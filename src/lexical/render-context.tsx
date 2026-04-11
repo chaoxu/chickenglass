@@ -17,7 +17,9 @@ import { CslProcessor, getCitationRegistrationKey, type CitationBacklink } from 
 import { parseFrontmatter, type FrontmatterConfig } from "../lib/frontmatter";
 import { normalizeProjectPath, projectPathCandidatesFromDocument } from "../lib/project-paths";
 import { PROJECT_CONFIG_FILE, mergeConfigs, parseProjectConfig, type ProjectConfig } from "../project-config";
-import { buildFootnoteDefinitionMap, buildRenderIndex, buildStaticAssetUrl, type RenderIndex } from "./rendering";
+import { buildStaticAssetUrl } from "./markdown/asset-resolution";
+import { buildFootnoteDefinitionMap } from "./markdown/footnotes";
+import { buildRenderIndex, type RenderIndex } from "./markdown/reference-index";
 
 export interface CitationRenderData {
   readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>;

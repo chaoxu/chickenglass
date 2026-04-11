@@ -1,5 +1,5 @@
 import type { CslJsonItem } from "../citations/bibtex-parser";
-import { formatCitationPreview } from "../lexical/rendering";
+import { formatCitationPreview } from "../lexical/markdown/reference-display";
 import type { ReferenceRenderDependencies } from "./reference-render-state";
 
 const COMPLETE_REF_PART_RE = /^\s*@[A-Za-z0-9_][\w:./'-]*(?:\s*,.*)?\s*$/;

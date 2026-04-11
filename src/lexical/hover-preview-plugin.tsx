@@ -7,12 +7,14 @@ import { useLexicalRenderContext } from "./render-context";
 import { FigureMedia } from "./figure-media";
 import {
   buildPreviewFencedDivRaw,
-  formatCitationPreview,
-  parseMarkdownImage,
+} from "./markdown/block-syntax";
+import { parseMarkdownImage } from "./markdown/image-markdown";
+import { formatCitationPreview } from "./markdown/reference-display";
+import {
   renderDisplayMathHtml,
   renderFencedDivHtml,
   renderMarkdownRichHtml,
-} from "./rendering";
+} from "./markdown/rich-html-preview";
 
 interface PreviewState {
   readonly anchor: HTMLElement;

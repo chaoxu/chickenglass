@@ -4,11 +4,10 @@ import type { FrontmatterConfig } from "../lib/frontmatter";
 import type { ReferenceCompletionCandidate } from "../state/reference-completion-engine";
 import {
   buildPreviewFencedDivRaw,
-  type RenderCitations,
-  type RenderIndex,
-  renderDisplayMathHtml,
-  renderFencedDivHtml,
-} from "./rendering";
+} from "./markdown/block-syntax";
+import type { RenderCitations } from "./markdown/reference-display";
+import type { RenderIndex } from "./markdown/reference-index";
+import { renderDisplayMathHtml, renderFencedDivHtml } from "./markdown/rich-html-preview";
 
 export interface ReferenceCompletionPreviewRenderOptions {
   readonly citations: RenderCitations;
