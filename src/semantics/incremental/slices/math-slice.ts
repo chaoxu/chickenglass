@@ -21,7 +21,7 @@ export interface DirtyMathWindowExtraction {
   readonly structural: Pick<StructuralWindowExtraction, "mathRegions">;
 }
 
-const INLINE_MATH_DELIMITER_RE = /(?:\$|\\\(|\\\))/;
+const MATH_DELIMITER_RE = /(?:\$\$|\$|\\\[|\\\]|\\\(|\\\))/;
 
 function mapOptionalPos(
   value: number | undefined,
@@ -124,9 +124,29 @@ function firstChangedOldPos(
   return first;
 }
 
+function mathRegionTouchesRawChange(
+  value: Pick<MathSemantics, "from" | "to">,
+  change: Pick<DirtyWindow, "fromOld" | "toOld">,
+): boolean {
+  if (change.fromOld === change.toOld) {
+    return value.from <= change.fromOld && change.fromOld <= value.to;
+  }
+  return value.from < change.toOld && change.fromOld < value.to;
+}
+
+function mathRegionTouchesRawChanges(
+  value: Pick<MathSemantics, "from" | "to">,
+  delta: Pick<SemanticDelta, "rawChangedRanges">,
+): boolean {
+  return delta.rawChangedRanges.some((change) =>
+    mathRegionTouchesRawChange(value, change)
+  );
+}
+
 function mapMathRegions(
   values: readonly MathSemantics[],
   delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
+  dropTouched = true,
 ): readonly MathSemantics[] {
   if (values.length === 0 || delta.rawChangedRanges.length === 0) {
     return values;
@@ -148,6 +168,10 @@ function mapMathRegions(
   const mapped = startIndex === 0 ? [] : values.slice(0, startIndex);
   for (let index = startIndex; index < values.length; index += 1) {
     const value = values[index];
+    if (dropTouched && mathRegionTouchesRawChanges(value, delta)) {
+      changed = true;
+      continue;
+    }
     const next = shiftedChange && value.from >= shiftedChange.toOld
       ? shiftMathSemantics(value, shiftedChange.delta)
       : mapMathSemantics(value, changes);
@@ -191,22 +215,20 @@ function rangesTouchOrOverlap(
   return region.from <= window.toNew && window.fromNew <= region.to;
 }
 
-function touchesInlineMathRegion(
+function touchesMathRegion(
   regions: readonly MathSemantics[],
   window: Pick<DirtyWindow, "fromNew" | "toNew">,
 ): boolean {
-  return regions.some((region) =>
-    !region.isDisplay && rangesTouchOrOverlap(region, window)
-  );
+  return regions.some((region) => rangesTouchOrOverlap(region, window));
 }
 
-function windowTouchesInlineMathDelimiter(
+function windowTouchesMathDelimiter(
   doc: TextSource,
   window: Pick<DirtyWindow, "fromNew" | "toNew">,
 ): boolean {
   const from = Math.max(0, window.fromNew - 1);
   const to = Math.min(doc.length, window.toNew + 1);
-  return INLINE_MATH_DELIMITER_RE.test(doc.slice(from, to));
+  return MATH_DELIMITER_RE.test(doc.slice(from, to));
 }
 
 function shouldExpandMathWindowToParagraph(
@@ -215,9 +237,9 @@ function shouldExpandMathWindowToParagraph(
   doc: TextSource,
 ): boolean {
   return (
-    windowTouchesInlineMathDelimiter(doc, extraction.window)
-    || touchesInlineMathRegion(mappedPrevious, extraction.window)
-    || touchesInlineMathRegion(extraction.structural.mathRegions, extraction.window)
+    windowTouchesMathDelimiter(doc, extraction.window)
+    || touchesMathRegion(mappedPrevious, extraction.window)
+    || touchesMathRegion(extraction.structural.mathRegions, extraction.window)
   );
 }
 
@@ -228,7 +250,7 @@ export function expandDirtyMathExtractions(
   doc: TextSource,
   tree: Tree,
 ): readonly DirtyMathWindowExtraction[] {
-  const mappedPrevious = mapMathRegions(previous.mathRegions, delta);
+  const mappedPrevious = mapMathRegions(previous.mathRegions, delta, false);
   let changed = false;
 
   const expanded = dirtyExtractions.map((extraction) => {
@@ -273,7 +295,7 @@ export function computeMathOverhangRanges(
   delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
   dirtyWindows: readonly Pick<DirtyWindow, "fromNew" | "toNew">[],
 ): readonly { readonly from: number; readonly to: number }[] {
-  const mapped = mapMathRegions(previous.mathRegions, delta);
+  const mapped = mapMathRegions(previous.mathRegions, delta, false);
   const overhangs: { from: number; to: number }[] = [];
   for (const window of dirtyWindows) {
     const overhangTo = findOverhangTo(mapped, window);

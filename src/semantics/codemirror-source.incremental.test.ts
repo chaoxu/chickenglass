@@ -193,6 +193,30 @@ describe("documentAnalysisField incremental contract", () => {
     );
   });
 
+  it("drops a display-math region when its opening delimiter is deleted", () => {
+    const beforeState = createSemanticsState([
+      "before",
+      "",
+      "$$",
+      "x",
+      "$$",
+      "",
+      "after",
+    ].join("\n"));
+
+    const afterState = replaceOnce(beforeState, "$$\n", "");
+    const after = afterState.field(documentAnalysisField);
+    const rebuilt = analyzeDocumentSemantics(
+      editorStateTextSource(afterState),
+      fullTree(afterState),
+    );
+
+    expect(after.mathRegions).toEqual(rebuilt.mathRegions);
+    expect(after.mathRegions.map((region) => region.latex)).toEqual(
+      rebuilt.mathRegions.map((region) => region.latex),
+    );
+  });
+
   it("preserves unaffected equation prefix identity while renumbering the tail", () => {
     const doc = [
       "$$x$$ {#eq:first}",

@@ -808,6 +808,21 @@ describe("math decoration invalidation", () => {
     expect(after.size).toBe(before.size);
   });
 
+  it("drops inline math widgets when deleting the opening delimiter", () => {
+    const doc = "before $x$ after";
+    const state = createMathRenderState(doc, 0);
+    const start = doc.indexOf("$x$");
+
+    const after = state.update({
+      changes: { from: start, to: start + 1, insert: "" },
+    }).state;
+
+    const widgetSpecs = getDecorationSpecs(after.field(mathDecorationField))
+      .filter((spec) => spec.widgetClass === "MathWidget");
+
+    expect(widgetSpecs).toHaveLength(0);
+  });
+
   it("refreshes visible math metadata after a position-only edit", async () => {
     const doc = "hello $x$ end";
     const currentView = createMathRenderView(doc, 0);

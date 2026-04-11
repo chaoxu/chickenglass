@@ -2,6 +2,7 @@ import {
   type EditorState,
   type Extension,
   type Range,
+  type Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -48,6 +49,7 @@ import {
   mergeDirtyRanges,
   rangeIntersectsDirtyRanges,
 } from "./incremental-dirty-ranges";
+import { rangesIntersect } from "../lib/range-helpers";
 import { serializeMacros } from "./source-widget";
 import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
 import {
@@ -249,6 +251,52 @@ function collectDirtyMathRegions(
   return dirty;
 }
 
+function rangeTouchesChange(
+  range: Pick<MathSemantics, "from" | "to">,
+  change: DirtyRange,
+): boolean {
+  if (change.from === change.to) {
+    return range.from <= change.from && change.from <= range.to;
+  }
+  return rangesIntersect(range, change);
+}
+
+function mapMathRegionDirtyRange(
+  region: Pick<MathSemantics, "from" | "to">,
+  changes: { mapPos: (pos: number, assoc?: number) => number },
+): DirtyRange {
+  const from = changes.mapPos(region.from, -1);
+  return {
+    from,
+    to: Math.max(from, changes.mapPos(region.to, 1)),
+  };
+}
+
+function collectChangedMathDirtyRanges(
+  tr: Transaction,
+  regionsBefore: readonly MathSemantics[],
+  regionsAfter: readonly MathSemantics[],
+): DirtyRange[] {
+  const dirtyRanges: DirtyRange[] = [];
+
+  tr.changes.iterChangedRanges((fromOld, toOld, fromNew, toNew) => {
+    const oldChange = { from: fromOld, to: Math.max(fromOld, toOld) };
+    const newChange = { from: fromNew, to: Math.max(fromNew, toNew) };
+
+    for (const region of regionsBefore) {
+      if (!rangeTouchesChange(region, oldChange)) continue;
+      dirtyRanges.push(mapMathRegionDirtyRange(region, tr.changes));
+    }
+
+    for (const region of regionsAfter) {
+      if (!rangeTouchesChange(region, newChange)) continue;
+      dirtyRanges.push({ from: region.from, to: region.to });
+    }
+  }, true);
+
+  return mergeDirtyRanges(dirtyRanges);
+}
+
 function sameViewportRanges(
   before: readonly { from: number; to: number }[],
   after: readonly { from: number; to: number }[],
@@ -406,7 +454,10 @@ const mathDecorationField = createDecorationStateField({
           return [];
         }
 
-        return dirtyRangesFromChanges(tr.changes, expandChangeRange);
+        return mergeDirtyRanges([
+          ...dirtyRangesFromChanges(tr.changes, expandChangeRange),
+          ...collectChangedMathDirtyRanges(tr, regionsBefore, regionsAfter),
+        ]);
       },
     });
 
