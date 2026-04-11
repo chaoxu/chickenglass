@@ -4,7 +4,6 @@ import {
   $createNodeSelection,
   $getNearestNodeFromDOMNode,
   $setSelection,
-  scrollIntoViewIfNeeded,
   type LexicalEditor,
 } from "lexical";
 
@@ -167,7 +166,6 @@ export function syncSourceBlockPositions(root: HTMLElement | null, doc: string):
 
 function selectNavigationTarget(
   editor: LexicalEditor,
-  root: HTMLElement,
   target: HTMLElement,
 ): boolean {
   let didSelect = false;
@@ -192,7 +190,10 @@ function selectNavigationTarget(
 
   if (didSelect) {
     editor.focus(() => {
-      scrollIntoViewIfNeeded(editor, target.getBoundingClientRect(), root);
+      target.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+      });
     });
   }
 
@@ -210,7 +211,7 @@ export function scrollSourcePositionIntoView(
 
   const heading = root.querySelector<HTMLElement>(`.cf-lexical-heading[data-coflat-heading-pos="${String(pos)}"]`);
   if (heading) {
-    return selectNavigationTarget(editor, root, heading);
+    return selectNavigationTarget(editor, heading);
   }
 
   const rawBlocks = [...root.querySelectorAll<HTMLElement>("[data-coflat-source-from]")];
@@ -235,7 +236,7 @@ export function scrollSourcePositionIntoView(
     return false;
   }
 
-  return selectNavigationTarget(editor, root, target);
+  return selectNavigationTarget(editor, target);
 }
 
 export function SourcePositionPlugin({
