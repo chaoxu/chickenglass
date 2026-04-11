@@ -1,6 +1,6 @@
 import { act, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
-import { UNDO_COMMAND } from "lexical";
+import { CLICK_COMMAND, UNDO_COMMAND } from "lexical";
 import { createElement, type ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
@@ -67,6 +67,60 @@ async function mountEditor(overrides: Partial<RichMarkdownEditorProps> = {}) {
     },
   };
 }
+
+describe("ClickableLinkPlugin in read-only mode", () => {
+  it("renders link as anchor in read-only mode", async () => {
+    const editor = await mountEditor({
+      doc: "[example](https://example.com)",
+      editable: false,
+    });
+
+    try {
+      await waitFor(() => {
+        const anchor = editor.editor.getRootElement()?.querySelector("a");
+        expect(anchor).not.toBeNull();
+        expect(anchor?.getAttribute("href")).toBe("https://example.com");
+        expect(anchor?.textContent).toBe("example");
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("link source editor intercepts clicks in editable mode", async () => {
+    const editor = await mountEditor({
+      doc: "[example](https://example.com)",
+      editable: true,
+    });
+
+    try {
+      await waitFor(() => {
+        const anchor = editor.editor.getRootElement()?.querySelector("a");
+        expect(anchor).not.toBeNull();
+      });
+
+      let handled = false;
+      const cleanup = editor.editor.registerCommand(
+        CLICK_COMMAND,
+        () => {
+          handled = true;
+          return false;
+        },
+        0,
+      );
+
+      const anchor = editor.editor.getRootElement()?.querySelector("a");
+      act(() => {
+        anchor?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(handled).toBe(true);
+      cleanup();
+    } finally {
+      editor.unmount();
+    }
+  });
+});
 
 describe("LexicalRichMarkdownEditor nested history", () => {
   it("preserves undo history across editable blur/focus toggles", async () => {

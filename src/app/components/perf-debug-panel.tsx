@@ -14,7 +14,6 @@ function formatMs(value: number): string {
 
 export function PerfDebugPanel() {
   const open = useDevSettings((s) => s.perfPanel);
-  const toggleOpen = useDevSettings((s) => s.toggle);
   const [snapshot, setSnapshot] = useState<CombinedPerfSnapshot | null>(null);
 
   useEffect(() => {
@@ -88,7 +87,7 @@ export function PerfDebugPanel() {
           </button>
           <button
             type="button"
-            onClick={() => toggleOpen("perfPanel")}
+            onClick={() => useDevSettings.getState().toggle("perfPanel")}
             className="rounded border border-[var(--cf-border)] px-2 py-1 text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
           >
             Close

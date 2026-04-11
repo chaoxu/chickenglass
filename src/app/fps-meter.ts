@@ -70,16 +70,6 @@ export interface FpsMeterSnapshot {
   readonly frameTime: number;
 }
 
-/** Toggle the FPS meter on/off. Returns the new enabled state. */
-export function toggleFpsMeter(): boolean {
-  if (enabled) {
-    stop();
-  } else {
-    start();
-  }
-  return enabled;
-}
-
 /** Explicitly set the FPS meter to enabled or disabled. */
 export function setFpsMeterEnabled(next: boolean): void {
   if (next === enabled) return;
