@@ -1,3 +1,4 @@
+import type { ChangeDesc } from "@codemirror/state";
 import type {
   CrossrefReferenceEntry,
   LabelReferenceEntry,
@@ -156,44 +157,41 @@ function buildHeadingTargets(
   });
 }
 
-function buildTargetsById(
+interface DocumentReferenceTargetIndexes {
+  readonly targetsById: ReadonlyMap<string, readonly DocumentReferenceTarget[]>;
+  readonly uniqueTargetById: ReadonlyMap<string, DocumentReferenceTarget>;
+  readonly duplicatesById: ReadonlyMap<string, readonly DocumentReferenceTarget[]>;
+}
+
+function buildReferenceTargetIndexes(
   targets: readonly DocumentReferenceTarget[],
-): ReadonlyMap<string, readonly DocumentReferenceTarget[]> {
-  const byId = new Map<string, DocumentReferenceTarget[]>();
+): DocumentReferenceTargetIndexes {
+  const targetsById = new Map<string, DocumentReferenceTarget[]>();
+  const uniqueTargetById = new Map<string, DocumentReferenceTarget>();
+  const duplicatesById = new Map<string, readonly DocumentReferenceTarget[]>();
+
   for (const target of targets) {
     if (!target.id) continue;
-    const bucket = byId.get(target.id);
-    if (bucket) {
-      bucket.push(target);
-    } else {
-      byId.set(target.id, [target]);
+    const bucket = targetsById.get(target.id);
+    if (!bucket) {
+      targetsById.set(target.id, [target]);
+      uniqueTargetById.set(target.id, target);
+      continue;
     }
-  }
-  return byId;
-}
 
-function buildUniqueTargetById(
-  targetsById: ReadonlyMap<string, readonly DocumentReferenceTarget[]>,
-): ReadonlyMap<string, DocumentReferenceTarget> {
-  const unique = new Map<string, DocumentReferenceTarget>();
-  for (const [id, targets] of targetsById) {
-    if (targets.length === 1) {
-      unique.set(id, targets[0]);
+    if (bucket.length === 1) {
+      uniqueTargetById.delete(target.id);
+      duplicatesById.set(target.id, bucket);
     }
-  }
-  return unique;
-}
 
-function buildDuplicatesById(
-  targetsById: ReadonlyMap<string, readonly DocumentReferenceTarget[]>,
-): ReadonlyMap<string, readonly DocumentReferenceTarget[]> {
-  const duplicates = new Map<string, readonly DocumentReferenceTarget[]>();
-  for (const [id, targets] of targetsById) {
-    if (targets.length > 1) {
-      duplicates.set(id, targets);
-    }
+    bucket.push(target);
   }
-  return duplicates;
+
+  return {
+    targetsById,
+    uniqueTargetById,
+    duplicatesById,
+  };
 }
 
 export function buildDocumentReferenceCatalog(
@@ -207,13 +205,83 @@ export function buildDocumentReferenceCatalog(
   ];
   targets.sort((left, right) => (left.from - right.from) || (left.to - right.to));
 
-  const targetsById = buildTargetsById(targets);
+  const {
+    targetsById,
+    uniqueTargetById,
+    duplicatesById,
+  } = buildReferenceTargetIndexes(targets);
   return {
     targets,
     targetsById,
-    uniqueTargetById: buildUniqueTargetById(targetsById),
-    duplicatesById: buildDuplicatesById(targetsById),
+    uniqueTargetById,
+    duplicatesById,
     references: analysis.references,
+  };
+}
+
+function mapDocumentReferenceTarget(
+  target: DocumentReferenceTarget,
+  changes: ChangeDesc,
+): DocumentReferenceTarget {
+  const from = changes.mapPos(target.from, 1);
+  const to = Math.max(from, changes.mapPos(target.to, -1));
+  if (from === target.from && to === target.to) {
+    return target;
+  }
+  return {
+    ...target,
+    from,
+    to,
+  };
+}
+
+export function mapDocumentReferenceCatalog(
+  catalog: DocumentReferenceCatalog,
+  changes: ChangeDesc,
+  references = catalog.references,
+): DocumentReferenceCatalog {
+  let targetsChanged = false;
+  const targets: DocumentReferenceTarget[] = [];
+  const targetsById = new Map<string, DocumentReferenceTarget[]>();
+  const uniqueTargetById = new Map<string, DocumentReferenceTarget>();
+  const duplicatesById = new Map<string, readonly DocumentReferenceTarget[]>();
+
+  for (const target of catalog.targets) {
+    const next = mapDocumentReferenceTarget(target, changes);
+    if (next !== target) targetsChanged = true;
+    targets.push(next);
+
+    if (!next.id) continue;
+    const bucket = targetsById.get(next.id);
+    if (!bucket) {
+      targetsById.set(next.id, [next]);
+      uniqueTargetById.set(next.id, next);
+      continue;
+    }
+    if (bucket.length === 1) {
+      uniqueTargetById.delete(next.id);
+      duplicatesById.set(next.id, bucket);
+    }
+    bucket.push(next);
+  }
+
+  if (!targetsChanged && references === catalog.references) {
+    return catalog;
+  }
+
+  if (!targetsChanged) {
+    return {
+      ...catalog,
+      references,
+    };
+  }
+
+  return {
+    targets,
+    targetsById,
+    uniqueTargetById,
+    duplicatesById,
+    references,
   };
 }
 

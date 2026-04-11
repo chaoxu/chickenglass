@@ -10,6 +10,10 @@ import { blockCounterField } from "../state/block-counter";
 import { documentLabelGraphField } from "../state/document-label-graph";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import {
+  documentReferenceCatalogField,
+  editorBlockReferenceTargetInputsField,
+} from "./editor-reference-catalog";
+import {
   buildDocumentLabelGraph,
   findDocumentLabelBacklinks,
   getDocumentLabelDefinition,
@@ -28,6 +32,8 @@ function createGraphState(doc: string): EditorState {
       documentAnalysisField,
       createPluginRegistryField(defaultPlugins),
       blockCounterField,
+      editorBlockReferenceTargetInputsField,
+      documentReferenceCatalogField,
       documentLabelGraphField,
     ],
   });
@@ -187,5 +193,46 @@ describe("documentLabelGraphField", () => {
 
     expect(graph.uniqueDefinitionById.get("thm:b")?.displayLabel).toBe("Theorem 1");
     expect(graph.uniqueDefinitionById.get("thm:a")?.displayLabel).toBe("Theorem 2");
+  });
+
+  it("maps definition and backlink positions across unrelated prose edits", () => {
+    const before = createGraphState([
+      "# Intro {#sec:intro}",
+      "",
+      "Lead paragraph.",
+      "",
+      "::: {.theorem #thm:main} Main Result",
+      "Body.",
+      ":::",
+      "",
+      "See [@thm:main] and @sec:intro.",
+    ].join("\n"));
+    const graphBefore = before.field(documentLabelGraphField);
+    const headingBefore = graphBefore.uniqueDefinitionById.get("sec:intro");
+    const theoremBefore = graphBefore.uniqueDefinitionById.get("thm:main");
+    const theoremBacklinkBefore = findDocumentLabelBacklinks(graphBefore, "thm:main")[0];
+    const headingBacklinkBefore = findDocumentLabelBacklinks(graphBefore, "sec:intro")[0];
+
+    const insert = " Updated";
+    const after = before.update({
+      changes: {
+        from: "# Intro".length,
+        insert,
+      },
+    }).state;
+    const graphAfter = after.field(documentLabelGraphField);
+    const headingAfter = graphAfter.uniqueDefinitionById.get("sec:intro");
+    const theoremAfter = graphAfter.uniqueDefinitionById.get("thm:main");
+    const theoremBacklinkAfter = findDocumentLabelBacklinks(graphAfter, "thm:main")[0];
+    const headingBacklinkAfter = findDocumentLabelBacklinks(graphAfter, "sec:intro")[0];
+
+    expect(headingBefore).toBeDefined();
+    expect(theoremBefore).toBeDefined();
+    expect(theoremBacklinkBefore).toBeDefined();
+    expect(headingBacklinkBefore).toBeDefined();
+    expect(headingAfter?.labelFrom).toBe((headingBefore?.labelFrom ?? 0) + insert.length);
+    expect(theoremAfter?.from).toBe((theoremBefore?.from ?? 0) + insert.length);
+    expect(theoremBacklinkAfter?.from).toBe((theoremBacklinkBefore?.from ?? 0) + insert.length);
+    expect(headingBacklinkAfter?.from).toBe((headingBacklinkBefore?.from ?? 0) + insert.length);
   });
 });

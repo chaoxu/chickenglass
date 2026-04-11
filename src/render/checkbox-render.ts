@@ -11,14 +11,21 @@ import {
   type Decoration,
   type EditorView,
   type DecorationSet,
+  type ViewUpdate,
 } from "@codemirror/view";
 import {
   type Extension,
   type Range,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
-import { createSimpleViewPlugin } from "./view-plugin-factories";
+import {
+  buildDecorations,
+  pushWidgetDecoration,
+} from "./decoration-core";
+import {
+  createIncrementalDecorationsViewPlugin,
+} from "./view-plugin-factories";
+import { normalizeDirtyRange, type VisibleRange } from "./viewport-diff";
 import { RenderWidget } from "./source-widget";
 
 /** Checkbox widget that toggles task marker content on click. */
@@ -60,10 +67,13 @@ export class CheckboxWidget extends RenderWidget {
   }
 }
 
-function buildCheckboxDecorations(view: EditorView): DecorationSet {
+function collectCheckboxItems(
+  view: EditorView,
+  ranges: readonly VisibleRange[],
+): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
   const seen = new Set<number>();
-  for (const { from, to } of view.visibleRanges) {
+  for (const { from, to } of ranges) {
     syntaxTree(view.state).iterate({
       from,
       to,
@@ -81,10 +91,63 @@ function buildCheckboxDecorations(view: EditorView): DecorationSet {
       },
     });
   }
+  return items;
+}
+
+function buildCheckboxDecorations(view: EditorView): DecorationSet {
+  const items = collectCheckboxItems(view, view.visibleRanges);
   return buildDecorations(items);
 }
 
+function collectTaskMarkerDirtyRangesInState(
+  state: EditorView["state"],
+  from: number,
+  to: number,
+  push: (from: number, to: number) => void,
+): void {
+  syntaxTree(state).iterate({
+    from,
+    to,
+    enter(node) {
+      if (node.name !== "TaskMarker") return;
+      push(node.from, node.to);
+    },
+  });
+}
+
+function computeCheckboxDocChangeRanges(update: ViewUpdate): readonly VisibleRange[] {
+  const dirtyRanges: VisibleRange[] = [];
+  const pushMappedRange = (from: number, to: number) => {
+    dirtyRanges.push(normalizeDirtyRange(from, to, update.state.doc.length));
+  };
+
+  update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    syntaxTree(update.startState).iterate({
+      from: fromA,
+      to: toA,
+      enter(node) {
+        if (node.name !== "TaskMarker") return;
+        pushMappedRange(
+          update.changes.mapPos(node.from, 1),
+          update.changes.mapPos(node.to, -1),
+        );
+      },
+    });
+    collectTaskMarkerDirtyRangesInState(update.state, fromB, toB, pushMappedRange);
+  });
+
+  return dirtyRanges;
+}
+
 /** CM6 extension that renders task list checkboxes with toggle support. */
-export const checkboxRenderPlugin: Extension = createSimpleViewPlugin(
+export const checkboxRenderPlugin: Extension = createIncrementalDecorationsViewPlugin(
   buildCheckboxDecorations,
+  {
+    incrementalRanges: computeCheckboxDocChangeRanges,
+    collectRanges: collectCheckboxItems,
+    shouldRebuild(update) {
+      return !update.docChanged
+        && syntaxTree(update.state) !== syntaxTree(update.startState);
+    },
+  },
 );

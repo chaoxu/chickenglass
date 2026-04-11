@@ -1,4 +1,5 @@
 import {
+  type ChangeDesc,
   type EditorState,
   type Text,
 } from "@codemirror/state";
@@ -64,6 +65,68 @@ export interface DocumentLabelGraph {
   readonly duplicatesById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>;
   readonly references: readonly DocumentLabelReference[];
   readonly referencesByTarget: ReadonlyMap<string, readonly DocumentLabelReference[]>;
+}
+
+function mapDocumentLabelDefinition(
+  definition: DocumentLabelDefinition,
+  changes: ChangeDesc,
+): DocumentLabelDefinition {
+  const from = changes.mapPos(definition.from, 1);
+  const to = Math.max(from, changes.mapPos(definition.to, -1));
+  const tokenFrom = changes.mapPos(definition.tokenFrom, 1);
+  const tokenTo = Math.max(tokenFrom, changes.mapPos(definition.tokenTo, -1));
+  const labelFrom = changes.mapPos(definition.labelFrom, 1);
+  const labelTo = Math.max(labelFrom, changes.mapPos(definition.labelTo, -1));
+  if (
+    from === definition.from
+    && to === definition.to
+    && tokenFrom === definition.tokenFrom
+    && tokenTo === definition.tokenTo
+    && labelFrom === definition.labelFrom
+    && labelTo === definition.labelTo
+  ) {
+    return definition;
+  }
+  return {
+    ...definition,
+    from,
+    to,
+    tokenFrom,
+    tokenTo,
+    labelFrom,
+    labelTo,
+  };
+}
+
+function mapDocumentLabelReference(
+  reference: DocumentLabelReference,
+  changes: ChangeDesc,
+): DocumentLabelReference {
+  const from = changes.mapPos(reference.from, 1);
+  const to = Math.max(from, changes.mapPos(reference.to, -1));
+  const labelFrom = changes.mapPos(reference.labelFrom, 1);
+  const labelTo = Math.max(labelFrom, changes.mapPos(reference.labelTo, -1));
+  const clusterFrom = changes.mapPos(reference.clusterFrom, 1);
+  const clusterTo = Math.max(clusterFrom, changes.mapPos(reference.clusterTo, -1));
+  if (
+    from === reference.from
+    && to === reference.to
+    && labelFrom === reference.labelFrom
+    && labelTo === reference.labelTo
+    && clusterFrom === reference.clusterFrom
+    && clusterTo === reference.clusterTo
+  ) {
+    return reference;
+  }
+  return {
+    ...reference,
+    from,
+    to,
+    labelFrom,
+    labelTo,
+    clusterFrom,
+    clusterTo,
+  };
 }
 
 function buildDefinitionsById(
@@ -306,6 +369,39 @@ export function buildDocumentLabelGraph(state: EditorState): DocumentLabelGraph 
   const definitionsById = buildDefinitionsById(definitions);
   const references = buildReferences(catalog, doc);
 
+  return {
+    definitions,
+    definitionsById,
+    uniqueDefinitionById: buildUniqueDefinitionById(definitionsById),
+    duplicatesById: buildDuplicatesById(definitionsById),
+    references,
+    referencesByTarget: buildReferencesByTarget(references),
+  };
+}
+
+export function mapDocumentLabelGraph(
+  graph: DocumentLabelGraph,
+  changes: ChangeDesc,
+): DocumentLabelGraph {
+  let definitionsChanged = false;
+  const definitions = graph.definitions.map((definition) => {
+    const next = mapDocumentLabelDefinition(definition, changes);
+    if (next !== definition) definitionsChanged = true;
+    return next;
+  });
+
+  let referencesChanged = false;
+  const references = graph.references.map((reference) => {
+    const next = mapDocumentLabelReference(reference, changes);
+    if (next !== reference) referencesChanged = true;
+    return next;
+  });
+
+  if (!definitionsChanged && !referencesChanged) {
+    return graph;
+  }
+
+  const definitionsById = buildDefinitionsById(definitions);
   return {
     definitions,
     definitionsById,

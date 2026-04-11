@@ -34,6 +34,21 @@ describe("buildSemanticDelta", () => {
     expect(delta.plainInlineTextOnlyChange).toBe(true);
   });
 
+  it("preserves CM6 assoc behavior at the single-insert boundary", () => {
+    const state = createMarkdownState("abcd");
+    const tr = state.update({
+      changes: { from: 2, insert: "XY" },
+    });
+
+    const delta = buildSemanticDelta(tr);
+
+    expect(delta.mapOldToNew(2, -1)).toBe(2);
+    expect(delta.mapOldToNew(2, 1)).toBe(4);
+    expect(delta.mapNewToOld(2, -1)).toBe(2);
+    expect(delta.mapNewToOld(4, 1)).toBe(2);
+    expect(delta.mapNewToOld(3)).toBe(2);
+  });
+
   it("captures exact old and new coordinates for a delete", () => {
     const state = createMarkdownState("abcdef");
     const tr = state.update({

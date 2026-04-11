@@ -199,12 +199,10 @@ const fenceGuideWidgetView = ViewPlugin.fromClass(class {
         update.startState.field(documentSemanticsField),
         "fencedDivs",
       );
-    const visibilityOrGeometryChanged =
-      update.viewportChanged || update.geometryChanged;
     const needsSync =
       activePathChanged ||
       fencedDivsChanged ||
-      ((nextActivePath !== "" || this.hasActiveGuides) && visibilityOrGeometryChanged);
+      ((nextActivePath !== "" || this.hasActiveGuides) && update.viewportChanged);
 
     if (!needsSync) return;
 

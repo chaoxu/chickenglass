@@ -7,6 +7,7 @@ import type {
   FencedBlockInfo,
 } from "../fenced-block/model";
 import { countColons } from "../parser";
+import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
 
 export interface FenceRange {
   readonly from: number;
@@ -82,9 +83,14 @@ export function shouldBlockClosingFenceChanges(
   docLength: number,
 ): boolean {
   for (const change of changes) {
-    for (const range of ranges) {
-      if (isClosingFenceChangeBlocked(change, range, docLength)) return true;
-    }
+    let blocked = false;
+    forEachOverlappingOrderedRange(ranges, change, (range) => {
+      if (blocked) return;
+      if (isClosingFenceChangeBlocked(change, range, docLength)) {
+        blocked = true;
+      }
+    });
+    if (blocked) return true;
   }
   return false;
 }
@@ -113,9 +119,14 @@ export function shouldBlockOpeningFenceChanges(
   kind: OpeningFenceKind,
 ): boolean {
   for (const change of changes) {
-    for (const range of ranges) {
-      if (isOpeningFenceChangeBlocked(change, range, kind)) return true;
-    }
+    let blocked = false;
+    forEachOverlappingOrderedRange(ranges, change, (range) => {
+      if (blocked) return;
+      if (isOpeningFenceChangeBlocked(change, range, kind)) {
+        blocked = true;
+      }
+    });
+    if (blocked) return true;
   }
   return false;
 }
@@ -193,6 +204,7 @@ export function planOpeningFenceDeletionCleanup(
   blocks: readonly FencedBlockInfo[],
 ): readonly FenceChangeSpec[] | null {
   if (blocks.length === 0) return null;
+  if (changes.every((change) => change.from === change.to)) return null;
 
   const closingFencesToRemove: FenceChangeSpec[] = [];
   for (const change of changes) {

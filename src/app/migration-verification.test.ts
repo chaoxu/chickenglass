@@ -1041,7 +1041,7 @@ describe("#370 — shared decoration/widget factories", () => {
     const reference = fileText("src/render/reference-render.ts");
     const pluginRender = fileText("src/render/plugin-render.ts");
 
-    expect(checkbox).toContain("createSimpleViewPlugin");
+    expect(checkbox).toContain("createIncrementalDecorationsViewPlugin");
     expect(checkbox).toContain("pushWidgetDecoration");
     expect(image).toContain("pushWidgetDecoration");
     expect(reference).toContain("createSemanticSensitiveViewPlugin");

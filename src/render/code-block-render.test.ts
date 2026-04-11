@@ -18,6 +18,7 @@ import {
   _codeBlockDecorationFieldForTest as codeBlockDecorationField,
   _codeBlockStructureFieldForTest as codeBlockStructureField,
   _computeCodeBlockDirtyRegionForTest as computeCodeBlockDirtyRegion,
+  _docChangeTouchesCodeBlockContentForTest as docChangeTouchesCodeBlockContent,
   _incrementalCodeBlockUpdateForTest as incrementalCodeBlockUpdate,
 } from "./code-block-render";
 import { closingFenceProtection } from "../plugins/fence-protection";
@@ -463,6 +464,31 @@ describe("computeCodeBlockDirtyRegion (#723)", () => {
 });
 
 describe("incrementalCodeBlockUpdate (#723)", () => {
+  it("treats plain prose edits between blocks as outside code block content", () => {
+    const doc = [
+      "```js",
+      "console.log('x')",
+      "```",
+      "",
+      "plain prose",
+      "",
+      "```py",
+      "print('y')",
+      "```",
+    ].join("\n");
+    const state = createParsedState(doc);
+    const proseLineStart = state.doc.line(5).from;
+    const tr = state.update({
+      changes: {
+        from: proseLineStart,
+        to: proseLineStart + "plain prose".length,
+        insert: "different prose",
+      },
+    });
+
+    expect(docChangeTouchesCodeBlockContent(collectCodeBlocks(state), tr.changes)).toBe(false);
+  });
+
   it("drops stale code blocks on full document switches", () => {
     const sourceDoc = [
       "::: {.theorem #thm:hover-code}",

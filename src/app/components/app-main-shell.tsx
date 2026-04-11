@@ -9,7 +9,7 @@ import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 interface AppMainShellProps {
   sidebarLayout: Pick<
     SidebarLayoutController,
-    "sidenotesCollapsed" | "setSidenotesCollapsed"
+    "sidenotesCollapsed" | "setSidenotesCollapsed" | "sidebarCollapsed" | "sidebarTab"
   >;
   onOpenPalette: () => void;
 }
@@ -22,6 +22,8 @@ export function AppMainShell({
   const workspace = useAppWorkspaceController();
   const editor = useAppEditorController();
   const currentPath = editor.currentPath;
+  const trackOutline = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "outline";
+  const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
 
   return (
     <SidebarInset>
@@ -43,8 +45,8 @@ export function AppMainShell({
             editor.setDocumentSourceMap(currentPath, sourceMap);
           }}
           onStateChange={editor.handleEditorStateChange}
-          onHeadingsChange={editor.handleHeadingsChange}
-          onDiagnosticsChange={editor.handleDiagnosticsChange}
+          onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+          onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
           onDocumentReady={editor.handleEditorDocumentReady}
           editorMode={editor.editorMode}
           activeDocumentSignal={editor.activeDocumentSignal}

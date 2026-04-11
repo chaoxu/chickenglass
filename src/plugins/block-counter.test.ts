@@ -626,4 +626,42 @@ describe("blockCounterField", () => {
     expect(counter2).not.toBe(counter1);
     expect(counter2.blocks.map((block) => block.number)).toEqual([1, 1]);
   });
+
+  it("maps block positions when prose edits do not touch fenced-div structure", () => {
+    const doc = [
+      "Intro",
+      "",
+      "::: {.theorem #thm:a}",
+      "Body.",
+      ":::",
+    ].join("\n");
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({ extensions: [fencedDiv] }),
+        frontmatterField,
+        documentSemanticsField,
+        createPluginRegistryField([makeBlockPlugin({ name: "theorem" })]),
+        blockCounterField,
+      ],
+    });
+    const counter1 = state.field(blockCounterField);
+    const theorem1 = counter1.byId.get("thm:a");
+    const insert = " updated";
+    const tr = state.update({
+      changes: {
+        from: "Intro".length,
+        insert,
+      },
+    });
+    const counter2 = tr.state.field(blockCounterField);
+    const theorem2 = counter2.byId.get("thm:a");
+
+    expect(theorem1).toBeDefined();
+    expect(theorem2).toBeDefined();
+    expect(counter2.numberingKey).toBe(counter1.numberingKey);
+    expect(theorem2?.number).toBe(1);
+    expect(theorem2?.from).toBe((theorem1?.from ?? 0) + insert.length);
+    expect(theorem2?.to).toBe((theorem1?.to ?? 0) + insert.length);
+  });
 });

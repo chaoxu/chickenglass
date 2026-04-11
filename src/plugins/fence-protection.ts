@@ -35,6 +35,7 @@ import {
 import { type Decoration, EditorView } from "@codemirror/view";
 import {
   collectDisplayMathBlocks,
+  docChangeTouchesFencedDivStructure,
   collectFencedDivs,
   mapDisplayMathBlockInfo,
   mapFencedBlockInfo,
@@ -107,6 +108,22 @@ interface FenceProtectionInputs {
   readonly displayMathBlocks: readonly DisplayMathBlockInfo[];
 }
 
+function currentFenceProtectionSourceState(
+  state: EditorState,
+): FenceProtectionCacheSourceState {
+  const semantics = state.field(documentSemanticsField, false);
+  const codeBlockStructure = state.field(codeBlockStructureField, false);
+  return {
+    registry: state.field(pluginRegistryField, false) ?? null,
+    fencedDivsRevision: semantics
+      ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs")
+      : null,
+    codeBlockStructureRevision: codeBlockStructure
+      ? getCodeBlockStructureRevision(state)
+      : null,
+  };
+}
+
 function filterProtectedDivs(
   state: EditorState,
   divs: readonly FencedDivInfo[],
@@ -137,8 +154,6 @@ function buildFenceProtectionCache(
   state: EditorState,
   inputs = collectFenceProtectionInputs(state),
 ): FenceProtectionCache {
-  const semantics = state.field(documentSemanticsField, false);
-  const codeBlockStructure = state.field(codeBlockStructureField, false);
   const closingFenceRanges = buildClosingFenceRanges(
     state,
     inputs.protectedDivs,
@@ -154,15 +169,7 @@ function buildFenceProtectionCache(
     openingFenceBacktickRanges: buildOpeningFenceBacktickRanges(inputs.codeBlocks),
     openingMathDelimiterRanges: buildOpeningMathDelimiterRanges(inputs.displayMathBlocks),
     closingFenceAtomicRanges: buildClosingFenceAtomicRanges(state, closingFenceRanges),
-    sourceState: {
-      registry: state.field(pluginRegistryField, false) ?? null,
-      fencedDivsRevision: semantics
-        ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs")
-        : null,
-      codeBlockStructureRevision: codeBlockStructure
-        ? getCodeBlockStructureRevision(state)
-        : null,
-    },
+    sourceState: currentFenceProtectionSourceState(state),
   };
 }
 
@@ -278,7 +285,30 @@ function didCodeBlockFenceStructureChange(tr: Transaction): boolean {
   return getCodeBlockStructureRevision(tr.startState) !== getCodeBlockStructureRevision(tr.state);
 }
 
+function docChangeCouldAffectDisplayMathFences(tr: Transaction): boolean {
+  let affects = false;
+
+  tr.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    if (affects) return;
+    const oldLineFrom = tr.startState.doc.lineAt(fromA).from;
+    const oldLineTo = tr.startState.doc.lineAt(Math.max(fromA, toA)).to;
+    const newLineFrom = tr.state.doc.lineAt(fromB).from;
+    const newLineTo = tr.state.doc.lineAt(Math.max(fromB, toB)).to;
+    const oldText = tr.startState.sliceDoc(oldLineFrom, oldLineTo);
+    const newText = tr.state.sliceDoc(newLineFrom, newLineTo);
+    affects = oldText.includes("$")
+      || oldText.includes("\\")
+      || newText.includes("$")
+      || newText.includes("\\");
+  });
+
+  return affects;
+}
+
 function didDisplayMathFenceGeometryChange(tr: Transaction): boolean {
+  if (tr.docChanged && !docChangeCouldAffectDisplayMathFences(tr)) {
+    return false;
+  }
   const before = collectDisplayMathBlocks(tr.startState);
   const after = collectDisplayMathBlocks(tr.state);
   if (!tr.docChanged) return !sameDisplayMathBlocks(before, after);
@@ -293,7 +323,12 @@ function shouldRebuildFenceProtectionCache(tr: Transaction): boolean {
   if (fenceProtectionRegistryChanged(tr)) {
     return true;
   }
-  if (didSemanticsSliceChange(tr.startState, tr.state, "fencedDivs")) return true;
+  if (
+    didSemanticsSliceChange(tr.startState, tr.state, "fencedDivs")
+    && (!tr.docChanged || docChangeTouchesFencedDivStructure(tr))
+  ) {
+    return true;
+  }
   if (didCodeBlockFenceStructureChange(tr)) return true;
   if (didDisplayMathFenceGeometryChange(tr)) return true;
   return false;
@@ -333,7 +368,7 @@ function mapFenceProtectionCache(
     openingFenceBacktickRanges,
     openingMathDelimiterRanges,
     closingFenceAtomicRanges,
-    sourceState: value.sourceState,
+    sourceState: currentFenceProtectionSourceState(tr.state),
   };
 }
 
@@ -587,3 +622,4 @@ export const fenceProtectionExtension: Extension = [
 
 export type { FenceRange } from "./fence-protection-pipeline";
 export { fenceProtectionCacheField as _fenceProtectionCacheFieldForTest };
+export { docChangeCouldAffectDisplayMathFences as _docChangeCouldAffectDisplayMathFencesForTest };

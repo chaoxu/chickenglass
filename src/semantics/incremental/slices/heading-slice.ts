@@ -90,14 +90,34 @@ function replacementStartIndex(
 
 function mapHeadings(
   headings: readonly HeadingSemantics[],
-  changes: PositionMapper,
+  delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
 ): readonly HeadingSemantics[] {
+  if (headings.length === 0 || delta.rawChangedRanges.length === 0) {
+    return headings;
+  }
+
+  const changes = deltaMapper(delta);
+  const shiftedChange = singleChangeShift(delta);
+  const firstChanged = firstChangedOldPos(delta);
+  let startIndex = 0;
+  while (startIndex < headings.length && headings[startIndex].to <= firstChanged) {
+    startIndex += 1;
+  }
+
+  if (startIndex === headings.length) {
+    return headings;
+  }
+
   let changed = false;
-  const mapped = headings.map((heading) => {
-    const next = mapHeadingSemantics(heading, changes);
+  const mapped = startIndex === 0 ? [] : headings.slice(0, startIndex);
+  for (let index = startIndex; index < headings.length; index += 1) {
+    const heading = headings[index];
+    const next = shiftedChange && heading.from >= shiftedChange.toOld
+      ? shiftHeadingSemantics(heading, shiftedChange.delta)
+      : mapHeadingSemantics(heading, changes);
     if (next !== heading) changed = true;
-    return next;
-  });
+    mapped.push(next);
+  }
   return changed ? mapped : headings;
 }
 
@@ -164,6 +184,53 @@ function deltaMapper(delta: Pick<SemanticDelta, "mapOldToNew">): PositionMapper 
   };
 }
 
+function singleChangeShift(
+  delta: Pick<SemanticDelta, "rawChangedRanges">,
+): { readonly fromOld: number; readonly toOld: number; readonly delta: number } | null {
+  if (delta.rawChangedRanges.length !== 1) {
+    return null;
+  }
+
+  const change = delta.rawChangedRanges[0];
+  const shift = (change.toNew - change.fromNew) - (change.toOld - change.fromOld);
+  if (shift === 0) {
+    return null;
+  }
+
+  return {
+    fromOld: change.fromOld,
+    toOld: change.toOld,
+    delta: shift,
+  };
+}
+
+function firstChangedOldPos(
+  delta: Pick<SemanticDelta, "rawChangedRanges">,
+): number {
+  let first = Number.POSITIVE_INFINITY;
+  for (const range of delta.rawChangedRanges) {
+    if (range.fromOld < first) {
+      first = range.fromOld;
+    }
+  }
+  return first;
+}
+
+function shiftHeadingSemantics(
+  value: HeadingSemantics,
+  delta: number,
+): HeadingSemantics {
+  return {
+    from: value.from + delta,
+    to: value.to + delta,
+    level: value.level,
+    text: value.text,
+    id: value.id,
+    number: value.number,
+    unnumbered: value.unnumbered,
+  };
+}
+
 export function mapHeadingSemantics(
   value: HeadingSemantics,
   changes: PositionMapper,
@@ -201,12 +268,12 @@ export function buildHeadingSlice(
 
 export function mergeHeadingSlice(
   previous: HeadingSlice,
-  delta: Pick<SemanticDelta, "mapOldToNew">,
+  delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
   dirtyExtractions: readonly DirtyHeadingWindowExtraction[],
 ): HeadingSlice {
   let headings: readonly HeadingStructure[] = mapHeadings(
     previous.headings,
-    deltaMapper(delta),
+    delta,
   );
   let earliestAffectedIndex = Number.POSITIVE_INFINITY;
 

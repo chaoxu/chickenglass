@@ -22,6 +22,7 @@ import {
   classifyReference,
   type ResolvedCrossref,
 } from "../index/crossref-resolver";
+import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
 import { ensureCitationsRegistered } from "../citations/citation-registration";
 import {
   type BibStore,
@@ -47,7 +48,6 @@ import {
   dirtyRangesFromChanges,
   expandChangeRangeToLines,
   mergeDirtyRanges,
-  rangeIntersectsDirtyRanges,
 } from "./incremental-dirty-ranges";
 import {
   findFocusedInlineRevealTarget,
@@ -287,7 +287,14 @@ export function collectReferenceRanges(
   // reset and replay every citation cluster.
   ensureCitationsRegistered(analysis, store, processor);
 
-  return emitReferenceDecorations(planReferenceRendering(view, store, processor, references));
+  return emitReferenceDecorations(
+    planReferenceRendering(
+      view,
+      store,
+      processor,
+      references,
+    ),
+  );
 }
 
 /** Build reference decorations from the view state. */
@@ -301,12 +308,15 @@ function collectDirtyReferences(
   references: readonly ReferenceSemantics[],
   dirtyRanges: readonly DirtyRange[],
 ): ReferenceSemantics[] {
-  if (dirtyRanges.length === 0) return [];
+  if (dirtyRanges.length === 0 || references.length === 0) return [];
   const dirty: ReferenceSemantics[] = [];
-  for (const reference of references) {
-    if (rangeIntersectsDirtyRanges(reference.from, reference.to, dirtyRanges)) {
+  const seenFrom = new Set<number>();
+  for (const range of dirtyRanges) {
+    forEachOverlappingOrderedRange(references, range, (reference) => {
+      if (seenFrom.has(reference.from)) return;
+      seenFrom.add(reference.from);
       dirty.push(reference);
-    }
+    });
   }
   return dirty;
 }
@@ -359,11 +369,33 @@ function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
         (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
       )
     : [];
+  if (
+    docDirtyRanges.length > 0 &&
+    !activeChanged &&
+    !dirtyRangesCouldContainReferences(update, docDirtyRanges)
+  ) {
+    return [];
+  }
   return mergeDirtyRangesWithActiveReference(
     docDirtyRanges,
     activeChanged ? beforeActive : null,
     activeChanged ? afterActive : null,
   );
+}
+
+function dirtyRangesCouldContainReferences(
+  update: ViewUpdate,
+  dirtyRanges: readonly DirtyRange[],
+): boolean {
+  for (const range of dirtyRanges) {
+    if (
+      update.startState.sliceDoc(range.from, range.to).includes("@") ||
+      update.state.sliceDoc(range.from, range.to).includes("@")
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function collectReferenceRangesForDirtySpans(
@@ -387,7 +419,8 @@ export const referenceRenderPlugin: Extension = createSemanticSensitiveViewPlugi
   {
     collectRanges: collectReferenceRangesForDirtySpans,
     semanticChanged: referenceRenderSliceChanged,
-    contextChanged: (update) => getReferenceRevealChange(update).activeChanged,
+    contextChanged: (update) =>
+      getReferenceRevealChange(update).activeChanged,
     contextUpdateMode: "dirty-ranges",
     shouldRebuild: (update) => referenceRenderDependenciesNeedRebuild(update),
     dirtyRangeFn: (update) => computeReferenceDirtyRanges(update),
@@ -395,3 +428,5 @@ export const referenceRenderPlugin: Extension = createSemanticSensitiveViewPlugi
       mappedDecorationsWithFreshWidgetSources(decorations, update.changes),
   },
 );
+
+export { computeReferenceDirtyRanges as _computeReferenceDirtyRangesForTest };

@@ -37,13 +37,30 @@ export function buildSectionDecorations(state: EditorState): DecorationSet {
   return buildDecorations(items);
 }
 
-function sectionHeadingFingerprint(state: EditorState): string {
-  return state.field(documentSemanticsField).headings
-    .map((heading) => `${heading.level}:${heading.unnumbered ? "u" : "n"}`)
-    .join(",");
+function sameSectionHeadingTopology(
+  before: readonly { readonly level: number; readonly unnumbered: boolean }[],
+  after: readonly { readonly level: number; readonly unnumbered: boolean }[],
+): boolean {
+  if (before.length !== after.length) {
+    return false;
+  }
+
+  for (let index = 0; index < before.length; index += 1) {
+    if (
+      before[index].level !== after[index].level ||
+      before[index].unnumbered !== after[index].unnumbered
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-const sectionShouldRebuild = createChangeChecker(sectionHeadingFingerprint);
+const sectionShouldRebuild = createChangeChecker({
+  get: (state) => state.field(documentSemanticsField).headings,
+  equals: sameSectionHeadingTopology,
+});
 
 const sectionNumberField = createDecorationsField(
   buildSectionDecorations,

@@ -5,6 +5,7 @@ import type {
   ReferenceSemantics,
   TextSource,
 } from "../semantics/document";
+import type { PositionMapper } from "../semantics/incremental/merge-utils";
 import {
   formatBlockReferenceLabel,
   formatEquationReferenceLabel,
@@ -14,6 +15,7 @@ import type {
   CitationReferenceEntry,
   CrossrefReferenceEntry,
   LabelReferenceEntry,
+  ReferenceTarget,
   ReferenceEntry,
   ReferenceIndexModel,
 } from "./model";
@@ -235,4 +237,83 @@ export function classifyReferenceIndex(
 
   addCitationEntries(doc, analysis.references, index);
   return index;
+}
+
+function mapReferenceRange(
+  range: ReferenceEntry["sourceRange"],
+  changes: PositionMapper,
+): ReferenceEntry["sourceRange"] {
+  const from = changes.mapPos(range.from, 1);
+  const to = Math.max(from, changes.mapPos(range.to, -1));
+  if (from === range.from && to === range.to) {
+    return range;
+  }
+  return { from, to };
+}
+
+function mapReferenceTarget(
+  target: null,
+  changes: PositionMapper,
+): null;
+function mapReferenceTarget(
+  target: ReferenceTarget,
+  changes: PositionMapper,
+): ReferenceTarget;
+function mapReferenceTarget(
+  target: ReferenceEntry["target"],
+  changes: PositionMapper,
+): ReferenceEntry["target"] {
+  if (!target?.range) {
+    return target;
+  }
+  const range = mapReferenceRange(target.range, changes);
+  if (range === target.range) {
+    return target;
+  }
+  return {
+    ...target,
+    range,
+  };
+}
+
+function mapReferenceEntry(
+  entry: ReferenceEntry,
+  changes: PositionMapper,
+): ReferenceEntry {
+  const sourceRange = mapReferenceRange(entry.sourceRange, changes);
+  if (entry.type === "citation") {
+    if (sourceRange === entry.sourceRange) {
+      return entry;
+    }
+    return {
+      ...entry,
+      sourceRange,
+    };
+  }
+
+  const target = mapReferenceTarget(entry.target, changes);
+  if (sourceRange === entry.sourceRange && target === entry.target) {
+    return entry;
+  }
+  return {
+    ...entry,
+    sourceRange,
+    target,
+  };
+}
+
+export function mapReferenceIndex(
+  index: ReferenceIndexModel,
+  changes: PositionMapper,
+): ReferenceIndexModel {
+  let changed = false;
+  const mapped = new Map<string, ReferenceEntry>();
+  for (const [id, entry] of index) {
+    const next = mapReferenceEntry(entry, changes);
+    if (next !== entry) {
+      changed = true;
+    }
+    mapped.set(id, next);
+  }
+  return changed ? mapped : index;
 }

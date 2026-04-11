@@ -3,7 +3,10 @@ import { EditorView } from "@codemirror/view";
 import { bibDataField } from "../citations";
 import { defaultPlugins } from "../plugins";
 import { referencePresentationField } from "../references/presentation";
-import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
+import {
+  editorBlockReferenceTargetInputsField,
+  documentReferenceCatalogField,
+} from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../state/document-analysis";
 import { documentLabelGraphField } from "../state/document-label-graph";
@@ -30,6 +33,7 @@ export function coreDocumentStateExtensions(): Extension[] {
     documentSemanticsField,
     createPluginRegistryField(defaultPlugins),
     blockCounterField,
+    editorBlockReferenceTargetInputsField,
     documentReferenceCatalogField,
     documentLabelGraphField,
     bibDataField,

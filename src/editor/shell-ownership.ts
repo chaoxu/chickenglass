@@ -23,6 +23,13 @@ export type ActiveShellPathEntry =
   | { readonly kind: "fenced"; readonly depth: number; readonly block: FencedDivInfo }
   | { readonly kind: "code"; readonly depth: number; readonly block: CodeShellInfo };
 
+interface ActiveFencedCache {
+  readonly path: FencedDivInfo[];
+  readonly openFenceStarts: ReadonlySet<number>;
+}
+
+const activeFencedCache = new WeakMap<EditorState, ActiveFencedCache>();
+
 function currentSelectionRange(state: EditorState): {
   readonly from: number;
   readonly to: number;
@@ -74,16 +81,36 @@ export function findCodeShellAt(
 }
 
 export function activeFencedPath(state: EditorState): FencedDivInfo[] {
+  const cached = activeFencedCache.get(state);
+  if (cached) {
+    return cached.path;
+  }
   const focused = state.field(editorFocusField, false) ?? false;
-  if (!focused) return [];
+  if (!focused) {
+    activeFencedCache.set(state, {
+      path: [],
+      openFenceStarts: new Set(),
+    });
+    return [];
+  }
   const selection = currentSelectionRange(state);
-  return collectFencedDivs(state)
+  const path = collectFencedDivs(state)
     .filter((div) => containsRange(div, selection))
     .sort((a, b) => (a.from - b.from) || (a.to - b.to));
+  activeFencedCache.set(state, {
+    path,
+    openFenceStarts: new Set(path.map((div) => div.openFenceFrom)),
+  });
+  return path;
 }
 
 export function activeFencedOpenFenceStarts(state: EditorState): ReadonlySet<number> {
-  return new Set(activeFencedPath(state).map((div) => div.openFenceFrom));
+  const cached = activeFencedCache.get(state);
+  if (cached) {
+    return cached.openFenceStarts;
+  }
+  activeFencedPath(state);
+  return activeFencedCache.get(state)?.openFenceStarts ?? new Set();
 }
 
 export function activeFencedDepthAtRange(

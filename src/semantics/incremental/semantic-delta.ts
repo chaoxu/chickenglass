@@ -105,12 +105,67 @@ function detectFrontmatterChange(tr: Transaction): boolean {
   return changed;
 }
 
+interface SingleInsertionChange {
+  readonly pos: number;
+  readonly delta: number;
+}
+
+function getSingleInsertionChange(
+  rawChangedRanges: readonly RawChangedRange[],
+): SingleInsertionChange | null {
+  if (rawChangedRanges.length !== 1) {
+    return null;
+  }
+
+  const change = rawChangedRanges[0];
+  if (change.fromOld !== change.toOld || change.fromNew === change.toNew) {
+    return null;
+  }
+
+  return {
+    pos: change.fromOld,
+    delta: change.toNew - change.fromNew,
+  };
+}
+
+function mapOldToNewSingleInsertion(
+  pos: number,
+  assoc: number,
+  change: SingleInsertionChange,
+): number {
+  if (pos < change.pos) {
+    return pos;
+  }
+  if (pos > change.pos) {
+    return pos + change.delta;
+  }
+  return assoc < 0 ? change.pos : change.pos + change.delta;
+}
+
+function mapNewToOldSingleInsertion(
+  pos: number,
+  assoc: number,
+  change: SingleInsertionChange,
+): number {
+  if (pos < change.pos) {
+    return pos;
+  }
+  if (pos > change.pos + change.delta) {
+    return pos - change.delta;
+  }
+  if (pos < change.pos + change.delta) {
+    return change.pos;
+  }
+  return assoc < 0 ? change.pos : pos - change.delta;
+}
+
 export function buildSemanticDelta(
   tr: Transaction,
   options: SemanticDeltaBuildOptions = {},
 ): SemanticDelta {
   const rawChangedRanges = collectRawChangedRanges(tr);
   const syntaxTreeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
+  const singleInsertion = getSingleInsertionChange(rawChangedRanges);
 
   return {
     rawChangedRanges,
@@ -121,10 +176,14 @@ export function buildSemanticDelta(
     globalInvalidation: tr.annotation(semanticGlobalInvalidationAnnotation) === true,
     plainInlineTextOnlyChange: detectPlainInlineTextOnlyChange(tr),
     mapOldToNew(pos, assoc = -1) {
-      return tr.changes.mapPos(pos, assoc);
+      return singleInsertion
+        ? mapOldToNewSingleInsertion(pos, assoc, singleInsertion)
+        : tr.changes.mapPos(pos, assoc);
     },
     mapNewToOld(pos, assoc = -1) {
-      return tr.changes.invertedDesc.mapPos(pos, assoc);
+      return singleInsertion
+        ? mapNewToOldSingleInsertion(pos, assoc, singleInsertion)
+        : tr.changes.invertedDesc.mapPos(pos, assoc);
     },
   };
 }

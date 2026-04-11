@@ -1,5 +1,6 @@
 import type { SelectionRange } from "@codemirror/state";
 import { containsRange } from "../lib/range-helpers";
+import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
 
 export interface InlineRevealTarget {
   readonly from: number;
@@ -27,13 +28,22 @@ export function findFocusedInlineRevealTarget<T extends InlineRevealTarget>(
   focused: boolean,
   matches: (target: T) => boolean = () => true,
 ): T | null {
-  for (const target of targets) {
-    if (!matches(target)) continue;
-    if (isFocusedInlineRevealTarget(selection, target, focused)) {
-      return target;
-    }
+  if (!focused || targets.length === 0) {
+    return null;
   }
-  return null;
+
+  let matched: T | null = null;
+  forEachOverlappingOrderedRange(
+    targets,
+    { from: selection.from, to: selection.to },
+    (target) => {
+      if (matched || !matches(target)) return;
+      if (containsRange(target, selection)) {
+        matched = target;
+      }
+    },
+  );
+  return matched;
 }
 
 export function inlineRevealTargetChanged(

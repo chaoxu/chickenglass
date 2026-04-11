@@ -537,7 +537,6 @@ export function computeMarkdownDocChangeRanges(
   };
 
   update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-    pushRange(fromB, toB);
     collectMarkdownDirtyRangesInState(update.startState, fromA, toA, (nodeFrom, nodeTo) => {
       dirtyRanges.push(mapNodeRange(update, nodeFrom, nodeTo));
     });

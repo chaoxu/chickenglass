@@ -26,7 +26,7 @@ import {
   isFencedStructureEditActive,
 } from "../editor/structure-edit-state";
 import { createChangeChecker } from "../state/change-detection";
-import { collectFencedDivs } from "../fenced-block/model";
+import { collectFencedDivs, docChangeTouchesFencedDivStructure } from "../fenced-block/model";
 import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
 import { mathMacrosField } from "../state/math-macros";
 import {
@@ -39,6 +39,7 @@ import {
 } from "./render-core";
 import {
   documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
 import { type BlockCounterState, blockCounterField } from "../state/block-counter";
 import { pluginRegistryField } from "../state/plugin-registry";
@@ -70,41 +71,13 @@ function sameNumberSet(
   return true;
 }
 
-function sameStringArray(
-  before: readonly string[] | null,
-  after: readonly string[] | null,
-): boolean {
-  if (before === after) return true;
-  if (!before || !after) return before === after;
-  if (before.length !== after.length) return false;
-  for (let index = 0; index < before.length; index += 1) {
-    if (before[index] !== after[index]) return false;
-  }
-  return true;
-}
-
-function getFencedDivRenderSignature(
-  state: EditorState,
-): readonly string[] | null {
+function getFencedDivRenderRevision(state: EditorState): number {
   const semantics = state.field(documentSemanticsField, false);
-  if (!semantics) return null;
-  return semantics.fencedDivs.map((div) => [
-    div.primaryClass ?? "",
-    div.classes.join("\u0001"),
-    div.id ?? "",
-    div.title ?? "",
-    div.singleLine ? "1" : "0",
-    div.isSelfClosing ? "1" : "0",
-    div.closeFenceFrom < 0 ? "0" : "1",
-  ].join("\u0002"));
+  return semantics ? getDocumentAnalysisSliceRevision(semantics, "fencedDivs") : -1;
 }
 
 function getBlockCounterSignature(state: EditorState): string {
-  const counters = state.field(blockCounterField, false);
-  if (!counters) return "";
-  return counters.blocks
-    .map((block) => `${block.type}\u0000${block.id ?? ""}\u0000${block.number}`)
-    .join("\u0001");
+  return state.field(blockCounterField, false)?.numberingKey ?? "";
 }
 /**
  * Build decorations for all fenced divs using the plugin registry.
@@ -321,10 +294,7 @@ const activeShellStartsChanged = createChangeChecker({
   equals: sameNumberSet,
 });
 
-const fencedDivRenderSignatureChanged = createChangeChecker({
-  get: getFencedDivRenderSignature,
-  equals: sameStringArray,
-});
+const fencedDivRenderRevisionChanged = createChangeChecker(getFencedDivRenderRevision);
 
 const blockDecorationDependencyChanged = createChangeChecker(
   (state) => state.field(pluginRegistryField, false),
@@ -334,7 +304,10 @@ const blockDecorationDependencyChanged = createChangeChecker(
 
 function blockDecorationInputsChanged(tr: Transaction): boolean {
   return hasStructureEditEffect(tr)
-    || fencedDivRenderSignatureChanged(tr)
+    || (
+      fencedDivRenderRevisionChanged(tr)
+      && (!tr.docChanged || docChangeTouchesFencedDivStructure(tr))
+    )
     || blockDecorationDependencyChanged(tr);
 }
 

@@ -555,7 +555,7 @@ describe("computeMarkdownDocChangeRanges (#823)", () => {
   it("keeps prose typing scoped to the dirty fragment", () => {
     const { getRanges } = createDocRangeView("intro text\n\n**bold** tail", 5);
     view.dispatch({ changes: { from: 2, insert: "X" } });
-    expect(getRanges()).toEqual([{ from: 2, to: 3 }]);
+    expect(getRanges()).toEqual([]);
   });
 
   it("expands edits inside bold text to the full formatted node", () => {

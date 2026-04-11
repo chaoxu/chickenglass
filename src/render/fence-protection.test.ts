@@ -20,6 +20,7 @@ import {
   getClosingFenceRanges,
   getOpeningFenceBacktickRanges,
   getOpeningMathDelimiterRanges,
+  _docChangeCouldAffectDisplayMathFencesForTest as docChangeCouldAffectDisplayMathFences,
   _fenceProtectionCacheFieldForTest as fenceProtectionCacheField,
 } from "../plugins/fence-protection";
 import { _blockDecorationFieldForTest as blockDecorationField } from "./plugin-render";
@@ -133,6 +134,27 @@ describe("openingFenceColonProtection", () => {
   });
 });
 
+describe("display math fence invalidation", () => {
+  it("ignores plain prose edits that cannot affect display math delimiters", () => {
+    const state = createProtectedState([
+      "Plain intro text.",
+      "",
+      "$$",
+      "x^2",
+      "$$",
+    ].join("\n"));
+    const insertAt = state.doc.line(1).from + "Plain".length;
+    const tr = state.update({
+      changes: {
+        from: insertAt,
+        insert: " more",
+      },
+    });
+
+    expect(docChangeCouldAffectDisplayMathFences(tr)).toBe(false);
+  });
+});
+
 describe("fenceProtectionCacheField", () => {
   it("reuses the mapped cache on same-length code block body edits that do not move fences", () => {
     const doc = "```js\nconsole.log('x')\n```";
@@ -148,6 +170,23 @@ describe("fenceProtectionCacheField", () => {
     }).state;
 
     expect(nextState.field(fenceProtectionCacheField)).toBe(initialCache);
+  });
+
+  it("keeps helper reads on the mapped cache after same-length code block body edits", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createCodeBlockProtectedState(doc);
+    const nextState = state.update({
+      changes: {
+        from: doc.indexOf("console"),
+        to: doc.indexOf("console") + "console".length,
+        insert: "printer",
+      },
+    }).state;
+
+    const cache = nextState.field(fenceProtectionCacheField);
+
+    expect(getClosingFenceRanges(nextState)).toBe(cache.closingFenceRanges);
+    expect(getOpeningFenceBacktickRanges(nextState)).toBe(cache.openingFenceBacktickRanges);
   });
 });
 

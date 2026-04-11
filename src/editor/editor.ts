@@ -1,7 +1,8 @@
-import { indentUnit, LanguageDescription } from "@codemirror/language";
+import { indentUnit, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState, type Extension, StateEffect, StateField } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
+import { classHighlighter } from "@lezer/highlight";
 import { bibliographyPlugin } from "../citations";
 import {
   blockRenderPlugin,
@@ -29,6 +30,7 @@ import {
   editableCompartment,
   modeClassCompartment,
   renderCompartment,
+  syntaxHighlightCompartment,
   themeCompartment,
   treeViewCompartment,
 } from "./compartments";
@@ -125,6 +127,8 @@ const renderingExtensions: Extension[] = [
   searchHighlightPlugin,
 ];
 
+const sourceSyntaxHighlightingExtension = syntaxHighlighting(classHighlighter);
+
 /** Standard code-language descriptions for fenced code blocks. */
 const codeLanguageDescriptions: LanguageDescription[] = [
   LanguageDescription.of({ name: "javascript", alias: ["js", "jsx"], load: () => import("@codemirror/lang-javascript").then(m => m.javascript({ jsx: true })) }),
@@ -220,8 +224,9 @@ export function createEditor(config: EditorConfig): EditorView {
       // Parser: markdown with custom extensions + code block language support
       ...createMarkdownLanguageExtensions({
         codeLanguages: codeLanguageDescriptions,
-        syntaxHighlighting: true,
+        syntaxHighlighting: false,
       }),
+      syntaxHighlightCompartment.of([]),
 
       // Core document state (frontmatter, semantics, block plugins, caches)
       ...coreDocumentStateExtensions(),
@@ -273,6 +278,7 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
       effects.push(renderCompartment.reconfigure(renderingExtensions));
       effects.push(editableCompartment.reconfigure([]));
       effects.push(modeClassCompartment.reconfigure([]));
+      effects.push(syntaxHighlightCompartment.reconfigure([]));
       break;
     case "source":
       effects.push(renderCompartment.reconfigure([]));
@@ -280,6 +286,7 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
       effects.push(modeClassCompartment.reconfigure(
         EditorView.editorAttributes.of({ class: "cf-source-mode" }),
       ));
+      effects.push(syntaxHighlightCompartment.reconfigure(sourceSyntaxHighlightingExtension));
       break;
     case "read":
       effects.push(renderCompartment.reconfigure(renderingExtensions));
@@ -287,6 +294,7 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
       effects.push(modeClassCompartment.reconfigure(
         EditorView.editorAttributes.of({ class: "cf-read-mode" }),
       ));
+      effects.push(syntaxHighlightCompartment.reconfigure([]));
       break;
   }
 

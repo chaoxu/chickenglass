@@ -35,6 +35,8 @@ interface DirtyRange {
   readonly to: number;
 }
 
+const TABLE_STRUCTURE_RE = /[|:\-\n\r]/;
+
 function createTableRange(
   doc: Text,
   tableFrom: number,
@@ -125,6 +127,19 @@ function mapTableRange(table: TableRange, tr: Transaction): TableRange {
   };
 }
 
+function mapTableRanges(
+  tables: readonly TableRange[],
+  tr: Transaction,
+): readonly TableRange[] {
+  let changed = false;
+  const mapped = tables.map((table) => {
+    const next = mapTableRange(table, tr);
+    if (next !== table) changed = true;
+    return next;
+  });
+  return changed ? mapped : tables;
+}
+
 function expandChangedRangeToNearbyLines(
   doc: Text,
   from: number,
@@ -140,6 +155,40 @@ function expandChangedRangeToNearbyLines(
   const expandedEnd = doc.line(Math.min(doc.lines, endLine.number + 1)).to;
 
   return { from: expandedStart, to: expandedEnd };
+}
+
+function changeCouldAffectTableStructure(
+  change: { readonly from: number; readonly to: number; readonly inserted: Text },
+): boolean {
+  if (change.from !== change.to) {
+    return true;
+  }
+  return TABLE_STRUCTURE_RE.test(change.inserted.toString());
+}
+
+function canSkipLocalTableRebuild(
+  tables: readonly TableRange[],
+  tr: Transaction,
+): boolean {
+  let canSkip = true;
+
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    if (!canSkip) return;
+    if (changeCouldAffectTableStructure({ from: fromA, to: toA, inserted })) {
+      canSkip = false;
+      return;
+    }
+
+    const expanded = expandChangedRangeToNearbyLines(tr.startState.doc, fromA, toA);
+    for (const table of tables) {
+      if (table.from > expanded.to) break;
+      if (!rangesOverlap(table, expanded)) continue;
+      canSkip = false;
+      return;
+    }
+  }, true);
+
+  return canSkip;
 }
 
 function computeDirtyRanges(
@@ -194,22 +243,26 @@ function incrementalTableDiscoveryUpdate(
   tables: readonly TableRange[],
   tr: Transaction,
 ): readonly TableRange[] {
+  const mappedTables = mapTableRanges(tables, tr);
+  if (canSkipLocalTableRebuild(tables, tr)) {
+    return mappedTables;
+  }
+
   const dirtyRanges = computeDirtyRanges(tables, tr);
   const rebuiltTables = collectTables(tr.state, dirtyRanges);
   const preservedTables: TableRange[] = [];
 
-  for (const table of tables) {
-    const mapped = mapTableRange(table, tr);
+  for (const mapped of mappedTables) {
     if (tableOverlapsDirtyRanges(mapped, dirtyRanges)) continue;
     preservedTables.push(mapped);
   }
 
   if (
     rebuiltTables.length === 0 &&
-    preservedTables.length === tables.length &&
-    preservedTables.every((table, index) => table === tables[index])
+    preservedTables.length === mappedTables.length &&
+    preservedTables.every((table, index) => table === mappedTables[index])
   ) {
-    return tables;
+    return mappedTables;
   }
 
   return [...preservedTables, ...rebuiltTables].sort((left, right) => left.from - right.from);

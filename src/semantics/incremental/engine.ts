@@ -1,7 +1,10 @@
 import type { Tree } from "@lezer/common";
 import { buildDocumentIR } from "../../ir/document-ir-builder";
 import type { DocumentIR } from "../../ir/types";
-import { classifyReferenceIndex } from "../../references/classifier";
+import {
+  classifyReferenceIndex,
+  mapReferenceIndex,
+} from "../../references/classifier";
 import type { ReferenceIndexModel } from "../../references/model";
 import type {
   DocumentAnalysis,
@@ -88,6 +91,7 @@ type DocumentAnalysisBase = Omit<DocumentAnalysis, "referenceIndex">;
 interface FencedDivSlice {
   readonly fencedDivs: readonly FencedDivSemantics[];
   readonly fencedDivByFrom: ReadonlyMap<number, FencedDivSemantics>;
+  readonly structureRanges: readonly { readonly from: number; readonly to: number }[];
 }
 
 interface IncludeSlice {
@@ -207,6 +211,7 @@ function createFencedDivSlice(
   return {
     fencedDivs,
     fencedDivByFrom: new Map(fencedDivs.map((div) => [div.from, div])),
+    structureRanges: collectFencedDivStructureRanges(fencedDivs),
   };
 }
 
@@ -303,6 +308,107 @@ function sameReferenceIndexInputs(
   );
 }
 
+function sameReferenceIndexHeadingMetadata(
+  left: HeadingSlice["headings"],
+  right: HeadingSlice["headings"],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const before = left[index];
+    const after = right[index];
+    if (
+      before.level !== after.level
+      || before.text !== after.text
+      || before.id !== after.id
+      || before.number !== after.number
+      || before.unnumbered !== after.unnumbered
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameReferenceIndexFencedDivMetadata(
+  left: readonly FencedDivSemantics[],
+  right: readonly FencedDivSemantics[],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const before = left[index];
+    const after = right[index];
+    if (
+      before.primaryClass !== after.primaryClass
+      || before.id !== after.id
+      || before.title !== after.title
+      || (before.attrFrom !== undefined) !== (after.attrFrom !== undefined)
+      || (before.attrTo !== undefined) !== (after.attrTo !== undefined)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameReferenceIndexEquationMetadata(
+  left: EquationSlice["equations"],
+  right: EquationSlice["equations"],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const before = left[index];
+    const after = right[index];
+    if (
+      before.id !== after.id
+      || before.number !== after.number
+      || before.latex !== after.latex
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameReferenceIndexReferenceMetadata(
+  left: readonly ReferenceSemantics[],
+  right: readonly ReferenceSemantics[],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const before = left[index];
+    const after = right[index];
+    if (
+      before.bracketed !== after.bracketed
+      || before.ids !== after.ids
+      || before.locators !== after.locators
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function canMapReferenceIndexInputs(
+  previous: InternalDocumentAnalysisState,
+  next: DocumentAnalysisSlices,
+): boolean {
+  return (
+    sameReferenceIndexHeadingMetadata(previous.headingSlice.headings, next.headingSlice.headings)
+    && sameReferenceIndexFencedDivMetadata(
+      previous.fencedDivSlice.fencedDivs,
+      next.fencedDivSlice.fencedDivs,
+    )
+    && sameReferenceIndexEquationMetadata(
+      previous.equationSlice.equations,
+      next.equationSlice.equations,
+    )
+    && sameReferenceIndexReferenceMetadata(
+      previous.referenceSlice.references,
+      next.referenceSlice.references,
+    )
+  );
+}
+
 function buildDocumentAnalysisBase(
   slices: DocumentAnalysisSlices,
 ): DocumentAnalysisBase {
@@ -318,6 +424,7 @@ function finalizeDocumentAnalysis(
   slices: DocumentAnalysisSlices,
   excludedRanges: readonly ExcludedRange[],
   doc: TextSource,
+  referenceIndexOverride?: ReferenceIndexModel,
 ): DocumentAnalysis {
   const previousState = previous ? getInternalState(previous) : undefined;
   if (
@@ -330,10 +437,12 @@ function finalizeDocumentAnalysis(
 
   const revisions = buildRevisionInfo(previousState, slices);
   const analysisBase = buildDocumentAnalysisBase(slices);
-  const referenceIndex =
+  const referenceIndex = referenceIndexOverride
+    ?? (
     previousState && sameReferenceIndexInputs(previousState, slices)
       ? previousState.referenceIndex
-      : classifyReferenceIndex(doc, analysisBase);
+      : classifyReferenceIndex(doc, analysisBase)
+    );
   const analysis: DocumentAnalysis = {
     ...analysisBase,
     referenceIndex,
@@ -496,61 +605,60 @@ function windowTouchesRange(
   return range.from < window.toOld && window.fromOld < range.to;
 }
 
-function windowsTouchAnyRange(
+function windowTouchesSortedRanges(
+  window: Pick<DirtyWindow, "fromOld" | "toOld">,
+  ranges: readonly { readonly from: number; readonly to: number }[],
+): boolean {
+  if (ranges.length === 0) {
+    return false;
+  }
+
+  if (window.fromOld === window.toOld) {
+    const index = lowerBoundByTo(ranges, window.fromOld);
+    const range = ranges[index];
+    return range !== undefined && windowTouchesRange(range, window);
+  }
+
+  const index = lowerBoundByTo(ranges, window.fromOld + 1);
+  const range = ranges[index];
+  return range !== undefined && windowTouchesRange(range, window);
+}
+
+function windowsTouchSortedRanges(
   windows: readonly Pick<DirtyWindow, "fromOld" | "toOld">[],
   ranges: readonly { readonly from: number; readonly to: number }[],
 ): boolean {
-  for (const window of windows) {
-    for (const range of ranges) {
-      if (windowTouchesRange(range, window)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return windows.some((window) => windowTouchesSortedRanges(window, ranges));
 }
 
-function canSkipStructuralExtraction(
+function classifyStructuralExtraction(
   previousState: InternalDocumentAnalysisState,
   delta: SemanticDelta,
-): boolean {
+): "skip" | "paragraph" | "full" {
   if (!delta.plainInlineTextOnlyChange) {
-    return false;
+    return "full";
   }
 
   const dirtyWindows = delta.dirtyWindows;
-  return !(
-    windowsTouchAnyRange(dirtyWindows, previousState.headingSlice.headings)
-    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.refs)
-    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.definitions)
-    || windowsTouchAnyRange(dirtyWindows, previousState.fencedDivSlice.fencedDivs)
-    || windowsTouchAnyRange(dirtyWindows, previousState.equationSlice.equations)
-    || windowsTouchAnyRange(dirtyWindows, previousState.mathSlice.mathRegions)
-    || windowsTouchAnyRange(dirtyWindows, previousState.referenceSlice.references)
-    || windowsTouchAnyRange(dirtyWindows, previousState.excludedRanges)
-  );
-}
 
-function canUseParagraphStructuralExtraction(
-  previousState: InternalDocumentAnalysisState,
-  delta: SemanticDelta,
-): boolean {
-  if (!delta.plainInlineTextOnlyChange) {
-    return false;
+  const touchesStructuralOwners = (
+    windowsTouchSortedRanges(dirtyWindows, previousState.headingSlice.headings)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.footnoteSlice.refs)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.footnoteSlice.definitions)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.fencedDivSlice.structureRanges)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.equationSlice.equations)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.includeSlice.includes)
+  );
+  if (touchesStructuralOwners) {
+    return "full";
   }
 
-  const dirtyWindows = delta.dirtyWindows;
-  return !(
-    windowsTouchAnyRange(dirtyWindows, previousState.headingSlice.headings)
-    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.refs)
-    || windowsTouchAnyRange(dirtyWindows, previousState.footnoteSlice.definitions)
-    || windowsTouchAnyRange(
-      dirtyWindows,
-      collectFencedDivStructureRanges(previousState.fencedDivSlice.fencedDivs),
-    )
-    || windowsTouchAnyRange(dirtyWindows, previousState.equationSlice.equations)
-    || windowsTouchAnyRange(dirtyWindows, previousState.includeSlice.includes)
+  const touchesInlineOwners = (
+    windowsTouchSortedRanges(dirtyWindows, previousState.mathSlice.mathRegions)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.referenceSlice.references)
+    || windowsTouchSortedRanges(dirtyWindows, previousState.excludedRanges)
   );
+  return touchesInlineOwners ? "paragraph" : "skip";
 }
 
 function extractDirtyParagraphWindows(
@@ -611,10 +719,9 @@ export function updateDocumentAnalysis(
   }
 
   const changes = createPositionMapper(delta);
-  const skipStructuralExtraction = canSkipStructuralExtraction(previousState, delta);
-  const useParagraphStructuralExtraction =
-    !skipStructuralExtraction
-    && canUseParagraphStructuralExtraction(previousState, delta);
+  const structuralExtractionMode = classifyStructuralExtraction(previousState, delta);
+  const skipStructuralExtraction = structuralExtractionMode === "skip";
+  const useParagraphStructuralExtraction = structuralExtractionMode === "paragraph";
   const expandedForEquations = expandDirtyWindows(
     delta.dirtyWindows,
     previousState.equationSlice.equations,
@@ -680,6 +787,7 @@ export function updateDocumentAnalysis(
       fencedDivSlice.fencedDivs,
       previousState.includeSlice.includes,
       changes,
+      delta.rawChangedRanges,
     ),
   );
   const includeSlice = includes === previousState.includeSlice.includes
@@ -764,6 +872,18 @@ export function updateDocumentAnalysis(
     narrativeExtractions,
   );
 
+  const referenceIndex = canMapReferenceIndexInputs(previousState, {
+    headingSlice,
+    footnoteSlice,
+    fencedDivSlice,
+    equationSlice,
+    mathSlice,
+    referenceSlice,
+    includeSlice,
+  })
+    ? mapReferenceIndex(previousState.referenceIndex, changes)
+    : undefined;
+
   return finalizeDocumentAnalysis(previous, {
     headingSlice,
     footnoteSlice,
@@ -772,7 +892,7 @@ export function updateDocumentAnalysis(
     mathSlice,
     referenceSlice,
     includeSlice,
-  }, excludedRanges, doc);
+  }, excludedRanges, doc, referenceIndex);
 }
 
 export function updateDocumentArtifacts(

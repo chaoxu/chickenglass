@@ -5,6 +5,7 @@ import { documentAnalysisField } from "../state/document-analysis";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { mathMacrosField } from "../state/math-macros";
 import { serializeMacros } from "./source-widget";
+import { rangesOverlap } from "../lib/range-helpers";
 
 function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {
   if (typeof requestIdleCallback === "function") {
@@ -32,6 +33,51 @@ function prewarmMathRegionsChanged(
   return false;
 }
 
+const INLINE_MATH_DELIMITER_RE = /(?:\$|\\\(|\\\)|\\\[|\\\])/;
+
+function docChangeTouchesMathContent(update: ViewUpdate): boolean {
+  if (!update.docChanged) return false;
+
+  const beforeRegions = update.startState.field(documentAnalysisField).mathRegions;
+  const afterRegions = update.state.field(documentAnalysisField).mathRegions;
+
+  let touched = false;
+  update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    if (touched) return;
+
+    const beforeFrom = Math.max(0, fromA - 2);
+    const beforeTo = Math.min(update.startState.doc.length, toA + 2);
+    const afterFrom = Math.max(0, fromB - 2);
+    const afterTo = Math.min(update.state.doc.length, toB + 2);
+
+    if (
+      INLINE_MATH_DELIMITER_RE.test(update.startState.sliceDoc(beforeFrom, beforeTo))
+      || INLINE_MATH_DELIMITER_RE.test(update.state.sliceDoc(afterFrom, afterTo))
+    ) {
+      touched = true;
+      return;
+    }
+
+    for (const region of beforeRegions) {
+      if (region.from > toA) break;
+      if (rangesOverlap(region, { from: fromA, to: toA })) {
+        touched = true;
+        return;
+      }
+    }
+
+    for (const region of afterRegions) {
+      if (region.from > toB) break;
+      if (rangesOverlap(region, { from: fromB, to: toB })) {
+        touched = true;
+        return;
+      }
+    }
+  });
+
+  return touched;
+}
+
 /**
  * ViewPlugin that pre-populates the KaTeX HTML string cache during idle time.
  */
@@ -49,10 +95,14 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       const regions = update.state.field(documentAnalysisField).mathRegions;
       const macros = update.state.field(mathMacrosField);
       const macrosKey = serializeMacros(macros);
+      const mathContentTouched = docChangeTouchesMathContent(update);
 
       if (
         macrosKey !== this.lastMacrosKey ||
-        prewarmMathRegionsChanged(this.lastRegions, regions)
+        (
+          (!update.docChanged || mathContentTouched)
+          && prewarmMathRegionsChanged(this.lastRegions, regions)
+        )
       ) {
         this.schedulePrewarm(update.state);
       }

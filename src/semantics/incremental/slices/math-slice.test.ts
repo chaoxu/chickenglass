@@ -140,4 +140,32 @@ describe("math slice", () => {
     expect(after.mathRegions[0]).toBe(before.mathRegions[0]);
     expect(after.mathRegions[1]).toBe(before.mathRegions[1]);
   });
+
+  it("preserves the untouched math prefix when a prose insert shifts only later math", () => {
+    const doc = [
+      "Alpha $x$.",
+      "",
+      "Beta paragraph.",
+      "",
+      "Gamma $y$.",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const before = analyzeMathSlice(beforeState);
+    const insertAt = doc.indexOf("Beta paragraph.");
+    const tr = beforeState.update({
+      changes: { from: insertAt, to: insertAt, insert: "Lead " },
+    });
+    const delta = buildSemanticDelta(tr);
+    const after = mergeMathSlice(
+      before,
+      delta,
+      extractDirtyMathWindows(tr.state, delta),
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+    );
+
+    expect(after.mathRegions[0]).toBe(before.mathRegions[0]);
+    expect(after.mathRegions[1]).not.toBe(before.mathRegions[1]);
+    expect(after.mathRegions[1].from).toBe(before.mathRegions[1].from + 5);
+  });
 });

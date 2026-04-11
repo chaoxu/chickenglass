@@ -186,6 +186,33 @@ describe("incremental document analysis engine", () => {
     expect(after.includes).toEqual(rebuilt.includes);
   });
 
+  it("matches a full rebuild for plain prose inserts before later inline refs in the same paragraph", () => {
+    const state = createState(
+      "Lead prose here before [@sec:one] and $x$ later in the same paragraph.",
+    );
+    const before = analyze(state);
+    const insertPos = state.doc.toString().indexOf("before");
+    const tr = state.update({
+      changes: { from: insertPos, to: insertPos, insert: "plain " },
+    });
+
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+    const rebuilt = analyze(tr.state);
+
+    expect(after.headings).toEqual(rebuilt.headings);
+    expect(after.footnotes).toEqual(rebuilt.footnotes);
+    expect(after.fencedDivs).toEqual(rebuilt.fencedDivs);
+    expect(after.equations).toEqual(rebuilt.equations);
+    expect(after.mathRegions).toEqual(rebuilt.mathRegions);
+    expect(after.references).toEqual(rebuilt.references);
+    expect(after.includes).toEqual(rebuilt.includes);
+  });
+
   it("refreshes IR section ranges when a tail edit reuses the prior analysis", () => {
     const state = createState([
       "# Intro",

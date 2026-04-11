@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback } from "react";
+import { useRef, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback, useEffect } from "react";
 import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -81,6 +81,7 @@ export function EditorPane({
   const headingTrackingExtension = useMemo(() => {
     let lastRev: number | undefined;
     return EditorView.updateListener.of((update) => {
+      if (!onHeadingsChangeRef.current) return;
       const analysis = update.state.field(documentSemanticsField, false);
       if (!analysis) return;
       const rev = getDocumentAnalysisSliceRevision(analysis, "headings");
@@ -96,6 +97,7 @@ export function EditorPane({
     let lastAnalysisRev: number | undefined;
     let lastBibRev: number | undefined;
     return EditorView.updateListener.of((update) => {
+      if (!onDiagnosticsChangeRef.current) return;
       const analysis = update.state.field(documentSemanticsField, false);
       if (!analysis) return;
       const analysisRev = getDocumentAnalysisRevision(analysis);
@@ -167,6 +169,19 @@ export function EditorPane({
   useEditorStateTracking(editorState, onStateChange);
   useSidenotesAutoCollapse(view, sidenotesCollapsed, onSidenotesCollapsedChange);
   useFootnoteTooltip(view, sidenotesCollapsed);
+
+  // When a hidden sidebar panel is shown again, push one fresh snapshot
+  // without waiting for the next semantic revision.
+  useEffect(() => {
+    if (view && onHeadingsChange) {
+      onHeadingsChange(extractHeadings(view.state));
+    }
+  }, [onHeadingsChange, view]);
+  useEffect(() => {
+    if (view && onDiagnosticsChange) {
+      onDiagnosticsChange(extractDiagnostics(view.state));
+    }
+  }, [onDiagnosticsChange, view]);
 
   // Extract headings for breadcrumbs and outline
   const headings = view ? extractHeadings(view.state) : [];

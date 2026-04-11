@@ -1,6 +1,7 @@
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import {
   EditorState,
+  type ChangeDesc,
   type Range,
   type Transaction,
 } from "@codemirror/state";
@@ -349,6 +350,34 @@ export function incrementalCodeBlockUpdate(
   });
 }
 
+function changeTouchesCodeBlockContent(
+  block: Pick<CodeBlockInfo, "from" | "to">,
+  from: number,
+  to: number,
+): boolean {
+  if (from === to) {
+    return from > block.from && from < block.to;
+  }
+  return from < block.to && block.from < to;
+}
+
+export function docChangeTouchesCodeBlockContent(
+  blocks: readonly CodeBlockInfo[],
+  changes: ChangeDesc,
+): boolean {
+  let touched = false;
+  changes.iterChangedRanges((fromA, toA) => {
+    if (touched) return;
+    for (const block of blocks) {
+      if (block.from >= toA && fromA !== toA) break;
+      if (!changeTouchesCodeBlockContent(block, fromA, toA)) continue;
+      touched = true;
+      break;
+    }
+  });
+  return touched;
+}
+
 /**
  * CM6 StateField that provides code block rendering decorations.
  *
@@ -366,15 +395,20 @@ export const codeBlockDecorationField = createDecorationStateField({
   },
 
   update(value, tr) {
+    const structureChanged = codeBlockStructureRevisionChanged(tr);
     if (
       tr.effects.some((e) => e.is(focusEffect)) ||
       hasStructureEditEffect(tr) ||
-      codeBlockStructureRevisionChanged(tr)
+      structureChanged
     ) {
       return buildCodeBlockDecorations(tr.state);
     }
 
     if (tr.docChanged) {
+      const blocks = collectCodeBlocks(tr.startState);
+      if (!docChangeTouchesCodeBlockContent(blocks, tr.changes)) {
+        return value.map(tr.changes);
+      }
       const treeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
       const treeReady = syntaxTreeAvailable(tr.state, tr.state.doc.length);
 

@@ -1,4 +1,4 @@
-import type { EditorState } from "@codemirror/state";
+import type { ChangeDesc, EditorState } from "@codemirror/state";
 import type { FencedDivSemantics } from "../semantics/document";
 import { containsPos } from "../lib/range-helpers";
 import { documentSemanticsField } from "../state/document-analysis";
@@ -38,6 +38,10 @@ interface FencedDivGeometryInfo extends FencedBlockInfo {
 }
 
 const fencedDivInfoCache = new WeakMap<object, FencedDivInfo[]>();
+const fencedDivStructureRangeCache = new WeakMap<
+  object,
+  readonly { readonly from: number; readonly to: number }[]
+>();
 
 function mapSentinelPos(
   pos: number,
@@ -73,6 +77,65 @@ export function collectFencedDivs(state: EditorState): FencedDivInfo[] {
     }));
   fencedDivInfoCache.set(semantics as object, collected);
   return collected;
+}
+
+export function collectFencedDivStructureRanges(
+  state: EditorState,
+): readonly { readonly from: number; readonly to: number }[] {
+  const semantics = state.field(documentSemanticsField, false);
+  if (!semantics) return [];
+  const cached = fencedDivStructureRangeCache.get(semantics as object);
+  if (cached) return cached;
+
+  const ranges: { from: number; to: number }[] = [];
+  for (const div of semantics.fencedDivs) {
+    ranges.push({ from: div.openFenceFrom, to: div.openFenceTo });
+    if (
+      div.attrFrom !== undefined
+      && div.attrTo !== undefined
+      && div.attrFrom < div.attrTo
+    ) {
+      ranges.push({ from: div.attrFrom, to: div.attrTo });
+    }
+    if (
+      div.titleFrom !== undefined
+      && div.titleTo !== undefined
+      && div.titleFrom < div.titleTo
+    ) {
+      ranges.push({ from: div.titleFrom, to: div.titleTo });
+    }
+    if (div.closeFenceFrom >= 0 && div.closeFenceFrom < div.closeFenceTo) {
+      ranges.push({ from: div.closeFenceFrom, to: div.closeFenceTo });
+    }
+  }
+  fencedDivStructureRangeCache.set(semantics as object, ranges);
+  return ranges;
+}
+
+function rangesTouchSortedRanges(
+  from: number,
+  to: number,
+  ranges: readonly { readonly from: number; readonly to: number }[],
+): boolean {
+  for (const range of ranges) {
+    if (range.from > to) return false;
+    if (range.to >= from && range.from <= to) return true;
+  }
+  return false;
+}
+
+export function docChangeTouchesFencedDivStructure(
+  tr: { readonly startState: EditorState; readonly state: EditorState; readonly changes: ChangeDesc },
+): boolean {
+  const beforeRanges = collectFencedDivStructureRanges(tr.startState);
+  const afterRanges = collectFencedDivStructureRanges(tr.state);
+  let touched = false;
+  tr.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    if (touched) return;
+    touched = rangesTouchSortedRanges(fromA, toA, beforeRanges)
+      || rangesTouchSortedRanges(fromB, toB, afterRanges);
+  });
+  return touched;
 }
 
 /**

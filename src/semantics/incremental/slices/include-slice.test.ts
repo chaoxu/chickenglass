@@ -80,6 +80,7 @@ describe("deriveIncludeSlice", () => {
       afterFencedDivs,
       before.includes,
       tr.changes,
+      delta.rawChangedRanges,
     );
 
     expect(afterIncludes).toEqual(
@@ -124,6 +125,7 @@ describe("deriveIncludeSlice", () => {
       afterFencedDivs,
       before.includes,
       tr.changes,
+      delta.rawChangedRanges,
     );
 
     expect(afterIncludes).toEqual(
@@ -172,6 +174,7 @@ describe("deriveIncludeSlice", () => {
       afterFencedDivs,
       before.includes,
       tr.changes,
+      delta.rawChangedRanges,
     );
 
     expect(afterIncludes).toEqual(
@@ -221,6 +224,7 @@ describe("deriveIncludeSlice", () => {
       afterFencedDivs,
       before.includes,
       tr.changes,
+      delta.rawChangedRanges,
     );
 
     expect(afterFencedDivs).toEqual(
@@ -262,6 +266,7 @@ describe("deriveIncludeSlice", () => {
       afterFencedDivs,
       before.includes,
       tr.changes,
+      delta.rawChangedRanges,
     );
 
     expect(afterIncludes).toEqual(

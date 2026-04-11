@@ -135,6 +135,24 @@ describe("CheckboxWidget", () => {
 });
 
 describe("checkboxRenderPlugin stable task markers", () => {
+  it("maps checkbox widgets through unrelated prose edits", () => {
+    const doc = "plain text\n\n- [ ] task";
+    const prosePos = doc.indexOf("plain") + 2;
+    const plugin = createCheckboxView(doc, prosePos);
+    const before = getDecorationSpecs(plugin.decorations);
+
+    view!.dispatch({
+      changes: { from: prosePos, to: prosePos, insert: "ZZ" },
+      selection: { anchor: prosePos + 2 },
+    });
+
+    const after = getDecorationSpecs(plugin.decorations);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.widgetClass).toBe("CheckboxWidget");
+    expect(after[0]?.from).toBe((before[0]?.from ?? 0) + 2);
+    expect(after[0]?.to).toBe((before[0]?.to ?? 0) + 2);
+  });
+
   it("does not rebuild when the cursor moves through plain prose", () => {
     const doc = "- [ ] task\n\nplain text";
     const prosePos = doc.indexOf("plain") + 2;

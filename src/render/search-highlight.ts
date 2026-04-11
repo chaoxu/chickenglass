@@ -123,22 +123,47 @@ function createSearchHighlight(): Extension {
     const query = getSearchQuery(update.state);
     const searchStr = query.valid ? query.search : "";
     const panelOpen = searchPanelOpen(update.state);
-
-    const searchChanged = searchStr !== lastSearch || panelOpen !== lastPanelOpen;
-    if (
-      searchChanged ||
-      update.docChanged ||
-      update.selectionSet ||
-      update.viewportChanged
-    ) {
-      lastSearch = searchStr;
-      lastPanelOpen = panelOpen;
-      return true;
-    }
-    return false;
+    const result = shouldUpdateSearchHighlights(
+      update,
+      {
+        lastSearch,
+        lastPanelOpen,
+        hadHighlights,
+      },
+      searchStr,
+      panelOpen,
+    );
+    lastSearch = searchStr;
+    lastPanelOpen = panelOpen;
+    return result;
   }
 
   return createSimpleViewPlugin(buildFn, { shouldUpdate });
+}
+
+interface SearchHighlightUpdateState {
+  readonly lastSearch: string;
+  readonly lastPanelOpen: boolean;
+  readonly hadHighlights: boolean;
+}
+
+export function shouldUpdateSearchHighlights(
+  update: Pick<ViewUpdate, "docChanged" | "selectionSet" | "viewportChanged">,
+  previous: SearchHighlightUpdateState,
+  searchStr: string,
+  panelOpen: boolean,
+): boolean {
+  const searchChanged =
+    searchStr !== previous.lastSearch || panelOpen !== previous.lastPanelOpen;
+  if (searchChanged) {
+    return true;
+  }
+
+  if (searchStr.length === 0 && !panelOpen && !previous.hadHighlights) {
+    return false;
+  }
+
+  return update.docChanged || update.selectionSet || update.viewportChanged;
 }
 
 /** CM6 extension that highlights search matches inside widget-backed content. */

@@ -190,6 +190,28 @@ describe("table range helpers", () => {
     expect(changedTables[1].from).toBeGreaterThan(initialTables[1].from);
   });
 
+  it("maps later tables without reparsing on plain prose inserts away from table syntax", () => {
+    const state = makeDiscoveryState([
+      "intro",
+      "",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const changedState = state.update({
+      changes: { from: state.doc.line(1).to, insert: " text" },
+    }).state;
+    const changedTables = changedState.field(tableDiscoveryField);
+
+    expect(changedTables).not.toBe(initialTables);
+    expect(changedTables[0]).not.toBe(initialTables[0]);
+    expect(changedTables[0].lines).toBe(initialTables[0].lines);
+    expect(changedTables[0].parsed).toBe(initialTables[0].parsed);
+    expect(changedTables[0].from).toBe(initialTables[0].from + 5);
+  });
+
   it("rebuilds only the touched table when a cell edit stays within one table", () => {
     const state = makeDiscoveryState([
       "| A | B |",

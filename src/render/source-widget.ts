@@ -47,13 +47,21 @@ export interface WidgetSourceRange {
   readonly to: number;
 }
 
+function readAppliedFenceDepth(el: HTMLElement): number {
+  const raw = Number(el.dataset.activeFenceDepth ?? "");
+  return Number.isInteger(raw) && raw > 0 ? raw : 0;
+}
+
 export function clearActiveFenceGuideClasses(el: HTMLElement): void {
-  el.classList.remove("cf-fence-guide");
-  for (const className of Array.from(el.classList)) {
-    if (className.startsWith("cf-fence-d")) {
-      el.classList.remove(className);
-    }
+  const depth = readAppliedFenceDepth(el);
+  if (!el.classList.contains("cf-fence-guide") && depth === 0) {
+    return;
   }
+  el.classList.remove("cf-fence-guide");
+  if (depth > 0) {
+    el.classList.remove(CSS.fenceDepth(Math.min(depth, 6)));
+  }
+  delete el.dataset.activeFenceDepth;
 }
 
 export function syncActiveFenceGuideClasses(
@@ -62,12 +70,32 @@ export function syncActiveFenceGuideClasses(
   from: number,
   to: number,
 ): void {
-  clearActiveFenceGuideClasses(el);
-  if (!view) return;
-  if (typeof view.state?.field !== "function") return;
-  const depth = activeFencedDepthAtRange(view.state, from, to);
-  if (depth <= 0) return;
-  el.classList.add("cf-fence-guide", CSS.fenceDepth(Math.min(depth, 6)));
+  const nextDepth = view && typeof view.state?.field === "function"
+    ? activeFencedDepthAtRange(view.state, from, to)
+    : 0;
+  const previousDepth = readAppliedFenceDepth(el);
+  const normalizedDepth = Math.min(nextDepth, 6);
+  const previousNormalizedDepth = Math.min(previousDepth, 6);
+
+  if (nextDepth <= 0) {
+    clearActiveFenceGuideClasses(el);
+    return;
+  }
+
+  if (
+    previousDepth === nextDepth
+    && el.classList.contains("cf-fence-guide")
+    && el.dataset.activeFenceGuides === "true"
+  ) {
+    return;
+  }
+
+  if (previousDepth > 0 && previousNormalizedDepth !== normalizedDepth) {
+    el.classList.remove(CSS.fenceDepth(previousNormalizedDepth));
+  }
+
+  el.classList.add("cf-fence-guide", CSS.fenceDepth(normalizedDepth));
+  el.dataset.activeFenceDepth = String(nextDepth);
 }
 
 export function resolveLiveWidgetSourceRange(

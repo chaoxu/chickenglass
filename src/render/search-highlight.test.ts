@@ -11,7 +11,10 @@ import {
   searchControllerExtensions,
   setSearchControllerQuery,
 } from "../editor/find-replace";
-import { searchHighlightPlugin } from "./search-highlight";
+import {
+  searchHighlightPlugin,
+  shouldUpdateSearchHighlights,
+} from "./search-highlight";
 import { MathWidget } from "./math-widget";
 
 const views: EditorView[] = [];
@@ -47,6 +50,23 @@ afterEach(() => {
 });
 
 describe("searchHighlightPlugin", () => {
+  it("skips updates while search is inactive and there are no widget highlights to clear", () => {
+    expect(shouldUpdateSearchHighlights(
+      {
+        docChanged: true,
+        selectionSet: true,
+        viewportChanged: true,
+      },
+      {
+        lastSearch: "",
+        lastPanelOpen: false,
+        hadHighlights: false,
+      },
+      "",
+      false,
+    )).toBe(false);
+  });
+
   it("highlights generic widget-backed matches via data-source metadata", () => {
     const widgetDeco = EditorView.decorations.of(
       Decoration.set([

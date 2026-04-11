@@ -8,6 +8,7 @@
 
 import { type Extension } from "@codemirror/state";
 import { codeBlockDecorationField,
+  docChangeTouchesCodeBlockContent,
   computeCodeBlockDirtyRegion,
   incrementalCodeBlockUpdate,} from "./code-block-decorations";
 import { codeBlockHoverPlugin } from "./code-block-hover";
@@ -28,6 +29,7 @@ export {
   codeBlockStructureField,
   codeBlockStructureField as _codeBlockStructureFieldForTest,
   collectCodeBlocks,
+  docChangeTouchesCodeBlockContent as _docChangeTouchesCodeBlockContentForTest,
   computeCodeBlockDirtyRegion as _computeCodeBlockDirtyRegionForTest,
   getCodeBlockStructureRevision,
   incrementalCodeBlockUpdate as _incrementalCodeBlockUpdateForTest,

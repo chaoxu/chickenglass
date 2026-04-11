@@ -74,10 +74,6 @@ export function getReferenceRenderAnalysis(
   return state.field(documentAnalysisField);
 }
 
-function serializeKeyPart(value: string | undefined): string {
-  return value ?? "";
-}
-
 const objectIdentityIds = new WeakMap<object, number>();
 let nextObjectIdentityId = 1;
 
@@ -91,12 +87,7 @@ function getObjectIdentityId(value: object | null | undefined): number {
 }
 
 function getBlockNumberingKey(state: EditorState): string {
-  const counters = state.field(blockCounterField, false);
-  if (!counters) return "";
-
-  return counters.blocks
-    .map((block) => `${block.type}\0${serializeKeyPart(block.id)}\0${block.number}`)
-    .join("\u0001");
+  return state.field(blockCounterField, false)?.numberingKey ?? "";
 }
 
 export const referenceRenderSliceChanged = createChangeChecker(

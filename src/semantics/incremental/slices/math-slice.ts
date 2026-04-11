@@ -62,25 +62,100 @@ export function mapMathSemantics(
   };
 }
 
-function mapMathRegions(
-  values: readonly MathSemantics[],
-  changes: PositionMapper,
-): readonly MathSemantics[] {
-  let changed = false;
-  const mapped = values.map((value) => {
-    const next = mapMathSemantics(value, changes);
-    if (next !== value) changed = true;
-    return next;
-  });
-  return changed ? mapped : values;
-}
-
 function deltaMapper(delta: Pick<SemanticDelta, "mapOldToNew">): PositionMapper {
   return {
     mapPos(pos, assoc = -1) {
       return delta.mapOldToNew(pos, assoc);
     },
   };
+}
+
+function singleChangeShift(
+  delta: Pick<SemanticDelta, "rawChangedRanges">,
+): { readonly fromOld: number; readonly toOld: number; readonly delta: number } | null {
+  if (delta.rawChangedRanges.length !== 1) {
+    return null;
+  }
+
+  const change = delta.rawChangedRanges[0];
+  const shift = (change.toNew - change.fromNew) - (change.toOld - change.fromOld);
+  if (shift === 0) {
+    return null;
+  }
+
+  return {
+    fromOld: change.fromOld,
+    toOld: change.toOld,
+    delta: shift,
+  };
+}
+
+function shiftOptionalPos(
+  value: number | undefined,
+  delta: number,
+): number | undefined {
+  return value === undefined ? undefined : value + delta;
+}
+
+function shiftMathSemantics(
+  value: MathSemantics,
+  delta: number,
+): MathSemantics {
+  return {
+    from: value.from + delta,
+    to: value.to + delta,
+    isDisplay: value.isDisplay,
+    contentFrom: value.contentFrom + delta,
+    contentTo: value.contentTo + delta,
+    labelFrom: shiftOptionalPos(value.labelFrom, delta),
+    latex: value.latex,
+  };
+}
+
+function firstChangedOldPos(
+  delta: Pick<SemanticDelta, "rawChangedRanges">,
+): number {
+  let first = Number.POSITIVE_INFINITY;
+  for (const range of delta.rawChangedRanges) {
+    if (range.fromOld < first) {
+      first = range.fromOld;
+    }
+  }
+  return first;
+}
+
+function mapMathRegions(
+  values: readonly MathSemantics[],
+  delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
+): readonly MathSemantics[] {
+  if (values.length === 0 || delta.rawChangedRanges.length === 0) {
+    return values;
+  }
+
+  const changes = deltaMapper(delta);
+  const shiftedChange = singleChangeShift(delta);
+  const firstChanged = firstChangedOldPos(delta);
+  let startIndex = 0;
+  while (startIndex < values.length && values[startIndex].to <= firstChanged) {
+    startIndex += 1;
+  }
+
+  if (startIndex === values.length) {
+    return values;
+  }
+
+  let changed = false;
+  const mapped = startIndex === 0 ? [] : values.slice(0, startIndex);
+  for (let index = startIndex; index < values.length; index += 1) {
+    const value = values[index];
+    const next = shiftedChange && value.from >= shiftedChange.toOld
+      ? shiftMathSemantics(value, shiftedChange.delta)
+      : mapMathSemantics(value, changes);
+    if (next !== value) changed = true;
+    mapped.push(next);
+  }
+
+  return changed ? mapped : values;
 }
 
 export function createMathSlice(
@@ -148,12 +223,12 @@ function shouldExpandMathWindowToParagraph(
 
 export function expandDirtyMathExtractions(
   previous: MathSlice,
-  delta: Pick<SemanticDelta, "mapOldToNew">,
+  delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
   dirtyExtractions: readonly DirtyMathWindowExtraction[],
   doc: TextSource,
   tree: Tree,
 ): readonly DirtyMathWindowExtraction[] {
-  const mappedPrevious = mapMathRegions(previous.mathRegions, deltaMapper(delta));
+  const mappedPrevious = mapMathRegions(previous.mathRegions, delta);
   let changed = false;
 
   const expanded = dirtyExtractions.map((extraction) => {
@@ -195,10 +270,10 @@ export function expandDirtyMathExtractions(
  */
 export function computeMathOverhangRanges(
   previous: MathSlice,
-  delta: Pick<SemanticDelta, "mapOldToNew">,
+  delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
   dirtyWindows: readonly Pick<DirtyWindow, "fromNew" | "toNew">[],
 ): readonly { readonly from: number; readonly to: number }[] {
-  const mapped = mapMathRegions(previous.mathRegions, deltaMapper(delta));
+  const mapped = mapMathRegions(previous.mathRegions, delta);
   const overhangs: { from: number; to: number }[] = [];
   for (const window of dirtyWindows) {
     const overhangTo = findOverhangTo(mapped, window);
@@ -211,12 +286,12 @@ export function computeMathOverhangRanges(
 
 export function mergeMathSlice(
   previous: MathSlice,
-  delta: Pick<SemanticDelta, "mapOldToNew">,
+  delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
   dirtyExtractions: readonly DirtyMathWindowExtraction[],
   doc: TextSource,
   tree: Tree,
 ): MathSlice {
-  let mathRegions = mapMathRegions(previous.mathRegions, deltaMapper(delta));
+  let mathRegions = mapMathRegions(previous.mathRegions, delta);
 
   for (const { window, structural } of dirtyExtractions) {
     const overhangTo = findOverhangTo(mathRegions, window);

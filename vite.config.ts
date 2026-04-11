@@ -97,8 +97,17 @@ export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
   const linkedNodeModulesRoot = realpathSync(path.join(__dirname, "node_modules"));
   const disableHmr = mode === "show" || process.env.COFLAT_DISABLE_HMR === "1";
+  const reactPlugin = react({
+    useAtYourOwnRisk_mutateSwcOptions(options) {
+      if (mode !== "show") return;
+      const reactOptions = options.jsc?.transform?.react;
+      if (reactOptions) {
+        reactOptions.development = false;
+      }
+    },
+  });
   return {
-    plugins: [react(), tailwindcss(), debugSessionSinkPlugin()],
+    plugins: [reactPlugin, tailwindcss(), debugSessionSinkPlugin()],
     define: {
       GIT_COMMIT_HASH: JSON.stringify(gitBuildInfo.hash),
       GIT_COMMIT_TIME: JSON.stringify(gitBuildInfo.time),

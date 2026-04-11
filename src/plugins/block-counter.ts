@@ -7,7 +7,7 @@
  * increment a single shared counter.
  */
 
-import { type EditorState } from "@codemirror/state";
+import { type ChangeDesc, type EditorState } from "@codemirror/state";
 import type { NumberingScheme } from "../parser/frontmatter";
 import type { FencedDivSemantics } from "../semantics/document";
 import type { PluginRegistryState } from "./plugin-registry";
@@ -36,6 +36,8 @@ export interface BlockCounterState {
   readonly byId: ReadonlyMap<string, NumberedBlock>;
   /** Map from document position (from) to its NumberedBlock entry. */
   readonly byPosition: ReadonlyMap<number, NumberedBlock>;
+  /** Position-insensitive numbering signature for cheap equality checks. */
+  readonly numberingKey: string;
 }
 
 /** Sentinel counter group used when numbering is "global". */
@@ -66,15 +68,29 @@ const GLOBAL_COUNTER = "_global";
  * @param numbering - Numbering scheme from frontmatter (`"global"` or
  *   `"grouped"`). Defaults to `"grouped"`.
  */
-export function computeBlockNumbersFromFencedDivs(
+function buildBlockCounterState(
+  blocks: readonly NumberedBlock[],
+  numberingKey: string,
+): BlockCounterState {
+  const byId = new Map<string, NumberedBlock>();
+  const byPosition = new Map<number, NumberedBlock>();
+  for (const block of blocks) {
+    if (block.id) {
+      byId.set(block.id, block);
+    }
+    byPosition.set(block.from, block);
+  }
+  return { blocks, byId, byPosition, numberingKey };
+}
+
+function buildNumberedBlocks(
   fencedDivs: readonly FencedDivSemantics[],
   registry: PluginRegistryState,
   numbering: NumberingScheme = "grouped",
-): BlockCounterState {
+): { readonly blocks: readonly NumberedBlock[]; readonly numberingKey: string } {
   const blocks: NumberedBlock[] = [];
-  const byId = new Map<string, NumberedBlock>();
-  const byPosition = new Map<number, NumberedBlock>();
   const counters = new Map<string, number>();
+  const keyParts: string[] = [];
 
   for (const div of fencedDivs) {
     if (!div.primaryClass) continue;
@@ -98,13 +114,78 @@ export function computeBlockNumbersFromFencedDivs(
     };
 
     blocks.push(entry);
-    if (div.id) {
-      byId.set(div.id, entry);
-    }
-    byPosition.set(div.from, entry);
+    keyParts.push(`${entry.type}\0${entry.id ?? ""}\0${entry.number}`);
   }
 
-  return { blocks, byId, byPosition };
+  return {
+    blocks,
+    numberingKey: keyParts.join("\u0001"),
+  };
+}
+
+function buildBlockNumberingKey(
+  fencedDivs: readonly FencedDivSemantics[],
+  registry: PluginRegistryState,
+  numbering: NumberingScheme = "grouped",
+): string {
+  const counters = new Map<string, number>();
+  const keyParts: string[] = [];
+
+  for (const div of fencedDivs) {
+    if (!div.primaryClass) continue;
+
+    const plugin = getPluginOrFallback(registry, div.primaryClass);
+    if (!plugin || !plugin.numbered) continue;
+
+    const counterGroup =
+      numbering === "global"
+        ? GLOBAL_COUNTER
+        : (plugin.counter ?? plugin.name);
+    const current = (counters.get(counterGroup) ?? 0) + 1;
+    counters.set(counterGroup, current);
+    keyParts.push(`${div.primaryClass}\0${div.id ?? ""}\0${current}`);
+  }
+
+  return keyParts.join("\u0001");
+}
+
+export function computeBlockNumberingKeyFromFencedDivs(
+  fencedDivs: readonly FencedDivSemantics[],
+  registry: PluginRegistryState,
+  numbering: NumberingScheme = "grouped",
+): string {
+  return buildBlockNumberingKey(fencedDivs, registry, numbering);
+}
+
+export function computeBlockNumbersFromFencedDivs(
+  fencedDivs: readonly FencedDivSemantics[],
+  registry: PluginRegistryState,
+  numbering: NumberingScheme = "grouped",
+): BlockCounterState {
+  const { blocks, numberingKey } = buildNumberedBlocks(fencedDivs, registry, numbering);
+  return buildBlockCounterState(blocks, numberingKey);
+}
+
+export function mapBlockCounterState(
+  value: BlockCounterState,
+  changes: ChangeDesc,
+): BlockCounterState {
+  let changed = false;
+  const blocks = value.blocks.map((block) => {
+    const from = changes.mapPos(block.from, 1);
+    const to = Math.max(from, changes.mapPos(block.to, -1));
+    if (from === block.from && to === block.to) {
+      return block;
+    }
+    changed = true;
+    return {
+      ...block,
+      from,
+      to,
+    };
+  });
+
+  return changed ? buildBlockCounterState(blocks, value.numberingKey) : value;
 }
 
 export function computeBlockNumbers(
@@ -121,5 +202,5 @@ export function computeBlockNumbers(
 
 /** Create an empty counter state. */
 export function emptyCounterState(): BlockCounterState {
-  return { blocks: [], byId: new Map(), byPosition: new Map() };
+  return { blocks: [], byId: new Map(), byPosition: new Map(), numberingKey: "" };
 }

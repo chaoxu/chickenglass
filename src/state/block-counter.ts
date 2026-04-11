@@ -1,8 +1,11 @@
 import { type EditorState, StateField, type Transaction } from "@codemirror/state";
 
 import type { NumberingScheme } from "../parser/frontmatter";
+import { docChangeTouchesFencedDivStructure } from "../fenced-block/model";
 import {
+  computeBlockNumberingKeyFromFencedDivs,
   computeBlockNumbers,
+  mapBlockCounterState,
   type BlockCounterState,
 } from "../plugins/block-counter";
 import {
@@ -48,6 +51,14 @@ function shouldRecomputeBlockNumbers(tr: Transaction): boolean {
   return blockCounterConfigChanged(tr);
 }
 
+function nextBlockNumberingKey(tr: Transaction): string {
+  return computeBlockNumberingKeyFromFencedDivs(
+    tr.state.field(documentSemanticsField).fencedDivs,
+    tr.state.field(pluginRegistryField),
+    getEffectiveNumbering(tr.state),
+  );
+}
+
 /**
  * CM6 StateField that maintains block numbering.
  *
@@ -70,14 +81,30 @@ export const blockCounterField = StateField.define<BlockCounterState>({
   },
 
   update(value, tr) {
-    if (shouldRecomputeBlockNumbers(tr)) {
-      return computeBlockNumbers(
-        tr.state,
-        tr.state.field(pluginRegistryField),
-        getEffectiveNumbering(tr.state),
-      );
+    if (!shouldRecomputeBlockNumbers(tr)) {
+      return value;
     }
-    return value;
+
+    if (
+      tr.docChanged
+      && !blockCounterConfigChanged(tr)
+      && !docChangeTouchesFencedDivStructure(tr)
+    ) {
+      return mapBlockCounterState(value, tr.changes);
+    }
+
+    if (
+      !blockCounterConfigChanged(tr)
+      && nextBlockNumberingKey(tr) === value.numberingKey
+    ) {
+      return tr.docChanged ? mapBlockCounterState(value, tr.changes) : value;
+    }
+
+    return computeBlockNumbers(
+      tr.state,
+      tr.state.field(pluginRegistryField),
+      getEffectiveNumbering(tr.state),
+    );
   },
 
   compare(a, b) {

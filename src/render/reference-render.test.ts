@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach, vi } from "vitest";
-import type { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { ChangeSpec, EditorState } from "@codemirror/state";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
@@ -24,6 +24,7 @@ import {
 } from "../editor/structure-edit-state";
 import {
   collectReferenceRanges,
+  _computeReferenceDirtyRangesForTest as computeReferenceDirtyRanges,
   planReferenceRendering,
   referenceRenderDependenciesChanged,
   referenceRenderPlugin,
@@ -102,6 +103,26 @@ function widgetClass(range: { value: { spec: { widget?: { constructor: { name: s
 
 function revealReferenceAt(view: EditorView, pos: number): void {
   view.dispatch({ selection: { anchor: pos } });
+}
+
+function mockReferenceViewUpdate(
+  startState: EditorState,
+  nextState: EditorState,
+  changes: ChangeSpec,
+): ViewUpdate {
+  const tr = startState.update({ changes });
+  expect(tr.state.doc.toString()).toBe(nextState.doc.toString());
+  return {
+    startState,
+    state: nextState,
+    view: {
+      hasFocus: true,
+    },
+    docChanged: true,
+    changes: tr.changes,
+    focusChanged: false,
+    selectionSet: false,
+  } as unknown as ViewUpdate;
 }
 
 describe("collectReferenceRanges", () => {
@@ -893,6 +914,62 @@ describe("collectReferenceRanges", () => {
 
       expect(registerSpy).not.toHaveBeenCalled();
       registerSpy.mockRestore();
+    });
+
+    it("skips dirty reference rescans for plain prose inserts on lines without refs", () => {
+      const doc = [
+        "Plain intro text.",
+        "",
+        "See [@karger2000].",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      const insertAt = doc.indexOf("intro") + "intro".length;
+      const nextState = view.state.update({
+        changes: {
+          from: insertAt,
+          insert: " more",
+        },
+      }).state;
+
+      const update = mockReferenceViewUpdate(
+        view.state,
+        nextState,
+        {
+          from: insertAt,
+          insert: " more",
+        },
+      );
+
+      expect(computeReferenceDirtyRanges(update)).toEqual([]);
+    });
+
+    it("keeps dirty reference rescans when the changed line contains a ref", () => {
+      const doc = [
+        "See [@karger2000].",
+        "",
+        "Tail text.",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      const insertAt = doc.indexOf("karger2000");
+      const nextState = view.state.update({
+        changes: {
+          from: insertAt,
+          insert: "x",
+        },
+      }).state;
+
+      const update = mockReferenceViewUpdate(
+        view.state,
+        nextState,
+        {
+          from: insertAt,
+          insert: "x",
+        },
+      );
+
+      expect(computeReferenceDirtyRanges(update).length).toBeGreaterThan(0);
     });
 
     it("re-registers citations when bibliography data changes", () => {
