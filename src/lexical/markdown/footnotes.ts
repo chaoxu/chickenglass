@@ -1,4 +1,4 @@
-const FOOTNOTE_DEFINITION_RE = /^\[\^([^\]]+)\]:\s*(.*)$/;
+export const FOOTNOTE_DEFINITION_RE = /^\[\^([^\]]+)\]:\s*(.*)$/;
 
 export function parseFootnoteDefinition(raw: string): { id: string; body: string } | null {
   const lines = raw.split("\n");

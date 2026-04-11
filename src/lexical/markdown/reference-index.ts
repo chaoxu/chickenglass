@@ -2,8 +2,7 @@ import { extractHeadingDefinitions } from "../../app/markdown/headings";
 import { extractMarkdownBlocks, extractMarkdownEquations } from "../../app/markdown/labels";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { normalizeBlockType, resolveBlockNumbering, resolveBlockTitle } from "./block-metadata";
-
-const FOOTNOTE_DEFINITION_RE = /^\[\^([^\]]+)\]:\s*(.*)$/;
+import { FOOTNOTE_DEFINITION_RE } from "./footnotes";
 
 export interface RenderReferenceEntry {
   readonly blockType?: string;
