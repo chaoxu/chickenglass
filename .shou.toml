@@ -21,27 +21,29 @@ verify = [
 ]
 
 accept = """
-Coflat-specific acceptance rules:
+Coflat2-specific acceptance rules:
 
 1. Visual/editor changes.
-If the change touches CM6 rendering, decorations, parser-visible structure, inline rendering, themes, CSS, geometry, mode parity, or scrolling:
+If the change touches Lexical rendering, DecoratorNode output, node DOM, inline rendering, themes, CSS, geometry, mode parity, or scrolling:
   - verify in the live browser, not only with typecheck/tests.
   - open `index.md`; if the issue affects long-document behavior and local private fixtures are available, also verify on the affected heavy fixture such as `fixtures/cogirth/main2.md`.
   - prefer the repo helpers and managed harness (`pnpm test:browser`, `scripts/test-helpers.mjs`, perf harness) over ad-hoc browser setup.
-  - for Rich/Read or Rich/Source issues, confirm the relevant modes both behave correctly.
-  - no editor CSS may change `.cm-line` height or flow unless the corresponding render path explicitly models that structure in CM6.
-  - prefer explicit widget or decoration contracts over "fix it in CSS later" patches.
+  - for Rich/Source mode issues, confirm both modes behave correctly.
+  - prefer Lexical-native patterns (registerCommand, $getSelection, node.select(), DecoratorNode) over manual DOM manipulation.
+  - no editor CSS may change Lexical's ContentEditable layout unless the corresponding node explicitly models that structure.
 
 2. Parser and structure changes.
-If the change touches parsing or document structure:
+If the change touches markdown transformers, custom nodes, or document structure:
   - add or update a Vitest test with the exact document content.
   - verify the tree/structure in the live editor when incremental behavior matters.
+  - verify markdown round-trip fidelity with carryover tests.
 
 3. Architecture and refactor issues.
 For refactor, cleanup, or architecture tickets:
   - prove the promised structural outcome in HEAD, not just the narrative in the diff.
   - show that one concept has one owner, stale duplicate paths are removed, and any promised split/centralization actually exists now.
   - do not close on directional cleanup alone.
+  - for CM6→Lexical migration work: confirm the CM6 pattern is fully removed, not just wrapped.
 
 4. Desktop/Tauri-specific behavior.
 If the change affects native-only behavior:
