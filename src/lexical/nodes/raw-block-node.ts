@@ -17,8 +17,7 @@ export type RawBlockVariant =
   | "fenced-div"
   | "footnote-definition"
   | "frontmatter"
-  | "image"
-  | "table";
+  | "image";
 
 export type SerializedRawBlockNode = Spread<{
   raw: string;

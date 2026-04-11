@@ -1,0 +1,104 @@
+import {
+  ElementNode,
+  type LexicalNode,
+  type LexicalUpdateJSON,
+  type NodeKey,
+  type SerializedElementNode,
+  type Spread,
+} from "lexical";
+
+export type SerializedTableCellNode = Spread<{
+  header: boolean;
+}, SerializedElementNode>;
+
+function syncTableCellDom(
+  node: TableCellNode,
+  dom: HTMLElement,
+): void {
+  dom.dataset.coflatTableCell = node.isHeader() ? "header" : "body";
+  dom.classList.add("cf-lexical-table-cell");
+  if (node.isHeader()) {
+    dom.classList.add("cf-lexical-table-cell--header");
+    dom.setAttribute("scope", "col");
+  } else {
+    dom.classList.remove("cf-lexical-table-cell--header");
+    dom.removeAttribute("scope");
+  }
+}
+
+export class TableCellNode extends ElementNode {
+  __header: boolean;
+
+  static getType(): string {
+    return "coflat-table-cell";
+  }
+
+  static clone(node: TableCellNode): TableCellNode {
+    return new TableCellNode(node.__header, node.__key);
+  }
+
+  static importJSON(serializedNode: SerializedTableCellNode): TableCellNode {
+    return $createTableCellNode(serializedNode.header).updateFromJSON(serializedNode);
+  }
+
+  constructor(header = false, key?: NodeKey) {
+    super(key);
+    this.__header = header;
+  }
+
+  createDOM(): HTMLElement {
+    const dom = document.createElement(this.isHeader() ? "th" : "td");
+    syncTableCellDom(this, dom);
+    return dom;
+  }
+
+  updateDOM(prevNode: TableCellNode, dom: HTMLElement): boolean {
+    if (prevNode.__header !== this.__header) {
+      return true;
+    }
+    syncTableCellDom(this, dom);
+    return false;
+  }
+
+  exportJSON(): SerializedTableCellNode {
+    return {
+      ...super.exportJSON(),
+      header: this.isHeader(),
+      type: "coflat-table-cell",
+      version: 1,
+    };
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedTableCellNode>,
+  ): this {
+    return super.updateFromJSON(serializedNode).setHeader(serializedNode.header);
+  }
+
+  canBeEmpty(): false {
+    return false;
+  }
+
+  isHeader(): boolean {
+    return this.getLatest().__header;
+  }
+
+  setHeader(header: boolean): this {
+    const node = this.getWritable();
+    node.__header = header;
+    return node;
+  }
+}
+
+export function $createTableCellNode(
+  header = false,
+  key?: NodeKey,
+): TableCellNode {
+  return new TableCellNode(header, key);
+}
+
+export function $isTableCellNode(
+  node: LexicalNode | null | undefined,
+): node is TableCellNode {
+  return node instanceof TableCellNode;
+}
