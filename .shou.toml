@@ -1,24 +1,24 @@
 solve_verify = [
   "pnpm typecheck",
-  "pnpm lint",
+  "pnpm exec biome lint .",
   "pnpm test",
 ]
 
 review_verify = [
   "pnpm typecheck",
-  "pnpm lint",
+  "pnpm exec biome lint .",
   "pnpm test",
 ]
 
 premerge_verify = [
   "pnpm typecheck",
-  "pnpm lint",
+  "pnpm exec biome lint .",
   "pnpm test",
 ]
 
 verify = [
   "pnpm typecheck",
-  "pnpm lint",
+  "pnpm exec biome lint .",
   "pnpm test",
 ]
 
