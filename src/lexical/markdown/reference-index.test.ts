@@ -56,7 +56,7 @@ describe("buildRenderIndex", () => {
       numbering: "global",
     });
 
-    expect(index.references.get("prob:a")?.label).toBe("Exercise 1");
-    expect(index.references.get("prob:b")?.label).toBe("Exercise 2");
+  expect(index.references.get("prob:a")?.label).toBe("Exercise 1");
+  expect(index.references.get("prob:b")?.label).toBe("Exercise 2");
   });
 });

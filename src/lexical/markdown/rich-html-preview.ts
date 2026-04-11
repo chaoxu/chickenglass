@@ -41,6 +41,15 @@ interface MarkdownRendererFallback {
   renderToken: (tokens: unknown[], idx: number, opts: unknown) => string;
 }
 
+interface MarkdownRenderEnv {
+  readonly coflatRenderOptions: RichHtmlOptions;
+}
+
+// markdown-it rendering is synchronous today, so a simple stack is enough to
+// thread per-call options through the shared renderer. Revisit this before
+// introducing any async render path.
+const markdownRenderOptionsStack: RichHtmlOptions[] = [];
+
 function encodeHtml(text: string): string {
   return text
     .replaceAll("&", "&amp;")
@@ -53,7 +62,40 @@ function encodeAttr(text: string): string {
   return encodeHtml(text).replaceAll("'", "&#39;");
 }
 
-function createMarkdownRenderer(options: RichHtmlOptions) {
+function currentMarkdownRenderOptions(): RichHtmlOptions | null {
+  return markdownRenderOptionsStack[markdownRenderOptionsStack.length - 1] ?? null;
+}
+
+function createMarkdownRenderEnv(options: RichHtmlOptions): MarkdownRenderEnv {
+  return {
+    coflatRenderOptions: options,
+  };
+}
+
+function optionsFromMarkdownRenderEnv(env: unknown): RichHtmlOptions | null {
+  if (typeof env !== "object" || env === null) {
+    return null;
+  }
+
+  const value = Reflect.get(env, "coflatRenderOptions");
+  return typeof value === "object" && value !== null
+    ? value as RichHtmlOptions
+    : null;
+}
+
+function withMarkdownRenderOptions<T>(
+  options: RichHtmlOptions,
+  render: (env: MarkdownRenderEnv) => T,
+): T {
+  markdownRenderOptionsStack.push(options);
+  try {
+    return render(createMarkdownRenderEnv(options));
+  } finally {
+    markdownRenderOptionsStack.pop();
+  }
+}
+
+function createMarkdownRenderer() {
   const md = new MarkdownIt({
     breaks: false,
     html: true,
@@ -67,12 +109,17 @@ function createMarkdownRenderer(options: RichHtmlOptions) {
   md.use(markdownItTexmath, {
     delimiters: ["dollars", "brackets"],
     engine: {
-      renderToString(content: string, renderOptions: Record<string, unknown>) {
+      renderToString(content: string, mathRenderOptions: Record<string, unknown>) {
+        const renderOptions = currentMarkdownRenderOptions();
+        const {
+          macros: _ignoredMacros,
+          ...restMathRenderOptions
+        } = mathRenderOptions;
         return katex.renderToString(
           content,
           {
-            ...buildKatexOptions(Boolean(renderOptions["displayMode"]), options.config?.math),
-            ...renderOptions,
+            ...restMathRenderOptions,
+            ...buildKatexOptions(Boolean(mathRenderOptions["displayMode"]), renderOptions?.config?.math),
           },
         );
       },
@@ -87,13 +134,14 @@ function createMarkdownRenderer(options: RichHtmlOptions) {
     tokens: unknown[],
     idx: number,
     opts: unknown,
-    _env: unknown,
+    env: unknown,
     self: MarkdownRendererFallback,
   ) => {
     const token = tokens[idx] as MarkdownImageToken;
     const src = token.attrGet("src") ?? "";
     const alt = token.content || "";
-    const resolved = options.resolveAssetUrl(src) ?? src;
+    const renderOptions = optionsFromMarkdownRenderEnv(env);
+    const resolved = renderOptions?.resolveAssetUrl(src) ?? src;
 
     if (/\.pdf(?:$|[?#])/i.test(src)) {
       return `<div class="cf-lexical-media cf-lexical-media--pdf"><object data="${encodeAttr(resolved)}" type="application/pdf" class="cf-lexical-media-object" aria-label="${encodeAttr(alt || src)}"></object></div>`;
@@ -103,11 +151,13 @@ function createMarkdownRenderer(options: RichHtmlOptions) {
     token.attrSet("alt", alt);
     const existingClass = token.attrGet("class");
     token.attrSet("class", existingClass ? `${existingClass} cf-lexical-image` : "cf-lexical-image");
-    return defaultImageRenderer(tokens, idx, opts, _env, self);
+    return defaultImageRenderer(tokens, idx, opts, env, self);
   };
 
   return md;
 }
+
+const sharedMarkdownRenderer = createMarkdownRenderer();
 
 function injectReferenceMarkup(
   markdown: string,
@@ -133,13 +183,19 @@ function renderMarkdownChunk(markdown: string, options: RichHtmlOptions): string
   if (!trimmed) {
     return "";
   }
-  const md = createMarkdownRenderer(options);
-  return md.render(injectReferenceMarkup(trimmed, options.renderIndex, options.citations));
+  return withMarkdownRenderOptions(options, (env) =>
+    sharedMarkdownRenderer.render(
+      injectReferenceMarkup(trimmed, options.renderIndex, options.citations),
+      env,
+    ));
 }
 
 function renderInlineMarkdownHtml(markdown: string, options: RichHtmlOptions): string {
-  const md = createMarkdownRenderer(options);
-  return md.renderInline(injectReferenceMarkup(markdown, options.renderIndex, options.citations));
+  return withMarkdownRenderOptions(options, (env) =>
+    sharedMarkdownRenderer.renderInline(
+      injectReferenceMarkup(markdown, options.renderIndex, options.citations),
+      env,
+    ));
 }
 
 export function renderFrontmatterHtml(raw: string): string {

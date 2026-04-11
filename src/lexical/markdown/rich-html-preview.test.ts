@@ -1,7 +1,9 @@
+import katex from "katex";
 import { describe, expect, it } from "vitest";
 
+import { buildKatexOptions } from "../../lib/katex-options";
 import { renderFrontmatterHtml, renderMarkdownRichHtml } from "./rich-html-preview";
-import type { RenderIndex } from "./reference-index";
+import { buildRenderIndex, type RenderIndex } from "./reference-index";
 
 const renderIndex: RenderIndex = {
   footnotes: new Map(),
@@ -59,5 +61,51 @@ describe("rich-html-preview", () => {
 
     expect(html).toContain("cf-lexical-media--pdf");
     expect(html).toContain("/demo/notes/figures/paper.pdf");
+  });
+
+  it("keeps asset resolution scoped to each render call", () => {
+    const renderIndex = buildRenderIndex("");
+    const markdown = "![Preview](figure.png)";
+
+    const first = renderMarkdownRichHtml(markdown, {
+      renderIndex,
+      resolveAssetUrl: (targetPath) => `/preview-a/${targetPath}`,
+    });
+    const second = renderMarkdownRichHtml(markdown, {
+      renderIndex,
+      resolveAssetUrl: (targetPath) => `/preview-b/${targetPath}`,
+    });
+
+    expect(first).toContain('src="/preview-a/figure.png"');
+    expect(second).toContain('src="/preview-b/figure.png"');
+  });
+
+  it("keeps math macros scoped to each render call", () => {
+    const renderIndex = buildRenderIndex("");
+    const markdown = "Inline $\\RR$ math";
+    const bareMath = katex.renderToString("\\RR", buildKatexOptions(false));
+    const configuredMath = katex.renderToString("\\RR", buildKatexOptions(false, {
+      "\\RR": "\\mathbb{R}",
+    }));
+
+    const withoutMacros = renderMarkdownRichHtml(markdown, {
+      renderIndex,
+      resolveAssetUrl: () => null,
+    });
+    const withMacros = renderMarkdownRichHtml(markdown, {
+      config: {
+        math: {
+          "\\RR": "\\mathbb{R}",
+        },
+      },
+      renderIndex,
+      resolveAssetUrl: () => null,
+    });
+
+    expect(bareMath).not.toBe(configuredMath);
+    expect(withoutMacros).toContain(bareMath);
+    expect(withoutMacros).not.toContain(configuredMath);
+    expect(withMacros).toContain(configuredMath);
+    expect(withMacros).not.toContain(bareMath);
   });
 });
