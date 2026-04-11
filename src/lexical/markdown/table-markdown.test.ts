@@ -11,6 +11,7 @@ describe("table-markdown", () => {
       "| c |",
     ].join("\n"))).toEqual({
       alignments: ["left", "right"],
+      dividerCells: [":---", "---:"],
       headers: ["Left", "Right"],
       rows: [
         ["a | b", "1"],
@@ -22,11 +23,12 @@ describe("table-markdown", () => {
   it("serializes normalized markdown tables", () => {
     expect(serializeMarkdownTable({
       alignments: ["left", "right"],
+      dividerCells: [":---", "---:"],
       headers: ["Left", "Right"],
       rows: [["a", "1"]],
     })).toBe([
       "| Left | Right |",
-      "| :--- | ---: |",
+      "|:---|---:|",
       "| a | 1 |",
     ].join("\n"));
   });
