@@ -189,6 +189,41 @@ Do not use the Playwright MCP plugin for this repo.
   inline caption/title layout,
   and rich token behavior inside nested editors.
 
+## Documentation-first development
+
+- Do not default to custom code before checking whether the behavior is already
+  defined by upstream documentation, source, or existing subsystem docs.
+- For Lexical work, read the relevant official Lexical docs or upstream source
+  guidance before introducing new editor patterns, especially for selection,
+  commands, transforms, node lifecycle, and DOM reconciliation behavior.
+- Prefer extending an existing documented mechanism over inventing a local
+  workaround. If the repo deliberately deviates from upstream guidance, make
+  the reason explicit in code comments, issues, or architecture docs.
+- When a change depends on framework semantics rather than local business
+  rules, treat documentation review as part of the implementation work, not as
+  optional background reading.
+
+## Lexical runtime rules
+
+- Lexical `$` helpers such as `$getRoot()`, `$getSelection()`, and
+  `$getNodeByKey()` must only run inside `editor.update(...)`,
+  `editor.read(...)`, command handlers, node transforms, or other valid
+  Lexical execution contexts.
+- Prefer Lexical commands for cross-plugin coordination. Do not couple plugins
+  through ad hoc DOM coordination when a command boundary would express the
+  intent more clearly.
+- Prefer node transforms for structural normalization and tree invariants. Do
+  not scatter one-off structural repair logic across unrelated React plugins
+  when the invariant belongs to the Lexical tree.
+- Treat Lexical nodes as immutable snapshots. Do not retain node objects across
+  updates; reacquire them from the active editor state when needed.
+- Treat Lexical node keys as runtime identities only. Do not use them as
+  persisted document identifiers or as stable semantic IDs outside the live
+  editor session.
+- Every `editor.register*()` subscription must have explicit cleanup ownership.
+  Long-lived plugins that add DOM listeners or root listeners must keep setup
+  and teardown easy to audit.
+
 ## Document format
 
 Pandoc-flavored markdown is the canonical document format. See `FORMAT.md`.
