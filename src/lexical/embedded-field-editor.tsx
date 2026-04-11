@@ -154,6 +154,8 @@ export function EmbeddedFieldEditor({
         namespace={namespace}
         onRootElementChange={setNestedRoot}
         onTextChange={onTextChange}
+        preserveLocalHistory
+        repairBlankClickSelection={spec.fieldKind !== "inline"}
         requireUserEditFlag={false}
         renderContextValue={context}
         showCodeBlockChrome={false}
