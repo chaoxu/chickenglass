@@ -9,7 +9,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { FootnoteReferenceRenderer } from "../node-renderers";
+import { FootnoteReferenceRenderer } from "../renderers/block-renderers";
 
 export type SerializedFootnoteReferenceNode = Spread<{
   raw: string;

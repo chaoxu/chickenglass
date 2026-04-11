@@ -10,7 +10,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { RawBlockRenderer } from "../node-renderers";
+import { RawBlockRenderer } from "../renderers/block-renderers";
 
 export type RawBlockVariant =
   | "display-math"
