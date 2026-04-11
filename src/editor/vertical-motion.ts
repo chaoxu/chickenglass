@@ -358,6 +358,7 @@ function activateTableStop(
       '[data-section="header"][data-row="0"][data-col="0"], [data-section][data-row][data-col]',
     );
     if (!firstCell) return false;
+    firstCell.dataset.keyboardPreviewEntry = "true";
     dispatchPlainMouseDown(firstCell);
     const opened = Boolean(
       container?.querySelector(`.${CSS.tableCellEditing} .cm-editor`) ||
