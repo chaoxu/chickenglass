@@ -1,3 +1,12 @@
+/**
+ * embedded-field-editor — Rich nested editor for inline/block fields inside
+ * decorator nodes (captions, titles, table cells).
+ *
+ * Uses LexicalRichMarkdownEditor with activation lifecycle (always-on or
+ * focus-activated). For source-text editing of structure metadata fields
+ * (openers, include paths), see StructureSourceEditor instead — it wraps
+ * the plain LexicalMarkdownEditor with draft/commit/revert semantics.
+ */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 

@@ -1,3 +1,33 @@
+/**
+ * editor-focus-plugin — Central focus arbiter for Lexical editor surfaces.
+ *
+ * ## Focus ownership model
+ *
+ * Each Lexical editor surface has an EditorFocusPlugin that tracks whether
+ * it currently owns focus. Ownership is expressed as a FocusOwner value
+ * from `src/state/editor-focus.ts` and flows through Lexical commands:
+ *
+ * - `REQUEST_SURFACE_FOCUS_COMMAND` — Programmatic focus request. Used by
+ *   EditorHandlePlugin and markdown-editor to transfer focus to a surface
+ *   at a specific edge (start/end/current).
+ *
+ * - `FOCUS_COMMAND` / `BLUR_COMMAND` — Native focus/blur events. The plugin
+ *   updates the current FocusOwner accordingly.
+ *
+ * ## What goes through this system
+ *
+ * Focus transitions between Lexical editor surfaces (main rich editor,
+ * embedded field editors, source editors) go through dispatchSurfaceFocusRequest
+ * or scheduleRegisteredSurfaceFocus.
+ *
+ * ## What does NOT go through this system
+ *
+ * Non-Lexical DOM elements (native <input> in InlineMathSourcePlugin,
+ * LinkSourcePlugin, reference-renderer) manage their own .focus() calls.
+ * These are leaf-level UI elements within a Lexical decorator, not
+ * competing editor surfaces. Similarly, block-keyboard-access-plugin
+ * focuses focusable decorator containers directly.
+ */
 import { useEffect, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
