@@ -26,7 +26,7 @@ accept = """
 Coflat2 acceptance rules. Every rule applies to the verifier, not the author.
 
 0. Regression gate.
-The full test suite must pass. Do not verify only new tests — run `pnpm test` and confirm zero failures. If carryover tests exist for the touched area, confirm round-trip fidelity.
+Run `pnpm test` before and after the change. The change must not introduce new failures. If pre-existing failures exist (from other in-progress work), note them but do not block on them — compare the failure set, not the absolute count. If carryover tests exist for the touched area, confirm round-trip fidelity.
 
 1. Visual/editor changes.
 If the change touches Lexical rendering, DecoratorNode output, node DOM, themes, CSS, or scrolling:
