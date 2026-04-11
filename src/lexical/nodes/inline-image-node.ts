@@ -9,7 +9,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { InlineImageRenderer } from "../node-renderers";
+import { InlineImageRenderer } from "../renderers/inline-image-renderer";
 
 export type SerializedInlineImageNode = Spread<{
   raw: string;

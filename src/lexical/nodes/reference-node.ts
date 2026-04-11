@@ -9,7 +9,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { ReferenceRenderer } from "../node-renderers";
+import { ReferenceRenderer } from "../renderers/reference-renderer";
 
 export type SerializedReferenceNode = Spread<{
   raw: string;
