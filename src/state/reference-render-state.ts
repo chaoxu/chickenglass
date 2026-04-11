@@ -5,7 +5,7 @@
  */
 
 import type { DocumentLabelGraph } from "../app/markdown/labels";
-import type { CitationRenderData } from "../lexical/render-context";
+import type { CitationRenderData } from "../lexical-next/controller/citation-runtime";
 import type { RenderIndex } from "../lexical/markdown/reference-index";
 import { createChangeChecker } from "./change-detection";
 
