@@ -86,13 +86,14 @@ import {
 } from "./source-position-plugin";
 import {
   getSourceText,
-  readSourceTextSelectionFromLexicalRoot,
+  $readSourceTextSelectionFromLexicalRoot,
   selectSourceOffsetsInLexicalRoot,
   writeSourceTextToLexicalRoot,
 } from "./source-text";
 import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import { useDevSettings } from "../app/dev-settings";
 
 const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
@@ -142,6 +143,10 @@ function ClickCaretRepairPlugin({
       const listener = () => handleMouseUp(rootElement);
       clickRepairHandlers.set(rootElement, listener);
       rootElement.addEventListener("mouseup", listener);
+      return () => {
+        rootElement.removeEventListener("mouseup", listener);
+        clickRepairHandlers.delete(rootElement);
+      };
     });
   }, [editor, enabled]);
 
@@ -208,10 +213,10 @@ function SourceSelectionPlugin({
       onSelectionChange?.(nextSelection);
     };
 
-    syncSelection(editor.getEditorState().read(() => readSourceTextSelectionFromLexicalRoot()));
+    syncSelection(editor.getEditorState().read(() => $readSourceTextSelectionFromLexicalRoot()));
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
-        syncSelection(readSourceTextSelectionFromLexicalRoot());
+        syncSelection($readSourceTextSelectionFromLexicalRoot());
       });
     });
   }, [editor, editorMode, onSelectionChange, selectionRef]);
