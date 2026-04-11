@@ -8,7 +8,9 @@ import { appendDebugTimelineEvent } from "./debug-timeline";
 import {
   activateStructureEditAt,
   activateStructureEditTarget,
+  clearStructureEditTarget,
   createStructureEditTargetAt,
+  getActiveStructureEditTarget,
 } from "./structure-edit-state";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
@@ -482,12 +484,31 @@ function requestSelectionVisibility(
   });
 }
 
+function exitActiveDisplayMathTarget(
+  view: EditorView,
+  forward: boolean,
+): boolean {
+  const active = getActiveStructureEditTarget(view.state);
+  if (active?.kind !== "display-math") return false;
+
+  const exitPos = forward ? active.to : active.from;
+  if (!clearStructureEditTarget(view)) return false;
+  view.dispatch({
+    selection: EditorSelection.cursor(exitPos, forward ? 1 : -1),
+    scrollIntoView: false,
+    userEvent: "select",
+  });
+  requestSelectionVisibility(view);
+  return true;
+}
+
 export function moveVerticallyInRichView(
   view: EditorView,
   forward: boolean,
 ): boolean {
   const range = view.state.selection.main;
   if (!range.empty) return false;
+  const activeStructure = getActiveStructureEditTarget(view.state);
 
   const before = snapshotVerticalMotion(view);
   const nextRange = view.moveVertically(range, forward);
@@ -496,9 +517,29 @@ export function moveVerticallyInRichView(
     nextRange.anchor === range.anchor &&
     nextRange.head === range.head
   ) {
+    if (exitActiveDisplayMathTarget(view, forward)) {
+      return true;
+    }
     // Consume the key at rich-mode boundaries so CM6's default ArrowUp/Down
     // handler does not run a second vertical move with different assoc/goal
     // state and bounce between the terminal blank line and the last content line.
+    return true;
+  }
+
+  if (activeStructure?.kind === "display-math") {
+    const nextInsideActiveDisplayMath =
+      nextRange.head >= activeStructure.from && nextRange.head < activeStructure.to;
+
+    if (!nextInsideActiveDisplayMath) {
+      clearStructureEditTarget(view);
+    }
+
+    view.dispatch({
+      selection: view.state.selection.replaceRange(nextRange),
+      scrollIntoView: false,
+      userEvent: "select",
+    });
+    requestSelectionVisibility(view);
     return true;
   }
 

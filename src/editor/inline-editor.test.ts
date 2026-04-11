@@ -27,6 +27,7 @@ import { CSS } from "../constants/css-classes";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
 import { CslProcessor } from "../citations/csl-processor";
 import { frontmatterField } from "./frontmatter-state";
+import type { DocumentReferenceCatalog } from "../semantics/reference-catalog";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
@@ -364,6 +365,47 @@ describe("inline editor citation widget rendering (#422)", () => {
     // Without equation context, this should at least not show cf-link-rendered
     const linkRenderedEls = view.dom.querySelectorAll(".cf-link-rendered");
     expect(linkRenderedEls.length).toBe(0);
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("renders block crossrefs from an injected root reference catalog", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+
+    const target = {
+      id: "thm:fundamental",
+      kind: "block" as const,
+      from: 100,
+      to: 120,
+      displayLabel: "Theorem 1",
+      number: "1",
+      ordinal: 1,
+      title: "Fundamental Theorem",
+      blockType: "theorem",
+    };
+    const referenceCatalog: DocumentReferenceCatalog = {
+      targets: [target],
+      targetsById: new Map([[target.id, [target]]]),
+      uniqueTargetById: new Map([[target.id, target]]),
+      duplicatesById: new Map(),
+      references: [],
+    };
+
+    const view = createInlineEditor({
+      parent,
+      doc: "[@thm:fundamental]",
+      macros: {},
+      referenceCatalog,
+      onChange: () => {},
+    });
+
+    const crossrefEl = view.dom.querySelector(".cf-crossref");
+    const unresolvedEl = view.dom.querySelector(".cf-crossref-unresolved");
+
+    expect(crossrefEl?.textContent).toBe("Theorem 1");
+    expect(unresolvedEl).toBeNull();
 
     view.destroy();
     parent.remove();

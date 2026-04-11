@@ -11,6 +11,7 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "./document-analysis";
 import { pluginRegistryField } from "./plugin-registry";
+import { externalDocumentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import {
   getEquationNumbersCacheKey,
   type DocumentAnalysis,
@@ -150,6 +151,10 @@ const crossrefNumberingChanged = createChangeChecker(
   },
 );
 
+const externalReferenceCatalogChanged = createChangeChecker(
+  (state) => state.field(externalDocumentReferenceCatalogField, false),
+);
+
 const bibliographyInputsChanged = createChangeChecker(
   (state) => state.field(bibDataField, false)?.store ?? null,
   (state) => state.field(bibDataField, false)?.cslProcessor ?? null,
@@ -165,6 +170,7 @@ export function referenceRenderRebuildDependenciesChanged(
   afterState: EditorState,
 ): boolean {
   return (
+    externalReferenceCatalogChanged(beforeState, afterState) ||
     bibliographyInputsChanged(beforeState, afterState) ||
     blockLabelConfigChanged(beforeState, afterState) ||
     crossrefNumberingChanged(beforeState, afterState)
@@ -207,6 +213,7 @@ export function getReferenceRenderDependencySignature(
     getDocumentAnalysisSliceRevision(analysis, "references"),
     getEquationNumbersCacheKey(analysis),
     getBlockNumberingKey(state),
+    getObjectIdentityId(state.field(externalDocumentReferenceCatalogField, false)),
     getObjectIdentityId(store as object),
     getObjectIdentityId(cslProcessor),
     processorRevision,

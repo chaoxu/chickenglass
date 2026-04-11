@@ -1,5 +1,5 @@
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
-import { StateField, type EditorState } from "@codemirror/state";
+import { StateEffect, StateField, type EditorState } from "@codemirror/state";
 import type { NumberingScheme } from "../parser/frontmatter";
 import { computeBlockNumbersFromFencedDivs } from "../plugins/block-counter";
 import { getPluginOrFallback } from "../plugins/plugin-registry";
@@ -28,6 +28,25 @@ import {
   type DocumentReferenceCatalog,
 } from "./reference-catalog";
 import { createChangeChecker } from "../state/change-detection";
+
+export const setExternalDocumentReferenceCatalogEffect =
+  StateEffect.define<DocumentReferenceCatalog | null>();
+
+export const externalDocumentReferenceCatalogField =
+  StateField.define<DocumentReferenceCatalog | null>({
+    create() {
+      return null;
+    },
+
+    update(value, tr) {
+      for (const effect of tr.effects) {
+        if (effect.is(setExternalDocumentReferenceCatalogEffect)) {
+          return effect.value;
+        }
+      }
+      return value;
+    },
+  });
 
 type DocumentAnalysisBase = Omit<DocumentAnalysis, "referenceIndex">;
 
@@ -190,6 +209,10 @@ export function getEditorDocumentReferenceCatalog(
   state: EditorState,
   ...analysisArg: [analysis?: DocumentAnalysis]
 ): DocumentReferenceCatalog {
+  const external = state.field(externalDocumentReferenceCatalogField, false);
+  if (external) {
+    return external;
+  }
   const [analysis] = analysisArg;
   const cached = state.field(documentReferenceCatalogField, false);
   if (analysisArg.length === 0 && cached) {

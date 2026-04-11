@@ -23,6 +23,7 @@ import {
 } from "./source-widget";
 import { ShellWidget } from "./shell-widget";
 import { bibDataField } from "../state/bib-data";
+import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.
@@ -249,11 +250,15 @@ export class TableWidget extends ShellWidget {
 
   private mountPreviewEditor(cell: HTMLElement, content: string): void {
     const bibData = this.editorView?.state.field?.(bibDataField, false);
+    const referenceCatalog = this.editorView
+      ? getEditorDocumentReferenceCatalog(this.editorView.state)
+      : undefined;
     const controller = createInlineEditorController({
       parent: cell,
       doc: content,
       macros: this.macros,
       bibData: bibData ?? undefined,
+      referenceCatalog,
       readOnly: true,
       onChange: () => {},
     });
@@ -432,11 +437,15 @@ export class TableWidget extends ShellWidget {
       const currentLinear = section === "header" ? 0 : row + 1;
       const totalRows = 1 + bodyRowCount;
       const bibData = this.editorView?.state.field?.(bibDataField, false);
+      const referenceCatalog = this.editorView
+        ? getEditorDocumentReferenceCatalog(this.editorView.state)
+        : undefined;
       const controller = createInlineEditorController({
         parent: cell,
         doc: rawText,
         macros: this.macros,
         bibData: bibData ?? undefined,
+        referenceCatalog,
         onChange: () => {},
       });
 

@@ -21,6 +21,11 @@ import { referenceRenderPlugin } from "./render/reference-render";
 import { documentAnalysisField } from "./state/document-analysis";
 import { type BibData, bibDataEffect, bibDataField } from "./state/bib-data";
 import { frontmatterField } from "./state/frontmatter-state";
+import {
+  externalDocumentReferenceCatalogField,
+  setExternalDocumentReferenceCatalogEffect,
+} from "./semantics/editor-reference-catalog";
+import type { DocumentReferenceCatalog } from "./semantics/reference-catalog";
 
 /** Options for creating a lightweight inline editor. */
 export interface InlineEditorOptions {
@@ -33,6 +38,8 @@ export interface InlineEditorOptions {
   /** Bibliography data for citation rendering. When provided, the inline
    *  editor renders [@id] citations and @id cross-references. */
   bibData?: BibData;
+  /** Root-document reference catalog for resolving crossrefs in embedded editors. */
+  referenceCatalog?: DocumentReferenceCatalog;
   /** Called whenever the document changes. */
   onChange: (newDoc: string) => void;
   /** Called when the editor loses focus. */
@@ -80,6 +87,7 @@ export function createInlineEditorController(
     frontmatterField,
     documentAnalysisField,
     bibDataField,
+    externalDocumentReferenceCatalogField,
     referenceRenderPlugin,
     drawSelection(),
     readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
@@ -109,6 +117,11 @@ export function createInlineEditorController(
 
   if (opts.bibData) {
     view.dispatch({ effects: bibDataEffect.of(opts.bibData) });
+  }
+  if (opts.referenceCatalog) {
+    view.dispatch({
+      effects: setExternalDocumentReferenceCatalogEffect.of(opts.referenceCatalog),
+    });
   }
 
   return {

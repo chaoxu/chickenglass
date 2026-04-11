@@ -135,18 +135,31 @@ function syncInlineMathViewportRanges(view: EditorView): void {
 }
 
 class InlineMathViewportTracker {
+  private syncScheduled = false;
+
   constructor(view: EditorView) {
+    this.scheduleSync(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (update.docChanged || update.viewportChanged) {
+      this.scheduleSync(update.view);
+    }
+  }
+
+  private scheduleSync(view: EditorView): void {
+    if (this.syncScheduled) return;
+    this.syncScheduled = true;
     queueMicrotask(() => {
+      this.syncScheduled = false;
       if (view.dom.isConnected) {
         syncInlineMathViewportRanges(view);
       }
     });
   }
 
-  update(update: ViewUpdate): void {
-    if (update.docChanged || update.viewportChanged) {
-      syncInlineMathViewportRanges(update.view);
-    }
+  destroy(): void {
+    this.syncScheduled = false;
   }
 }
 
