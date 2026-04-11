@@ -23,8 +23,9 @@ import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import {
   $getRoot,
-  CLEAR_HISTORY_COMMAND,
+  HISTORY_MERGE_TAG,
   FORMAT_TEXT_COMMAND,
+  type EditorUpdateOptions,
   type LexicalEditor,
 } from "lexical";
 
@@ -289,11 +290,15 @@ function replaceSourceText(
   editor: LexicalEditor,
   text: string,
   selection: MarkdownEditorSelection,
+  options?: Pick<EditorUpdateOptions, "tag">,
 ): void {
   editor.update(() => {
     writeSourceTextToLexicalRoot(text);
     selectSourceOffsetsInLexicalRoot(selection.anchor, selection.focus);
-  }, { discrete: true });
+  }, {
+    discrete: true,
+    tag: options?.tag,
+  });
 }
 
 function readEditorDocument(editor: LexicalEditor, editorMode: EditorMode): string {
@@ -419,12 +424,14 @@ function MarkdownModeSyncPlugin({
   doc,
   editorMode,
   lastCommittedDocRef,
+  pendingLocalEchoDocRef,
   selectionRef,
   userEditPendingRef,
 }: {
   readonly doc: string;
   readonly editorMode: EditorMode;
   readonly lastCommittedDocRef: MutableRefObject<string>;
+  readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
   readonly userEditPendingRef: MutableRefObject<boolean>;
 }) {
@@ -432,10 +439,14 @@ function MarkdownModeSyncPlugin({
   const appliedModeRef = useRef(editorMode);
 
   useEffect(() => {
+    const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
     const previousMode = appliedModeRef.current;
     const modeChanged = previousMode !== editorMode;
     const docChanged = doc !== lastCommittedDocRef.current;
     if (!modeChanged && !docChanged) {
+      if (pendingLocalEchoDoc === doc) {
+        pendingLocalEchoDocRef.current = null;
+      }
       return;
     }
 
@@ -447,6 +458,10 @@ function MarkdownModeSyncPlugin({
       selectionRef.current.focus,
       nextDoc.length,
     );
+    const mergeHistory = pendingLocalEchoDoc !== null || (modeChanged && !docChanged);
+    const syncOptions = mergeHistory
+      ? { tag: HISTORY_MERGE_TAG }
+      : undefined;
 
     selectionRef.current = nextSelection;
     lastCommittedDocRef.current = nextDoc;
@@ -454,12 +469,12 @@ function MarkdownModeSyncPlugin({
     appliedModeRef.current = editorMode;
 
     if (editorMode === "source") {
-      replaceSourceText(editor, nextDoc, nextSelection);
+      replaceSourceText(editor, nextDoc, nextSelection, syncOptions);
     } else {
-      setLexicalMarkdown(editor, nextDoc);
+      setLexicalMarkdown(editor, nextDoc, syncOptions);
     }
-    editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
-  }, [doc, editor, editorMode, lastCommittedDocRef, selectionRef, userEditPendingRef]);
+    pendingLocalEchoDocRef.current = null;
+  }, [doc, editor, editorMode, lastCommittedDocRef, pendingLocalEchoDocRef, selectionRef, userEditPendingRef]);
 
   return null;
 }
@@ -677,6 +692,7 @@ export function LexicalMarkdownEditor({
   const initialModeRef = useRef(editorMode);
   const editorModeRef = useRef(editorMode);
   const lastCommittedDocRef = useRef(doc);
+  const pendingLocalEchoDocRef = useRef<string | null>(null);
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
@@ -729,6 +745,7 @@ export function LexicalMarkdownEditor({
         return;
       }
 
+      pendingLocalEchoDocRef.current = nextDoc;
       lastCommittedDocRef.current = nextDoc;
       onTextChange?.(nextDoc);
       onDocChange?.(changes);
@@ -754,6 +771,7 @@ export function LexicalMarkdownEditor({
     }
 
     userEditPendingRef.current = false;
+    pendingLocalEchoDocRef.current = nextDoc;
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
@@ -800,6 +818,7 @@ export function LexicalMarkdownEditor({
                 doc={doc}
                 editorMode={editorMode}
                 lastCommittedDocRef={lastCommittedDocRef}
+                pendingLocalEchoDocRef={pendingLocalEchoDocRef}
                 selectionRef={sourceSelectionRef}
                 userEditPendingRef={userEditPendingRef}
               />
