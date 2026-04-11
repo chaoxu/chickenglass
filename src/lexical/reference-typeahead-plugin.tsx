@@ -24,9 +24,6 @@ import {
   type ReferenceCompletionCandidate,
 } from "../state/reference-completion-engine";
 import { EditorChromePanel } from "./editor-chrome";
-import { buildPreviewFencedDivRaw } from "./markdown/block-syntax";
-import { formatCitationPreview } from "./markdown/reference-display";
-import { renderDisplayMathHtml, renderFencedDivHtml } from "./markdown/rich-html-preview";
 import { $createReferenceNode } from "./nodes/reference-node";
 import {
   buildReferenceCompletionPreviewModel,
