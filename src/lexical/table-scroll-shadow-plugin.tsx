@@ -4,18 +4,13 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 const TABLE_SELECTOR = ".cf-lexical-table-block";
 const SCROLL_THRESHOLD = 2;
 
-type ScrollEdge = "left" | "right" | "both" | "none";
-
-function computeScrollEdge(el: HTMLElement): ScrollEdge {
+function computeScrollEdge(el: HTMLElement): "left" | "right" | "both" | null {
   const maxScroll = el.scrollWidth - el.clientWidth;
   if (maxScroll <= SCROLL_THRESHOLD) {
-    return "none";
+    return null;
   }
   const atLeft = el.scrollLeft <= SCROLL_THRESHOLD;
   const atRight = el.scrollLeft >= maxScroll - SCROLL_THRESHOLD;
-  if (atLeft && atRight) {
-    return "none";
-  }
   if (atLeft) {
     return "left";
   }
@@ -27,10 +22,10 @@ function computeScrollEdge(el: HTMLElement): ScrollEdge {
 
 function syncScrollState(table: HTMLElement): void {
   const edge = computeScrollEdge(table);
-  if (edge === "none") {
-    delete table.dataset.scrollEdge;
-  } else {
+  if (edge) {
     table.dataset.scrollEdge = edge;
+  } else {
+    delete table.dataset.scrollEdge;
   }
 }
 
@@ -39,17 +34,21 @@ export function TableScrollShadowPlugin() {
 
   useEffect(() => {
     const tracked = new Map<HTMLElement, () => void>();
+    const resizeObserver = new ResizeObserver(() => {
+      for (const table of tracked.keys()) {
+        syncScrollState(table);
+      }
+    });
 
     function attach(table: HTMLElement): void {
       if (tracked.has(table)) {
         return;
       }
-
       const onScroll = () => {
         syncScrollState(table);
       };
-
       table.addEventListener("scroll", onScroll, { passive: true });
+      resizeObserver.observe(table);
       syncScrollState(table);
       tracked.set(table, onScroll);
     }
@@ -58,6 +57,7 @@ export function TableScrollShadowPlugin() {
       const handler = tracked.get(table);
       if (handler) {
         table.removeEventListener("scroll", handler);
+        resizeObserver.unobserve(table);
         tracked.delete(table);
       }
     }
@@ -65,12 +65,10 @@ export function TableScrollShadowPlugin() {
     function scanAll(root: HTMLElement): void {
       const tables = root.querySelectorAll<HTMLElement>(TABLE_SELECTOR);
       const current = new Set<HTMLElement>();
-
       for (const table of tables) {
         attach(table);
         current.add(table);
       }
-
       for (const table of tracked.keys()) {
         if (!current.has(table)) {
           detach(table);
@@ -78,23 +76,10 @@ export function TableScrollShadowPlugin() {
       }
     }
 
-    function resyncAll(): void {
-      for (const table of tracked.keys()) {
-        syncScrollState(table);
-      }
-    }
-
     const rootElement = editor.getRootElement();
     if (rootElement) {
-      scanAll(rootElement);
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      resyncAll();
-    });
-
-    if (rootElement) {
       resizeObserver.observe(rootElement);
+      scanAll(rootElement);
     }
 
     const unregisterRootListener = editor.registerRootListener(
@@ -116,9 +101,6 @@ export function TableScrollShadowPlugin() {
       const root = editor.getRootElement();
       if (root) {
         scanAll(root);
-        for (const table of tracked.keys()) {
-          resizeObserver.observe(table);
-        }
       }
     });
 

@@ -1039,20 +1039,6 @@ table.cf-lexical-table-block > tbody {
   border-collapse: collapse;
 }
 
-table.cf-lexical-table-block[data-scroll-edge="left"] {
-  box-shadow: inset 12px 0 8px -8px rgba(0, 0, 0, 0.08);
-}
-
-table.cf-lexical-table-block[data-scroll-edge="right"] {
-  box-shadow: inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
-}
-
-table.cf-lexical-table-block[data-scroll-edge="both"] {
-  box-shadow:
-    inset 12px 0 8px -8px rgba(0, 0, 0, 0.08),
-    inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
-}
-
 div.cf-lexical-table-block {
   overflow-x: auto;
 }
@@ -1062,15 +1048,15 @@ div.cf-lexical-table-block > table {
   border-collapse: collapse;
 }
 
-div.cf-lexical-table-block[data-scroll-edge="left"] {
+.cf-lexical-table-block[data-scroll-edge="left"] {
   box-shadow: inset 12px 0 8px -8px rgba(0, 0, 0, 0.08);
 }
 
-div.cf-lexical-table-block[data-scroll-edge="right"] {
+.cf-lexical-table-block[data-scroll-edge="right"] {
   box-shadow: inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
 }
 
-div.cf-lexical-table-block[data-scroll-edge="both"] {
+.cf-lexical-table-block[data-scroll-edge="both"] {
   box-shadow:
     inset 12px 0 8px -8px rgba(0, 0, 0, 0.08),
     inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
