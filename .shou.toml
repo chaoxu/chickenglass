@@ -44,6 +44,7 @@ For refactor, cleanup, or architecture tickets:
   - show that one concept has one owner, stale duplicate paths are removed, and any promised split/centralization actually exists now.
   - do not close on directional cleanup alone.
   - for CM6→Lexical migration work: confirm the CM6 pattern is fully removed, not just wrapped.
+  - verify new modules are actually wired up: grep for imports from at least one non-test consumer. A module with zero external importers (only its own test) is dead code, not a delivered feature. If the module is intentional scaffolding for a follow-up issue, note the dependency explicitly in the commit message.
 
 4. Desktop/Tauri-specific behavior.
 If the change affects native-only behavior:
