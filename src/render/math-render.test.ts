@@ -842,7 +842,7 @@ describe("math decoration invalidation", () => {
     });
   });
 
-  it("limits initial inline math widgets to the selection band while keeping display math rendered", () => {
+  it("renders inline math document-wide while keeping display math rendered", () => {
     const inlineLines = Array.from(
       { length: 20 },
       (_, index) => `line ${index + 1} $x_${index + 1}$`,
@@ -854,7 +854,7 @@ describe("math decoration invalidation", () => {
       .filter((spec) => spec.widgetClass === "MathWidget");
 
     expect(widgetSpecs.filter((spec) => spec.block === true)).toHaveLength(1);
-    expect(widgetSpecs.filter((spec) => spec.block !== true)).toHaveLength(9);
+    expect(widgetSpecs.filter((spec) => spec.block !== true)).toHaveLength(20);
   });
 
   it("rebuilds when the inline math viewport band changes", () => {
@@ -876,7 +876,7 @@ describe("math decoration invalidation", () => {
       .filter((spec) => spec.widgetClass === "MathWidget");
 
     expect(afterState.field(mathDecorationField)).not.toBe(state.field(mathDecorationField));
-    expect(before).toHaveLength(9);
+    expect(before).toHaveLength(20);
     expect(after).toHaveLength(6);
   });
 });

@@ -59,6 +59,17 @@ function nextBlockNumberingKey(tr: Transaction): string {
   );
 }
 
+function blockCounterStateFitsDoc(
+  value: BlockCounterState,
+  docLength: number,
+): boolean {
+  return value.blocks.every((block) =>
+    block.from >= 0 &&
+    block.from <= block.to &&
+    block.to <= docLength
+  );
+}
+
 /**
  * CM6 StateField that maintains block numbering.
  *
@@ -85,19 +96,40 @@ export const blockCounterField = StateField.define<BlockCounterState>({
       return value;
     }
 
+    const configChanged = blockCounterConfigChanged(tr);
+    const canMapExistingPositions = blockCounterStateFitsDoc(
+      value,
+      tr.startState.doc.length,
+    );
+
     if (
       tr.docChanged
-      && !blockCounterConfigChanged(tr)
+      && !configChanged
       && !docChangeTouchesFencedDivStructure(tr)
     ) {
-      return mapBlockCounterState(value, tr.changes);
+      return canMapExistingPositions
+        ? mapBlockCounterState(value, tr.changes)
+        : computeBlockNumbers(
+            tr.state,
+            tr.state.field(pluginRegistryField),
+            getEffectiveNumbering(tr.state),
+          );
     }
 
     if (
-      !blockCounterConfigChanged(tr)
+      !configChanged
       && nextBlockNumberingKey(tr) === value.numberingKey
     ) {
-      return tr.docChanged ? mapBlockCounterState(value, tr.changes) : value;
+      if (!tr.docChanged) {
+        return value;
+      }
+      return canMapExistingPositions
+        ? mapBlockCounterState(value, tr.changes)
+        : computeBlockNumbers(
+            tr.state,
+            tr.state.field(pluginRegistryField),
+            getEffectiveNumbering(tr.state),
+          );
     }
 
     return computeBlockNumbers(
