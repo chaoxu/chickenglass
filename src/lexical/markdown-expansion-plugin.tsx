@@ -20,6 +20,10 @@ import { $isTableCellNode } from "./nodes/table-cell-node";
 import { $isTableNode } from "./nodes/table-node";
 import { $isTableRowNode } from "./nodes/table-row-node";
 import { createTableNodeFromMarkdown } from "./markdown";
+import {
+  getPendingEmbeddedSurfaceFocusId,
+  queuePendingSurfaceFocus,
+} from "./pending-surface-focus";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
@@ -35,6 +39,7 @@ type InsertFocusTarget =
   | "footnote-body"
   | "frontmatter"
   | "include-path"
+  | "none"
   | "table-cell";
 
 interface ExpansionCandidate {
@@ -138,7 +143,7 @@ export function getMarkdownExpansionCandidate(selection: RangeSelection): Expans
 
   if (IMAGE_BLOCK_RE.test(text)) {
     return {
-      focusTarget: "block-body",
+      focusTarget: "none",
       raw: text,
       replaceNodes: [paragraph],
       variant: "image",
@@ -204,7 +209,14 @@ function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
 }
 
 function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget: InsertFocusTarget): void {
+  if (focusTarget === "block-body" || focusTarget === "footnote-body") {
+    return;
+  }
+
   requestAnimationFrame(() => {
+    if (focusTarget === "none") {
+      return;
+    }
     if (focusTarget === "table-cell") {
       focusFirstTableCell(editor, key);
       return;
@@ -249,6 +261,12 @@ function insertExpandedBlock(
       return;
     }
     insertedNodeKey = insertedNode.getKey();
+    if (candidate.focusTarget === "block-body" || candidate.focusTarget === "footnote-body") {
+      queuePendingSurfaceFocus(
+        getPendingEmbeddedSurfaceFocusId(editor.getKey(), insertedNodeKey, candidate.focusTarget),
+        "end",
+      );
+    }
 
     firstNode.insertBefore(insertedNode);
     for (const node of candidate.replaceNodes) {

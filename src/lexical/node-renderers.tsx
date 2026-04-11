@@ -22,6 +22,7 @@ import {
   parseStructuredFencedDivRaw,
   serializeFencedDivRaw,
 } from "./markdown/block-syntax";
+import { getPendingEmbeddedSurfaceFocusId } from "./pending-surface-focus";
 import { humanizeBlockType } from "./markdown/block-metadata";
 import {
   parseFootnoteDefinition,
@@ -75,6 +76,17 @@ function richHtmlOptions(context: ReturnType<typeof useLexicalRenderContext>) {
   };
 }
 
+function usePendingEmbeddedSurfaceFocusId(
+  nodeKey: NodeKey,
+  target: "block-body" | "footnote-body",
+): string {
+  const [editor] = useLexicalComposerContext();
+  return useMemo(
+    () => getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, target),
+    [editor, nodeKey, target],
+  );
+}
+
 function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
   const [editor] = useLexicalComposerContext();
 
@@ -108,6 +120,7 @@ function FencedDivStructureSourceEditor({
       <StructureSourceEditor
         className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--opener"
         doc={getFirstLine(raw)}
+        namespace={`coflat-block-opener-${nodeKey}`}
         onChange={(nextOpener) => updateRaw(replaceFirstLine(raw, nextOpener))}
         onClose={onClose}
       />
@@ -518,6 +531,7 @@ function FrontmatterRenderer({
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--frontmatter"
           doc={raw}
           multiline
+          namespace={`coflat-frontmatter-source-${nodeKey}`}
           onChange={updateRaw}
           onClose={() => setEditingSource(false)}
         />
@@ -595,6 +609,7 @@ function DisplayMathBlockRenderer({
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--math"
             doc={raw}
             multiline
+            namespace={`coflat-display-math-${nodeKey}`}
             onChange={updateRaw}
             onClose={() => setEditing(false)}
           />
@@ -710,6 +725,7 @@ function FootnoteDefinitionBlockRenderer({
   const { renderIndex } = useLexicalRenderContext();
   const parsed = useMemo(() => parseFootnoteDefinition(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
+  const pendingFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "footnote-body");
 
   if (!parsed) {
     return <div className="cf-lexical-raw-fallback">{raw}</div>;
@@ -727,6 +743,7 @@ function FootnoteDefinitionBlockRenderer({
           family="footnote-body"
           namespace={`coflat-footnote-${nodeKey}`}
           onTextChange={(nextBody) => updateRaw(serializeFootnoteDefinition(parsed.id, nextBody))}
+          pendingFocusId={pendingFocusId}
         />
       </div>
     </section>
@@ -777,6 +794,7 @@ function IncludeBlockRenderer({
         <StructureSourceEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--include"
           doc={parsed.bodyMarkdown.trim()}
+          namespace={`coflat-include-path-${nodeKey}`}
           onChange={(nextPath) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextPath,
           }))}
@@ -816,6 +834,7 @@ function CaptionedBlockRenderer({
   const surfaceEditable = useLexicalSurfaceEditable();
   const updateRaw = useRawBlockUpdater(nodeKey);
   const [editingOpener, setEditingOpener] = useState(false);
+  const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
 
   return (
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`}>
@@ -835,6 +854,7 @@ function CaptionedBlockRenderer({
           onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextBody,
           }))}
+          pendingFocusId={pendingBodyFocusId}
         />
       </div>
       {parsed.titleMarkdown ? (
@@ -917,6 +937,7 @@ function EmbedBlockRenderer({
           <StructureSourceEditor
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--embed"
             doc={parsed.bodyMarkdown.trim()}
+            namespace={`coflat-embed-${nodeKey}`}
             onChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
               bodyMarkdown: nextBody,
             }))}
@@ -970,6 +991,7 @@ function FencedDivBlockRenderer({
   const parsed = useMemo(() => parseStructuredFencedDivRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const [editingOpener, setEditingOpener] = useState(false);
+  const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
   const referenceEntry = parsed.id ? context.renderIndex.references.get(parsed.id) : undefined;
   const blockOverride = context.config.blocks?.[parsed.blockType];
   const labelOverride = blockOverride && typeof blockOverride === "object"
@@ -1001,6 +1023,7 @@ function FencedDivBlockRenderer({
           onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextBody,
           }))}
+          pendingFocusId={pendingBodyFocusId}
         />
       </blockquote>
     );
@@ -1051,6 +1074,7 @@ function FencedDivBlockRenderer({
           onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextBody,
           }))}
+          pendingFocusId={pendingBodyFocusId}
         />
       </div>
     </section>

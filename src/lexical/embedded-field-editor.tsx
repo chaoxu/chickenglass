@@ -6,12 +6,13 @@ import {
   getEmbeddedFieldFamilySpec,
 } from "../lexical-next";
 import { useLexicalSurfaceEditable } from "./editability-context";
-import { COFLAT_FOCUS_EDGE_EVENT } from "./focus-edge-plugin";
+import { scheduleRegisteredSurfaceFocus, type FocusRequestEdge } from "./editor-focus-plugin";
+import { consumePendingSurfaceFocus } from "./pending-surface-focus";
 import { useLexicalRenderContext } from "./render-context";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 
 type ActivationMode = "always" | "focus";
-type FocusRequest = "end" | "pointer";
+type FocusRequest = FocusRequestEdge | "pointer";
 
 export interface EmbeddedFieldEditorProps {
   readonly activation?: ActivationMode;
@@ -21,6 +22,7 @@ export interface EmbeddedFieldEditorProps {
   readonly family: EmbeddedFieldFamily;
   readonly namespace: string;
   readonly onTextChange?: (text: string) => void;
+  readonly pendingFocusId?: string;
 }
 
 export function EmbeddedFieldEditor({
@@ -31,9 +33,11 @@ export function EmbeddedFieldEditor({
   family,
   namespace,
   onTextChange,
+  pendingFocusId,
 }: EmbeddedFieldEditorProps) {
   const context = useLexicalRenderContext();
   const surfaceEditable = useLexicalSurfaceEditable();
+  const [nestedRoot, setNestedRoot] = useState<HTMLElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const requestedFocusRef = useRef<FocusRequest | null>(null);
   const spec = getEmbeddedFieldFamilySpec(family);
@@ -70,52 +74,49 @@ export function EmbeddedFieldEditor({
 
   useEffect(() => {
     const requestedFocus = requestedFocusRef.current;
-    if (!requestedFocus || !active) {
+    if (!requestedFocus || !active || !nestedRoot) {
       return;
     }
 
-    let cancelled = false;
-    let attemptsRemaining = 6;
-
-    const focusEditableRoot = () => {
-      if (cancelled || requestedFocusRef.current !== requestedFocus) {
-        return;
-      }
-
-      const editableRoot = shellRef.current?.querySelector<HTMLElement>("[contenteditable='true']");
-      if (editableRoot) {
-        if (requestedFocus === "end") {
-          editableRoot.dispatchEvent(new CustomEvent(COFLAT_FOCUS_EDGE_EVENT, {
-            detail: { edge: "end" },
-          }));
+    return scheduleRegisteredSurfaceFocus(nestedRoot, {
+      edge: requestedFocus === "pointer" ? "current" : requestedFocus,
+      maxAttempts: 6,
+      onFailure: () => {
+        requestedFocusRef.current = null;
+        if (activation === "focus") {
+          setActive(false);
         }
-        editableRoot.focus({ preventScroll: true });
-      }
-      if (shellRef.current?.contains(document.activeElement)) {
+      },
+      onSuccess: () => {
         requestedFocusRef.current = null;
-        return;
-      }
+      },
+    });
+  }, [active, nestedRoot]);
 
-      attemptsRemaining -= 1;
-      if (attemptsRemaining <= 0) {
-        requestedFocusRef.current = null;
-        return;
-      }
+  useEffect(() => {
+    if (!pendingFocusId) {
+      return;
+    }
 
-      requestAnimationFrame(focusEditableRoot);
-    };
+    const edge = consumePendingSurfaceFocus(pendingFocusId);
+    if (!edge) {
+      return;
+    }
 
-    focusEditableRoot();
-    return () => {
-      cancelled = true;
-    };
-  }, [active]);
+    requestedFocusRef.current = edge;
+    if (activation === "focus") {
+      setActive(true);
+    }
+  }, [activation, pendingFocusId]);
 
   return (
     <div
       className={canActivate ? "cf-embedded-field-shell cf-embedded-field-shell--focus" : "cf-embedded-field-shell"}
       onBlurCapture={canActivate
         ? (event) => {
+            if (requestedFocusRef.current) {
+              return;
+            }
             const nextFocused = event.relatedTarget;
             if (nextFocused instanceof Node && shellRef.current?.contains(nextFocused)) {
               return;
@@ -148,8 +149,10 @@ export function EmbeddedFieldEditor({
         doc={doc}
         editable={effectiveEditable}
         editorClassName={className}
+        focusOwnerRole="embedded-field"
         layoutMode={spec.fieldKind === "inline" ? "inline" : "block"}
         namespace={namespace}
+        onRootElementChange={setNestedRoot}
         onTextChange={onTextChange}
         requireUserEditFlag={false}
         renderContextValue={context}

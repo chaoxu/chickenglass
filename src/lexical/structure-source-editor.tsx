@@ -3,14 +3,17 @@ import {
   useEffect,
   useRef,
   useState,
-  type ChangeEvent,
   type KeyboardEvent,
 } from "react";
+
+import type { MarkdownEditorHandle } from "./markdown-editor-types";
+import { LexicalMarkdownEditor } from "./markdown-editor";
 
 interface StructureSourceEditorProps {
   readonly className: string;
   readonly doc: string;
   readonly multiline?: boolean;
+  readonly namespace: string;
   readonly onChange: (nextValue: string) => void;
   readonly onClose: () => void;
 }
@@ -19,23 +22,24 @@ export function StructureSourceEditor({
   className,
   doc,
   multiline = false,
+  namespace,
   onChange,
   onClose,
 }: StructureSourceEditorProps) {
   const [draft, setDraft] = useState(() => doc);
   const originalDocRef = useRef(doc);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const handleRef = useRef<MarkdownEditorHandle | null>(null);
 
-  useEffect(() => {
-    const field = multiline ? textareaRef.current : inputRef.current;
-    if (!field) {
+  const focusEditor = useCallback(() => {
+    const handle = handleRef.current;
+    if (!handle) {
       return;
     }
-    field.focus();
+
     const end = draft.length;
-    field.setSelectionRange(end, end);
-  }, []);
+    handle.setSelection(end, end);
+    handle.focus();
+  }, [draft.length]);
 
   useEffect(() => {
     if (doc === originalDocRef.current) {
@@ -55,7 +59,7 @@ export function StructureSourceEditor({
   }, [draft, onChange, onClose]);
 
   const handleKeyDown = useCallback((
-    event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+    event: KeyboardEvent<HTMLDivElement>,
   ) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -69,24 +73,32 @@ export function StructureSourceEditor({
     }
   }, [closeWithRevert, multiline, onClose]);
 
-  const commonProps = {
-    className,
-    onBlur: () => onClose(),
-    onChange: (
-      event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => {
-      const nextValue = event.currentTarget.value;
-      setDraft(nextValue);
-      onChange(nextValue);
-    },
-    onKeyDown: handleKeyDown,
-    spellCheck: false,
-    value: draft,
-  } as const;
-
-  return multiline ? (
-    <textarea {...commonProps} ref={textareaRef} />
-  ) : (
-    <input {...commonProps} ref={inputRef} />
+  return (
+    <LexicalMarkdownEditor
+      doc={draft}
+      editorClassName={className}
+      editorMode="source"
+      focusOwnerRole="embedded-field"
+      namespace={namespace}
+      onBlurCapture={(event) => {
+        const nextFocused = event.relatedTarget;
+        if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
+          return;
+        }
+        onClose();
+      }}
+      onEditorReady={(handle) => {
+        handleRef.current = handle;
+        focusEditor();
+      }}
+      onFocus={focusEditor}
+      onKeyDown={handleKeyDown}
+      onTextChange={(nextValue) => {
+        setDraft(nextValue);
+        onChange(nextValue);
+      }}
+      spellCheck={false}
+      testId={null}
+    />
   );
 }

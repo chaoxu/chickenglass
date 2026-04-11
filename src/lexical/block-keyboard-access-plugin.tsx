@@ -18,6 +18,7 @@ import {
   type NodeKey,
 } from "lexical";
 import { $findAdjacentTopLevelSiblingFromSelection } from "./selection-boundary";
+import { requestRegisteredSurfaceFocus } from "./editor-focus-plugin";
 
 type NavigationDirection = "forward" | "backward";
 
@@ -32,8 +33,14 @@ function queryEditableTargets(target: HTMLElement): HTMLElement[] {
   return [...target.querySelectorAll<HTMLElement>("[contenteditable='true']")];
 }
 
-function activateNestedEditor(editable: HTMLElement): void {
-  editable.focus();
+function activateNestedEditor(
+  editable: HTMLElement,
+  direction: NavigationDirection,
+): boolean {
+  return requestRegisteredSurfaceFocus(
+    editable,
+    direction === "forward" ? "start" : "end",
+  );
 }
 
 function focusTarget(
@@ -46,8 +53,7 @@ function focusTarget(
   const editable = direction === "forward"
     ? editableTargets[0]
     : editableTargets[editableTargets.length - 1];
-  if (editable) {
-    activateNestedEditor(editable);
+  if (editable && activateNestedEditor(editable, direction)) {
     return true;
   }
 

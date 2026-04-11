@@ -4,6 +4,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEventHandler,
+  type KeyboardEventHandler,
   type MouseEvent as ReactMouseEvent,
   type MutableRefObject,
 } from "react";
@@ -32,12 +34,18 @@ import {
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
 } from "../app/editor-doc-change";
+import {
+  focusSurface,
+  type FocusOwner,
+  type FocusOwnerRole,
+  type SurfaceFocusOwner,
+} from "../state/editor-focus";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import { BibliographySection } from "./bibliography-section";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
-import { FocusEdgePlugin } from "./focus-edge-plugin";
+import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromePlugin } from "./heading-chrome-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
@@ -458,6 +466,7 @@ function MarkdownModeSyncPlugin({
 
 interface EditorHandlePluginProps {
   readonly editorModeRef: MutableRefObject<EditorMode>;
+  readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
@@ -466,6 +475,7 @@ interface EditorHandlePluginProps {
 
 function EditorHandlePlugin({
   editorModeRef,
+  focusOwnerRef,
   onEditorReady,
   onSelectionChange,
   selectionRef,
@@ -513,12 +523,10 @@ function EditorHandlePlugin({
         setLexicalMarkdown(editor, nextDoc);
       },
       focus: () => {
-        if (editorModeRef.current === "source") {
-          editor.focus();
-          return;
+        if (editorModeRef.current !== "source") {
+          scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
         }
-        scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
-        editor.focus();
+        dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
       getDoc: () => readEditorDocument(editor, editorModeRef.current),
       getSelection: () => selectionRef.current,
@@ -589,15 +597,13 @@ function EditorHandlePlugin({
           editor.update(() => {
             selectSourceOffsetsInLexicalRoot(nextSelection.anchor, nextSelection.focus);
           }, { discrete: true });
-          editor.focus();
-          return;
+        } else {
+          scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
         }
-
-        scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
-        editor.focus();
+        dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
     }, editor);
-  }, [editor, editorModeRef, onEditorReady, onSelectionChange, selectionRef, userEditPendingRef]);
+  }, [editor, editorModeRef, focusOwnerRef, onEditorReady, onSelectionChange, selectionRef, userEditPendingRef]);
 
   return null;
 }
@@ -625,9 +631,14 @@ export interface LexicalMarkdownEditorProps {
   readonly editorMode: EditorMode;
   readonly editable?: boolean;
   readonly editorClassName?: string;
+  readonly focusOwnerRole?: FocusOwnerRole;
   readonly namespace?: string;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
+  readonly onBlurCapture?: FocusEventHandler<HTMLDivElement>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
+  readonly onFocus?: FocusEventHandler<HTMLDivElement>;
+  readonly onFocusOwnerChange?: (owner: FocusOwner) => void;
+  readonly onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
   readonly onRootElementChange?: (root: HTMLElement | null) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly onTextChange?: (text: string) => void;
@@ -644,9 +655,14 @@ export function LexicalMarkdownEditor({
   editorMode,
   editable = true,
   editorClassName,
+  focusOwnerRole,
   namespace = "coflat-lexical-markdown",
   onDocChange,
+  onBlurCapture,
   onEditorReady,
+  onFocus,
+  onFocusOwnerChange,
+  onKeyDown,
   onRootElementChange,
   onSelectionChange,
   onTextChange,
@@ -665,6 +681,14 @@ export function LexicalMarkdownEditor({
   const userEditPendingRef = useRef(false);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
   const isSourceMode = editorMode === "source";
+  const focusOwner = useMemo(
+    () => focusSurface(
+      focusOwnerRole ?? (isSourceMode ? "source-surface" : "rich-surface"),
+      namespace,
+    ),
+    [focusOwnerRole, isSourceMode, namespace],
+  );
+  const focusOwnerRef = useRef(focusOwner);
 
   const initialConfig = useMemo(() => ({
     editable,
@@ -685,6 +709,10 @@ export function LexicalMarkdownEditor({
     editorModeRef.current = editorMode;
     userEditPendingRef.current = false;
   }, [editorMode]);
+
+  useEffect(() => {
+    focusOwnerRef.current = focusOwner;
+  }, [focusOwner]);
 
   const handleChange = useCallback((
     _editorState: unknown,
@@ -752,9 +780,11 @@ export function LexicalMarkdownEditor({
         >
           <EditorScrollSurfaceProvider surface={effectiveSurface}>
             <LexicalComposer initialConfig={initialConfig}>
+              <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
               <EditableSyncPlugin editable={editable} />
               <EditorHandlePlugin
                 editorModeRef={editorModeRef}
+                focusOwnerRef={focusOwnerRef}
                 onEditorReady={onEditorReady}
                 onSelectionChange={onSelectionChange}
                 selectionRef={sourceSelectionRef}
@@ -780,6 +810,9 @@ export function LexicalMarkdownEditor({
                       aria-label="Lexical source editor"
                       className={resolvedEditorClassName}
                       data-testid={testId ?? undefined}
+                      onBlurCapture={onBlurCapture}
+                      onFocus={onFocus}
+                      onKeyDown={onKeyDown}
                       onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
                       spellCheck={spellCheck}
                     />
@@ -794,6 +827,7 @@ export function LexicalMarkdownEditor({
                       aria-label="Lexical rich editor"
                       className={resolvedEditorClassName}
                       data-testid={testId ?? undefined}
+                      onBlurCapture={onBlurCapture}
                       onBeforeInput={editable
                         ? () => {
                             userEditPendingRef.current = true;
@@ -806,6 +840,10 @@ export function LexicalMarkdownEditor({
                         : undefined}
                       onKeyDown={editable
                         ? (event) => {
+                            onKeyDown?.(event);
+                            if (event.defaultPrevented) {
+                              return;
+                            }
                             if (
                               event.key === "Backspace"
                               || event.key === "Delete"
@@ -814,12 +852,13 @@ export function LexicalMarkdownEditor({
                               userEditPendingRef.current = true;
                             }
                           }
-                        : undefined}
+                        : onKeyDown}
                       onMouseUp={editable
                         ? (event: ReactMouseEvent<HTMLDivElement>) => {
                             repairBlankClickSelection(event.currentTarget, event);
                           }
                         : undefined}
+                      onFocus={onFocus}
                       onPaste={editable
                         ? () => {
                             userEditPendingRef.current = true;
@@ -832,7 +871,6 @@ export function LexicalMarkdownEditor({
                   placeholder={null}
                 />
               )}
-              <FocusEdgePlugin />
               {!isSourceMode ? <CodeBlockChromePlugin /> : null}
               {!isSourceMode ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
               {!isSourceMode && editable ? <ClickCaretRepairPlugin enabled /> : null}
