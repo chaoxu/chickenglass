@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRenderIndex } from "./rendering";
+import { buildRenderIndex } from "./reference-index";
 
 describe("buildRenderIndex", () => {
   it("shares theorem-family counters and keeps dedicated definition/algorithm counters", () => {

@@ -1,0 +1,212 @@
+import MarkdownIt from "markdown-it";
+import markdownItAttrs from "markdown-it-attrs";
+import markdownItFootnote from "markdown-it-footnote";
+import markdownItMark from "markdown-it-mark";
+import markdownItTaskLists from "markdown-it-task-lists";
+import markdownItTexmath from "markdown-it-texmath";
+import katex from "katex";
+
+import { buildKatexOptions } from "../../lib/katex-options";
+import { parseFrontmatter, type FrontmatterConfig } from "../../lib/frontmatter";
+import {
+  buildPreviewFencedDivRaw,
+  collectSpecialBlockRanges,
+  parseDisplayMathRaw,
+  parseFencedDivRaw,
+} from "./block-syntax";
+import { resolveBlockTitle } from "./block-metadata";
+import {
+  BRACKETED_REFERENCE_RE,
+  NARRATIVE_REFERENCE_RE,
+  renderReferenceDisplay,
+  type RenderCitations,
+} from "./reference-display";
+import type { RenderIndex } from "./reference-index";
+
+interface RichHtmlOptions {
+  readonly citations?: RenderCitations;
+  readonly config?: FrontmatterConfig;
+  readonly docPath?: string;
+  readonly renderIndex: RenderIndex;
+  readonly resolveAssetUrl: (targetPath: string) => string | null;
+}
+
+interface MarkdownImageToken {
+  attrGet: (name: string) => string | null;
+  attrSet: (name: string, value: string) => void;
+  content?: string;
+}
+
+interface MarkdownRendererFallback {
+  renderToken: (tokens: unknown[], idx: number, opts: unknown) => string;
+}
+
+function encodeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function encodeAttr(text: string): string {
+  return encodeHtml(text).replaceAll("'", "&#39;");
+}
+
+function createMarkdownRenderer(options: RichHtmlOptions) {
+  const md = new MarkdownIt({
+    breaks: false,
+    html: true,
+    linkify: true,
+  });
+
+  md.use(markdownItAttrs);
+  md.use(markdownItFootnote);
+  md.use(markdownItMark);
+  md.use(markdownItTaskLists, { enabled: true });
+  md.use(markdownItTexmath, {
+    delimiters: ["dollars", "brackets"],
+    engine: {
+      renderToString(content: string, renderOptions: Record<string, unknown>) {
+        return katex.renderToString(
+          content,
+          {
+            ...buildKatexOptions(Boolean(renderOptions["displayMode"]), options.config?.math),
+            ...renderOptions,
+          },
+        );
+      },
+    },
+  });
+
+  const defaultImageRenderer = md.renderer.rules.image
+    ?? ((tokens: unknown[], idx: number, opts: unknown, _env: unknown, self: MarkdownRendererFallback) =>
+      self.renderToken(tokens, idx, opts));
+
+  md.renderer.rules.image = (
+    tokens: unknown[],
+    idx: number,
+    opts: unknown,
+    _env: unknown,
+    self: MarkdownRendererFallback,
+  ) => {
+    const token = tokens[idx] as MarkdownImageToken;
+    const src = token.attrGet("src") ?? "";
+    const alt = token.content || "";
+    const resolved = options.resolveAssetUrl(src) ?? src;
+
+    if (/\.pdf(?:$|[?#])/i.test(src)) {
+      return `<div class="cf-lexical-media cf-lexical-media--pdf"><object data="${encodeAttr(resolved)}" type="application/pdf" class="cf-lexical-media-object" aria-label="${encodeAttr(alt || src)}"></object></div>`;
+    }
+
+    token.attrSet("src", resolved);
+    token.attrSet("alt", alt);
+    const existingClass = token.attrGet("class");
+    token.attrSet("class", existingClass ? `${existingClass} cf-lexical-image` : "cf-lexical-image");
+    return defaultImageRenderer(tokens, idx, opts, _env, self);
+  };
+
+  return md;
+}
+
+function injectReferenceMarkup(
+  markdown: string,
+  renderIndex: RenderIndex,
+  citations?: RenderCitations,
+): string {
+  const placeholders: string[] = [];
+  let next = markdown.replace(BRACKETED_REFERENCE_RE, (raw) => {
+    const placeholder = `__COFLAT_REF_${placeholders.length}__`;
+    placeholders.push(`<span class="cf-lexical-reference">${encodeHtml(renderReferenceDisplay(raw, renderIndex, citations))}</span>`);
+    return placeholder;
+  });
+
+  next = next.replace(NARRATIVE_REFERENCE_RE, (_raw, prefix: string, id: string) =>
+    `${prefix}<span class="cf-lexical-reference">${encodeHtml(renderReferenceDisplay(`@${id}`, renderIndex, citations))}</span>`);
+
+  return next.replace(/__COFLAT_REF_(\d+)__/g, (_raw, indexText: string) =>
+    placeholders[Number(indexText)] ?? "");
+}
+
+function renderMarkdownChunk(markdown: string, options: RichHtmlOptions): string {
+  const trimmed = markdown.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const md = createMarkdownRenderer(options);
+  return md.render(injectReferenceMarkup(trimmed, options.renderIndex, options.citations));
+}
+
+function renderInlineMarkdownHtml(markdown: string, options: RichHtmlOptions): string {
+  const md = createMarkdownRenderer(options);
+  return md.renderInline(injectReferenceMarkup(markdown, options.renderIndex, options.citations));
+}
+
+export function renderFrontmatterHtml(raw: string): string {
+  const parsed = parseFrontmatter(raw);
+  if (parsed.config.title) {
+    return `<header class="cf-lexical-title-shell"><h1 class="cf-lexical-frontmatter-title">${encodeHtml(parsed.config.title)}</h1></header>`;
+  }
+  return "";
+}
+
+export function renderDisplayMathHtml(raw: string, options: RichHtmlOptions): string {
+  const parsed = parseDisplayMathRaw(raw);
+  const equation = katex.renderToString(parsed.body, buildKatexOptions(true, options.config?.math));
+  const label = parsed.id ? options.renderIndex.references.get(parsed.id)?.shortLabel : undefined;
+  return `<div class="cf-lexical-display-math"><div class="cf-lexical-display-math-body">${equation}</div>${label ? `<div class="cf-lexical-display-math-label">${encodeHtml(label)}</div>` : ""}</div>`;
+}
+
+export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): string {
+  const parsed = parseFencedDivRaw(raw);
+  const referenceEntry = parsed.id ? options.renderIndex.references.get(parsed.id) : undefined;
+  const titleHtml = parsed.title
+    ? renderInlineMarkdownHtml(parsed.title, options)
+    : "";
+  const bodyHtml = parsed.blockType === "include"
+    ? `<p class="cf-lexical-include-path">${encodeHtml(parsed.body)}</p>`
+    : renderMarkdownRichHtml(parsed.body, options);
+  const label = referenceEntry?.label ?? resolveBlockTitle(parsed.blockType, options.config);
+  const isCaptionBlock = parsed.blockType === "figure" || parsed.blockType === "table";
+
+  if (parsed.blockType === "gist" || parsed.blockType === "youtube") {
+    return `<section class="cf-lexical-block cf-lexical-block--embed cf-lexical-block--${encodeAttr(parsed.blockType)}"><div class="cf-lexical-block-label">${encodeHtml(label)}</div><a class="cf-lexical-embed-link" href="${encodeAttr(parsed.body)}" target="_blank" rel="noreferrer">${encodeHtml(parsed.body)}</a></section>`;
+  }
+
+  if (parsed.blockType === "blockquote") {
+    return `<blockquote class="cf-lexical-blockquote-shell">${bodyHtml}</blockquote>`;
+  }
+
+  const headerHtml = `<header class="cf-lexical-block-header"><span class="cf-lexical-block-label">${encodeHtml(label)}</span>${titleHtml ? `<span class="cf-lexical-block-title">${titleHtml}</span>` : ""}</header>`;
+  if (isCaptionBlock) {
+    return `<section class="cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}"><div class="cf-lexical-block-body">${bodyHtml}</div>${headerHtml}</section>`;
+  }
+  return `<section class="cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}">${headerHtml}<div class="cf-lexical-block-body">${bodyHtml}</div></section>`;
+}
+
+export function renderMarkdownRichHtml(markdown: string, options: RichHtmlOptions): string {
+  const ranges = collectSpecialBlockRanges(markdown);
+  if (ranges.length === 0) {
+    return renderMarkdownChunk(markdown, options);
+  }
+
+  const html: string[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    if (cursor < range.from) {
+      html.push(renderMarkdownChunk(markdown.slice(cursor, range.from), options));
+    }
+    html.push(
+      range.variant === "display-math"
+        ? renderDisplayMathHtml(range.raw, options)
+        : renderFencedDivHtml(range.raw, options),
+    );
+    cursor = range.to;
+  }
+  if (cursor < markdown.length) {
+    html.push(renderMarkdownChunk(markdown.slice(cursor), options));
+  }
+  return html.join("");
+}
+
+export { buildPreviewFencedDivRaw };
