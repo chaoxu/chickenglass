@@ -51,6 +51,7 @@ import { HeadingChromePlugin } from "./heading-chrome-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
+import { StructureEditProvider } from "./structure-edit-plugin";
 import {
   coflatMarkdownNodes,
   coflatMarkdownTransformers,
@@ -798,124 +799,126 @@ export function LexicalMarkdownEditor({
         >
           <EditorScrollSurfaceProvider surface={effectiveSurface}>
             <LexicalComposer initialConfig={initialConfig}>
-              <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
-              <EditableSyncPlugin editable={editable} />
-              <EditorHandlePlugin
-                editorModeRef={editorModeRef}
-                focusOwnerRef={focusOwnerRef}
-                onEditorReady={onEditorReady}
-                onSelectionChange={onSelectionChange}
-                selectionRef={sourceSelectionRef}
-                userEditPendingRef={userEditPendingRef}
-              />
-              <SourceSelectionPlugin
-                editorMode={editorMode}
-                onSelectionChange={onSelectionChange}
-                selectionRef={sourceSelectionRef}
-              />
-              <RootElementPlugin onRootElementChange={onRootElementChange} />
-              <MarkdownModeSyncPlugin
-                doc={doc}
-                editorMode={editorMode}
-                lastCommittedDocRef={lastCommittedDocRef}
-                pendingLocalEchoDocRef={pendingLocalEchoDocRef}
-                selectionRef={sourceSelectionRef}
-                userEditPendingRef={userEditPendingRef}
-              />
-              {isSourceMode ? (
-                <PlainTextPlugin
-                  contentEditable={(
-                    <ContentEditable
-                      aria-label="Lexical source editor"
-                      className={resolvedEditorClassName}
-                      data-testid={testId ?? undefined}
-                      onBlurCapture={onBlurCapture}
-                      onFocus={onFocus}
-                      onKeyDown={onKeyDown}
-                      onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
-                      spellCheck={spellCheck}
-                    />
-                  )}
-                  placeholder={null}
-                  ErrorBoundary={LexicalErrorBoundary}
+              <StructureEditProvider>
+                <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
+                <EditableSyncPlugin editable={editable} />
+                <EditorHandlePlugin
+                  editorModeRef={editorModeRef}
+                  focusOwnerRef={focusOwnerRef}
+                  onEditorReady={onEditorReady}
+                  onSelectionChange={onSelectionChange}
+                  selectionRef={sourceSelectionRef}
+                  userEditPendingRef={userEditPendingRef}
                 />
-              ) : (
-                <RichTextPlugin
-                  contentEditable={(
-                    <ContentEditable
-                      aria-label="Lexical rich editor"
-                      className={resolvedEditorClassName}
-                      data-testid={testId ?? undefined}
-                      onBlurCapture={onBlurCapture}
-                      onBeforeInput={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      onDrop={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      onKeyDown={editable
-                        ? (event) => {
-                            onKeyDown?.(event);
-                            if (event.defaultPrevented) {
-                              return;
-                            }
-                            if (
-                              event.key === "Backspace"
-                              || event.key === "Delete"
-                              || event.key === "Enter"
-                            ) {
+                <SourceSelectionPlugin
+                  editorMode={editorMode}
+                  onSelectionChange={onSelectionChange}
+                  selectionRef={sourceSelectionRef}
+                />
+                <RootElementPlugin onRootElementChange={onRootElementChange} />
+                <MarkdownModeSyncPlugin
+                  doc={doc}
+                  editorMode={editorMode}
+                  lastCommittedDocRef={lastCommittedDocRef}
+                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+                  selectionRef={sourceSelectionRef}
+                  userEditPendingRef={userEditPendingRef}
+                />
+                {isSourceMode ? (
+                  <PlainTextPlugin
+                    contentEditable={(
+                      <ContentEditable
+                        aria-label="Lexical source editor"
+                        className={resolvedEditorClassName}
+                        data-testid={testId ?? undefined}
+                        onBlurCapture={onBlurCapture}
+                        onFocus={onFocus}
+                        onKeyDown={onKeyDown}
+                        onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
+                        spellCheck={spellCheck}
+                      />
+                    )}
+                    placeholder={null}
+                    ErrorBoundary={LexicalErrorBoundary}
+                  />
+                ) : (
+                  <RichTextPlugin
+                    contentEditable={(
+                      <ContentEditable
+                        aria-label="Lexical rich editor"
+                        className={resolvedEditorClassName}
+                        data-testid={testId ?? undefined}
+                        onBlurCapture={onBlurCapture}
+                        onBeforeInput={editable
+                          ? () => {
                               userEditPendingRef.current = true;
                             }
-                          }
-                        : onKeyDown}
-                      onMouseUp={editable
-                        ? (event: ReactMouseEvent<HTMLDivElement>) => {
-                            repairBlankClickSelection(event.currentTarget, event);
-                          }
-                        : undefined}
-                      onFocus={onFocus}
-                      onPaste={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      spellCheck={spellCheck}
-                    />
-                  )}
-                  ErrorBoundary={LexicalErrorBoundary}
-                  placeholder={null}
-                />
-              )}
-              {!isSourceMode ? <CodeBlockChromePlugin /> : null}
-              {!isSourceMode ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
-              {!isSourceMode && editable ? <ClickCaretRepairPlugin enabled /> : null}
-              {editable ? <HistoryPlugin /> : null}
-              {!isSourceMode ? <ListPlugin /> : null}
-              {!isSourceMode ? <CheckListPlugin /> : null}
-              {!isSourceMode ? <LinkPlugin /> : null}
-              {!isSourceMode && editable ? <LinkSourcePlugin /> : null}
-              {!isSourceMode && editable ? <FormatEventPlugin /> : null}
-              {!isSourceMode && editable ? <InlineMathSourcePlugin /> : null}
-              {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
-              {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
-              {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}
-              {!isSourceMode ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
-              {!isSourceMode ? (
-                <SourcePositionPlugin
-                  doc={renderContextValue?.doc ?? doc}
-                  enableNavigation
-                />
-              ) : null}
-              {!isSourceMode ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
-              {!isSourceMode && editable ? (
-                <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} />
-              ) : null}
-              {editable ? <OnChangePlugin onChange={handleChange} /> : null}
-              {!isSourceMode ? <BibliographySection /> : null}
+                          : undefined}
+                        onDrop={editable
+                          ? () => {
+                              userEditPendingRef.current = true;
+                            }
+                          : undefined}
+                        onKeyDown={editable
+                          ? (event) => {
+                              onKeyDown?.(event);
+                              if (event.defaultPrevented) {
+                                return;
+                              }
+                              if (
+                                event.key === "Backspace"
+                                || event.key === "Delete"
+                                || event.key === "Enter"
+                              ) {
+                                userEditPendingRef.current = true;
+                              }
+                            }
+                          : onKeyDown}
+                        onMouseUp={editable
+                          ? (event: ReactMouseEvent<HTMLDivElement>) => {
+                              repairBlankClickSelection(event.currentTarget, event);
+                            }
+                          : undefined}
+                        onFocus={onFocus}
+                        onPaste={editable
+                          ? () => {
+                              userEditPendingRef.current = true;
+                            }
+                          : undefined}
+                        spellCheck={spellCheck}
+                      />
+                    )}
+                    ErrorBoundary={LexicalErrorBoundary}
+                    placeholder={null}
+                  />
+                )}
+                {!isSourceMode ? <CodeBlockChromePlugin /> : null}
+                {!isSourceMode ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
+                {!isSourceMode && editable ? <ClickCaretRepairPlugin enabled /> : null}
+                {editable ? <HistoryPlugin /> : null}
+                {!isSourceMode ? <ListPlugin /> : null}
+                {!isSourceMode ? <CheckListPlugin /> : null}
+                {!isSourceMode ? <LinkPlugin /> : null}
+                {!isSourceMode && editable ? <LinkSourcePlugin /> : null}
+                {!isSourceMode && editable ? <FormatEventPlugin /> : null}
+                {!isSourceMode && editable ? <InlineMathSourcePlugin /> : null}
+                {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
+                {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
+                {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}
+                {!isSourceMode ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
+                {!isSourceMode ? (
+                  <SourcePositionPlugin
+                    doc={renderContextValue?.doc ?? doc}
+                    enableNavigation
+                  />
+                ) : null}
+                {!isSourceMode ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
+                {!isSourceMode && editable ? (
+                  <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} />
+                ) : null}
+                {editable ? <OnChangePlugin onChange={handleChange} /> : null}
+                {!isSourceMode ? <BibliographySection /> : null}
+              </StructureEditProvider>
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
         </div>

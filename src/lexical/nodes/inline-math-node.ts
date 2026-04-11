@@ -16,7 +16,7 @@ export type SerializedInlineMathNode = Spread<{
   raw: string;
 }, SerializedLexicalNode>;
 
-import { InlineMathRenderer } from "../renderers/math-renderers";
+import { InlineMathRenderer } from "../renderers/inline-math-renderer";
 
 export class InlineMathNode extends DecoratorNode<JSX.Element> {
   __raw: string;

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type JSX } from "react";
+import { useMemo, useState, type JSX } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { NodeKey } from "lexical";
 
@@ -9,6 +9,7 @@ import { FloatingPreviewPortal, PreviewHtml } from "../hover-preview-plugin";
 import { LexicalRichMarkdownEditor } from "../rich-markdown-editor";
 import { useIncludedDocument, useLexicalRenderContext } from "../render-context";
 import { StructureSourceEditor } from "../structure-source-editor";
+import { useStructureEditToggle } from "../structure-edit-plugin";
 import { useLexicalSurfaceEditable } from "../editability-context";
 import {
   parseStructuredFencedDivRaw,
@@ -94,7 +95,11 @@ function FrontmatterRenderer({
   const context = useLexicalRenderContext();
   const title = parseFrontmatter(raw).config.title ?? "";
   const updateRaw = useRawBlockUpdater(nodeKey);
-  const [editingSource, setEditingSource] = useState(false);
+  const sourceEdit = useStructureEditToggle(
+    nodeKey,
+    "frontmatter",
+    "frontmatter-source",
+  );
 
   const titleHtml = useMemo(
     () => title ? renderMarkdownRichHtml(title, richHtmlOptions(context)) : "",
@@ -102,20 +107,20 @@ function FrontmatterRenderer({
   );
 
   return (
-    <header className={`cf-lexical-title-shell${editingSource ? " is-editing-source" : ""}`}>
-      {editingSource ? (
+    <header className={`cf-lexical-title-shell${sourceEdit.active ? " is-editing-source" : ""}`}>
+      {sourceEdit.active ? (
         <StructureSourceEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--frontmatter"
           doc={raw}
           multiline
           namespace={`coflat-frontmatter-source-${nodeKey}`}
           onChange={updateRaw}
-          onClose={() => setEditingSource(false)}
+          onClose={sourceEdit.deactivate}
         />
       ) : (
         <div
           className="cf-lexical-structure-toggle cf-lexical-structure-toggle--frontmatter"
-          {...structureToggleProps(surfaceEditable, () => setEditingSource(true))}
+          {...structureToggleProps(surfaceEditable, sourceEdit.activate)}
         >
           {title ? (
             <div
@@ -190,26 +195,17 @@ function IncludeBlockRenderer({
   const parsed = useMemo(() => parseStructuredFencedDivRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const content = useIncludedDocument(parsed.bodyMarkdown.trim());
-  const [editingPath, setEditingPath] = useState(false);
+  const pathEdit = useStructureEditToggle(nodeKey, "fenced-div", "include-path");
 
   return (
-    <section
-      className="cf-lexical-include-shell"
-      onBlurCapture={(event) => {
-        const nextFocused = event.relatedTarget;
-        if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) {
-          return;
-        }
-        setEditingPath(false);
-      }}
-    >
+    <section className="cf-lexical-include-shell">
       <div className="cf-lexical-include-meta">
         {surfaceEditable ? (
           <button
             className="cf-lexical-include-path-toggle cf-lexical-structure-toggle cf-lexical-structure-toggle--include"
             onMouseDown={(event) => {
               event.preventDefault();
-              setEditingPath(true);
+              pathEdit.activate();
             }}
             type="button"
           >
@@ -219,7 +215,7 @@ function IncludeBlockRenderer({
           <span className="cf-lexical-include-path-label">{parsed.bodyMarkdown.trim()}</span>
         )}
       </div>
-      {editingPath ? (
+      {pathEdit.active ? (
         <StructureSourceEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--include"
           doc={parsed.bodyMarkdown.trim()}
@@ -227,7 +223,7 @@ function IncludeBlockRenderer({
           onChange={(nextPath) => updateRaw(serializeFencedDivRaw(parsed, {
             bodyMarkdown: nextPath,
           }))}
-          onClose={() => setEditingPath(false)}
+          onClose={pathEdit.deactivate}
         />
       ) : null}
       <div className="cf-lexical-include-content">
@@ -262,15 +258,15 @@ function CaptionedBlockRenderer({
 }) {
   const surfaceEditable = useLexicalSurfaceEditable();
   const updateRaw = useRawBlockUpdater(nodeKey);
-  const [editingOpener, setEditingOpener] = useState(false);
+  const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
 
   return (
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`}>
-      {editingOpener ? (
+      {openerEdit.active ? (
         <FencedDivStructureSourceEditor
           nodeKey={nodeKey}
-          onClose={() => setEditingOpener(false)}
+          onClose={openerEdit.deactivate}
           raw={raw}
         />
       ) : null}
@@ -290,7 +286,7 @@ function CaptionedBlockRenderer({
         <footer className="cf-lexical-block-caption">
           <span
             className="cf-lexical-block-caption-label cf-lexical-structure-toggle"
-            {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
+            {...structureToggleProps(surfaceEditable, openerEdit.activate)}
           >
             {label}
           </span>
@@ -326,43 +322,32 @@ function EmbedBlockRenderer({
 }) {
   const surfaceEditable = useLexicalSurfaceEditable();
   const updateRaw = useRawBlockUpdater(nodeKey);
-  const [editing, setEditing] = useState(false);
-  const [editingOpener, setEditingOpener] = useState(false);
-  const shellRef = useRef<HTMLElement | null>(null);
+  const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
+  const bodyEdit = useStructureEditToggle(nodeKey, "fenced-div", "embed-url");
   const src = useMemo(
     () => computeEmbedSrc(parsed.blockType, parsed.bodyMarkdown),
     [parsed.blockType, parsed.bodyMarkdown],
   );
 
   return (
-    <section
-      className={`cf-lexical-block cf-lexical-block--embed cf-lexical-block--${parsed.blockType}`}
-      onBlurCapture={(event) => {
-        const nextFocused = event.relatedTarget;
-        if (nextFocused instanceof Node && shellRef.current?.contains(nextFocused)) {
-          return;
-        }
-        setEditing(false);
-      }}
-      ref={shellRef}
-    >
+    <section className={`cf-lexical-block cf-lexical-block--embed cf-lexical-block--${parsed.blockType}`}>
       <header className="cf-lexical-block-header">
         <span
           className="cf-lexical-block-label cf-lexical-structure-toggle"
-          {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
+          {...structureToggleProps(surfaceEditable, openerEdit.activate)}
         >
           {label}
         </span>
       </header>
-      {editingOpener ? (
+      {openerEdit.active ? (
         <FencedDivStructureSourceEditor
           nodeKey={nodeKey}
-          onClose={() => setEditingOpener(false)}
+          onClose={openerEdit.deactivate}
           raw={raw}
         />
       ) : null}
       <div className="cf-lexical-block-body">
-        {editing ? (
+        {bodyEdit.active ? (
           <StructureSourceEditor
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--embed"
             doc={parsed.bodyMarkdown.trim()}
@@ -370,7 +355,7 @@ function EmbedBlockRenderer({
             onChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
               bodyMarkdown: nextBody,
             }))}
-            onClose={() => setEditing(false)}
+            onClose={bodyEdit.deactivate}
           />
         ) : src ? (
           <div className="cf-lexical-embed-frame-shell">
@@ -395,7 +380,7 @@ function EmbedBlockRenderer({
           onMouseDown={surfaceEditable
             ? (event) => {
                 event.preventDefault();
-                setEditing(true);
+                bodyEdit.activate();
               }
             : undefined}
           rel="noreferrer"
@@ -419,7 +404,7 @@ function FencedDivBlockRenderer({
   const context = useLexicalRenderContext();
   const parsed = useMemo(() => parseStructuredFencedDivRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
-  const [editingOpener, setEditingOpener] = useState(false);
+  const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
   const referenceEntry = parsed.id ? context.renderIndex.references.get(parsed.id) : undefined;
   const blockOverride = context.config.blocks?.[parsed.blockType];
@@ -464,17 +449,17 @@ function FencedDivBlockRenderer({
 
   return (
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType}`}>
-      {editingOpener ? (
+      {openerEdit.active ? (
         <FencedDivStructureSourceEditor
           nodeKey={nodeKey}
-          onClose={() => setEditingOpener(false)}
+          onClose={openerEdit.deactivate}
           raw={raw}
         />
       ) : null}
       <header className="cf-lexical-block-header">
         <span
           className="cf-lexical-block-label cf-lexical-structure-toggle"
-          {...structureToggleProps(surfaceEditable, () => setEditingOpener(true))}
+          {...structureToggleProps(surfaceEditable, openerEdit.activate)}
         >
           {label}
         </span>

@@ -6,7 +6,11 @@
  * (adapter code in plugins and renderers).
  */
 
-import type { StructureBlockVariant, StructureEditState } from "./structure-edit";
+import type {
+  StructureBlockVariant,
+  StructureEditState,
+  StructureEditSurface,
+} from "./structure-edit";
 import {
   STRUCTURE_EDIT_IDLE,
   structureEditActive,
@@ -22,8 +26,9 @@ export function activateStructureEdit(
   current: StructureEditState,
   blockKey: string,
   variant: StructureBlockVariant,
+  surface: StructureEditSurface,
 ): StructureEditState {
-  const next = structureEditActive(blockKey, variant);
+  const next = structureEditActive(blockKey, variant, surface);
   if (isSameStructureEdit(current, next)) {
     return current;
   }
@@ -51,8 +56,13 @@ export function deactivateStructureEdit(
 export function deactivateStructureEditIfMatch(
   current: StructureEditState,
   blockKey: string,
+  surface: StructureEditSurface,
 ): StructureEditState {
-  if (current.status === "editing" && current.blockKey === blockKey) {
+  if (
+    current.status === "editing"
+    && current.blockKey === blockKey
+    && current.surface === surface
+  ) {
     return STRUCTURE_EDIT_IDLE;
   }
   return current;

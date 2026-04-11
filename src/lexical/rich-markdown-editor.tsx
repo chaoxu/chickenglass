@@ -60,6 +60,7 @@ import { HeadingChromePlugin } from "./heading-chrome-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
+import { StructureEditProvider } from "./structure-edit-plugin";
 import {
   getCoflatClipboardData,
   getCoflatMarkdownFromDataTransfer,
@@ -788,94 +789,96 @@ export function LexicalRichMarkdownEditor({
         >
           <EditorScrollSurfaceProvider surface={effectiveSurface}>
             <LexicalComposer initialConfig={initialConfig}>
-              <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
-              <EditableSyncPlugin editable={editable} />
-              <EditorHandlePlugin
-                focusOwner={focusOwner}
-                onEditorReady={onEditorReady}
-                onSelectionChange={onSelectionChange}
-                selectionRef={sourceSelectionRef}
-                userEditPendingRef={userEditPendingRef}
-              />
-              <RootElementPlugin onRootElementChange={onRootElementChange} />
-              <MarkdownSyncPlugin
-                doc={doc}
-                lastCommittedDocRef={lastCommittedDocRef}
-                pendingLocalEchoDocRef={pendingLocalEchoDocRef}
-                preserveLocalHistory={preserveLocalHistory}
-              />
-              <CoflatClipboardPlugin />
-              <RichTextPlugin
-                contentEditable={(
-                  <ContentEditable
-                    aria-label="Lexical rich editor"
-                    className={resolvedEditorClassName}
-                    data-testid={testId ?? undefined}
-                    onBeforeInput={editable
-                      ? () => {
-                          userEditPendingRef.current = true;
-                        }
-                      : undefined}
-                    onDrop={editable
-                      ? () => {
-                          userEditPendingRef.current = true;
-                        }
-                      : undefined}
-                    onKeyDown={editable
-                      ? (event) => {
-                          if (singleLine && event.key === "Enter") {
-                            event.preventDefault();
-                            return;
-                          }
-                          if (
-                            event.key === "Backspace"
-                            || event.key === "Delete"
-                            || event.key === "Enter"
-                          ) {
+              <StructureEditProvider>
+                <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
+                <EditableSyncPlugin editable={editable} />
+                <EditorHandlePlugin
+                  focusOwner={focusOwner}
+                  onEditorReady={onEditorReady}
+                  onSelectionChange={onSelectionChange}
+                  selectionRef={sourceSelectionRef}
+                  userEditPendingRef={userEditPendingRef}
+                />
+                <RootElementPlugin onRootElementChange={onRootElementChange} />
+                <MarkdownSyncPlugin
+                  doc={doc}
+                  lastCommittedDocRef={lastCommittedDocRef}
+                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+                  preserveLocalHistory={preserveLocalHistory}
+                />
+                <CoflatClipboardPlugin />
+                <RichTextPlugin
+                  contentEditable={(
+                    <ContentEditable
+                      aria-label="Lexical rich editor"
+                      className={resolvedEditorClassName}
+                      data-testid={testId ?? undefined}
+                      onBeforeInput={editable
+                        ? () => {
                             userEditPendingRef.current = true;
                           }
+                        : undefined}
+                      onDrop={editable
+                        ? () => {
+                            userEditPendingRef.current = true;
+                          }
+                        : undefined}
+                      onKeyDown={editable
+                        ? (event) => {
+                            if (singleLine && event.key === "Enter") {
+                              event.preventDefault();
+                              return;
+                            }
+                            if (
+                              event.key === "Backspace"
+                              || event.key === "Delete"
+                              || event.key === "Enter"
+                            ) {
+                              userEditPendingRef.current = true;
+                            }
+                          }
+                        : undefined}
+                      onPaste={editable
+                        ? () => {
+                            userEditPendingRef.current = true;
+                          }
+                        : undefined}
+                      onMouseUp={editable && shouldRepairBlankClickSelection
+                        ? (event: React.MouseEvent<HTMLDivElement>) => {
+                          repairBlankClickSelection(event.currentTarget, event);
                         }
-                      : undefined}
-                    onPaste={editable
-                      ? () => {
-                          userEditPendingRef.current = true;
-                        }
-                      : undefined}
-                    onMouseUp={editable && shouldRepairBlankClickSelection
-                      ? (event: React.MouseEvent<HTMLDivElement>) => {
-                        repairBlankClickSelection(event.currentTarget, event);
-                      }
-                      : undefined}
-                    onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
-                    spellCheck={spellCheck}
-                  />
-                )}
-                ErrorBoundary={LexicalErrorBoundary}
-                placeholder={null}
-              />
-              <CodeHighlightPlugin />
-              {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
-              {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
-              {editable ? <FormatEventPlugin /> : null}
-              {editable || preserveLocalHistory ? (
-                <HistoryPlugin
-                  externalHistoryState={nestedHistoryStateRef.current ?? undefined}
+                        : undefined}
+                      onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
+                      spellCheck={spellCheck}
+                    />
+                  )}
+                  ErrorBoundary={LexicalErrorBoundary}
+                  placeholder={null}
                 />
-              ) : null}
-              <ListPlugin />
-              <CheckListPlugin />
-              <LinkPlugin />
-              {editable ? <LinkSourcePlugin /> : null}
-              {editable ? <InlineMathSourcePlugin /> : null}
-              {editable ? <MarkdownExpansionPlugin /> : null}
-              {editable ? <BlockKeyboardAccessPlugin /> : null}
-              {editable ? <ReferenceTypeaheadPlugin /> : null}
-              {showHeadingChrome ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
-              <SourcePositionPlugin doc={renderContextValue?.doc ?? doc} enableNavigation={enableSourceNavigation} />
-              {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
-              {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
-              {editable ? <OnChangePlugin onChange={handleChange} /> : null}
-              {showBibliography ? <BibliographySection /> : null}
+                <CodeHighlightPlugin />
+                {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
+                {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
+                {editable ? <FormatEventPlugin /> : null}
+                {editable || preserveLocalHistory ? (
+                  <HistoryPlugin
+                    externalHistoryState={nestedHistoryStateRef.current ?? undefined}
+                  />
+                ) : null}
+                <ListPlugin />
+                <CheckListPlugin />
+                <LinkPlugin />
+                {editable ? <LinkSourcePlugin /> : null}
+                {editable ? <InlineMathSourcePlugin /> : null}
+                {editable ? <MarkdownExpansionPlugin /> : null}
+                {editable ? <BlockKeyboardAccessPlugin /> : null}
+                {editable ? <ReferenceTypeaheadPlugin /> : null}
+                {showHeadingChrome ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
+                <SourcePositionPlugin doc={renderContextValue?.doc ?? doc} enableNavigation={enableSourceNavigation} />
+                {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
+                {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
+                {editable ? <OnChangePlugin onChange={handleChange} /> : null}
+                {showBibliography ? <BibliographySection /> : null}
+              </StructureEditProvider>
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
         </div>
