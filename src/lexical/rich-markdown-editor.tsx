@@ -294,7 +294,7 @@ function EditorHandlePlugin({
         setLexicalMarkdown(editor, nextDoc);
       },
       focus: () => {
-        scrollSourcePositionIntoView(editor.getRootElement(), selectionRef.current.from);
+        scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
         editor.focus();
       },
       getDoc: () => getLexicalMarkdown(editor),
@@ -351,7 +351,7 @@ function EditorHandlePlugin({
           anchor,
           focus,
         );
-        scrollSourcePositionIntoView(editor.getRootElement(), nextSelection.from);
+        scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
         editor.focus();
       },
     }, editor);
@@ -736,6 +736,7 @@ export function LexicalRichMarkdownEditor({
                 ErrorBoundary={LexicalErrorBoundary}
                 placeholder={null}
               />
+              <CodeHighlightPlugin />
               <FocusEdgePlugin />
               {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
               {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}

@@ -457,7 +457,7 @@ function EditorHandlePlugin({
           editor.focus();
           return;
         }
-        scrollSourcePositionIntoView(editor.getRootElement(), selectionRef.current.from);
+        scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
         editor.focus();
       },
       getDoc: () => readEditorDocument(editor, editorModeRef.current),
@@ -533,7 +533,7 @@ function EditorHandlePlugin({
           return;
         }
 
-        scrollSourcePositionIntoView(editor.getRootElement(), nextSelection.from);
+        scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
         editor.focus();
       },
     }, editor);
