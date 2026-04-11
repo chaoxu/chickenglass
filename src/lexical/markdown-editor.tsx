@@ -48,6 +48,7 @@ import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromePlugin } from "./heading-chrome-plugin";
+import { HeadingIndexPlugin } from "./heading-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
@@ -906,6 +907,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
                 {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}
                 {!isSourceMode ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
+                {!isSourceMode ? <HeadingIndexPlugin /> : null}
                 {!isSourceMode ? (
                   <SourcePositionPlugin
                     doc={renderContextValue?.doc ?? doc}

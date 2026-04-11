@@ -5,8 +5,9 @@ import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
 import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { computeLiveStats } from "../writing-stats";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
-import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
+import type { HeadingEntry } from "../heading-ancestry";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
+import { useHeadingIndex } from "../stores/heading-index-store";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { EditorMode } from "../editor-mode";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -55,7 +56,7 @@ export function EditorPane({
     telemetry.setCursorPos(0, doc);
   }, [doc]);
 
-  const headings = useMemo(() => extractHeadings(liveDoc), [liveDoc]);
+  const headings = useHeadingIndex((s) => s.headings);
   const diagnostics = useMemo(() => extractDiagnostics(liveDoc), [liveDoc]);
 
   useEffect(() => {
