@@ -4,7 +4,11 @@ import { registerCodeHighlighting } from "@lexical/code";
 import { copyToClipboard } from "@lexical/clipboard";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+import {
+  createEmptyHistoryState,
+  HistoryPlugin,
+  type HistoryState,
+} from "@lexical/react/LexicalHistoryPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
@@ -15,6 +19,7 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
   $getSelection,
+  $getRoot,
   $isNodeSelection,
   $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
@@ -22,6 +27,7 @@ import {
   COPY_COMMAND,
   CUT_COMMAND,
   FORMAT_TEXT_COMMAND,
+  HISTORY_MERGE_TAG,
   PASTE_COMMAND,
   PASTE_TAG,
   type LexicalEditor,
@@ -76,6 +82,8 @@ import type {
 } from "./markdown-editor-types";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 
+const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
+
 function getViewportFromRichSurface(root: HTMLElement): number {
   const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
   if (headings.length === 0) {
@@ -100,6 +108,71 @@ function getViewportFromRichSurface(root: HTMLElement): number {
   }
 
   return active;
+}
+
+function hasEditableTextSelection(root: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection || !selection.isCollapsed) {
+    return false;
+  }
+
+  const anchorNode = selection.anchorNode;
+  const anchorElement = anchorNode instanceof Element
+    ? anchorNode
+    : anchorNode?.parentElement;
+  const textLeaf = anchorElement?.closest("[data-lexical-text='true']");
+  return Boolean(textLeaf && root.contains(textLeaf));
+}
+
+function ClickCaretRepairPlugin({
+  enabled,
+}: {
+  readonly enabled: boolean;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const handleMouseUp = (rootElement: HTMLElement) => {
+      queueMicrotask(() => {
+        if (document.activeElement !== rootElement) {
+          return;
+        }
+
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0 && rootElement.contains(selection.anchorNode)) {
+          return;
+        }
+
+        editor.update(() => {
+          $getRoot().selectEnd();
+        }, { discrete: true });
+      });
+    };
+
+    return editor.registerRootListener((rootElement, previousRootElement) => {
+      if (previousRootElement) {
+        const previousListener = clickRepairHandlers.get(previousRootElement);
+        if (previousListener) {
+          previousRootElement.removeEventListener("mouseup", previousListener);
+          clickRepairHandlers.delete(previousRootElement);
+        }
+      }
+
+      if (!rootElement) {
+        return;
+      }
+
+      const listener = () => handleMouseUp(rootElement);
+      clickRepairHandlers.set(rootElement, listener);
+      rootElement.addEventListener("mouseup", listener);
+    });
+  }, [editor, enabled]);
+
+  return null;
 }
 
 function EditableSyncPlugin({
@@ -186,21 +259,40 @@ function CodeHighlightPlugin() {
 function MarkdownSyncPlugin({
   doc,
   lastCommittedDocRef,
+  pendingLocalEchoDocRef,
+  preserveLocalHistory,
 }: {
   readonly doc: string;
   readonly lastCommittedDocRef: MutableRefObject<string>;
+  readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
+  readonly preserveLocalHistory: boolean;
 }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
+    const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
     if (doc === lastCommittedDocRef.current) {
+      if (pendingLocalEchoDoc === doc) {
+        pendingLocalEchoDocRef.current = null;
+      }
       return;
     }
 
-    setLexicalMarkdown(editor, doc);
-    editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
+    const preservePendingLocalHistory =
+      preserveLocalHistory && pendingLocalEchoDoc !== null;
+    setLexicalMarkdown(
+      editor,
+      doc,
+      preservePendingLocalHistory
+        ? { tag: HISTORY_MERGE_TAG }
+        : undefined,
+    );
+    if (!preservePendingLocalHistory) {
+      editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
+    }
+    pendingLocalEchoDocRef.current = null;
     lastCommittedDocRef.current = doc;
-  }, [doc, editor, lastCommittedDocRef]);
+  }, [doc, editor, lastCommittedDocRef, pendingLocalEchoDocRef, preserveLocalHistory]);
 
   return null;
 }
@@ -518,6 +610,23 @@ function RootElementPlugin({
   return null;
 }
 
+function repairBlankClickSelection(root: HTMLElement, event: React.MouseEvent): void {
+  if (hasEditableTextSelection(root)) {
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  const range = document.caretRangeFromPoint(event.clientX, event.clientY);
+  if (range && root.contains(range.startContainer)) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+}
+
 export interface LexicalRichMarkdownEditorProps {
   readonly doc: string;
   readonly docPath?: string;
@@ -532,6 +641,8 @@ export interface LexicalRichMarkdownEditorProps {
   readonly onTextChange?: (text: string) => void;
   readonly onScrollChange?: (scrollTop: number) => void;
   readonly onViewportFromChange?: (from: number) => void;
+  readonly preserveLocalHistory?: boolean;
+  readonly repairBlankClickSelection?: boolean;
   readonly requireUserEditFlag?: boolean;
   readonly renderContextValue?: LexicalRenderContextValue;
   readonly showBibliography?: boolean;
@@ -559,6 +670,8 @@ export function LexicalRichMarkdownEditor({
   onTextChange,
   onScrollChange,
   onViewportFromChange,
+  preserveLocalHistory = false,
+  repairBlankClickSelection: shouldRepairBlankClickSelection = false,
   requireUserEditFlag = true,
   renderContextValue,
   showBibliography = false,
@@ -574,9 +687,15 @@ export function LexicalRichMarkdownEditor({
   const inheritedSurface = useEditorScrollSurface();
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
+  const nestedHistoryStateRef = useRef<HistoryState | null>(null);
+  const pendingLocalEchoDocRef = useRef<string | null>(null);
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
+
+  if (preserveLocalHistory && nestedHistoryStateRef.current === null) {
+    nestedHistoryStateRef.current = createEmptyHistoryState();
+  }
 
   const initialConfig = useMemo(() => ({
     editable,
@@ -615,6 +734,7 @@ export function LexicalRichMarkdownEditor({
     }
 
     userEditPendingRef.current = false;
+    pendingLocalEchoDocRef.current = nextDoc;
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
@@ -660,7 +780,12 @@ export function LexicalRichMarkdownEditor({
                 userEditPendingRef={userEditPendingRef}
               />
               <RootElementPlugin onRootElementChange={onRootElementChange} />
-              <MarkdownSyncPlugin doc={doc} lastCommittedDocRef={lastCommittedDocRef} />
+              <MarkdownSyncPlugin
+                doc={doc}
+                lastCommittedDocRef={lastCommittedDocRef}
+                pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+                preserveLocalHistory={preserveLocalHistory}
+              />
               <CoflatClipboardPlugin />
               <RichTextPlugin
                 contentEditable={(
@@ -698,6 +823,11 @@ export function LexicalRichMarkdownEditor({
                           userEditPendingRef.current = true;
                         }
                       : undefined}
+                    onMouseUp={editable && shouldRepairBlankClickSelection
+                      ? (event: React.MouseEvent<HTMLDivElement>) => {
+                        repairBlankClickSelection(event.currentTarget, event);
+                      }
+                      : undefined}
                     onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
                     spellCheck={spellCheck}
                   />
@@ -711,7 +841,11 @@ export function LexicalRichMarkdownEditor({
               {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
               {editable && shouldRepairBlankClickSelection ? <ClickCaretRepairPlugin enabled /> : null}
               {editable ? <FormatEventPlugin /> : null}
-              {editable ? <HistoryPlugin /> : null}
+              {editable || preserveLocalHistory ? (
+                <HistoryPlugin
+                  externalHistoryState={nestedHistoryStateRef.current ?? undefined}
+                />
+              ) : null}
               <ListPlugin />
               <CheckListPlugin />
               <LinkPlugin />

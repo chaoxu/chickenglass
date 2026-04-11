@@ -18,6 +18,7 @@ import {
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
   $createParagraphNode,
+  type EditorUpdateOptions,
   type EditorThemeClasses,
   type ElementNode,
   type Klass,
@@ -597,10 +598,17 @@ export function createLexicalInitialEditorState(markdown: string): InitialEditor
   };
 }
 
-export function setLexicalMarkdown(editor: LexicalEditor, markdown: string): void {
+export function setLexicalMarkdown(
+  editor: LexicalEditor,
+  markdown: string,
+  options?: Pick<EditorUpdateOptions, "tag">,
+): void {
   editor.update(() => {
     $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
-  }, { discrete: true });
+  }, {
+    discrete: true,
+    tag: options?.tag,
+  });
 }
 
 export function getLexicalMarkdown(editor: LexicalEditor): string {

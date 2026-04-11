@@ -151,6 +151,8 @@ export function EmbeddedFieldEditor({
         layoutMode={spec.fieldKind === "inline" ? "inline" : "block"}
         namespace={namespace}
         onTextChange={onTextChange}
+        preserveLocalHistory
+        repairBlankClickSelection={spec.fieldKind !== "inline"}
         requireUserEditFlag={false}
         renderContextValue={context}
         showCodeBlockChrome={false}
