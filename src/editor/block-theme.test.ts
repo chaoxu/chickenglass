@@ -78,6 +78,12 @@ describe("blockThemeStyles", () => {
       verticalAlign: "top",
     });
 
+    expect(blockThemeStyles[".cf-table-widget table"]).toEqual({
+      borderCollapse: "collapse",
+      width: "100%",
+      fontSize: "var(--cf-table-font-size, 0.9em)",
+    });
+
     expect(blockThemeStyles[".cf-table-widget th"]).toEqual({
       fontWeight: "700",
       borderBottom: "var(--cf-border-width-accent) solid var(--cf-table-header-border)",

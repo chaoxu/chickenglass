@@ -9,7 +9,11 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { findTablePipePositions } from "../lib/table-inline-span";
-import { findTablesInState, type TableRange } from "../state/table-discovery";
+import {
+  findTablesInState,
+  tableDiscoveryPendingParseField,
+  type TableRange,
+} from "../state/table-discovery";
 
 export { findTablesInState, type TableRange } from "../state/table-discovery";
 
@@ -36,15 +40,18 @@ class TableDiscoveryParsePlugin {
   private schedule(): void {
     if (this.destroyed) return;
     if (this.scheduled !== null) return;
+    if (!this.view.state.field(tableDiscoveryPendingParseField, false)) return;
     if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
 
     this.scheduled = setTimeout(() => {
       this.scheduled = null;
       if (this.destroyed) return;
+      if (!this.view.state.field(tableDiscoveryPendingParseField, false)) return;
       if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
       forceParsing(this.view, this.view.state.doc.length, 25);
       if (
         !this.destroyed &&
+        this.view.state.field(tableDiscoveryPendingParseField, false) &&
         !syntaxTreeAvailable(this.view.state, this.view.state.doc.length) &&
         syntaxParserRunning(this.view)
       ) {

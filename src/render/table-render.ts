@@ -25,9 +25,9 @@ import { buildDecorations } from "./decoration-core";
 import { createDecorationStateField } from "./decoration-field";
 import { editorFocusField, focusTracker } from "./focus-state";
 import {
-  getReferenceRenderDependencySignature,
-  referenceRenderDependenciesChanged,
-} from "./reference-render";
+  getTableReferenceRenderDependencySignature,
+  tableReferenceRenderDependenciesChanged,
+} from "../state/reference-render-state";
 import {
   findTableAtCursor,
   findTablesInState,
@@ -35,7 +35,11 @@ import {
   tableDiscoveryParsePlugin,
 } from "./table-discovery";
 import { mathMacrosField } from "../state/math-macros";
-import { tableDiscoveryField } from "../state/table-discovery";
+import {
+  tableDiscoveryField,
+  tableDiscoveryPendingParseField,
+  type TableRange,
+} from "../state/table-discovery";
 import { showTableContextMenu } from "./table-actions";
 import { tableKeybindings } from "./table-navigation";
 import { cellEditAnnotation, TableWidget } from "./table-widget";
@@ -79,28 +83,78 @@ export function insertTable(
 function buildTableDecorationsFromState(state: EditorState): DecorationSet {
   const tables = findTablesInState(state);
   const macros = state.field(mathMacrosField);
-  const renderSignature = getReferenceRenderDependencySignature(state);
+  const renderSignature = getTableReferenceRenderDependencySignature(state);
   const items: Range<Decoration>[] = [];
 
   for (const table of tables) {
-    const tableText = state.sliceDoc(table.from, table.to);
-    const widget = new TableWidget(
-      table.parsed,
-      tableText,
-      table.from,
-      macros,
-      renderSignature,
-    );
-
-    items.push(
-      Decoration.replace({
-        widget,
-        block: true,
-      }).range(table.from, table.to),
-    );
+    items.push(buildTableDecorationRange(state, table, macros, renderSignature));
   }
 
   return buildDecorations(items);
+}
+
+function buildTableDecorationRange(
+  state: EditorState,
+  table: TableRange,
+  macros: Record<string, string>,
+  renderSignature: string,
+): Range<Decoration> {
+  const tableText = state.sliceDoc(table.from, table.to);
+  const widget = new TableWidget(
+    table.parsed,
+    tableText,
+    table.from,
+    macros,
+    renderSignature,
+  );
+
+  return Decoration.replace({
+    widget,
+    block: true,
+  }).range(table.from, table.to);
+}
+
+function rangeTouchesTable(
+  from: number,
+  to: number,
+  table: Pick<TableRange, "from" | "to">,
+): boolean {
+  return table.from < to && from < table.to;
+}
+
+function updateTableDecorationsForDiscoveryChange(
+  value: DecorationSet,
+  startState: EditorState,
+  state: EditorState,
+): DecorationSet {
+  const beforeTables = findTablesInState(startState);
+  const afterTables = findTablesInState(state);
+  const afterSet = new Set(afterTables);
+  const beforeSet = new Set(beforeTables);
+  const removedTables = beforeTables.filter((table) => !afterSet.has(table));
+  const addedTables = afterTables.filter((table) => !beforeSet.has(table));
+
+  if (removedTables.length === 0 && addedTables.length === 0) {
+    return value;
+  }
+
+  const affectedTables = [...removedTables, ...addedTables];
+  const filterFrom = Math.min(...affectedTables.map((table) => table.from));
+  const filterTo = Math.max(...affectedTables.map((table) => table.to));
+  const macros = state.field(mathMacrosField);
+  const renderSignature = getTableReferenceRenderDependencySignature(state);
+
+  return value.update({
+    filterFrom,
+    filterTo,
+    filter(from, to) {
+      return !affectedTables.some((table) => rangeTouchesTable(from, to, table));
+    },
+    add: addedTables.map((table) =>
+      buildTableDecorationRange(state, table, macros, renderSignature)
+    ),
+    sort: true,
+  });
 }
 
 /**
@@ -116,6 +170,12 @@ const tableDecorationField = createDecorationStateField({
 
   update(value, tr) {
     const cellEdit = tr.annotation(cellEditAnnotation);
+    const referenceDepsChanged = tableReferenceRenderDependenciesChanged(
+      tr.startState,
+      tr.state,
+    );
+    const tableDiscoveryChanged =
+      tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false);
 
     // Live keystrokes inside the inline cell editor: map existing
     // decorations through the change so the widget (and its nested
@@ -126,9 +186,12 @@ const tableDecorationField = createDecorationStateField({
 
     if (
       cellEdit === "commit" ||
-      referenceRenderDependenciesChanged(tr.startState, tr.state) ||
-      tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false)
+      referenceDepsChanged ||
+      tableDiscoveryChanged
     ) {
+      if (!referenceDepsChanged && tableDiscoveryChanged && cellEdit !== "commit") {
+        return updateTableDecorationsForDiscoveryChange(value, tr.startState, tr.state);
+      }
       return buildTableDecorationsFromState(tr.state);
     }
     if (tr.docChanged) {
@@ -163,6 +226,7 @@ export const tableRenderPlugin: Extension = [
   focusTracker,
   mathMacrosField,
   tableDiscoveryField,
+  tableDiscoveryPendingParseField,
   tableDiscoveryParsePlugin,
   tableDecorationField,
   tableContextMenuHandler,

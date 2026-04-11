@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { InlineRenderSurface } from "../inline-surface";
-import { renderInlineMarkdown, splitByInlineMath } from "./inline-render";
+import {
+  renderInlineMarkdown,
+  splitByInlineMath,
+  type InlineReferenceRenderContext,
+} from "./inline-render";
 
 /** Render inline markdown into a div and return innerHTML. */
 function render(
@@ -12,6 +16,54 @@ function render(
   renderInlineMarkdown(container, text, macros, surface);
   return container.innerHTML;
 }
+
+function renderWithReferenceContext(
+  text: string,
+  referenceContext: InlineReferenceRenderContext,
+  surface: InlineRenderSurface | "document-body" = "document-body",
+): string {
+  const container = document.createElement("div");
+  renderInlineMarkdown(container, text, {}, surface, referenceContext);
+  return container.innerHTML;
+}
+
+const inlineReferenceContext: InlineReferenceRenderContext = {
+  classify(id, preferCitation) {
+    if (id === "thm:fundamental") {
+      return {
+        kind: "crossref",
+        resolved: {
+          kind: "block",
+          label: "Theorem 3",
+          number: 3,
+        },
+      };
+    }
+    if (id === "fig:growth-local") {
+      return {
+        kind: "crossref",
+        resolved: {
+          kind: "block",
+          label: "Figure 1",
+          number: 1,
+        },
+      };
+    }
+    if (preferCitation && id === "cormen2009") {
+      return { kind: "citation", id };
+    }
+    return { kind: "unresolved", id };
+  },
+  cite(ids) {
+    if (ids.length === 1 && ids[0] === "cormen2009") {
+      return "[1]";
+    }
+    return `[${ids.join(", ")}]`;
+  },
+  citeNarrative(id) {
+    return id === "cormen2009" ? "Cormen [1]" : id;
+  },
+};
 
 describe("splitByInlineMath", () => {
   it("returns a single text segment for plain text", () => {
@@ -315,5 +367,64 @@ describe("renderInlineMarkdown — surface policies", () => {
   it("keeps narrative references inert in document-inline without bibliography context", () => {
     const html = render("As @karger2000 showed.", {}, "document-inline");
     expect(html).toBe("As @karger2000 showed.");
+  });
+});
+
+describe("renderInlineMarkdown — resolved reference context", () => {
+  it("renders resolved block crossrefs without nested editor markup", () => {
+    const html = renderWithReferenceContext(
+      "See [@thm:fundamental].",
+      inlineReferenceContext,
+    );
+    expect(html).toContain('class="cf-crossref"');
+    expect(html).toContain("Theorem 3");
+    expect(html).not.toContain("cm-editor");
+  });
+
+  it("renders bracketed citations with citation styling", () => {
+    const html = renderWithReferenceContext(
+      "See [@cormen2009].",
+      inlineReferenceContext,
+    );
+    expect(html).toContain('class="cf-citation"');
+    expect(html).toContain("[1]");
+  });
+
+  it("renders mixed crossref+citation clusters as lightweight DOM", () => {
+    const html = renderWithReferenceContext(
+      "See [@fig:growth-local; @cormen2009].",
+      inlineReferenceContext,
+    );
+    expect(html).toContain('class="cf-citation"');
+    expect(html).toContain("Figure 1");
+    expect(html).toContain("[1]");
+    expect(html).not.toContain("cm-editor");
+  });
+
+  it("renders resolved table-preview crossrefs as plain label text", () => {
+    const html = renderWithReferenceContext(
+      "See [@thm:fundamental].",
+      inlineReferenceContext,
+      "table-preview-inline",
+    );
+    expect(html).toBe("See (Theorem 3).");
+  });
+
+  it("renders table-preview citations as plain citation text", () => {
+    const html = renderWithReferenceContext(
+      "See [@cormen2009].",
+      inlineReferenceContext,
+      "table-preview-inline",
+    );
+    expect(html).toBe("See [1].");
+  });
+
+  it("renders table-preview inline math as raw source text", () => {
+    const html = renderWithReferenceContext(
+      "Cost $O(n^2)$.",
+      inlineReferenceContext,
+      "table-preview-inline",
+    );
+    expect(html).toBe("Cost $O(n^2)$.");
   });
 });

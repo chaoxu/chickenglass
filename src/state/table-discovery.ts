@@ -37,6 +37,10 @@ interface DirtyRange {
 
 const TABLE_STRUCTURE_RE = /[|:\-\n\r]/;
 
+function getParsedTableLineCount(parsed: ParsedTable): number {
+  return 2 + parsed.rows.length;
+}
+
 function createTableRange(
   doc: Text,
   tableFrom: number,
@@ -52,17 +56,20 @@ function createTableRange(
   const parsed = parseTable(lines);
   if (!parsed) return null;
 
+  const lineCount = getParsedTableLineCount(parsed);
+  const lastTableLine = doc.line(Math.min(doc.lines, startLine.number + lineCount - 1));
+  const tableLines = lines.slice(0, lineCount);
   const sepLine = doc.line(startLine.number + 1);
   const separatorFrom = sepLine.from;
   const separatorTo = sepLine.to < doc.length ? sepLine.to + 1 : sepLine.to;
 
   return {
     from: tableFrom,
-    to: tableTo,
+    to: lastTableLine.to,
     separatorFrom,
     separatorTo,
     parsed,
-    lines,
+    lines: tableLines,
     startLineNumber: startLine.number,
   };
 }
@@ -268,6 +275,74 @@ function incrementalTableDiscoveryUpdate(
   return [...preservedTables, ...rebuiltTables].sort((left, right) => left.from - right.from);
 }
 
+export function updateDiscoveredTables(
+  tables: readonly TableRange[],
+  tr: Transaction,
+  treeAvailable = syntaxTreeAvailable(tr.state, tr.state.doc.length),
+): readonly TableRange[] {
+  const finish = (next: readonly TableRange[]): readonly TableRange[] => (
+    sameDiscoveredTables(tables, next) ? tables : next
+  );
+
+  if (!tr.docChanged) {
+    if (
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+      && treeAvailable
+    ) {
+      return finish(collectTables(tr.state));
+    }
+    return tables;
+  }
+
+  if (!treeAvailable) {
+    return finish(canSkipLocalTableRebuild(tables, tr)
+      ? mapTableRanges(tables, tr)
+      : collectTables(tr.state));
+  }
+
+  return finish(incrementalTableDiscoveryUpdate(tables, tr));
+}
+
+export function computePendingTableParse(
+  tables: readonly TableRange[],
+  tr: Transaction,
+  treeAvailable = syntaxTreeAvailable(tr.state, tr.state.doc.length),
+): boolean {
+  if (treeAvailable) {
+    return false;
+  }
+
+  if (!tr.docChanged) {
+    return false;
+  }
+
+  return !canSkipLocalTableRebuild(tables, tr);
+}
+
+export function sameDiscoveredTables(
+  before: readonly TableRange[],
+  after: readonly TableRange[],
+): boolean {
+  if (before.length !== after.length) return false;
+  for (let i = 0; i < before.length; i += 1) {
+    const ta = before[i];
+    const tb = after[i];
+    if (ta.from !== tb.from || ta.to !== tb.to) return false;
+    if (
+      ta.separatorFrom !== tb.separatorFrom ||
+      ta.separatorTo !== tb.separatorTo ||
+      ta.startLineNumber !== tb.startLineNumber
+    ) {
+      return false;
+    }
+    if (ta.lines.length !== tb.lines.length) return false;
+    for (let j = 0; j < ta.lines.length; j += 1) {
+      if (ta.lines[j] !== tb.lines[j]) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Shared table discovery cache for the current document/tree.
  *
@@ -280,40 +355,22 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
   },
 
   update(value, tr) {
-    if (tr.docChanged) {
-      if (!syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
-        return collectTables(tr.state);
-      }
-      return incrementalTableDiscoveryUpdate(value, tr);
-    }
-    if (
-      syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
-      syntaxTreeAvailable(tr.state, tr.state.doc.length)
-    ) {
-      return collectTables(tr.state);
-    }
-    return value;
+    return updateDiscoveredTables(value, tr);
   },
 
   compare(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      const ta = a[i];
-      const tb = b[i];
-      if (ta.from !== tb.from || ta.to !== tb.to) return false;
-      if (
-        ta.separatorFrom !== tb.separatorFrom ||
-        ta.separatorTo !== tb.separatorTo ||
-        ta.startLineNumber !== tb.startLineNumber
-      ) {
-        return false;
-      }
-      if (ta.lines.length !== tb.lines.length) return false;
-      for (let j = 0; j < ta.lines.length; j++) {
-        if (ta.lines[j] !== tb.lines[j]) return false;
-      }
-    }
-    return true;
+    return sameDiscoveredTables(a, b);
+  },
+});
+
+export const tableDiscoveryPendingParseField = StateField.define<boolean>({
+  create() {
+    return false;
+  },
+
+  update(_value, tr) {
+    const tables = tr.startState.field(tableDiscoveryField, false) ?? collectTables(tr.startState);
+    return computePendingTableParse(tables, tr);
   },
 });
 

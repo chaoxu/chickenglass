@@ -2,7 +2,14 @@ import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
-import { tableDiscoveryField, type TableRange } from "../state/table-discovery";
+import {
+  computePendingTableParse,
+  sameDiscoveredTables,
+  tableDiscoveryField,
+  tableDiscoveryPendingParseField,
+  type TableRange,
+  updateDiscoveredTables,
+} from "../state/table-discovery";
 import {
   findCellBounds,
   findClosestTable,
@@ -38,6 +45,7 @@ function makeDiscoveryState(doc: string): EditorState {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       tableDiscoveryField,
+      tableDiscoveryPendingParseField,
     ],
   });
 }
@@ -122,6 +130,12 @@ describe("table range helpers", () => {
     expect(findClosestTable(tables, 120)?.from).toBe(140);
   });
 
+  it("treats equivalent discovered tables as unchanged even when array identity differs", () => {
+    const tables = [table(10, 40), table(60, 90)];
+    const cloned = tables.map((entry) => ({ ...entry }));
+    expect(sameDiscoveredTables(tables, cloned)).toBe(true);
+  });
+
   it("skips the separator row when requested", () => {
     expect(skipSeparator(1, 1)).toBe(2);
     expect(skipSeparator(1, -1)).toBe(0);
@@ -162,6 +176,27 @@ describe("table range helpers", () => {
     }).state;
 
     expect(changedState.field(tableDiscoveryField)).toBe(initialTables);
+  });
+
+  it("clips discovered table ranges to the actual table rows", () => {
+    const state = makeDiscoveryState([
+      "::: {#tbl:test .table}",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      ":::",
+      "",
+      "after",
+    ].join("\n"));
+
+    const [discovered] = state.field(tableDiscoveryField);
+    expect(discovered.lines).toEqual([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+    ]);
+    expect(discovered.from).toBe(state.doc.line(2).from);
+    expect(discovered.to).toBe(state.doc.line(4).to);
   });
 
   it("preserves untouched table objects when prose between tables changes", () => {
@@ -282,6 +317,41 @@ describe("table range helpers", () => {
     } as unknown as import("@codemirror/view").EditorView);
 
     expect(visibleTables).toEqual([tables[1]]);
+  });
+
+  it("maps cached tables without reparsing when the tree is unavailable for plain prose edits", () => {
+    const state = makeDiscoveryState([
+      "intro",
+      "",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const transaction = state.update({
+      changes: { from: state.doc.line(1).to, insert: " text" },
+    });
+    const changedTables = updateDiscoveredTables(initialTables, transaction, false);
+
+    expect(changedTables).not.toBe(initialTables);
+    expect(changedTables[0]?.parsed).toBe(initialTables[0]?.parsed);
+    expect(changedTables[0]?.lines).toBe(initialTables[0]?.lines);
+    expect(computePendingTableParse(initialTables, transaction, false)).toBe(false);
+  });
+
+  it("marks a pending parse when the tree is unavailable for table-structure edits", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+    ].join("\n"));
+
+    const transaction = state.update({
+      changes: { from: state.doc.line(3).from + 1, insert: "|" },
+    });
+
+    expect(computePendingTableParse(state.field(tableDiscoveryField), transaction, false)).toBe(true);
   });
 
 });

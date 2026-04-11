@@ -351,7 +351,11 @@ async function openCleanRichDocument(page, fixture, runtimeOptions) {
       settleMs: runtimeOptions.postOpenSettleMs,
     },
   );
-  return fixture.content;
+  return evaluateStep(
+    page,
+    "getLoadedDocumentText",
+    async () => window.__cmView.state.doc.toString(),
+  );
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {

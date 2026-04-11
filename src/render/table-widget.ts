@@ -4,11 +4,11 @@ import {
   createInlineEditorController,
   type InlineEditorController,
 } from "../inline-editor";
+import { findInlineNeutralAnchor } from "../inline-fragments";
 import {
-  findInlineNeutralAnchor,
-  parseInlineFragments,
-} from "../inline-fragments";
-import { renderInlineMarkdown } from "./inline-render";
+  renderInlineMarkdown,
+  type InlineReferenceRenderContext,
+} from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {
   findClosestTable,
@@ -24,7 +24,10 @@ import {
 } from "./source-widget";
 import { ShellWidget } from "./shell-widget";
 import { bibDataField } from "../state/bib-data";
+import { ensureCitationsRegistered } from "../citations/citation-registration";
+import { classifyReference } from "../index/crossref-resolver";
 import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
+import { getOptionalReferenceRenderState } from "../state/reference-render-state";
 
 /**
  * Annotation attached to transactions dispatched by cell-edit sync.
@@ -149,7 +152,6 @@ export class TableWidget extends ShellWidget {
   private editorView: EditorView | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeMeasureFrame: number | null = null;
-  private readonly previewEditors = new Map<HTMLElement, InlineEditorController>();
   private readonly macroSignature: string;
   private readonly renderSignature: string;
 
@@ -236,50 +238,41 @@ export class TableWidget extends ShellWidget {
     };
   }
 
-  private restoreRenderedCell(cell: HTMLElement, content: string): void {
-    this.destroyPreviewEditor(cell);
-    if (this.cellNeedsLivePreview(content)) {
-      this.mountPreviewEditor(cell, content);
-      return;
-    }
-    renderInlineMarkdown(cell, content, this.macros);
-  }
-
-  private cellNeedsLivePreview(content: string): boolean {
-    return parseInlineFragments(content).some((fragment) => fragment.kind === "reference");
-  }
-
-  private mountPreviewEditor(cell: HTMLElement, content: string): void {
-    const bibData = this.editorView?.state.field?.(bibDataField, false);
-    const referenceCatalog = this.editorView && typeof this.editorView.state.field === "function"
-      ? getEditorDocumentReferenceCatalog(this.editorView.state)
-      : undefined;
-    const controller = createInlineEditorController({
-      parent: cell,
-      doc: content,
-      macros: this.macros,
-      bibData: bibData ?? undefined,
-      referenceCatalog,
-      readOnly: true,
-      onChange: () => {},
-    });
-    this.previewEditors.set(cell, controller);
-  }
-
-  private destroyPreviewEditor(cell: HTMLElement): void {
-    const controller = this.previewEditors.get(cell);
-    if (!controller) return;
-    controller.destroy();
-    this.previewEditors.delete(cell);
+  private restoreRenderedCell(
+    cell: HTMLElement,
+    content: string,
+    referenceContext = this.createReferenceRenderContext(),
+  ): void {
     cell.innerHTML = "";
+    renderInlineMarkdown(
+      cell,
+      content,
+      this.macros,
+      "table-preview-inline",
+      referenceContext,
+    );
   }
 
-  private destroyPreviewEditors(): void {
-    for (const [cell, controller] of this.previewEditors) {
-      controller.destroy();
-      cell.innerHTML = "";
+  private createReferenceRenderContext(): InlineReferenceRenderContext | undefined {
+    const rootView = this.editorView;
+    if (!rootView || typeof rootView.state.field !== "function") {
+      return undefined;
     }
-    this.previewEditors.clear();
+    const { analysis, bibliography } = getOptionalReferenceRenderState(rootView.state);
+    if (!analysis || !bibliography) {
+      return undefined;
+    }
+    const { store, cslProcessor } = bibliography;
+    ensureCitationsRegistered(analysis, store, cslProcessor);
+    return {
+      classify: (id, preferCitation) =>
+        classifyReference(rootView.state, id, {
+          bibliography: store,
+          preferCitation,
+        }),
+      cite: (ids, locators) => cslProcessor.cite([...ids], [...locators]),
+      citeNarrative: (id) => cslProcessor.citeNarrative(id),
+    };
   }
 
   private syncToRoot(
@@ -407,6 +400,7 @@ export class TableWidget extends ShellWidget {
     this.editorView = view;
 
     const tableEl = document.createElement("table");
+    const referenceContext = this.createReferenceRenderContext();
 
     const focusTargetCell = (
       linearRow: number,
@@ -464,7 +458,6 @@ export class TableWidget extends ShellWidget {
     ): void => {
       clearActivePreviewCell();
       const rawText = this.getRawCellText(section, row, col);
-      this.destroyPreviewEditor(cell);
       cell.innerHTML = "";
       cell.classList.add("cf-table-cell-editing");
 
@@ -734,7 +727,7 @@ export class TableWidget extends ShellWidget {
         cell.style.textAlign = align;
       }
 
-      this.restoreRenderedCell(cell, content);
+      this.restoreRenderedCell(cell, content, referenceContext);
 
       cell.addEventListener("keydown", (event) => {
         if (activePreviewCell?.cell !== cell || activePreviewCell.owner !== this) return;
@@ -951,13 +944,39 @@ export class TableWidget extends ShellWidget {
   updateDOM(dom: HTMLElement, view: EditorView, from: TableWidget): boolean {
     if (dom.tagName !== "DIV") return false;
 
+    const canReuseDom = this.eq(from);
+
+    if (canReuseDom) {
+      if (activeInlineEditor?.owner === from) {
+        activeInlineEditor = {
+          ...activeInlineEditor,
+          owner: this,
+        };
+      }
+      if (activePreviewCell?.owner === from) {
+        activePreviewCell = {
+          ...activePreviewCell,
+          owner: this,
+        };
+      }
+
+      from.clearPendingResizeMeasure();
+      from.resizeObserver?.disconnect();
+      from.resizeObserver = null;
+      from.editorView = null;
+
+      this.editorView = view;
+      this.syncContainerAttrs(dom);
+      this.observeContainer(dom, view);
+      return true;
+    }
+
     if (activeInlineEditor?.owner === from) {
       destroyActiveInlineEditor();
     }
     if (activePreviewCell?.owner === from) {
       clearActivePreviewCell();
     }
-    from.destroyPreviewEditors();
     from.clearPendingResizeMeasure();
     from.resizeObserver?.disconnect();
     from.resizeObserver = null;
@@ -980,7 +999,6 @@ export class TableWidget extends ShellWidget {
     if (activePreviewCell?.owner === this) {
       clearActivePreviewCell();
     }
-    this.destroyPreviewEditors();
     this.editorView = null;
   }
 

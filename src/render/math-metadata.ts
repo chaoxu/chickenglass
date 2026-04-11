@@ -81,19 +81,32 @@ function syncRenderedMathWidgetMetadata(
   return count > 0;
 }
 
-function docChangeTouchesViewport(update: ViewUpdate): boolean {
-  let touchesViewport = false;
+function changeAffectsWidget(
+  from: number,
+  to: number,
+  widget: Pick<RenderedMathWidget, "from" | "to">,
+): boolean {
+  return to <= widget.from || (from < widget.to && to > widget.from);
+}
+
+function docChangeAffectsVisibleMathWidgets(
+  update: ViewUpdate,
+  mathDecorationField: StateField<DecorationSet>,
+): boolean {
+  const visibleWidgets = collectVisibleRenderedMathWidgets(update.view, mathDecorationField);
+  if (visibleWidgets.length === 0) {
+    return false;
+  }
+
+  let affectsVisibleMath = false;
   update.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
-    if (touchesViewport) return;
+    if (affectsVisibleMath) return;
     const changeTo = Math.max(fromB, toB);
-    if (fromB <= update.view.viewport.to && changeTo >= update.view.viewport.from) {
-      touchesViewport = true;
-    } else if (fromB < update.view.viewport.from) {
-      // Any edit before the viewport shifts later widget source positions.
-      touchesViewport = true;
-    }
+    affectsVisibleMath = visibleWidgets.some((widget) =>
+      changeAffectsWidget(fromB, changeTo, widget),
+    );
   });
-  return touchesViewport;
+  return affectsVisibleMath;
 }
 
 export function createMathWidgetMetadataPlugin(
@@ -120,7 +133,7 @@ export function createMathWidgetMetadataPlugin(
           || (
             update.docChanged
             && this.hadVisibleMathWidgets
-            && docChangeTouchesViewport(update)
+            && docChangeAffectsVisibleMathWidgets(update, mathDecorationField)
           )
         ) {
           this.scheduleSync(update.view);
@@ -145,3 +158,5 @@ export function createMathWidgetMetadataPlugin(
     },
   );
 }
+
+export { docChangeAffectsVisibleMathWidgets as _docChangeAffectsVisibleMathWidgetsForTest };

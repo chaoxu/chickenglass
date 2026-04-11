@@ -11,6 +11,7 @@ import { _tableDecorationFieldForTest as tableDecorationField } from "./table-re
 import { editorFocusField } from "./render-utils";
 import { mathMacrosField } from "../state/math-macros";
 import { frontmatterField } from "../editor/frontmatter-state";
+import { tableDiscoveryField } from "../state/table-discovery";
 import { markdownExtensions } from "../parser";
 import type { ParsedTable } from "./table-utils";
 import { createMockEditorView, createEditorState, getDecorationSpecs } from "../test-utils";
@@ -215,6 +216,26 @@ describe("TableWidget source range attributes", () => {
     expect(dom.dataset.tableFrom).toBe("12");
     expect(dom.dataset.sourceFrom).toBe("12");
     expect(dom.querySelector("tbody td")?.textContent).toBe("3");
+  });
+
+  it("reuses stable table DOM when widget identity is unchanged", () => {
+    ResizeObserverStub.instances.length = 0;
+
+    const oldWidget = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 0, {});
+    const dom = oldWidget.toDOM(makeStubView());
+    const originalTable = dom.querySelector("table");
+    const oldObserver = ResizeObserverStub.instances.at(-1);
+
+    const newWidget = new TableWidget(makeTable(), "| A |\n|---|\n| 1 |", 12, {});
+    const result = newWidget.updateDOM(dom, makeStubView(), oldWidget);
+    const newObserver = ResizeObserverStub.instances.at(-1);
+
+    expect(result).toBe(true);
+    expect(oldObserver?.disconnect).toHaveBeenCalledTimes(1);
+    expect(dom.querySelector("table")).toBe(originalTable);
+    expect(newObserver).toBeDefined();
+    expect(newObserver).not.toBe(oldObserver);
+    expect(dom.dataset.tableFrom).toBe("12");
   });
 
   it("cancels a pending resize frame when updateDOM reuses the widget DOM", () => {
@@ -447,5 +468,58 @@ describe("tableDecorationField commit rebuild (#404)", () => {
     // widget object is the same (mapped through, not rebuilt). Verify the
     // range was adjusted by the +1 char insertion.
     expect(specsAfter[0].to).toBe(specsBefore[0].to + 1);
+  });
+});
+
+describe("tableDecorationField discovery updates", () => {
+  function createTwoTableState(doc: string): EditorState {
+    return createEditorState(doc, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        frontmatterField,
+        editorFocusField,
+        mathMacrosField,
+        tableDiscoveryField,
+        tableDecorationField,
+      ],
+    });
+  }
+
+  function getWidgets(state: EditorState): readonly unknown[] {
+    const widgets: unknown[] = [];
+    const cursor = state.field(tableDecorationField).iter();
+    while (cursor.value) {
+      widgets.push(cursor.value.spec.widget);
+      cursor.next();
+    }
+    return widgets;
+  }
+
+  it("preserves unaffected table widgets when another table shifts", () => {
+    const doc = [
+      "| A |",
+      "| --- |",
+      "| 1 |",
+      "",
+      "Between tables.",
+      "",
+      "| B |",
+      "| --- |",
+      "| 2 |",
+    ].join("\n");
+
+    const state = createTwoTableState(doc);
+    const [firstWidgetBefore, secondWidgetBefore] = getWidgets(state);
+    const insertAt = doc.indexOf("Between") + "Between".length;
+    const afterState = state.update({
+      changes: {
+        from: insertAt,
+        insert: " updated",
+      },
+    }).state;
+    const [firstWidgetAfter, secondWidgetAfter] = getWidgets(afterState);
+
+    expect(firstWidgetAfter).toBe(firstWidgetBefore);
+    expect(secondWidgetAfter).not.toBe(secondWidgetBefore);
   });
 });

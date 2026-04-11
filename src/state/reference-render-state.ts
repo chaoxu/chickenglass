@@ -1,6 +1,10 @@
 import type { EditorState } from "@codemirror/state";
 
-import type { CslProcessor } from "../citations/csl-processor";
+import {
+  collectCitationMatches,
+  getCitationRegistrationKey,
+  type CslProcessor,
+} from "../citations/csl-processor";
 import type { BibStore } from "./bib-data";
 import { bibDataField } from "./bib-data";
 import type { BlockCounterState } from "./block-counter";
@@ -15,6 +19,7 @@ import { externalDocumentReferenceCatalogField } from "../semantics/editor-refer
 import {
   getEquationNumbersCacheKey,
   type DocumentAnalysis,
+  type ReferenceSemantics,
 } from "../semantics/document";
 import type { PluginRegistryState } from "../plugins/plugin-registry";
 
@@ -46,7 +51,7 @@ interface OptionalReferenceRenderState {
   readonly pluginRegistry: PluginRegistryState | null;
 }
 
-function readOptionalReferenceRenderState(
+export function getOptionalReferenceRenderState(
   state: EditorState,
 ): OptionalReferenceRenderState {
   return {
@@ -60,11 +65,15 @@ function readOptionalReferenceRenderState(
 export function getReferenceRenderState(
   state: EditorState,
 ): ReferenceRenderState {
+  const optional = getOptionalReferenceRenderState(state);
+  if (!optional.analysis || !optional.bibliography) {
+    throw new RangeError("Reference render state is unavailable in this editor state.");
+  }
   return {
-    analysis: getReferenceRenderAnalysis(state),
-    bibliography: state.field(bibDataField),
-    blockCounter: state.field(blockCounterField, false) ?? undefined,
-    pluginRegistry: state.field(pluginRegistryField, false) ?? null,
+    analysis: optional.analysis,
+    bibliography: optional.bibliography,
+    blockCounter: optional.blockCounter,
+    pluginRegistry: optional.pluginRegistry,
   };
 }
 
@@ -152,6 +161,114 @@ const bibliographyInputsChanged = createChangeChecker(
   (state) => state.field(bibDataField, false)?.processorRevision ?? null,
 );
 
+interface CitationRegistrationSnapshot {
+  readonly references: readonly ReferenceSemantics[] | null;
+  readonly store: BibStore | null;
+}
+
+interface CitationClusterScan {
+  readonly nextIndex: number;
+  readonly ids: readonly string[];
+  readonly locators: readonly (string | undefined)[];
+}
+
+function nextCitationClusterScan(
+  references: readonly ReferenceSemantics[],
+  store: BibStore,
+  startIndex: number,
+): CitationClusterScan | null {
+  for (let index = startIndex; index < references.length; index += 1) {
+    const reference = references[index];
+    let ids: string[] | null = null;
+    let locators: (string | undefined)[] | null = null;
+
+    for (let idIndex = 0; idIndex < reference.ids.length; idIndex += 1) {
+      const id = reference.ids[idIndex];
+      if (!store.has(id)) continue;
+      ids ??= [];
+      locators ??= [];
+      ids.push(id);
+      locators.push(reference.locators[idIndex]);
+    }
+
+    if (ids) {
+      return {
+        nextIndex: index + 1,
+        ids,
+        locators: locators ?? [],
+      };
+    }
+  }
+
+  return null;
+}
+
+function sameCitationRegistrationInputs(
+  left: readonly ReferenceSemantics[],
+  right: readonly ReferenceSemantics[],
+  store: BibStore,
+): boolean {
+  let leftIndex = 0;
+  let rightIndex = 0;
+
+  for (;;) {
+    const leftCluster = nextCitationClusterScan(left, store, leftIndex);
+    const rightCluster = nextCitationClusterScan(right, store, rightIndex);
+
+    if (!leftCluster || !rightCluster) {
+      return leftCluster === rightCluster;
+    }
+
+    if (leftCluster.ids.length !== rightCluster.ids.length) {
+      return false;
+    }
+
+    for (let index = 0; index < leftCluster.ids.length; index += 1) {
+      if (leftCluster.ids[index] !== rightCluster.ids[index]) {
+        return false;
+      }
+      if (leftCluster.locators[index] !== rightCluster.locators[index]) {
+        return false;
+      }
+    }
+
+    leftIndex = leftCluster.nextIndex;
+    rightIndex = rightCluster.nextIndex;
+  }
+}
+
+function getCitationRegistrationSnapshot(
+  state: EditorState,
+): CitationRegistrationSnapshot {
+  const analysis = state.field(documentAnalysisField, false) ?? null;
+  const bibliography = state.field(bibDataField, false) ?? null;
+  return {
+    references: analysis?.references ?? null,
+    store: bibliography?.store ?? null,
+  };
+}
+
+function sameCitationRegistrationSnapshot(
+  before: CitationRegistrationSnapshot,
+  after: CitationRegistrationSnapshot,
+): boolean {
+  if (before.store !== after.store) {
+    return false;
+  }
+  if (!before.store) {
+    return before.references === after.references;
+  }
+  if (!before.references || !after.references) {
+    return before.references === after.references;
+  }
+  return sameCitationRegistrationInputs(before.references, after.references, before.store);
+}
+
+const citationRegistrationInputsChanged = createChangeChecker({
+  get: getCitationRegistrationSnapshot,
+  equals: sameCitationRegistrationSnapshot,
+});
+
 const blockLabelConfigChanged = createChangeChecker(
   (state) => state.field(pluginRegistryField, false),
 );
@@ -178,6 +295,30 @@ export function referenceRenderDependenciesChanged(
   );
 }
 
+export function tableReferenceRenderDependenciesChanged(
+  beforeState: EditorState,
+  afterState: EditorState,
+): boolean {
+  const beforeAnalysis = beforeState.field(documentAnalysisField, false);
+  const afterAnalysis = afterState.field(documentAnalysisField, false);
+
+  const sharedOwnersChanged = (
+    externalReferenceCatalogChanged(beforeState, afterState) ||
+    bibliographyInputsChanged(beforeState, afterState) ||
+    blockLabelConfigChanged(beforeState, afterState)
+  );
+
+  if (!beforeAnalysis || !afterAnalysis) {
+    return sharedOwnersChanged;
+  }
+
+  return (
+    sharedOwnersChanged ||
+    crossrefNumberingChanged(beforeState, afterState)
+    || citationRegistrationInputsChanged(beforeState, afterState)
+  );
+}
+
 export function getReferenceRenderDependencySignature(
   state: EditorState,
 ): string {
@@ -185,7 +326,7 @@ export function getReferenceRenderDependencySignature(
     analysis,
     bibliography,
     pluginRegistry,
-  } = readOptionalReferenceRenderState(state);
+  } = getOptionalReferenceRenderState(state);
   if (!analysis || !bibliography) {
     return [
       "",
@@ -209,6 +350,44 @@ export function getReferenceRenderDependencySignature(
     getObjectIdentityId(cslProcessor),
     processorRevision,
     cslProcessor.citationRegistrationKey ?? "",
+    getObjectIdentityId(pluginRegistry),
+  ].join("\u0001");
+}
+
+export function getTableReferenceRenderDependencySignature(
+  state: EditorState,
+): string {
+  const {
+    analysis,
+    bibliography,
+    pluginRegistry,
+  } = getOptionalReferenceRenderState(state);
+  if (!analysis || !bibliography) {
+    return [
+      "",
+      "",
+      "",
+      0,
+      0,
+      0,
+      "",
+      getObjectIdentityId(pluginRegistry),
+    ].join("\u0001");
+  }
+
+  const { store, cslProcessor, processorRevision } = bibliography;
+  const citationRegistrationKey = getCitationRegistrationKey(
+    collectCitationMatches(analysis.references, store),
+  );
+
+  return [
+    citationRegistrationKey,
+    getEquationNumbersCacheKey(analysis),
+    getBlockNumberingKey(state),
+    getObjectIdentityId(state.field(externalDocumentReferenceCatalogField, false)),
+    getObjectIdentityId(store as object),
+    getObjectIdentityId(cslProcessor),
+    processorRevision,
     getObjectIdentityId(pluginRegistry),
   ].join("\u0001");
 }
