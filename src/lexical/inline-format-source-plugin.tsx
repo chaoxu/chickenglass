@@ -1,7 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $getAdjacentNode,
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getRoot,
@@ -36,6 +35,7 @@ import {
   $isInlineFormatSourceNode,
 } from "./nodes/inline-format-source-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { $findAdjacentNodeAtSelectionBoundary } from "./selection-boundary";
 import { getInlineTextFormatSelector, getInlineTextFormatSpecs } from "../lexical-next";
 
 const INLINE_FORMAT_SPECS = getInlineTextFormatSpecs();
@@ -119,138 +119,28 @@ function resolveInlineFormatAnchor(target: EventTarget | null): HTMLElement | nu
   return anchor.closest("a.cf-lexical-link") ? null : anchor;
 }
 
-function findBoundarySibling(rootElement: HTMLElement, startNode: Node, isBackward: boolean): Node | null {
-  let current: Node | null = startNode;
-  while (current && current !== rootElement) {
-    const sibling = isBackward ? current.previousSibling : current.nextSibling;
-    if (sibling) {
-      return sibling;
-    }
-    current = current.parentNode;
-  }
-  return null;
-}
-
-function findInlineFormatAnchorInNode(node: Node | null, isBackward: boolean): HTMLElement | null {
-  if (!node) {
+function readSourceSelectionOffsets(): SourceSelectionOffsets | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) {
     return null;
   }
 
-  if (node instanceof HTMLElement) {
-    if (node.matches(INLINE_FORMAT_SELECTOR) && !node.closest("a.cf-lexical-link")) {
-      return node;
-    }
-    const matches = node.querySelectorAll<HTMLElement>(INLINE_FORMAT_SELECTOR);
-    if (matches.length > 0) {
-      return isBackward ? matches[matches.length - 1] : matches[0];
-    }
-  }
-
-  const child = isBackward ? node.lastChild : node.firstChild;
-  return findInlineFormatAnchorInNode(child, isBackward);
-}
-
-function findInlineFormatAnchorFromDomSelection(
-  rootElement: HTMLElement | null,
-  isBackward: boolean,
-): HTMLElement | null {
-  if (!rootElement) {
-    return null;
-  }
-
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed) {
-    return null;
-  }
-
-  const anchorNode = selection.anchorNode;
-  if (!anchorNode || !rootElement.contains(anchorNode)) {
-    return null;
-  }
-
-  if (anchorNode instanceof Text) {
-    const textLength = anchorNode.textContent?.length ?? 0;
-    if ((isBackward && selection.anchorOffset !== 0) || (!isBackward && selection.anchorOffset !== textLength)) {
-      return null;
-    }
-    const sibling = findBoundarySibling(rootElement, anchorNode, isBackward);
-    return findInlineFormatAnchorInNode(sibling, isBackward);
-  }
-
-  if (anchorNode instanceof Element) {
-    const childIndex = isBackward ? selection.anchorOffset - 1 : selection.anchorOffset;
-    if (childIndex >= 0 && childIndex < anchorNode.childNodes.length) {
-      return findInlineFormatAnchorInNode(anchorNode.childNodes[childIndex], isBackward);
-    }
-    const sibling = findBoundarySibling(rootElement, anchorNode, isBackward);
-    return findInlineFormatAnchorInNode(sibling, isBackward);
-  }
-
-  return null;
-}
-
-function measureTextOffsetWithinElement(
-  element: HTMLElement,
-  node: Node,
-  offset: number,
-): number {
-  const range = document.createRange();
-  range.selectNodeContents(element);
-  range.setEnd(node, offset);
-  return range.toString().length;
-}
-
-function readSourceSelectionOffsets(rootElement: HTMLElement | null): SourceSelectionOffsets | null {
-  if (!rootElement) {
-    return null;
-  }
-
-  const selection = window.getSelection();
-  if (!selection || !selection.anchorNode || !selection.focusNode) {
-    return null;
-  }
-
-  const sourceElement = (
-    selection.anchorNode instanceof Element
-      ? selection.anchorNode
-      : selection.anchorNode.parentElement
-  )?.closest<HTMLElement>(".cf-lexical-inline-format-source");
+  const anchorNode = selection.anchor.getNode();
+  const focusNode = selection.focus.getNode();
   if (
-    !(sourceElement instanceof HTMLElement)
-    || !rootElement.contains(sourceElement)
-    || !sourceElement.contains(selection.anchorNode)
-    || !sourceElement.contains(selection.focusNode)
+    !$isInlineFormatSourceNode(anchorNode)
+    || !$isInlineFormatSourceNode(focusNode)
+    || anchorNode.getKey() !== focusNode.getKey()
   ) {
     return null;
   }
 
-  const nodeKey = sourceElement.dataset.coflatInlineFormatSourceKey;
-  if (!nodeKey) {
-    return null;
-  }
-
-  if (sourceElement.textContent === EMPTY_INLINE_FORMAT_SOURCE_SENTINEL) {
-    return {
-      end: 0,
-      nodeKey,
-      start: 0,
-    };
-  }
-
-  const anchorOffset = measureTextOffsetWithinElement(
-    sourceElement,
-    selection.anchorNode,
-    selection.anchorOffset,
-  );
-  const focusOffset = measureTextOffsetWithinElement(
-    sourceElement,
-    selection.focusNode,
-    selection.focusOffset,
-  );
-
+  const rawLength = anchorNode.getRaw().length;
+  const anchorOffset = Math.min(selection.anchor.offset, rawLength);
+  const focusOffset = Math.min(selection.focus.offset, rawLength);
   return {
     end: Math.max(anchorOffset, focusOffset),
-    nodeKey,
+    nodeKey: anchorNode.getKey(),
     start: Math.min(anchorOffset, focusOffset),
   };
 }
@@ -465,107 +355,73 @@ export function InlineFormatSourcePlugin() {
           .map((node) => node.getKey())
       );
 
+    const selectSourceCaret = (nodeKey: NodeKey, caretOffset: number): boolean => {
+      let selected = false;
+      editor.update(() => {
+        const sourceNode = $getNodeByKey(nodeKey);
+        if (!$isInlineFormatSourceNode(sourceNode)) {
+          return;
+        }
+
+        const clampedOffset = Math.min(caretOffset, sourceNode.getRaw().length);
+        sourceNode.select(clampedOffset, clampedOffset);
+        selected = true;
+      }, {
+        discrete: true,
+        tag: COFLAT_NESTED_EDIT_TAG,
+      });
+      return selected;
+    };
+
     const syncSourceSelection = (activation: InlineFormatActivation) => {
       queueMicrotask(() => {
-        editor.update(() => {
-          const sourceNode = $getNodeByKey(activation.nodeKey);
-          if (!$isInlineFormatSourceNode(sourceNode)) {
-            return;
-          }
-          const caretOffset = getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide);
-          sourceNode.select(caretOffset, caretOffset);
-        }, {
-          discrete: true,
-          tag: COFLAT_NESTED_EDIT_TAG,
-        });
+        const syncSelection = () => {
+          const caretOffset = editor.getEditorState().read(() => {
+            const sourceNode = $getNodeByKey(activation.nodeKey);
+            return $isInlineFormatSourceNode(sourceNode)
+              ? getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide)
+              : null;
+          });
+          return caretOffset == null
+            ? false
+            : selectSourceCaret(activation.nodeKey, caretOffset);
+        };
+
+        if (!syncSelection()) {
+          pendingActivation = null;
+          return;
+        }
+
         editor.focus();
 
-        const syncDomSelection = (remainingFrames: number) => {
+        const resyncSelection = (remainingFrames: number) => {
           requestAnimationFrame(() => {
-            editor.update(() => {
-              const sourceNode = $getNodeByKey(activation.nodeKey);
-              if (!$isInlineFormatSourceNode(sourceNode)) {
-                return;
-              }
-              const caretOffset = getInlineFormatEntryCaretOffset(sourceNode.getRaw(), activation.entrySide);
-              sourceNode.select(caretOffset, caretOffset);
-            }, {
-              discrete: true,
-              tag: COFLAT_NESTED_EDIT_TAG,
-            });
-
-            const rootElement = editor.getRootElement();
-            const sourceElement = rootElement?.querySelector(".cf-lexical-inline-format-source");
-            const textNode = sourceElement?.firstChild instanceof Text
-              ? sourceElement.firstChild
-              : null;
-            const selection = window.getSelection();
-
-            if (!(sourceElement instanceof HTMLElement) || !textNode || !selection) {
-              if (remainingFrames > 0) {
-                syncDomSelection(remainingFrames - 1);
-                return;
-              }
+            if (!syncSelection()) {
               pendingActivation = null;
               return;
             }
 
-            const raw = normalizeInlineFormatSourceRaw(textNode.textContent ?? "");
-            const caretOffset = getInlineFormatEntryCaretOffset(raw, activation.entrySide);
-            const range = document.createRange();
-            range.setStart(textNode, caretOffset);
-            range.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(range);
             if (remainingFrames > 0) {
-              syncDomSelection(remainingFrames - 1);
+              resyncSelection(remainingFrames - 1);
               return;
             }
             pendingActivation = null;
           });
         };
 
-        syncDomSelection(3);
+        resyncSelection(3);
       });
     };
 
     const syncSourceCaret = (nodeKey: NodeKey, caretOffset: number) => {
       queueMicrotask(() => {
-        editor.update(() => {
-          const sourceNode = $getNodeByKey(nodeKey);
-          if (!$isInlineFormatSourceNode(sourceNode)) {
-            return;
-          }
-          sourceNode.select(
-            Math.min(caretOffset, sourceNode.getRaw().length),
-            Math.min(caretOffset, sourceNode.getRaw().length),
-          );
-        }, {
-          discrete: true,
-          tag: COFLAT_NESTED_EDIT_TAG,
-        });
+        if (!selectSourceCaret(nodeKey, caretOffset)) {
+          return;
+        }
         editor.focus();
 
         requestAnimationFrame(() => {
-          const rootElement = editor.getRootElement();
-          if (!rootElement) {
-            return;
-          }
-          const sourceElement = rootElement.querySelector<HTMLElement>(
-            `.cf-lexical-inline-format-source[data-coflat-inline-format-source-key="${nodeKey}"]`,
-          );
-          const textNode = sourceElement?.firstChild instanceof Text
-            ? sourceElement.firstChild
-            : null;
-          const selection = window.getSelection();
-          if (!(sourceElement instanceof HTMLElement) || !textNode || !selection) {
-            return;
-          }
-          const range = document.createRange();
-          range.setStart(textNode, Math.min(caretOffset, textNode.textContent?.length ?? 0));
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
+          selectSourceCaret(nodeKey, caretOffset);
         });
       });
     };
@@ -598,14 +454,9 @@ export function InlineFormatSourcePlugin() {
         return false;
       }
 
-      const adjacentActivation = editor.getEditorState().read(() => {
-        const selection = $getSelection();
-        if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-          return null;
-        }
-
-        const adjacent = $getAdjacentNode(selection.anchor, isBackward);
-        if (!isEditableInlineFormatNode(adjacent)) {
+      const activation = editor.getEditorState().read(() => {
+        const adjacent = $findAdjacentNodeAtSelectionBoundary(isBackward, isEditableInlineFormatNode);
+        if (!adjacent) {
           return null;
         }
 
@@ -614,15 +465,6 @@ export function InlineFormatSourcePlugin() {
           nodeKey: adjacent.getKey(),
         } satisfies InlineFormatActivation;
       });
-
-      const fallbackAnchor = adjacentActivation
-        ? null
-        : findInlineFormatAnchorFromDomSelection(editor.getRootElement(), isBackward);
-      const activation = adjacentActivation ?? (
-        fallbackAnchor
-          ? getActivationFromAnchor(fallbackAnchor, entrySide)
-          : null
-      );
       if (!activation) {
         return false;
       }
@@ -727,7 +569,7 @@ export function InlineFormatSourcePlugin() {
       editor.registerCommand(
         BEFORE_INPUT_COMMAND,
         (event) => {
-          const selectionOffsets = readSourceSelectionOffsets(editor.getRootElement());
+          const selectionOffsets = readSourceSelectionOffsets();
           if (!selectionOffsets) {
             return false;
           }
@@ -783,7 +625,7 @@ export function InlineFormatSourcePlugin() {
       editor.registerCommand(
         KEY_DOWN_COMMAND,
         (event) => {
-          const selectionOffsets = readSourceSelectionOffsets(editor.getRootElement());
+          const selectionOffsets = readSourceSelectionOffsets();
           if (!selectionOffsets) {
             return false;
           }

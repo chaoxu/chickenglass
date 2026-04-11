@@ -3,10 +3,7 @@ import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createNodeSelection,
-  $getAdjacentNode,
   $getNodeByKey,
-  $getSelection,
-  $isRangeSelection,
   $setSelection,
   CLICK_COMMAND,
   COMMAND_PRIORITY_HIGH,
@@ -20,6 +17,7 @@ import {
 import { SurfaceFloatingPortal } from "../lexical-next";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
+import { $findAdjacentNodeAtSelectionBoundary } from "./selection-boundary";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 type EntrySide = "start" | "end";
@@ -53,76 +51,6 @@ function findInlineMathAnchor(rootElement: HTMLElement | null, nodeKey: NodeKey)
     return null;
   }
   return rootElement.querySelector<HTMLElement>(selectorForNodeKey(nodeKey));
-}
-
-function findBoundarySibling(rootElement: HTMLElement, startNode: Node, isBackward: boolean): Node | null {
-  let current: Node | null = startNode;
-  while (current && current !== rootElement) {
-    const sibling = isBackward ? current.previousSibling : current.nextSibling;
-    if (sibling) {
-      return sibling;
-    }
-    current = current.parentNode;
-  }
-  return null;
-}
-
-function findInlineMathAnchorInNode(node: Node | null, isBackward: boolean): HTMLElement | null {
-  if (!node) {
-    return null;
-  }
-
-  if (node instanceof HTMLElement) {
-    if (node.matches("[data-coflat-inline-math-key]")) {
-      return node;
-    }
-    const matches = node.querySelectorAll<HTMLElement>("[data-coflat-inline-math-key]");
-    if (matches.length > 0) {
-      return isBackward ? matches[matches.length - 1] : matches[0];
-    }
-  }
-
-  const child = isBackward ? node.lastChild : node.firstChild;
-  return findInlineMathAnchorInNode(child, isBackward);
-}
-
-function findInlineMathAnchorFromDomSelection(
-  rootElement: HTMLElement | null,
-  isBackward: boolean,
-): HTMLElement | null {
-  if (!rootElement) {
-    return null;
-  }
-
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed) {
-    return null;
-  }
-
-  const anchorNode = selection.anchorNode;
-  if (!anchorNode || !rootElement.contains(anchorNode)) {
-    return null;
-  }
-
-  if (anchorNode instanceof Text) {
-    const textLength = anchorNode.textContent?.length ?? 0;
-    if ((isBackward && selection.anchorOffset !== 0) || (!isBackward && selection.anchorOffset !== textLength)) {
-      return null;
-    }
-    const sibling = findBoundarySibling(rootElement, anchorNode, isBackward);
-    return findInlineMathAnchorInNode(sibling, isBackward);
-  }
-
-  if (anchorNode instanceof Element) {
-    const childIndex = isBackward ? selection.anchorOffset - 1 : selection.anchorOffset;
-    if (childIndex >= 0 && childIndex < anchorNode.childNodes.length) {
-      return findInlineMathAnchorInNode(anchorNode.childNodes[childIndex], isBackward);
-    }
-    const sibling = findBoundarySibling(rootElement, anchorNode, isBackward);
-    return findInlineMathAnchorInNode(sibling, isBackward);
-  }
-
-  return null;
 }
 
 export function InlineMathSourcePlugin() {
@@ -261,18 +189,9 @@ export function InlineMathSourcePlugin() {
         return false;
       }
 
-      const adjacentNodeKey = editor.getEditorState().read(() => {
-        const selection = $getSelection();
-        if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-          return null;
-        }
-        const adjacent = $getAdjacentNode(selection.anchor, isBackward);
-        return $isInlineMathNode(adjacent) ? adjacent.getKey() : null;
-      });
-      const fallbackAnchor = adjacentNodeKey
-        ? null
-        : findInlineMathAnchorFromDomSelection(editor.getRootElement(), isBackward);
-      const nextNodeKey = adjacentNodeKey ?? fallbackAnchor?.dataset.coflatInlineMathKey ?? null;
+      const nextNodeKey = editor.getEditorState().read(() =>
+        $findAdjacentNodeAtSelectionBoundary(isBackward, $isInlineMathNode)?.getKey() ?? null
+      );
       if (!nextNodeKey) {
         return false;
       }
@@ -288,7 +207,7 @@ export function InlineMathSourcePlugin() {
         $setSelection(selection);
       }, { discrete: true });
 
-      return startEditing(nextNodeKey, entrySide, fallbackAnchor);
+      return startEditing(nextNodeKey, entrySide);
     };
 
     return mergeRegister(
