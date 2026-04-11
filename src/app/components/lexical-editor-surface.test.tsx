@@ -79,7 +79,7 @@ describe("LexicalEditorSurface", () => {
     });
   });
 
-  it("formats through the single editor handle", () => {
+  it("formats through the single editor handle in source mode", () => {
     const onDocumentReady = vi.fn();
     const onEditorReady = vi.fn();
     const handle = {
@@ -98,6 +98,7 @@ describe("LexicalEditorSurface", () => {
     } satisfies MarkdownEditorHandle;
 
     renderSurface({
+      editorMode: "source",
       onDocumentReady,
       onEditorReady,
     });
