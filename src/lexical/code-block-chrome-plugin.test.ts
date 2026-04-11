@@ -57,7 +57,7 @@ describe("collectCodeBlockOverlays", () => {
     mockRect(surface, { bottom: 600, left: 0, right: 800, top: 0 });
     mockRect(container, { bottom: 240, left: 32, right: 632, top: 120 });
 
-    const overlay = collectCodeBlockOverlays(root, surface)[0];
+    const overlay = collectCodeBlockOverlays(root, surface, { left: 0, top: surface.scrollTop })[0];
     expect(overlay?.rect.top).toBe(120);
   });
 
@@ -69,7 +69,7 @@ describe("collectCodeBlockOverlays", () => {
     mockRect(surface, { bottom: 600, left: 0, right: 800, top: 0 });
     mockRect(container, { bottom: 240, left: 32, right: 632, top: 120 });
 
-    const overlay = collectCodeBlockOverlays(root, surface)[0];
+    const overlay = collectCodeBlockOverlays(root, surface, { left: 0, top: surface.scrollTop })[0];
     expect(overlay?.rect.top).toBe(400);
   });
 });
