@@ -76,6 +76,19 @@ export function LexicalEditorSurface({
   useEffect(() => {
     const handleFormat = (event: Event) => {
       const detail = (event as CustomEvent<FormatEventDetail>).detail;
+      if (
+        editorMode !== "source"
+        && (
+          detail.type === "bold"
+          || detail.type === "code"
+          || detail.type === "highlight"
+          || detail.type === "italic"
+          || detail.type === "strikethrough"
+        )
+      ) {
+        return;
+      }
+
       const handle = handleRef.current;
       if (!handle) {
         return;
@@ -90,7 +103,7 @@ export function LexicalEditorSurface({
     return () => {
       document.removeEventListener(FORMAT_EVENT, handleFormat);
     };
-  }, []);
+  }, [editorMode]);
 
   return (
     <LexicalMarkdownEditor

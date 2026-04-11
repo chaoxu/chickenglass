@@ -37,10 +37,6 @@ import {
   $isFootnoteReferenceNode,
   FootnoteReferenceNode,
 } from "./nodes/footnote-reference-node";
-import {
-  $isInlineFormatSourceNode,
-  InlineFormatSourceNode,
-} from "./nodes/inline-format-source-node";
 import { $createInlineMathNode, $isInlineMathNode, InlineMathNode } from "./nodes/inline-math-node";
 import { $createReferenceNode, $isReferenceNode, ReferenceNode } from "./nodes/reference-node";
 import { $createRawBlockNode, $isRawBlockNode, type RawBlockVariant, RawBlockNode } from "./nodes/raw-block-node";
@@ -67,8 +63,6 @@ const NARRATIVE_REFERENCE_IMPORT = /@([A-Za-z0-9_][\w.:-]*)/;
 const NARRATIVE_REFERENCE_SHORTCUT = /@([A-Za-z0-9_][\w.:-]*)$/;
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
-const NEVER_INLINE_FORMAT_SOURCE_IMPORT = /\b\B/;
-const NEVER_INLINE_FORMAT_SOURCE_SHORTCUT = /\b\B$/;
 const IMAGE_BLOCK_START = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
 const FOOTNOTE_DEFINITION_START = /^\[\^[^\]]+\]:\s*(.*)$/;
 
@@ -352,20 +346,11 @@ const footnoteReferenceTransformer = createInlineTokenTransformer(
   FOOTNOTE_REFERENCE_SHORTCUT,
 );
 
-const inlineFormatSourceTransformer = createInlineTokenTransformer(
-  [InlineFormatSourceNode],
-  (node) => ($isInlineFormatSourceNode(node) ? node.getRaw() : null),
-  () => {},
-  NEVER_INLINE_FORMAT_SOURCE_IMPORT,
-  NEVER_INLINE_FORMAT_SOURCE_SHORTCUT,
-);
-
 const tableCellMarkdownTransformers = [
   ...TEXT_FORMAT_TRANSFORMERS,
   inlineMathDollarTransformer,
   inlineMathParenTransformer,
   inlineImageTransformer,
-  inlineFormatSourceTransformer,
   bracketedReferenceTransformer,
   footnoteReferenceTransformer,
   narrativeReferenceTransformer,
@@ -512,7 +497,6 @@ export const coflatMarkdownNodes = [
   CodeHighlightNode,
   InlineMathNode,
   InlineImageNode,
-  InlineFormatSourceNode,
   ReferenceNode,
   FootnoteReferenceNode,
   RawBlockNode,
@@ -564,7 +548,6 @@ export const coflatMarkdownTransformers = [
   inlineMathDollarTransformer,
   inlineMathParenTransformer,
   inlineImageTransformer,
-  inlineFormatSourceTransformer,
   bracketedReferenceTransformer,
   footnoteReferenceTransformer,
   narrativeReferenceTransformer,
@@ -653,7 +636,6 @@ export const coflatCustomTransformers = [
   inlineMathDollarTransformer,
   inlineMathParenTransformer,
   inlineImageTransformer,
-  inlineFormatSourceTransformer,
   bracketedReferenceTransformer,
   footnoteReferenceTransformer,
   narrativeReferenceTransformer,

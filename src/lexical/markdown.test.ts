@@ -122,4 +122,23 @@ describe("coflat lexical markdown", () => {
 
     expect(getLexicalMarkdown(editor)).toBe(markdown);
   });
+
+  it("imports inline markdown formats as native formatted text nodes", () => {
+    const editor = createHeadlessCoflatEditor();
+    const markdown = "**Bold** *italic* ~~strike~~ ==highlight== `code`";
+
+    setLexicalMarkdown(editor, markdown);
+
+    editor.getEditorState().read(() => {
+      const textNodes = $getRoot().getAllTextNodes();
+      expect(textNodes.some((node) => node.getType() === "coflat-inline-format-source")).toBe(false);
+      expect(textNodes.some((node) => node.getTextContent() === "Bold" && node.hasFormat("bold"))).toBe(true);
+      expect(textNodes.some((node) => node.getTextContent() === "italic" && node.hasFormat("italic"))).toBe(true);
+      expect(textNodes.some((node) => node.getTextContent() === "strike" && node.hasFormat("strikethrough"))).toBe(true);
+      expect(textNodes.some((node) => node.getTextContent() === "highlight" && node.hasFormat("highlight"))).toBe(true);
+      expect(textNodes.some((node) => node.getTextContent() === "code" && node.hasFormat("code"))).toBe(true);
+    });
+
+    expect(getLexicalMarkdown(editor)).toBe(markdown);
+  });
 });
