@@ -1,6 +1,13 @@
 import { act, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
-import { CLICK_COMMAND, UNDO_COMMAND } from "lexical";
+import {
+  $getRoot,
+  $getSelection,
+  $isElementNode,
+  $isRangeSelection,
+  CLICK_COMMAND,
+  UNDO_COMMAND,
+} from "lexical";
 import { createElement, type ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
@@ -192,6 +199,58 @@ describe("LexicalRichMarkdownEditor nested history", () => {
         editor.editor.dispatchCommand(UNDO_COMMAND, undefined);
       });
       await waitFor(() => expect(editor.handle.getDoc()).toBe("draft one"));
+    } finally {
+      editor.unmount();
+    }
+  });
+});
+
+describe("__editor selection bridge (rich mode)", () => {
+  it("setSelection moves the Lexical selection for a prose document with no tagged blocks", async () => {
+    const editor = await mountEditor({ doc: "plain prose only" });
+
+    try {
+      act(() => {
+        editor.handle.setSelection(3, 3);
+      });
+
+      const anchorInFirstBlock = editor.editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return false;
+        }
+        const firstChild = $getRoot().getFirstChild();
+        return selection.anchor.getNode().getTopLevelElement()?.getKey() === firstChild?.getKey();
+      });
+      expect(anchorInFirstBlock).toBe(true);
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("getSelection reports the live source position when the caret is inside a heading", async () => {
+    const editor = await mountEditor({ doc: "# Title\n\nbody" });
+
+    try {
+      await waitFor(() => {
+        const heading = editor.editor.getRootElement()?.querySelector<HTMLElement>(
+          ".cf-lexical-heading[data-coflat-heading-pos]",
+        );
+        expect(heading).not.toBeNull();
+      });
+
+      act(() => {
+        editor.editor.update(() => {
+          const first = $getRoot().getFirstChild();
+          if (first && $isElementNode(first)) {
+            first.selectStart();
+          }
+        });
+      });
+
+      await waitFor(() => {
+        expect(editor.handle.getSelection().anchor).toBe(0);
+      });
     } finally {
       editor.unmount();
     }
