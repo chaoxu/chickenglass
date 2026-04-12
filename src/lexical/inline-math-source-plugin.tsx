@@ -276,6 +276,7 @@ export function InlineMathSourcePlugin() {
       anchor={editing.anchor}
       className="cf-lexical-inline-math-panel"
       offsetPx={8}
+      onAnchorLost={() => closeEditing(editing, { commit: true })}
       shiftPaddingPx={8}
     >
       <EditorChromePanel className="cf-lexical-floating-source-shell cf-lexical-inline-math-panel-shell">
