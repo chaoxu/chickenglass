@@ -5,8 +5,6 @@ import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { isTauri } from "../../lib/tauri";
 import { recordDebugSessionEvent } from "../../debug/session-recorder";
 import type { SourceMap } from "../source-map";
-import { getActiveEditor } from "../../lexical/active-editor-tracker";
-import { readLexicalTree } from "../../lexical/tree-print";
 import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
@@ -20,31 +18,22 @@ import {
   debugGetNativeStateCommand,
   debugListWindowsCommand,
 } from "../tauri-client/debug";
+import {
+  connectAppBridge,
+  connectEditorBridge,
+  connectLexicalEditor,
+  connectPerfBridge,
+  connectSourceMap,
+  connectTauriSmoke,
+  disconnectAppBridge,
+  type TauriSmokeWindowState,
+} from "../../debug/debug-bridge";
+import type {
+  DebugDocumentState,
+  DebugProjectFile,
+} from "./use-app-debug-types";
 
-export interface DebugDocumentState {
-  path: string;
-  name: string;
-  dirty: boolean;
-}
-
-export type DebugProjectFile =
-  | { path: string; kind: "text"; content: string }
-  | { path: string; kind: "binary"; base64: string };
-
-interface TauriSmokeWindowState {
-  projectRoot: string | null;
-  currentDocument: DebugDocumentState | null;
-  dirty: boolean;
-  startupComplete: boolean;
-  restoredProjectRoot: string | null;
-  mode: EditorMode;
-  backendProjectRoot: string | null;
-  backendProjectGeneration: number | null;
-  watcherRoot: string | null;
-  watcherGeneration: number | null;
-  watcherActive: boolean;
-  lastFocusedWindow: string | null;
-}
+export type { DebugDocumentState, DebugProjectFile } from "./use-app-debug-types";
 
 interface AppDebugDeps {
   editorHandle: MarkdownEditorHandle | null;
@@ -139,7 +128,7 @@ export function useAppDebug({
   ]);
 
   useEffect(() => {
-    window.__app = {
+    connectAppBridge({
       openFile: async (path) => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
@@ -217,83 +206,65 @@ export function useAppDebug({
       getProjectRoot: () => projectRoot,
       getCurrentDocument: () => currentDocument,
       isDirty: () => hasDirtyDocument,
-    };
-    window.__editor = editorHandle
-      ? {
-          focus: () => {
-            recordDebugSessionEvent({
-              timestamp: Date.now(),
-              type: "app",
-              summary: "editor.focus",
-            });
-            editorHandle.focus();
-          },
-          getDoc: () => getCurrentDocText(),
-          getSelection: () => editorHandle.getSelection(),
-          insertText: (text) => {
-            recordDebugSessionEvent({
-              timestamp: Date.now(),
-              type: "app",
-              summary: `editor.insertText ${text.length}`,
-              detail: { text },
-            });
-            editorHandle.insertText(text);
-          },
-          setDoc: (doc) => {
-            recordDebugSessionEvent({
-              timestamp: Date.now(),
-              type: "app",
-              summary: `editor.setDoc ${doc.length}`,
-              detail: { docLength: doc.length },
-            });
-            editorHandle.setDoc(doc);
-          },
-          setSelection: (anchor, focus = anchor) => {
-            recordDebugSessionEvent({
-              timestamp: Date.now(),
-              type: "app",
-              summary: `editor.setSelection ${anchor}:${focus}`,
-              detail: { anchor, focus },
-            });
-            editorHandle.setSelection(anchor, focus);
-          },
-        }
-      : undefined;
-    window.__cmView = {
-      dispatch: () => {},
-      dom: document.querySelector('[data-testid="lexical-editor"]'),
-      focus: () => {
-        editorHandle?.focus();
-      },
-      state: {
-        doc: {
-          toString: () => getCurrentDocText(),
-        },
-      },
-    };
-    window.__cfDebug = {
+    });
+
+    connectEditorBridge(
+      editorHandle
+        ? {
+            focus: () => {
+              recordDebugSessionEvent({
+                timestamp: Date.now(),
+                type: "app",
+                summary: "editor.focus",
+              });
+              editorHandle.focus();
+            },
+            getDoc: () => getCurrentDocText(),
+            getSelection: () => editorHandle.getSelection(),
+            insertText: (text) => {
+              recordDebugSessionEvent({
+                timestamp: Date.now(),
+                type: "app",
+                summary: `editor.insertText ${text.length}`,
+                detail: { text },
+              });
+              editorHandle.insertText(text);
+            },
+            setDoc: (doc) => {
+              recordDebugSessionEvent({
+                timestamp: Date.now(),
+                type: "app",
+                summary: `editor.setDoc ${doc.length}`,
+                detail: { docLength: doc.length },
+              });
+              editorHandle.setDoc(doc);
+            },
+            setSelection: (anchor, focus = anchor) => {
+              recordDebugSessionEvent({
+                timestamp: Date.now(),
+                type: "app",
+                summary: `editor.setSelection ${anchor}:${focus}`,
+                detail: { anchor, focus },
+              });
+              editorHandle.setSelection(anchor, focus);
+            },
+          }
+        : null,
+    );
+
+    connectLexicalEditor(lexicalEditor);
+    connectSourceMap(getCurrentSourceMap());
+
+    connectPerfBridge({
       perfSummary: getCombinedPerfSnapshot,
       printPerfSummary,
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
       toggleFps: () => useDevSettings.getState().toggle("fpsCounter"),
-    };
-    window.__cmDebug = {
-      dump: () => ({
-        doc: getCurrentDocText(),
-        selection: editorHandle?.getSelection() ?? null,
-      }),
-      line: (lineNumber: number) => getCurrentDocText().split("\n")[lineNumber - 1] ?? null,
-      selection: () => editorHandle?.getSelection() ?? null,
-      tree: () => {
-        const active = getActiveEditor() ?? lexicalEditor;
-        return active ? readLexicalTree(active) : "";
-      },
-      get treeString() { return this.tree; },
-    };
-    window.__cfSourceMap = getCurrentSourceMap();
+    });
+
     if (import.meta.env.DEV && isTauri()) {
-      window.__tauriSmoke = {
+      connectTauriSmoke({
         openProject,
         openFile,
         requestNativeClose,
@@ -317,20 +288,20 @@ export function useAppDebug({
         },
         simulateExternalChange: (relativePath: string, treeChanged?: boolean) =>
           debugEmitFileChangedCommand(relativePath, treeChanged),
-      };
+      });
     } else {
-      delete window.__tauriSmoke;
+      connectTauriSmoke(null);
     }
+
     return () => {
-      // Clear debug globals on unmount / HMR so stale closures are not left
-      // on window between hot-reloads or component teardowns.
-      delete window.__app;
-      delete window.__editor;
-      delete window.__cmView;
-      delete window.__cmDebug;
-      delete window.__cfDebug;
-      delete window.__cfSourceMap;
-      delete window.__tauriSmoke;
+      // Disconnect on unmount / HMR so stale closures are not left active on
+      // the bridge between hot-reloads or component teardowns. The window.__*
+      // surfaces remain shaped; calling them will throw DebugBridgeError.
+      disconnectAppBridge();
+      connectEditorBridge(null);
+      connectLexicalEditor(null);
+      connectSourceMap(null);
+      connectTauriSmoke(null);
     };
   }, [
     editorHandle,
