@@ -1,6 +1,5 @@
 import { memo, useState, useCallback } from "react";
 import type { HeadingEntry } from "../heading-ancestry";
-import { HeadingLabel } from "./heading-chrome";
 
 interface OutlineProps {
   headings: HeadingEntry[];
@@ -90,7 +89,7 @@ export const Outline = memo(function Outline({ headings, onSelect }: OutlineProp
               <span className="text-[10px] text-[var(--cf-muted)] shrink-0 font-mono tabular-nums">
                 {heading.number}
               </span>
-              <HeadingLabel text={heading.text} className="truncate cf-ui-font" />
+              <span className="truncate cf-ui-font">{heading.text}</span>
             </button>
           </div>
         );
