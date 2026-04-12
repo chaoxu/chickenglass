@@ -10,7 +10,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { RawBlockRenderer } from "../renderers/block-renderers";
+import { getRawBlockRenderer } from "./raw-block-renderer-registry";
 
 export type RawBlockVariant =
   | "display-math"
@@ -89,7 +89,8 @@ export class RawBlockNode extends DecoratorBlockNode {
   }
 
   decorate(): JSX.Element {
-    return createElement(RawBlockRenderer, {
+    const Renderer = getRawBlockRenderer();
+    return createElement(Renderer, {
       nodeKey: this.getKey(),
       raw: this.getRaw(),
       variant: this.getVariant(),

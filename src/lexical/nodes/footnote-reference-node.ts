@@ -9,7 +9,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { FootnoteReferenceRenderer } from "../renderers/block-renderers";
+import { getFootnoteReferenceRenderer } from "./footnote-reference-renderer-registry";
 
 export type SerializedFootnoteReferenceNode = Spread<{
   raw: string;
@@ -74,7 +74,8 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
   }
 
   decorate(): JSX.Element {
-    return createElement(FootnoteReferenceRenderer, {
+    const Renderer = getFootnoteReferenceRenderer();
+    return createElement(Renderer, {
       raw: this.getRaw(),
     });
   }
