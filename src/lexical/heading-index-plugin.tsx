@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getRoot } from "lexical";
 import { $isHeadingNode } from "@lexical/rich-text";
 
@@ -7,10 +5,8 @@ import {
   extractLabelId,
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
-  headingEntriesEqual,
   type HeadingEntry,
 } from "../app/markdown/headings";
-import { useHeadingIndexStore } from "../app/stores/heading-index-store";
 
 const TAG_TO_LEVEL: Record<string, number> = {
   h1: 1,
@@ -68,10 +64,12 @@ export function $collectHeadingEntries(): Omit<HeadingEntry, "pos">[] {
 
 /**
  * Merge heading entries from the Lexical tree with `pos` values from
- * the DOM (set by HeadingChromePlugin via data-coflat-heading-pos).
+ * the DOM. The `pos` values are written by syncHeadingChrome via the
+ * `data-coflat-heading-pos` attribute during the same update tick, so
+ * both reads see consistent structure.
  */
-function mergeWithDomPositions(
-  entries: Omit<HeadingEntry, "pos">[],
+export function mergeHeadingDomPositions(
+  entries: readonly Omit<HeadingEntry, "pos">[],
   root: HTMLElement | null,
 ): HeadingEntry[] {
   if (!root) {
@@ -84,48 +82,4 @@ function mergeWithDomPositions(
     const pos = el ? Number(el.dataset.coflatHeadingPos ?? i) : i;
     return { ...entry, pos: Number.isFinite(pos) ? pos : i };
   });
-}
-
-/**
- * Lexical plugin that maintains a live heading index in a Zustand store.
- *
- * Listens for editor updates and rebuilds the heading index from the
- * Lexical tree. Heading structure (level, text, numbering) comes from
- * HeadingNodes; source-position (`pos`) comes from the DOM attributes
- * set by HeadingChromePlugin.
- */
-export function HeadingIndexPlugin() {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    const store = useHeadingIndexStore;
-    let prev: HeadingEntry[] = [];
-
-    const sync = () => {
-      let entries: Omit<HeadingEntry, "pos">[] = [];
-      editor.read(() => {
-        entries = $collectHeadingEntries();
-      });
-      const headings = mergeWithDomPositions(entries, editor.getRootElement());
-      if (!headingEntriesEqual(prev, headings)) {
-        prev = headings;
-        store.getState().setHeadings(headings);
-      }
-    };
-
-    // Initial sync
-    sync();
-
-    const unregister = editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-      if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
-      sync();
-    });
-
-    return () => {
-      unregister();
-      store.getState().reset();
-    };
-  }, [editor]);
-
-  return null;
 }
