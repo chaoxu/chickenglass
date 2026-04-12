@@ -11,10 +11,28 @@ import {
 
 const cliPath = join(process.cwd(), "scripts", "dev-worktree.mjs");
 
+// Strip git env vars that git sets for subprocesses. Without this, when
+// these tests run inside a parent git command (e.g. inside the pre-push
+// hook), child `git init` / `git commit` in tmp repos inherit GIT_DIR and
+// the main repo's core.hooksPath — their commits then try to invoke
+// lefthook in /tmp and fail.
+function childEnv() {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_COMMON_DIR;
+  delete env.GIT_OBJECT_DIRECTORY;
+  delete env.GIT_NAMESPACE;
+  delete env.GIT_PREFIX;
+  return env;
+}
+
 function run(cwd, ...args) {
   return execFileSync(args[0], args.slice(1), {
     cwd,
     encoding: "utf8",
+    env: childEnv(),
   }).trim();
 }
 
@@ -135,6 +153,7 @@ describe("dev-worktree", () => {
       {
         cwd: subdir,
         encoding: "utf8",
+        env: childEnv(),
       },
     );
 
