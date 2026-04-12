@@ -1,10 +1,9 @@
-import { openRegressionDocument } from "../test-helpers.mjs";
+import { openAndSettleRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "footnotes";
 
 export async function run(page) {
-  await openRegressionDocument(page, "index.md");
-  await page.waitForTimeout(500);
+  await openAndSettleRegressionDocument(page, "index.md");
 
   const state = await page.evaluate(() => ({
     definitionCount: document.querySelectorAll(".cf-lexical-footnote-definition").length,
