@@ -1,7 +1,9 @@
-import type { DebugDocumentState } from "../app/hooks/use-app-debug";
+import type { DebugDocumentState } from "../app/hooks/use-app-debug-types";
+import { getConnectedApp } from "./debug-bridge";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
 const DEBUG_RECORDER_ENDPOINT = "/__coflat/debug-event";
+const JSON_CONTENT_TYPE = "application/json";
 const FLUSH_DELAY_MS = 400;
 const MAX_BATCH_SIZE = 100;
 
@@ -60,9 +62,10 @@ function currentContext(): DebugSessionEvent["context"] {
       location: "",
     };
   }
+  const app = getConnectedApp();
   return {
-    document: window.__app?.getCurrentDocument?.() ?? null,
-    mode: window.__app?.getMode?.() ?? null,
+    document: app ? app.getCurrentDocument() : null,
+    mode: app ? app.getMode() : null,
     selection: null,
     location: window.location.href,
   };
@@ -123,7 +126,7 @@ export async function flushDebugSessionEvents(): Promise<void> {
     const response = await fetch(DEBUG_RECORDER_ENDPOINT, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": JSON_CONTENT_TYPE,
       },
       body: JSON.stringify({
         sessionId: batch[0]?.sessionId ?? ensureSessionId(),
