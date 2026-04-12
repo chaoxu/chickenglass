@@ -457,9 +457,14 @@ function MarkdownModeSyncPlugin({
       return;
     }
 
-    const nextDoc = docChanged
-      ? doc
-      : readEditorDocument(editor, previousMode);
+    // On a pure mode toggle (docChanged is false, so `doc` already equals
+    // `lastCommittedDocRef.current`), `doc` is the canonical text. Never
+    // route through `readEditorDocument(editor, previousMode)` here:
+    // `getLexicalMarkdown` is lossy for several Pandoc-flavored node shapes
+    // (YAML frontmatter, some heading markers, bullet lists) and the re-
+    // serialization silently destroyed large fractions of the document on
+    // rich → source → rich round-trips (issue #99).
+    const nextDoc = doc;
     const nextSelection = createMarkdownSelection(
       selectionRef.current.anchor,
       selectionRef.current.focus,
