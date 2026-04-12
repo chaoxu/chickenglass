@@ -68,8 +68,7 @@ import {
   useMarkdownSelectionRefSync,
   ViewportTrackingPlugin,
 } from "./editor-surface-shared";
-import { HeadingChromePlugin } from "./heading-chrome-plugin";
-import { HeadingIndexPlugin } from "./heading-index-plugin";
+import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
@@ -629,8 +628,7 @@ export function LexicalRichMarkdownEditor({
                 {editable ? <TabKeyPlugin /> : null}
                 {editable ? <ReferenceTypeaheadPlugin /> : null}
                 {editable ? <SlashPickerPlugin /> : null}
-                {showHeadingChrome ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
-                {showHeadingChrome ? <HeadingIndexPlugin /> : null}
+                {showHeadingChrome ? <HeadingChromeAndIndexPlugin doc={renderContextValue?.doc ?? doc} /> : null}
                 <SourcePositionPlugin doc={renderContextValue?.doc ?? doc} enableNavigation={enableSourceNavigation} />
                 {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
                 {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}

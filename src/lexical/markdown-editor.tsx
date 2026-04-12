@@ -56,8 +56,7 @@ import {
   storeSelection,
   ViewportTrackingPlugin,
 } from "./editor-surface-shared";
-import { HeadingChromePlugin } from "./heading-chrome-plugin";
-import { HeadingIndexPlugin } from "./heading-index-plugin";
+import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
@@ -705,8 +704,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
                 {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}
                 {!isSourceMode && editable ? <SlashPickerPlugin /> : null}
-                {!isSourceMode ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
-                {!isSourceMode ? <HeadingIndexPlugin /> : null}
+                {!isSourceMode ? <HeadingChromeAndIndexPlugin doc={renderContextValue?.doc ?? doc} /> : null}
                 {!isSourceMode ? (
                   <SourcePositionPlugin
                     doc={renderContextValue?.doc ?? doc}
