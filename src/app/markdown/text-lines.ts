@@ -10,7 +10,15 @@ export interface TextPosition {
   readonly col: number;
 }
 
-export function getTextLines(doc: string): TextLine[] {
+// Single-entry identity cache. Callers within one operation (e.g.
+// getTextPosition + getTextLineAtOffset in the same event handler) pass
+// the same `doc` reference, so the common case is a cache hit. Keeping
+// the cache size to one avoids unbounded memory growth from long-lived
+// doc strings.
+let cachedDoc: string | null = null;
+let cachedLines: readonly TextLine[] | null = null;
+
+function computeTextLines(doc: string): readonly TextLine[] {
   const rawLines = doc.split("\n");
   const lines: TextLine[] = [];
   let offset = 0;
@@ -26,6 +34,16 @@ export function getTextLines(doc: string): TextLine[] {
     offset += text.length + 1;
   }
 
+  return lines;
+}
+
+export function getTextLines(doc: string): readonly TextLine[] {
+  if (cachedDoc === doc && cachedLines !== null) {
+    return cachedLines;
+  }
+  const lines = computeTextLines(doc);
+  cachedDoc = doc;
+  cachedLines = lines;
   return lines;
 }
 
