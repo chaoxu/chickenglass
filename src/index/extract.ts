@@ -1,10 +1,4 @@
-import { extractHeadingDefinitions } from "../app/markdown/headings";
-import {
-  buildDocumentLabelGraph,
-  extractMarkdownBlocks,
-  extractMarkdownEquations,
-} from "../app/markdown/labels";
-import { maskMarkdownCodeSpansAndBlocks } from "../app/markdown/masking";
+import { buildDocumentLabelGraph, scanDocument } from "../app/markdown/labels";
 import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
 
 export function extractFileIndex(
@@ -13,11 +7,9 @@ export function extractFileIndex(
 ): FileIndex {
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
-  const scanDoc = maskMarkdownCodeSpansAndBlocks(content);
-  const headings = extractHeadingDefinitions(content, scanDoc);
-  const blocks = extractMarkdownBlocks(content, scanDoc);
-  const equations = extractMarkdownEquations(content, scanDoc);
-  const graph = buildDocumentLabelGraph(content);
+  const scan = scanDocument(content);
+  const { headings, blocks, equations } = scan;
+  const graph = buildDocumentLabelGraph(content, scan);
 
   for (const heading of headings) {
     entries.push({

@@ -1,5 +1,4 @@
-import { extractHeadingDefinitions } from "../../app/markdown/headings";
-import { extractMarkdownBlocks, extractMarkdownEquations } from "../../app/markdown/labels";
+import { type DocumentScan, scanDocument } from "../../app/markdown/labels";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { normalizeBlockType, resolveBlockNumbering, resolveBlockTitle } from "./block-metadata";
 import { FOOTNOTE_DEFINITION_RE } from "./footnotes";
@@ -22,12 +21,16 @@ function nextCounter(counters: Map<string, number>, blockType: string): number {
   return next;
 }
 
-export function buildRenderIndex(doc: string, config?: FrontmatterConfig): RenderIndex {
+export function buildRenderIndex(
+  doc: string,
+  config?: FrontmatterConfig,
+  scan: DocumentScan = scanDocument(doc),
+): RenderIndex {
   const references = new Map<string, RenderReferenceEntry>();
   const footnotes = new Map<string, number>();
 
   let headingCounter = 0;
-  for (const heading of extractHeadingDefinitions(doc)) {
+  for (const heading of scan.headings) {
     if (!heading.id) {
       continue;
     }
@@ -40,7 +43,7 @@ export function buildRenderIndex(doc: string, config?: FrontmatterConfig): Rende
   }
 
   let equationCounter = 0;
-  for (const equation of extractMarkdownEquations(doc)) {
+  for (const equation of scan.equations) {
     if (!equation.id) {
       continue;
     }
@@ -53,7 +56,7 @@ export function buildRenderIndex(doc: string, config?: FrontmatterConfig): Rende
   }
 
   const blockCounters = new Map<string, number>();
-  for (const block of extractMarkdownBlocks(doc)) {
+  for (const block of scan.blocks) {
     if (!block.id) {
       continue;
     }
