@@ -28,10 +28,27 @@ Examples:
 `;
 }
 
+// Strip git env vars so child git calls don't inherit GIT_DIR / core.hooksPath
+// from a parent git context (e.g. when this script or its tests run inside a
+// git hook). Otherwise sub-gits try to operate on the parent repo, not on
+// the target tmp/worktree directories the script manages.
+function childEnv() {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_COMMON_DIR;
+  delete env.GIT_OBJECT_DIRECTORY;
+  delete env.GIT_NAMESPACE;
+  delete env.GIT_PREFIX;
+  return env;
+}
+
 function runCommand(command, args, cwd, check = true) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
+    env: childEnv(),
   });
 
   if (result.error) {
