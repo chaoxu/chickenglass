@@ -24,6 +24,7 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import {
   $getRoot,
+  HISTORIC_TAG,
   HISTORY_MERGE_TAG,
   type EditorUpdateOptions,
   type LexicalEditor,
@@ -557,6 +558,7 @@ export function LexicalMarkdownEditor({
       !userEditPendingRef.current
       && !tags.has(COFLAT_FORMAT_EVENT_TAG)
       && !tags.has(COFLAT_NESTED_EDIT_TAG)
+      && !tags.has(HISTORIC_TAG)
     ) {
       return;
     }
