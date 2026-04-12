@@ -95,6 +95,7 @@ import type {
 } from "./markdown-editor-types";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import { ActiveEditorPlugin } from "./active-editor-plugin";
+import { TabKeyPlugin } from "./tab-key-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 
 function SelectionAlwaysOnPlugin() {
@@ -835,6 +836,7 @@ export function LexicalRichMarkdownEditor({
                 {editable ? <InlineMathSourcePlugin /> : null}
                 {editable ? <MarkdownExpansionPlugin /> : null}
                 {editable ? <BlockKeyboardAccessPlugin /> : null}
+                {editable ? <TabKeyPlugin /> : null}
                 {editable ? <ReferenceTypeaheadPlugin /> : null}
                 {editable ? <SlashPickerPlugin /> : null}
                 {showHeadingChrome ? <HeadingChromePlugin doc={renderContextValue?.doc ?? doc} /> : null}
