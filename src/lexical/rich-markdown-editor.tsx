@@ -20,7 +20,9 @@ import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysO
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import {
+  $getRoot,
   $getSelection,
+  $isElementNode,
   $isNodeSelection,
   $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
@@ -83,6 +85,7 @@ import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
 import {
+  readSourcePositionFromLexicalSelection,
   scrollSourcePositionIntoView,
   SourcePositionPlugin,
 } from "./source-position-plugin";
@@ -353,7 +356,14 @@ function EditorHandlePlugin({
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },
       getDoc: () => getLexicalMarkdown(editor),
-      getSelection: () => selectionRef.current,
+      getSelection: () => {
+        const livePosition = readSourcePositionFromLexicalSelection(editor);
+        if (livePosition === null) {
+          return selectionRef.current;
+        }
+        const docLength = getLexicalMarkdown(editor).length;
+        return createMarkdownSelection(livePosition, livePosition, docLength);
+      },
       insertText: (text) => {
         const currentDoc = getLexicalMarkdown(editor);
         const selection = createMarkdownSelection(
@@ -406,7 +416,20 @@ function EditorHandlePlugin({
           anchor,
           focus,
         );
-        scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
+        const moved = scrollSourcePositionIntoView(
+          editor,
+          editor.getRootElement(),
+          nextSelection.from,
+        );
+        if (!moved) {
+          editor.update(() => {
+            const root = $getRoot();
+            const firstChild = root.getFirstChild();
+            if (firstChild && $isElementNode(firstChild)) {
+              firstChild.selectStart();
+            }
+          }, { discrete: true });
+        }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },
     }, editor);

@@ -3,6 +3,8 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
   $createNodeSelection,
   $getNearestNodeFromDOMNode,
+  $getSelection,
+  $isRangeSelection,
   $setSelection,
   type LexicalEditor,
 } from "lexical";
@@ -198,6 +200,51 @@ function selectNavigationTarget(
   }
 
   return didSelect;
+}
+
+function sourcePositionFromElement(element: HTMLElement | null): number | null {
+  let current: HTMLElement | null = element;
+  while (current) {
+    const sourceFrom = current.dataset.coflatSourceFrom;
+    if (sourceFrom !== undefined) {
+      const parsed = Number(sourceFrom);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (current.classList.contains("cf-lexical-heading")) {
+      const headingPos = current.dataset.coflatHeadingPos;
+      if (headingPos !== undefined) {
+        const parsed = Number(headingPos);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Read the current Lexical selection and translate it to a source-document
+ * offset using block-level position markers (`data-coflat-source-from`,
+ * `data-coflat-heading-pos`). Returns `null` if the selection cannot be
+ * mapped back to a source offset (e.g. the doc is pure prose with no
+ * tagged blocks).
+ */
+export function readSourcePositionFromLexicalSelection(
+  editor: LexicalEditor,
+): number | null {
+  return editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) {
+      return null;
+    }
+
+    const anchorElement = editor.getElementByKey(selection.anchor.getNode().getKey());
+    return sourcePositionFromElement(anchorElement);
+  });
 }
 
 export function scrollSourcePositionIntoView(
