@@ -25,7 +25,7 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
-import { renderMarkdownRichHtml } from "./rendering";
+import { renderMarkdownRichHtml } from "./markdown/rich-html-preview";
 import type { LexicalRenderContextValue } from "./render-context";
 
 export const COFLAT_MARKDOWN_MIME = "application/x-coflat-markdown";

@@ -100,55 +100,12 @@ export const BLOCK_MANIFEST = [
 export type BlockName = (typeof BLOCK_MANIFEST)[number]["name"];
 
 /**
- * Counter groups derived from the manifest.
- *
- * Maps each counter group name to the list of block names that share it.
- */
-export const COUNTER_GROUPS: Readonly<Record<string, readonly BlockName[]>> = (() => {
-  const groups: Record<string, BlockName[]> = {};
-  for (const entry of BLOCK_MANIFEST) {
-    if (entry.counterGroup) {
-      (groups[entry.counterGroup] ??= []).push(entry.name);
-    }
-  }
-  return groups;
-})();
-
-/**
  * BLOCK_MANIFEST typed as readonly BlockManifestEntry[] for property access.
  *
  * BLOCK_MANIFEST itself is inferred as a const tuple of narrow literal types,
  * so accessing optional properties like `specialBehavior` requires this alias.
  */
 export const BLOCK_MANIFEST_ENTRIES: readonly BlockManifestEntry[] = BLOCK_MANIFEST;
-
-/** @internal convenience alias used within this module */
-const entries: readonly BlockManifestEntry[] = BLOCK_MANIFEST_ENTRIES;
-
-/** Block names that use embed rendering (iframe replacement). */
-export const EMBED_CLASSES: ReadonlySet<string> = new Set(
-  entries
-    .filter((e) => e.specialBehavior === "embed")
-    .map((e) => e.name),
-);
-
-/**
- * Block names excluded from fallback plugin generation.
- *
- * These class names are handled by special-purpose code in the renderer
- * and should not get a generic "numbered block" fallback.
- */
-export const EXCLUDED_FROM_FALLBACK: ReadonlySet<string> = new Set(["include"]);
-
-/**
- * Block names that have per-type accent CSS variables and body style CSS variables.
- *
- * Excludes embed types and blockquote, which don't use the standard
- * `--cf-block-{type}-accent` / `--cf-block-{type}-style` pattern.
- */
-export const STYLED_BLOCK_NAMES: readonly string[] = entries
-  .filter((e) => e.specialBehavior !== "embed" && e.specialBehavior !== "blockquote")
-  .map((e) => e.name);
 
 /** Shared counter group name for theorem-family blocks. */
 export const THEOREM_COUNTER = "theorem";
@@ -158,9 +115,3 @@ export const DEFINITION_COUNTER = "definition";
 
 /** Counter group name for algorithm blocks. */
 export const ALGORITHM_COUNTER = "algorithm";
-
-/** Counter group name for figure blocks. */
-export const FIGURE_COUNTER = "figure";
-
-/** Counter group name for table blocks. */
-export const TABLE_COUNTER = "table";

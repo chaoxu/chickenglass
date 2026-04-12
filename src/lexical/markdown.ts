@@ -44,7 +44,7 @@ import { $createRawBlockNode, $isRawBlockNode, type RawBlockVariant, RawBlockNod
 import { $createTableCellNode, $isTableCellNode, TableCellNode } from "./nodes/table-cell-node";
 import { $createTableNode, $isTableNode, type TableColumnAlignment, TableNode } from "./nodes/table-node";
 import { $createTableRowNode, $isTableRowNode, TableRowNode } from "./nodes/table-row-node";
-import { type MarkdownTable, parseMarkdownTable, serializeMarkdownTable } from "./rendering";
+import { type MarkdownTable, parseMarkdownTable, serializeMarkdownTable } from "./markdown/table-markdown";
 
 const FRONTMATTER_DELIMITER = /^---\s*$/;
 const FENCED_DIV_START = /^\s*(:{3,})(.*)$/;
@@ -633,18 +633,3 @@ export function roundTripMarkdown(markdown: string): string {
   return getLexicalMarkdown(editor);
 }
 
-export const coflatCustomTransformers = [
-  frontmatterTransformer,
-  fencedDivTransformer,
-  displayMathDollarTransformer,
-  displayMathBracketTransformer,
-  imageBlockTransformer,
-  tableBlockTransformer,
-  footnoteDefinitionTransformer,
-  inlineMathDollarTransformer,
-  inlineMathParenTransformer,
-  inlineImageTransformer,
-  bracketedReferenceTransformer,
-  footnoteReferenceTransformer,
-  narrativeReferenceTransformer,
-] satisfies readonly (ElementTransformer | MultilineElementTransformer | TextMatchTransformer)[];

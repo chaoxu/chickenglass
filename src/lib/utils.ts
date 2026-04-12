@@ -17,35 +17,6 @@ export function cn(...inputs: ClassValue[]): string {
 }
 
 /**
- * Return `s` with its first character uppercased.
- *
- * Used to derive display titles from plugin/block class names.
- */
-export function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/**
- * Copy the listed keys from `value`, omitting entries whose value is `undefined`.
- *
- * Useful when building typed config objects where `undefined` should mean
- * "inherit/default" rather than "present with no value".
- */
-export function pickDefined<T extends object, K extends keyof T>(
-  value: T,
-  keys: readonly K[],
-): Partial<Pick<T, K>> {
-  const result: Partial<Pick<T, K>> = {};
-  for (const key of keys) {
-    const entry = value[key];
-    if (entry !== undefined) {
-      result[key] = entry;
-    }
-  }
-  return result;
-}
-
-/**
  * Extract the last segment of a file path (the filename).
  *
  * Handles both forward-slash (Unix) and backslash (Windows) separators.
