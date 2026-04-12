@@ -1,4 +1,8 @@
-import { buildDocumentLabelGraph, type DocumentLabelGraph } from "../../app/markdown/labels";
+import {
+  buildDocumentLabelGraph,
+  type DocumentLabelGraph,
+  scanDocument,
+} from "../../app/markdown/labels";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { parseFrontmatter } from "../../lib/frontmatter";
 import { type ProjectConfig, mergeConfigs } from "../../project-config";
@@ -21,12 +25,13 @@ export function buildDocumentRuntime(
 ): LexicalDocumentRuntime {
   const frontmatter = parseFrontmatter(doc);
   const config = mergeConfigs(projectConfig, frontmatter.config);
+  const scan = scanDocument(doc);
 
   return {
     config,
     footnoteDefinitions: buildFootnoteDefinitionMap(doc),
-    labelGraph: buildDocumentLabelGraph(doc),
-    renderIndex: buildRenderIndex(doc, config),
+    labelGraph: buildDocumentLabelGraph(doc, scan),
+    renderIndex: buildRenderIndex(doc, config, scan),
     resolveAssetUrl: resolver.resolveAssetUrl,
   };
 }

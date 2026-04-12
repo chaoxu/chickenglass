@@ -1,4 +1,4 @@
-import { extractHeadingDefinitions } from "./headings";
+import { extractHeadingDefinitions, type HeadingDefinition } from "./headings";
 import { maskMarkdownCodeSpansAndBlocks } from "./masking";
 import { getTextLineAtOffset, getTextLines } from "./text-lines";
 
@@ -502,11 +502,28 @@ function indexReferencesByTarget(
   return referencesByTarget;
 }
 
-export function buildDocumentLabelGraph(doc: string): DocumentLabelGraph {
+export interface DocumentScan {
+  readonly scanDoc: string;
+  readonly headings: readonly HeadingDefinition[];
+  readonly blocks: readonly MarkdownBlock[];
+  readonly equations: readonly MarkdownEquation[];
+}
+
+export function scanDocument(doc: string): DocumentScan {
   const scanDoc = maskMarkdownCodeSpansAndBlocks(doc);
-  const headings = extractHeadingDefinitions(doc, scanDoc);
-  const blocks = extractMarkdownBlocks(doc, scanDoc);
-  const equations = extractMarkdownEquations(doc, scanDoc);
+  return {
+    scanDoc,
+    headings: extractHeadingDefinitions(doc, scanDoc),
+    blocks: extractMarkdownBlocks(doc, scanDoc),
+    equations: extractMarkdownEquations(doc, scanDoc),
+  };
+}
+
+export function buildDocumentLabelGraph(
+  doc: string,
+  scan: DocumentScan = scanDocument(doc),
+): DocumentLabelGraph {
+  const { scanDoc, headings, blocks, equations } = scan;
 
   const definitions: DocumentLabelDefinition[] = [];
 
