@@ -28,7 +28,37 @@ describe("syncHeadingChrome", () => {
     const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading")];
     expect(headings[0].dataset.coflatHeadingNumber).toBe("1");
     expect(headings[1].dataset.coflatHeadingNumber).toBeUndefined();
-    expect(headings[1].textContent).toBe("Aside");
     expect(headings[2].dataset.coflatHeadingNumber).toBe("1.1");
+  });
+
+  it("leaves heading text content untouched (issue #98)", () => {
+    // Regression: mutating the rendered text of a Lexical heading (to hide the
+    // Pandoc attribute suffix) caused Lexical's MutationObserver to push the
+    // stripped text back into state on the next keystroke, silently dropping
+    // authored `{-}` / `{.unnumbered}` / `{#id}` blocks.
+    document.body.innerHTML = `
+      <div id="root">
+        <h1 class="cf-lexical-heading">Appendix {-}</h1>
+        <h2 class="cf-lexical-heading">Methods {.unnumbered}</h2>
+        <h3 class="cf-lexical-heading">Notes {#sec:notes}</h3>
+      </div>
+    `;
+    const root = document.getElementById("root");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("missing root");
+    }
+
+    syncHeadingChrome(root, [
+      "# Appendix {-}",
+      "",
+      "## Methods {.unnumbered}",
+      "",
+      "### Notes {#sec:notes}",
+    ].join("\n"));
+
+    const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading")];
+    expect(headings[0].textContent).toBe("Appendix {-}");
+    expect(headings[1].textContent).toBe("Methods {.unnumbered}");
+    expect(headings[2].textContent).toBe("Notes {#sec:notes}");
   });
 });

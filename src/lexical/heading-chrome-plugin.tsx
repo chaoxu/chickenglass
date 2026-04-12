@@ -3,6 +3,14 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 
 import { extractHeadingDefinitions } from "../app/markdown/headings";
 
+// NOTE: This plugin must never mutate the Text node contents under a heading
+// element. Lexical reconciles from its internal state into the DOM, and its
+// MutationObserver reads DOM text back into state. Stripping the Pandoc
+// attribute suffix from the rendered text causes the next keystroke to push
+// the stripped text back into the Lexical TextNode, silently losing the
+// authored `{-}` / `{.unnumbered}` / `{#id}` attribute block (issue #98).
+// Only set data-* attributes here; visual treatment of the attribute suffix
+// belongs to CSS.
 export function syncHeadingChrome(root: HTMLElement | null, doc: string): void {
   if (!root) {
     return;
@@ -26,28 +34,6 @@ export function syncHeadingChrome(root: HTMLElement | null, doc: string): void {
     if (heading.number) {
       element.dataset.coflatHeadingNumber = heading.number;
     }
-
-    if (!heading.attrs) {
-      return;
-    }
-
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    let lastText: Text | null = null;
-    let current = walker.nextNode();
-    while (current) {
-      if (current instanceof Text) {
-        lastText = current;
-      }
-      current = walker.nextNode();
-    }
-
-    if (!lastText || !lastText.textContent?.endsWith(heading.attrs)) {
-      return;
-    }
-
-    lastText.textContent = lastText.textContent
-      .slice(0, lastText.textContent.length - heading.attrs.length)
-      .trimEnd();
   });
 }
 
