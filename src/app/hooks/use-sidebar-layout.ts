@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 export type SidebarTab = "files" | "outline" | "diagnostics" | "runtime";
 
@@ -19,7 +19,7 @@ export function useSidebarLayout(): SidebarLayoutController {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
 
-  return {
+  return useMemo(() => ({
     sidebarCollapsed,
     setSidebarCollapsed,
     sidebarWidth,
@@ -28,5 +28,5 @@ export function useSidebarLayout(): SidebarLayoutController {
     setSidebarTab,
     sidenotesCollapsed,
     setSidenotesCollapsed,
-  };
+  }), [sidebarCollapsed, sidebarWidth, sidebarTab, sidenotesCollapsed]);
 }
