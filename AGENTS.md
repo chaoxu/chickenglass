@@ -133,6 +133,22 @@ Manual CDP lane:
 
 Do not use the Playwright MCP plugin for this repo.
 
+### Script purposes
+
+- `scripts/test-regression.mjs` — main `pnpm test:browser` entry; auto-loads
+  every file under `scripts/regression-tests/` and runs them against a live
+  dev server.
+- `scripts/test-chrome.mjs` (`pnpm chrome:test`) — standalone Chromium connect
+  probe that verifies the `pnpm chrome` CDP lane is reachable and takes a
+  screenshot. Use when diagnosing the manual CDP lane, not as part of the
+  regression suite.
+- `scripts/smoke-editor-package.mjs` (`pnpm smoke:editor-package`) — packs and
+  installs `dist/` into a throwaway consumer project to verify the shipped
+  `coflat/editor` export is importable with no relative `src/` leakage. Run
+  before cutting an editor-package release.
+- `scripts/browser-repro.mjs` — capture/replay/diff CDP session recorder; see
+  `docs/verification-workflows.md`.
+
 ## Perf benchmarking
 
 - Use `scripts/perf-regression.mjs`

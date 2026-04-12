@@ -482,9 +482,20 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   };
 }
 
-export async function openRegressionDocument(page, path = "index.md") {
-  const opened = await openFixtureDocument(page, path, { project: "full-project" });
+export async function openRegressionDocument(page, path = "index.md", options = {}) {
+  const opened = await openFixtureDocument(page, path, { project: "full-project", ...options });
   return opened.virtualPath;
+}
+
+/**
+ * Open a regression document and wait an extra ~500ms for secondary indexing
+ * passes (headings/tables/cross-refs) to settle. Prefer this over an inline
+ * `waitForTimeout(500)` in regression tests that read post-load render state.
+ */
+export async function openAndSettleRegressionDocument(page, path = "index.md", options = {}) {
+  const virtualPath = await openRegressionDocument(page, path, options);
+  await sleep(500);
+  return virtualPath;
 }
 
 export async function findLine(page, needle) {
