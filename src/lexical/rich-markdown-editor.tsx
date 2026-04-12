@@ -29,6 +29,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   COPY_COMMAND,
   CUT_COMMAND,
+  HISTORIC_TAG,
   HISTORY_MERGE_TAG,
   PASTE_COMMAND,
   PASTE_TAG,
@@ -496,6 +497,7 @@ export function LexicalRichMarkdownEditor({
       && !userEditPendingRef.current
       && !tags.has(COFLAT_FORMAT_EVENT_TAG)
       && !tags.has(COFLAT_NESTED_EDIT_TAG)
+      && !tags.has(HISTORIC_TAG)
     ) {
       return;
     }
