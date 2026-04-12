@@ -479,13 +479,27 @@ function MarkdownModeSyncPlugin({
     lastCommittedDocRef.current = nextDoc;
     userEditPendingRef.current = false;
     appliedModeRef.current = editorMode;
-
-    if (editorMode === "source") {
-      replaceSourceText(editor, nextDoc, nextSelection, syncOptions);
-    } else {
-      setLexicalMarkdown(editor, nextDoc, syncOptions);
-    }
     pendingLocalEchoDocRef.current = null;
+
+    // Defer the editor update to a microtask so the discrete commit (and the
+    // `flushSync(setDecorators)` call inside Lexical's decorator listener) runs
+    // AFTER React's current commit phase finishes. Committing during the
+    // effect phase triggers React 19's "flushSync was called from inside a
+    // lifecycle method" warning.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      if (editorMode === "source") {
+        replaceSourceText(editor, nextDoc, nextSelection, syncOptions);
+      } else {
+        setLexicalMarkdown(editor, nextDoc, syncOptions);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [doc, editor, editorMode, lastCommittedDocRef, pendingLocalEchoDocRef, selectionRef, userEditPendingRef]);
 
   return null;
