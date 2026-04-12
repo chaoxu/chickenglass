@@ -25,7 +25,6 @@ import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysO
 import {
   $getRoot,
   HISTORY_MERGE_TAG,
-  FORMAT_TEXT_COMMAND,
   type EditorUpdateOptions,
   type LexicalEditor,
 } from "lexical";
@@ -48,6 +47,15 @@ import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
+import {
+  createMarkdownSelection,
+  EditableSyncPlugin,
+  FormatEventPlugin,
+  repairBlankClickSelection,
+  RootElementPlugin,
+  storeSelection,
+  ViewportTrackingPlugin,
+} from "./editor-surface-shared";
 import { HeadingChromePlugin } from "./heading-chrome-plugin";
 import { HeadingIndexPlugin } from "./heading-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
@@ -83,50 +91,9 @@ import {
 import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import { useDevSettings } from "../app/dev-settings";
 
 const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
-
-function getViewportFromRichSurface(root: HTMLElement): number {
-  const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
-  if (headings.length === 0) {
-    return 0;
-  }
-
-  const threshold = root.getBoundingClientRect().top + 24;
-  let active = 0;
-
-  for (const heading of headings) {
-    const pos = Number(heading.dataset.coflatHeadingPos ?? "");
-    if (!Number.isFinite(pos)) {
-      continue;
-    }
-
-    if (heading.getBoundingClientRect().top <= threshold) {
-      active = pos;
-      continue;
-    }
-
-    break;
-  }
-
-  return active;
-}
-
-function hasEditableTextSelection(root: HTMLElement): boolean {
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed) {
-    return false;
-  }
-
-  const anchorNode = selection.anchorNode;
-  const anchorElement = anchorNode instanceof Element
-    ? anchorNode
-    : anchorNode?.parentElement;
-  const textLeaf = anchorElement?.closest("[data-lexical-text='true']");
-  return Boolean(textLeaf && root.contains(textLeaf));
-}
 
 function ClickCaretRepairPlugin({
   enabled,
@@ -179,98 +146,6 @@ function ClickCaretRepairPlugin({
   return null;
 }
 
-function EditableSyncPlugin({
-  editable,
-}: {
-  readonly editable: boolean;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    editor.setEditable(editable);
-  }, [editable, editor]);
-
-  return null;
-}
-
-function isInlineTextFormatEvent(
-  detail: FormatEventDetail,
-): detail is Extract<FormatEventDetail, { type: "bold" | "code" | "highlight" | "italic" | "strikethrough" }> {
-  return detail.type === "bold"
-    || detail.type === "code"
-    || detail.type === "highlight"
-    || detail.type === "italic"
-    || detail.type === "strikethrough";
-}
-
-function editorOwnsActiveSelection(root: HTMLElement | null): boolean {
-  if (!root) {
-    return false;
-  }
-
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || !selection.anchorNode || !selection.focusNode) {
-    return false;
-  }
-
-  const activeElement = document.activeElement;
-  return root.contains(selection.anchorNode)
-    && root.contains(selection.focusNode)
-    && !!activeElement
-    && (activeElement === root || root.contains(activeElement));
-}
-
-function FormatEventPlugin() {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    const handleFormat = (event: Event) => {
-      const detail = (event as CustomEvent<FormatEventDetail>).detail;
-      if (!isInlineTextFormatEvent(detail)) {
-        return;
-      }
-
-      const root = editor.getRootElement();
-      if (!editorOwnsActiveSelection(root)) {
-        return;
-      }
-
-      editor.update(() => {
-        editor.dispatchCommand(FORMAT_TEXT_COMMAND, detail.type);
-      }, {
-        discrete: true,
-        tag: COFLAT_FORMAT_EVENT_TAG,
-      });
-    };
-
-    document.addEventListener(FORMAT_EVENT, handleFormat);
-    return () => {
-      document.removeEventListener(FORMAT_EVENT, handleFormat);
-    };
-  }, [editor]);
-
-  return null;
-}
-
-function clampOffset(offset: number, docLength: number): number {
-  return Math.max(0, Math.min(offset, docLength));
-}
-
-function createMarkdownSelection(
-  anchor: number,
-  focus = anchor,
-  docLength = Number.MAX_SAFE_INTEGER,
-): MarkdownEditorSelection {
-  const nextAnchor = clampOffset(anchor, docLength);
-  const nextFocus = clampOffset(focus, docLength);
-  return {
-    anchor: nextAnchor,
-    focus: nextFocus,
-    from: Math.min(nextAnchor, nextFocus),
-    to: Math.max(nextAnchor, nextFocus),
-  };
-}
-
 function sameSelection(left: MarkdownEditorSelection, right: MarkdownEditorSelection): boolean {
   return (
     left.anchor === right.anchor
@@ -278,19 +153,6 @@ function sameSelection(left: MarkdownEditorSelection, right: MarkdownEditorSelec
     && left.from === right.from
     && left.to === right.to
   );
-}
-
-function storeSelection(
-  selectionRef: MutableRefObject<MarkdownEditorSelection>,
-  docLength: number,
-  onSelectionChange: ((selection: MarkdownEditorSelection) => void) | undefined,
-  anchor: number,
-  focus = anchor,
-): MarkdownEditorSelection {
-  const nextSelection = createMarkdownSelection(anchor, focus, docLength);
-  selectionRef.current = nextSelection;
-  onSelectionChange?.(nextSelection);
-  return nextSelection;
 }
 
 function replaceSourceText(
@@ -312,78 +174,6 @@ function readEditorDocument(editor: LexicalEditor, editorMode: EditorMode): stri
   return editorMode === "source"
     ? getSourceText(editor)
     : getLexicalMarkdown(editor);
-}
-
-function ViewportTrackingPlugin({
-  onViewportFromChange,
-}: {
-  readonly onViewportFromChange?: (from: number) => void;
-}) {
-  const [editor] = useLexicalComposerContext();
-  const surface = useEditorScrollSurface();
-
-  useEffect(() => {
-    if (!onViewportFromChange || !surface || typeof window === "undefined") {
-      return;
-    }
-
-    let frame = 0;
-
-    const sync = () => {
-      if (frame !== 0) {
-        cancelAnimationFrame(frame);
-      }
-
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const root = editor.getRootElement();
-        if (!root) {
-          return;
-        }
-        onViewportFromChange(getViewportFromRichSurface(root));
-      });
-    };
-
-    const unregisterUpdate = editor.registerUpdateListener(() => {
-      sync();
-    });
-
-    surface.addEventListener("scroll", sync, { passive: true });
-    window.addEventListener("resize", sync);
-    sync();
-
-    return () => {
-      if (frame !== 0) {
-        cancelAnimationFrame(frame);
-      }
-      surface.removeEventListener("scroll", sync);
-      window.removeEventListener("resize", sync);
-      unregisterUpdate();
-    };
-  }, [editor, onViewportFromChange, surface]);
-
-  return null;
-}
-
-function RootElementPlugin({
-  onRootElementChange,
-}: {
-  readonly onRootElementChange?: (root: HTMLElement | null) => void;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    if (!onRootElementChange) {
-      return;
-    }
-
-    onRootElementChange(editor.getRootElement());
-    return editor.registerRootListener((rootElement) => {
-      onRootElementChange(rootElement);
-    });
-  }, [editor, onRootElementChange]);
-
-  return null;
 }
 
 function SourceSelectionPlugin({
@@ -633,23 +423,6 @@ function EditorHandlePlugin({
   }, [editor, editorModeRef, focusOwnerRef, onEditorReady, onSelectionChange, selectionRef, userEditPendingRef]);
 
   return null;
-}
-
-function repairBlankClickSelection(root: HTMLElement, event: ReactMouseEvent): void {
-  if (hasEditableTextSelection(root)) {
-    return;
-  }
-
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  const range = document.caretRangeFromPoint(event.clientX, event.clientY);
-  if (range && root.contains(range.startContainer)) {
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
 }
 
 export interface LexicalMarkdownEditorProps {
