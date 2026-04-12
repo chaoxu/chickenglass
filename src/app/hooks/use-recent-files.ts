@@ -58,36 +58,43 @@ export function useRecentFiles(
     [recentFileEntries],
   );
 
+  const reloadFiles = useCallback(() => {
+    setAllRecentFileEntries(getRecentFileEntries());
+  }, []);
+  const reloadFolders = useCallback(() => {
+    setRecentFolders(getRecentFolders());
+  }, []);
+
   const addRecentFile = useCallback((path: string) => {
     recordRecentFile(path, currentProjectRoot);
-    setAllRecentFileEntries(getRecentFileEntries());
-  }, [currentProjectRoot]);
+    reloadFiles();
+  }, [currentProjectRoot, reloadFiles]);
 
   const addRecentFolder = useCallback((path: string) => {
     recordRecentFolder(path);
-    setRecentFolders(getRecentFolders());
-  }, []);
+    reloadFolders();
+  }, [reloadFolders]);
 
   const removeRecentFileForCurrentProject = useCallback((path: string) => {
     removeRecentFile(path, currentProjectRoot);
-    setAllRecentFileEntries(getRecentFileEntries());
-  }, [currentProjectRoot]);
+    reloadFiles();
+  }, [currentProjectRoot, reloadFiles]);
 
   const removeRecent = useCallback((path: string) => {
     removeRecentEntry(path);
-    setAllRecentFileEntries(getRecentFileEntries());
-    setRecentFolders(getRecentFolders());
-  }, []);
+    reloadFiles();
+    reloadFolders();
+  }, [reloadFiles, reloadFolders]);
 
   const clearFiles = useCallback(() => {
     clearRecentFiles();
-    setAllRecentFileEntries(getRecentFileEntries());
-  }, []);
+    reloadFiles();
+  }, [reloadFiles]);
 
   const clearFolders = useCallback(() => {
     clearRecentFolders();
-    setRecentFolders(getRecentFolders());
-  }, []);
+    reloadFolders();
+  }, [reloadFolders]);
 
   return {
     recentFiles,

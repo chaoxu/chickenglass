@@ -58,6 +58,5 @@ export function useDialogs(): UseDialogsReturn {
     closeAbout,
     closeShortcuts,
     closeGotoLine,
-  }), [paletteOpen, searchOpen, settingsOpen, aboutOpen, shortcutsOpen, gotoLineOpen,
-       closeAbout, closeShortcuts, closeGotoLine]);
+  }), [paletteOpen, searchOpen, settingsOpen, aboutOpen, shortcutsOpen, gotoLineOpen]);
 }

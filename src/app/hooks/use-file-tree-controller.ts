@@ -327,7 +327,12 @@ export function useFileTreeController({
     () => persistRef?.current.treeState ?? { expandedItems: [], focusedItem: null },
   );
 
-  onSelectRef.current = onSelect;
+  // Sync onSelect into a ref so headless-tree callbacks stay stable while
+  // still dispatching to the latest handler. Written in an effect to avoid
+  // tearing if a render is torn/aborted before commit.
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   // Sync state back to the persist ref on every change so it survives unmount.
   useEffect(() => {

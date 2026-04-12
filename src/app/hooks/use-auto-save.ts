@@ -96,9 +96,14 @@ export function useAutoSave(
       clearPendingEventSave();
     };
 
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
+    const listeners: readonly [EventTarget, string, EventListener][] = [
+      [window, "blur", handleBlur],
+      [window, "focus", handleFocus],
+      [document, "visibilitychange", handleVisibility],
+    ];
+    for (const [target, event, handler] of listeners) {
+      target.addEventListener(event, handler);
+    }
 
     // Periodic timer. Disabled when interval <= 0.
     let timerId: ReturnType<typeof setInterval> | null = null;
@@ -107,9 +112,9 @@ export function useAutoSave(
     }
 
     return () => {
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      for (const [target, event, handler] of listeners) {
+        target.removeEventListener(event, handler);
+      }
       clearPendingEventSave();
       if (timerId !== null) clearInterval(timerId);
     };
