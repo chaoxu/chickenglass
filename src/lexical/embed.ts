@@ -1,4 +1,4 @@
-export function isValidEmbedUrl(url: string): boolean {
+function isValidEmbedUrl(url: string): boolean {
   const trimmed = url.trim();
   try {
     const parsed = new URL(trimmed);
@@ -8,7 +8,7 @@ export function isValidEmbedUrl(url: string): boolean {
   }
 }
 
-export function extractYoutubeId(url: string): string | undefined {
+function extractYoutubeId(url: string): string | undefined {
   const trimmed = url.trim();
   try {
     const parsed = new URL(trimmed);
@@ -39,11 +39,11 @@ export function extractYoutubeId(url: string): string | undefined {
   return undefined;
 }
 
-export function youtubeEmbedUrl(videoId: string): string {
+function youtubeEmbedUrl(videoId: string): string {
   return `https://www.youtube.com/embed/${videoId}`;
 }
 
-export function gistEmbedUrl(url: string): string {
+function gistEmbedUrl(url: string): string {
   const trimmed = url.trim();
   if (trimmed.endsWith(".pibb")) {
     return trimmed;

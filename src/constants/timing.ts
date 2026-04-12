@@ -35,14 +35,6 @@ export const HOVER_DELAY_MS = 300;
 export const IFRAME_POLL_INTERVAL_MS = 500;
 
 /**
- * Maximum number of poll attempts when waiting for an embed iframe to load.
- * 10 attempts × 500 ms = 5 s total timeout. After this point the embed is
- * considered failed and the placeholder is left in place rather than retrying
- * indefinitely.
- */
-export const IFRAME_MAX_ATTEMPTS = 10;
-
-/**
  * Duration (ms) the copy-success checkmark is shown before reverting to the
  * copy icon. 1500 ms is long enough to register visually without disrupting
  * workflow.

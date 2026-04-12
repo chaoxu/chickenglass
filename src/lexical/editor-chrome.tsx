@@ -21,27 +21,6 @@ export function EditorChromePanel({
   );
 }
 
-export function EditorChromeHeader({
-  hint,
-  title,
-}: {
-  readonly hint?: React.ReactNode;
-  readonly title: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-[var(--cf-border)] px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--cf-muted)]">
-        {title}
-      </div>
-      {hint ? (
-        <div className="text-[10px] text-[var(--cf-muted)]">
-          {hint}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function EditorChromeBody({
   children,
   className,

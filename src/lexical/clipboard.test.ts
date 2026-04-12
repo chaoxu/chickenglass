@@ -26,7 +26,7 @@ import {
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
-import { buildRenderIndex } from "./rendering";
+import { buildRenderIndex } from "./markdown/reference-index";
 
 function createRenderContext(doc: string): ClipboardRenderContext {
   return {

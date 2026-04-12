@@ -6,7 +6,7 @@ export const modKey = isMac ? "Cmd" : "Ctrl";
 // ── Re-exports from canonical shared location ───────────────────────────────
 // Framework-free utils now live in `src/lib/utils.ts`. Re-exported here for
 // backward compatibility so existing `app/` imports continue to work.
-export { cn, capitalize, basename, dirname, uint8ArrayToBase64, base64ToUint8Array } from "../../lib/utils";
+export { cn, basename, dirname, uint8ArrayToBase64, base64ToUint8Array } from "../../lib/utils";
 
 /**
  * Read a JSON value from localStorage, returning `fallback` on any error.

@@ -4,7 +4,8 @@ import { MemoryFileSystem } from "../app/file-manager";
 import { buildDocumentLabelGraph } from "../app/markdown/labels";
 import { createReferencePreviewBuilder } from "./hover-preview-plugin";
 import type { LexicalRenderContextValue } from "./render-context";
-import { buildFootnoteDefinitionMap, buildRenderIndex } from "./rendering";
+import { buildFootnoteDefinitionMap } from "./markdown/footnotes";
+import { buildRenderIndex } from "./markdown/reference-index";
 
 function createRenderContext(doc: string): LexicalRenderContextValue {
   return {
