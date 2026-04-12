@@ -52,8 +52,7 @@ export function EditorPane({
     const counts = computeLiveStats(doc);
     const telemetry = useEditorTelemetryStore.getState();
     telemetry.setLiveCounts(counts.words, counts.chars);
-    telemetry.setScroll(0, 0);
-    telemetry.setCursorPos(0, doc);
+    telemetry.setTelemetry({ scrollTop: 0, viewportFrom: 0, cursorPos: 0, doc });
   }, [doc]);
 
   const headings = useHeadingIndex((s) => s.headings);
@@ -68,9 +67,11 @@ export function EditorPane({
   }, [diagnostics, onDiagnosticsChange]);
 
   const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
-    const telemetry = useEditorTelemetryStore.getState();
-    telemetry.setCursorPos(selection.focus, liveDocRef.current);
-    telemetry.setScroll(telemetry.scrollTop, selection.from);
+    useEditorTelemetryStore.getState().setTelemetry({
+      cursorPos: selection.focus,
+      doc: liveDocRef.current,
+      viewportFrom: selection.from,
+    });
   }, []);
 
   const handleTextChange = useCallback((nextDoc: string) => {
@@ -81,13 +82,11 @@ export function EditorPane({
   }, []);
 
   const handleScrollChange = useCallback((scrollTop: number) => {
-    const telemetry = useEditorTelemetryStore.getState();
-    telemetry.setScroll(scrollTop, telemetry.viewportFrom);
+    useEditorTelemetryStore.getState().setTelemetry({ scrollTop });
   }, []);
 
   const handleViewportFromChange = useCallback((from: number) => {
-    const telemetry = useEditorTelemetryStore.getState();
-    telemetry.setScroll(telemetry.scrollTop, from);
+    useEditorTelemetryStore.getState().setTelemetry({ viewportFrom: from });
   }, []);
 
   const handleRichRootElementChange = useCallback((root: HTMLElement | null) => {

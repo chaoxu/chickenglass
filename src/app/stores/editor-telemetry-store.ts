@@ -32,11 +32,23 @@ export interface EditorTelemetryState {
   charCount: number;
 }
 
+/**
+ * Partial telemetry update. Any subset of fields may be provided.
+ *
+ * `cursorPos` requires a `doc` to resolve line/column. Callers pass the live
+ * doc alongside; the store derives `cursorLine` / `cursorCol` atomically so
+ * subscribers never observe a stale line/col against a fresh `cursorPos`.
+ */
+export interface EditorTelemetryUpdate {
+  readonly cursorPos?: number;
+  readonly doc?: string;
+  readonly scrollTop?: number;
+  readonly viewportFrom?: number;
+}
+
 interface EditorTelemetryActions {
-  /** Update cursor position and derive line/col from the view. */
-  setCursorPos: (pos: number, doc: string) => void;
-  /** Update scroll metrics. */
-  setScroll: (top: number, from: number) => void;
+  /** Apply a partial telemetry update in a single store write. */
+  setTelemetry: (update: EditorTelemetryUpdate) => void;
   /** Update word and character counts together. */
   setLiveCounts: (words: number, chars: number) => void;
   /** Reset all telemetry (e.g. when the editor is destroyed / tab switches). */
@@ -57,28 +69,44 @@ const initialState: EditorTelemetryState = {
   charCount: 0,
 };
 
+function resolveCursorLineCol(
+  pos: number,
+  doc: string,
+): { line: number; col: number } {
+  try {
+    const resolved = getTextPosition(doc, pos);
+    return { line: resolved.line, col: resolved.col };
+  } catch {
+    // Stale offset after doc change — use defaults.
+    return { line: 1, col: 1 };
+  }
+}
+
 // ── Store ───────────────────────────────────────────────────────────────────
 
 export const useEditorTelemetryStore = create<EditorTelemetryStore>()(
   (set) => ({
     ...initialState,
 
-    setCursorPos: (pos: number, doc: string) => {
-      try {
-        const line = getTextPosition(doc, pos);
-        set({
-          cursorPos: pos,
-          cursorLine: line.line,
-          cursorCol: line.col,
-        });
-      } catch {
-        // Stale offset after doc change — use defaults.
-        set({ cursorPos: pos, cursorLine: 1, cursorCol: 1 });
+    setTelemetry: ({ cursorPos, doc, scrollTop, viewportFrom }) => {
+      const next: Partial<EditorTelemetryState> = {};
+      if (cursorPos !== undefined) {
+        next.cursorPos = cursorPos;
+        if (doc !== undefined) {
+          const { line, col } = resolveCursorLineCol(cursorPos, doc);
+          next.cursorLine = line;
+          next.cursorCol = col;
+        }
       }
-    },
-
-    setScroll: (top: number, from: number) => {
-      set({ scrollTop: top, viewportFrom: from });
+      if (scrollTop !== undefined) {
+        next.scrollTop = scrollTop;
+      }
+      if (viewportFrom !== undefined) {
+        next.viewportFrom = viewportFrom;
+      }
+      if (Object.keys(next).length > 0) {
+        set(next);
+      }
     },
 
     setLiveCounts: (words: number, chars: number) => {
