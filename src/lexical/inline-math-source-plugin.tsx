@@ -174,9 +174,28 @@ export function InlineMathSourcePlugin() {
     if (!input) {
       return;
     }
-    input.focus({ preventScroll: true });
+
     const caret = editing.entrySide === "start" ? 0 : input.value.length;
-    input.setSelectionRange(caret, caret);
+
+    const applyFocus = () => {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(caret, caret);
+    };
+
+    applyFocus();
+
+    // Lexical's CLICK_COMMAND reconciliation may call root.focus() as part of
+    // selection sync, clobbering the input focus. Re-apply on the next frame
+    // to win the race against that reconciliation pass.
+    const rafId = requestAnimationFrame(() => {
+      if (document.activeElement !== input) {
+        applyFocus();
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
   }, [editing]);
 
   useEffect(() => {
