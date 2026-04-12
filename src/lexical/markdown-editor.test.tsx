@@ -163,3 +163,67 @@ describe("LexicalMarkdownEditor history", () => {
     }
   });
 });
+
+describe("LexicalMarkdownEditor mode round-trip (issue #99)", () => {
+  // Representative Pandoc-flavored fixture covering the shapes the bug
+  // report flagged as dropped: YAML frontmatter, attributed headings, bullet
+  // lists. Source mode stores the text verbatim in a CodeBlockNode, so its
+  // `getDoc()` returns an exact byte-for-byte copy — this is the lossless
+  // side of the mode pair we assert against. The lexical-side serializer
+  // (`getLexicalMarkdown`) is lossy for these shapes; the fix in
+  // MarkdownModeSyncPlugin avoids routing through it on a pure mode toggle,
+  // so the text that lands in source mode after a rich → source switch is
+  // the canonical committed doc, not the lossy re-serialization.
+  const FIXTURE = [
+    "---",
+    "title: Round Trip",
+    "---",
+    "",
+    "# Intro {-}",
+    "",
+    "Body paragraph.",
+    "",
+    "- one",
+    "- two",
+    "- three",
+    "",
+    "## Methods {.unnumbered}",
+    "",
+    "More **bold** text.",
+    "",
+  ].join("\n");
+
+  it("keeps canonical doc text when switching rich → source with no edits", async () => {
+    const editor = await mountEditor({ doc: FIXTURE, editorMode: "lexical" });
+
+    try {
+      act(() => {
+        editor.rerender({ doc: FIXTURE, editorMode: "source" });
+      });
+      await waitFor(() => expect(editor.handle.getDoc()).toBe(FIXTURE));
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("keeps canonical doc text on rich → source → rich → source round-trip", async () => {
+    const editor = await mountEditor({ doc: FIXTURE, editorMode: "lexical" });
+
+    try {
+      act(() => {
+        editor.rerender({ doc: FIXTURE, editorMode: "source" });
+      });
+      await waitFor(() => expect(editor.handle.getDoc()).toBe(FIXTURE));
+
+      act(() => {
+        editor.rerender({ doc: FIXTURE, editorMode: "lexical" });
+      });
+      act(() => {
+        editor.rerender({ doc: FIXTURE, editorMode: "source" });
+      });
+      await waitFor(() => expect(editor.handle.getDoc()).toBe(FIXTURE));
+    } finally {
+      editor.unmount();
+    }
+  });
+});
