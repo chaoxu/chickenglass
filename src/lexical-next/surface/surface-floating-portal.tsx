@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { autoUpdate, computePosition, flip, offset, shift, type Placement } from "@floating-ui/dom";
+import { autoUpdate, computePosition, flip, hide, offset, shift, type Placement } from "@floating-ui/dom";
 
 import { useEditorScrollSurface } from "./editor-scroll-surface";
 
@@ -9,6 +9,7 @@ export interface SurfaceFloatingPortalProps {
   readonly children: ReactNode;
   readonly className?: string;
   readonly offsetPx?: number;
+  readonly onAnchorLost?: () => void;
   readonly placement?: Placement;
   readonly shiftPaddingPx?: number;
   readonly style?: CSSProperties;
@@ -21,6 +22,7 @@ export function SurfaceFloatingPortal({
   children,
   className,
   offsetPx = 6,
+  onAnchorLost,
   placement = "bottom-start",
   shiftPaddingPx = 5,
   style,
@@ -29,6 +31,11 @@ export function SurfaceFloatingPortal({
 }: SurfaceFloatingPortalProps) {
   const surface = useEditorScrollSurface();
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const onAnchorLostRef = useRef(onAnchorLost);
+
+  useEffect(() => {
+    onAnchorLostRef.current = onAnchorLost;
+  }, [onAnchorLost]);
 
   useEffect(() => {
     const tooltip = tooltipRef.current;
@@ -38,14 +45,17 @@ export function SurfaceFloatingPortal({
 
     return autoUpdate(anchor, tooltip, () => {
       void computePosition(anchor, tooltip, {
-        middleware: [offset(offsetPx), flip(), shift({ padding: shiftPaddingPx })],
+        middleware: [offset(offsetPx), flip(), shift({ padding: shiftPaddingPx }), hide()],
         placement,
         strategy: "absolute",
-      }).then(({ x, y }) => {
+      }).then(({ middlewareData, x, y }) => {
         Object.assign(tooltip.style, {
           left: `${x}px`,
           top: `${y}px`,
         });
+        if (middlewareData.hide?.referenceHidden) {
+          onAnchorLostRef.current?.();
+        }
       });
     });
   }, [anchor, offsetPx, placement, shiftPaddingPx, surface]);
