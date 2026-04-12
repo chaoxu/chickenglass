@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeProjectPath,
   projectPathCandidatesFromDocument,
-  relativeProjectPathFromDocument,
   resolveProjectPathFromDocument,
 } from "./project-paths";
 
@@ -43,19 +42,5 @@ describe("projectPathCandidatesFromDocument", () => {
     expect(projectPathCandidatesFromDocument("main.md", "refs/library.bib")).toEqual([
       "refs/library.bib",
     ]);
-  });
-});
-
-describe("relativeProjectPathFromDocument", () => {
-  it("returns a document-relative markdown path for nested assets", () => {
-    expect(relativeProjectPathFromDocument("notes/main.md", "notes/assets/plot.png")).toBe(
-      "assets/plot.png",
-    );
-  });
-
-  it("walks up to the project root when needed", () => {
-    expect(relativeProjectPathFromDocument("notes/main.md", "assets/plot.png")).toBe(
-      "../assets/plot.png",
-    );
   });
 });

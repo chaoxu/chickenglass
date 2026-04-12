@@ -7,11 +7,6 @@
 import { normalize } from "pathe";
 import { dirname } from "./utils";
 
-function splitProjectPath(path: string): string[] {
-  const normalized = normalizeProjectPath(path);
-  return normalized ? normalized.split("/") : [];
-}
-
 /**
  * Normalize a project-relative path.
  *
@@ -58,31 +53,4 @@ export function projectPathCandidatesFromDocument(
   const resolved = resolveProjectPathFromDocument(docPath, targetPath);
   const rootRelative = normalizeProjectPath(targetPath);
   return resolved === rootRelative ? [resolved] : [resolved, rootRelative];
-}
-
-/**
- * Convert a project-relative target path back into markdown path text
- * relative to the current document.
- */
-export function relativeProjectPathFromDocument(
-  docPath: string,
-  targetPath: string,
-): string {
-  const fromParts = splitProjectPath(dirname(docPath));
-  const toParts = splitProjectPath(targetPath);
-
-  let common = 0;
-  while (
-    common < fromParts.length &&
-    common < toParts.length &&
-    fromParts[common] === toParts[common]
-  ) {
-    common++;
-  }
-
-  const upward = new Array(fromParts.length - common).fill("..");
-  const downward = toParts.slice(common);
-  const relativeParts = [...upward, ...downward];
-
-  return relativeParts.length > 0 ? relativeParts.join("/") : ".";
 }

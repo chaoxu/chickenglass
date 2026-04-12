@@ -1,4 +1,3 @@
-import type { FileSystem } from "./types";
 import { uint8ArrayToBase64 } from "./utils";
 
 const IMAGE_MIME_BY_EXT: Readonly<Record<string, string>> = {
@@ -23,19 +22,28 @@ function readPathExtension(path: string): string | null {
   return match ? match[1].toLowerCase() : null;
 }
 
-export function inferImageMimeType(path: string): string | null {
+function inferImageMimeType(path: string): string | null {
   const ext = readPathExtension(path);
   if (!ext) return null;
   return IMAGE_MIME_BY_EXT[ext] ?? `image/${ext}`;
 }
 
-export function imageBytesToDataUrl(bytes: Uint8Array, mime: string): string {
+function imageBytesToDataUrl(bytes: Uint8Array, mime: string): string {
   return `data:${mime};base64,${uint8ArrayToBase64(bytes)}`;
+}
+
+/**
+ * Minimal structural shape for a binary-capable filesystem. Declared locally so
+ * this module stays in `src/lib/` without pulling in the app-layer filesystem
+ * interface.
+ */
+interface BinaryReadable {
+  readFileBinary(path: string): Promise<Uint8Array>;
 }
 
 export async function readImageFileAsDataUrl(
   path: string,
-  fs: Pick<FileSystem, "readFileBinary">,
+  fs: BinaryReadable,
 ): Promise<string | null> {
   const mime = inferImageMimeType(path);
   if (!mime) return null;

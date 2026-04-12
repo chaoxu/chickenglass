@@ -43,7 +43,7 @@ function isStandaloneDelimiter(
   return doc.slice(from, from + 3) === "---" && doc.slice(from + 3, lineEnd).trim().length === 0;
 }
 
-export function extractRawFrontmatter(
+function extractRawFrontmatter(
   doc: string,
 ): { raw: string; end: number } | null {
   if (!doc.startsWith("---")) return null;
