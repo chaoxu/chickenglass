@@ -727,8 +727,8 @@ export function resolveDocumentLabelBacklinks(
   doc: string,
   selectionFrom: number,
   selectionTo = selectionFrom,
+  graph: DocumentLabelGraph = buildDocumentLabelGraph(doc),
 ): DocumentLabelBacklinksLookup {
-  const graph = buildDocumentLabelGraph(doc);
   const reference = findMatchingReference(graph, selectionFrom, selectionTo);
   if (reference) {
     const definition = graph.uniqueDefinitionById.get(reference.id);
@@ -783,8 +783,8 @@ export function resolveDocumentLabelRenameTarget(
   doc: string,
   selectionFrom: number,
   selectionTo = selectionFrom,
+  graph: DocumentLabelGraph = buildDocumentLabelGraph(doc),
 ): DocumentLabelRenameTargetLookup {
-  const graph = buildDocumentLabelGraph(doc);
   const reference = findMatchingReference(graph, selectionFrom, selectionTo);
   if (reference) {
     const definition = graph.uniqueDefinitionById.get(reference.id);
@@ -824,13 +824,13 @@ export function prepareDocumentLabelRename(
   selectionFrom: number,
   nextId: string,
   selectionTo = selectionFrom,
+  graph: DocumentLabelGraph = buildDocumentLabelGraph(doc),
 ): DocumentLabelRenamePlan {
-  const lookup = resolveDocumentLabelRenameTarget(doc, selectionFrom, selectionTo);
+  const lookup = resolveDocumentLabelRenameTarget(doc, selectionFrom, selectionTo, graph);
   if (lookup.kind !== "target") {
     return lookup;
   }
 
-  const graph = buildDocumentLabelGraph(doc);
   const { definition, references } = lookup.target;
   const validation = validateDocumentLabelRename(graph, nextId, {
     currentId: definition.id,

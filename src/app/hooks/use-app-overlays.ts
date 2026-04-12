@@ -2,12 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { BackgroundIndexer } from "../../index";
 import { dispatchFormatEvent } from "../../constants/events";
 import {
-  resolveDocumentLabelBacklinks,
-  type DocumentLabelBacklinksResult,
-} from "../markdown/labels";
-import {
+  buildDocumentLabelGraph,
   prepareDocumentLabelRename,
+  resolveDocumentLabelBacklinks,
   resolveDocumentLabelRenameTarget,
+  type DocumentLabelBacklinksResult,
   type DocumentLabelRenameTarget,
 } from "../markdown/labels";
 import { useDevSettings } from "../dev-settings";
@@ -321,10 +320,12 @@ export function useAppOverlays({
 
     const selection = handle.getSelection();
     const currentDoc = editor.getCurrentDocText();
+    const graph = buildDocumentLabelGraph(currentDoc);
     const lookup = resolveDocumentLabelRenameTarget(
       currentDoc,
       selection.from,
       selection.to,
+      graph,
     );
     if (lookup.kind === "duplicate") {
       window.alert(duplicateRenameMessage(lookup.id));
@@ -349,6 +350,7 @@ export function useAppOverlays({
       selection.from,
       promptedId,
       selection.to,
+      graph,
     );
     if (rename.kind === "ready") {
       if (rename.changes.length === 0) {
