@@ -180,8 +180,6 @@ export function StatusBar({
     onModeChange(next);
   }, [editorMode, onModeChange]);
 
-  const closePopover = useCallback(() => setPopoverOpen(false), []);
-
   const wordLabel = wordCount === 1 ? "1 word" : `${wordCount} words`;
   const charLabel = `${charCount} chars`;
 
@@ -253,7 +251,7 @@ export function StatusBar({
         <StatsPopover
           stats={stats}
           anchorRef={wordCountRef}
-          onClose={closePopover}
+          onClose={() => setPopoverOpen(false)}
         />
       )}
     </>
