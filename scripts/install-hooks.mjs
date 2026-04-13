@@ -37,8 +37,6 @@ const gitEnv = isGitDir(dotGitPath)
 
 if (!isGitWorktree(gitEnv)) {
   console.warn("[prepare] skipping hook install outside a git work tree");
-} else if (isGitDir(dotGitPath)) {
-  run(["install", "--force"], gitEnv);
 } else {
-  run(["install"], gitEnv);
+  run(["install", "--force"], gitEnv);
 }
