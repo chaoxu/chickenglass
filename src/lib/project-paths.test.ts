@@ -4,7 +4,7 @@ import {
   normalizeProjectPath,
   projectPathCandidatesFromDocument,
   resolveProjectPathFromDocument,
-} from "../../lib/project-paths";
+} from "./project-paths";
 
 describe("normalizeProjectPath", () => {
   it("strips leading slashes and resolves dot segments", () => {

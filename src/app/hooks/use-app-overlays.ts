@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { BackgroundIndexer } from "../../index";
 import { dispatchFormatEvent } from "../../constants/events";
-import { buildDocumentLabelGraph } from "../markdown/labels";
 import {
   buildDocumentLabelGraph,
   prepareDocumentLabelRename,
