@@ -472,8 +472,8 @@ describe("BackgroundIndexer", () => {
       { file: "b.md", content: "# B" },
     ]);
 
-    await expect(indexer.getFileIndex("a.md")).resolves.toBeUndefined();
-    await expect(indexer.getFileIndex("b.md")).resolves.toBeDefined();
+    expect(indexer.getFileIndex("a.md")).toBeUndefined();
+    expect(indexer.getFileIndex("b.md")).toBeDefined();
   });
 
   it("supports raw source-text queries", async () => {

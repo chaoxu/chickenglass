@@ -2,12 +2,12 @@ import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
   entry: [
-    "src/app/index.ts",
     "editor.ts",
     "scripts/*.mjs",
     "scripts/regression-tests/*.mjs",
   ],
-  project: ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
+  project: ["src/**/*.{ts,tsx}", "*.{ts,tsx}", "scripts/**/*.mjs"],
+  ignoreBinaries: [],
   ignoreDependencies: [
     // Tauri CLI — invoked via shell, not imported
     "@tauri-apps/cli",

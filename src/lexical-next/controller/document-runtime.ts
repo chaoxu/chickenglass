@@ -1,5 +1,6 @@
 import {
   buildDocumentLabelGraph,
+  type DocumentScan,
   type DocumentLabelGraph,
   scanDocument,
 } from "../../app/markdown/labels";
@@ -22,10 +23,10 @@ export function buildDocumentRuntime(
   doc: string,
   projectConfig: ProjectConfig,
   resolver: Pick<LexicalRenderResourceResolver, "resolveAssetUrl">,
+  scan: DocumentScan = scanDocument(doc),
 ): LexicalDocumentRuntime {
   const frontmatter = parseFrontmatter(doc);
   const config = mergeConfigs(projectConfig, frontmatter.config);
-  const scan = scanDocument(doc);
 
   return {
     config,

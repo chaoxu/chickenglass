@@ -149,7 +149,6 @@ function AppInner() {
     containerRef: appContainerRef,
     refreshTree: workspace.refreshTree,
     reloadFile: editor.reloadFile,
-    handleWatchedPathChange: editor.handleWatchedPathChange,
     syncExternalChange: editor.syncExternalChange,
   });
 

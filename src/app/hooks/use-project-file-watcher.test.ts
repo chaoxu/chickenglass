@@ -58,13 +58,21 @@ const { useProjectFileWatcher } = await import("./use-project-file-watcher");
 
 interface HarnessProps {
   projectRoot: string | null;
+  refreshTree?: (changedPath?: string) => Promise<void>;
+  reloadFile?: (path: string) => Promise<void>;
+  syncExternalChange?: (path: string) => Promise<"ignore">;
 }
 
-const refreshTree = async () => {};
-const reloadFile = async () => {};
-const syncExternalChange = async () => "ignore" as const;
+const defaultRefreshTree = async () => {};
+const defaultReloadFile = async () => {};
+const defaultSyncExternalChange = async () => "ignore" as const;
 
-const Harness: FC<HarnessProps> = ({ projectRoot }) => {
+const Harness: FC<HarnessProps> = ({
+  projectRoot,
+  refreshTree = defaultRefreshTree,
+  reloadFile = defaultReloadFile,
+  syncExternalChange = defaultSyncExternalChange,
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   useProjectFileWatcher({
     projectRoot,
@@ -164,5 +172,30 @@ describe("useProjectFileWatcher", () => {
     expect(firstInstance.unwatch).toHaveBeenCalledTimes(1);
     expect(watcherMockState.instances).toHaveLength(2);
     expect(watcherMockState.instances[1].watch).toHaveBeenCalledWith("/tmp/project-b");
+  });
+
+  it("keeps the watcher mounted when callback identities change", async () => {
+    const firstRefreshTree = vi.fn(async () => {});
+    const secondRefreshTree = vi.fn(async () => {});
+
+    await act(async () => {
+      root.render(createElement(Harness, {
+        projectRoot: "/tmp/project-a",
+        refreshTree: firstRefreshTree,
+      }));
+    });
+
+    expect(watcherMockState.instances).toHaveLength(1);
+    const [instance] = watcherMockState.instances;
+
+    await act(async () => {
+      root.render(createElement(Harness, {
+        projectRoot: "/tmp/project-a",
+        refreshTree: secondRefreshTree,
+      }));
+    });
+
+    expect(watcherMockState.instances).toHaveLength(1);
+    expect(instance.unwatch).not.toHaveBeenCalled();
   });
 });

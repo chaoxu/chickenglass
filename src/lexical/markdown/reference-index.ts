@@ -21,6 +21,13 @@ function nextCounter(counters: Map<string, number>, blockType: string): number {
   return next;
 }
 
+export function buildRenderIndexFromSnapshot(
+  snapshot: DocumentScan,
+  config?: FrontmatterConfig,
+): RenderIndex {
+  return buildRenderIndex(snapshot.doc, config, snapshot);
+}
+
 export function buildRenderIndex(
   doc: string,
   config?: FrontmatterConfig,

@@ -10,8 +10,7 @@ export interface UseSearchIndexerResult {
 
 /**
  * Runs a live query against a BackgroundIndexer whenever query, typeFilter,
- * open state, or the indexer itself changes. Cancels in-flight requests on
- * cleanup to avoid stale state updates.
+ * open state, or the indexer itself changes.
  */
 export function useSearchIndexer(
   open: boolean,

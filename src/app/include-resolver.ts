@@ -1,6 +1,7 @@
 import type { FileSystem } from "./file-manager";
 import { type IncludeRegion, SourceMap } from "./source-map";
 import { extractMarkdownBlocks } from "./markdown/labels";
+import { maskMarkdownCodeSpansAndBlocks } from "./markdown/masking";
 import {
   normalizeProjectPath,
   resolveProjectPathFromDocument,
@@ -61,7 +62,7 @@ interface CacheEntry {
 }
 
 function findIncludeBlocks(content: string): readonly IncludeMatch[] {
-  return extractMarkdownBlocks(content)
+  return extractMarkdownBlocks(content, maskMarkdownCodeSpansAndBlocks(content))
     .filter((block) => block.blockType === "include")
     .map((block) => ({
       from: block.from,

@@ -1,4 +1,4 @@
-import { ContextMenu } from "./context-menu";
+import { ContextMenu } from "../lib/context-menu";
 
 /** Represents a single open file tab. */
 export interface Tab {

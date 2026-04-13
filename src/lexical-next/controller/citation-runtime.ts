@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { extractDocumentLabelReferences } from "../../app/markdown/labels";
+import type { DocumentLabelReference } from "../../app/markdown/label-parser";
+import { buildDocumentLabelParseSnapshot } from "../../app/markdown/label-parser";
 import { buildCitationBacklinkMap } from "../../citations/bibliography";
 import { type BibStore, type CslJsonItem, parseBibTeX } from "../../citations/bibtex-parser";
 import {
@@ -69,11 +70,20 @@ export function buildCitationRenderData(
   doc: string,
   loadedBibliography: LoadedBibliography,
 ): CitationRenderData {
+  return buildCitationRenderDataFromReferences(
+    buildDocumentLabelParseSnapshot(doc).references,
+    loadedBibliography,
+  );
+}
+
+export function buildCitationRenderDataFromReferences(
+  references: readonly DocumentLabelReference[],
+  loadedBibliography: LoadedBibliography,
+): CitationRenderData {
   if (loadedBibliography.store.size === 0) {
     return EMPTY_CITATIONS;
   }
 
-  const references = extractDocumentLabelReferences(doc);
   const clusters = collectCitationClusters(references, loadedBibliography.store);
   const cslProcessor = loadedBibliography.cslProcessor;
   if (
@@ -94,7 +104,7 @@ export function buildCitationRenderData(
 }
 
 export function useCitationRenderData(
-  doc: string,
+  references: readonly DocumentLabelReference[],
   config: FrontmatterConfig,
   resolver: Pick<LexicalRenderResourceResolver, "readProjectTextFile">,
 ): CitationRenderData {
@@ -130,7 +140,7 @@ export function useCitationRenderData(
   }, [config.bibliography, config.csl, resolver.readProjectTextFile]);
 
   return useMemo(
-    () => buildCitationRenderData(doc, loadedBibliography),
-    [doc, loadedBibliography],
+    () => buildCitationRenderDataFromReferences(references, loadedBibliography),
+    [references, loadedBibliography],
   );
 }

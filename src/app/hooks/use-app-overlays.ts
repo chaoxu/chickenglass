@@ -22,6 +22,7 @@ import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
+import { TAURI_MENU_IDS } from "../tauri-client/bridge-metadata";
 
 interface AppOverlayDeps {
   fs: FileSystem;
@@ -231,14 +232,12 @@ export function useAppOverlays({
       return;
     }
 
-    void indexer
-      .updateFile(editor.currentPath, activeSearchDoc)
-      .then(() => {
-        setSearchVersion((version) => version + 1);
-      })
-      .catch((error: unknown) => {
-        console.error("[search] failed to sync active file into app search index", error);
-      });
+    try {
+      indexer.updateFile(editor.currentPath, activeSearchDoc);
+      setSearchVersion((version) => version + 1);
+    } catch (error: unknown) {
+      console.error("[search] failed to sync active file into app search index", error);
+    }
   }, [dialogs.searchOpen, indexer, editor.currentPath, activeSearchDoc]);
 
   const handleExportHtml = useCallback(() => {
@@ -385,12 +384,12 @@ export function useAppOverlays({
 
   const commandDefs: CommandDef[] = useMemo(() => [
     // ── File ──────────────────────────────────────────────────────────────
-    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: "file_save", action: () => { void editor.saveFile(); } },
-    { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, menuId: "file_open_file", action: () => onOpenFile() },
-    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, hotkey: "mod+shift+s", menuId: "file_save_as", action: handleSaveAs },
-    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: "file_close_tab", action: () => { void editor.closeCurrentFile(); } },
-    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: "file_open_folder", action: () => workspace.handleOpenFolder() },
-    { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: "file_quit", action: onQuit },
+    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: TAURI_MENU_IDS.fileSave, action: () => { void editor.saveFile(); } },
+    { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, menuId: TAURI_MENU_IDS.fileOpenFile, action: () => onOpenFile() },
+    { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, hotkey: "mod+shift+s", menuId: TAURI_MENU_IDS.fileSaveAs, action: handleSaveAs },
+    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: TAURI_MENU_IDS.fileCloseTab, action: () => { void editor.closeCurrentFile(); } },
+    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: TAURI_MENU_IDS.fileOpenFolder, action: () => workspace.handleOpenFolder() },
+    { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: TAURI_MENU_IDS.fileQuit, action: onQuit },
 
     // ── Format ────────────────────────────────────────────────────────────
     { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
@@ -407,12 +406,12 @@ export function useAppOverlays({
     { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("files"); } },
     { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("outline"); } },
     { id: "nav.show-diagnostics", label: "Show Diagnostics Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("diagnostics"); } },
-    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: "edit_find", action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
+    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: TAURI_MENU_IDS.editFind, action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
     { id: "nav.show-label-references", label: "Show References to Label", category: "Navigation", action: handleShowLabelBacklinks },
     { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, hotkey: "mod+,", action: () => dialogs.setSettingsOpen(true), hotkeyAction: () => dialogs.setSettingsOpen((value) => !value) },
 
     // ── View ──────────────────────────────────────────────────────────────
-    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: "view_toggle_sidebar", action: () => sidebarLayout.setSidebarCollapsed((value) => !value) },
+    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: TAURI_MENU_IDS.viewToggleSidebar, action: () => sidebarLayout.setSidebarCollapsed((value) => !value) },
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => sidebarLayout.setSidenotesCollapsed((value) => !value) },
     { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
     { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => useDevSettings.getState().toggle("fpsCounter") },
@@ -420,12 +419,12 @@ export function useAppOverlays({
     { id: "view.toggle-tree-view", label: "Toggle Tree View", category: "View", action: () => useDevSettings.getState().toggle("treeView") },
 
     // ── Export ────────────────────────────────────────────────────────────
-    { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: "file_export", action: handleExportHtml },
+    { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: TAURI_MENU_IDS.fileExport, action: handleExportHtml },
     { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
 
     // ── Help ──────────────────────────────────────────────────────────────
-    { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: "help_shortcuts", action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
-    { id: "help.about", label: "About Coflat", category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
+    { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: TAURI_MENU_IDS.helpShortcuts, action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
+    { id: "help.about", label: "About Coflat", category: "Help", menuId: TAURI_MENU_IDS.helpAbout, action: () => dialogs.setAboutOpen(true) },
 
     // ── Recent files (palette only) ──────────────────────────────────────
     ...(workspace.recentFiles ?? []).map((path, i) => ({

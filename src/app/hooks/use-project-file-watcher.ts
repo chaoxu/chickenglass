@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { FileWatcher } from "../file-watcher";
 import type { ExternalDocumentSyncResult } from "../editor-session-service";
@@ -9,7 +9,6 @@ interface UseProjectFileWatcherOptions {
   containerRef: RefObject<HTMLElement | null>;
   refreshTree: (changedPath?: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
-  handleWatchedPathChange?: (path: string) => void | Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
 }
 
@@ -18,9 +17,16 @@ export function useProjectFileWatcher({
   containerRef,
   refreshTree,
   reloadFile,
-  handleWatchedPathChange,
   syncExternalChange,
 }: UseProjectFileWatcherOptions): void {
+  const refreshTreeRef = useRef(refreshTree);
+  const reloadFileRef = useRef(reloadFile);
+  const syncExternalChangeRef = useRef(syncExternalChange);
+
+  refreshTreeRef.current = refreshTree;
+  reloadFileRef.current = reloadFile;
+  syncExternalChangeRef.current = syncExternalChange;
+
   useEffect(() => {
     const container = containerRef.current;
     if (!isTauri() || !projectRoot || !container) {
@@ -28,10 +34,9 @@ export function useProjectFileWatcher({
     }
 
     const watcher = new FileWatcher({
-      refreshTree,
-      reloadFile,
-      handleWatchedPathChange,
-      syncExternalChange,
+      refreshTree: (changedPath) => refreshTreeRef.current(changedPath),
+      reloadFile: (path) => reloadFileRef.current(path),
+      syncExternalChange: (path) => syncExternalChangeRef.current(path),
       container,
     });
     let cancelled = false;
@@ -58,10 +63,6 @@ export function useProjectFileWatcher({
     };
   }, [
     containerRef,
-    handleWatchedPathChange,
     projectRoot,
-    refreshTree,
-    reloadFile,
-    syncExternalChange,
   ]);
 }

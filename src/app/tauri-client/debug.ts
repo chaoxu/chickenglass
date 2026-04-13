@@ -1,3 +1,4 @@
+import { TAURI_COMMANDS } from "./bridge-metadata";
 import { tauriCommand, tauriArgs } from "./make-command";
 
 export interface NativeWindowDebugInfo {
@@ -14,9 +15,9 @@ export interface NativeDebugState {
   last_focused_window: string | null;
 }
 
-export const debugListWindowsCommand = tauriCommand<NativeWindowDebugInfo[]>("debug_list_windows");
-export const debugGetNativeStateCommand = tauriCommand<NativeDebugState>("debug_get_native_state");
-export const debugEmitFileChangedCommand = tauriArgs<undefined>("debug_emit_file_changed")(
+export const debugListWindowsCommand = tauriCommand<NativeWindowDebugInfo[]>(TAURI_COMMANDS.debugListWindows);
+export const debugGetNativeStateCommand = tauriCommand<NativeDebugState>(TAURI_COMMANDS.debugGetNativeState);
+export const debugEmitFileChangedCommand = tauriArgs<undefined>(TAURI_COMMANDS.debugEmitFileChanged)(
   (relativePath: string, treeChanged?: boolean) =>
     treeChanged === undefined ? { relativePath } : { relativePath, treeChanged },
 );

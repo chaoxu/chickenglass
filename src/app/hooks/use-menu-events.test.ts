@@ -1,6 +1,10 @@
 import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  TAURI_MENU_EVENT_CHANNEL,
+  TAURI_MENU_IDS,
+} from "../tauri-client/bridge-metadata";
 
 const menuEventMockState = vi.hoisted(() => {
   const state = {
@@ -63,11 +67,15 @@ describe("useMenuEvents", () => {
     const onQuit = vi.fn();
 
     await act(async () => {
-      root.render(createElement(Harness, { handlers: { file_quit: onQuit } }));
+      root.render(createElement(Harness, { handlers: { [TAURI_MENU_IDS.fileQuit]: onQuit } }));
       await Promise.resolve();
     });
 
-    menuEventMockState.handler?.({ payload: "file_quit" });
+    expect(menuEventMockState.listen).toHaveBeenCalledWith(
+      TAURI_MENU_EVENT_CHANNEL,
+      expect.any(Function),
+    );
+    menuEventMockState.handler?.({ payload: TAURI_MENU_IDS.fileQuit });
 
     expect(onQuit).toHaveBeenCalledTimes(1);
   });

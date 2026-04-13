@@ -81,7 +81,6 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   readonly handleModeChange: (mode: EditorMode) => void;
   readonly isMarkdownFile: boolean;
   readonly hasDirtyDocument: boolean;
-  readonly handleWatchedPathChange: (path: string) => void;
   readonly handleDragOver: (event: React.DragEvent) => void;
   readonly handleDrop: (event: React.DragEvent) => void;
 }
@@ -147,11 +146,6 @@ export function useAppEditorShell({
 
   const handleDiagnosticsChange = useCallback((nextDiagnostics: DiagnosticEntry[]) => {
     setDiagnostics(nextDiagnostics);
-  }, []);
-
-  const handleWatchedPathChange = useCallback((_path: string) => {
-    // The Lexical surface keeps exact markdown text in memory and no longer
-    // relies on CM-side render caches.
   }, []);
 
   const handleInsertImage = useCallback(() => {
@@ -277,7 +271,6 @@ export function useAppEditorShell({
     activeDocumentSignal,
     getCurrentDocText,
     hasDirtyDocument,
-    handleWatchedPathChange,
     handleDragOver,
     handleDrop,
   };

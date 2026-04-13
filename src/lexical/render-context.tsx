@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
 import { useFileSystem } from "../app/contexts/file-system-context";
 import type { FileSystem } from "../app/file-manager";
 import { type CitationRenderData, useCitationRenderData } from "../lexical-next/controller/citation-runtime";
@@ -60,11 +61,12 @@ function LexicalRenderContextRuntimeProvider({
   const fs = useFileSystem();
   const resolver = useLexicalRenderResourceResolver(fs, docPath);
   const projectConfig = useProjectConfigResource(resolver);
+  const documentSnapshot = useMemo(() => buildDocumentLabelParseSnapshot(doc), [doc]);
   const documentRuntime = useMemo(
-    () => buildDocumentRuntime(doc, projectConfig, resolver),
-    [doc, projectConfig, resolver],
+    () => buildDocumentRuntime(doc, projectConfig, resolver, documentSnapshot),
+    [doc, documentSnapshot, projectConfig, resolver],
   );
-  const citations = useCitationRenderData(doc, documentRuntime.config, resolver);
+  const citations = useCitationRenderData(documentSnapshot.references, documentRuntime.config, resolver);
 
   const computedValue = useMemo<LexicalRenderContextValue>(() => ({
     citations,
