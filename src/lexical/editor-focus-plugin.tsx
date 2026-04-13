@@ -109,16 +109,20 @@ function focusEditorSurface(
       }
       root.selectEnd();
     }, { discrete: true });
+    editor.focus(undefined, {
+      defaultSelection: edge === "start" ? "rootStart" : "rootEnd",
+    });
+    return;
   }
 
-  editor.focus(
-    undefined,
-    edge === "start"
-      ? { defaultSelection: "rootStart" }
-      : edge === "end"
-        ? { defaultSelection: "rootEnd" }
-        : undefined,
-  );
+  // edge === "current": DOM-focus only. Never call editor.focus() here,
+  // because Lexical's editor.focus() falls back to root.selectEnd() when
+  // no Lexical selection exists (see Lexical focus() implementation),
+  // which triggers scrollIntoView and teleports the viewport to doc end.
+  // DOM focus preserves whatever selection the browser already placed
+  // (e.g. from a click caret-from-point), and Lexical's selection listener
+  // will pick it up on the next reconcile.
+  editor.getRootElement()?.focus({ preventScroll: true });
 }
 
 export function dispatchSurfaceFocusRequest(
