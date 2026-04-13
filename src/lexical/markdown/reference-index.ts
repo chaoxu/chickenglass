@@ -1,5 +1,4 @@
-import type { DocumentLabelParseSnapshot } from "../../app/markdown/label-parser";
-import { buildDocumentLabelParseSnapshot } from "../../app/markdown/label-parser";
+import { type DocumentScan, scanDocument } from "../../app/markdown/labels";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { normalizeBlockType, resolveBlockNumbering, resolveBlockTitle } from "./block-metadata";
 import { FOOTNOTE_DEFINITION_RE } from "./footnotes";
@@ -23,14 +22,22 @@ function nextCounter(counters: Map<string, number>, blockType: string): number {
 }
 
 export function buildRenderIndexFromSnapshot(
-  snapshot: Pick<DocumentLabelParseSnapshot, "blocks" | "doc" | "equations" | "headings">,
+  snapshot: DocumentScan,
   config?: FrontmatterConfig,
+): RenderIndex {
+  return buildRenderIndex(snapshot.doc, config, snapshot);
+}
+
+export function buildRenderIndex(
+  doc: string,
+  config?: FrontmatterConfig,
+  scan: DocumentScan = scanDocument(doc),
 ): RenderIndex {
   const references = new Map<string, RenderReferenceEntry>();
   const footnotes = new Map<string, number>();
 
   let headingCounter = 0;
-  for (const heading of snapshot.headings) {
+  for (const heading of scan.headings) {
     if (!heading.id) {
       continue;
     }
@@ -43,7 +50,7 @@ export function buildRenderIndexFromSnapshot(
   }
 
   let equationCounter = 0;
-  for (const equation of snapshot.equations) {
+  for (const equation of scan.equations) {
     if (!equation.id) {
       continue;
     }
@@ -56,7 +63,7 @@ export function buildRenderIndexFromSnapshot(
   }
 
   const blockCounters = new Map<string, number>();
-  for (const block of snapshot.blocks) {
+  for (const block of scan.blocks) {
     if (!block.id) {
       continue;
     }
@@ -75,7 +82,7 @@ export function buildRenderIndexFromSnapshot(
   }
 
   let footnoteCounter = 0;
-  for (const line of snapshot.doc.split("\n")) {
+  for (const line of doc.split("\n")) {
     const match = line.match(FOOTNOTE_DEFINITION_RE);
     if (!match || footnotes.has(match[1])) {
       continue;
@@ -88,14 +95,4 @@ export function buildRenderIndexFromSnapshot(
     footnotes,
     references,
   };
-}
-
-export function buildRenderIndex(doc: string, config?: FrontmatterConfig): RenderIndex {
-  const snapshot = buildDocumentLabelParseSnapshot(doc);
-  return buildRenderIndexFromSnapshot({
-    blocks: snapshot.blocks,
-    doc,
-    equations: snapshot.equations,
-    headings: snapshot.headings,
-  }, config);
 }

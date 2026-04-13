@@ -1,5 +1,4 @@
-import { buildDocumentLabelGraphFromSnapshot } from "../app/markdown/label-graph";
-import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
+import { buildDocumentLabelGraph, scanDocument } from "../app/markdown/labels";
 import type { IndexEntry, IndexReference, FileIndex } from "./query-api";
 
 export function extractFileIndex(
@@ -8,11 +7,9 @@ export function extractFileIndex(
 ): FileIndex {
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
-  const snapshot = buildDocumentLabelParseSnapshot(content);
-  const headings = snapshot.headings;
-  const blocks = snapshot.blocks;
-  const equations = snapshot.equations;
-  const graph = buildDocumentLabelGraphFromSnapshot(snapshot);
+  const scan = scanDocument(content);
+  const { headings, blocks, equations } = scan;
+  const graph = buildDocumentLabelGraph(content, scan);
 
   for (const heading of headings) {
     entries.push({

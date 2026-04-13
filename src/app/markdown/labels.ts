@@ -18,7 +18,6 @@ export type {
   DocumentLabelRenameValidation,
 } from "./label-graph";
 export {
-  buildDocumentLabelGraph,
   buildDocumentLabelGraphFromSnapshot,
   findDocumentLabelBacklinks,
   isLikelyLocalReferenceId,
@@ -38,3 +37,28 @@ export {
   resolveDocumentLabelBacklinks,
   resolveDocumentLabelRenameTarget,
 } from "./label-actions";
+
+import {
+  buildDocumentLabelParseSnapshot,
+  type DocumentLabelParseSnapshot,
+} from "./label-parser";
+import {
+  buildDocumentLabelGraphFromSnapshot,
+  type DocumentLabelGraph,
+} from "./label-graph";
+
+export interface DocumentScan extends DocumentLabelParseSnapshot {}
+
+export function scanDocument(doc: string): DocumentScan {
+  return buildDocumentLabelParseSnapshot(doc);
+}
+
+export function buildDocumentLabelGraph(
+  doc: string,
+  scan: DocumentScan = scanDocument(doc),
+): DocumentLabelGraph {
+  if (scan.doc !== doc) {
+    return buildDocumentLabelGraphFromSnapshot(scanDocument(doc));
+  }
+  return buildDocumentLabelGraphFromSnapshot(scan);
+}
