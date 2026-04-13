@@ -19,6 +19,7 @@ const watcherBackendState = vi.hoisted(() => {
   return {
     watchDirectoryCommand: vi.fn(async () => true),
     unwatchDirectoryCommand: vi.fn(async () => true),
+    listener: null as null | ((event: { payload: unknown }) => void),
     listen: vi.fn(async () => listenDeferred.promise),
     listenDeferred,
     reset() {
@@ -26,9 +27,13 @@ const watcherBackendState = vi.hoisted(() => {
       this.watchDirectoryCommand.mockImplementation(async () => true);
       this.unwatchDirectoryCommand.mockClear();
       this.unwatchDirectoryCommand.mockImplementation(async () => true);
+      this.listener = null;
       this.listen.mockClear();
       this.listenDeferred = createDeferred<() => void>();
-      this.listen.mockImplementation(async () => this.listenDeferred.promise);
+      this.listen.mockImplementation(async (_eventName: string, handler: (event: { payload: unknown }) => void) => {
+        this.listener = handler;
+        return this.listenDeferred.promise;
+      });
     },
   };
 });
@@ -80,12 +85,18 @@ function createWatcher(
 }
 
 describe("FileWatcher", () => {
-  it("drops a late listener registration after unwatch", async () => {
+  it("registers the frontend listener before attaching the backend watcher", async () => {
     watcherBackendState.reset();
-    const unlisten = vi.fn();
     const { watcher } = createWatcher();
 
     const watchPromise = watcher.watch("/tmp/project-a");
+    await vi.waitFor(() => {
+      expect(watcherBackendState.listen).toHaveBeenCalledTimes(1);
+    });
+
+    expect(watcherBackendState.watchDirectoryCommand).not.toHaveBeenCalled();
+
+    watcherBackendState.listenDeferred.resolve(vi.fn());
     await vi.waitFor(() => {
       expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledWith(
         "/tmp/project-a",
@@ -93,7 +104,21 @@ describe("FileWatcher", () => {
       );
     });
 
+    await watchPromise;
+  });
+
+  it("drops a late listener registration after unwatch", async () => {
+    watcherBackendState.reset();
+    const unlisten = vi.fn();
+    const { watcher } = createWatcher();
+
+    const watchPromise = watcher.watch("/tmp/project-a");
+    await vi.waitFor(() => {
+      expect(watcherBackendState.listen).toHaveBeenCalledTimes(1);
+    });
+
     await watcher.unwatch();
+    expect(watcherBackendState.watchDirectoryCommand).not.toHaveBeenCalled();
     expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(1);
     expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenNthCalledWith(1, expect.any(Number));
 
@@ -101,55 +126,8 @@ describe("FileWatcher", () => {
     await watchPromise;
 
     expect(unlisten).toHaveBeenCalledTimes(1);
-    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(2);
-    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenNthCalledWith(2, expect.any(Number));
-  });
-
-  it("drops a stale listener when a newer watcher instance takes over", async () => {
-    watcherBackendState.reset();
-    const firstUnlisten = vi.fn();
-    const secondUnlisten = vi.fn();
-    const firstListenDeferred = watcherBackendState.listenDeferred;
-    const secondListenDeferred = {
-      promise: Promise.resolve(secondUnlisten),
-      resolve: (_value: () => void) => {},
-    };
-
-    const listenQueue = [firstListenDeferred.promise, secondListenDeferred.promise];
-    watcherBackendState.listen.mockImplementation(() => listenQueue.shift() ?? Promise.resolve(vi.fn()));
-
-    const first = createWatcher().watcher;
-    const second = createWatcher().watcher;
-
-    const firstWatch = first.watch("/tmp/project-a");
-    const secondWatch = second.watch("/tmp/project-a");
-
-    firstListenDeferred.resolve(firstUnlisten);
-    await firstWatch;
-    await secondWatch;
-
-    expect(secondUnlisten).not.toHaveBeenCalled();
-    expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
-      1,
-      "/tmp/project-a",
-      expect.any(Number),
-    );
-    expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
-      2,
-      "/tmp/project-a",
-      expect.any(Number),
-    );
-    const [firstCall = [] as unknown[], secondCall = [] as unknown[]] =
-      watcherBackendState.watchDirectoryCommand.mock.calls;
-    const unwatchCalls = watcherBackendState.unwatchDirectoryCommand.mock.calls as Array<unknown[]>;
-    const firstToken = firstCall[1];
-    const secondToken = secondCall[1];
-    expect(
-      unwatchCalls.some((call) => call[0] === firstToken),
-    ).toBe(true);
-    expect(
-      unwatchCalls.some((call) => call[0] === secondToken),
-    ).toBe(false);
+    expect(watcherBackendState.watchDirectoryCommand).not.toHaveBeenCalled();
+    expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(1);
   });
 
   it("warns when backend unwatch fails during teardown but still resolves", async () => {
@@ -323,5 +301,31 @@ describe("FileWatcher", () => {
 
     expect(container.querySelector(".file-watcher-notification")).toBeNull();
     expect(container.textContent).toBe("");
+  });
+
+  it("ignores file-changed events from stale watcher generations", async () => {
+    watcherBackendState.reset();
+    const syncExternalChange = vi.fn(async () => "notify" as const);
+    watcherBackendState.listen.mockImplementation(async (_eventName: string, handler: (event: { payload: unknown }) => void) => {
+      watcherBackendState.listener = handler;
+      return vi.fn();
+    });
+    const { watcher } = createWatcher({ syncExternalChange });
+
+    await watcher.watch("/tmp/project-a");
+    const [watchCall = [] as unknown[]] = watcherBackendState.watchDirectoryCommand.mock.calls;
+    const activeToken = watchCall[1] as number;
+
+    watcherBackendState.listener?.({
+      payload: { path: "notes.md", treeChanged: false, generation: activeToken + 1 },
+    });
+    await Promise.resolve();
+    expect(syncExternalChange).not.toHaveBeenCalled();
+
+    watcherBackendState.listener?.({
+      payload: { path: "notes.md", treeChanged: false, generation: activeToken },
+    });
+    await Promise.resolve();
+    expect(syncExternalChange).toHaveBeenCalledWith("notes.md");
   });
 });

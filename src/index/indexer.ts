@@ -18,6 +18,7 @@ import type {
   FileIndex,
   IndexEntry,
   IndexQuery,
+  LabelResolution,
   ResolvedReference,
   SourceTextQuery,
 } from "./query-api";
@@ -66,7 +67,7 @@ export class BackgroundIndexer {
   }
 
   /** Resolve a label to its index entry. */
-  resolveLabel(label: string): IndexEntry | undefined {
+  resolveLabel(label: string): LabelResolution {
     return resolveLabel(this.getDocumentIndex(), label);
   }
 

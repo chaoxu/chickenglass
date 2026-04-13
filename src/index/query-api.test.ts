@@ -184,20 +184,42 @@ describe("resolveLabel", () => {
 
   it("resolves a label to its entry", () => {
     const entry = resolveLabel(index, "thm-main");
-    expect(entry).toBeDefined();
-    expect(entry?.type).toBe("theorem");
-    expect(entry?.file).toBe("main.md");
+    expect(entry.kind).toBe("resolved");
+    expect(entry.kind === "resolved" ? entry.entry.type : undefined).toBe("theorem");
+    expect(entry.kind === "resolved" ? entry.entry.file : undefined).toBe("main.md");
   });
 
   it("resolves labels across files", () => {
     const entry = resolveLabel(index, "thm-appendix");
-    expect(entry).toBeDefined();
-    expect(entry?.file).toBe("appendix.md");
+    expect(entry.kind).toBe("resolved");
+    expect(entry.kind === "resolved" ? entry.entry.file : undefined).toBe("appendix.md");
   });
 
   it("returns undefined for unknown labels", () => {
     const entry = resolveLabel(index, "nonexistent");
-    expect(entry).toBeUndefined();
+    expect(entry).toEqual({ kind: "missing" });
+  });
+
+  it("surfaces duplicate labels as ambiguous", () => {
+    const duplicateIndex = makeIndex([
+      {
+        file: "main.md",
+        entries: [makeEntry({ type: "theorem", label: "thm-shared", file: "main.md" })],
+        references: [],
+      },
+      {
+        file: "appendix.md",
+        entries: [makeEntry({ type: "lemma", label: "thm-shared", file: "appendix.md" })],
+        references: [],
+      },
+    ]);
+
+    const entry = resolveLabel(duplicateIndex, "thm-shared");
+    expect(entry.kind).toBe("ambiguous");
+    expect(entry.kind === "ambiguous" ? entry.entries.map((candidate) => candidate.file) : []).toEqual([
+      "main.md",
+      "appendix.md",
+    ]);
   });
 });
 
@@ -232,6 +254,7 @@ describe("findReferences", () => {
     const refs = findReferences(index, "thm-1");
     expect(refs[0].target).toBeDefined();
     expect(refs[0].target?.label).toBe("thm-1");
+    expect(refs[0].ambiguousTargets).toBeUndefined();
   });
 
   it("returns empty for unreferenced labels", () => {
@@ -258,5 +281,25 @@ describe("findReferences", () => {
     const refs = findReferences(multiRefIndex, "thm-1");
     expect(refs).toHaveLength(1);
     expect(refs[0].reference.ids).toEqual(["thm-1", "thm-2"]);
+  });
+
+  it("returns explicit ambiguous targets instead of picking one definition", () => {
+    const duplicateIndex = makeIndex([
+      {
+        file: "a.md",
+        entries: [makeEntry({ type: "theorem", label: "thm-1", file: "a.md" })],
+        references: [],
+      },
+      {
+        file: "b.md",
+        entries: [makeEntry({ type: "lemma", label: "thm-1", file: "b.md" })],
+        references: [makeRef({ ids: ["thm-1"], sourceFile: "b.md" })],
+      },
+    ]);
+
+    const refs = findReferences(duplicateIndex, "thm-1");
+    expect(refs).toHaveLength(1);
+    expect(refs[0].target).toBeUndefined();
+    expect(refs[0].ambiguousTargets?.map((entry) => entry.file)).toEqual(["a.md", "b.md"]);
   });
 });

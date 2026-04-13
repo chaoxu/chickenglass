@@ -3,14 +3,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 
 import { FileSystemProvider } from "./src/app/contexts/file-system-context";
-import { type EditorMode, normalizeEditorMode } from "./src/app/editor-mode";
+import { normalizeEditorMode } from "./src/app/editor-mode";
 import { MemoryFileSystem } from "./src/app/file-manager";
 import {
   type MarkdownEditorHandle,
 } from "./src/lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "./src/lexical/markdown-editor";
 
-export type StandaloneEditorMode = EditorMode;
+export type StandaloneEditorMode = "lexical" | "source";
 
 export interface MountEditorOptions {
   readonly parent: HTMLElement;

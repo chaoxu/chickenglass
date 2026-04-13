@@ -204,7 +204,7 @@ export async function exportDocument(
 
   const outputPath = deriveOutputPath(sourcePath, format);
 
-  return exportDocumentCommand(content, format, outputPath);
+  return exportDocumentCommand(content, format, outputPath, sourcePath);
 }
 
 /**

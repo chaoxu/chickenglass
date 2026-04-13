@@ -46,6 +46,7 @@ export interface FileWatcherConfig {
 export interface FileChangedEvent {
   path: string;
   treeChanged: boolean;
+  generation?: number;
 }
 
 type FileChangedPayload = FileChangedEvent | string;
@@ -97,31 +98,42 @@ export class FileWatcher {
       }
     }
 
-    const watchApplied = await watchDirectoryCommand(directoryPath, watchToken);
-    if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
-      try {
-        await unwatchDirectoryCommand(watchToken);
-      } catch (error: unknown) {
-        console.warn("[file-watcher] failed to clean up stale backend watcher after watch handoff", watchToken, error);
-      }
-      return;
-    }
-
-    // Listen for file-changed events from the backend.
+    // Listen before attaching the backend watcher so startup events cannot
+    // race ahead of the frontend subscription.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
     const unlisten = await listen<FileChangedPayload>("file-changed", (event) => {
-      void this.handleFileChanged(event.payload).catch(
-        logCatchError("[file-watcher] handleFileChanged failed", event.payload),
+      const payload = normalizeFileChangedEvent(event.payload);
+      if (payload.generation !== undefined && payload.generation !== watchToken) {
+        return;
+      }
+      void this.handleFileChanged(payload).catch(
+        logCatchError("[file-watcher] handleFileChanged failed", payload),
       );
     });
 
     if (this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
       unlisten();
+      return;
+    }
+
+    let watchApplied = false;
+    try {
+      watchApplied = await watchDirectoryCommand(directoryPath, watchToken);
+    } catch (error) {
+      if (this.watchToken === watchToken) {
+        this.watchToken = null;
+      }
+      unlisten();
+      throw error;
+    }
+
+    if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
+      unlisten();
       try {
         await unwatchDirectoryCommand(watchToken);
       } catch (error: unknown) {
-        console.warn("[file-watcher] failed to clean up late backend watcher listener", watchToken, error);
+        console.warn("[file-watcher] failed to clean up stale backend watcher after watch handoff", watchToken, error);
       }
       return;
     }

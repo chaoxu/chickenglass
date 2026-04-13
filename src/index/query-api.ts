@@ -80,7 +80,22 @@ export interface ResolvedReference {
   readonly reference: IndexReference;
   /** The target entry, if found. */
   readonly target: IndexEntry | undefined;
+  /** All matching target entries when the label is ambiguous across files. */
+  readonly ambiguousTargets?: readonly IndexEntry[];
 }
+
+export type LabelResolution =
+  | {
+    readonly kind: "resolved";
+    readonly entry: IndexEntry;
+  }
+  | {
+    readonly kind: "ambiguous";
+    readonly entries: readonly IndexEntry[];
+  }
+  | {
+    readonly kind: "missing";
+  };
 
 /**
  * Query the document index, returning all entries matching the given filters.
@@ -181,20 +196,39 @@ export function getAllLabels(index: DocumentIndex): readonly string[] {
   return labels;
 }
 
+function collectLabelDefinitions(
+  index: DocumentIndex,
+  label: string,
+): readonly IndexEntry[] {
+  const matches: IndexEntry[] = [];
+
+  for (const [, fileIndex] of index.files) {
+    for (const entry of fileIndex.entries) {
+      if (entry.label === label) {
+        matches.push(entry);
+      }
+    }
+  }
+
+  return matches;
+}
+
 /**
- * Resolve a label to its target entry across all files.
- * Returns the first matching entry, or undefined if not found.
+ * Resolve a label across all files.
+ * Returns an explicit ambiguity result when more than one definition exists.
  */
 export function resolveLabel(
   index: DocumentIndex,
   label: string,
-): IndexEntry | undefined {
-  for (const [, fileIndex] of index.files) {
-    for (const entry of fileIndex.entries) {
-      if (entry.label === label) return entry;
-    }
+): LabelResolution {
+  const entries = collectLabelDefinitions(index, label);
+  if (entries.length === 0) {
+    return { kind: "missing" };
   }
-  return undefined;
+  if (entries.length > 1) {
+    return { kind: "ambiguous", entries };
+  }
+  return { kind: "resolved", entry: entries[0] };
 }
 
 /**
@@ -204,13 +238,15 @@ export function findReferences(
   index: DocumentIndex,
   label: string,
 ): readonly ResolvedReference[] {
-  const target = resolveLabel(index, label);
+  const resolution = resolveLabel(index, label);
+  const target = resolution.kind === "resolved" ? resolution.entry : undefined;
+  const ambiguousTargets = resolution.kind === "ambiguous" ? resolution.entries : undefined;
   const results: ResolvedReference[] = [];
 
   for (const [, fileIndex] of index.files) {
     for (const ref of fileIndex.references) {
       if (ref.ids.includes(label)) {
-        results.push({ reference: ref, target });
+        results.push({ reference: ref, target, ambiguousTargets });
       }
     }
   }

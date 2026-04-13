@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -54,6 +55,24 @@ fn resolve_export_output_path(project_root: &Path, output_path: &str) -> Result<
     Ok(resolved_path)
 }
 
+fn resolve_export_source_dir(project_root: &Path, source_path: &str) -> Result<PathBuf, String> {
+    let resolved_source_path = resolve_project_path(project_root, source_path)?;
+    Ok(resolved_source_path
+        .parent()
+        .unwrap_or(project_root)
+        .to_path_buf())
+}
+
+fn build_pandoc_resource_path(project_root: &Path, source_dir: &Path) -> Result<OsString, String> {
+    let mut resource_paths = vec![source_dir.to_path_buf()];
+    if source_dir != project_root {
+        resource_paths.push(project_root.to_path_buf());
+    }
+
+    std::env::join_paths(resource_paths)
+        .map_err(|e| format!("Failed to construct Pandoc resource path: {}", e))
+}
+
 #[command]
 pub fn export_document(
     window: WebviewWindow,
@@ -62,16 +81,21 @@ pub fn export_document(
     content: String,
     format: String,
     output_path: String,
+    source_path: String,
 ) -> Result<String, String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         EXPORT_DOCUMENT,
         Some(&output_path),
         |project_root| {
             let output_path = resolve_export_output_path(&project_root, &output_path)?;
+            let source_dir = resolve_export_source_dir(&project_root, &source_path)?;
+            let resource_path = build_pandoc_resource_path(&project_root, &source_dir)?;
 
             let mut args = vec![
                 "-f".to_string(),
                 "markdown".to_string(),
+                "--resource-path".to_string(),
+                resource_path.to_string_lossy().to_string(),
                 "-o".to_string(),
                 output_path.to_string_lossy().to_string(),
             ];
@@ -84,6 +108,7 @@ pub fn export_document(
 
             let mut child = Command::new("pandoc")
                 .args(&args)
+                .current_dir(&source_dir)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -112,7 +137,9 @@ pub fn export_document(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_export_output_path;
+    use super::{
+        build_pandoc_resource_path, resolve_export_output_path, resolve_export_source_dir,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -167,5 +194,47 @@ mod tests {
 
         fs::remove_dir_all(&project_root).expect("remove project root");
         fs::remove_dir_all(&outside_root).expect("remove outside root");
+    }
+
+    #[test]
+    fn resolves_source_directory_from_the_document_path() {
+        let project_root = create_temp_dir("export-root");
+        let docs_dir = project_root.join("notes");
+        fs::create_dir_all(&docs_dir).expect("create docs dir");
+
+        let source_dir =
+            resolve_export_source_dir(&project_root, "notes/main.md").expect("resolve source dir");
+
+        assert_eq!(source_dir, docs_dir);
+
+        fs::remove_dir_all(&project_root).expect("remove project root");
+    }
+
+    #[test]
+    fn includes_document_dir_and_project_root_in_pandoc_resource_path() {
+        let project_root = create_temp_dir("export-root");
+        let docs_dir = project_root.join("notes");
+        fs::create_dir_all(&docs_dir).expect("create docs dir");
+
+        let resource_path =
+            build_pandoc_resource_path(&project_root, &docs_dir).expect("resource path");
+        let paths: Vec<PathBuf> = std::env::split_paths(&resource_path).collect();
+
+        assert_eq!(paths, vec![docs_dir.clone(), project_root.clone()]);
+
+        fs::remove_dir_all(&project_root).expect("remove project root");
+    }
+
+    #[test]
+    fn avoids_duplicate_root_entries_in_pandoc_resource_path() {
+        let project_root = create_temp_dir("export-root");
+
+        let resource_path =
+            build_pandoc_resource_path(&project_root, &project_root).expect("resource path");
+        let paths: Vec<PathBuf> = std::env::split_paths(&resource_path).collect();
+
+        assert_eq!(paths, vec![project_root.clone()]);
+
+        fs::remove_dir_all(&project_root).expect("remove project root");
     }
 }

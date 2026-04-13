@@ -50,7 +50,7 @@ pub fn watch_directory(
         let debounce_ms = Duration::from_millis(500);
         let event_sender =
             spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms)?;
-        let watcher = create_directory_watcher(watch_path, event_sender.clone())?;
+        let watcher = create_directory_watcher(watch_path, generation, event_sender.clone())?;
 
         let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
         let attached = attach_watcher(&mut lock, &window_label, generation, watcher);

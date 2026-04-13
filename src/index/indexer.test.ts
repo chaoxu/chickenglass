@@ -109,6 +109,20 @@ $$ F = ma $$ {#eq:newton}`;
       expect(equations[0].label).toBe("eq:pythag");
       expect(equations[1].label).toBe("eq:newton");
     });
+
+    it("ignores stray #tokens after closing equation fences", () => {
+      const content = `$$ x $$ #todo
+
+\\[
+y
+\\] #later`;
+      const result = extractFileIndex(content, "math.md");
+
+      const equations = result.entries.filter((e) => e.type === "equation");
+      expect(equations).toHaveLength(2);
+      expect(equations[0].label).toBeUndefined();
+      expect(equations[1].label).toBeUndefined();
+    });
   });
 
   describe("headings", () => {
@@ -172,6 +186,19 @@ By [@thm-main] and [@eq:key], this follows.
 
     it("indexes narrative references (@id)", () => {
       const content = `As shown in @thm-main, we have the result.`;
+      const result = extractFileIndex(content, "doc.md");
+
+      expect(result.references).toHaveLength(1);
+      expect(result.references[0].ids).toEqual(["thm-main"]);
+      expect(result.references[0].bracketed).toBe(false);
+    });
+
+    it("does not index email addresses or embedded @tokens as narrative references", () => {
+      const content = [
+        "Contact user@example.com for details.",
+        "The token foo@bar should also stay plain text.",
+        "But @thm-main should still resolve as a narrative reference.",
+      ].join("\n");
       const result = extractFileIndex(content, "doc.md");
 
       expect(result.references).toHaveLength(1);

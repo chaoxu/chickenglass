@@ -56,6 +56,30 @@ export function hasEditableTextSelection(root: HTMLElement): boolean {
   return Boolean(textLeaf && root.contains(textLeaf));
 }
 
+function getCaretRangeFromPoint(
+  documentRef: Document,
+  x: number,
+  y: number,
+): Range | null {
+  if (typeof documentRef.caretRangeFromPoint === "function") {
+    return documentRef.caretRangeFromPoint(x, y);
+  }
+
+  if (typeof documentRef.caretPositionFromPoint === "function") {
+    const position = documentRef.caretPositionFromPoint(x, y);
+    if (!position) {
+      return null;
+    }
+
+    const range = documentRef.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    range.collapse(true);
+    return range;
+  }
+
+  return null;
+}
+
 export function repairBlankClickSelection(root: HTMLElement, event: ReactMouseEvent): void {
   if (hasEditableTextSelection(root)) {
     return;
@@ -66,11 +90,18 @@ export function repairBlankClickSelection(root: HTMLElement, event: ReactMouseEv
     return;
   }
 
-  const range = document.caretRangeFromPoint(event.clientX, event.clientY);
+  const range = getCaretRangeFromPoint(document, event.clientX, event.clientY);
   if (range && root.contains(range.startContainer)) {
     selection.removeAllRanges();
     selection.addRange(range);
+    return;
   }
+
+  const fallbackRange = document.createRange();
+  fallbackRange.selectNodeContents(root);
+  fallbackRange.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(fallbackRange);
 }
 
 function clampOffset(offset: number, docLength: number): number {
@@ -210,7 +241,6 @@ function editorOwnsActiveSelection(root: HTMLElement | null): boolean {
   if (!selection || selection.rangeCount === 0 || !selection.anchorNode || !selection.focusNode) {
     return false;
   }
-
   const activeElement = document.activeElement;
   return root.contains(selection.anchorNode)
     && root.contains(selection.focusNode)
