@@ -48,7 +48,7 @@ export interface SearchPanelProps {
   searchMode: AppSearchMode;
   /** Monotonic version that bumps whenever the backing index changes. */
   searchVersion: number;
-  /** The background indexer to query. */
+  /** The in-memory document index to query. */
   indexer?: BackgroundIndexer | null;
 }
 
@@ -121,7 +121,7 @@ export const SearchResultItem = memo(function SearchResultItem({
 // ── SearchPanel ───────────────────────────────────────────────────────────────
 
 /**
- * Modal search panel that queries the BackgroundIndexer.
+ * Modal search panel that queries the document index.
  * Results are grouped by file. Clicking a result calls onResultSelect
  * and closes the panel.
  */

@@ -18,19 +18,16 @@
 import { useEffect, useRef } from "react";
 import { isTauri } from "../../lib/tauri";
 import { dispatchFormatEvent, type SimpleFormatEventType } from "../../constants/events";
+import {
+  TAURI_FORMAT_MENU_EVENT_TYPES,
+  TAURI_MENU_EVENT_CHANNEL,
+} from "../tauri-client/bridge-metadata";
 
 /**
  * Map from menu-event IDs that dispatch a cf:format event for the markdown editor.
  * To add a new format action, add an entry here.
  */
-const formatEventMap: Readonly<Record<string, SimpleFormatEventType>> = {
-  format_bold: "bold",
-  format_italic: "italic",
-  format_code: "code",
-  format_strikethrough: "strikethrough",
-  format_highlight: "highlight",
-  format_link: "link",
-};
+const formatEventMap: Readonly<Record<string, SimpleFormatEventType>> = TAURI_FORMAT_MENU_EVENT_TYPES;
 
 /**
  * Listen for native Tauri menu events and dispatch to handlers.
@@ -57,7 +54,7 @@ export function useMenuEvents(handlers: Record<string, () => void>): void {
       const { listen } = await import("@tauri-apps/api/event");
       if (cancelled) return undefined;
 
-      return listen<string>("menu-event", (event) => {
+      return listen<string>(TAURI_MENU_EVENT_CHANNEL, (event) => {
         const id = event.payload;
         const h = handlersRef.current;
 

@@ -27,21 +27,15 @@ import { extractFileIndex, updateFileInIndex, removeFileFromIndex } from "./extr
 /**
  * Document indexer that runs extraction and queries on the main thread.
  *
- * All methods return Promises for API compatibility with consumers that
- * were written against the previous async worker-based interface, but
- * they resolve synchronously.
- *
  * Usage:
  * ```ts
  * const indexer = new BackgroundIndexer();
- * await indexer.updateFile("chapter1.md", content);
- * const theorems = await indexer.query({ type: "theorem" });
- * indexer.dispose();
+ * indexer.updateFile("chapter1.md", content);
+ * const theorems = indexer.query({ type: "theorem" });
  * ```
  */
 export class BackgroundIndexer {
   private files = new Map<string, FileIndex>();
-  private disposed = false;
 
   private getDocumentIndex(): { files: ReadonlyMap<string, FileIndex> } {
     return { files: this.files };
@@ -51,51 +45,43 @@ export class BackgroundIndexer {
    * Update or add a single file without disturbing other indexed files.
    * Returns the number of entries found in the file.
    */
-  async updateFile(file: string, content: string): Promise<number> {
-    if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
+  updateFile(file: string, content: string): number {
     this.files = updateFileInIndex(this.files, file, content);
     return this.files.get(file)?.entries.length ?? 0;
   }
 
   /** Remove a file from the index. */
-  async removeFile(file: string): Promise<void> {
-    if (this.disposed) throw new Error(`Indexer.removeFile("${file}"): indexer is disposed`);
+  removeFile(file: string): void {
     this.files = removeFileFromIndex(this.files, file);
   }
 
   /** Query the index with the given filters. */
-  async query(query: IndexQuery): Promise<readonly IndexEntry[]> {
-    if (this.disposed) throw new Error("Indexer.query: indexer is disposed");
+  query(query: IndexQuery): readonly IndexEntry[] {
     return queryIndex(this.getDocumentIndex(), query);
   }
 
   /** Query raw source text across indexed files. */
-  async querySourceText(query: SourceTextQuery): Promise<readonly IndexEntry[]> {
-    if (this.disposed) throw new Error("Indexer.querySourceText: indexer is disposed");
+  querySourceText(query: SourceTextQuery): readonly IndexEntry[] {
     return querySourceText(this.getDocumentIndex(), query);
   }
 
   /** Resolve a label to its index entry. */
-  async resolveLabel(label: string): Promise<IndexEntry | undefined> {
-    if (this.disposed) throw new Error(`Indexer.resolveLabel("${label}"): indexer is disposed`);
+  resolveLabel(label: string): IndexEntry | undefined {
     return resolveLabel(this.getDocumentIndex(), label);
   }
 
   /** Find all references to a label across all files. */
-  async findReferences(label: string): Promise<readonly ResolvedReference[]> {
-    if (this.disposed) throw new Error(`Indexer.findReferences("${label}"): indexer is disposed`);
+  findReferences(label: string): readonly ResolvedReference[] {
     return findReferences(this.getDocumentIndex(), label);
   }
 
   /** Get the full index for a specific file. */
-  async getFileIndex(file: string): Promise<FileIndex | undefined> {
-    if (this.disposed) throw new Error(`Indexer.getFileIndex("${file}"): indexer is disposed`);
+  getFileIndex(file: string): FileIndex | undefined {
     return this.files.get(file);
   }
 
   /** Get all labels from all indexed files. */
-  async getAllLabels(): Promise<readonly string[]> {
-    if (this.disposed) throw new Error("Indexer.getAllLabels: indexer is disposed");
+  getAllLabels(): readonly string[] {
     return getAllLabels(this.getDocumentIndex());
   }
 
@@ -104,10 +90,9 @@ export class BackgroundIndexer {
    * batch are removed; use `updateFile()` / `removeFile()` for incremental sync.
    * Returns the total entry count in the rebuilt index.
    */
-  async bulkUpdate(
+  bulkUpdate(
     files: ReadonlyArray<{ file: string; content: string }>,
-  ): Promise<number> {
-    if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
+  ): number {
     const nextFiles = new Map<string, FileIndex>();
     let totalEntries = 0;
     for (const { file, content } of files) {
@@ -117,12 +102,5 @@ export class BackgroundIndexer {
     }
     this.files = nextFiles;
     return totalEntries;
-  }
-
-  /** Mark the indexer as disposed. No-op cleanup (no worker to terminate). */
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.files.clear();
   }
 }

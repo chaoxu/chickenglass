@@ -49,4 +49,42 @@ describe("buildCitationRenderData", () => {
     expect(citations.backlinks.get("cite:knuth")).toHaveLength(2);
     expect(citations.backlinks.get("cite:lamport")).toHaveLength(1);
   });
+
+  it("ignores citation syntax embedded in inline code and fenced code blocks", () => {
+    const citations = buildCitationRenderData(
+      [
+        "Use `@cite:knuth` as a literal token.",
+        "",
+        "```md",
+        "[@cite:lamport]",
+        "```",
+        "",
+        "See [@cite:tufte].",
+      ].join("\n"),
+      {
+        store: new Map([
+          ["cite:knuth", {
+            id: "cite:knuth",
+            title: "Literate Programming",
+            type: "book",
+          }],
+          ["cite:lamport", {
+            id: "cite:lamport",
+            title: "LaTeX",
+            type: "book",
+          }],
+          ["cite:tufte", {
+            id: "cite:tufte",
+            title: "The Visual Display of Quantitative Information",
+            type: "book",
+          }],
+        ]),
+      },
+    );
+
+    expect(citations.citedIds).toEqual(["cite:tufte"]);
+    expect(citations.backlinks.get("cite:knuth")).toBeUndefined();
+    expect(citations.backlinks.get("cite:lamport")).toBeUndefined();
+    expect(citations.backlinks.get("cite:tufte")).toHaveLength(1);
+  });
 });

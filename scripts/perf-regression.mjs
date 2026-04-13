@@ -17,8 +17,6 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
-  EXTERNAL_DEMO_ROOT,
-  EXTERNAL_FIXTURE_ROOT,
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
@@ -81,7 +79,6 @@ const SCROLL_FIXTURE = {
   virtualPath: "cogirth/main2.md",
   candidates: [
     resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-    resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
   ],
 };
 const PUBLIC_SCROLL_FALLBACK = PUBLIC_SHOWCASE_FIXTURE;
@@ -142,7 +139,6 @@ export const TYPING_BURST_CASES = [
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
       resolve(REPO_ROOT, "demo/index.md"),
-      resolve(EXTERNAL_DEMO_ROOT, "index.md"),
     ],
   },
   {
@@ -152,7 +148,6 @@ export const TYPING_BURST_CASES = [
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
     candidates: [
       resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
     ],
   },
   {
@@ -166,7 +161,6 @@ export const TYPING_BURST_CASES = [
     ],
     candidates: [
       resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
     ],
   },
 ];

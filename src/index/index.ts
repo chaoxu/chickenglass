@@ -1,8 +1,8 @@
 /**
  * Barrel exports for the index module.
  *
- * Includes cross-reference resolution (T12) and the background AST
- * indexer with query API (T15).
+ * Includes cross-reference resolution (T12) and the in-memory
+ * document indexer with query API (T15).
  */
 
 export {

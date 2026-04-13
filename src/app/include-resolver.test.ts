@@ -60,4 +60,25 @@ describe("expandDocumentIncludes", () => {
     expect(expanded.text).toBe(rawMain);
     expect(expanded.sourceMap).toBeNull();
   });
+
+  it("ignores include syntax embedded in fenced code blocks", async () => {
+    const fs = new MemoryFileSystem({
+      "main.md": [
+        "# Main",
+        "",
+        "```md",
+        "::: {.include}",
+        "chapter.md",
+        ":::",
+        "```",
+      ].join("\n"),
+      "chapter.md": "# Chapter",
+    });
+
+    const rawMain = await fs.readFile("main.md");
+    const expanded = await expandDocumentIncludes("main.md", rawMain, fs);
+
+    expect(expanded.text).toBe(rawMain);
+    expect(expanded.sourceMap).toBeNull();
+  });
 });

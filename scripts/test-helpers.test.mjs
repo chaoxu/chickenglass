@@ -4,6 +4,7 @@ import {
   normalizeConnectEditorOptions,
   waitForAppUrl,
 } from "./test-helpers.mjs";
+import { openFixtureDocument } from "./test-helpers/fixtures.mjs";
 
 describe("test helpers browser harness", () => {
   afterEach(() => {
@@ -41,5 +42,43 @@ describe("test helpers browser harness", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fixture helpers", () => {
+  afterEach(() => {
+    delete globalThis.window;
+  });
+
+  it("keeps single-file fixtures isolated from an already-open project path", async () => {
+    const app = {
+      openFile: vi.fn(async () => {}),
+      hasFile: vi.fn(async () => true),
+      openFileWithContent: vi.fn(async () => {}),
+      getCurrentDocument: () => ({ path: "notes.md" }),
+    };
+    const editor = {
+      getDoc: () => "# Fixture\n",
+    };
+    globalThis.window = {
+      __app: app,
+      __editor: editor,
+      __cfSourceMap: { regions: [] },
+    };
+
+    const page = {
+      evaluate: vi.fn(async (callback, arg) => callback(arg)),
+      waitForFunction: vi.fn(async (callback, arg) => callback(arg)),
+    };
+
+    await openFixtureDocument(page, {
+      virtualPath: "notes.md",
+      displayPath: "fixture:notes.md",
+      content: "# Fixture\n",
+    });
+
+    expect(app.hasFile).not.toHaveBeenCalled();
+    expect(app.openFile).not.toHaveBeenCalled();
+    expect(app.openFileWithContent).toHaveBeenCalledWith("notes.md", "# Fixture\n");
   });
 });

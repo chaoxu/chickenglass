@@ -1,5 +1,5 @@
-import { extractHeadingDefinitions } from "../../app/markdown/headings";
-import { extractMarkdownBlocks, extractMarkdownEquations } from "../../app/markdown/labels";
+import type { DocumentLabelParseSnapshot } from "../../app/markdown/label-parser";
+import { buildDocumentLabelParseSnapshot } from "../../app/markdown/label-parser";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { normalizeBlockType, resolveBlockNumbering, resolveBlockTitle } from "./block-metadata";
 import { FOOTNOTE_DEFINITION_RE } from "./footnotes";
@@ -22,12 +22,15 @@ function nextCounter(counters: Map<string, number>, blockType: string): number {
   return next;
 }
 
-export function buildRenderIndex(doc: string, config?: FrontmatterConfig): RenderIndex {
+export function buildRenderIndexFromSnapshot(
+  snapshot: Pick<DocumentLabelParseSnapshot, "blocks" | "doc" | "equations" | "headings">,
+  config?: FrontmatterConfig,
+): RenderIndex {
   const references = new Map<string, RenderReferenceEntry>();
   const footnotes = new Map<string, number>();
 
   let headingCounter = 0;
-  for (const heading of extractHeadingDefinitions(doc)) {
+  for (const heading of snapshot.headings) {
     if (!heading.id) {
       continue;
     }
@@ -40,7 +43,7 @@ export function buildRenderIndex(doc: string, config?: FrontmatterConfig): Rende
   }
 
   let equationCounter = 0;
-  for (const equation of extractMarkdownEquations(doc)) {
+  for (const equation of snapshot.equations) {
     if (!equation.id) {
       continue;
     }
@@ -53,7 +56,7 @@ export function buildRenderIndex(doc: string, config?: FrontmatterConfig): Rende
   }
 
   const blockCounters = new Map<string, number>();
-  for (const block of extractMarkdownBlocks(doc)) {
+  for (const block of snapshot.blocks) {
     if (!block.id) {
       continue;
     }
@@ -72,7 +75,7 @@ export function buildRenderIndex(doc: string, config?: FrontmatterConfig): Rende
   }
 
   let footnoteCounter = 0;
-  for (const line of doc.split("\n")) {
+  for (const line of snapshot.doc.split("\n")) {
     const match = line.match(FOOTNOTE_DEFINITION_RE);
     if (!match || footnotes.has(match[1])) {
       continue;
@@ -85,4 +88,14 @@ export function buildRenderIndex(doc: string, config?: FrontmatterConfig): Rende
     footnotes,
     references,
   };
+}
+
+export function buildRenderIndex(doc: string, config?: FrontmatterConfig): RenderIndex {
+  const snapshot = buildDocumentLabelParseSnapshot(doc);
+  return buildRenderIndexFromSnapshot({
+    blocks: snapshot.blocks,
+    doc,
+    equations: snapshot.equations,
+    headings: snapshot.headings,
+  }, config);
 }
