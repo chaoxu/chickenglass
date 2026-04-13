@@ -16,6 +16,7 @@ use crate::commands::state::FileWatcherEntry;
 struct FileChangedEvent {
     path: String,
     tree_changed: bool,
+    generation: u64,
 }
 
 pub enum WatchEventMessage {
@@ -108,6 +109,7 @@ pub fn spawn_debounced_event_worker(
 
 pub fn create_directory_watcher(
     root: PathBuf,
+    generation: u64,
     event_sender: mpsc::Sender<WatchEventMessage>,
 ) -> Result<RecommendedWatcher, String> {
     let root_for_closure = root.clone();
@@ -139,6 +141,7 @@ pub fn create_directory_watcher(
                 let payload = FileChangedEvent {
                     path: relative,
                     tree_changed,
+                    generation,
                 };
 
                 let _ = event_sender_for_closure.send(WatchEventMessage::FileChanged(
@@ -350,6 +353,7 @@ mod tests {
                 payload: FileChangedEvent {
                     path: "notes/index.md".to_string(),
                     tree_changed: false,
+                    generation: 0,
                 },
             }),
             &mut |payload| emitted.push(payload.clone()),
@@ -366,6 +370,7 @@ mod tests {
             vec![FileChangedEvent {
                 path: "notes/index.md".to_string(),
                 tree_changed: false,
+                generation: 0,
             }],
         );
     }
@@ -383,6 +388,7 @@ mod tests {
                 payload: FileChangedEvent {
                     path: "notes/index.md".to_string(),
                     tree_changed: false,
+                    generation: 0,
                 },
             }),
             &mut |payload| emitted.push(payload.clone()),
@@ -394,6 +400,7 @@ mod tests {
                 payload: FileChangedEvent {
                     path: "notes/index.md".to_string(),
                     tree_changed: false,
+                    generation: 0,
                 },
             }),
             &mut |payload| emitted.push(payload.clone()),
@@ -408,6 +415,7 @@ mod tests {
             vec![FileChangedEvent {
                 path: "notes/index.md".to_string(),
                 tree_changed: false,
+                generation: 0,
             }],
         );
     }

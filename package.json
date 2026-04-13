@@ -20,7 +20,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "dev:worktree": "node scripts/dev-worktree.mjs",
     "dev:browser": "vite & sleep 2 && pnpm run chrome && wait",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --pretty false",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json",
     "build": "pnpm typecheck && vite build && pnpm build:editor",
@@ -50,7 +50,7 @@
     "publint": "publint",
     "size": "size-limit",
     "build:analyze": "vite build --config vite.editor.config.ts --mode analyze",
-    "prepare": "lefthook install",
+    "prepare": "node scripts/install-hooks.mjs",
     "prepack": "pnpm build:editor"
   },
   "size-limit": [

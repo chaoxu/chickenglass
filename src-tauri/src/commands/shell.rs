@@ -34,8 +34,8 @@ pub fn open_url(perf: State<'_, PerfState>, url: String) -> Result<(), String> {
 
         #[cfg(target_os = "windows")]
         {
-            Command::new("cmd")
-                .args(["/C", "start", "", &url])
+            Command::new("rundll32")
+                .args(["url.dll,FileProtocolHandler", &url])
                 .spawn()
                 .map_err(|e| format!("Failed to open URL: {}", e))?;
         }

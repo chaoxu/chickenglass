@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, lstatSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -28,23 +28,40 @@ function childEnv() {
   return env;
 }
 
+const testExecEnv = childEnv();
+const testGitEnv = {
+  ...testExecEnv,
+  GIT_AUTHOR_NAME: "Test User",
+  GIT_AUTHOR_EMAIL: "test@example.com",
+  GIT_COMMITTER_NAME: "Test User",
+  GIT_COMMITTER_EMAIL: "test@example.com",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: devNull,
+};
+
 function run(cwd, ...args) {
   return execFileSync(args[0], args.slice(1), {
     cwd,
     encoding: "utf8",
-    env: childEnv(),
+    env: testExecEnv,
+  }).trim();
+}
+
+function runGit(cwd, ...args) {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: testGitEnv,
   }).trim();
 }
 
 function initRepo() {
   const repoRoot = mkdtempSync(join(tmpdir(), "coflat-dev-worktree-"));
-  run(repoRoot, "git", "init", "-b", "main");
-  run(repoRoot, "git", "config", "user.name", "Test User");
-  run(repoRoot, "git", "config", "user.email", "test@example.com");
+  runGit(repoRoot, "init", "-b", "main");
   writeFileSync(join(repoRoot, "tracked.txt"), "base\n");
   writeFileSync(join(repoRoot, "package.json"), "{\n  \"name\": \"tmp\"\n}\n");
-  run(repoRoot, "git", "add", "tracked.txt", "package.json");
-  run(repoRoot, "git", "commit", "-m", "initial");
+  runGit(repoRoot, "add", "tracked.txt", "package.json");
+  runGit(repoRoot, "commit", "-m", "initial");
   return repoRoot;
 }
 
@@ -56,14 +73,12 @@ function initBareOrigin() {
 
 function pushRemoteBranch(originRoot, branch, filename, contents) {
   const cloneRoot = mkdtempSync(join(tmpdir(), "coflat-dev-worktree-clone-"));
-  run(tmpdir(), "git", "clone", originRoot, cloneRoot);
-  run(cloneRoot, "git", "config", "user.name", "Test User");
-  run(cloneRoot, "git", "config", "user.email", "test@example.com");
-  run(cloneRoot, "git", "checkout", "-b", branch);
+  runGit(tmpdir(), "clone", originRoot, cloneRoot);
+  runGit(cloneRoot, "checkout", "-b", branch);
   writeFileSync(join(cloneRoot, filename), contents);
-  run(cloneRoot, "git", "add", filename);
-  run(cloneRoot, "git", "commit", "-m", `add ${branch}`);
-  run(cloneRoot, "git", "push", "-u", "origin", branch);
+  runGit(cloneRoot, "add", filename);
+  runGit(cloneRoot, "commit", "-m", `add ${branch}`);
+  runGit(cloneRoot, "push", "-u", "origin", branch);
   return cloneRoot;
 }
 
@@ -153,7 +168,7 @@ describe("dev-worktree", () => {
       {
         cwd: subdir,
         encoding: "utf8",
-        env: childEnv(),
+        env: testExecEnv,
       },
     );
 

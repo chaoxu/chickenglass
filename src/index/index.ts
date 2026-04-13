@@ -18,6 +18,7 @@ export {
   type FileIndex,
   type DocumentIndex,
   type ResolvedReference,
+  type LabelResolution,
 } from "./query-api";
 
 export {
