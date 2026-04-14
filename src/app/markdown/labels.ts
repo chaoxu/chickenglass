@@ -53,12 +53,24 @@ export function scanDocument(doc: string): DocumentScan {
   return buildDocumentLabelParseSnapshot(doc);
 }
 
+// Single-entry cache keyed by `doc` identity — addresses #173 (rename
+// dialog invoking this fresh) and any other non-render call site that
+// happens to pass the same doc repeatedly.
+let cachedGraphDoc: string | null = null;
+let cachedGraph: DocumentLabelGraph | null = null;
+
 export function buildDocumentLabelGraph(
   doc: string,
-  scan: DocumentScan = scanDocument(doc),
+  scan?: DocumentScan,
 ): DocumentLabelGraph {
-  if (scan.doc !== doc) {
-    return buildDocumentLabelGraphFromSnapshot(scanDocument(doc));
+  if (scan === undefined && cachedGraph && cachedGraphDoc === doc) {
+    return cachedGraph;
   }
-  return buildDocumentLabelGraphFromSnapshot(scan);
+  const resolvedScan = scan && scan.doc === doc ? scan : scanDocument(doc);
+  const graph = buildDocumentLabelGraphFromSnapshot(resolvedScan);
+  if (scan === undefined) {
+    cachedGraphDoc = doc;
+    cachedGraph = graph;
+  }
+  return graph;
 }

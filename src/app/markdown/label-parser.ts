@@ -350,16 +350,33 @@ export function extractDocumentLabelReferences(doc: string, scanDoc = doc): Docu
   return references;
 }
 
+// Single-entry cache keyed by `doc` identity — subsequent calls with the
+// same doc string (e.g. re-renders that didn't change the document) reuse
+// the prior snapshot instead of repeating the full scan. Addresses #174
+// for the non-keystroke re-render path; keystrokes still recompute because
+// the doc string changes.
+let cachedSnapshotDoc: string | null = null;
+let cachedSnapshot: DocumentLabelParseSnapshot | null = null;
+
 export function buildDocumentLabelParseSnapshot(
   doc: string,
-  scanDoc = maskMarkdownCodeSpansAndBlocks(doc),
+  scanDoc?: string,
 ): DocumentLabelParseSnapshot {
-  return {
+  if (scanDoc === undefined && cachedSnapshot && cachedSnapshotDoc === doc) {
+    return cachedSnapshot;
+  }
+  const resolvedScanDoc = scanDoc ?? maskMarkdownCodeSpansAndBlocks(doc);
+  const snapshot: DocumentLabelParseSnapshot = {
     doc,
-    scanDoc,
-    headings: extractHeadingDefinitions(doc, scanDoc),
-    blocks: extractMarkdownBlocks(doc, scanDoc),
-    equations: extractMarkdownEquations(doc, scanDoc),
-    references: extractDocumentLabelReferences(doc, scanDoc),
+    scanDoc: resolvedScanDoc,
+    headings: extractHeadingDefinitions(doc, resolvedScanDoc),
+    blocks: extractMarkdownBlocks(doc, resolvedScanDoc),
+    equations: extractMarkdownEquations(doc, resolvedScanDoc),
+    references: extractDocumentLabelReferences(doc, resolvedScanDoc),
   };
+  if (scanDoc === undefined) {
+    cachedSnapshotDoc = doc;
+    cachedSnapshot = snapshot;
+  }
+  return snapshot;
 }
