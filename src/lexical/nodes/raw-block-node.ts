@@ -10,7 +10,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { getRawBlockRenderer } from "./raw-block-renderer-registry";
+import { getRawBlockRenderer } from "./renderer-registry";
 import type { RawBlockVariant } from "./raw-block-types";
 
 export type { RawBlockVariant };

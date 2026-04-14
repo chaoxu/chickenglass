@@ -25,8 +25,7 @@ import {
 import { parseMarkdownImage } from "../markdown/image-markdown";
 import { renderMarkdownRichHtml } from "../markdown/rich-html-preview";
 import { parseFrontmatter } from "../../lib/frontmatter";
-import { setFootnoteReferenceRenderer } from "../nodes/footnote-reference-renderer-registry";
-import { setRawBlockRenderer } from "../nodes/raw-block-renderer-registry";
+import { registerRenderers } from "../nodes/renderer-registry";
 import type { RawBlockVariant } from "../nodes/raw-block-node";
 import { DisplayMathBlockRenderer } from "./math-renderers";
 import { structureToggleProps, useRawBlockUpdater } from "./shared";
@@ -588,5 +587,7 @@ export function RawBlockRenderer({
 // `raw-block-node.ts` and `footnote-reference-node.ts` hold these through
 // small registry modules so they never statically reach back into
 // `block-renderers.tsx`, which would close the rich-markdown-editor hub cycle.
-setFootnoteReferenceRenderer(FootnoteReferenceRenderer);
-setRawBlockRenderer(RawBlockRenderer);
+registerRenderers({
+  footnoteReference: FootnoteReferenceRenderer,
+  rawBlock: RawBlockRenderer,
+});
