@@ -172,14 +172,14 @@
   white-space: pre-wrap;
 }
 
-.cf-lexical-editor--rich > * {
+.cf-lexical-editor.cf-lexical-editor--rich > * {
   width: 100%;
   max-width: var(--cf-content-max-width, 800px);
   margin-left: auto;
   margin-right: auto;
 }
 
-.cf-lexical-editor--rich > [data-lexical-decorator] {
+.cf-lexical-editor.cf-lexical-editor--rich > [data-lexical-decorator] {
   margin-left: 0;
   margin-right: 0;
 }
