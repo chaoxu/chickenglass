@@ -42,16 +42,39 @@ export function writeSourceTextToLexicalRoot(text: string): void {
   }
 }
 
-function paragraphStartOffset(paragraphIndex: number, paragraphs: readonly ElementNode[]): number {
-  let offset = 0;
-  for (let index = 0; index < paragraphIndex; index += 1) {
-    offset += paragraphs[index].getTextContent().length + 1;
+interface ParagraphIndex {
+  readonly paragraphs: readonly ElementNode[];
+  /** Cumulative text+separator offset at the START of paragraph i. */
+  readonly starts: readonly number[];
+}
+
+/**
+ * WeakMap keyed by the root node. Lexical allocates a new root per editor
+ * state, so the map entry auto-invalidates when the tree changes without
+ * us needing explicit invalidation hooks. Addresses #175.
+ */
+const indexByRoot = new WeakMap<ElementNode, ParagraphIndex>();
+
+function getParagraphIndex(): ParagraphIndex {
+  const root = $getRoot();
+  const cached = indexByRoot.get(root);
+  if (cached) {
+    return cached;
   }
-  return offset;
+  const paragraphs = getParagraphs();
+  const starts: number[] = new Array(paragraphs.length);
+  let cursor = 0;
+  for (let i = 0; i < paragraphs.length; i += 1) {
+    starts[i] = cursor;
+    cursor += paragraphs[i].getTextContent().length + 1;
+  }
+  const index: ParagraphIndex = { paragraphs, starts };
+  indexByRoot.set(root, index);
+  return index;
 }
 
 function resolvePointAtOffset(offset: number): SourceTextPoint {
-  const paragraphs = getParagraphs();
+  const { paragraphs } = getParagraphIndex();
   if (paragraphs.length === 0) {
     const paragraph = $createParagraphNode();
     $getRoot().append(paragraph);
@@ -156,16 +179,16 @@ function childTextOffset(node: ElementNode, childOffset: number): number {
 function resolvePointOffset(point: PointType): number {
   const root = $getRoot();
   const node = point.getNode();
-  const paragraphs = getParagraphs();
+  const { paragraphs, starts } = getParagraphIndex();
 
   if (node.getKey() === root.getKey()) {
     const paragraphIndex = Math.max(0, Math.min(point.offset, paragraphs.length));
-    return paragraphStartOffset(paragraphIndex, paragraphs);
+    return starts[paragraphIndex] ?? (starts.at(-1) ?? 0);
   }
 
   const paragraph = node.getTopLevelElementOrThrow();
   const paragraphIndex = paragraphs.findIndex((entry) => entry.getKey() === paragraph.getKey());
-  const baseOffset = paragraphIndex >= 0 ? paragraphStartOffset(paragraphIndex, paragraphs) : 0;
+  const baseOffset = paragraphIndex >= 0 ? (starts[paragraphIndex] ?? 0) : 0;
 
   if (point.type === "element") {
     if ($isElementNode(node) && node.getKey() === paragraph.getKey()) {
