@@ -20,7 +20,6 @@ import {
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
-  readEditorText,
   resolveFixtureDocumentWithFallback,
   sleep,
   switchToMode,
@@ -479,8 +478,12 @@ export const scenarios = {
 
 function printUsage() {
   console.log(`Usage:
-  npm run perf:capture -- --scenario open-index --output output/perf/open-index.json
-  npm run perf:compare -- --scenario open-index --baseline output/perf/open-index.json
+  node scripts/perf-regression.mjs capture [options]
+  node scripts/perf-regression.mjs compare --baseline <path> [options]
+
+Commands:
+  capture                  Run the scenario and write a perf report (default)
+  compare                  Run the scenario and diff against a baseline report
 
 Options:
   --scenario <name>        One of: ${Object.keys(scenarios).join(", ")}
@@ -496,6 +499,18 @@ Options:
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
   --heavy-doc              Use long timeouts/settles for heavy-doc automation
+  -h, --help               Show this help text
+
+Fixtures:
+  Preferred heavy fixture: fixtures/rankdecrease/main.md
+  Fallback public fixture: demo/index.md
+
+Examples:
+  # Capture a baseline using the heavy fixture
+  pnpm perf:capture:heavy -- --scenario scroll-step-lexical --output /tmp/baseline.json
+
+  # Compare a fresh run against that baseline
+  pnpm perf:compare:heavy -- --scenario scroll-step-lexical --baseline /tmp/baseline.json
 `);
 }
 
