@@ -4,6 +4,7 @@ import { AppShell } from "./app.tsx";
 import { isTauri } from "../lib/tauri";
 import { configureExternalUrlOpener } from "../lib/open-link";
 import { installRuntimeLogging } from "./runtime-logger";
+import { TAURI_COMMANDS } from "./tauri-client/bridge-metadata";
 import "../globals.css";
 
 async function bootstrap(): Promise<void> {
@@ -17,7 +18,7 @@ async function bootstrap(): Promise<void> {
   if (isTauri()) {
     configureExternalUrlOpener(async (url) => {
       const { invokeWithPerf } = await import("./perf");
-      await invokeWithPerf("open_url", { url });
+      await invokeWithPerf(TAURI_COMMANDS.openUrl, { url });
       return true;
     });
   }

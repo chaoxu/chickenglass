@@ -22,6 +22,11 @@ export const TAURI_COMMANDS = {
   debugListWindows: "debug_list_windows",
   debugGetNativeState: "debug_get_native_state",
   debugEmitFileChanged: "debug_emit_file_changed",
+  checkPandoc: "check_pandoc",
+  exportDocument: "export_document",
+  getPerfSnapshot: "get_perf_snapshot",
+  clearPerfSnapshot: "clear_perf_snapshot",
+  openUrl: "open_url",
 } as const;
 
 export const TAURI_MENU_IDS = {
