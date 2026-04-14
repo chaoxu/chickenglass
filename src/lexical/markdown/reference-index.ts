@@ -1,7 +1,7 @@
 import { type DocumentScan, scanDocument } from "../../app/markdown/labels";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { normalizeBlockType, resolveBlockNumbering, resolveBlockTitle } from "./block-metadata";
-import { FOOTNOTE_DEFINITION_RE } from "./footnotes";
+import { FOOTNOTE_DEFINITION_MULTILINE_RE } from "./footnotes";
 
 export interface RenderReferenceEntry {
   readonly blockType?: string;
@@ -81,14 +81,16 @@ export function buildRenderIndex(
     });
   }
 
+  // Single multiline regex pass over `doc` — avoids materializing every line
+  // of the doc into a separate array just to scan for footnote definitions.
   let footnoteCounter = 0;
-  for (const line of doc.split("\n")) {
-    const match = line.match(FOOTNOTE_DEFINITION_RE);
-    if (!match || footnotes.has(match[1])) {
+  for (const match of doc.matchAll(FOOTNOTE_DEFINITION_MULTILINE_RE)) {
+    const id = match[1];
+    if (footnotes.has(id)) {
       continue;
     }
     footnoteCounter += 1;
-    footnotes.set(match[1], footnoteCounter);
+    footnotes.set(id, footnoteCounter);
   }
 
   return {

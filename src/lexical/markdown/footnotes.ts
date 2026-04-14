@@ -1,4 +1,6 @@
 export const FOOTNOTE_DEFINITION_RE = /^\[\^([^\]]+)\]:\s*(.*)$/;
+// Same pattern anchored per line — for whole-doc scans without splitting.
+export const FOOTNOTE_DEFINITION_MULTILINE_RE = /^\[\^([^\]]+)\]:/gm;
 
 export function parseFootnoteDefinition(raw: string): { id: string; body: string } | null {
   const lines = raw.split("\n");
