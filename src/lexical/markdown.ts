@@ -26,6 +26,7 @@ import {
 } from "lexical";
 
 import { getInlineTextFormatSpecs } from "../lexical-next";
+import { FRONTMATTER_DELIMITER_RE } from "../lib/frontmatter";
 import {
   $createInlineImageNode,
   $isInlineImageNode,
@@ -47,7 +48,7 @@ import {
   createTableNodeFromMarkdown as createTableNodeFromMarkdownInner,
 } from "./markdown/table-lexical";
 
-const FRONTMATTER_DELIMITER = /^---\s*$/;
+
 const FENCED_DIV_START = /^\s*(:{3,})(.*)$/;
 const DISPLAY_MATH_DOLLAR_START = /^\s*\$\$(?!\$).*$/;
 const DISPLAY_MATH_BRACKET_START = /^\s*\\\[\s*$/;
@@ -142,18 +143,18 @@ function createRawBlockTransformer(
 const frontmatterTransformer = createRawBlockTransformer(
   "frontmatter",
   (lines, startLineIndex) => {
-    if (startLineIndex !== 0 || !FRONTMATTER_DELIMITER.test(lines[startLineIndex])) {
+    if (startLineIndex !== 0 || !FRONTMATTER_DELIMITER_RE.test(lines[startLineIndex])) {
       return -1;
     }
     for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-      if (FRONTMATTER_DELIMITER.test(lines[lineIndex])) {
+      if (FRONTMATTER_DELIMITER_RE.test(lines[lineIndex])) {
         return lineIndex;
       }
     }
     return -1;
   },
 );
-frontmatterTransformer.regExpStart = FRONTMATTER_DELIMITER;
+frontmatterTransformer.regExpStart = FRONTMATTER_DELIMITER_RE;
 
 const fencedDivTransformer = createRawBlockTransformer(
   "fenced-div",

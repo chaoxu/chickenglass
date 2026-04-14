@@ -1,5 +1,9 @@
 import { parse as parseYaml } from "yaml";
 
+/** Frontmatter fence — three hyphens, optional trailing whitespace, end of line. */
+export const FRONTMATTER_DELIMITER = "---";
+export const FRONTMATTER_DELIMITER_RE = /^---\s*$/;
+
 export interface BlockConfig {
   counter?: string | null;
   numbered?: boolean;
@@ -40,13 +44,16 @@ function isStandaloneDelimiter(
   from: number,
   lineEnd: number,
 ): boolean {
-  return doc.slice(from, from + 3) === "---" && doc.slice(from + 3, lineEnd).trim().length === 0;
+  return (
+    doc.slice(from, from + FRONTMATTER_DELIMITER.length) === FRONTMATTER_DELIMITER &&
+    doc.slice(from + FRONTMATTER_DELIMITER.length, lineEnd).trim().length === 0
+  );
 }
 
 function extractRawFrontmatter(
   doc: string,
 ): { raw: string; end: number } | null {
-  if (!doc.startsWith("---")) return null;
+  if (!doc.startsWith(FRONTMATTER_DELIMITER)) return null;
 
   const opening = findLineBoundary(doc, 0);
   if (opening.next === doc.length) return null;
