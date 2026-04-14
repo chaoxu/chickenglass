@@ -8,7 +8,7 @@ import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
 import { buildKatexOptions } from "../../lib/katex-options";
-import { structureToggleProps, useRawBlockUpdater } from "./shared";
+import { preventKatexMouseDown, structureToggleProps, useRawBlockUpdater } from "./shared";
 
 export function DisplayMathBlockRenderer({
   nodeKey,
@@ -41,6 +41,7 @@ export function DisplayMathBlockRenderer({
           <div
             className="cf-lexical-display-math-body"
             dangerouslySetInnerHTML={{ __html: equation }}
+            onMouseDown={preventKatexMouseDown}
             {...structureToggleProps(surfaceEditable, sourceEdit.activate)}
           />
           {label ? (

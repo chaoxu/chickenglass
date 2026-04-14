@@ -1,4 +1,4 @@
-import { useCallback, type KeyboardEvent, type SyntheticEvent } from "react";
+import { useCallback, type KeyboardEvent, type MouseEvent, type SyntheticEvent } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
@@ -8,6 +8,11 @@ type RawUpdatableNode = {
   getRaw?: () => string;
   setRaw?: (value: string) => unknown;
 };
+
+/** Prevent browser from placing a stray caret in non-editable KaTeX content. */
+export function preventKatexMouseDown(event: MouseEvent) {
+  event.preventDefault();
+}
 
 export function structureToggleProps(
   active: boolean,

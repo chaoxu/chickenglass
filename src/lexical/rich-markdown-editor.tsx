@@ -108,6 +108,7 @@ import type {
 import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TabKeyPlugin } from "./tab-key-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
+import { InteractionTracePlugin } from "./interaction-trace-plugin";
 
 function SelectionAlwaysOnPlugin() {
   const open = useDevSettings((s) => s.selectionAlwaysOn);
@@ -639,6 +640,7 @@ export function LexicalRichMarkdownEditor({
                 {showBibliography ? <BibliographySection /> : null}
                 <ActiveEditorPlugin />
                 <TreeViewPlugin />
+                <InteractionTracePlugin />
               </StructureEditProvider>
             </LexicalComposer>
           </EditorScrollSurfaceProvider>

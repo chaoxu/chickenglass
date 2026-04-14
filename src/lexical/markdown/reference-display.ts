@@ -4,7 +4,7 @@ import type { CslProcessor } from "../../citations/csl-processor";
 import type { RenderIndex } from "./reference-index";
 
 export const BRACKETED_REFERENCE_RE = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/g;
-export const NARRATIVE_REFERENCE_RE = /(^|[^\w])@([A-Za-z0-9_][\w.:-]*)/g;
+export const NARRATIVE_REFERENCE_RE = /(^|[^\w])@([A-Za-z0-9_](?:[\w.:-]*\w)?)/g;
 
 export interface RenderCitations {
   readonly cslProcessor?: CslProcessor;
@@ -76,12 +76,12 @@ export function parseReferenceToken(raw: string): ParsedReferenceToken | null {
     const ids: string[] = [];
     const locators: Array<string | undefined> = [];
 
-    for (const match of body.matchAll(/@([A-Za-z0-9_][\w.:-]*)/g)) {
+    for (const match of body.matchAll(/@([A-Za-z0-9_](?:[\w.:-]*\w)?)/g)) {
       const id = match[1];
       ids.push(id);
       const nextFrom = (match.index ?? 0) + match[0].length;
       const remainder = body.slice(nextFrom);
-      const nextMatch = remainder.search(/@([A-Za-z0-9_][\w.:-]*)/);
+      const nextMatch = remainder.search(/@([A-Za-z0-9_](?:[\w.:-]*\w)?)/);
       const locatorRaw = nextMatch >= 0 ? remainder.slice(0, nextMatch) : remainder;
       const locator = locatorRaw.replace(/^[\s;,:-]+|[\s;,:-]+$/g, "").trim() || undefined;
       locators.push(locator);
@@ -92,7 +92,7 @@ export function parseReferenceToken(raw: string): ParsedReferenceToken | null {
       : null;
   }
 
-  const match = raw.match(/@([A-Za-z0-9_][\w.:-]*)/);
+  const match = raw.match(/@([A-Za-z0-9_](?:[\w.:-]*\w)?)/);
   if (!match) {
     return null;
   }

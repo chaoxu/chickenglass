@@ -26,6 +26,8 @@ import {
   $getRoot,
   HISTORIC_TAG,
   HISTORY_MERGE_TAG,
+  FORMAT_TEXT_COMMAND,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type EditorUpdateOptions,
   type LexicalEditor,
 } from "lexical";
@@ -415,7 +417,7 @@ function EditorHandlePlugin({
         userEditPendingRef.current = true;
         setLexicalMarkdown(editor, doc);
       },
-      setSelection: (anchor, focus = anchor) => {
+      setSelection: (anchor, focus = anchor, options) => {
         const nextSelection = storeSelection(
           selectionRef,
           readEditorDocument(editor, editorModeRef.current).length,
@@ -425,9 +427,12 @@ function EditorHandlePlugin({
         );
 
         if (editorModeRef.current === "source") {
+          const tags: EditorUpdateOptions["tag"] = options?.skipScrollIntoView
+            ? [SKIP_SCROLL_INTO_VIEW_TAG]
+            : undefined;
           editor.update(() => {
             selectSourceOffsetsInLexicalRoot(nextSelection.anchor, nextSelection.focus);
-          }, { discrete: true });
+          }, { discrete: true, tag: tags });
         } else {
           scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
         }

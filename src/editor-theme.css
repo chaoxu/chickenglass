@@ -129,8 +129,16 @@
 }
 
 .cf-lexical-surface--scroll {
+  display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: auto;
+}
+
+.cf-lexical-surface--scroll > .cf-lexical-editor {
+  flex: 0 0 auto;
+  height: max-content;
+  overflow: visible;
 }
 
 .cf-lexical-surface--inline {
@@ -164,6 +172,11 @@
   max-width: var(--cf-content-max-width, 800px);
   margin-left: auto;
   margin-right: auto;
+}
+
+.cf-lexical-editor--rich > [data-lexical-decorator] {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .cf-lexical-editor--hidden {
@@ -722,8 +735,10 @@
 }
 
 .cf-lexical-bibliography {
-  margin: 2em 0 3rem;
-  padding: 0 0 2rem;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 48px 2rem;
+  max-width: var(--cf-content-max-width, 800px);
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;
@@ -732,10 +747,10 @@
 }
 
 .cf-bibliography-heading {
-  margin: 0 0 0.65rem;
-  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
-  font-size: 0.95rem;
-  font-weight: 700;
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h2-size, 1.15em);
+  font-style: var(--cf-h2-style, italic);
+  font-weight: var(--cf-h2-weight, 400);
 }
 
 .cf-bibliography-entry + .cf-bibliography-entry {
@@ -789,7 +804,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 1rem;
   align-items: center;
-  margin: 0.8em 0;
+  margin: 0.5em 0;
   text-align: initial;
 }
 
@@ -829,6 +844,19 @@
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+/* Lexical inserts paragraph nodes between decorator wrappers for cursor
+   placement.  When both neighbors are block environments or display math the
+   intervening paragraph should not contribute visual space.
+   Note: nested :has() is not supported, so the trailing-neighbor check only
+   verifies the next sibling is *some* decorator, not that it contains a block. */
+[data-lexical-decorator]:has(.cf-lexical-block, .cf-lexical-display-math)
+  + .cf-lexical-paragraph:has(+ [data-lexical-decorator]) {
+  margin: 0;
+  min-height: 0;
+  line-height: 0;
+  font-size: 0;
 }
 
 .cf-lexical-block--proof {

@@ -37,7 +37,7 @@ export function StructureSourceEditor({
     }
 
     const end = draft.length;
-    handle.setSelection(end, end);
+    handle.setSelection(end, end, { skipScrollIntoView: true });
     handle.focus();
   }, [draft.length]);
 

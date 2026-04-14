@@ -34,6 +34,9 @@ export interface DevSettingsStore extends DevSettings {
   set: (key: keyof DevSettings, value: boolean) => void;
 }
 
+export const selectAnyDebugActive = (s: DevSettings) =>
+  s.treeView || s.perfPanel || s.fpsCounter || s.commandLogging || s.focusTracing;
+
 export const useDevSettings = create<DevSettingsStore>((setState, getState) => ({
   treeView: false,
   perfPanel: false,

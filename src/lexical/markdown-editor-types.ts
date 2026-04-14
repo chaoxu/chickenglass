@@ -14,5 +14,5 @@ export interface MarkdownEditorHandle {
   getSelection: () => MarkdownEditorSelection;
   insertText: (text: string) => void;
   setDoc: (doc: string) => void;
-  setSelection: (anchor: number, focus?: number) => void;
+  setSelection: (anchor: number, focus?: number, options?: { skipScrollIntoView?: boolean }) => void;
 }
