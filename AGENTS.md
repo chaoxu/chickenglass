@@ -269,6 +269,12 @@ tea logins
 - `demo/` is public showcase content only
 - Use `fixtures/` for regression, heavy, or private documents
 - Prefer `pnpm dev:worktree -- <name>` for isolated local work
+- Clean up stale worktrees with the subcommands:
+  - `pnpm dev:worktree list` lists Coflat-managed worktrees (branch, age, merged?)
+  - `pnpm dev:worktree remove <name>` removes a worktree and its branch
+    (refuses dirty worktrees or unmerged branches; `--force` / `--even-if-unmerged` override)
+  - `pnpm dev:worktree prune` prunes stale git metadata and deletes managed
+    branches that are merged into `origin/main`; use `--dry-run` first
 
 ## Maintenance triggers
 

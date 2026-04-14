@@ -184,3 +184,82 @@ describe("sanitizeDevWorktreeName", () => {
     expect(sanitizeDevWorktreeName("  Perf 444 / Tables  ")).toBe("perf-444-tables");
   });
 });
+
+describe("dev-worktree subcommands", () => {
+  it("--help lists the new subcommands", () => {
+    const output = execFileSync("node", [cliPath, "--help"], {
+      encoding: "utf8",
+      env: testExecEnv,
+    });
+    expect(output).toMatch(/dev:worktree list/);
+    expect(output).toMatch(/dev:worktree remove/);
+    expect(output).toMatch(/dev:worktree prune/);
+  });
+
+  it("list prints Coflat-managed worktrees", () => {
+    const repoRoot = initRepo();
+    cleanup.push(repoRoot);
+
+    createDevWorktree({ repoRoot, name: "list-me" });
+
+    const output = execFileSync("node", [cliPath, "list"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: testExecEnv,
+    });
+    expect(output).toMatch(/list-me/);
+    expect(output).toMatch(/BRANCH/);
+  });
+
+  it("remove refuses unmerged branches without --force", () => {
+    const repoRoot = initRepo();
+    cleanup.push(repoRoot);
+
+    createDevWorktree({ repoRoot, name: "to-remove" });
+
+    // origin/main is unavailable in this bare-init repo, so remove should
+    // bail out asking for --force/--even-if-unmerged.
+    expect(() =>
+      execFileSync("node", [cliPath, "remove", "to-remove"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env: testExecEnv,
+        stdio: "pipe",
+      }),
+    ).toThrow();
+  });
+
+  it("remove --force deletes worktree and branch", () => {
+    const repoRoot = initRepo();
+    cleanup.push(repoRoot);
+
+    const result = createDevWorktree({ repoRoot, name: "force-remove" });
+
+    execFileSync("node", [cliPath, "remove", "force-remove", "--force"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: testExecEnv,
+    });
+
+    expect(existsSync(result.worktreePath)).toBe(false);
+    const branches = execFileSync("git", ["branch", "--list", "force-remove"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: testExecEnv,
+    }).trim();
+    expect(branches).toBe("");
+  });
+
+  it("prune --dry-run runs cleanly with nothing to prune", () => {
+    const repoRoot = initRepo();
+    cleanup.push(repoRoot);
+
+    const output = execFileSync("node", [cliPath, "prune", "--dry-run"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: testExecEnv,
+    });
+    // Should not throw and should mention pruning/branches.
+    expect(output.length).toBeGreaterThan(0);
+  });
+});
