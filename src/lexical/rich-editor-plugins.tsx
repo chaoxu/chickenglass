@@ -5,7 +5,9 @@ import { copyToClipboard } from "@lexical/clipboard";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $getRoot,
   $getSelection,
+  $isElementNode,
   $isNodeSelection,
   $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
@@ -38,6 +40,7 @@ import {
   setLexicalMarkdown,
 } from "./markdown";
 import {
+  readSourcePositionFromLexicalSelection,
   scrollSourcePositionIntoView,
 } from "./source-position-plugin";
 import { COFLAT_FORMAT_EVENT_TAG } from "./update-tags";
@@ -305,7 +308,14 @@ export function EditorHandlePlugin({
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },
       getDoc: () => getLexicalMarkdown(editor),
-      getSelection: () => selectionRef.current,
+      getSelection: () => {
+        const livePosition = readSourcePositionFromLexicalSelection(editor);
+        if (livePosition === null) {
+          return selectionRef.current;
+        }
+        const docLength = getLexicalMarkdown(editor).length;
+        return createMarkdownSelection(livePosition, livePosition, docLength);
+      },
       insertText: (text) => {
         const currentDoc = getLexicalMarkdown(editor);
         const selection = createMarkdownSelection(
@@ -358,7 +368,20 @@ export function EditorHandlePlugin({
           anchor,
           focus,
         );
-        scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
+        const moved = scrollSourcePositionIntoView(
+          editor,
+          editor.getRootElement(),
+          nextSelection.from,
+        );
+        if (!moved) {
+          editor.update(() => {
+            const root = $getRoot();
+            const firstChild = root.getFirstChild();
+            if (firstChild && $isElementNode(firstChild)) {
+              firstChild.selectStart();
+            }
+          }, { discrete: true });
+        }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },
     }, editor);

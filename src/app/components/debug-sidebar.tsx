@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode, type RefCallback } from "react";
-import { useDevSettings } from "../dev-settings";
+import { useDevSettings } from "../../state/dev-settings";
 import { PerfDebugPanelContent } from "./perf-debug-panel";
 import { getInteractionLog, type InteractionTraceEntry } from "../../lexical/interaction-trace";
 

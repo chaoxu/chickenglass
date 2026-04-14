@@ -8,7 +8,7 @@ import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../../state/editor-telemetry-store";
 import { buildInfo } from "../build-info";
-import { useDevSettings, selectAnyDebugActive, type DevSettings } from "../dev-settings";
+import { useDevSettings, selectAnyDebugActive, type DevSettings } from "../../state/dev-settings";
 import {
   EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
   unsubscribeNoop,
@@ -159,7 +159,7 @@ const DebugPopover = memo(function DebugPopover({ anchorRef, onClose }: DebugPop
       </div>
       <div className="flex flex-col gap-1.5">
         {DEBUG_TOGGLE_LABELS.map(([key, label]) => (
-          <label key={key} className="flex items-center justify-between gap-4 cursor-pointer">
+          <label key={String(key)} className="flex items-center justify-between gap-4 cursor-pointer">
             <span className="text-[var(--cf-muted)]">{label}</span>
             <input
               type="checkbox"

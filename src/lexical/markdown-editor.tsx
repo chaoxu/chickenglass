@@ -25,7 +25,6 @@ import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysO
 import {
   HISTORIC_TAG,
   HISTORY_MERGE_TAG,
-  FORMAT_TEXT_COMMAND,
   SKIP_SCROLL_INTO_VIEW_TAG,
   type EditorUpdateOptions,
   type LexicalEditor,
@@ -92,7 +91,6 @@ import {
 import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import { useDevSettings } from "../state/dev-settings";
 
 function sameSelection(left: MarkdownEditorSelection, right: MarkdownEditorSelection): boolean {

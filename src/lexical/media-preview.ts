@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { readImageFileAsDataUrl } from "../lib/image-data-url";
-import { isPdfTarget } from "../lib/pdf-target";
 import { projectPathCandidatesFromDocument } from "../lib/project-paths";
 import { useLexicalRenderContext } from "./render-context";
 import { rasterizePdfPage1 } from "./pdf-rasterizer";
 
 function isLocalAssetTarget(target: string): boolean {
   return !/^(?:[a-z]+:|\/\/|\/)/i.test(target);
+}
+
+function isPdfTarget(target: string): boolean {
+  return /\.pdf(?:$|[?#])/i.test(target);
 }
 
 export interface AssetPreviewState {
