@@ -185,7 +185,7 @@ function resolvePointOffset(point: PointType): number {
   return baseOffset + paragraph.getTextContent().length;
 }
 
-export function readSourceTextSelectionFromLexicalRoot(): MarkdownEditorSelection {
+export function $readSourceTextSelectionFromLexicalRoot(): MarkdownEditorSelection {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) {
     return {
@@ -222,7 +222,7 @@ export function setSourceText(editor: LexicalEditor, text: string): void {
 }
 
 export function getSourceTextSelection(editor: LexicalEditor): MarkdownEditorSelection {
-  return editor.getEditorState().read(() => readSourceTextSelectionFromLexicalRoot());
+  return editor.getEditorState().read(() => $readSourceTextSelectionFromLexicalRoot());
 }
 
 export function setSourceTextSelection(editor: LexicalEditor, anchor: number, focus = anchor): void {

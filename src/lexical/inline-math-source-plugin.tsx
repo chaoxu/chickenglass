@@ -11,6 +11,7 @@ import {
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
   mergeRegister,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type NodeKey,
 } from "lexical";
 
@@ -97,7 +98,7 @@ export function InlineMathSourcePlugin() {
         return;
       }
       parent.select(index + 1, index + 1);
-    }, { discrete: true });
+    }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
   }, [editor]);
 
   const startEditing = useCallback((
@@ -224,7 +225,7 @@ export function InlineMathSourcePlugin() {
         const selection = $createNodeSelection();
         selection.add(nextNodeKey);
         $setSelection(selection);
-      }, { discrete: true });
+      }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
 
       return startEditing(nextNodeKey, entrySide);
     };
@@ -274,7 +275,7 @@ export function InlineMathSourcePlugin() {
             const selection = $createNodeSelection();
             selection.add(nodeKey);
             $setSelection(selection);
-          }, { discrete: true });
+          }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
 
           startEditing(nodeKey, "end", anchor);
           return true;

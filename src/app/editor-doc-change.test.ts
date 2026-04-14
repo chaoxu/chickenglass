@@ -5,7 +5,7 @@ import {
   createMinimalEditorDocumentChanges,
   createEditorDocumentText,
   editorDocumentToString,
-} from "./editor-doc-change";
+} from "../lib/editor-doc-change";
 
 describe("editor-doc-change", () => {
   it("applies sorted document changes without flattening the whole doc first", () => {

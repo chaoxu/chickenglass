@@ -1,5 +1,5 @@
 import { basename } from "./lib/utils";
-import type { EditorDocumentText } from "./editor-doc-change";
+import type { EditorDocumentText } from "../lib/editor-doc-change";
 import {
   markSessionDocumentDirty,
   renameSessionDocument,

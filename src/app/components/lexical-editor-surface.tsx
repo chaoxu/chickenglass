@@ -11,7 +11,7 @@ import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 // nodes/raw-block-renderer-registry.ts.
 import "../../lexical/renderers/block-renderers";
 import { FORMAT_EVENT, type FormatEventDetail } from "../../constants/events";
-import type { EditorDocumentChange } from "../editor-doc-change";
+import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import type { EditorMode } from "../editor-mode";
 import { planMarkdownFormat } from "../format-markdown";
 

@@ -4,38 +4,29 @@
  *
  * Uses @lexical/react/LexicalTreeView which reflects the actual Lexical
  * node tree, selection state, and editor identity for the active surface.
+ *
+ * Portals into the debug sidebar when available (via React context).
  */
 
+import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { TreeView } from "@lexical/react/LexicalTreeView";
-import { useDevSettings } from "../app/dev-settings";
+import { useDevSettings } from "../state/dev-settings";
+import { useTreeViewPortalTarget } from "../app/components/debug-sidebar";
 
 export function TreeViewPlugin() {
   const open = useDevSettings((s) => s.treeView);
   const [editor] = useLexicalComposerContext();
+  const portalTarget = useTreeViewPortalTarget();
 
   if (!open) return null;
 
-  return (
-    <div className="fixed bottom-4 left-4 z-[120] w-[520px] rounded-lg border border-[var(--cf-border)] bg-[var(--cf-bg)] shadow-lg">
-      <div className="flex items-center justify-between border-b border-[var(--cf-border)] px-3 py-2">
-        <div>
-          <div className="text-sm font-semibold text-[var(--cf-fg)]">
-            Lexical Tree
-          </div>
-          <div className="text-xs text-[var(--cf-muted)]">
-            {editor._config.namespace}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => useDevSettings.getState().toggle("treeView")}
-          className="rounded border border-[var(--cf-border)] px-2 py-1 text-xs text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]"
-        >
-          Close
-        </button>
+  const content = (
+    <div className="p-3">
+      <div className="mb-2 text-xs font-medium text-[var(--cf-fg)]">
+        Tree: {editor._config.namespace}
       </div>
-      <div className="max-h-[60vh] overflow-auto p-3">
+      <div className="max-h-[50vh] overflow-auto">
         <TreeView
           viewClassName="cf-tree-view text-xs font-mono whitespace-pre-wrap text-[var(--cf-fg)]"
           treeTypeButtonClassName="rounded border border-[var(--cf-border)] px-2 py-1 text-xs text-[var(--cf-fg)] hover:bg-[var(--cf-hover)] mr-1"
@@ -48,4 +39,10 @@ export function TreeViewPlugin() {
       </div>
     </div>
   );
+
+  if (portalTarget) {
+    return createPortal(content, portalTarget);
+  }
+
+  return null;
 }

@@ -14,7 +14,7 @@
 
 import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import { headingAncestryAt, headingEntriesEqual, type HeadingEntry } from "../heading-ancestry";
-import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
+import { useEditorTelemetryStore } from "../../state/editor-telemetry-store";
 import { CSS } from "../../constants/css-classes";
 import {
   Breadcrumb,

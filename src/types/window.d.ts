@@ -82,6 +82,8 @@ declare global {
       clearPerf: () => Promise<void>;
       togglePerfPanel: () => void;
       toggleFps: () => boolean;
+      interactionLog: () => readonly import("../lexical/interaction-trace").InteractionTraceEntry[];
+      clearInteractionLog: () => void;
     };
 
     /**

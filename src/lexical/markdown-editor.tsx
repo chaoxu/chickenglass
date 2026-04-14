@@ -23,9 +23,9 @@ import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import {
-  $getRoot,
   HISTORIC_TAG,
   HISTORY_MERGE_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type EditorUpdateOptions,
   type LexicalEditor,
 } from "lexical";
@@ -35,7 +35,7 @@ import {
   applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
-} from "../app/editor-doc-change";
+} from "../lib/editor-doc-change";
 import {
   focusSurface,
   type FocusOwner,
@@ -84,67 +84,14 @@ import {
 } from "./source-position-plugin";
 import {
   getSourceText,
-  readSourceTextSelectionFromLexicalRoot,
+  $readSourceTextSelectionFromLexicalRoot,
   selectSourceOffsetsInLexicalRoot,
   writeSourceTextToLexicalRoot,
 } from "./source-text";
 import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { useDevSettings } from "../app/dev-settings";
-
-const clickRepairHandlers = new WeakMap<HTMLElement, EventListener>();
-
-function ClickCaretRepairPlugin({
-  enabled,
-}: {
-  readonly enabled: boolean;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    const handleMouseUp = (rootElement: HTMLElement) => {
-      queueMicrotask(() => {
-        if (document.activeElement !== rootElement) {
-          return;
-        }
-
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0 && rootElement.contains(selection.anchorNode)) {
-          return;
-        }
-
-        editor.update(() => {
-          $getRoot().selectEnd();
-        }, { discrete: true });
-      });
-    };
-
-    return editor.registerRootListener((rootElement, previousRootElement) => {
-      if (previousRootElement) {
-        const previousListener = clickRepairHandlers.get(previousRootElement);
-        if (previousListener) {
-          previousRootElement.removeEventListener("mouseup", previousListener);
-          clickRepairHandlers.delete(previousRootElement);
-        }
-      }
-
-      if (!rootElement) {
-        return;
-      }
-
-      const listener = () => handleMouseUp(rootElement);
-      clickRepairHandlers.set(rootElement, listener);
-      rootElement.addEventListener("mouseup", listener);
-    });
-  }, [editor, enabled]);
-
-  return null;
-}
+import { useDevSettings } from "../state/dev-settings";
 
 function sameSelection(left: MarkdownEditorSelection, right: MarkdownEditorSelection): boolean {
   return (
@@ -206,10 +153,10 @@ function SourceSelectionPlugin({
       onSelectionChange?.(nextSelection);
     };
 
-    syncSelection(editor.getEditorState().read(() => readSourceTextSelectionFromLexicalRoot()));
+    syncSelection(editor.getEditorState().read(() => $readSourceTextSelectionFromLexicalRoot()));
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
-        syncSelection(readSourceTextSelectionFromLexicalRoot());
+        syncSelection($readSourceTextSelectionFromLexicalRoot());
       });
     });
   }, [editor, editorMode, onSelectionChange, selectionRef]);
@@ -415,7 +362,7 @@ function EditorHandlePlugin({
         userEditPendingRef.current = true;
         setLexicalMarkdown(editor, doc);
       },
-      setSelection: (anchor, focus = anchor) => {
+      setSelection: (anchor, focus = anchor, options) => {
         const nextSelection = storeSelection(
           selectionRef,
           readEditorDocument(editor, editorModeRef.current).length,
@@ -425,9 +372,12 @@ function EditorHandlePlugin({
         );
 
         if (editorModeRef.current === "source") {
+          const tags: EditorUpdateOptions["tag"] = options?.skipScrollIntoView
+            ? [SKIP_SCROLL_INTO_VIEW_TAG]
+            : undefined;
           editor.update(() => {
             selectSourceOffsetsInLexicalRoot(nextSelection.anchor, nextSelection.focus);
-          }, { discrete: true });
+          }, { discrete: true, tag: tags });
         } else {
           scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
         }
@@ -694,7 +644,6 @@ export function LexicalMarkdownEditor({
                 )}
                 {!isSourceMode ? <CodeBlockChromePlugin /> : null}
                 {!isSourceMode ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
-                {!isSourceMode && editable ? <ClickCaretRepairPlugin enabled /> : null}
                 {editable ? <HistoryPlugin /> : null}
                 {!isSourceMode ? <ListPlugin /> : null}
                 {!isSourceMode ? <CheckListPlugin /> : null}

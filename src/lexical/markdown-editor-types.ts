@@ -1,4 +1,4 @@
-import type { EditorDocumentChange } from "../app/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/editor-doc-change";
 
 export interface MarkdownEditorSelection {
   readonly anchor: number;
@@ -14,5 +14,5 @@ export interface MarkdownEditorHandle {
   getSelection: () => MarkdownEditorSelection;
   insertText: (text: string) => void;
   setDoc: (doc: string) => void;
-  setSelection: (anchor: number, focus?: number) => void;
+  setSelection: (anchor: number, focus?: number, options?: { skipScrollIntoView?: boolean }) => void;
 }

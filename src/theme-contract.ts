@@ -26,6 +26,7 @@ export const themeFoundationTokens = [
   "--cf-border-width",
   "--cf-border-width-accent",
   "--cf-transition",
+  "--cf-danger",
 ] as const;
 
 export const themeLayerTokens = [
@@ -99,6 +100,7 @@ export const themeTypographyTokens = [
   "--cf-ui-font",
   "--cf-content-font",
   "--cf-code-font",
+  "--cf-code-font-size",
   "--cf-base-font-size",
   "--cf-line-height",
   "--cf-content-max-width",
@@ -178,6 +180,7 @@ export const themeSurfaceTokenMap = {
     "--cf-fg",
     "--cf-content-font",
     "--cf-code-font",
+    "--cf-code-font-size",
     "--cf-base-font-size",
     "--cf-line-height",
     "--cf-content-max-width",
@@ -189,6 +192,7 @@ export const themeSurfaceTokenMap = {
     "--cf-fg",
     "--cf-content-font",
     "--cf-code-font",
+    "--cf-code-font-size",
     "--cf-base-font-size",
     "--cf-line-height",
     "--cf-content-max-width",
@@ -277,6 +281,7 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-border-width": "1px",
   "--cf-border-width-accent": "2px",
   "--cf-transition": "0.15s ease",
+  "--cf-danger": "#dc2626",
   "--cf-layer-inline-chrome": "1",
   "--cf-layer-preview-surface": "1000",
   "--cf-layer-block-picker": "1010",
@@ -341,6 +346,7 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-ui-font": defaultUIFontStack,
   "--cf-content-font": defaultContentFontStack,
   "--cf-code-font": defaultCodeFontStack,
+  "--cf-code-font-size": "0.85em",
   "--cf-base-font-size": "16px",
   "--cf-line-height": "1.5",
   "--cf-content-max-width": "800px",

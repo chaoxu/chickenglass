@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+/**
+ * embedded-field-editor — Rich nested editor for inline/block fields inside
+ * decorator nodes (captions, titles, table cells).
+ *
+ * Uses LexicalRichMarkdownEditor with activation lifecycle (always-on or
+ * focus-activated). For source-text editing of structure metadata fields
+ * (openers, include paths), see StructureSourceEditor instead — it wraps
+ * the plain LexicalMarkdownEditor with draft/commit/revert semantics.
+ */
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import {
@@ -42,6 +51,8 @@ export function EmbeddedFieldEditor({
   const requestedFocusRef = useRef<FocusRequest | null>(null);
   const spec = getEmbeddedFieldFamilySpec(family);
   const canActivate = activation === "focus" && (editable ?? surfaceEditable);
+  const canActivateRef = useRef(canActivate);
+  canActivateRef.current = canActivate;
   const [active, setActive] = useState(activation === "always");
 
   useEffect(() => {
@@ -55,7 +66,7 @@ export function EmbeddedFieldEditor({
   }, [activation, editable, surfaceEditable]);
 
   const activate = useCallback((focusRequest: FocusRequest = "end") => {
-    if (!canActivate) {
+    if (!canActivateRef.current) {
       return;
     }
     requestedFocusRef.current = focusRequest;
@@ -66,13 +77,13 @@ export function EmbeddedFieldEditor({
       return;
     }
     setActive(true);
-  }, [canActivate]);
+  }, []);
 
   const effectiveEditable = activation === "focus"
     ? Boolean((editable ?? surfaceEditable) && active)
     : Boolean(editable ?? surfaceEditable);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const requestedFocus = requestedFocusRef.current;
     if (!requestedFocus || !active || !nestedRoot) {
       return;

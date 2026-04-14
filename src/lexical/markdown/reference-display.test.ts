@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CslJsonItem } from "../../citations/bibtex-parser";
 import {
   formatCitationPreview,
+  NARRATIVE_REFERENCE_RE,
   parseReferenceToken,
   renderReferenceDisplay,
 } from "./reference-display";
@@ -49,5 +50,44 @@ describe("reference-display", () => {
     expect(formatCitationPreview("knuth1984", {
       store: new Map([["knuth1984", citeItem]]),
     })).toContain("The TeXbook");
+  });
+
+  describe("NARRATIVE_REFERENCE_RE does not capture trailing punctuation", () => {
+    function matchIds(text: string): string[] {
+      NARRATIVE_REFERENCE_RE.lastIndex = 0;
+      const ids: string[] = [];
+      for (const m of text.matchAll(NARRATIVE_REFERENCE_RE)) {
+        ids.push(m[2]);
+      }
+      return ids;
+    }
+
+    it("excludes trailing period", () => {
+      expect(matchIds("see @thm:fundamental.")).toEqual(["thm:fundamental"]);
+    });
+
+    it("excludes trailing comma", () => {
+      expect(matchIds("@thm:main, which")).toEqual(["thm:main"]);
+    });
+
+    it("excludes trailing semicolon", () => {
+      expect(matchIds("@sec:intro;")).toEqual(["sec:intro"]);
+    });
+
+    it("excludes trailing colon at end of sentence", () => {
+      expect(matchIds("see @sec:results:")).toEqual(["sec:results"]);
+    });
+
+    it("keeps internal dots and colons", () => {
+      expect(matchIds("@thm:main.sub")).toEqual(["thm:main.sub"]);
+    });
+
+    it("matches single-character references", () => {
+      expect(matchIds("@x is")).toEqual(["x"]);
+    });
+
+    it("matches references at start of text", () => {
+      expect(matchIds("@thm:main shows")).toEqual(["thm:main"]);
+    });
   });
 });

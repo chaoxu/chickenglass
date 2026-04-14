@@ -1,3 +1,12 @@
+/**
+ * structure-source-editor — Plain-text nested editor for structure metadata
+ * fields (block openers, include paths, math source).
+ *
+ * Uses LexicalMarkdownEditor in source mode with draft/commit/revert
+ * semantics. For rich inline/block content editing inside decorator nodes
+ * (captions, titles, table cells), see EmbeddedFieldEditor instead — it
+ * wraps LexicalRichMarkdownEditor with activation lifecycle.
+ */
 import {
   useCallback,
   useEffect,
@@ -37,7 +46,7 @@ export function StructureSourceEditor({
     }
 
     const end = draft.length;
-    handle.setSelection(end, end);
+    handle.setSelection(end, end, { skipScrollIntoView: true });
     handle.focus();
   }, [draft.length]);
 

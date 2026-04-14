@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryFileSystem } from "../file-manager";
-import type { EditorDocumentChange } from "../editor-doc-change";
+import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";

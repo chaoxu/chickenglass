@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackgroundIndexer } from "../../index";
 import { createActiveDocumentSignal } from "../active-document-signal";
 import type { PaletteCommand } from "../components/command-palette";
-import { useDevSettings } from "../dev-settings";
+import { useDevSettings } from "../../state/dev-settings";
 import { MemoryFileSystem } from "../file-manager";
 import type { Settings } from "../lib/types";
 

@@ -225,7 +225,13 @@ export function TableActionMenuPlugin() {
 
     return editor.registerRootListener((rootElement, prevRootElement) => {
       prevRootElement?.removeEventListener("contextmenu", handleContextMenu);
-      rootElement?.addEventListener("contextmenu", handleContextMenu);
+      if (!rootElement) {
+        return;
+      }
+      rootElement.addEventListener("contextmenu", handleContextMenu);
+      return () => {
+        rootElement.removeEventListener("contextmenu", handleContextMenu);
+      };
     });
   }, [editor]);
 

@@ -11,7 +11,7 @@
  */
 
 import { create } from "zustand";
-import { getTextPosition } from "../markdown/text-lines";
+import { getTextPosition } from "../app/markdown/text-lines";
 
 // ── State shape ─────────────────────────────────────────────────────────────
 

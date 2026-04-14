@@ -2,7 +2,7 @@ import {
   editorDocumentToString,
   emptyEditorDocument,
   type EditorDocumentText,
-} from "./editor-doc-change";
+} from "../lib/editor-doc-change";
 import {
   createEditorSessionState,
   type EditorSessionState,

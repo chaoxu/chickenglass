@@ -8,7 +8,7 @@ import { getCurrentSessionDocument } from "./editor-session-model";
 import {
   editorDocumentToString,
   emptyEditorDocument,
-} from "./editor-doc-change";
+} from "../lib/editor-doc-change";
 import { applySaveAsResult } from "./editor-session-save";
 import { buildProjectedWritePlan } from "./editor-session-write-plan";
 import {

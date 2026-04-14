@@ -1,10 +1,14 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { memo, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { Bug, Settings } from "lucide-react";
+import { useAppWorkspaceController } from "../contexts/app-workspace-context";
+import type { Theme } from "../theme-manager";
 import { markdownEditorModes, type EditorMode } from "../editor-mode";
 import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
 import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
 import { cn } from "../lib/utils";
-import { useEditorTelemetry } from "../stores/editor-telemetry-store";
+import { useEditorTelemetry } from "../../state/editor-telemetry-store";
 import { buildInfo } from "../build-info";
+import { useDevSettings, selectAnyDebugActive, type DevSettings } from "../../state/dev-settings";
 import {
   EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
   unsubscribeNoop,
@@ -36,32 +40,37 @@ const MODE_LABELS: Record<EditorMode, string> = {
   lexical: "Lexical",
   source: "Source",
 };
-// ── StatsPopover ───────────────────────────────────────────────────────────────
+// ── StatusBarPopover ──────────────────────────────────────────────────────────
+// Shared backdrop + positioning + Escape-dismiss wrapper for status-bar popovers.
+// Manual positioning is sufficient — the anchor is always at the bottom of the
+// viewport so there is no collision risk. @floating-ui was evaluated (#180, #189)
+// but rejected: only 2 manual positioning sites exist, both trivial.
 
-interface StatsPopoverProps {
-  stats: DocStats;
+interface StatusBarPopoverProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
+  align: "left" | "right";
+  ariaLabel: string;
+  minWidth: string;
+  children: ReactNode;
 }
 
-const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
+function StatusBarPopover({ anchorRef, onClose, align, ariaLabel, minWidth, children }: StatusBarPopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Position the panel above the anchor element.
-  // Manual positioning is sufficient here — the anchor is always at the bottom
-  // of the viewport so there is no collision risk. @floating-ui was evaluated
-  // (#180, #189) but rejected: only 2 manual positioning sites exist in the
-  // codebase, both are trivial, and the ~8KB gzipped cost is not justified.
   useEffect(() => {
     const anchor = anchorRef.current;
     const panel = panelRef.current;
     if (!anchor || !panel) return;
     const rect = anchor.getBoundingClientRect();
     panel.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-    panel.style.left = `${rect.left}px`;
-  }, [anchorRef]);
+    if (align === "left") {
+      panel.style.left = `${rect.left}px`;
+    } else {
+      panel.style.right = `${window.innerWidth - rect.right}px`;
+    }
+  }, [anchorRef, align]);
 
-  // Dismiss on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -73,6 +82,32 @@ const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: S
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-label={ariaLabel}
+        tabIndex={-1}
+        className="fixed z-50 rounded-md border border-[var(--cf-border)] bg-[var(--cf-bg)] p-3 text-xs text-[var(--cf-fg)]"
+        style={{ minWidth }}
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
+// ── StatsPopover ───────────────────────────────────────────────────────────────
+
+interface StatsPopoverProps {
+  stats: DocStats;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  onClose: () => void;
+}
+
+const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
   const rows: Array<[string, string]> = [
     ["Words", stats.words.toLocaleString()],
     ["Characters", stats.chars.toLocaleString()],
@@ -82,34 +117,163 @@ const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: S
   ];
 
   return (
-    <>
-      {/* Transparent backdrop — click closes popover */}
-      <div
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-label="Writing statistics"
-        tabIndex={-1}
-        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cf-border)] bg-[var(--cf-bg)] p-3 text-xs text-[var(--cf-fg)]"
-      >
-        <div className="font-semibold text-sm mb-2 text-[var(--cf-fg)]">
-          Writing Statistics
-        </div>
-        <div className="flex flex-col gap-1">
-          {rows.map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-6">
-              <span className="text-[var(--cf-muted)]">{label}</span>
-              <span className="font-medium tabular-nums">{value}</span>
-            </div>
-          ))}
-        </div>
+    <StatusBarPopover anchorRef={anchorRef} onClose={onClose} align="left" ariaLabel="Writing statistics" minWidth="200px">
+      <div className="font-semibold text-sm mb-2 text-[var(--cf-fg)]">
+        Writing Statistics
       </div>
+      <div className="flex flex-col gap-1">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-6">
+            <span className="text-[var(--cf-muted)]">{label}</span>
+            <span className="font-medium tabular-nums">{value}</span>
+          </div>
+        ))}
+      </div>
+    </StatusBarPopover>
+  );
+});
+
+// ── DebugPopover ──────────────────────────────────────────────────────────────
+
+const DEBUG_TOGGLE_LABELS: ReadonlyArray<readonly [keyof DevSettings, string]> = [
+  ["treeView", "Tree View"],
+  ["perfPanel", "Perf Panel"],
+  ["fpsCounter", "FPS Counter"],
+  ["commandLogging", "Command Log"],
+  ["focusTracing", "Focus Tracing"],
+  ["selectionAlwaysOn", "Selection Always On"],
+];
+
+interface DebugPopoverProps {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  onClose: () => void;
+}
+
+const DebugPopover = memo(function DebugPopover({ anchorRef, onClose }: DebugPopoverProps) {
+  const settings = useDevSettings();
+
+  return (
+    <StatusBarPopover anchorRef={anchorRef} onClose={onClose} align="right" ariaLabel="Debug settings" minWidth="180px">
+      <div className="font-semibold text-sm mb-2 text-[var(--cf-fg)]">
+        Debug
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {DEBUG_TOGGLE_LABELS.map(([key, label]) => (
+          <label key={String(key)} className="flex items-center justify-between gap-4 cursor-pointer">
+            <span className="text-[var(--cf-muted)]">{label}</span>
+            <input
+              type="checkbox"
+              checked={settings[key]}
+              onChange={() => settings.toggle(key)}
+              className="accent-[var(--cf-accent,#0969da)]"
+            />
+          </label>
+        ))}
+      </div>
+    </StatusBarPopover>
+  );
+});
+
+// ── DebugButton ───────────────────────────────────────────────────────────────
+
+const DebugButton = memo(function DebugButton() {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const anyActive = useDevSettings(selectAnyDebugActive);
+  const closePopover = useCallback(() => setOpen(false), []);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label="Debug settings"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "px-1 rounded hover:bg-[var(--cf-hover)] transition-colors",
+          anyActive && "text-[var(--cf-accent,#0969da)]",
+        )}
+      >
+        <Bug size={14} />
+      </button>
+      {open && (
+        <DebugPopover
+          anchorRef={btnRef}
+          onClose={closePopover}
+        />
+      )}
+    </>
+  );
+});
+
+// ── ConfigPopover ────────────────────────────────────────────────────────────
+
+const THEME_OPTIONS: ReadonlyArray<readonly [Theme, string]> = [
+  ["light", "Light"],
+  ["dark", "Dark"],
+  ["system", "System"],
+];
+
+interface ConfigPopoverProps {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  onClose: () => void;
+}
+
+const ConfigPopover = memo(function ConfigPopover({ anchorRef, onClose }: ConfigPopoverProps) {
+  const { settings, updateSetting } = useAppWorkspaceController();
+
+  return (
+    <StatusBarPopover anchorRef={anchorRef} onClose={onClose} align="right" ariaLabel="Editor settings" minWidth="160px">
+      <div className="font-semibold text-sm mb-2 text-[var(--cf-fg)]">
+        Settings
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="text-[var(--cf-muted)] text-xs mb-0.5">Theme</div>
+        {THEME_OPTIONS.map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="cf-theme"
+              value={value}
+              checked={settings.theme === value}
+              onChange={() => updateSetting("theme", value)}
+              className="accent-[var(--cf-accent,#0969da)]"
+            />
+            <span className="text-[var(--cf-muted)]">{label}</span>
+          </label>
+        ))}
+      </div>
+    </StatusBarPopover>
+  );
+});
+
+// ── ConfigButton ─────────────────────────────────────────────────────────────
+
+const ConfigButton = memo(function ConfigButton() {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const closePopover = useCallback(() => setOpen(false), []);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label="Editor settings"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "px-1 rounded hover:bg-[var(--cf-hover)] transition-colors",
+          open && "bg-[var(--cf-hover)]",
+        )}
+      >
+        <Settings size={14} />
+      </button>
+      {open && (
+        <ConfigPopover
+          anchorRef={btnRef}
+          onClose={closePopover}
+        />
+      )}
     </>
   );
 });
@@ -223,6 +387,8 @@ export function StatusBar({
               {buildInfo.label}
             </span>
           )}
+          <ConfigButton />
+          <DebugButton />
           {onOpenPalette && (
             <button
               type="button"

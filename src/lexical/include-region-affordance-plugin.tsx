@@ -4,7 +4,7 @@ import { mergeRegister } from "lexical";
 
 import { SurfacePortal, useEditorScrollSurface } from "../lexical-next";
 import type { IncludeRegion } from "../app/source-map";
-import { useEditorTelemetryStore } from "../app/stores/editor-telemetry-store";
+import { useEditorTelemetryStore } from "../state/editor-telemetry-store";
 
 function findActiveIncludeRegion(
   regions: readonly IncludeRegion[],

@@ -6,7 +6,7 @@ import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from "../unsaved-changes";
-import { type EditorDocumentChange } from "../editor-doc-change";
+import { type EditorDocumentChange } from "../../lib/editor-doc-change";
 import { type ActiveDocumentSignal } from "../active-document-signal";
 import {
   createEditorSessionService,

@@ -239,6 +239,12 @@ function installWindowBridge(): void {
     toggleFps: () => {
       throw new DebugBridgeError("__cfDebug.toggleFps");
     },
+    interactionLog: () => {
+      throw new DebugBridgeError("__cfDebug.interactionLog");
+    },
+    clearInteractionLog: () => {
+      throw new DebugBridgeError("__cfDebug.clearInteractionLog");
+    },
   };
 
   Object.defineProperty(window, "__cfSourceMap", {
@@ -262,6 +268,8 @@ export interface PerfBridgeMethods {
   clearPerf: () => Promise<void>;
   togglePerfPanel: () => void;
   toggleFps: () => boolean;
+  interactionLog: () => readonly import("../lexical/interaction-trace").InteractionTraceEntry[];
+  clearInteractionLog: () => void;
 }
 
 export function connectPerfBridge(methods: PerfBridgeMethods): void {
@@ -272,6 +280,8 @@ export function connectPerfBridge(methods: PerfBridgeMethods): void {
     clearPerf: methods.clearPerf,
     togglePerfPanel: methods.togglePerfPanel,
     toggleFps: methods.toggleFps,
+    interactionLog: methods.interactionLog,
+    clearInteractionLog: methods.clearInteractionLog,
   };
 }
 

@@ -1,7 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MutableRefObject } from "react";
-import { registerCodeHighlighting } from "@lexical/code";
-import { copyToClipboard } from "@lexical/clipboard";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import {
@@ -12,80 +9,41 @@ import {
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
-import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
-import {
-  $getRoot,
-  $getSelection,
-  $isElementNode,
-  $isNodeSelection,
-  $isRangeSelection,
-  CLEAR_HISTORY_COMMAND,
-  COMMAND_PRIORITY_HIGH,
-  COPY_COMMAND,
-  CUT_COMMAND,
-  HISTORIC_TAG,
-  HISTORY_MERGE_TAG,
-  PASTE_COMMAND,
-  PASTE_TAG,
-  type LexicalEditor,
-  isDOMNode,
-  isSelectionCapturedInDecoratorInput,
-  mergeRegister,
-} from "lexical";
+import type { LexicalEditor } from "lexical";
 
 import {
-  applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
-} from "../app/editor-doc-change";
+} from "../lib/editor-doc-change";
 import {
   focusSurface,
   type FocusOwner,
   type FocusOwnerRole,
-  type SurfaceFocusOwner,
 } from "../state/editor-focus";
 import {
   LexicalRenderContextProvider,
   type LexicalRenderContextValue,
-  useLexicalRenderContext,
 } from "./render-context";
 import { BibliographySection } from "./bibliography-section";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
-import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
-import {
-  createMarkdownSelection,
-  EditableSyncPlugin,
-  FormatEventPlugin,
-  repairBlankClickSelection,
-  RootElementPlugin,
-  storeSelection,
-  useMarkdownSelectionRefSync,
-  ViewportTrackingPlugin,
-} from "./editor-surface-shared";
+import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
 import { StructureEditProvider } from "./structure-edit-plugin";
 import {
-  getCoflatClipboardData,
-  getCoflatMarkdownFromDataTransfer,
-  insertCoflatMarkdownAtSelection,
-} from "./clipboard";
-import {
   coflatMarkdownNodes,
   coflatMarkdownTransformers,
   createLexicalInitialEditorState,
   getLexicalMarkdown,
   lexicalMarkdownTheme,
-  setLexicalMarkdown,
 } from "./markdown";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
@@ -93,13 +51,8 @@ import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
-import {
-  readSourcePositionFromLexicalSelection,
-  scrollSourcePositionIntoView,
-  SourcePositionPlugin,
-} from "./source-position-plugin";
+import { SourcePositionPlugin } from "./source-position-plugin";
 import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-import { useDevSettings } from "../app/dev-settings";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,
@@ -108,294 +61,25 @@ import type {
 import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TabKeyPlugin } from "./tab-key-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
+import { InteractionTracePlugin } from "./interaction-trace-plugin";
 
-function SelectionAlwaysOnPlugin() {
-  const open = useDevSettings((s) => s.selectionAlwaysOn);
-  if (!open) return null;
-  return <SelectionAlwaysOnDisplay />;
-}
+import {
+  CoflatClipboardPlugin,
+  CodeHighlightPlugin,
+  createMarkdownSelection,
+  EditableSyncPlugin,
+  EditorHandlePlugin,
+  FormatEventPlugin,
+  MarkdownSyncPlugin,
+  repairBlankClickSelection,
+  RootElementPlugin,
+  SelectionAlwaysOnPlugin,
+  ViewportTrackingPlugin,
+} from "./rich-editor-plugins";
 
-function CodeHighlightPlugin() {
-  const [editor] = useLexicalComposerContext();
+export type { LexicalRichMarkdownEditorProps };
 
-  useEffect(() => registerCodeHighlighting(editor), [editor]);
-
-  return null;
-}
-
-function MarkdownSyncPlugin({
-  doc,
-  lastCommittedDocRef,
-  pendingLocalEchoDocRef,
-  preserveLocalHistory,
-}: {
-  readonly doc: string;
-  readonly lastCommittedDocRef: MutableRefObject<string>;
-  readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
-  readonly preserveLocalHistory: boolean;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
-    if (doc === lastCommittedDocRef.current) {
-      if (pendingLocalEchoDoc === doc) {
-        pendingLocalEchoDocRef.current = null;
-      }
-      return;
-    }
-
-    const preservePendingLocalHistory =
-      preserveLocalHistory && pendingLocalEchoDoc !== null;
-    setLexicalMarkdown(
-      editor,
-      doc,
-      preservePendingLocalHistory
-        ? { tag: HISTORY_MERGE_TAG }
-        : undefined,
-    );
-    if (!preservePendingLocalHistory) {
-      editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
-    }
-    pendingLocalEchoDocRef.current = null;
-    lastCommittedDocRef.current = doc;
-  }, [doc, editor, lastCommittedDocRef, pendingLocalEchoDocRef, preserveLocalHistory]);
-
-  return null;
-}
-
-interface EditorHandlePluginProps {
-  readonly focusOwner: SurfaceFocusOwner;
-  readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
-  readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
-  readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
-  readonly userEditPendingRef: MutableRefObject<boolean>;
-}
-
-function EditorHandlePlugin({
-  focusOwner,
-  onEditorReady,
-  onSelectionChange,
-  selectionRef,
-  userEditPendingRef,
-}: EditorHandlePluginProps) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    if (!onEditorReady) {
-      return;
-    }
-
-    onEditorReady({
-      applyChanges: (changes) => {
-        if (changes.length === 0) {
-          return;
-        }
-
-        const currentDoc = getLexicalMarkdown(editor);
-        const nextDoc = applyEditorDocumentChanges(currentDoc, changes);
-        if (nextDoc === currentDoc) {
-          storeSelection(
-            selectionRef,
-            currentDoc.length,
-            onSelectionChange,
-            selectionRef.current.anchor,
-            selectionRef.current.focus,
-          );
-          return;
-        }
-        userEditPendingRef.current = true;
-        storeSelection(
-          selectionRef,
-          nextDoc.length,
-          onSelectionChange,
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
-        );
-        setLexicalMarkdown(editor, nextDoc);
-      },
-      focus: () => {
-        scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
-        dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
-      },
-      getDoc: () => getLexicalMarkdown(editor),
-      getSelection: () => {
-        const livePosition = readSourcePositionFromLexicalSelection(editor);
-        if (livePosition === null) {
-          return selectionRef.current;
-        }
-        const docLength = getLexicalMarkdown(editor).length;
-        return createMarkdownSelection(livePosition, livePosition, docLength);
-      },
-      insertText: (text) => {
-        const currentDoc = getLexicalMarkdown(editor);
-        const selection = createMarkdownSelection(
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
-          currentDoc.length,
-        );
-        const nextDoc = [
-          currentDoc.slice(0, selection.from),
-          text,
-          currentDoc.slice(selection.to),
-        ].join("");
-        const nextOffset = selection.from + text.length;
-
-        if (nextDoc === currentDoc) {
-          storeSelection(selectionRef, currentDoc.length, onSelectionChange, nextOffset);
-          return;
-        }
-        userEditPendingRef.current = true;
-        storeSelection(selectionRef, nextDoc.length, onSelectionChange, nextOffset);
-        setLexicalMarkdown(editor, nextDoc);
-      },
-      setDoc: (doc) => {
-        const currentDoc = getLexicalMarkdown(editor);
-        if (doc === currentDoc) {
-          storeSelection(
-            selectionRef,
-            currentDoc.length,
-            onSelectionChange,
-            selectionRef.current.anchor,
-            selectionRef.current.focus,
-          );
-          return;
-        }
-        userEditPendingRef.current = true;
-        storeSelection(
-          selectionRef,
-          doc.length,
-          onSelectionChange,
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
-        );
-        setLexicalMarkdown(editor, doc);
-      },
-      setSelection: (anchor, focus = anchor) => {
-        const nextSelection = storeSelection(
-          selectionRef,
-          getLexicalMarkdown(editor).length,
-          onSelectionChange,
-          anchor,
-          focus,
-        );
-        const moved = scrollSourcePositionIntoView(
-          editor,
-          editor.getRootElement(),
-          nextSelection.from,
-        );
-        if (!moved) {
-          editor.update(() => {
-            const root = $getRoot();
-            const firstChild = root.getFirstChild();
-            if (firstChild && $isElementNode(firstChild)) {
-              firstChild.selectStart();
-            }
-          }, { discrete: true });
-        }
-        dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
-      },
-    }, editor);
-  }, [editor, focusOwner, onEditorReady, onSelectionChange, selectionRef, userEditPendingRef]);
-
-  return null;
-}
-
-function getClipboardEvent(
-  event: ClipboardEvent | KeyboardEvent | null,
-): ClipboardEvent | null {
-  return event && "clipboardData" in event
-    ? event as ClipboardEvent
-    : null;
-}
-
-function getPasteClipboardData(
-  event: ClipboardEvent | InputEvent | KeyboardEvent,
-): DataTransfer | null {
-  return "clipboardData" in event
-    ? event.clipboardData ?? null
-    : null;
-}
-
-function CoflatClipboardPlugin() {
-  const [editor] = useLexicalComposerContext();
-  const renderContext = useLexicalRenderContext();
-
-  useEffect(() => {
-    const getClipboardData = () => editor.getEditorState().read(() =>
-      getCoflatClipboardData(editor, renderContext, $getSelection())
-    );
-
-    return mergeRegister(
-      editor.registerCommand(COPY_COMMAND, (event) => {
-        const clipboardData = getClipboardData();
-        if (!clipboardData) {
-          return false;
-        }
-
-        void copyToClipboard(editor, getClipboardEvent(event), clipboardData);
-        return true;
-      }, COMMAND_PRIORITY_HIGH),
-      editor.registerCommand(CUT_COMMAND, (event) => {
-        const clipboardData = getClipboardData();
-        if (!clipboardData) {
-          return false;
-        }
-
-        void copyToClipboard(editor, getClipboardEvent(event), clipboardData).then((copied) => {
-          if (!copied) {
-            return;
-          }
-
-          editor.update(() => {
-            const selection = $getSelection();
-            if ($isRangeSelection(selection)) {
-              selection.removeText();
-              return;
-            }
-
-            if ($isNodeSelection(selection)) {
-              for (const node of selection.getNodes()) {
-                node.remove();
-              }
-            }
-          });
-        });
-
-        return true;
-      }, COMMAND_PRIORITY_HIGH),
-      editor.registerCommand(PASTE_COMMAND, (event) => {
-        const clipboardData = getPasteClipboardData(event);
-        if (!clipboardData) {
-          return false;
-        }
-
-        if (isDOMNode(event.target) && isSelectionCapturedInDecoratorInput(event.target)) {
-          return false;
-        }
-
-        const markdown = getCoflatMarkdownFromDataTransfer(clipboardData);
-        if (!markdown) {
-          return false;
-        }
-
-        const inserted = insertCoflatMarkdownAtSelection(editor, markdown, {
-          tag: PASTE_TAG,
-        });
-        if (!inserted) {
-          return false;
-        }
-
-        event.preventDefault();
-        return true;
-      }, COMMAND_PRIORITY_HIGH),
-    );
-  }, [editor, renderContext]);
-
-  return null;
-}
-
-export interface LexicalRichMarkdownEditorProps {
+interface LexicalRichMarkdownEditorProps {
   readonly doc: string;
   readonly docPath?: string;
   readonly editable?: boolean;
@@ -496,7 +180,6 @@ export function LexicalRichMarkdownEditor({
       && !userEditPendingRef.current
       && !tags.has(COFLAT_FORMAT_EVENT_TAG)
       && !tags.has(COFLAT_NESTED_EDIT_TAG)
-      && !tags.has(HISTORIC_TAG)
     ) {
       return;
     }
@@ -529,7 +212,13 @@ export function LexicalRichMarkdownEditor({
   ].filter(Boolean).join(" ");
   const effectiveSurface = inheritedSurface ?? surfaceElement;
 
-  useMarkdownSelectionRefSync(doc, sourceSelectionRef);
+  useEffect(() => {
+    sourceSelectionRef.current = createMarkdownSelection(
+      sourceSelectionRef.current.anchor,
+      sourceSelectionRef.current.focus,
+      doc.length,
+    );
+  }, [doc]);
 
   return (
     <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
@@ -639,6 +328,7 @@ export function LexicalRichMarkdownEditor({
                 {showBibliography ? <BibliographySection /> : null}
                 <ActiveEditorPlugin />
                 <TreeViewPlugin />
+                <InteractionTracePlugin />
               </StructureEditProvider>
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
