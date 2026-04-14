@@ -3,6 +3,12 @@ import {
   defaultContentFontStack,
   defaultUIFontStack,
 } from "./constants/editor-constants";
+import { CONTENT_MAX_WIDTH } from "./constants/layout";
+import {
+  BASE_FONT_SIZE_CSS,
+  BASE_LINE_HEIGHT_CSS,
+  DEFAULT_TRANSITION,
+} from "./constants/typography";
 
 export const themeFoundationTokens = [
   "--cf-bg",
@@ -280,7 +286,7 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-spacing-lg": "16px",
   "--cf-border-width": "1px",
   "--cf-border-width-accent": "2px",
-  "--cf-transition": "0.15s ease",
+  "--cf-transition": DEFAULT_TRANSITION,
   "--cf-danger": "#dc2626",
   "--cf-layer-inline-chrome": "1",
   "--cf-layer-preview-surface": "1000",
@@ -347,9 +353,9 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-content-font": defaultContentFontStack,
   "--cf-code-font": defaultCodeFontStack,
   "--cf-code-font-size": "0.85em",
-  "--cf-base-font-size": "16px",
-  "--cf-line-height": "1.5",
-  "--cf-content-max-width": "800px",
+  "--cf-base-font-size": BASE_FONT_SIZE_CSS,
+  "--cf-line-height": BASE_LINE_HEIGHT_CSS,
+  "--cf-content-max-width": CONTENT_MAX_WIDTH,
   "--cf-sidenote-width": "224px",
   "--cf-fence-guide-width": "3px",
   "--cf-ui-font-size-sm": "12px",

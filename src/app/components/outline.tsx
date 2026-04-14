@@ -66,7 +66,7 @@ export const Outline = memo(function Outline({ headings, onSelect }: OutlineProp
         return (
           <div
             key={i}
-            className="flex items-baseline w-full hover:bg-[var(--cf-hover)] transition-colors duration-[var(--cf-transition,0.15s)]"
+            className="flex items-baseline w-full hover:bg-[var(--cf-hover)] transition-colors duration-[var(--cf-transition)]"
             style={{ paddingLeft: `${indent}px`, paddingRight: "8px" }}
           >
             {/* Collapse toggle */}

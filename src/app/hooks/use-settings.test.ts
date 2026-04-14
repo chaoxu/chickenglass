@@ -45,7 +45,7 @@ describe("useSettings", () => {
       expect(settings).toEqual({
         autoSaveInterval: 30000,
         fontSize: 16,
-        lineHeight: 1.6,
+        lineHeight: 1.5,
         tabSize: 2,
         showLineNumbers: false,
         wordWrap: true,
@@ -69,7 +69,7 @@ describe("useSettings", () => {
       const { settings } = useSettings();
       expect(settings.fontSize).toBe(20);
       expect(settings.tabSize).toBe(4);
-      expect(settings.lineHeight).toBe(1.6);
+      expect(settings.lineHeight).toBe(1.5);
       expect(settings.editorMode).toBe("lexical");
     });
 
@@ -152,7 +152,7 @@ describe("useSettings", () => {
       updateSetting("tabSize", 8);
       const stored = storedSettings();
       expect(stored?.tabSize).toBe(8);
-      expect(stored?.lineHeight).toBe(1.6);
+      expect(stored?.lineHeight).toBe(1.5);
       expect(stored?.editorMode).toBe("lexical");
     });
 

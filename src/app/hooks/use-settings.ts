@@ -12,11 +12,12 @@ import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
 import { EDITOR_MODE, LEGACY_EDITOR_MODE_READ } from "../editor-mode";
+import { BASE_FONT_SIZE_PX, BASE_LINE_HEIGHT } from "../../constants/typography";
 
 const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 30000,
-  fontSize: 16,
-  lineHeight: 1.6,
+  fontSize: BASE_FONT_SIZE_PX,
+  lineHeight: BASE_LINE_HEIGHT,
   tabSize: 2,
   showLineNumbers: false,
   wordWrap: true,

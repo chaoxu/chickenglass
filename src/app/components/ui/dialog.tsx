@@ -110,7 +110,7 @@ const DialogCloseButton = React.forwardRef<
     <DialogPrimitive.Close
       ref={ref}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
+        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,
       )}
       {...props}

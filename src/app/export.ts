@@ -74,9 +74,9 @@ ${themeTokens}
     }
     body {
       font-family: var(--cf-content-font);
-      font-size: 16px;
-      line-height: 1.6;
-      max-width: 800px;
+      font-size: var(--cf-base-font-size);
+      line-height: var(--cf-line-height);
+      max-width: var(--cf-content-max-width);
       margin: 3rem auto;
       padding: 0 1.5rem;
       color: var(--cf-fg);

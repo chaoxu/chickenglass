@@ -115,7 +115,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
                   <a
                     href={c.url}
                     onClick={(e) => handleLinkClick(e, c.url)}
-                    className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
+                    className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition)] hover:opacity-60"
                   >
                     {c.name}
                   </a>
@@ -145,7 +145,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
                         console.error("[about] failed to reveal desktop log directory", error);
                       });
                   }}
-                  className="mt-2 text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
+                  className="mt-2 text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition)] hover:opacity-60"
                 >
                   Reveal Log Folder
                 </button>
@@ -158,7 +158,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           <a
             href={GITHUB_URL}
             onClick={(e) => handleLinkClick(e, GITHUB_URL)}
-            className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition,0.15s)] hover:opacity-60"
+            className="text-sm text-[var(--cf-fg)] underline transition-opacity duration-[var(--cf-transition)] hover:opacity-60"
           >
             View on GitHub
           </a>

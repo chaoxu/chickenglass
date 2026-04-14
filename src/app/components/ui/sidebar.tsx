@@ -166,7 +166,7 @@ const Sidebar = React.forwardRef<
       className={cn(
         "flex min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--cf-bg)]",
         open ? "w-[var(--cf-sidebar-width)] border-r border-[var(--cf-border)]" : "w-0 border-r-0 pointer-events-none",
-        !isDragging && "transition-[width] duration-[var(--cf-transition,0.15s)] ease-in-out",
+        !isDragging && "transition-[width] duration-[var(--cf-transition)] ease-in-out",
         className,
       )}
       style={{
@@ -234,7 +234,7 @@ const SidebarTrigger = React.forwardRef<
       aria-label={ariaLabel ?? (open ? "Collapse sidebar" : "Expand sidebar")}
       title={title ?? defaultTitle}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
+        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition)] hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,
       )}
       onClick={(event) => {
@@ -271,7 +271,7 @@ function SidebarRail({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
       className={cn(
         "shrink-0 w-1 cursor-col-resize relative -ml-[2px] z-10",
         "hover:bg-[var(--cf-active)] active:bg-[var(--cf-active)]",
-        "transition-colors duration-[var(--cf-transition,0.15s)]",
+        "transition-colors duration-[var(--cf-transition)]",
         className,
       )}
       onMouseDown={startResize}

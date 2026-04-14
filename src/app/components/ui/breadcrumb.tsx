@@ -35,7 +35,7 @@ function BreadcrumbButton({ className, type = "button", ...props }: BreadcrumbBu
       type={type}
       className={cn(
         "inline-flex min-w-0 items-center rounded px-1 py-[1px]",
-        "text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition,0.15s)]",
+        "text-[var(--cf-muted)] transition-colors duration-[var(--cf-transition)]",
         "hover:bg-[var(--cf-hover)] hover:text-[var(--cf-fg)]",
         className,
       )}

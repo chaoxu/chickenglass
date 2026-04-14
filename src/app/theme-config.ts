@@ -3,6 +3,11 @@ import {
   defaultContentFontStack,
   defaultUIFontStack,
 } from "../constants/editor-constants";
+import { CONTENT_MAX_WIDTH } from "../constants/layout";
+import {
+  BASE_FONT_SIZE_CSS,
+  BASE_LINE_HEIGHT_CSS,
+} from "../constants/typography";
 import { themeTypographyTokens } from "../theme-contract";
 
 export interface HeadingStyle {
@@ -32,9 +37,9 @@ const academic: ThemePreset = {
   uiFont: defaultUIFontStack,
   contentFont: defaultContentFontStack,
   codeFont: defaultCodeFontStack,
-  baseFontSize: "16px",
-  lineHeight: "1.5",
-  contentMaxWidth: "800px",
+  baseFontSize: BASE_FONT_SIZE_CSS,
+  lineHeight: BASE_LINE_HEIGHT_CSS,
+  contentMaxWidth: CONTENT_MAX_WIDTH,
   h1: { size: "1.15em", weight: "700", style: "normal" },
   h2: { size: "1.15em", weight: "400", style: "italic" },
   h3: { size: "1.1em", weight: "600", style: "italic" },
@@ -50,7 +55,7 @@ const monospace: ThemePreset = {
   codeFont: defaultCodeFontStack,
   baseFontSize: "15px",
   lineHeight: "1.6",
-  contentMaxWidth: "800px",
+  contentMaxWidth: CONTENT_MAX_WIDTH,
   h1: { size: "1.4em", weight: "700", style: "normal" },
   h2: { size: "1.25em", weight: "700", style: "normal" },
   h3: { size: "1.15em", weight: "600", style: "normal" },
@@ -64,9 +69,9 @@ const modern: ThemePreset = {
   uiFont: defaultUIFontStack,
   contentFont: "system-ui, -apple-system, 'Segoe UI', sans-serif",
   codeFont: defaultCodeFontStack,
-  baseFontSize: "16px",
-  lineHeight: "1.5",
-  contentMaxWidth: "800px",
+  baseFontSize: BASE_FONT_SIZE_CSS,
+  lineHeight: BASE_LINE_HEIGHT_CSS,
+  contentMaxWidth: CONTENT_MAX_WIDTH,
   h1: { size: "1.5em", weight: "700", style: "normal" },
   h2: { size: "1.3em", weight: "600", style: "normal" },
   h3: { size: "1.15em", weight: "600", style: "normal" },

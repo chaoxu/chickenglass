@@ -34,7 +34,7 @@ export function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: 
               type="button"
               onClick={() => { onSetTheme(t.value); }}
               className={cn(
-                "px-3 py-1 text-sm rounded border transition-colors duration-[var(--cf-transition,0.15s)]",
+                "px-3 py-1 text-sm rounded border transition-colors duration-[var(--cf-transition)]",
                 theme === t.value
                   ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
                   : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
@@ -61,7 +61,7 @@ export function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: 
                 type="button"
                 onClick={() => { onUpdateSetting("writingTheme", key); }}
                 className={cn(
-                  "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition,0.15s)]",
+                  "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition)]",
                   settings.writingTheme === key
                     ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
                     : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
@@ -84,7 +84,7 @@ export function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: 
               type="button"
               onClick={() => { onUpdateSetting("themeName", t.id); }}
               className={cn(
-                "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition,0.15s)]",
+                "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition)]",
                 settings.themeName === t.id
                   ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
                   : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",

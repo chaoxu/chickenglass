@@ -31,7 +31,7 @@ export const Diagnostics = memo(function Diagnostics({
       {diagnostics.map((diag) => (
         <button
           key={`${diag.severity}-${diag.from}-${diag.to}-${diag.message}`}
-          className="flex items-baseline gap-1.5 w-full text-left px-3 py-[2px] text-sm hover:bg-[var(--cf-hover)] transition-colors duration-[var(--cf-transition,0.15s)] cursor-pointer"
+          className="flex items-baseline gap-1.5 w-full text-left px-3 py-[2px] text-sm hover:bg-[var(--cf-hover)] transition-colors duration-[var(--cf-transition)] cursor-pointer"
           onClick={() => onSelect(diag.from)}
         >
           <span

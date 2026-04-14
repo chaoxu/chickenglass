@@ -174,7 +174,7 @@
 
 .cf-lexical-editor.cf-lexical-editor--rich > * {
   width: 100%;
-  max-width: var(--cf-content-max-width, 800px);
+  max-width: var(--cf-content-max-width);
   margin-left: auto;
   margin-right: auto;
 }
@@ -743,7 +743,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0 48px 2rem;
-  max-width: var(--cf-content-max-width, 800px);
+  max-width: var(--cf-content-max-width);
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;

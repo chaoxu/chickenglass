@@ -83,7 +83,7 @@ export const SearchResultItem = memo(function SearchResultItem({
 }: SearchResultItemProps) {
   return (
     <button
-      className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cf-hover)] border-b border-[var(--cf-border)] last:border-b-0 transition-colors duration-[var(--cf-transition,0.15s)]"
+      className="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[var(--cf-hover)] border-b border-[var(--cf-border)] last:border-b-0 transition-colors duration-[var(--cf-transition)]"
       onClick={() => onClick(entry)}
     >
       {/* Top row: type badge + number + title */}
