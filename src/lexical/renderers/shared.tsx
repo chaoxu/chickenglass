@@ -17,14 +17,21 @@ export function preventKatexMouseDown(event: MouseEvent) {
 export function structureToggleProps(
   active: boolean,
   onActivate: () => void,
-  options?: { stopPropagation?: boolean },
+  options?: {
+    stopPropagation?: boolean;
+    onBeforeActivate?: (element: HTMLElement) => void;
+  },
 ): Record<string, unknown> {
   if (!active) return {};
 
   const stop = options?.stopPropagation;
+  const onBeforeActivate = options?.onBeforeActivate;
   return {
     onClick: (event: SyntheticEvent) => {
       event.preventDefault();
+      if (event.currentTarget instanceof HTMLElement) {
+        onBeforeActivate?.(event.currentTarget);
+      }
       if (stop) {
         event.stopPropagation();
       }
@@ -33,6 +40,9 @@ export function structureToggleProps(
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
+        if (event.currentTarget instanceof HTMLElement) {
+          onBeforeActivate?.(event.currentTarget);
+        }
         if (stop) {
           event.stopPropagation();
         }

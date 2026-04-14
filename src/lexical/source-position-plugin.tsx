@@ -4,6 +4,7 @@ import {
   $createNodeSelection,
   $getNearestNodeFromDOMNode,
   $getSelection,
+  $isNodeSelection,
   $isRangeSelection,
   $setSelection,
   type LexicalEditor,
@@ -202,28 +203,56 @@ function selectNavigationTarget(
   return didSelect;
 }
 
-function sourcePositionFromElement(element: HTMLElement | null): number | null {
-  let current: HTMLElement | null = element;
-  while (current) {
-    const sourceFrom = current.dataset.coflatSourceFrom;
-    if (sourceFrom !== undefined) {
-      const parsed = Number(sourceFrom);
+function sourcePositionFromMarkedElement(element: HTMLElement | null): number | null {
+  if (!element) {
+    return null;
+  }
+
+  const sourceFrom = element.dataset.coflatSourceFrom;
+  if (sourceFrom !== undefined) {
+    const parsed = Number(sourceFrom);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  if (element.classList.contains("cf-lexical-heading")) {
+    const headingPos = element.dataset.coflatHeadingPos;
+    if (headingPos !== undefined) {
+      const parsed = Number(headingPos);
       if (Number.isFinite(parsed)) {
         return parsed;
       }
     }
-    if (current.classList.contains("cf-lexical-heading")) {
-      const headingPos = current.dataset.coflatHeadingPos;
-      if (headingPos !== undefined) {
-        const parsed = Number(headingPos);
-        if (Number.isFinite(parsed)) {
-          return parsed;
-        }
-      }
+  }
+
+  return null;
+}
+
+function sourcePositionFromElement(element: HTMLElement | null): number | null {
+  const markedDescendant = element?.querySelector<HTMLElement>(
+    "[data-coflat-source-from], .cf-lexical-heading[data-coflat-heading-pos]",
+  ) ?? null;
+  const descendantPosition = sourcePositionFromMarkedElement(markedDescendant);
+  if (descendantPosition !== null) {
+    return descendantPosition;
+  }
+
+  let current: HTMLElement | null = element;
+  while (current) {
+    const currentPosition = sourcePositionFromMarkedElement(current);
+    if (currentPosition !== null) {
+      return currentPosition;
     }
     current = current.parentElement;
   }
   return null;
+}
+
+export function readSourcePositionFromElement(
+  element: HTMLElement | null,
+): number | null {
+  return sourcePositionFromElement(element);
 }
 
 /**
@@ -236,15 +265,29 @@ function sourcePositionFromElement(element: HTMLElement | null): number | null {
 export function readSourcePositionFromLexicalSelection(
   editor: LexicalEditor,
 ): number | null {
-  return editor.getEditorState().read(() => {
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection)) {
+  return editor.getEditorState().read(() => $readSourcePositionFromLexicalSelection(editor));
+}
+
+export function $readSourcePositionFromLexicalSelection(
+  editor: LexicalEditor,
+): number | null {
+  const selection = $getSelection();
+  if ($isRangeSelection(selection)) {
+    const anchorElement = editor.getElementByKey(selection.anchor.getNode().getKey());
+    return sourcePositionFromElement(anchorElement);
+  }
+
+  if ($isNodeSelection(selection)) {
+    const [node] = selection.getNodes();
+    if (!node) {
       return null;
     }
 
-    const anchorElement = editor.getElementByKey(selection.anchor.getNode().getKey());
-    return sourcePositionFromElement(anchorElement);
-  });
+    const element = editor.getElementByKey(node.getKey());
+    return sourcePositionFromElement(element);
+  }
+
+  return null;
 }
 
 export function scrollSourcePositionIntoView(

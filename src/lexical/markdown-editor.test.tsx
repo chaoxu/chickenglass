@@ -1,11 +1,17 @@
 import { act, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
-import { UNDO_COMMAND } from "lexical";
+import {
+  $createNodeSelection,
+  $getNearestNodeFromDOMNode,
+  $setSelection,
+  UNDO_COMMAND,
+} from "lexical";
 import { createElement, type ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
+import { setActiveEditor } from "./active-editor-tracker";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 
@@ -224,6 +230,130 @@ describe("LexicalMarkdownEditor mode round-trip (issue #99)", () => {
       await waitFor(() => expect(editor.handle.getDoc()).toBe(FIXTURE));
     } finally {
       editor.unmount();
+    }
+  });
+});
+
+describe("LexicalMarkdownEditor rich selection bridge", () => {
+  it("reports the live source position when display math owns the selection", async () => {
+    const doc = [
+      "Before",
+      "",
+      "$$",
+      "x",
+      "$$",
+      "",
+      "After",
+    ].join("\n");
+    const editor = await mountEditor({
+      doc,
+      editorMode: "lexical",
+    });
+
+    try {
+      setActiveEditor(editor.editor);
+      await waitFor(() => {
+        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        expect(rawBlock).not.toBeNull();
+      });
+
+      act(() => {
+        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        if (!(rawBlock instanceof HTMLElement)) {
+          throw new Error("expected display math element");
+        }
+
+        editor.editor.update(() => {
+          const node = $getNearestNodeFromDOMNode(rawBlock);
+          if (!node) {
+            throw new Error("expected display math node");
+          }
+          const selection = $createNodeSelection();
+          selection.add(node.getKey());
+          $setSelection(selection);
+        }, { discrete: true });
+      });
+
+      const expected = doc.indexOf("$$\nx\n$$");
+      await waitFor(() => {
+        expect(editor.handle.getSelection().anchor).toBe(expected);
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("keeps the last mapped rich selection when a nested editor becomes active", async () => {
+    const doc = [
+      "Before",
+      "",
+      "$$",
+      "x",
+      "$$",
+      "",
+      "After",
+    ].join("\n");
+    const editor = await mountEditor({
+      doc,
+      editorMode: "lexical",
+    });
+    const nested = await mountEditor({
+      doc: "nested",
+      editorMode: "source",
+    });
+
+    try {
+      setActiveEditor(editor.editor);
+      await waitFor(() => {
+        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        expect(rawBlock).not.toBeNull();
+      });
+
+      act(() => {
+        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        if (!(rawBlock instanceof HTMLElement)) {
+          throw new Error("expected display math element");
+        }
+
+        editor.editor.update(() => {
+          const node = $getNearestNodeFromDOMNode(rawBlock);
+          if (!node) {
+            throw new Error("expected display math node");
+          }
+          const selection = $createNodeSelection();
+          selection.add(node.getKey());
+          $setSelection(selection);
+        }, { discrete: true });
+      });
+
+      const expected = doc.indexOf("$$\nx\n$$");
+      await waitFor(() => {
+        expect(editor.handle.getSelection().anchor).toBe(expected);
+      });
+
+      act(() => {
+        setActiveEditor(nested.editor);
+        editor.editor.update(() => {
+          const root = editor.editor.getRootElement();
+          const firstParagraph = root?.querySelector("p");
+          if (!(firstParagraph instanceof HTMLElement)) {
+            throw new Error("expected first paragraph");
+          }
+          const node = $getNearestNodeFromDOMNode(firstParagraph);
+          if (!node) {
+            throw new Error("expected first paragraph node");
+          }
+          node.selectStart();
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(editor.handle.getSelection().anchor).toBe(expected);
+      });
+    } finally {
+      setActiveEditor(editor.editor);
+      editor.unmount();
+      nested.unmount();
     }
   });
 });

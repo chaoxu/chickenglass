@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import type { NodeKey } from "lexical";
 
@@ -7,6 +8,8 @@ import { useLexicalRenderContext } from "../render-context";
 import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
+import { readSourcePositionFromElement } from "../source-position-plugin";
+import { SET_SOURCE_SELECTION_COMMAND } from "../source-selection-command";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { preventKatexMouseDown, structureToggleProps, useRawBlockUpdater } from "./shared";
 
@@ -18,6 +21,7 @@ export function DisplayMathBlockRenderer({
   readonly raw: string;
 }) {
   const { config, renderIndex } = useLexicalRenderContext();
+  const [editor] = useLexicalComposerContext();
   const surfaceEditable = useLexicalSurfaceEditable();
   const parsed = useMemo(() => parseStructuredDisplayMathRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
@@ -31,6 +35,13 @@ export function DisplayMathBlockRenderer({
     [config.math, parsed.body],
   );
   const label = parsed.id ? renderIndex.references.get(parsed.id)?.shortLabel : undefined;
+  const rememberSourcePosition = useCallback((element: HTMLElement) => {
+    const sourcePosition = readSourcePositionFromElement(element);
+    if (sourcePosition === null) {
+      return;
+    }
+    editor.dispatchCommand(SET_SOURCE_SELECTION_COMMAND, sourcePosition);
+  }, [editor]);
 
   return (
     <div
@@ -42,12 +53,16 @@ export function DisplayMathBlockRenderer({
             className="cf-lexical-display-math-body"
             dangerouslySetInnerHTML={{ __html: equation }}
             onMouseDown={preventKatexMouseDown}
-            {...structureToggleProps(surfaceEditable, sourceEdit.activate)}
+            {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+              onBeforeActivate: rememberSourcePosition,
+            })}
           />
           {label ? (
             <div
               className="cf-lexical-display-math-label"
-              {...structureToggleProps(surfaceEditable, sourceEdit.activate)}
+              {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+                onBeforeActivate: rememberSourcePosition,
+              })}
             >
               {label}
             </div>
