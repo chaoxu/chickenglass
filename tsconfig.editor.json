@@ -6,7 +6,9 @@
     "emitDeclarationOnly": true,
     "declarationMap": false,
     "outDir": "./dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsc/editor.tsbuildinfo"
   },
   "include": ["editor.ts", "src/**/*.d.ts"],
   "exclude": [
