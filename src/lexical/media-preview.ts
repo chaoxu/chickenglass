@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { readImageFileAsDataUrl } from "../lib/image-data-url";
 import { projectPathCandidatesFromDocument } from "../lib/project-paths";
-import { useLexicalRenderContext } from "./render-context";
+import { useLexicalRenderResources } from "./render-context";
 import { rasterizePdfPage1 } from "./pdf-rasterizer";
 
 function isLocalAssetTarget(target: string): boolean {
@@ -20,7 +20,7 @@ export interface AssetPreviewState {
 }
 
 export function useAssetPreview(target: string): AssetPreviewState {
-  const { docPath, fs, resolveAssetUrl } = useLexicalRenderContext();
+  const { docPath, fs, resolveAssetUrl } = useLexicalRenderResources();
   const fallbackUrl = useMemo(
     () => resolveAssetUrl(target) ?? target,
     [resolveAssetUrl, target],
@@ -92,7 +92,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
 }
 
 export function useLocalImageDataUrl(target: string): string | null {
-  const { docPath, fs } = useLexicalRenderContext();
+  const { docPath, fs } = useLexicalRenderResources();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {

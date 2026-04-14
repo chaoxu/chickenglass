@@ -16,6 +16,27 @@ import {
   useProjectConfigResource,
 } from "../lexical-next/controller/resource-resolver";
 
+/**
+ * Two contexts to cut per-keystroke fan-out (issue #172):
+ *
+ * - LexicalRenderResourceContext — stable resources (fs, docPath, resolver,
+ *   resolveAssetUrl). Changes only when docPath or the fs identity changes,
+ *   which is rare. Hooks that only need to load/resolve assets subscribe to
+ *   this and do not re-render on every keystroke.
+ *
+ * - LexicalRenderContext — document-derived runtime (doc, citations, config,
+ *   renderIndex, labelGraph, footnoteDefinitions). Changes on every doc edit.
+ *   Renderers that format text based on the doc subscribe here.
+ *
+ * Consumers that need both read both; React 18 batches the resulting renders.
+ */
+
+export interface LexicalRenderResources {
+  readonly docPath?: string;
+  readonly fs: FileSystem;
+  readonly resolveAssetUrl: (targetPath: string) => string | null;
+}
+
 export interface LexicalRenderContextValue extends LexicalDocumentRuntime {
   readonly citations: CitationRenderData;
   readonly doc: string;
@@ -23,6 +44,7 @@ export interface LexicalRenderContextValue extends LexicalDocumentRuntime {
   readonly fs: FileSystem;
 }
 
+const LexicalRenderResourceContext = createContext<LexicalRenderResources | null>(null);
 const LexicalRenderContext = createContext<LexicalRenderContextValue | null>(null);
 
 interface LexicalRenderContextProviderProps {
@@ -39,10 +61,17 @@ export function LexicalRenderContextProvider({
   value,
 }: LexicalRenderContextProviderProps) {
   if (value) {
+    const resources: LexicalRenderResources = {
+      docPath: value.docPath,
+      fs: value.fs,
+      resolveAssetUrl: value.resolveAssetUrl,
+    };
     return (
-      <LexicalRenderContext.Provider value={value}>
-        {children}
-      </LexicalRenderContext.Provider>
+      <LexicalRenderResourceContext.Provider value={resources}>
+        <LexicalRenderContext.Provider value={value}>
+          {children}
+        </LexicalRenderContext.Provider>
+      </LexicalRenderResourceContext.Provider>
     );
   }
 
@@ -68,6 +97,12 @@ function LexicalRenderContextRuntimeProvider({
   );
   const citations = useCitationRenderData(documentSnapshot.references, documentRuntime.config, resolver);
 
+  const resources = useMemo<LexicalRenderResources>(() => ({
+    docPath,
+    fs,
+    resolveAssetUrl: documentRuntime.resolveAssetUrl,
+  }), [docPath, fs, documentRuntime.resolveAssetUrl]);
+
   const computedValue = useMemo<LexicalRenderContextValue>(() => ({
     citations,
     doc,
@@ -77,9 +112,11 @@ function LexicalRenderContextRuntimeProvider({
   }), [citations, doc, docPath, documentRuntime, fs]);
 
   return (
-    <LexicalRenderContext.Provider value={computedValue}>
-      {children}
-    </LexicalRenderContext.Provider>
+    <LexicalRenderResourceContext.Provider value={resources}>
+      <LexicalRenderContext.Provider value={computedValue}>
+        {children}
+      </LexicalRenderContext.Provider>
+    </LexicalRenderResourceContext.Provider>
   );
 }
 
@@ -91,8 +128,16 @@ export function useLexicalRenderContext(): LexicalRenderContextValue {
   return value;
 }
 
+export function useLexicalRenderResources(): LexicalRenderResources {
+  const value = useContext(LexicalRenderResourceContext);
+  if (!value) {
+    throw new Error("useLexicalRenderResources must be used within a LexicalRenderContextProvider");
+  }
+  return value;
+}
+
 export function useIncludedDocument(path: string | undefined): string | null {
-  const { docPath, fs } = useLexicalRenderContext();
+  const { docPath, fs } = useLexicalRenderResources();
   const resolver = useLexicalRenderResourceResolver(fs, docPath);
   return useIncludedDocumentResource(path, resolver);
 }
