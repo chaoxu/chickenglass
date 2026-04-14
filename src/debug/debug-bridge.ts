@@ -97,6 +97,28 @@ let connectedLexical: LexicalEditor | null = null;
 let connectedSourceMap: SourceMap | null = null;
 let connectedTauriSmoke: TauriSmokeMethods | null = null;
 
+/**
+ * Per-slice readiness. Each promise resolves the first time the matching
+ * provider connects and stays resolved for the rest of the session, so
+ * automation can `await window.__app.ready` instead of polling methods
+ * until they stop throwing `DebugBridgeError`.
+ */
+type ReadySlice = "app" | "editor" | "perf";
+const readyResolvers = new Map<ReadySlice, () => void>();
+const readyPromises: Record<ReadySlice, Promise<void>> = {
+  app: new Promise<void>((resolve) => { readyResolvers.set("app", resolve); }),
+  editor: new Promise<void>((resolve) => { readyResolvers.set("editor", resolve); }),
+  perf: new Promise<void>((resolve) => { readyResolvers.set("perf", resolve); }),
+};
+
+function markReady(slice: ReadySlice): void {
+  const resolve = readyResolvers.get(slice);
+  if (resolve) {
+    readyResolvers.delete(slice);
+    resolve();
+  }
+}
+
 function requireApp(): AppBridgeMethods {
   if (!connectedApp) throw new DebugBridgeError("__app");
   return connectedApp;
@@ -121,6 +143,7 @@ export function getConnectedSourceMap(): SourceMap | null {
 
 export function connectAppBridge(methods: AppBridgeMethods): void {
   connectedApp = methods;
+  markReady("app");
 }
 
 export function disconnectAppBridge(): void {
@@ -129,6 +152,9 @@ export function disconnectAppBridge(): void {
 
 export function connectEditorBridge(methods: EditorBridgeMethods | null): void {
   connectedEditor = methods;
+  if (methods) {
+    markReady("editor");
+  }
 }
 
 export function connectLexicalEditor(editor: LexicalEditor | null): void {
@@ -181,6 +207,7 @@ function installWindowBridge(): void {
     getProjectRoot: () => requireApp().getProjectRoot(),
     getCurrentDocument: () => requireApp().getCurrentDocument(),
     isDirty: () => requireApp().isDirty(),
+    ready: readyPromises.app,
   };
 
   window.__editor = {
@@ -190,6 +217,7 @@ function installWindowBridge(): void {
     insertText: (text) => requireEditor().insertText(text),
     setDoc: (doc) => requireEditor().setDoc(doc),
     setSelection: (anchor, focus) => requireEditor().setSelection(anchor, focus),
+    ready: readyPromises.editor,
   };
 
   window.__cmView = {
@@ -245,6 +273,7 @@ function installWindowBridge(): void {
     clearInteractionLog: () => {
       throw new DebugBridgeError("__cfDebug.clearInteractionLog");
     },
+    ready: readyPromises.perf,
   };
 
   Object.defineProperty(window, "__cfSourceMap", {
@@ -282,7 +311,9 @@ export function connectPerfBridge(methods: PerfBridgeMethods): void {
     toggleFps: methods.toggleFps,
     interactionLog: methods.interactionLog,
     clearInteractionLog: methods.clearInteractionLog,
+    ready: readyPromises.perf,
   };
+  markReady("perf");
 }
 
 installWindowBridge();

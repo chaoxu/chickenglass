@@ -72,9 +72,13 @@ cargo nextest run
 
 ## Debug helpers
 
-Debug globals are exposed on `window` for console and Playwright testing:
+Debug globals are exposed on `window` for console and Playwright testing.
+Methods throw `DebugBridgeError` until their provider connects. Automation
+should `await __app.ready` (likewise `__editor.ready`, `__cfDebug.ready`)
+rather than polling methods in a retry loop.
 
 ```text
+await __app.ready
 __app.openFile("posts/x.md")
 __app.openFileWithContent("scratch.md", "# Draft")
 __app.saveFile()

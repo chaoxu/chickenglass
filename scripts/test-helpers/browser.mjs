@@ -115,10 +115,28 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
 
 export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
   try {
+    // First ensure the bridge globals exist (they install eagerly at module
+    // load). Then await their `.ready` promises so methods are safe to call.
     await page.waitForFunction(
       ({ coreGlobals }) => coreGlobals.every((name) => Boolean(window[name])),
       { coreGlobals: CORE_DEBUG_GLOBAL_NAMES },
       { timeout },
+    );
+    await page.evaluate(
+      async ({ readyTimeout }) => {
+        const withTimeout = (label, promise) =>
+          Promise.race([
+            promise,
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`ready:${label} timed out`)), readyTimeout),
+            ),
+          ]);
+        await Promise.all([
+          withTimeout("__app", window.__app.ready),
+          withTimeout("__cfDebug", window.__cfDebug.ready),
+        ]);
+      },
+      { readyTimeout: timeout },
     );
   } catch (error) {
     const title = await page.title().catch(() => "");

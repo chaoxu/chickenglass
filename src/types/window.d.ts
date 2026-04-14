@@ -30,16 +30,18 @@ declare global {
     /**
      * App-level debug helpers exposed for console and Playwright testing.
      * Eagerly installed by the debug bridge; methods throw until
-     * `useAppDebug` connects a provider.
+     * `useAppDebug` connects a provider. Automation should `await __app.ready`
+     * rather than polling methods for readiness.
      */
-    __app: AppBridgeMethods;
+    __app: AppBridgeMethods & { ready: Promise<void> };
 
     /**
      * Editor-level debug helpers exposed for browser automation and console use.
      * Eagerly installed by the debug bridge; methods throw until an editor
-     * surface mounts and `useAppDebug` connects a provider.
+     * surface mounts and `useAppDebug` connects a provider. Automation should
+     * `await __editor.ready` rather than polling.
      */
-    __editor: EditorBridgeMethods;
+    __editor: EditorBridgeMethods & { ready: Promise<void> };
 
     __cmView: {
       dispatch: (...args: unknown[]) => void;
@@ -84,6 +86,11 @@ declare global {
       toggleFps: () => boolean;
       interactionLog: () => readonly import("../lexical/interaction-trace").InteractionTraceEntry[];
       clearInteractionLog: () => void;
+      /**
+       * Resolves once `connectPerfBridge` runs. Prefer `await __cfDebug.ready`
+       * over retry loops that poll for methods to stop throwing.
+       */
+      ready: Promise<void>;
     };
 
     /**

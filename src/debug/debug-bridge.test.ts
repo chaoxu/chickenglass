@@ -68,4 +68,31 @@ describe("debug-bridge eager install", () => {
     bridge.disconnectAppBridge();
     expect(() => window.__app.getMode()).toThrow(bridge.DebugBridgeError);
   });
+
+  it("exposes a ready promise that resolves when the provider connects", async () => {
+    const bridge = await import("./debug-bridge");
+    expect(window.__app.ready).toBeInstanceOf(Promise);
+    let settled = false;
+    const readyPromise = window.__app.ready.then(() => {
+      settled = true;
+    });
+    // Before connect, the promise must still be pending.
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    bridge.connectAppBridge({
+      openFile: vi.fn(async () => {}),
+      hasFile: vi.fn(async () => true),
+      openFileWithContent: vi.fn(async () => {}),
+      saveFile: vi.fn(async () => {}),
+      closeFile: vi.fn(async () => true),
+      setSearchOpen: vi.fn(),
+      setMode: vi.fn(),
+      getMode: () => "source" as EditorMode,
+      getProjectRoot: () => "/tmp",
+      getCurrentDocument: () => null,
+      isDirty: () => false,
+    });
+    await readyPromise;
+    expect(settled).toBe(true);
+  });
 });
