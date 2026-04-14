@@ -32,6 +32,7 @@
     "test:focused": "node scripts/focused-vitest.mjs",
     "test:watch": "vitest --watch --reporter=dot",
     "test:changed": "vitest run --changed",
+    "test:related": "vitest related --run",
     "typecheck:watch": "tsc --noEmit --watch",
     "clean": "rm -rf dist",
     "tauri:dev": "cargo tauri dev",

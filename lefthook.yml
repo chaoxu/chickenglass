@@ -10,4 +10,9 @@ pre-push:
     typecheck:
       run: pnpm typecheck
     test:
-      run: pnpm test
+      # Run only tests whose module graph touches files being pushed.
+      # The `glob` filter lets lefthook skip the command entirely when
+      # the push contains no JS/TS changes. Use `pnpm test` to run the
+      # full suite manually.
+      glob: "*.{ts,tsx,js,mjs,cjs}"
+      run: pnpm vitest related {push_files} --run

@@ -53,6 +53,7 @@ pnpm build
 pnpm lint
 pnpm lint:fix
 pnpm test
+pnpm test:related <files>  # run only tests that import these files
 pnpm typecheck
 pnpm tauri:dev
 pnpm tauri:build
