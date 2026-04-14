@@ -11,13 +11,9 @@ import {
 } from "lexical";
 
 import { getRawBlockRenderer } from "./raw-block-renderer-registry";
+import type { RawBlockVariant } from "./raw-block-types";
 
-export type RawBlockVariant =
-  | "display-math"
-  | "fenced-div"
-  | "footnote-definition"
-  | "frontmatter"
-  | "image";
+export type { RawBlockVariant };
 
 export type SerializedRawBlockNode = Spread<{
   raw: string;

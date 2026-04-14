@@ -7,14 +7,9 @@
  */
 import { createElement, type ComponentType, type JSX } from "react";
 
-// Duplicated here (not imported from `./raw-block-node`) so this registry has
-// no back-edge to the node module, keeping the cycle cut.
-export type RawBlockRendererVariant =
-  | "display-math"
-  | "fenced-div"
-  | "footnote-definition"
-  | "frontmatter"
-  | "image";
+import type { RawBlockVariant } from "./raw-block-types";
+
+export type RawBlockRendererVariant = RawBlockVariant;
 
 export interface RawBlockRendererProps {
   readonly nodeKey: string;
