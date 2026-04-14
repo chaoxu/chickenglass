@@ -1,28 +1,29 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { BackgroundIndexer } from "../../index";
+import { useCallback, useMemo } from "react";
+
+import type { BackgroundIndexer } from "../../index";
 import { dispatchFormatEvent } from "../../constants/events";
-import {
-  buildDocumentLabelGraph,
-  prepareDocumentLabelRename,
-  resolveDocumentLabelBacklinks,
-  resolveDocumentLabelRenameTarget,
-  type DocumentLabelBacklinksResult,
-  type DocumentLabelRenameTarget,
-} from "../markdown/labels";
+import type { DocumentLabelBacklinksResult } from "../markdown/labels";
 import { useDevSettings } from "../../state/dev-settings";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
 import type { PaletteCommand } from "../components/command-palette";
-import { collectSearchableMarkdownPaths } from "../search";
 import { useAutoSave } from "./use-auto-save";
 import type { UseDialogsReturn } from "./use-dialogs";
-import { useHotkeys, type HotkeyBinding } from "./use-hotkeys";
+import { useHotkeys } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
 import { TAURI_MENU_IDS } from "../tauri-client/bridge-metadata";
+import {
+  toHotkeyBindings,
+  toMenuHandlers,
+  toPaletteCommands,
+  type CommandDef,
+} from "./command-registry";
+import { useAppLabelCommands } from "./use-app-label-commands";
+import { useAppSearchIndex } from "./use-app-search-index";
 
 interface AppOverlayDeps {
   fs: FileSystem;
@@ -55,87 +56,6 @@ export interface AppOverlayController {
   closeLabelBacklinks: () => void;
 }
 
-// ── Command registry ─────────────────────────────────────────────────────────
-
-/**
- * A single command definition that serves as the source of truth for the
- * command palette, keyboard shortcuts, and native menu event wiring.
- */
-interface CommandDef {
-  /** Unique command identifier (e.g., "file.save"). */
-  id: string;
-  /** Display label shown in the command palette. */
-  label: string;
-  /** Category for palette grouping. */
-  category?: string;
-  /** Display-only shortcut hint (e.g., "Cmd+S"). */
-  shortcut?: string;
-  /** Hotkey binding string (e.g., "mod+s"). Registers a global keyboard shortcut. */
-  hotkey?: string;
-  /** Tauri menu event ID (e.g., "file_save"). Wires the native menu bar. */
-  menuId?: string;
-  /** Action executed from the command palette or native menu. */
-  action: () => void;
-  /**
-   * Optional hotkey handler override. Some commands need different behavior
-   * when triggered via hotkey (e.g., toggling a dialog) vs palette (opening).
-   * Defaults to `action` when not provided.
-   */
-  hotkeyAction?: () => void;
-}
-
-/** Extract PaletteCommand[] from the registry. */
-function toPaletteCommands(defs: CommandDef[]): PaletteCommand[] {
-  return defs.map(({ id, label, category, shortcut, action }) => ({
-    id, label, category, shortcut, action,
-  }));
-}
-
-/** Extract HotkeyBinding[] from entries that declare a hotkey. */
-function toHotkeyBindings(defs: CommandDef[]): HotkeyBinding[] {
-  const result: HotkeyBinding[] = [];
-  for (const d of defs) {
-    if (d.hotkey) {
-      result.push({ key: d.hotkey, handler: d.hotkeyAction ?? d.action });
-    }
-  }
-  return result;
-}
-
-/** Extract a menuId → handler map from entries that declare a menuId. */
-function toMenuHandlers(defs: CommandDef[]): Record<string, () => void> {
-  const map: Record<string, () => void> = {};
-  for (const d of defs) {
-    if (d.menuId) map[d.menuId] = d.action;
-  }
-  return map;
-}
-
-const LABEL_ACTION_MESSAGE =
-  "Place the cursor on a local label definition or reference in the current document.";
-
-function duplicateRenameMessage(id: string): string {
-  return `Local label "${id}" is defined more than once in this document. Resolve the duplicate label before renaming it.`;
-}
-
-function renamePromptMessage(target: DocumentLabelRenameTarget): string {
-  const referenceCount = target.references.length;
-  const referenceWord = referenceCount === 1 ? "reference" : "references";
-  return [
-    `Rename local label "${target.definition.id}" to:`,
-    `This will update 1 definition and ${referenceCount} ${referenceWord} in the current document.`,
-  ].join("\n\n");
-}
-
-function renameValidationMessage(nextId: string): string {
-  return [
-    `Cannot rename label to "${nextId.trim()}".`,
-    "Use a non-empty id with no spaces. Allowed characters: letters, numbers, _, ., :, and -.",
-  ].join("\n\n");
-}
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useAppOverlays({
   fs,
   dialogs,
@@ -148,97 +68,8 @@ export function useAppOverlays({
   onOpenFile,
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
-  const [indexer] = useState(() => new BackgroundIndexer());
-  const [searchSyncRevision, setSearchSyncRevision] = useState(0);
-  const [searchVersion, setSearchVersion] = useState(0);
-  const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
-  const activeSearchDoc = useMemo(
-    () => (
-      dialogs.searchOpen && editor.currentPath
-        ? editor.getCurrentDocText()
-        : ""
-    ),
-    [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.getCurrentDocText],
-  );
-
-  useEffect(() => {
-    setLabelBacklinks(null);
-  }, [editor.currentPath]);
-
-  useEffect(() => {
-    if (labelBacklinks === null) {
-      return;
-    }
-
-    return editor.activeDocumentSignal.subscribe(() => {
-      setLabelBacklinks(null);
-    });
-  }, [editor.activeDocumentSignal, labelBacklinks]);
-
-  useEffect(() => {
-    if (!dialogs.searchOpen) {
-      return;
-    }
-
-    return editor.activeDocumentSignal.subscribe(() => {
-      setSearchSyncRevision((revision) => revision + 1);
-    });
-  }, [dialogs.searchOpen, editor.activeDocumentSignal]);
-
-  useEffect(() => {
-    if (!dialogs.searchOpen) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const tree = await fs.listTree();
-        const markdownPaths = collectSearchableMarkdownPaths(tree);
-        const files = await Promise.all(
-          markdownPaths.map(async (path) => ({
-            file: path,
-            content:
-              path === editor.currentPath
-                ? activeSearchDoc
-                : await fs.readFile(path),
-          })),
-        );
-
-        if (!cancelled) {
-          await indexer.bulkUpdate(files);
-          setSearchVersion((version) => version + 1);
-        }
-      } catch (error: unknown) {
-        if (!cancelled) {
-          console.error("[search] failed to build app search index", error);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    dialogs.searchOpen,
-    workspace.fileTree,
-    fs,
-    indexer,
-  ]);
-
-  useEffect(() => {
-    if (!dialogs.searchOpen || !editor.currentPath?.endsWith(".md")) {
-      return;
-    }
-
-    try {
-      indexer.updateFile(editor.currentPath, activeSearchDoc);
-      setSearchVersion((version) => version + 1);
-    } catch (error: unknown) {
-      console.error("[search] failed to sync active file into app search index", error);
-    }
-  }, [dialogs.searchOpen, indexer, editor.currentPath, activeSearchDoc]);
+  const { indexer, searchVersion } = useAppSearchIndex(fs, dialogs, editor, workspace.fileTree);
+  const labelCommands = useAppLabelCommands(editor);
 
   const handleExportHtml = useCallback(() => {
     const currentPath = editor.currentPath;
@@ -282,102 +113,6 @@ export function useAppOverlays({
     });
   }, [editor]);
 
-  const handleShowLabelBacklinks = useCallback(() => {
-    const handle = editor.editorHandle;
-    if (!handle || !editor.currentPath?.endsWith(".md")) {
-      window.alert(LABEL_ACTION_MESSAGE);
-      return;
-    }
-
-    const selection = handle.getSelection();
-    const lookup = resolveDocumentLabelBacklinks(
-      editor.getCurrentDocText(),
-      selection.from,
-      selection.to,
-    );
-    if (lookup.kind === "ready") {
-      setLabelBacklinks(lookup.result);
-      return;
-    }
-
-    if (lookup.kind === "duplicate") {
-      window.alert(
-        `Local label "${lookup.id}" is defined more than once in this document. Resolve the duplicate label before showing references.`,
-      );
-      return;
-    }
-
-    window.alert(LABEL_ACTION_MESSAGE);
-  }, [editor.currentPath, editor.editorHandle, editor.getCurrentDocText]);
-
-  const handleRenameDocumentLabel = useCallback(() => {
-    const handle = editor.editorHandle;
-    if (!handle || !editor.currentPath?.endsWith(".md")) {
-      window.alert(LABEL_ACTION_MESSAGE);
-      return;
-    }
-
-    const selection = handle.getSelection();
-    const currentDoc = editor.getCurrentDocText();
-    const graph = buildDocumentLabelGraph(currentDoc);
-    const lookup = resolveDocumentLabelRenameTarget(
-      currentDoc,
-      selection.from,
-      selection.to,
-      graph,
-    );
-    if (lookup.kind === "duplicate") {
-      window.alert(duplicateRenameMessage(lookup.id));
-      return;
-    }
-    if (lookup.kind === "none") {
-      window.alert(LABEL_ACTION_MESSAGE);
-      return;
-    }
-
-    const target = lookup.target;
-    const promptedId = window.prompt(
-      renamePromptMessage(target),
-      target.definition.id,
-    );
-    if (promptedId === null || promptedId === target.definition.id) {
-      return;
-    }
-
-    const rename = prepareDocumentLabelRename(
-      currentDoc,
-      selection.from,
-      promptedId,
-      selection.to,
-      graph,
-    );
-    if (rename.kind === "ready") {
-      if (rename.changes.length === 0) {
-        return;
-      }
-      handle.applyChanges(rename.changes);
-      handle.focus();
-      return;
-    }
-
-    if (rename.kind === "duplicate") {
-      window.alert(duplicateRenameMessage(rename.id));
-      return;
-    }
-    if (rename.kind === "invalid") {
-      if (rename.validation.reason === "collision") {
-        window.alert(
-          `Local label "${rename.validation.id}" already exists in this document. Choose a different id.`,
-        );
-      } else {
-        window.alert(renameValidationMessage(promptedId));
-      }
-      return;
-    }
-
-    window.alert(LABEL_ACTION_MESSAGE);
-  }, [editor.currentPath, editor.editorHandle, editor.getCurrentDocText]);
-
   // ── Single command registry ──────────────────────────────────────────────
   // Each command is defined once. Palette entries, hotkey bindings, and
   // Tauri menu handlers are all derived from this array.
@@ -399,7 +134,7 @@ export function useAppOverlays({
     { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
 
     // ── Edit ──────────────────────────────────────────────────────────────
-    { id: "edit.rename-local-label", label: "Rename Local Label", category: "Edit", action: handleRenameDocumentLabel },
+    { id: "edit.rename-local-label", label: "Rename Local Label", category: "Edit", action: labelCommands.handleRenameDocumentLabel },
 
     // ── Navigation ────────────────────────────────────────────────────────
     { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, hotkey: "mod+g", action: () => dialogs.setGotoLineOpen(true), hotkeyAction: () => dialogs.setGotoLineOpen((value) => !value) },
@@ -407,7 +142,7 @@ export function useAppOverlays({
     { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("outline"); } },
     { id: "nav.show-diagnostics", label: "Show Diagnostics Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("diagnostics"); } },
     { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: TAURI_MENU_IDS.editFind, action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
-    { id: "nav.show-label-references", label: "Show References to Label", category: "Navigation", action: handleShowLabelBacklinks },
+    { id: "nav.show-label-references", label: "Show References to Label", category: "Navigation", action: labelCommands.handleShowLabelBacklinks },
     { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, hotkey: "mod+,", action: () => dialogs.setSettingsOpen(true), hotkeyAction: () => dialogs.setSettingsOpen((value) => !value) },
 
     // ── View ──────────────────────────────────────────────────────────────
@@ -433,7 +168,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, handleShowLabelBacklinks, handleRenameDocumentLabel, onOpenFile, onQuit]);
+  ], [dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
@@ -463,7 +198,7 @@ export function useAppOverlays({
     indexer,
     searchVersion,
     openPalette: () => dialogs.setPaletteOpen(true),
-    labelBacklinks,
-    closeLabelBacklinks: () => setLabelBacklinks(null),
+    labelBacklinks: labelCommands.labelBacklinks,
+    closeLabelBacklinks: labelCommands.closeLabelBacklinks,
   };
 }
