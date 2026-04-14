@@ -10,6 +10,11 @@ import {
   emptyEditorDocument,
 } from "../lib/editor-doc-change";
 import { applySaveAsResult } from "./editor-session-save";
+import {
+  clearPathBuffersKeepPipeline,
+  readDocumentText,
+  renamePathBuffers,
+} from "./editor-session-buffers";
 import { buildProjectedWritePlan } from "./editor-session-write-plan";
 import {
   type EditorSessionRuntime,
@@ -47,12 +52,7 @@ function currentDocumentText(
   path: string | null,
   runtime: EditorSessionRuntime,
 ): string {
-  if (!path) return "";
-  return editorDocumentToString(
-    runtime.liveDocs.get(path)
-    ?? runtime.buffers.get(path)
-    ?? emptyEditorDocument,
-  );
+  return readDocumentText(runtime, path);
 }
 
 export function createEditorSessionPersistence({
@@ -123,29 +123,7 @@ export function createEditorSessionPersistence({
   };
 
   const renameBuffers = (oldPath: string, newPath: string) => {
-    const buffered = runtime.buffers.get(oldPath);
-    if (buffered !== undefined) {
-      runtime.buffers.delete(oldPath);
-      runtime.buffers.set(newPath, buffered);
-    }
-
-    const liveDoc = runtime.liveDocs.get(oldPath);
-    if (liveDoc !== undefined) {
-      runtime.liveDocs.delete(oldPath);
-      runtime.liveDocs.set(newPath, liveDoc);
-    }
-
-    const sourceMap = runtime.sourceMaps.get(oldPath);
-    if (sourceMap) {
-      runtime.sourceMaps.delete(oldPath);
-      runtime.sourceMaps.set(newPath, sourceMap);
-    }
-
-    runtime.pipeline.clear(oldPath);
-    runtime.pipeline.initPath(
-      newPath,
-      editorDocumentToString(liveDoc ?? buffered ?? emptyEditorDocument),
-    );
+    renamePathBuffers(runtime, oldPath, newPath);
 
     runtime.commit(
       renameSessionDocument(runtime.getState(), oldPath, newPath, basename(newPath)),
@@ -190,9 +168,7 @@ export function createEditorSessionPersistence({
       currentDocument.path === path
       || currentDocument.path.startsWith(`${path}/`)
     )) {
-      runtime.buffers.delete(currentDocument.path);
-      runtime.liveDocs.delete(currentDocument.path);
-      runtime.sourceMaps.delete(currentDocument.path);
+      clearPathBuffersKeepPipeline(runtime, currentDocument.path);
       runtime.commit(
         clearSessionDocument(runtime.getState(), currentDocument.path),
         { editorDoc: "" },
