@@ -6,6 +6,7 @@ import {
   type SerializedElementNode,
   type Spread,
 } from "lexical";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 export type SerializedTableCellNode = Spread<{
   header: boolean;
@@ -16,12 +17,12 @@ function syncTableCellDom(
   dom: HTMLElement,
 ): void {
   dom.dataset.coflatTableCell = node.isHeader() ? "header" : "body";
-  dom.classList.add("cf-lexical-table-cell");
+  dom.classList.add(LEXICAL_NODE_CLASS.TABLE_CELL);
   if (node.isHeader()) {
-    dom.classList.add("cf-lexical-table-cell--header");
+    dom.classList.add(LEXICAL_NODE_CLASS.TABLE_CELL_HEADER);
     dom.setAttribute("scope", "col");
   } else {
-    dom.classList.remove("cf-lexical-table-cell--header");
+    dom.classList.remove(LEXICAL_NODE_CLASS.TABLE_CELL_HEADER);
     dom.removeAttribute("scope");
   }
 }
@@ -64,7 +65,7 @@ export class TableCellNode extends ElementNode {
     return {
       ...super.exportJSON(),
       header: this.isHeader(),
-      type: "coflat-table-cell",
+      type: this.getType(),
       version: 1,
     };
   }

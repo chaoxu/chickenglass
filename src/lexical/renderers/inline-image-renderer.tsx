@@ -7,6 +7,7 @@ import { useAssetPreview } from "../media-preview";
 import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
 import { parseMarkdownImage } from "../markdown/image-markdown";
 import { structureToggleProps } from "./shared";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 export function InlineImageRenderer({
   nodeKey,
@@ -106,7 +107,7 @@ export function InlineImageRenderer({
     >
       <img
         alt={parsed.alt || parsed.src}
-        className="cf-lexical-inline-image"
+        className={LEXICAL_NODE_CLASS.INLINE_IMAGE}
         src={preview.previewUrl}
       />
     </span>

@@ -22,6 +22,7 @@ import {
   parseReferenceToken,
   renderReferenceDisplay,
 } from "../markdown/reference-display";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 function renderReferenceCluster(
   parsed: ParsedReferenceToken,
@@ -160,7 +161,7 @@ export function ReferenceRenderer({
     : null;
 
   if (!parsed) {
-    return <span className="cf-lexical-reference">{text}</span>;
+    return <span className={LEXICAL_NODE_CLASS.REFERENCE}>{text}</span>;
   }
 
   const wrapperClass = parsed.ids.some((id) => citations.store.has(id))

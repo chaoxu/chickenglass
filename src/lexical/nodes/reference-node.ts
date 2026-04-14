@@ -50,7 +50,7 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
   exportJSON(): SerializedReferenceNode {
     return {
       raw: this.getRaw(),
-      type: "coflat-reference",
+      type: this.getType(),
       version: 1,
     };
   }

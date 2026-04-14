@@ -1,13 +1,23 @@
-export type EditorMode = "lexical" | "source";
+export const EDITOR_MODE = {
+  LEXICAL: "lexical",
+  SOURCE: "source",
+} as const;
 
-export const markdownEditorModes = ["lexical", "source"] as const satisfies readonly EditorMode[];
+export type EditorMode = (typeof EDITOR_MODE)[keyof typeof EDITOR_MODE];
+
+export const LEGACY_EDITOR_MODE_READ = "read";
+
+export const markdownEditorModes = [
+  EDITOR_MODE.LEXICAL,
+  EDITOR_MODE.SOURCE,
+] as const satisfies readonly EditorMode[];
 
 export function normalizeEditorMode(mode: EditorMode, isMarkdown: boolean): EditorMode {
   if (!isMarkdown) {
-    return "source";
+    return EDITOR_MODE.SOURCE;
   }
-  if (mode === "source") {
+  if (mode === EDITOR_MODE.SOURCE) {
     return mode;
   }
-  return "lexical";
+  return EDITOR_MODE.LEXICAL;
 }

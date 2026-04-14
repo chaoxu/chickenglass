@@ -5,6 +5,7 @@ import { updateTableBodyCell, updateTableHeaderCell } from "../../state/table-ed
 import { EmbeddedFieldEditor } from "../embedded-field-editor";
 import { parseMarkdownTable, serializeMarkdownTable } from "../markdown/table-markdown";
 import { useRawBlockUpdater } from "./shared";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 export function TableBlockRenderer({
   nodeKey,
@@ -48,7 +49,7 @@ export function TableBlockRenderer({
   }
 
   return (
-    <div className="cf-lexical-table-block">
+    <div className={LEXICAL_NODE_CLASS.TABLE_BLOCK}>
       <table>
         <thead>
           <tr>

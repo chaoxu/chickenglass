@@ -11,6 +11,7 @@ import { useState, useCallback } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
+import { EDITOR_MODE, LEGACY_EDITOR_MODE_READ } from "../editor-mode";
 
 const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 30000,
@@ -20,7 +21,7 @@ const DEFAULT_SETTINGS: Settings = {
   showLineNumbers: false,
   wordWrap: true,
   spellCheck: false,
-  editorMode: "lexical",
+  editorMode: EDITOR_MODE.LEXICAL,
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},
@@ -38,8 +39,8 @@ function loadSettings(): Settings {
   const parsed = readLocalStorage<Partial<Settings>>(SETTINGS_KEY, {});
   const loaded = { ...DEFAULT_SETTINGS, ...parsed };
 
-  if ((parsed as { editorMode?: string }).editorMode === "read") {
-    loaded.editorMode = "lexical";
+  if ((parsed as { editorMode?: string }).editorMode === LEGACY_EDITOR_MODE_READ) {
+    loaded.editorMode = EDITOR_MODE.LEXICAL;
   }
 
   // Migrate legacy spellCheck boolean into enabledPlugins

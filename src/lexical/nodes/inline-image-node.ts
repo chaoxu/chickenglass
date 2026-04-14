@@ -50,7 +50,7 @@ export class InlineImageNode extends DecoratorNode<JSX.Element> {
   exportJSON(): SerializedInlineImageNode {
     return {
       raw: this.getRaw(),
-      type: "coflat-inline-image",
+      type: this.getType(),
       version: 1,
     };
   }

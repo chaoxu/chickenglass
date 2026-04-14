@@ -7,6 +7,7 @@ import {
   type SerializedElementNode,
   type Spread,
 } from "lexical";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 export type TableColumnAlignment = "center" | "left" | "right" | null;
 
@@ -16,7 +17,7 @@ export type SerializedTableNode = Spread<{
 }, SerializedElementNode>;
 
 function syncTableDom(node: TableNode, dom: HTMLTableElement): void {
-  dom.className = "cf-lexical-table-block";
+  dom.className = LEXICAL_NODE_CLASS.TABLE_BLOCK;
   dom.dataset.coflatSourceBlock = "true";
   dom.dataset.coflatSourceBlockKind = "table";
   dom.dataset.coflatTableBlock = "true";
@@ -79,7 +80,7 @@ export class TableNode extends ElementNode {
       ...super.exportJSON(),
       alignments: [...this.getAlignments()],
       dividerCells: [...this.getDividerCells()],
-      type: "coflat-table",
+      type: this.getType(),
       version: 1,
     };
   }

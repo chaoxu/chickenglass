@@ -5,6 +5,7 @@ import type { NodeKey } from "lexical";
 import { EmbeddedFieldEditor } from "../embedded-field-editor";
 import { computeEmbedSrc, embedSandboxPermissions } from "../embed";
 import { FigureMedia } from "../figure-media";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 import { FloatingPreviewPortal, PreviewHtml } from "../hover-preview-plugin";
 import { LexicalRichMarkdownEditor } from "../rich-markdown-editor";
 import { useIncludedDocument, useLexicalRenderContext } from "../render-context";
@@ -523,7 +524,7 @@ export function FootnoteReferenceRenderer({
   return (
     <>
       <sup
-        className="cf-lexical-footnote-ref"
+        className={LEXICAL_NODE_CLASS.FOOTNOTE_REFERENCE}
         data-footnote-id={id}
         onMouseEnter={(event) => {
           if (body) {

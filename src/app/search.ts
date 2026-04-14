@@ -1,4 +1,4 @@
-import type { EditorMode } from "./editor-mode";
+import { EDITOR_MODE, type EditorMode } from "./editor-mode";
 import type { IndexQuery } from "../index/query-api";
 import type { FileEntry } from "../lib/types";
 
@@ -11,7 +11,7 @@ export interface SearchNavigationTarget {
 }
 
 export function getAppSearchMode(editorMode: EditorMode): AppSearchMode {
-  return editorMode === "source" ? "source" : "semantic";
+  return editorMode === EDITOR_MODE.SOURCE ? "source" : "semantic";
 }
 
 /** Build a semantic index query from raw UI text and an optional type filter. */

@@ -50,7 +50,7 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
   exportJSON(): SerializedFootnoteReferenceNode {
     return {
       raw: this.getRaw(),
-      type: "coflat-footnote-reference",
+      type: this.getType(),
       version: 1,
     };
   }

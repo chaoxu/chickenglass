@@ -34,7 +34,7 @@ export class TableRowNode extends ElementNode {
   exportJSON(): SerializedElementNode {
     return {
       ...super.exportJSON(),
-      type: "coflat-table-row",
+      type: this.getType(),
       version: 1,
     };
   }

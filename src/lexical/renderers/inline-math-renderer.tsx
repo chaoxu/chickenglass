@@ -5,6 +5,7 @@ import type { NodeKey } from "lexical";
 import { useLexicalRenderContext } from "../render-context";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { preventKatexMouseDown } from "./shared";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 function stripInlineMathDelimiters(raw: string): string {
   if (raw.startsWith("\\(") && raw.endsWith("\\)")) {
@@ -32,7 +33,7 @@ export function InlineMathRenderer({
 
   return (
     <span
-      className="cf-lexical-inline-math"
+      className={LEXICAL_NODE_CLASS.INLINE_MATH}
       data-coflat-inline-math-key={nodeKey}
       dangerouslySetInnerHTML={{ __html: html }}
       onMouseDown={preventKatexMouseDown}

@@ -52,7 +52,7 @@ export class RawBlockNode extends DecoratorBlockNode {
     return {
       ...super.exportJSON(),
       raw: this.getRaw(),
-      type: "coflat-raw-block",
+      type: this.getType(),
       variant: this.getVariant(),
       version: 1,
     };

@@ -58,7 +58,7 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
     return {
       delimiter: this.getDelimiter(),
       raw: this.getRaw(),
-      type: "coflat-inline-math",
+      type: this.getType(),
       version: 1,
     };
   }

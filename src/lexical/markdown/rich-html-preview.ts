@@ -22,6 +22,7 @@ import {
   type RenderCitations,
 } from "./reference-display";
 import type { RenderIndex } from "./reference-index";
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 interface RichHtmlOptions {
   readonly citations?: RenderCitations;
@@ -167,12 +168,12 @@ function injectReferenceMarkup(
   const placeholders: string[] = [];
   let next = markdown.replace(BRACKETED_REFERENCE_RE, (raw) => {
     const placeholder = `__COFLAT_REF_${placeholders.length}__`;
-    placeholders.push(`<span class="cf-lexical-reference">${encodeHtml(renderReferenceDisplay(raw, renderIndex, citations))}</span>`);
+    placeholders.push(`<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(raw, renderIndex, citations))}</span>`);
     return placeholder;
   });
 
   next = next.replace(NARRATIVE_REFERENCE_RE, (_raw, prefix: string, id: string) =>
-    `${prefix}<span class="cf-lexical-reference">${encodeHtml(renderReferenceDisplay(`@${id}`, renderIndex, citations))}</span>`);
+    `${prefix}<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(`@${id}`, renderIndex, citations))}</span>`);
 
   return next.replace(/__COFLAT_REF_(\d+)__/g, (_raw, indexText: string) =>
     placeholders[Number(indexText)] ?? "");

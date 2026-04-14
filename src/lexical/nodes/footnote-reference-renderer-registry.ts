@@ -13,6 +13,8 @@
  */
 import { createElement, type ComponentType, type JSX } from "react";
 
+import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
+
 export interface FootnoteReferenceRendererProps {
   readonly raw: string;
 }
@@ -25,7 +27,7 @@ function FallbackFootnoteReferenceRenderer(_props: FootnoteReferenceRendererProp
   // crashing the editor.
   return createElement(
     "sup",
-    { className: "cf-lexical-footnote-ref", "data-footnote-fallback": "true" },
+    { className: LEXICAL_NODE_CLASS.FOOTNOTE_REFERENCE, "data-footnote-fallback": "true" },
     "?",
   );
 }
