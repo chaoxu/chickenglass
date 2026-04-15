@@ -210,24 +210,23 @@ const inlineMathAdapter: RevealAdapter = {
     if (!math) {
       return null;
     }
-    const raw = math.getRaw();
-    const source = math.getDelimiter() === "paren" ? `\\(${raw}\\)` : `$${raw}$`;
-    return { node: math, source };
+    // InlineMathNode.__raw already includes its delimiters (the markdown
+    // text-match transformer in `markdown.ts` stores the full match, so
+    // `getTextContent()` round-trips identically). Don't re-wrap.
+    return { node: math, source: math.getRaw() };
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    let inner: string | null = null;
-    let delimiter: InlineMathDelimiter = "dollar";
+    let delimiter: InlineMathDelimiter | null = null;
     if (trimmed.startsWith("$") && trimmed.endsWith("$") && trimmed.length >= 3) {
-      inner = trimmed.slice(1, -1);
+      delimiter = "dollar";
     } else if (trimmed.startsWith("\\(") && trimmed.endsWith("\\)") && trimmed.length >= 5) {
-      inner = trimmed.slice(2, -2);
       delimiter = "paren";
     }
-    if (inner == null) {
+    if (delimiter == null) {
       return live;
     }
-    const math = $createInlineMathNode(inner, delimiter);
+    const math = $createInlineMathNode(trimmed, delimiter);
     live.replace(math);
     return math;
   },
@@ -284,21 +283,14 @@ const footnoteReferenceAdapter: RevealAdapter = {
  * Order matters: decorator adapters claim NodeSelection cases first;
  * link claims any range selection inside an `<a>` (a more specific scope
  * than text-format); text-format is the fallback for raw styled runs.
- *
- * `inlineMathAdapter` is intentionally excluded from the active list:
- * `InlineMathSourcePlugin` still owns math editing with its own richer UX
- * (arrow-key entry, dedicated anchor lookup). Keeping the adapter exported
- * but out of the registry lets us migrate math later without churning the
- * adapter surface.
  */
 export const REVEAL_ADAPTERS: readonly RevealAdapter[] = [
+  inlineMathAdapter,
   referenceAdapter,
   footnoteReferenceAdapter,
   linkAdapter,
   textFormatAdapter,
 ];
-
-export { inlineMathAdapter };
 
 export const REVEAL_NODE_DEPENDENCIES = [LinkNode];
 

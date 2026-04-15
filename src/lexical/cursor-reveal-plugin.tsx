@@ -15,17 +15,22 @@
  *   the text is re-parsed via the same adapter — valid syntax becomes
  *   the original kind of node, anything else stays plain text.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $createNodeSelection,
   $createTextNode,
+  $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getSelection,
   $isTextNode,
+  CLICK_COMMAND,
+  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
   type LexicalEditor,
+  type LexicalNode,
   type NodeKey,
 } from "lexical";
 
@@ -37,6 +42,9 @@ import {
   type RevealSubject,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
+import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
+import { $isInlineMathNode } from "./nodes/inline-math-node";
+import { $isReferenceNode } from "./nodes/reference-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 // Re-exports kept so existing unit tests can continue importing the
@@ -48,6 +56,62 @@ export function CursorRevealPlugin({ presentation }: { presentation: RevealPrese
     return <InlineCursorReveal />;
   }
   return <FloatingCursorReveal />;
+}
+
+/**
+ * Decorator nodes never receive range selections, and the browser's default
+ * click handling stops at their DOM, so SELECTION_CHANGE never sees them.
+ * This hook fires on any click, finds the nearest revealable decorator, and
+ * hands its subject directly to the presentation via `onOpen`, bypassing the
+ * SELECTION_CHANGE path we use for text-format and link reveals.
+ */
+function useDecoratorClickEntry(
+  editor: LexicalEditor,
+  onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
+): void {
+  useEffect(() => {
+    return editor.registerCommand(
+      CLICK_COMMAND,
+      (event) => {
+        if (!(event.target instanceof Node)) {
+          return false;
+        }
+        const target = event.target;
+        const pendingRef: { value: { subject: RevealSubject; adapter: RevealAdapter } | null } = { value: null };
+        editor.read(() => {
+          const node = $getNearestNodeFromDOMNode(target);
+          if (!node || !isRevealableDecorator(node)) {
+            return;
+          }
+          const selection = $createNodeSelection();
+          selection.add(node.getKey());
+          const pick = pickRevealSubject(selection);
+          if (!pick) {
+            return;
+          }
+          pendingRef.value = { adapter: pick.adapter, subject: pick.subject };
+        });
+        const opened = pendingRef.value;
+        if (!opened) {
+          return false;
+        }
+        // Deferring escapes the editor.read context so the presentation can
+        // run a discrete editor.update without hitting "empty pending editor
+        // state on discrete nested update".
+        setTimeout(() => onOpen(opened.subject, opened.adapter), 0);
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onOpen]);
+}
+
+function isRevealableDecorator(node: LexicalNode): boolean {
+  return $isInlineMathNode(node)
+    || $isReferenceNode(node)
+    || $isFootnoteReferenceNode(node);
 }
 
 // ─── Floating presentation ──────────────────────────────────────────────
@@ -68,6 +132,25 @@ function FloatingCursorReveal() {
   // post-commit selection still points at the replacement node.
   const lastRevealedKeyRef = useRef<NodeKey | null>(null);
 
+  const openFloating = useCallback(
+    (subject: RevealSubject, adapter: RevealAdapter) => {
+      const key = subject.node.getKey();
+      if (key === lastRevealedKeyRef.current) {
+        return;
+      }
+      const dom = editor.getElementByKey(key);
+      if (!dom) {
+        return;
+      }
+      lastRevealedKeyRef.current = key;
+      setDraft(subject.source);
+      setState({ adapter, anchor: dom, nodeKey: key });
+    },
+    [editor],
+  );
+
+  useDecoratorClickEntry(editor, openFloating);
+
   useEffect(() => {
     return editor.registerCommand(
       SELECTION_CHANGE_COMMAND,
@@ -81,22 +164,12 @@ function FloatingCursorReveal() {
           lastRevealedKeyRef.current = null;
           return false;
         }
-        const key = pick.subject.node.getKey();
-        if (key === lastRevealedKeyRef.current) {
-          return false;
-        }
-        const dom = editor.getElementByKey(key);
-        if (!dom) {
-          return false;
-        }
-        lastRevealedKeyRef.current = key;
-        setDraft(pick.subject.source);
-        setState({ adapter: pick.adapter, anchor: dom, nodeKey: key });
+        openFloating(pick.subject, pick.adapter);
         return false;
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor]);
+  }, [editor, openFloating]);
 
   useEffect(() => {
     if (!state) {
@@ -180,6 +253,16 @@ function InlineCursorReveal() {
   // Key of the in-flight plain-text reveal node. When the caret moves off
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
+
+  const openFromDecoratorClick = useCallback(
+    (subject: RevealSubject, adapter: RevealAdapter) => {
+      // Decorator subjects have no meaningful caret offset; land at end.
+      openInlineReveal(editor, subject, adapter, subject.source.length, activeRef);
+    },
+    [editor],
+  );
+
+  useDecoratorClickEntry(editor, openFromDecoratorClick);
 
   useEffect(() => {
     return editor.registerCommand(

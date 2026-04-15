@@ -35,7 +35,6 @@ import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
-import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { REVEAL_PRESENTATION } from "../app/editor-mode";
 import { StructureEditProvider } from "./structure-edit-plugin";
@@ -316,7 +315,6 @@ export function LexicalRichMarkdownEditor({
                 {editable
                   ? <CursorRevealPlugin presentation={REVEAL_PRESENTATION.FLOATING} />
                   : <ClickableLinkPlugin />}
-                {editable ? <InlineMathSourcePlugin /> : null}
                 {editable ? <MarkdownExpansionPlugin /> : null}
                 {editable ? <BlockKeyboardAccessPlugin /> : null}
                 {editable ? <TabKeyPlugin /> : null}
