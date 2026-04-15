@@ -31,6 +31,7 @@ import {
   $isTextNode,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
+  type LexicalEditor,
   type NodeKey,
   type TextNode,
 } from "lexical";
@@ -85,6 +86,21 @@ export function unwrapSource(raw: string): {
   return { text, specs };
 }
 
+/**
+ * Replace a live TextNode with the result of reparsing `raw` as markdown:
+ * inner text as the new node's content, outer markers become format flags.
+ * Returns the replacement node so callers can track its key.
+ */
+function $reparseTextNodeFromSource(live: TextNode, raw: string): TextNode {
+  const { text, specs } = unwrapSource(raw);
+  const replacement = $createTextNode(text);
+  for (const spec of specs) {
+    replacement.toggleFormat(spec.lexicalFormat);
+  }
+  live.replace(replacement);
+  return replacement;
+}
+
 export function CursorRevealPlugin({ presentation }: { presentation: RevealPresentation }) {
   if (presentation === REVEAL_PRESENTATION.INLINE) {
     return <InlineCursorReveal />;
@@ -97,7 +113,6 @@ export function CursorRevealPlugin({ presentation }: { presentation: RevealPrese
 interface FloatingState {
   readonly nodeKey: NodeKey;
   readonly anchor: HTMLElement;
-  readonly initialRaw: string;
 }
 
 function FloatingCursorReveal() {
@@ -138,7 +153,7 @@ function FloatingCursorReveal() {
           return false;
         }
         setDraft(raw);
-        setState({ anchor: dom, initialRaw: raw, nodeKey: key });
+        setState({ anchor: dom, nodeKey: key });
         return false;
       },
       COMMAND_PRIORITY_LOW,
@@ -164,12 +179,7 @@ function FloatingCursorReveal() {
       if (!$isTextNode(node)) {
         return;
       }
-      const { text, specs } = unwrapSource(nextRaw);
-      const replacement = $createTextNode(text);
-      for (const spec of specs) {
-        replacement.toggleFormat(spec.lexicalFormat);
-      }
-      node.replace(replacement);
+      const replacement = $reparseTextNodeFromSource(node, nextRaw);
       lastRevealedKeyRef.current = replacement.getKey();
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
   };
@@ -219,7 +229,6 @@ function FloatingCursorReveal() {
 
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
-  readonly initialRaw: string;
 }
 
 function InlineCursorReveal() {
@@ -287,7 +296,7 @@ function InlineCursorReveal() {
  * Returns a handle for later reparse.
  */
 function openInlineReveal(
-  editor: ReturnType<typeof useLexicalComposerContext>[0],
+  editor: LexicalEditor,
   node: TextNode,
   specs: readonly InlineTextFormatSpec[],
   textOffset: number,
@@ -314,7 +323,7 @@ function openInlineReveal(
   if (plainKey == null) {
     return null;
   }
-  return { plainKey, initialRaw };
+  return { plainKey };
 }
 
 /**
@@ -322,22 +331,12 @@ function openInlineReveal(
  * `unwrapSource`, and replace it with a styled (or plain) TextNode.
  * No-op if the reveal node is gone (e.g. the block was deleted).
  */
-function commitInlineReveal(
-  editor: ReturnType<typeof useLexicalComposerContext>[0],
-  handle: InlineRevealHandle,
-): void {
+function commitInlineReveal(editor: LexicalEditor, handle: InlineRevealHandle): void {
   editor.update(() => {
     const live = $getNodeByKey(handle.plainKey);
     if (!$isTextNode(live)) {
       return;
     }
-    const raw = live.getTextContent();
-    // Nothing changed — leave the original styled run intact by re-wrapping.
-    const { text, specs } = unwrapSource(raw);
-    const replacement = $createTextNode(text);
-    for (const spec of specs) {
-      replacement.toggleFormat(spec.lexicalFormat);
-    }
-    live.replace(replacement);
+    $reparseTextNodeFromSource(live, live.getTextContent());
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 }

@@ -54,13 +54,6 @@ export const EDITOR_MODE_LABELS: Readonly<Record<EditorMode, string>> = {
   [EDITOR_MODE.SOURCE]: "Complete reveal",
 };
 
-/** Short-form description shown beneath the mode picker. */
-export const EDITOR_MODE_DESCRIPTIONS: Readonly<Record<EditorMode, string>> = {
-  [EDITOR_MODE.LEXICAL]: "Reveal the inline run under the caret",
-  [EDITOR_MODE.PARAGRAPH]: "Reveal the block under the caret",
-  [EDITOR_MODE.SOURCE]: "Reveal the whole document",
-};
-
 export const REVEAL_PRESENTATION = {
   INLINE: "inline",
   FLOATING: "floating",
