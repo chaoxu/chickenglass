@@ -24,6 +24,7 @@ export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
   onOpenPalette?: () => void;
+  onOpenSettings?: () => void;
   /** External signal used to refresh full stats without rerendering the shell. */
   activeDocumentSignal?: ActiveDocumentSignal;
   /** Returns the latest active-document text on demand. */
@@ -45,6 +46,7 @@ export function StatusBar({
   editorMode,
   onModeChange,
   onOpenPalette,
+  onOpenSettings,
   activeDocumentSignal,
   getDocText,
   isMarkdown = true,
@@ -130,7 +132,7 @@ export function StatusBar({
               {buildInfo.label}
             </span>
           )}
-          <ConfigButton />
+          <ConfigButton onOpenSettings={onOpenSettings} />
           <DebugButton />
           {onOpenPalette && (
             <button
