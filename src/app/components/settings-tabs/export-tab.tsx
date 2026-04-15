@@ -1,5 +1,5 @@
 import type { Settings, ExportFormat } from "../../lib/types";
-import { Row } from "./shared";
+import { Field, Section } from "./shared";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 interface ExportTabProps {
@@ -9,8 +9,11 @@ interface ExportTabProps {
 
 export function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
   return (
-    <section>
-      <Row label="Default format">
+    <Section title="Export">
+      <Field
+        label="Default format"
+        description="Pre-selected format in the export dialog. You can override per export."
+      >
         <Select
           value={settings.defaultExportFormat}
           onValueChange={(value) => {
@@ -26,7 +29,7 @@ export function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
             <SelectItem value="html">HTML</SelectItem>
           </SelectContent>
         </Select>
-      </Row>
-    </section>
+      </Field>
+    </Section>
   );
 }
