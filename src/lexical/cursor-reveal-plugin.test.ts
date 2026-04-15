@@ -11,9 +11,14 @@ import * as Reveal from "./cursor-reveal-plugin";
 
 describe("cursor-reveal: wrap/unwrap helpers", () => {
   const specs = getInlineTextFormatSpecs();
-  const bold = specs.find((s) => s.family === "bold")!;
-  const italic = specs.find((s) => s.family === "italic")!;
-  const code = specs.find((s) => s.family === "code")!;
+  const find = (family: string): InlineTextFormatSpec => {
+    const spec = specs.find((s) => s.family === family);
+    if (!spec) throw new Error(`missing spec: ${family}`);
+    return spec;
+  };
+  const bold = find("bold");
+  const italic = find("italic");
+  const code = find("code");
 
   it("wraps plain text with a single format's markers", () => {
     expect(Reveal.wrapWithSpecs("hello", [italic])).toBe("*hello*");
