@@ -62,6 +62,7 @@ import {
 } from "./editor-surface-shared";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
+import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { InlineMathSourcePlugin } from "./inline-math-source-plugin";
 import { LinkSourcePlugin } from "./link-source-plugin";
 import { StructureEditProvider } from "./structure-edit-plugin";
@@ -829,6 +830,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode ? <CheckListPlugin /> : null}
                 {!isSourceMode ? <LinkPlugin /> : null}
                 {!isSourceMode && editable ? <LinkSourcePlugin /> : null}
+                {!isSourceMode && editable ? <CursorRevealPlugin /> : null}
                 {!isSourceMode && editable ? <FormatEventPlugin /> : null}
                 {!isSourceMode && editable ? <InlineMathSourcePlugin /> : null}
                 {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
