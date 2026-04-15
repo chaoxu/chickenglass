@@ -277,10 +277,7 @@ function InlineCursorReveal() {
           return false;
         }
         const textOffset = sel.anchor.offset;
-        const handle = openInlineReveal(editor, anchorNode, specs, textOffset);
-        if (handle) {
-          activeRef.current = handle;
-        }
+        openInlineReveal(editor, anchorNode, specs, textOffset, activeRef);
         return false;
       },
       COMMAND_PRIORITY_LOW,
@@ -300,7 +297,8 @@ function openInlineReveal(
   node: TextNode,
   specs: readonly InlineTextFormatSpec[],
   textOffset: number,
-): InlineRevealHandle | null {
+  activeRef: { current: InlineRevealHandle | null },
+): void {
   const text = node.getTextContent();
   const initialRaw = wrapWithSpecs(text, specs);
   const openLen = specs.reduce((sum, s) => sum + s.markdownOpen.length, 0);
@@ -308,22 +306,25 @@ function openInlineReveal(
   // raw source. Clamp so we never land inside an open/close marker.
   const clampedTextOffset = Math.max(0, Math.min(textOffset, text.length));
   const rawOffset = openLen + clampedTextOffset;
-  let plainKey: NodeKey | null = null;
+  // The update is queued (we're inside another command handler), so we
+  // can't return the new key synchronously — record it via the ref the
+  // selection-change handler reads on the next tick.
   editor.update(() => {
     const live = $getNodeByKey(node.getKey());
     if (!$isTextNode(live)) {
       return;
     }
     const plain = $createTextNode(initialRaw);
-    // Clear any format flags so the text renders as raw markdown source.
+    // A non-empty style prevents Lexical from merging this node with its
+    // unstyled siblings during normalization — without it, the plain
+    // `*world*` immediately fuses into the surrounding paragraph text and
+    // we lose the key we use to find the run on commit. The CSS variable
+    // is a no-op visually.
+    plain.setStyle("--cf-reveal:1");
     live.replace(plain);
     plain.select(rawOffset, rawOffset);
-    plainKey = plain.getKey();
+    activeRef.current = { plainKey: plain.getKey() };
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
-  if (plainKey == null) {
-    return null;
-  }
-  return { plainKey };
 }
 
 /**
