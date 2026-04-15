@@ -1,15 +1,24 @@
 /**
  * Cursor-scope reveal plugin: when the caret lands inside a styled TextNode
- * (italic/bold/strikethrough/highlight/code), open a floating source editor
- * anchored to the run so the user can edit the raw markdown — add/remove
- * markers, change wording — and commit by pressing Enter, blurring, or
- * Escape (which discards).
+ * (italic/bold/strikethrough/highlight/code), surface the raw markdown so the
+ * user can edit the marker + wording directly.
  *
- * This is the cursor-scope + floating-presentation slice of the unified
- * reveal plan (`docs/design/inline-rendering-policy.md`,
- * plan: "Unified Reveal: scoped subtree source editing"). Inline-swap
- * presentation and paragraph/complete scopes are follow-up work; inline
- * math and link plugins keep their own (floating) surfaces for now.
+ * Two presentations are supported and picked via the `presentation` prop,
+ * which is driven by `Settings.revealPresentation`:
+ *
+ * - **Floating** (default for math/links today): open a
+ *   `SurfaceFloatingPortal` anchored to the styled run. The original Lexical
+ *   node is untouched; Enter/blur commits the draft, Escape discards.
+ *
+ * - **Inline** (Typora-style): swap the styled TextNode in place for a plain
+ *   TextNode whose text is `*...*` / `**...**` / etc. The user edits it
+ *   directly in the document flow. When the caret leaves that run, its text
+ *   is re-parsed — known open/close marker pairs become format flags on the
+ *   replacement node, anything else stays plain text.
+ *
+ * This is the cursor-scope slice of the unified reveal plan; paragraph and
+ * complete scopes are follow-up work. Inline math and link plugins still
+ * own their own floating surfaces for now.
  */
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -26,6 +35,7 @@ import {
   type TextNode,
 } from "lexical";
 
+import { REVEAL_PRESENTATION, type RevealPresentation } from "../app/editor-mode";
 import { SurfaceFloatingPortal } from "../lexical-next";
 import {
   getInlineTextFormatSpecs,
@@ -75,15 +85,24 @@ function unwrapSource(raw: string): {
   return { text, specs };
 }
 
-interface RevealState {
+export function CursorRevealPlugin({ presentation }: { presentation: RevealPresentation }) {
+  if (presentation === REVEAL_PRESENTATION.INLINE) {
+    return <InlineCursorReveal />;
+  }
+  return <FloatingCursorReveal />;
+}
+
+// ─── Floating presentation ──────────────────────────────────────────────
+
+interface FloatingState {
   readonly nodeKey: NodeKey;
   readonly anchor: HTMLElement;
   readonly initialRaw: string;
 }
 
-export function CursorRevealPlugin() {
+function FloatingCursorReveal() {
   const [editor] = useLexicalComposerContext();
-  const [state, setState] = useState<RevealState | null>(null);
+  const [state, setState] = useState<FloatingState | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   // Key we last revealed (or committed to). Prevents the floating editor
@@ -139,7 +158,7 @@ export function CursorRevealPlugin() {
     input.setSelectionRange(len, len);
   }, [state]);
 
-  const commitDraft = (current: RevealState, nextRaw: string) => {
+  const commitDraft = (current: FloatingState, nextRaw: string) => {
     editor.update(() => {
       const node = $getNodeByKey(current.nodeKey);
       if (!$isTextNode(node)) {
@@ -151,8 +170,6 @@ export function CursorRevealPlugin() {
         replacement.toggleFormat(spec.lexicalFormat);
       }
       node.replace(replacement);
-      // Treat the replacement as the "last revealed" node so the selection
-      // change that follows the replace does not immediately reopen us.
       lastRevealedKeyRef.current = replacement.getKey();
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
   };
@@ -182,7 +199,6 @@ export function CursorRevealPlugin() {
                 setState(null);
               } else if (event.key === "Escape") {
                 event.preventDefault();
-                // Don't commit — leave the original styled node as-is.
                 lastRevealedKeyRef.current = state.nodeKey;
                 setState(null);
               }
@@ -197,4 +213,123 @@ export function CursorRevealPlugin() {
       </EditorChromePanel>
     </SurfaceFloatingPortal>
   );
+}
+
+// ─── Inline (Typora-style) presentation ─────────────────────────────────
+
+interface InlineRevealHandle {
+  readonly plainKey: NodeKey;
+  readonly initialRaw: string;
+}
+
+function InlineCursorReveal() {
+  const [editor] = useLexicalComposerContext();
+  // Key of the in-flight plain-text reveal node. When the caret moves off
+  // this key, we reparse it back into a styled TextNode.
+  const activeRef = useRef<InlineRevealHandle | null>(null);
+
+  useEffect(() => {
+    return editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        const sel = $getSelection();
+        if (!$isRangeSelection(sel) || !sel.isCollapsed()) {
+          return false;
+        }
+        const anchorNode = sel.anchor.getNode();
+        if (!$isTextNode(anchorNode)) {
+          // Caret left a text node entirely — commit any active reveal.
+          if (activeRef.current) {
+            commitInlineReveal(editor, activeRef.current);
+            activeRef.current = null;
+          }
+          return false;
+        }
+        const anchorKey = anchorNode.getKey();
+
+        // Still sitting inside the active reveal — nothing to do.
+        if (activeRef.current && activeRef.current.plainKey === anchorKey) {
+          return false;
+        }
+
+        // Caret moved off the active reveal → commit it, then consider
+        // whether the new location is itself a styled run that should open.
+        if (activeRef.current) {
+          commitInlineReveal(editor, activeRef.current);
+          activeRef.current = null;
+          // The commit replaced the plain node. Don't try to open a new
+          // reveal on this selection-change tick — the replacement will
+          // trigger another SELECTION_CHANGE which we'll evaluate fresh.
+          return false;
+        }
+
+        const specs = activeFormatSpecs(anchorNode);
+        if (specs.length === 0) {
+          return false;
+        }
+        const handle = openInlineReveal(editor, anchorNode, specs);
+        if (handle) {
+          activeRef.current = handle;
+        }
+        return false;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor]);
+
+  return null;
+}
+
+/**
+ * Replace a styled TextNode with a plain-text one containing its raw
+ * markdown source (e.g. `*haha*`). Caret lands at the end of the raw text.
+ * Returns a handle for later reparse.
+ */
+function openInlineReveal(
+  editor: ReturnType<typeof useLexicalComposerContext>[0],
+  node: TextNode,
+  specs: readonly InlineTextFormatSpec[],
+): InlineRevealHandle | null {
+  const initialRaw = wrapWithSpecs(node.getTextContent(), specs);
+  let plainKey: NodeKey | null = null;
+  editor.update(() => {
+    const live = $getNodeByKey(node.getKey());
+    if (!$isTextNode(live)) {
+      return;
+    }
+    const plain = $createTextNode(initialRaw);
+    // Clear any format flags so the text renders as raw markdown source.
+    live.replace(plain);
+    plain.select(initialRaw.length, initialRaw.length);
+    plainKey = plain.getKey();
+  }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
+  if (plainKey == null) {
+    return null;
+  }
+  return { plainKey, initialRaw };
+}
+
+/**
+ * Take whatever the plain-text reveal node now contains, run it through
+ * `unwrapSource`, and replace it with a styled (or plain) TextNode.
+ * No-op if the reveal node is gone (e.g. the block was deleted).
+ */
+function commitInlineReveal(
+  editor: ReturnType<typeof useLexicalComposerContext>[0],
+  handle: InlineRevealHandle,
+): void {
+  editor.update(() => {
+    const live = $getNodeByKey(handle.plainKey);
+    if (!$isTextNode(live)) {
+      return;
+    }
+    const raw = live.getTextContent();
+    // Nothing changed — leave the original styled run intact by re-wrapping.
+    const { text, specs } = unwrapSource(raw);
+    const replacement = $createTextNode(text);
+    for (const spec of specs) {
+      replacement.toggleFormat(spec.lexicalFormat);
+    }
+    live.replace(replacement);
+  }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 }

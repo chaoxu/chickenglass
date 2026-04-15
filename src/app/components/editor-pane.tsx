@@ -9,7 +9,7 @@ import type { HeadingEntry } from "../heading-ancestry";
 import { useEditorTelemetryStore } from "../../state/editor-telemetry-store";
 import { useHeadingIndex } from "../../state/heading-index-store";
 import type { EditorDocumentChange } from "../../lib/editor-doc-change";
-import type { EditorMode } from "../editor-mode";
+import type { EditorMode, RevealPresentation } from "../editor-mode";
 import { Breadcrumbs } from "./breadcrumbs";
 import { LexicalEditorSurface } from "./lexical-editor-surface";
 
@@ -24,6 +24,7 @@ export interface EditorPaneProps {
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly onOutlineSelect?: (from: number) => void;
   readonly spellCheck?: boolean;
+  readonly revealPresentation?: RevealPresentation;
 }
 
 export function EditorPane({
@@ -37,6 +38,7 @@ export function EditorPane({
   onLexicalEditorReady,
   onOutlineSelect,
   spellCheck = false,
+  revealPresentation,
 }: EditorPaneProps) {
   const [liveDoc, setLiveDoc] = useState(doc);
   const liveDocRef = useRef(doc);
@@ -132,6 +134,7 @@ export function EditorPane({
         onDocumentReady={handleDocumentReady}
         onScrollChange={handleScrollChange}
         onViewportFromChange={handleViewportFromChange}
+        revealPresentation={revealPresentation}
         spellCheck={spellCheck}
       />
     </div>

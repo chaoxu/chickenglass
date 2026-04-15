@@ -37,6 +37,7 @@ export function AppMainShell({
             onOutlineSelect={editor.handleOutlineSelect}
             editorMode={editor.editorMode}
             spellCheck={workspace.settings.enabledPlugins.spellcheck ?? workspace.settings.spellCheck}
+            revealPresentation={workspace.settings.revealPresentation}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">

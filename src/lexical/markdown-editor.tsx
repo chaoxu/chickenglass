@@ -33,7 +33,8 @@ import {
   type LexicalEditor,
 } from "lexical";
 
-import type { EditorMode } from "../app/editor-mode";
+import type { EditorMode, RevealPresentation } from "../app/editor-mode";
+import { REVEAL_PRESENTATION } from "../app/editor-mode";
 import {
   applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
@@ -557,6 +558,7 @@ export interface LexicalMarkdownEditorProps {
   readonly onScrollChange?: (scrollTop: number) => void;
   readonly onViewportFromChange?: (from: number) => void;
   readonly renderContextValue?: LexicalRenderContextValue;
+  readonly revealPresentation?: RevealPresentation;
   readonly spellCheck?: boolean;
   readonly testId?: string | null;
 }
@@ -581,6 +583,7 @@ export function LexicalMarkdownEditor({
   onScrollChange,
   onViewportFromChange,
   renderContextValue,
+  revealPresentation = REVEAL_PRESENTATION.FLOATING,
   spellCheck = false,
   testId = "lexical-editor",
 }: LexicalMarkdownEditorProps) {
@@ -830,7 +833,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode ? <CheckListPlugin /> : null}
                 {!isSourceMode ? <LinkPlugin /> : null}
                 {!isSourceMode && editable ? <LinkSourcePlugin /> : null}
-                {!isSourceMode && editable ? <CursorRevealPlugin /> : null}
+                {!isSourceMode && editable ? <CursorRevealPlugin presentation={revealPresentation} /> : null}
                 {!isSourceMode && editable ? <FormatEventPlugin /> : null}
                 {!isSourceMode && editable ? <InlineMathSourcePlugin /> : null}
                 {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
