@@ -51,6 +51,7 @@ describe("useSettings", () => {
         wordWrap: true,
         spellCheck: false,
         editorMode: "lexical",
+        revealPresentation: "inline",
         theme: "system",
         defaultExportFormat: "pdf",
         enabledPlugins: { spellcheck: false },

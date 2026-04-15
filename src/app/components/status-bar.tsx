@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useSyncExternalStore } from "react";
 
-import { markdownEditorModes, type EditorMode } from "../editor-mode";
+import { markdownEditorModes, EDITOR_MODE_LABELS, type EditorMode } from "../editor-mode";
 import { computeDocStats, type DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../../state/editor-telemetry-store";
@@ -32,10 +32,7 @@ export interface StatusBarProps {
   isMarkdown?: boolean;
 }
 
-const MODE_LABELS: Record<EditorMode, string> = {
-  lexical: "Lexical",
-  source: "Source",
-};
+const MODE_LABELS = EDITOR_MODE_LABELS;
 
 /**
  * Status bar shown at the bottom of the editor.

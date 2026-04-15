@@ -10,7 +10,7 @@ import {
 } from "./src/lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "./src/lexical/markdown-editor";
 
-export type StandaloneEditorMode = "lexical" | "source";
+export type StandaloneEditorMode = "lexical" | "paragraph" | "source";
 
 export interface MountEditorOptions {
   readonly parent: HTMLElement;

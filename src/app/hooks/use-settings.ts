@@ -11,7 +11,7 @@ import { useState, useCallback } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
-import { EDITOR_MODE, LEGACY_EDITOR_MODE_READ } from "../editor-mode";
+import { EDITOR_MODE, LEGACY_EDITOR_MODE_READ, REVEAL_PRESENTATION } from "../editor-mode";
 import { BASE_FONT_SIZE_PX, BASE_LINE_HEIGHT } from "../../constants/typography";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS: Settings = {
   wordWrap: true,
   spellCheck: false,
   editorMode: EDITOR_MODE.LEXICAL,
+  revealPresentation: REVEAL_PRESENTATION.INLINE,
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},

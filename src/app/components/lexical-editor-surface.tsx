@@ -12,7 +12,7 @@ import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import "../../lexical/renderers/block-renderers";
 import { FORMAT_EVENT, type FormatEventDetail } from "../../constants/events";
 import type { EditorDocumentChange } from "../../lib/editor-doc-change";
-import type { EditorMode } from "../editor-mode";
+import type { EditorMode, RevealPresentation } from "../editor-mode";
 import { planMarkdownFormat } from "../format-markdown";
 
 export interface LexicalEditorSurfaceProps {
@@ -28,6 +28,7 @@ export interface LexicalEditorSurfaceProps {
   readonly onScrollChange?: (scrollTop: number) => void;
   readonly onViewportFromChange?: (from: number) => void;
   readonly spellCheck?: boolean;
+  readonly revealPresentation?: RevealPresentation;
 }
 
 export function LexicalEditorSurface({
@@ -43,6 +44,7 @@ export function LexicalEditorSurface({
   onScrollChange,
   onViewportFromChange,
   spellCheck = false,
+  revealPresentation,
 }: LexicalEditorSurfaceProps) {
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
   const docRef = useRef(doc);
@@ -127,6 +129,7 @@ export function LexicalEditorSurface({
       onSelectionChange={onSelectionChange}
       onTextChange={onTextChange}
       onViewportFromChange={onViewportFromChange}
+      revealPresentation={revealPresentation}
       spellCheck={spellCheck}
     />
   );
