@@ -48,7 +48,7 @@ function activeFormatSpecs(node: TextNode): readonly InlineTextFormatSpec[] {
   return getInlineTextFormatSpecs().filter((spec) => node.hasFormat(spec.lexicalFormat));
 }
 
-function wrapWithSpecs(text: string, specs: readonly InlineTextFormatSpec[]): string {
+export function wrapWithSpecs(text: string, specs: readonly InlineTextFormatSpec[]): string {
   const open = specs.map((s) => s.markdownOpen).join("");
   const close = [...specs].reverse().map((s) => s.markdownClose).join("");
   return `${open}${text}${close}`;
@@ -59,7 +59,7 @@ function wrapWithSpecs(text: string, specs: readonly InlineTextFormatSpec[]): st
  * Returns the inner text and the specs that wrapped it (outer-first).
  * Unknown or unbalanced markers leave the string as plain text.
  */
-function unwrapSource(raw: string): {
+export function unwrapSource(raw: string): {
   readonly text: string;
   readonly specs: readonly InlineTextFormatSpec[];
 } {
@@ -267,7 +267,8 @@ function InlineCursorReveal() {
         if (specs.length === 0) {
           return false;
         }
-        const handle = openInlineReveal(editor, anchorNode, specs);
+        const textOffset = sel.anchor.offset;
+        const handle = openInlineReveal(editor, anchorNode, specs, textOffset);
         if (handle) {
           activeRef.current = handle;
         }
@@ -289,8 +290,15 @@ function openInlineReveal(
   editor: ReturnType<typeof useLexicalComposerContext>[0],
   node: TextNode,
   specs: readonly InlineTextFormatSpec[],
+  textOffset: number,
 ): InlineRevealHandle | null {
-  const initialRaw = wrapWithSpecs(node.getTextContent(), specs);
+  const text = node.getTextContent();
+  const initialRaw = wrapWithSpecs(text, specs);
+  const openLen = specs.reduce((sum, s) => sum + s.markdownOpen.length, 0);
+  // Map the caret offset inside the styled text to an offset inside the
+  // raw source. Clamp so we never land inside an open/close marker.
+  const clampedTextOffset = Math.max(0, Math.min(textOffset, text.length));
+  const rawOffset = openLen + clampedTextOffset;
   let plainKey: NodeKey | null = null;
   editor.update(() => {
     const live = $getNodeByKey(node.getKey());
@@ -300,7 +308,7 @@ function openInlineReveal(
     const plain = $createTextNode(initialRaw);
     // Clear any format flags so the text renders as raw markdown source.
     live.replace(plain);
-    plain.select(initialRaw.length, initialRaw.length);
+    plain.select(rawOffset, rawOffset);
     plainKey = plain.getKey();
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
   if (plainKey == null) {
