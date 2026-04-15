@@ -1,24 +1,19 @@
 /**
- * Cursor-scope reveal plugin: when the caret lands inside a styled TextNode
- * (italic/bold/strikethrough/highlight/code), surface the raw markdown so the
- * user can edit the marker + wording directly.
+ * Cursor-scope reveal plugin: when the caret lands inside a revealable
+ * subtree (styled TextNode, link, inline math, citation, footnote ref),
+ * surface the raw markdown so the user can edit the marker + content
+ * directly. Two presentations are supported and picked via the
+ * `presentation` prop, driven by `Settings.revealPresentation`:
  *
- * Two presentations are supported and picked via the `presentation` prop,
- * which is driven by `Settings.revealPresentation`:
+ * - **Floating**: open a `SurfaceFloatingPortal` anchored to the live
+ *   subtree. The original Lexical node is untouched; Enter / blur
+ *   commits the draft, Escape discards.
  *
- * - **Floating** (default for math/links today): open a
- *   `SurfaceFloatingPortal` anchored to the styled run. The original Lexical
- *   node is untouched; Enter/blur commits the draft, Escape discards.
- *
- * - **Inline** (Typora-style): swap the styled TextNode in place for a plain
- *   TextNode whose text is `*...*` / `**...**` / etc. The user edits it
- *   directly in the document flow. When the caret leaves that run, its text
- *   is re-parsed — known open/close marker pairs become format flags on the
- *   replacement node, anything else stays plain text.
- *
- * This is the cursor-scope slice of the unified reveal plan; paragraph and
- * complete scopes are follow-up work. Inline math and link plugins still
- * own their own floating surfaces for now.
+ * - **Inline** (Typora-style): swap the live subtree in place for a
+ *   plain TextNode whose text is the markdown source. The user edits
+ *   it directly in the document flow. When the caret leaves that run,
+ *   the text is re-parsed via the same adapter — valid syntax becomes
+ *   the original kind of node, anything else stays plain text.
  */
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -27,79 +22,26 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getSelection,
-  $isRangeSelection,
   $isTextNode,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
   type LexicalEditor,
   type NodeKey,
-  type TextNode,
 } from "lexical";
 
 import { REVEAL_PRESENTATION, type RevealPresentation } from "../app/editor-mode";
 import { SurfaceFloatingPortal } from "../lexical-next";
 import {
-  getInlineTextFormatSpecs,
-  type InlineTextFormatSpec,
-} from "../lexical-next/model/inline-text-format-family";
+  pickRevealSubject,
+  type RevealAdapter,
+  type RevealSubject,
+} from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
-function activeFormatSpecs(node: TextNode): readonly InlineTextFormatSpec[] {
-  return getInlineTextFormatSpecs().filter((spec) => node.hasFormat(spec.lexicalFormat));
-}
-
-export function wrapWithSpecs(text: string, specs: readonly InlineTextFormatSpec[]): string {
-  const open = specs.map((s) => s.markdownOpen).join("");
-  const close = [...specs].reverse().map((s) => s.markdownClose).join("");
-  return `${open}${text}${close}`;
-}
-
-/**
- * Peel outermost known open/close marker pairs from a raw string.
- * Returns the inner text and the specs that wrapped it (outer-first).
- * Unknown or unbalanced markers leave the string as plain text.
- */
-export function unwrapSource(raw: string): {
-  readonly text: string;
-  readonly specs: readonly InlineTextFormatSpec[];
-} {
-  const specs: InlineTextFormatSpec[] = [];
-  let text = raw;
-  let peeled = true;
-  while (peeled) {
-    peeled = false;
-    for (const spec of getInlineTextFormatSpecs()) {
-      const min = spec.markdownOpen.length + spec.markdownClose.length;
-      if (
-        text.length >= min + 1 &&
-        text.startsWith(spec.markdownOpen) &&
-        text.endsWith(spec.markdownClose)
-      ) {
-        text = text.slice(spec.markdownOpen.length, text.length - spec.markdownClose.length);
-        specs.push(spec);
-        peeled = true;
-        break;
-      }
-    }
-  }
-  return { text, specs };
-}
-
-/**
- * Replace a live TextNode with the result of reparsing `raw` as markdown:
- * inner text as the new node's content, outer markers become format flags.
- * Returns the replacement node so callers can track its key.
- */
-function $reparseTextNodeFromSource(live: TextNode, raw: string): TextNode {
-  const { text, specs } = unwrapSource(raw);
-  const replacement = $createTextNode(text);
-  for (const spec of specs) {
-    replacement.toggleFormat(spec.lexicalFormat);
-  }
-  live.replace(replacement);
-  return replacement;
-}
+// Re-exports kept so existing unit tests can continue importing the
+// pure markdown helpers from this module.
+export { wrapWithSpecs, unwrapSource } from "./cursor-reveal-adapters";
 
 export function CursorRevealPlugin({ presentation }: { presentation: RevealPresentation }) {
   if (presentation === REVEAL_PRESENTATION.INLINE) {
@@ -113,6 +55,7 @@ export function CursorRevealPlugin({ presentation }: { presentation: RevealPrese
 interface FloatingState {
   readonly nodeKey: NodeKey;
   readonly anchor: HTMLElement;
+  readonly adapter: RevealAdapter;
 }
 
 function FloatingCursorReveal() {
@@ -122,7 +65,7 @@ function FloatingCursorReveal() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   // Key we last revealed (or committed to). Prevents the floating editor
   // from reopening on the same node right after it closes, since Lexical's
-  // post-commit selection still points at the replacement TextNode.
+  // post-commit selection still points at the replacement node.
   const lastRevealedKeyRef = useRef<NodeKey | null>(null);
 
   useEffect(() => {
@@ -130,30 +73,25 @@ function FloatingCursorReveal() {
       SELECTION_CHANGE_COMMAND,
       () => {
         const sel = $getSelection();
-        if (!$isRangeSelection(sel) || !sel.isCollapsed()) {
+        if (!sel) {
           return false;
         }
-        const node = sel.anchor.getNode();
-        if (!$isTextNode(node)) {
+        const pick = pickRevealSubject(sel);
+        if (!pick) {
           lastRevealedKeyRef.current = null;
           return false;
         }
-        const key = node.getKey();
+        const key = pick.subject.node.getKey();
         if (key === lastRevealedKeyRef.current) {
           return false;
         }
-        lastRevealedKeyRef.current = key;
-        const specs = activeFormatSpecs(node);
-        if (specs.length === 0) {
-          return false;
-        }
-        const raw = wrapWithSpecs(node.getTextContent(), specs);
         const dom = editor.getElementByKey(key);
         if (!dom) {
           return false;
         }
-        setDraft(raw);
-        setState({ anchor: dom, nodeKey: key });
+        lastRevealedKeyRef.current = key;
+        setDraft(pick.subject.source);
+        setState({ adapter: pick.adapter, anchor: dom, nodeKey: key });
         return false;
       },
       COMMAND_PRIORITY_LOW,
@@ -176,10 +114,15 @@ function FloatingCursorReveal() {
   const commitDraft = (current: FloatingState, nextRaw: string) => {
     editor.update(() => {
       const node = $getNodeByKey(current.nodeKey);
-      if (!$isTextNode(node)) {
+      if (!node) {
         return;
       }
-      const replacement = $reparseTextNodeFromSource(node, nextRaw);
+      // Floating mode never plain-swaps the subtree, so adapters expect a
+      // TextNode they can replace. Wrap the live node in a sacrificial
+      // TextNode and let the adapter rebuild from `nextRaw`.
+      const placeholder = $createTextNode(nextRaw);
+      node.replace(placeholder);
+      const replacement = current.adapter.reparse(placeholder, nextRaw);
       lastRevealedKeyRef.current = replacement.getKey();
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
   };
@@ -229,12 +172,13 @@ function FloatingCursorReveal() {
 
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
+  readonly adapter: RevealAdapter;
 }
 
 function InlineCursorReveal() {
   const [editor] = useLexicalComposerContext();
   // Key of the in-flight plain-text reveal node. When the caret moves off
-  // this key, we reparse it back into a styled TextNode.
+  // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
 
   useEffect(() => {
@@ -242,42 +186,31 @@ function InlineCursorReveal() {
       SELECTION_CHANGE_COMMAND,
       () => {
         const sel = $getSelection();
-        if (!$isRangeSelection(sel) || !sel.isCollapsed()) {
-          return false;
-        }
-        const anchorNode = sel.anchor.getNode();
-        if (!$isTextNode(anchorNode)) {
-          // Caret left a text node entirely — commit any active reveal.
-          if (activeRef.current) {
-            commitInlineReveal(editor, activeRef.current);
-            activeRef.current = null;
-          }
-          return false;
-        }
-        const anchorKey = anchorNode.getKey();
-
-        // Still sitting inside the active reveal — nothing to do.
-        if (activeRef.current && activeRef.current.plainKey === anchorKey) {
+        if (!sel) {
           return false;
         }
 
-        // Caret moved off the active reveal → commit it, then consider
-        // whether the new location is itself a styled run that should open.
+        // If a reveal is open and the selection is still inside that
+        // node, do nothing. Selection-change while inside the reveal
+        // (typing, arrow within) shouldn't disturb it.
         if (activeRef.current) {
+          const anchorKey = anchorTextKey(sel);
+          if (anchorKey && anchorKey === activeRef.current.plainKey) {
+            return false;
+          }
+          // Caret moved off the reveal — commit and exit. The replacement
+          // will trigger another SELECTION_CHANGE that we evaluate fresh.
           commitInlineReveal(editor, activeRef.current);
           activeRef.current = null;
-          // The commit replaced the plain node. Don't try to open a new
-          // reveal on this selection-change tick — the replacement will
-          // trigger another SELECTION_CHANGE which we'll evaluate fresh.
           return false;
         }
 
-        const specs = activeFormatSpecs(anchorNode);
-        if (specs.length === 0) {
+        const pick = pickRevealSubject(sel);
+        if (!pick) {
           return false;
         }
-        const textOffset = sel.anchor.offset;
-        openInlineReveal(editor, anchorNode, specs, textOffset, activeRef);
+        const preferredOffset = "anchor" in sel ? (sel.anchor as { offset: number }).offset : 0;
+        openInlineReveal(editor, pick.subject, pick.adapter, preferredOffset, activeRef);
         return false;
       },
       COMMAND_PRIORITY_LOW,
@@ -287,57 +220,79 @@ function InlineCursorReveal() {
   return null;
 }
 
+function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | null {
+  if (!selection || !("anchor" in selection)) {
+    return null;
+  }
+  // RangeSelection only — NodeSelection has no concept of "still inside".
+  const anchor = (selection as { anchor: { getNode: () => unknown } }).anchor;
+  const node = anchor.getNode();
+  return node && typeof (node as { getKey?: () => string }).getKey === "function"
+    ? (node as { getKey: () => string }).getKey()
+    : null;
+}
+
 /**
- * Replace a styled TextNode with a plain-text one containing its raw
- * markdown source (e.g. `*haha*`). Caret lands at the end of the raw text.
- * Returns a handle for later reparse.
+ * Replace the subject node with a plain-text node containing its
+ * markdown source, then position the caret inside. Records the key +
+ * adapter via `activeRef` from inside the queued update — we can't
+ * return synchronously because we're called from another command
+ * handler.
  */
 function openInlineReveal(
   editor: LexicalEditor,
-  node: TextNode,
-  specs: readonly InlineTextFormatSpec[],
-  textOffset: number,
+  subject: RevealSubject,
+  adapter: RevealAdapter,
+  preferredOffset: number,
   activeRef: { current: InlineRevealHandle | null },
 ): void {
-  const text = node.getTextContent();
-  const initialRaw = wrapWithSpecs(text, specs);
-  const openLen = specs.reduce((sum, s) => sum + s.markdownOpen.length, 0);
-  // Map the caret offset inside the styled text to an offset inside the
-  // raw source. Clamp so we never land inside an open/close marker.
-  const clampedTextOffset = Math.max(0, Math.min(textOffset, text.length));
-  const rawOffset = openLen + clampedTextOffset;
-  // The update is queued (we're inside another command handler), so we
-  // can't return the new key synchronously — record it via the ref the
-  // selection-change handler reads on the next tick.
+  const subjectKey = subject.node.getKey();
+  const initialRaw = subject.source;
+  const caretOffset = computeCaretOffset(subject, preferredOffset);
   editor.update(() => {
-    const live = $getNodeByKey(node.getKey());
-    if (!$isTextNode(live)) {
+    const live = $getNodeByKey(subjectKey);
+    if (!live) {
       return;
     }
     const plain = $createTextNode(initialRaw);
-    // A non-empty style prevents Lexical from merging this node with its
-    // unstyled siblings during normalization — without it, the plain
-    // `*world*` immediately fuses into the surrounding paragraph text and
-    // we lose the key we use to find the run on commit. The CSS variable
-    // is a no-op visually.
+    // A non-empty style prevents Lexical from merging this plain node
+    // with its unstyled siblings during normalization — without it the
+    // reveal text immediately fuses into the surrounding paragraph and
+    // we lose the key we use to find the run on commit. The CSS
+    // variable is a no-op visually.
     plain.setStyle("--cf-reveal:1");
     live.replace(plain);
-    plain.select(rawOffset, rawOffset);
-    activeRef.current = { plainKey: plain.getKey() };
+    plain.select(caretOffset, caretOffset);
+    activeRef.current = { adapter, plainKey: plain.getKey() };
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 }
 
 /**
- * Take whatever the plain-text reveal node now contains, run it through
- * `unwrapSource`, and replace it with a styled (or plain) TextNode.
- * No-op if the reveal node is gone (e.g. the block was deleted).
+ * For text-format subjects, map the caret's offset within the visible
+ * text to an offset inside the source string (skipping past the open
+ * marker). For other subjects the offset is meaningless — land at end.
  */
+function computeCaretOffset(subject: RevealSubject, preferredOffset: number): number {
+  if (!$isTextNode(subject.node)) {
+    return subject.source.length;
+  }
+  const text = subject.node.getTextContent();
+  const openMarkerLen = subject.source.length - text.length - (subject.source.length - text.length) / 2;
+  // The wrap is symmetric (open + text + close), so the open length is
+  // (source.length - text.length) / 2.
+  const openLen = Math.max(0, Math.floor((subject.source.length - text.length) / 2));
+  const clamped = Math.max(0, Math.min(preferredOffset, text.length));
+  // openMarkerLen kept above for future asymmetric markers; ignore it.
+  void openMarkerLen;
+  return openLen + clamped;
+}
+
 function commitInlineReveal(editor: LexicalEditor, handle: InlineRevealHandle): void {
   editor.update(() => {
     const live = $getNodeByKey(handle.plainKey);
     if (!$isTextNode(live)) {
       return;
     }
-    $reparseTextNodeFromSource(live, live.getTextContent());
+    handle.adapter.reparse(live, live.getTextContent());
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 }
