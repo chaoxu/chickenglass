@@ -20,10 +20,12 @@ import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createNodeSelection,
+  $createParagraphNode,
   $createTextNode,
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getSelection,
+  $isElementNode,
   $isTextNode,
   CLICK_COMMAND,
   COMMAND_PRIORITY_HIGH,
@@ -34,9 +36,16 @@ import {
   type NodeKey,
 } from "lexical";
 
-import { REVEAL_PRESENTATION, type RevealPresentation } from "../app/editor-mode";
+import {
+  EDITOR_MODE,
+  REVEAL_PRESENTATION,
+  type EditorMode,
+  type RevealPresentation,
+} from "../app/editor-mode";
 import { SurfaceFloatingPortal } from "../lexical-next";
 import {
+  PARAGRAPH_REVEAL_ADAPTERS,
+  REVEAL_ADAPTERS,
   pickRevealSubject,
   type RevealAdapter,
   type RevealSubject,
@@ -44,6 +53,7 @@ import {
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
+import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $isReferenceNode } from "./nodes/reference-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
@@ -51,11 +61,25 @@ import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 // pure markdown helpers from this module.
 export { wrapWithSpecs, unwrapSource } from "./cursor-reveal-adapters";
 
-export function CursorRevealPlugin({ presentation }: { presentation: RevealPresentation }) {
+export function CursorRevealPlugin({
+  editorMode,
+  presentation,
+}: {
+  editorMode: EditorMode;
+  presentation: RevealPresentation;
+}) {
+  // Mode picks the *scope* (which subtree the cursor surfaces); presentation
+  // picks *where* the editable surface lives. PARAGRAPH mode swaps the
+  // per-element adapters for a single paragraph adapter so the whole block
+  // opens as one source surface instead of just the inline token under the
+  // caret. SOURCE mode never reaches this plugin (it mounts PlainTextPlugin).
+  const adapters = editorMode === EDITOR_MODE.PARAGRAPH
+    ? PARAGRAPH_REVEAL_ADAPTERS
+    : REVEAL_ADAPTERS;
   if (presentation === REVEAL_PRESENTATION.INLINE) {
-    return <InlineCursorReveal />;
+    return <InlineCursorReveal adapters={adapters} />;
   }
-  return <FloatingCursorReveal />;
+  return <FloatingCursorReveal adapters={adapters} />;
 }
 
 /**
@@ -67,6 +91,7 @@ export function CursorRevealPlugin({ presentation }: { presentation: RevealPrese
  */
 function useDecoratorClickEntry(
   editor: LexicalEditor,
+  adapters: readonly RevealAdapter[],
   onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
 ): void {
   useEffect(() => {
@@ -85,7 +110,7 @@ function useDecoratorClickEntry(
           }
           const selection = $createNodeSelection();
           selection.add(node.getKey());
-          const pick = pickRevealSubject(selection);
+          const pick = pickRevealSubject(selection, adapters);
           if (!pick) {
             return;
           }
@@ -105,13 +130,18 @@ function useDecoratorClickEntry(
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onOpen]);
+  }, [editor, onOpen, adapters]);
 }
 
 function isRevealableDecorator(node: LexicalNode): boolean {
   return $isInlineMathNode(node)
     || $isReferenceNode(node)
-    || $isFootnoteReferenceNode(node);
+    || $isFootnoteReferenceNode(node)
+    // Block-scope decorator (e.g. theorem) — only the paragraph adapter
+    // claims it, so in cursor mode this is a no-op (pickRevealSubject
+    // returns null and nothing happens). In paragraph mode the click
+    // produces a NodeSelection that the paragraph adapter handles.
+    || $isRawBlockNode(node);
 }
 
 // ─── Floating presentation ──────────────────────────────────────────────
@@ -122,7 +152,7 @@ interface FloatingState {
   readonly adapter: RevealAdapter;
 }
 
-function FloatingCursorReveal() {
+function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
   const [state, setState] = useState<FloatingState | null>(null);
   const [draft, setDraft] = useState("");
@@ -149,7 +179,7 @@ function FloatingCursorReveal() {
     [editor],
   );
 
-  useDecoratorClickEntry(editor, openFloating);
+  useDecoratorClickEntry(editor, adapters, openFloating);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -159,7 +189,7 @@ function FloatingCursorReveal() {
         if (!sel) {
           return false;
         }
-        const pick = pickRevealSubject(sel);
+        const pick = pickRevealSubject(sel, adapters);
         if (!pick) {
           lastRevealedKeyRef.current = null;
           return false;
@@ -169,7 +199,7 @@ function FloatingCursorReveal() {
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, openFloating]);
+  }, [editor, openFloating, adapters]);
 
   useEffect(() => {
     if (!state) {
@@ -248,7 +278,7 @@ interface InlineRevealHandle {
   readonly adapter: RevealAdapter;
 }
 
-function InlineCursorReveal() {
+function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
   // Key of the in-flight plain-text reveal node. When the caret moves off
   // this key, we reparse it via the same adapter that opened it.
@@ -262,7 +292,7 @@ function InlineCursorReveal() {
     [editor],
   );
 
-  useDecoratorClickEntry(editor, openFromDecoratorClick);
+  useDecoratorClickEntry(editor, adapters, openFromDecoratorClick);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -288,7 +318,7 @@ function InlineCursorReveal() {
           return false;
         }
 
-        const pick = pickRevealSubject(sel);
+        const pick = pickRevealSubject(sel, adapters);
         if (!pick) {
           return false;
         }
@@ -298,7 +328,7 @@ function InlineCursorReveal() {
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor]);
+  }, [editor, adapters]);
 
   return null;
 }
@@ -344,7 +374,21 @@ function openInlineReveal(
     // we lose the key we use to find the run on commit. The CSS
     // variable is a no-op visually.
     plain.setStyle("--cf-reveal:1");
-    live.replace(plain);
+    if ($isElementNode(live) || $isRawBlockNode(live)) {
+      // Block-scope reveal (paragraph adapter): the subject is a
+      // top-level block, not an inline node. A bare TextNode at the
+      // root would violate Lexical's structural invariants, so wrap the
+      // placeholder in a fresh ParagraphNode and swap the whole block.
+      // `RawBlockNode` (theorem etc.) is a DecoratorBlockNode rather
+      // than an ElementNode, so we cover that case explicitly. On
+      // commit, the paragraph adapter walks `plain` up to this wrapper
+      // and splices in the parsed blocks.
+      const wrapper = $createParagraphNode();
+      wrapper.append(plain);
+      live.replace(wrapper);
+    } else {
+      live.replace(plain);
+    }
     plain.select(caretOffset, caretOffset);
     activeRef.current = { adapter, plainKey: plain.getKey() };
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
@@ -356,6 +400,11 @@ function openInlineReveal(
  * marker). For other subjects the offset is meaningless — land at end.
  */
 function computeCaretOffset(subject: RevealSubject, preferredOffset: number): number {
+  if (subject.caretOffset !== undefined) {
+    // Adapter (typically the paragraph adapter) computed an explicit
+    // offset within `source` — clamp and trust it.
+    return Math.max(0, Math.min(subject.caretOffset, subject.source.length));
+  }
   if (!$isTextNode(subject.node)) {
     return subject.source.length;
   }
