@@ -1,4 +1,4 @@
-import { useMemo, useState, type JSX } from "react";
+import { memo, useMemo, useState, type JSX } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { NodeKey } from "lexical";
 
@@ -497,7 +497,7 @@ function FencedDivBlockRenderer({
   );
 }
 
-export function FootnoteReferenceRenderer({
+export const FootnoteReferenceRenderer = memo(function FootnoteReferenceRenderer({
   raw,
 }: {
   readonly raw: string;
@@ -544,9 +544,14 @@ export function FootnoteReferenceRenderer({
       ) : null}
     </>
   );
-}
+});
 
-export function RawBlockRenderer({
+// Lexical recreates the decorator React element on every reconciliation pass
+// with primitive props (`nodeKey`, `raw`, `variant`). Memoizing skips the
+// dispatch logic AND the inner variant component re-render whenever those
+// props are unchanged — a major win on docs with hundreds of blocks where a
+// single edit otherwise re-renders every decorator.
+export const RawBlockRenderer = memo(function RawBlockRenderer({
   nodeKey,
   raw,
   variant,
@@ -581,7 +586,7 @@ export function RawBlockRenderer({
       {content}
     </section>
   );
-}
+});
 
 // Bind decorator renderers to their node registries at module load time.
 // `raw-block-node.ts` and `footnote-reference-node.ts` hold these through

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import type { NodeKey } from "lexical";
@@ -19,7 +19,7 @@ import {
   useRawBlockUpdater,
 } from "./shared";
 
-export function DisplayMathBlockRenderer({
+export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
   nodeKey,
   raw,
 }: {
@@ -103,4 +103,4 @@ export function DisplayMathBlockRenderer({
       )}
     </div>
   );
-}
+});

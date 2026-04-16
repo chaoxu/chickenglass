@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import katex from "katex";
 import type { NodeKey } from "lexical";
 
@@ -17,7 +17,11 @@ function stripInlineMathDelimiters(raw: string): string {
   return raw;
 }
 
-export function InlineMathRenderer({
+// `nodeKey` and `raw` are primitive props that Lexical recreates with stable
+// values whenever the underlying node hasn't changed. Memoizing skips the
+// KaTeX render check and the placeholder/dangerouslySetInnerHTML JSX rebuild
+// every time an unrelated decorator or paragraph re-reconciles.
+export const InlineMathRenderer = memo(function InlineMathRenderer({
   nodeKey,
   raw,
 }: {
@@ -61,4 +65,4 @@ export function InlineMathRenderer({
       ref={ref}
     />
   );
-}
+});

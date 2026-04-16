@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useMemo,
   useState,
@@ -35,7 +36,7 @@ function renderReferenceCluster(
  * `cursor-reveal-adapters.ts`); this renderer only handles the rendered
  * display and hover previews.
  */
-export function ReferenceRenderer({
+export const ReferenceRenderer = memo(function ReferenceRenderer({
   raw,
 }: {
   readonly raw: string;
@@ -152,4 +153,4 @@ export function ReferenceRenderer({
       {hoverPortal}
     </>
   );
-}
+});

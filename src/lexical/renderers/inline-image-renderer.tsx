@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
@@ -9,7 +9,7 @@ import { parseMarkdownImage } from "../markdown/image-markdown";
 import { structureToggleProps } from "./shared";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
-export function InlineImageRenderer({
+export const InlineImageRenderer = memo(function InlineImageRenderer({
   nodeKey,
   raw,
 }: {
@@ -112,4 +112,4 @@ export function InlineImageRenderer({
       />
     </span>
   );
-}
+});
