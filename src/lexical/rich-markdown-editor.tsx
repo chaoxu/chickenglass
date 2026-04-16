@@ -36,7 +36,7 @@ import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
-import { REVEAL_PRESENTATION } from "../app/editor-mode";
+import { EDITOR_MODE, REVEAL_PRESENTATION } from "../app/editor-mode";
 import { StructureEditProvider } from "./structure-edit-plugin";
 import {
   coflatMarkdownNodes,
@@ -313,7 +313,7 @@ export function LexicalRichMarkdownEditor({
                 <TableScrollShadowPlugin />
                 {editable ? <TableActionMenuPlugin /> : null}
                 {editable
-                  ? <CursorRevealPlugin presentation={REVEAL_PRESENTATION.FLOATING} />
+                  ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={REVEAL_PRESENTATION.FLOATING} />
                   : <ClickableLinkPlugin />}
                 {editable ? <MarkdownExpansionPlugin /> : null}
                 {editable ? <BlockKeyboardAccessPlugin /> : null}

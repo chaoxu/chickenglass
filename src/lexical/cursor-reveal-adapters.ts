@@ -11,11 +11,16 @@
  * adapter is tiny and self-contained so adding a new kind of revealable
  * inline (e.g. citations) is a single new entry in the registry.
  */
+import { $generateNodesFromSerializedNodes } from "@lexical/clipboard";
 import { $createLinkNode, $isLinkNode, LinkNode } from "@lexical/link";
+import { $isListNode } from "@lexical/list";
+import { $isHeadingNode, $isQuoteNode } from "@lexical/rich-text";
 import {
+  $createParagraphNode,
   $createTextNode,
   $isElementNode,
   $isNodeSelection,
+  $isParagraphNode,
   $isRangeSelection,
   $isTextNode,
   type BaseSelection,
@@ -28,6 +33,11 @@ import {
   type InlineTextFormatSpec,
 } from "../lexical-next/model/inline-text-format-family";
 import {
+  $exportLexicalNodeToJSON,
+  parseMarkdownFragmentToJSON,
+  serializeBlockToMarkdown,
+} from "./headless-markdown-parse";
+import {
   $createFootnoteReferenceNode,
   $isFootnoteReferenceNode,
 } from "./nodes/footnote-reference-node";
@@ -36,6 +46,7 @@ import {
   $isInlineMathNode,
   type InlineMathDelimiter,
 } from "./nodes/inline-math-node";
+import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $createReferenceNode, $isReferenceNode } from "./nodes/reference-node";
 
 export interface RevealSubject {
@@ -43,6 +54,15 @@ export interface RevealSubject {
   readonly node: LexicalNode;
   /** Markdown source the reveal surface initially shows. */
   readonly source: string;
+  /**
+   * Caret offset (within `source`) the reveal should land on when it
+   * opens. Optional: the plugin falls back to the legacy "infer from
+   * preferredOffset" path for adapters that don't provide one. Block-
+   * scope adapters use this to map the caret's visible position inside
+   * the block to an approximate source position so the caret doesn't
+   * always end up at end-of-source.
+   */
+  readonly caretOffset?: number;
 }
 
 export interface RevealAdapter {
@@ -277,6 +297,138 @@ const footnoteReferenceAdapter: RevealAdapter = {
   },
 };
 
+// ─── Paragraph (block-scope) adapter ────────────────────────────────────
+
+/**
+ * Top-level block kinds we surface as raw markdown source. Most
+ * decorator blocks are excluded because they don't round-trip cleanly
+ * through the standard transformers, but `RawBlockNode` is included:
+ * it stores its full markdown source verbatim in `__raw`, so the
+ * round-trip is trivially correct.
+ *
+ * Code blocks, tables, image blocks, frontmatter, and footnote
+ * definitions remain excluded — each has its own dedicated edit
+ * affordance.
+ */
+function isRevealableTopLevelBlock(node: LexicalNode): boolean {
+  return $isParagraphNode(node)
+    || $isHeadingNode(node)
+    || $isQuoteNode(node)
+    || $isListNode(node)
+    || $isRawBlockNode(node);
+}
+
+/**
+ * Walk `top`'s descendants in document order, summing visible text
+ * lengths until we encounter `anchorNode`, then add `anchorOffset`.
+ * Returns an approximate visible-text offset of the caret inside the
+ * block. The paragraph adapter uses this as a heuristic source offset
+ * — formatting markers (`*`, `**`, `[…]`) shift the actual source
+ * offset by a few chars, but the result lands close enough that the
+ * caret no longer always ends up at end-of-source.
+ */
+function $computeBlockVisibleOffset(
+  top: LexicalNode,
+  anchorNode: LexicalNode,
+  anchorOffset: number,
+): number {
+  let visible = 0;
+  let found = false;
+  function walk(node: LexicalNode): void {
+    if (found) {
+      return;
+    }
+    if (node === anchorNode) {
+      visible += anchorOffset;
+      found = true;
+      return;
+    }
+    if ($isTextNode(node)) {
+      visible += node.getTextContentSize();
+      return;
+    }
+    if ($isElementNode(node)) {
+      for (const child of node.getChildren()) {
+        walk(child);
+        if (found) {
+          return;
+        }
+      }
+      return;
+    }
+    // Decorator with a textual representation (inline math, refs).
+    visible += node.getTextContent().length;
+  }
+  walk(top);
+  return visible;
+}
+
+const paragraphAdapter: RevealAdapter = {
+  id: "paragraph",
+  findSubject(selection) {
+    let top: LexicalNode | null = null;
+    let caretOffset: number | undefined;
+
+    if ($isRangeSelection(selection)) {
+      const anchor = selection.anchor;
+      const anchorNode = anchor.getNode();
+      top = anchorNode.getTopLevelElement();
+      if (top && isRevealableTopLevelBlock(top)) {
+        caretOffset = $computeBlockVisibleOffset(top, anchorNode, anchor.offset);
+      }
+    } else if ($isNodeSelection(selection)) {
+      // Decorator click (e.g. clicking a theorem block) lands here. The
+      // selected node is the block itself, already at top level.
+      const nodes = selection.getNodes();
+      if (nodes.length === 1 && isRevealableTopLevelBlock(nodes[0])) {
+        top = nodes[0];
+      }
+    }
+
+    if (!top || !isRevealableTopLevelBlock(top)) {
+      return null;
+    }
+
+    // Serialize just this block's subtree into the raw markdown the
+    // user will edit. We can't pass `top` to `$convertToMarkdownString`
+    // directly: it treats its `node` arg as a *root-like* container and
+    // exports each child as a top-level element, but a paragraph's
+    // children are TextNodes (not top-level), so the export comes back
+    // empty. The headless workspace wraps the block at root for us. The
+    // recursive helper is required because `top.exportJSON()` alone
+    // returns an empty children array.
+    const source = serializeBlockToMarkdown($exportLexicalNodeToJSON(top)).replace(/\n+$/, "");
+    return { node: top, source, caretOffset };
+  },
+  reparse(live, raw) {
+    // For paragraph scope the live node is the placeholder TextNode
+    // inside the wrapper paragraph that openInlineReveal swapped in for
+    // the original block. Splice the parsed block(s) in before the
+    // wrapper, then drop the wrapper.
+    const wrapper = live.getTopLevelElement();
+    if (!wrapper) {
+      return live;
+    }
+    const blocks = parseMarkdownFragmentToJSON(raw);
+    if (blocks.length === 0) {
+      const empty = $createParagraphNode();
+      wrapper.replace(empty);
+      return empty;
+    }
+    const nodes = $generateNodesFromSerializedNodes([...blocks]);
+    if (nodes.length === 0) {
+      const empty = $createParagraphNode();
+      wrapper.replace(empty);
+      return empty;
+    }
+    for (const node of nodes) {
+      wrapper.insertBefore(node);
+    }
+    wrapper.remove();
+    return nodes[0];
+  },
+};
+
 // ─── Registry ───────────────────────────────────────────────────────────
 
 /**
@@ -292,12 +444,22 @@ export const REVEAL_ADAPTERS: readonly RevealAdapter[] = [
   textFormatAdapter,
 ];
 
+/**
+ * Single-entry adapter list for paragraph-scope reveal mode. The
+ * paragraph adapter handles any cursor position inside a revealable
+ * top-level block; per-element adapters are deliberately omitted so the
+ * whole block opens as one source surface instead of just the inline
+ * token under the caret.
+ */
+export const PARAGRAPH_REVEAL_ADAPTERS: readonly RevealAdapter[] = [paragraphAdapter];
+
 export const REVEAL_NODE_DEPENDENCIES = [LinkNode];
 
 export function pickRevealSubject(
   selection: BaseSelection,
+  adapters: readonly RevealAdapter[] = REVEAL_ADAPTERS,
 ): { adapter: RevealAdapter; subject: RevealSubject } | null {
-  for (const adapter of REVEAL_ADAPTERS) {
+  for (const adapter of adapters) {
     const subject = adapter.findSubject(selection);
     if (subject) {
       return { adapter, subject };

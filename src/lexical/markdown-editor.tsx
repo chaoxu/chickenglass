@@ -830,7 +830,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode ? <ListPlugin /> : null}
                 {!isSourceMode ? <CheckListPlugin /> : null}
                 {!isSourceMode ? <LinkPlugin /> : null}
-                {!isSourceMode && editable ? <CursorRevealPlugin presentation={revealPresentation} /> : null}
+                {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
                 {!isSourceMode && editable ? <FormatEventPlugin /> : null}
                 {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
                 {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
