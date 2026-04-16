@@ -32,7 +32,13 @@ declare module "@citation-js/core" {
       citation: CiteprocCitation,
       citationsPre: Array<[string, number]>,
       citationsPost: Array<[string, number]>,
-    ): [Record<string, unknown>, Array<[number, string]>];
+    ): [Record<string, unknown>, Array<[number, string, string?]>];
+    previewCitationCluster(
+      citation: Omit<CiteprocCitation, "citationID"> & { citationID?: string },
+      citationsPre: Array<[string, number]>,
+      citationsPost: Array<[string, number]>,
+      newMode: "html" | "text" | "rtf",
+    ): string;
     makeBibliography(): [Record<string, unknown>, string[]];
     updateItems(ids: string[]): void;
   }

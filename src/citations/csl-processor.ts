@@ -91,13 +91,14 @@ function buildCitationItems(
   });
 }
 
+function clusterKey(cluster: CitationCluster): string {
+  return cluster.ids
+    .map((id, index) => `${id}\0${serializeKeyPart(cluster.locators?.[index])}`)
+    .join("\u0001");
+}
+
 export function getCitationRegistrationKey(clusters: readonly CitationCluster[]): string {
-  return clusters
-    .map((cluster) =>
-      cluster.ids
-        .map((id, index) => `${id}\0${serializeKeyPart(cluster.locators?.[index])}`)
-        .join("\u0001"))
-    .join("\u0002");
+  return clusters.map(clusterKey).join("\u0002");
 }
 
 let nextProcessorId = 0;
@@ -122,6 +123,7 @@ export class CslProcessor {
   private styleXml: string;
   private engineRevision = 0;
   private registeredCitationKey: string | null = null;
+  private renderedClusters = new Map<string, string>();
   private initPromise: Promise<void> | null = null;
   private readonly processorId = nextProcessorId++;
   private styleGeneration = 0;
@@ -165,6 +167,7 @@ export class CslProcessor {
 
   registerCitations(clusters: readonly CitationCluster[]): void {
     this.registeredCitationKey = null;
+    this.renderedClusters.clear();
     if (!this.engine) {
       return;
     }
@@ -183,11 +186,21 @@ export class CslProcessor {
     for (let index = 0; index < clusters.length; index += 1) {
       const cluster = clusters[index];
       try {
-        this.engine.processCitationCluster({
+        const result = this.engine.processCitationCluster({
           citationItems: buildCitationItems(cluster.ids, cluster.locators),
           properties: { noteIndex: 0 },
           citationID: `cite-${index}`,
         }, citationsPre, []);
+        // result[1] is an array of [pos, html, citationID] triples for clusters
+        // whose rendering changed as a side effect of this insertion (numeric
+        // styles renumber forward citations). Cache them all by content key.
+        const updates: Array<[number, string, string?]> = result?.[1] ?? [];
+        for (const update of updates) {
+          const updatedCluster = clusters[update[0]];
+          if (updatedCluster) {
+            this.renderedClusters.set(clusterKey(updatedCluster), String(update[1]));
+          }
+        }
         citationsPre.push([`cite-${index}`, index]);
       } catch (error) {
         console.warn(`[csl] cluster error for cite-${index}`, error);
@@ -201,8 +214,25 @@ export class CslProcessor {
     if (!this.engine || ids.length === 0) {
       return "";
     }
+    const cached = this.renderedClusters.get(clusterKey({ ids, locators }));
+    if (cached !== undefined) {
+      return cached;
+    }
+    // Unregistered cluster (e.g., a per-id sub-render in a mixed cluster).
+    // previewCitationCluster reuses the engine's processed-cluster state
+    // without mutating it; unlike makeCitationCluster, it works for numeric
+    // styles that depend on the registry's per-item `seq` assignments.
     try {
-      return this.engine.makeCitationCluster(buildCitationItems(ids, locators));
+      const html = this.engine.previewCitationCluster(
+        {
+          citationItems: buildCitationItems(ids, locators),
+          properties: { noteIndex: 0 },
+        },
+        [],
+        [],
+        "html",
+      );
+      return typeof html === "string" ? html : `[${ids.join("; ")}]`;
     } catch (error) {
       console.warn("[csl] cite() engine error", error);
       return `[${ids.join("; ")}]`;
