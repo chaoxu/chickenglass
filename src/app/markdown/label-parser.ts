@@ -2,6 +2,7 @@ import type { HeadingDefinition } from "./headings";
 import { extractHeadingDefinitions } from "./headings";
 import { maskMarkdownCodeSpansAndBlocks } from "./masking";
 import { getTextLines } from "./text-lines";
+import { measureSync } from "../perf";
 
 const LABEL_ID_RE = /#([A-Za-z0-9_][\w.:-]*)/;
 const BRACED_LABEL_ID_RE = /\{#([A-Za-z0-9_][\w.:-]*)\}/;
@@ -365,18 +366,20 @@ export function buildDocumentLabelParseSnapshot(
   if (scanDoc === undefined && cachedSnapshot && cachedSnapshotDoc === doc) {
     return cachedSnapshot;
   }
-  const resolvedScanDoc = scanDoc ?? maskMarkdownCodeSpansAndBlocks(doc);
-  const snapshot: DocumentLabelParseSnapshot = {
-    doc,
-    scanDoc: resolvedScanDoc,
-    headings: extractHeadingDefinitions(doc, resolvedScanDoc),
-    blocks: extractMarkdownBlocks(doc, resolvedScanDoc),
-    equations: extractMarkdownEquations(doc, resolvedScanDoc),
-    references: extractDocumentLabelReferences(doc, resolvedScanDoc),
-  };
-  if (scanDoc === undefined) {
-    cachedSnapshotDoc = doc;
-    cachedSnapshot = snapshot;
-  }
-  return snapshot;
+  return measureSync("markdown.parseSnapshot", () => {
+    const resolvedScanDoc = scanDoc ?? maskMarkdownCodeSpansAndBlocks(doc);
+    const snapshot: DocumentLabelParseSnapshot = {
+      doc,
+      scanDoc: resolvedScanDoc,
+      headings: extractHeadingDefinitions(doc, resolvedScanDoc),
+      blocks: extractMarkdownBlocks(doc, resolvedScanDoc),
+      equations: extractMarkdownEquations(doc, resolvedScanDoc),
+      references: extractDocumentLabelReferences(doc, resolvedScanDoc),
+    };
+    if (scanDoc === undefined) {
+      cachedSnapshotDoc = doc;
+      cachedSnapshot = snapshot;
+    }
+    return snapshot;
+  }, { category: "markdown", detail: `${doc.length} chars` });
 }

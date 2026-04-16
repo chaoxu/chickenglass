@@ -1,3 +1,4 @@
+import { measureSync } from "../app/perf";
 import type { CslJsonItem } from "./bibtex-parser";
 import defaultCslStyle from "./ieee.csl?raw";
 
@@ -166,6 +167,12 @@ export class CslProcessor {
   }
 
   registerCitations(clusters: readonly CitationCluster[]): void {
+    measureSync("citations.registerCitations", () => {
+      this.registerCitationsImpl(clusters);
+    }, { category: "citations", detail: `${clusters.length} clusters` });
+  }
+
+  private registerCitationsImpl(clusters: readonly CitationCluster[]): void {
     this.registeredCitationKey = null;
     this.renderedClusters.clear();
     if (!this.engine) {

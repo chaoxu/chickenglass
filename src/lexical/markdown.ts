@@ -25,6 +25,7 @@ import {
   type TextNode,
 } from "lexical";
 
+import { measureSync } from "../app/perf";
 import { getInlineTextFormatSpecs } from "../lexical-next";
 import { FRONTMATTER_DELIMITER_RE } from "../lib/frontmatter";
 import {
@@ -463,18 +464,21 @@ export function setLexicalMarkdown(
   markdown: string,
   options?: Pick<EditorUpdateOptions, "tag">,
 ): void {
-  editor.update(() => {
-    $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
-  }, {
-    discrete: true,
-    tag: options?.tag,
-  });
+  measureSync("lexical.setLexicalMarkdown", () => {
+    editor.update(() => {
+      $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
+    }, {
+      discrete: true,
+      tag: options?.tag,
+    });
+  }, { category: "lexical", detail: `${markdown.length} chars` });
 }
 
 export function getLexicalMarkdown(editor: LexicalEditor): string {
-  return editor.getEditorState().read(() =>
-    $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
-  );
+  return measureSync("lexical.getLexicalMarkdown", () =>
+    editor.getEditorState().read(() =>
+      $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
+    ), { category: "lexical" });
 }
 
 export function createHeadlessCoflatEditor(): LexicalEditor {
