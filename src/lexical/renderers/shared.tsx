@@ -1,4 +1,12 @@
-import { useCallback, type KeyboardEvent, type MouseEvent, type SyntheticEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type RefObject,
+  type SyntheticEvent,
+} from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
@@ -69,4 +77,48 @@ export function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
       tag: COFLAT_NESTED_EDIT_TAG,
     });
   }, [editor, nodeKey]);
+}
+
+const LAZY_VISIBILITY_ROOT_MARGIN = "1500px";
+
+/**
+ * Returns true once the element enters the viewport (with a generous margin
+ * so scrolling rarely sees the placeholder). Stays true once flipped, so the
+ * caller can render expensive content lazily without unmounting it again.
+ *
+ * In environments without IntersectionObserver (jsdom, SSR, very old
+ * browsers) returns true immediately.
+ */
+export function useLazyVisibility(ref: RefObject<Element | null>): boolean {
+  const [visible, setVisible] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
+
+  useEffect(() => {
+    if (visible) return;
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        setVisible(true);
+        io.disconnect();
+      }
+    }, { rootMargin: LAZY_VISIBILITY_ROOT_MARGIN });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, visible]);
+
+  // Render eagerly when the user prints — printers expect the full document.
+  useEffect(() => {
+    if (visible) return;
+    const handler = () => setVisible(true);
+    window.addEventListener("beforeprint", handler);
+    return () => window.removeEventListener("beforeprint", handler);
+  }, [visible]);
+
+  return visible;
 }

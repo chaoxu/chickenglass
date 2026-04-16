@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import type { NodeKey } from "lexical";
@@ -12,7 +12,12 @@ import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
 import { readSourcePositionFromElement } from "../source-position-plugin";
 import { SET_SOURCE_SELECTION_COMMAND } from "../source-selection-command";
 import { buildKatexOptions } from "../../lib/katex-options";
-import { preventKatexMouseDown, structureToggleProps, useRawBlockUpdater } from "./shared";
+import {
+  preventKatexMouseDown,
+  structureToggleProps,
+  useLazyVisibility,
+  useRawBlockUpdater,
+} from "./shared";
 
 export function DisplayMathBlockRenderer({
   nodeKey,
@@ -31,9 +36,13 @@ export function DisplayMathBlockRenderer({
     "display-math",
     "display-math-source",
   );
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const visible = useLazyVisibility(bodyRef);
   const equation = useMemo(
-    () => katex.renderToString(parsed.body, buildKatexOptions(true, config.math)),
-    [config.math, parsed.body],
+    () => visible
+      ? katex.renderToString(parsed.body, buildKatexOptions(true, config.math))
+      : null,
+    [config.math, parsed.body, visible],
   );
   const label = parsed.id ? renderIndex.references.get(parsed.id)?.shortLabel : undefined;
   const rememberSourcePosition = useCallback((element: HTMLElement) => {
@@ -50,14 +59,24 @@ export function DisplayMathBlockRenderer({
     >
       {!sourceEdit.active ? (
         <>
-          <div
-            className="cf-lexical-display-math-body"
-            dangerouslySetInnerHTML={{ __html: equation }}
-            onMouseDown={preventKatexMouseDown}
-            {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
-              onBeforeActivate: rememberSourcePosition,
-            })}
-          />
+          {equation === null ? (
+            <div
+              className="cf-lexical-display-math-body"
+              data-coflat-display-math-pending=""
+              ref={bodyRef}
+              style={{ minHeight: "3em" }}
+            />
+          ) : (
+            <div
+              className="cf-lexical-display-math-body"
+              dangerouslySetInnerHTML={{ __html: equation }}
+              onMouseDown={preventKatexMouseDown}
+              ref={bodyRef}
+              {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+                onBeforeActivate: rememberSourcePosition,
+              })}
+            />
+          )}
           {label ? (
             <div
               className="cf-lexical-display-math-label"
