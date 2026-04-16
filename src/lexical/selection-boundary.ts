@@ -109,6 +109,50 @@ export function $findAdjacentNodeAtSelectionBoundary<T extends LexicalNode>(
   );
 }
 
+export function $isAtTopLevelBlockEdge(isBackward: boolean): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+    return false;
+  }
+
+  const anchorNode = selection.anchor.getNode();
+  const topBlock = anchorNode.getTopLevelElement();
+  if (!topBlock) {
+    return false;
+  }
+
+  if (selection.anchor.type === "text") {
+    if (!$isTextNode(anchorNode)) {
+      return false;
+    }
+    const edgeOffset = isBackward ? 0 : anchorNode.getTextContentSize();
+    if (selection.anchor.offset !== edgeOffset) {
+      return false;
+    }
+  } else if ($isElementNode(anchorNode)) {
+    const edgeOffset = isBackward ? 0 : anchorNode.getChildrenSize();
+    if (selection.anchor.offset !== edgeOffset) {
+      return false;
+    }
+  } else {
+    return false;
+  }
+
+  let current: LexicalNode = anchorNode;
+  while (current !== topBlock) {
+    const sibling = isBackward ? current.getPreviousSibling() : current.getNextSibling();
+    if (sibling) {
+      return false;
+    }
+    const parent: LexicalNode | null = current.getParent();
+    if (!parent) {
+      return false;
+    }
+    current = parent;
+  }
+  return true;
+}
+
 export function $findAdjacentTopLevelSiblingFromSelection<T extends LexicalNode>(
   direction: "forward" | "backward",
   predicate: NodePredicate<T>,

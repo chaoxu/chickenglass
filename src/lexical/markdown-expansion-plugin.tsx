@@ -19,10 +19,7 @@ import {
 } from "./block-insert-focus";
 import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
 import { createTableNodeFromMarkdown } from "./markdown";
-import {
-  getPendingEmbeddedSurfaceFocusId,
-  queuePendingSurfaceFocus,
-} from "./pending-surface-focus";
+import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
@@ -178,10 +175,7 @@ function insertExpandedBlock(
     }
     insertedNodeKey = insertedNode.getKey();
     if (candidate.focusTarget === "block-body" || candidate.focusTarget === "footnote-body") {
-      queuePendingSurfaceFocus(
-        getPendingEmbeddedSurfaceFocusId(editor.getKey(), insertedNodeKey, candidate.focusTarget),
-        "end",
-      );
+      queueEmbeddedSurfaceFocus(editor.getKey(), insertedNodeKey, candidate.focusTarget, "end");
     }
 
     firstNode.insertBefore(insertedNode);

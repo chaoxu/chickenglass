@@ -7,6 +7,7 @@ import { useLexicalSurfaceEditable } from "../editability-context";
 import { useLexicalRenderContext } from "../render-context";
 import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
+import { getPendingEmbeddedSurfaceFocusId } from "../pending-surface-focus";
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
 import { readSourcePositionFromElement } from "../source-position-plugin";
 import { SET_SOURCE_SELECTION_COMMAND } from "../source-selection-command";
@@ -77,6 +78,7 @@ export function DisplayMathBlockRenderer({
             namespace={`coflat-display-math-${nodeKey}`}
             onChange={updateRaw}
             onClose={sourceEdit.deactivate}
+            pendingFocusId={getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source")}
           />
         </div>
       )}

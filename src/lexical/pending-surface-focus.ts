@@ -2,7 +2,10 @@ import type { NodeKey } from "lexical";
 
 import type { FocusRequestEdge } from "./editor-focus-plugin";
 
-export type PendingEmbeddedSurfaceFocusTarget = "block-body" | "footnote-body";
+export type PendingEmbeddedSurfaceFocusTarget =
+  | "block-body"
+  | "footnote-body"
+  | "structure-source";
 
 const pendingSurfaceFocus = new Map<string, FocusRequestEdge>();
 
@@ -31,4 +34,16 @@ export function consumePendingSurfaceFocus(
 
   pendingSurfaceFocus.delete(focusId);
   return edge;
+}
+
+export function queueEmbeddedSurfaceFocus(
+  editorKey: string,
+  nodeKey: NodeKey,
+  target: PendingEmbeddedSurfaceFocusTarget,
+  edge: FocusRequestEdge = "current",
+): void {
+  queuePendingSurfaceFocus(
+    getPendingEmbeddedSurfaceFocusId(editorKey, nodeKey, target),
+    edge,
+  );
 }
