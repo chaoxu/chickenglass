@@ -3,7 +3,7 @@ import { cn } from "../../lib/utils";
 import { builtinThemes } from "../../themes";
 import { themePresets, themePresetKeys } from "../../theme-config";
 import { Textarea } from "../ui/textarea";
-import { Row } from "./shared";
+import { Field, Section } from "./shared";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -24,46 +24,55 @@ interface AppearanceTabProps {
 
 export function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: AppearanceTabProps) {
   return (
-    <section>
-      {/* Light / Dark / System toggle */}
-      <Row label="Mode">
-        <div className="flex gap-2">
-          {THEME_OPTIONS.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => { onSetTheme(t.value); }}
-              className={cn(
-                "px-3 py-1 text-sm rounded border transition-colors duration-[var(--cf-transition)]",
-                theme === t.value
-                  ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
-                  : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </Row>
+    <>
+      <Section title="Theme">
+        <Field label="Mode">
+          <div
+            role="radiogroup"
+            aria-label="Color mode"
+            className="inline-flex rounded-md border border-[var(--cf-border)] p-0.5"
+          >
+            {THEME_OPTIONS.map((t) => {
+              const active = theme === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => { onSetTheme(t.value); }}
+                  className={cn(
+                    "px-3 py-1 text-xs rounded transition-colors duration-[var(--cf-transition)]",
+                    active
+                      ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] shadow-sm"
+                      : "text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
+                  )}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+      </Section>
 
-      {/* Writing preset (typography: fonts, heading sizes) */}
-      <div className="py-3 border-b border-[var(--cf-border)]">
-        <label className="text-sm text-[var(--cf-fg)] block mb-2">Writing preset</label>
-        <p className="text-xs text-[var(--cf-muted)] mb-2">
-          UI, prose, and code fonts plus heading sizes and line spacing.
-        </p>
-        <div className="grid grid-cols-3 gap-2">
+      <Section
+        title="Writing preset"
+        description="UI, prose, and code fonts plus heading sizes and line spacing."
+      >
+        <div className="grid grid-cols-3 gap-2 pt-1">
           {themePresetKeys.map((key) => {
             const preset = themePresets[key];
+            const active = settings.writingTheme === key;
             return (
               <button
                 key={key}
                 type="button"
                 onClick={() => { onUpdateSetting("writingTheme", key); }}
                 className={cn(
-                  "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition)]",
-                  settings.writingTheme === key
-                    ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
+                  "px-3 py-2.5 text-sm rounded-md border text-left transition-colors duration-[var(--cf-transition)]",
+                  active
+                    ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)] shadow-sm"
                     : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
                 )}
               >
@@ -72,50 +81,44 @@ export function AppearanceTab({ theme, onSetTheme, settings, onUpdateSetting }: 
             );
           })}
         </div>
-      </div>
+      </Section>
 
-      {/* Writing theme selection */}
-      <div className="py-3 border-b border-[var(--cf-border)]">
-        <label className="text-sm text-[var(--cf-fg)] block mb-2">Color theme</label>
-        <div className="grid grid-cols-2 gap-2">
-          {builtinThemes.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => { onUpdateSetting("themeName", t.id); }}
-              className={cn(
-                "px-3 py-2 text-sm rounded border text-left transition-colors duration-[var(--cf-transition)]",
-                settings.themeName === t.id
-                  ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)]"
-                  : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
-              )}
-            >
-              <span className="font-medium">{t.name}</span>
-              {t.dark && (
-                <span className="ml-1 text-xs opacity-60">(dark)</span>
-              )}
-            </button>
-          ))}
+      <Section title="Color theme">
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          {builtinThemes.map((t) => {
+            const active = settings.themeName === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { onUpdateSetting("themeName", t.id); }}
+                className={cn(
+                  "flex items-center justify-between px-3 py-2.5 text-sm rounded-md border text-left transition-colors duration-[var(--cf-transition)]",
+                  active
+                    ? "bg-[var(--cf-accent)] text-[var(--cf-accent-fg)] border-[var(--cf-accent)] shadow-sm"
+                    : "border-[var(--cf-border)] text-[var(--cf-fg)] hover:bg-[var(--cf-hover)]",
+                )}
+              >
+                <span className="font-medium">{t.name}</span>
+                {t.dark && <span className="text-xs opacity-60">dark</span>}
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </Section>
 
-      {/* Custom CSS */}
-      <div className="py-3">
-        <label htmlFor="sd-custom-css" className="text-sm text-[var(--cf-fg)] block mb-1">
-          Custom CSS
-        </label>
-        <p className="text-xs text-[var(--cf-muted)] mb-2">
-          Add your own CSS overrides. Changes apply immediately.
-        </p>
-        <Textarea
-          id="sd-custom-css"
-          value={settings.customCss}
-          onChange={(e) => { onUpdateSetting("customCss", e.target.value); }}
-          placeholder={`/* Example: change editor font */\n[data-testid="lexical-editor"] {\n  font-family: "Georgia", serif;\n}`}
-          className="h-32 resize-y text-xs font-mono"
-          spellCheck={false}
-        />
-      </div>
-    </section>
+      <Section title="Custom CSS" description="Overrides applied immediately to the editor surface.">
+        <Field label="Stylesheet" htmlFor="sd-custom-css" stacked>
+          <Textarea
+            id="sd-custom-css"
+            value={settings.customCss}
+            onChange={(e) => { onUpdateSetting("customCss", e.target.value); }}
+            placeholder={`/* Example: change editor font */\n[data-testid="lexical-editor"] {\n  font-family: "Georgia", serif;\n}`}
+            className="h-32 resize-y text-xs font-mono"
+            spellCheck={false}
+          />
+        </Field>
+      </Section>
+    </>
   );
 }

@@ -75,7 +75,6 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
 
   decorate(): JSX.Element {
     return createElement(ReferenceRenderer, {
-      nodeKey: this.getKey(),
       raw: this.getRaw(),
     });
   }

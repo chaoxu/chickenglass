@@ -17,6 +17,7 @@ import {
 
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
+import { consumePendingSurfaceFocus } from "./pending-surface-focus";
 
 interface StructureSourceEditorProps {
   readonly className: string;
@@ -25,6 +26,7 @@ interface StructureSourceEditorProps {
   readonly namespace: string;
   readonly onChange: (nextValue: string) => void;
   readonly onClose: () => void;
+  readonly pendingFocusId?: string;
 }
 
 export function StructureSourceEditor({
@@ -34,10 +36,18 @@ export function StructureSourceEditor({
   namespace,
   onChange,
   onClose,
+  pendingFocusId,
 }: StructureSourceEditorProps) {
   const [draft, setDraft] = useState(() => doc);
   const originalDocRef = useRef(doc);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
+  // Resolve the requested initial caret edge exactly once, at mount, before
+  // any onEditorReady/onFocus callback fires. Subsequent focus events fall
+  // back to the default end-of-draft snap.
+  const initialEdgeRef = useRef<"start" | "end">(
+    pendingFocusId && consumePendingSurfaceFocus(pendingFocusId) === "start" ? "start" : "end",
+  );
+  const initialCaretAppliedRef = useRef(false);
 
   const focusEditor = useCallback(() => {
     const handle = handleRef.current;
@@ -45,8 +55,15 @@ export function StructureSourceEditor({
       return;
     }
 
-    const end = draft.length;
-    handle.setSelection(end, end, { skipScrollIntoView: true });
+    if (!initialCaretAppliedRef.current) {
+      if (initialEdgeRef.current === "start") {
+        handle.setSelection(0, 0, { skipScrollIntoView: true });
+      } else {
+        const end = draft.length;
+        handle.setSelection(end, end, { skipScrollIntoView: true });
+      }
+      initialCaretAppliedRef.current = true;
+    }
     handle.focus();
   }, [draft.length]);
 

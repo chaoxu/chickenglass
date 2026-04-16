@@ -11,14 +11,22 @@ import {
   $setSelection,
   COMMAND_PRIORITY_LOW,
   KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_LEFT_COMMAND,
+  KEY_ARROW_RIGHT_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   KEY_ARROW_UP_COMMAND,
   mergeRegister,
+  type LexicalCommand,
+  type LexicalEditor,
   type NodeKey,
 } from "lexical";
-import { $findAdjacentTopLevelSiblingFromSelection } from "./selection-boundary";
+import {
+  $findAdjacentTopLevelSiblingFromSelection,
+  $isAtTopLevelBlockEdge,
+} from "./selection-boundary";
 import { requestRegisteredSurfaceFocus } from "./editor-focus-plugin";
+import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
 
 type NavigationDirection = "forward" | "backward";
 
@@ -90,130 +98,105 @@ function enterDecoratorTarget(
   return focusTarget(target, direction);
 }
 
+function selectDecoratorTarget(editor: LexicalEditor, nodeKey: NodeKey): void {
+  editor.update(() => {
+    const node = $getNodeByKey(nodeKey);
+    if (!$isDecoratorNode(node)) {
+      return;
+    }
+    const selection = $createNodeSelection();
+    selection.add(node.getKey());
+    $setSelection(selection);
+  }, { discrete: true });
+}
+
+function registerDecoratorArrowNavigation(
+  editor: LexicalEditor,
+  command: LexicalCommand<KeyboardEvent | null>,
+  direction: NavigationDirection,
+  options: { readonly requireBlockEdge: boolean },
+): () => void {
+  return editor.registerCommand(
+    command,
+    (event) => {
+      if (!event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return false;
+      }
+
+      const targetKey = editor.getEditorState().read(() => {
+        if (options.requireBlockEdge && !$isAtTopLevelBlockEdge(direction === "backward")) {
+          return null;
+        }
+        return $findAdjacentTopLevelSiblingFromSelection(direction, $isDecoratorNode)?.getKey() ?? null;
+      });
+      if (!targetKey) {
+        return false;
+      }
+
+      const target = editor.getElementByKey(targetKey);
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      event.preventDefault();
+      selectDecoratorTarget(editor, targetKey);
+      queueEmbeddedSurfaceFocus(
+        editor.getKey(),
+        targetKey,
+        "structure-source",
+        direction === "forward" ? "start" : "end",
+      );
+      return enterDecoratorTarget(target, direction);
+    },
+    COMMAND_PRIORITY_LOW,
+  );
+}
+
+function registerDecoratorDeletionCommand(
+  editor: LexicalEditor,
+  command: LexicalCommand<KeyboardEvent | null>,
+): () => void {
+  return editor.registerCommand(
+    command,
+    (event) => {
+      const selection = $getSelection();
+      if (!$isNodeSelection(selection)) {
+        return false;
+      }
+
+      const nodes = selection.getNodes().filter($isDecoratorNode);
+      if (nodes.length === 0) {
+        return false;
+      }
+
+      event?.preventDefault();
+      editor.update(() => {
+        for (const node of nodes) {
+          node.remove();
+        }
+        const root = $getRoot();
+        if (root.getChildrenSize() === 0) {
+          const paragraph = $createParagraphNode();
+          root.append(paragraph);
+          paragraph.selectStart();
+        }
+      }, { discrete: true });
+      return true;
+    },
+    COMMAND_PRIORITY_LOW,
+  );
+}
+
 export function BlockKeyboardAccessPlugin() {
   const [editor] = useLexicalComposerContext();
 
-  const selectDecoratorTarget = (nodeKey: NodeKey) => {
-    editor.update(() => {
-      const node = $getNodeByKey(nodeKey);
-      if (!$isDecoratorNode(node)) {
-        return;
-      }
-      const selection = $createNodeSelection();
-      selection.add(node.getKey());
-      $setSelection(selection);
-    }, { discrete: true });
-  };
-
   useEffect(() => mergeRegister(
-    editor.registerCommand(
-      KEY_ARROW_DOWN_COMMAND,
-      (event) => {
-        if (!event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-          return false;
-        }
-
-        const targetKey = editor.getEditorState().read(() =>
-          $findAdjacentTopLevelSiblingFromSelection("forward", $isDecoratorNode)?.getKey() ?? null
-        );
-        if (!targetKey) {
-          return false;
-        }
-
-        const target = editor.getElementByKey(targetKey);
-        if (!(target instanceof HTMLElement)) {
-          return false;
-        }
-
-        event.preventDefault();
-        selectDecoratorTarget(targetKey);
-        return enterDecoratorTarget(target, "forward");
-      },
-      COMMAND_PRIORITY_LOW,
-    ),
-    editor.registerCommand(
-      KEY_ARROW_UP_COMMAND,
-      (event) => {
-        if (!event || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-          return false;
-        }
-
-        const targetKey = editor.getEditorState().read(() =>
-          $findAdjacentTopLevelSiblingFromSelection("backward", $isDecoratorNode)?.getKey() ?? null
-        );
-        if (!targetKey) {
-          return false;
-        }
-
-        const target = editor.getElementByKey(targetKey);
-        if (!(target instanceof HTMLElement)) {
-          return false;
-        }
-
-        event.preventDefault();
-        selectDecoratorTarget(targetKey);
-        return enterDecoratorTarget(target, "backward");
-      },
-      COMMAND_PRIORITY_LOW,
-    ),
-    editor.registerCommand(
-      KEY_BACKSPACE_COMMAND,
-      (event) => {
-        const selection = $getSelection();
-        if (!$isNodeSelection(selection)) {
-          return false;
-        }
-
-        const nodes = selection.getNodes().filter($isDecoratorNode);
-        if (nodes.length === 0) {
-          return false;
-        }
-
-        event?.preventDefault();
-        editor.update(() => {
-          for (const node of nodes) {
-            node.remove();
-          }
-          const root = $getRoot();
-          if (root.getChildrenSize() === 0) {
-            const paragraph = $createParagraphNode();
-            root.append(paragraph);
-            paragraph.selectStart();
-          }
-        }, { discrete: true });
-        return true;
-      },
-      COMMAND_PRIORITY_LOW,
-    ),
-    editor.registerCommand(
-      KEY_DELETE_COMMAND,
-      (event) => {
-        const selection = $getSelection();
-        if (!$isNodeSelection(selection)) {
-          return false;
-        }
-
-        const nodes = selection.getNodes().filter($isDecoratorNode);
-        if (nodes.length === 0) {
-          return false;
-        }
-
-        event?.preventDefault();
-        editor.update(() => {
-          for (const node of nodes) {
-            node.remove();
-          }
-          const root = $getRoot();
-          if (root.getChildrenSize() === 0) {
-            const paragraph = $createParagraphNode();
-            root.append(paragraph);
-            paragraph.selectStart();
-          }
-        }, { discrete: true });
-        return true;
-      },
-      COMMAND_PRIORITY_LOW,
-    ),
+    registerDecoratorArrowNavigation(editor, KEY_ARROW_DOWN_COMMAND, "forward", { requireBlockEdge: false }),
+    registerDecoratorArrowNavigation(editor, KEY_ARROW_UP_COMMAND, "backward", { requireBlockEdge: false }),
+    registerDecoratorArrowNavigation(editor, KEY_ARROW_RIGHT_COMMAND, "forward", { requireBlockEdge: true }),
+    registerDecoratorArrowNavigation(editor, KEY_ARROW_LEFT_COMMAND, "backward", { requireBlockEdge: true }),
+    registerDecoratorDeletionCommand(editor, KEY_BACKSPACE_COMMAND),
+    registerDecoratorDeletionCommand(editor, KEY_DELETE_COMMAND),
   ), [editor]);
 
   return null;

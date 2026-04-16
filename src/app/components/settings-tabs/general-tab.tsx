@@ -1,5 +1,5 @@
 import type { Settings } from "../../lib/types";
-import { Row } from "./shared";
+import { Field, Section } from "./shared";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 interface GeneralTabProps {
@@ -18,12 +18,12 @@ export function GeneralTab({ settings, onUpdateSetting }: GeneralTabProps) {
   }
 
   return (
-    <section>
-      <Row label="Auto-save interval">
-        <Select
-          value={intervalValue}
-          onValueChange={handleIntervalChange}
-        >
+    <Section title="Saving">
+      <Field
+        label="Auto-save interval"
+        description="How often unsaved changes are written to disk in the background."
+      >
+        <Select value={intervalValue} onValueChange={handleIntervalChange}>
           <SelectTrigger className="w-40" aria-label="Auto-save interval">
             <SelectValue />
           </SelectTrigger>
@@ -35,7 +35,7 @@ export function GeneralTab({ settings, onUpdateSetting }: GeneralTabProps) {
             <SelectItem value="300">5 minutes</SelectItem>
           </SelectContent>
         </Select>
-      </Row>
-    </section>
+      </Field>
+    </Section>
   );
 }

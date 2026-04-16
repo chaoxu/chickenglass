@@ -23,8 +23,7 @@ import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-nod
 import { createTableNodeFromMarkdown } from "./markdown";
 import { EditorChromePanel } from "./editor-chrome";
 import {
-  getPendingEmbeddedSurfaceFocusId,
-  queuePendingSurfaceFocus,
+  queueEmbeddedSurfaceFocus,
 } from "./pending-surface-focus";
 import { $isForbiddenTypeaheadContext } from "./typeahead-context";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
@@ -235,10 +234,7 @@ export function SlashPickerPlugin() {
       const nodeKey = rawBlockNode.getKey();
 
       if (entry.focusTarget === "block-body" || entry.focusTarget === "footnote-body") {
-        queuePendingSurfaceFocus(
-          getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, entry.focusTarget),
-          "end",
-        );
+        queueEmbeddedSurfaceFocus(editor.getKey(), nodeKey, entry.focusTarget, "end");
       }
 
       paragraph.replace(rawBlockNode);

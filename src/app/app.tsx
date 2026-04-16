@@ -194,6 +194,7 @@ function AppInner() {
             <AppMainShell
               sidebarLayout={sidebarLayout}
               onOpenPalette={() => dialogs.setPaletteOpen(true)}
+              onOpenSettings={() => dialogs.setSettingsOpen(true)}
             />
             <ConnectedAppOverlays
               dialogs={dialogs}
