@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { MutableRefObject } from "react";
-import { registerCodeHighlighting } from "@lexical/code";
+import { CodeNode, registerCodeHighlighting } from "@lexical/code";
+import { $nodesOfType } from "lexical";
 import { copyToClipboard } from "@lexical/clipboard";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
@@ -172,10 +173,48 @@ export function FormatEventPlugin() {
   return null;
 }
 
+// @lexical/code-prism passes the raw fence language straight to Prism — `ts`,
+// `js`, `py`, etc. miss because Prism registers them under their full names.
+// Mirror the upstream CODE_LANGUAGE_MAP so common aliases tokenize.
+const PRISM_LANGUAGE_ALIASES: Record<string, string> = {
+  js: "javascript",
+  jsx: "javascript",
+  md: "markdown",
+  plaintext: "plain",
+  py: "python",
+  text: "plain",
+  ts: "typescript",
+  tsx: "typescript",
+};
+
+function ensurePrismAliases(): void {
+  const prism = (globalThis as { Prism?: { languages: Record<string, unknown> } }).Prism;
+  if (!prism?.languages) {
+    return;
+  }
+  for (const [alias, target] of Object.entries(PRISM_LANGUAGE_ALIASES)) {
+    if (!prism.languages[alias] && prism.languages[target]) {
+      prism.languages[alias] = prism.languages[target];
+    }
+  }
+}
+
 export function CodeHighlightPlugin() {
   const [editor] = useLexicalComposerContext();
 
-  useEffect(() => registerCodeHighlighting(editor), [editor]);
+  useEffect(() => {
+    ensurePrismAliases();
+    const cleanup = registerCodeHighlighting(editor);
+    // Initial state nodes aren't dirty, so the freshly registered transform
+    // never sees pre-loaded code blocks. Touch each CodeNode once to schedule
+    // tokenization without changing content.
+    editor.update(() => {
+      for (const node of $nodesOfType(CodeNode)) {
+        node.markDirty();
+      }
+    });
+    return cleanup;
+  }, [editor]);
 
   return null;
 }

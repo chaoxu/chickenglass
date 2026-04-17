@@ -50,6 +50,7 @@ import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-
 import { BibliographySection } from "./bibliography-section";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
+import { CodeHighlightPlugin } from "./rich-editor-plugins";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
 import {
@@ -825,6 +826,7 @@ export function LexicalMarkdownEditor({
                     placeholder={null}
                   />
                 )}
+                {!isSourceMode ? <CodeHighlightPlugin /> : null}
                 {!isSourceMode ? <CodeBlockChromePlugin /> : null}
                 {!isSourceMode ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
                 {editable ? <HistoryPlugin /> : null}
