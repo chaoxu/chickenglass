@@ -22,7 +22,10 @@ import { createTableNodeFromMarkdown } from "./markdown";
 import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
-const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
+// Require a non-empty class/attrs suffix so a bare `:::` is treated as literal
+// text (or as a close gesture by the user) rather than expanding into an
+// empty Div.
+const FENCED_DIV_START_RE = /^\s*(:{3,})\s*(\S.*)$/;
 const DISPLAY_MATH_DOLLAR_RE = /^\s*\$\$\s*$/;
 const DISPLAY_MATH_BRACKET_RE = /^\s*\\\[\s*$/;
 const FOOTNOTE_DEFINITION_RE = /^\[\^[^\]]+\]:\s*(.*)$/;
@@ -176,6 +179,8 @@ function insertExpandedBlock(
     insertedNodeKey = insertedNode.getKey();
     if (candidate.focusTarget === "block-body" || candidate.focusTarget === "footnote-body") {
       queueEmbeddedSurfaceFocus(editor.getKey(), insertedNodeKey, candidate.focusTarget, "end");
+    } else if (candidate.focusTarget === "display-math" || candidate.focusTarget === "frontmatter") {
+      queueEmbeddedSurfaceFocus(editor.getKey(), insertedNodeKey, "structure-source", "start");
     }
 
     firstNode.insertBefore(insertedNode);
@@ -183,6 +188,8 @@ function insertExpandedBlock(
       node.remove();
     }
     ensureTrailingParagraph(insertedNode, afterNode);
+
+    activateInsertedBlock(editor, insertedNodeKey, candidate.focusTarget);
   }, {
     discrete: true,
     tag: COFLAT_NESTED_EDIT_TAG,
@@ -210,10 +217,7 @@ export function MarkdownExpansionPlugin() {
       }
 
       (event as KeyboardEvent | null)?.preventDefault();
-      const insertedNodeKey = insertExpandedBlock(editor, candidate);
-      if (insertedNodeKey) {
-        activateInsertedBlock(editor, insertedNodeKey, candidate.focusTarget);
-      }
+      insertExpandedBlock(editor, candidate);
       return true;
     },
     COMMAND_PRIORITY_HIGH,

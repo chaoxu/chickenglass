@@ -101,6 +101,14 @@ function matchDisplayMathEnd(
   return -1;
 }
 
+// Suppress live markdown-shortcut conversion for raw-block multiline
+// transformers. With a required regExpEnd set, @lexical/markdown's
+// runMultilineElementTransformers skips the transformer, leaving typing as
+// plain text. Import still works because handleImportAfterStartMatch runs
+// before the end-regex is consulted. MarkdownExpansionPlugin owns the
+// on-Enter conversion for these variants.
+const NEVER_MATCH_RE = /.^/;
+
 function createRawBlockTransformer(
   variant: RawBlockVariant,
   isMatch: (lines: readonly string[], startLineIndex: number, startMatch: RegExpMatchArray) => number,
@@ -126,6 +134,7 @@ function createRawBlockTransformer(
       appendRawBlock(rootNode, variant, joinRawLines(lines, startLineIndex, endLineIndex));
       return [true, endLineIndex];
     },
+    regExpEnd: NEVER_MATCH_RE,
     regExpStart: /.^/,
     replace(rootNode, _children, startMatch, endMatch, linesInBetween) {
       const fragments = [startMatch[0]];

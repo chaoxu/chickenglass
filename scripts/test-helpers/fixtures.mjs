@@ -252,7 +252,13 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   };
 }
 
-export async function openRegressionDocument(page, path = "index.md") {
-  const opened = await openFixtureDocument(page, path, { project: "full-project" });
+export async function openRegressionDocument(page, path = "index.md", options = {}) {
+  const opened = await openFixtureDocument(page, path, { project: "full-project", ...options });
   return opened.virtualPath;
+}
+
+export async function openAndSettleRegressionDocument(page, path = "index.md", options = {}) {
+  const virtualPath = await openRegressionDocument(page, path, options);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return virtualPath;
 }

@@ -19,6 +19,27 @@ import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 import { consumePendingSurfaceFocus } from "./pending-surface-focus";
 
+function computeInitialCaretOffset(
+  edge: "start" | "end",
+  draft: string,
+  multiline: boolean,
+): number {
+  if (edge === "end") {
+    return draft.length;
+  }
+  if (!multiline) {
+    return 0;
+  }
+  // For fenced templates (display math, frontmatter) land inside the body —
+  // just before the closing fence's newline, preserving any pre-filled line.
+  const firstNewline = draft.indexOf("\n");
+  const lastNewline = draft.lastIndexOf("\n");
+  if (firstNewline > 0 && lastNewline > firstNewline) {
+    return lastNewline;
+  }
+  return 0;
+}
+
 interface StructureSourceEditorProps {
   readonly className: string;
   readonly doc: string;
@@ -56,16 +77,16 @@ export function StructureSourceEditor({
     }
 
     if (!initialCaretAppliedRef.current) {
-      if (initialEdgeRef.current === "start") {
-        handle.setSelection(0, 0, { skipScrollIntoView: true });
-      } else {
-        const end = draft.length;
-        handle.setSelection(end, end, { skipScrollIntoView: true });
-      }
+      const offset = computeInitialCaretOffset(
+        initialEdgeRef.current,
+        draft,
+        multiline,
+      );
+      handle.setSelection(offset, offset, { skipScrollIntoView: true });
       initialCaretAppliedRef.current = true;
     }
     handle.focus();
-  }, [draft.length]);
+  }, [draft, multiline]);
 
   useEffect(() => {
     if (doc === originalDocRef.current) {

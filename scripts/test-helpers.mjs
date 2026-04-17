@@ -3,7 +3,7 @@
 import process from "node:process";
 import { MODE_LABELS, sleep, waitForEditorSurface } from "./test-helpers/shared.mjs";
 import { openRegressionDocument } from "./test-helpers/fixtures.mjs";
-export { PUBLIC_SHOWCASE_FIXTURE } from "./test-helpers/shared.mjs";
+export { PUBLIC_SHOWCASE_FIXTURE, sleep } from "./test-helpers/shared.mjs";
 export {
   connectEditor,
   disconnectBrowser,
@@ -13,6 +13,7 @@ export {
 } from "./test-helpers/browser.mjs";
 export {
   hasFixtureDocument,
+  openAndSettleRegressionDocument,
   openFixtureDocument,
   openRegressionDocument,
   resolveFixtureDocument,

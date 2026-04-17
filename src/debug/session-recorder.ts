@@ -120,6 +120,14 @@ export function recordDebugSessionEvent(
 
 export async function flushDebugSessionEvents(): Promise<void> {
   if (!isBrowser() || flushInFlight || pendingEvents.length === 0) return;
+  // The recorder endpoint is only mounted by the Vite dev middleware. In
+  // preview/production builds there is no sink, so draining the queue over
+  // the network just produces 404s and re-queues forever.
+  if (!import.meta.env.DEV) {
+    pendingEvents.length = 0;
+    connected = false;
+    return;
+  }
   flushInFlight = true;
   const batch = pendingEvents.splice(0, pendingEvents.length);
   try {

@@ -10,6 +10,7 @@ import {
 import { $isTableCellNode } from "./nodes/table-cell-node";
 import { $isTableNode } from "./nodes/table-node";
 import { $isTableRowNode } from "./nodes/table-row-node";
+import { ACTIVATE_STRUCTURE_EDIT_COMMAND } from "./structure-edit-plugin";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 export type InsertFocusTarget =
@@ -22,8 +23,6 @@ export type InsertFocusTarget =
   | "table-cell";
 
 const FOCUS_SELECTORS: Partial<Record<InsertFocusTarget, string>> = {
-  "display-math": ".cf-lexical-display-math-body",
-  "frontmatter": ".cf-lexical-structure-toggle--frontmatter",
   "include-path": ".cf-lexical-structure-toggle--include",
 };
 
@@ -67,6 +66,26 @@ export function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
 
 export function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget: InsertFocusTarget): void {
   if (focusTarget === "block-body" || focusTarget === "footnote-body") {
+    return;
+  }
+
+  if (focusTarget === "display-math") {
+    // Dispatch directly — the empty-equation body doesn't carry
+    // structureToggleProps, so a synthetic click has no handler.
+    editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, {
+      blockKey: key,
+      surface: "display-math-source",
+      variant: "display-math",
+    });
+    return;
+  }
+
+  if (focusTarget === "frontmatter") {
+    editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, {
+      blockKey: key,
+      surface: "frontmatter-source",
+      variant: "frontmatter",
+    });
     return;
   }
 

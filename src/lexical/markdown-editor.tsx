@@ -74,6 +74,7 @@ import {
   setLexicalMarkdown,
 } from "./markdown";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
+import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
@@ -829,6 +830,7 @@ export function LexicalMarkdownEditor({
                 {editable ? <HistoryPlugin /> : null}
                 {!isSourceMode ? <ListPlugin /> : null}
                 {!isSourceMode ? <CheckListPlugin /> : null}
+                {!isSourceMode && editable ? <ListMarkerStripPlugin /> : null}
                 {!isSourceMode ? <LinkPlugin /> : null}
                 {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
                 {!isSourceMode && editable ? <FormatEventPlugin /> : null}

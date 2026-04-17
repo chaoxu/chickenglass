@@ -93,6 +93,7 @@ function FrontmatterRenderer({
   readonly nodeKey: NodeKey;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const surfaceEditable = useLexicalSurfaceEditable();
   const context = useLexicalRenderContext();
   const title = parseFrontmatter(raw).config.title ?? "";
@@ -118,6 +119,7 @@ function FrontmatterRenderer({
           namespace={`coflat-frontmatter-source-${nodeKey}`}
           onChange={updateRaw}
           onClose={sourceEdit.deactivate}
+          pendingFocusId={getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source")}
         />
       ) : (
         <div

@@ -129,6 +129,16 @@ const textFormatAdapter: RevealAdapter = {
     if (specs.length === 0) {
       return null;
     }
+    // Only reveal when caret is strictly *inside* the formatted run.
+    // At an end boundary (offset 0 or offset === length), the user is
+    // either about to type adjacent content or has just finished a
+    // markdown shortcut transform that placed the caret there. Revealing
+    // in either case hijacks normal typing flow.
+    const offset = selection.anchor.offset;
+    const length = node.getTextContentSize();
+    if (offset <= 0 || offset >= length) {
+      return null;
+    }
     return { node, source: wrapWithSpecs(node.getTextContent(), specs) };
   },
   reparse(live, raw) {

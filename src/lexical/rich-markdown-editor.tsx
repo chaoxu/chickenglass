@@ -35,6 +35,7 @@ import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
+import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { EDITOR_MODE, REVEAL_PRESENTATION } from "../app/editor-mode";
 import { StructureEditProvider } from "./structure-edit-plugin";
@@ -309,6 +310,7 @@ export function LexicalRichMarkdownEditor({
                 ) : null}
                 <ListPlugin />
                 <CheckListPlugin />
+                {editable ? <ListMarkerStripPlugin /> : null}
                 <LinkPlugin />
                 <TableScrollShadowPlugin />
                 {editable ? <TableActionMenuPlugin /> : null}
