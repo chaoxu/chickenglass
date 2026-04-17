@@ -25,6 +25,14 @@ export async function run(page) {
     .first();
   await theoremTitle.click();
   await page.waitForTimeout(150);
+  // Move the caret to the end of the title before typing. Playwright's click()
+  // lands at the visual centre, which would put the marker mid-word and break
+  // the **...TitleEditNeedle** assertion. Cmd+A → ArrowRight collapses to the
+  // end inside the focused contenteditable.
+  await page.keyboard.press("Meta+A");
+  await page.waitForTimeout(80);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(80);
   await page.keyboard.type(` ${TITLE_MARKER}`);
   await page.waitForTimeout(250);
   await page.keyboard.press("Meta+A");
@@ -73,7 +81,10 @@ export async function run(page) {
   }
 
   if (!/\*\*.*TitleEditNeedle\*\*/.test(theoremTitleLine)) {
-    return { pass: false, message: "theorem-title edit did not flow back into canonical markdown" };
+    return {
+      pass: false,
+      message: `theorem-title edit did not flow back into canonical markdown. Title line: ${JSON.stringify(theoremTitleLine)}`,
+    };
   }
 
   if (!text.includes(MATH_MARKER)) {

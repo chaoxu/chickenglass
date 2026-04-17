@@ -1,4 +1,4 @@
-import { openRegressionDocument } from "../test-helpers.mjs";
+import { openRegressionDocument, setRevealPresentation } from "../test-helpers.mjs";
 
 export const name = "rich-surface-overlays";
 
@@ -7,6 +7,10 @@ function nearlyEqual(left, right, tolerance = 3) {
 }
 
 export async function run(page) {
+  // Reference/citation overlay layout assertions target the floating panel
+  // (cf-lexical-inline-token-panel-shell) — switch to that presentation since
+  // the default reveal is now inline-swap.
+  await setRevealPresentation(page, "floating");
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
 
   const state = await page.evaluate(async () => {

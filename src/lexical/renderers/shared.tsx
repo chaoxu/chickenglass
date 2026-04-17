@@ -82,6 +82,30 @@ export function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
 const LAZY_VISIBILITY_ROOT_MARGIN = "1500px";
 
 /**
+ * Walk up the ancestor chain to find the nearest scroll container. The editor
+ * scrolls inside `.cf-lexical-surface--scroll` (overflow: hidden) rather than
+ * the document body — when an element lives inside that container but its
+ * page-relative bounding box falls outside the viewport, IntersectionObserver
+ * with `root: null` reports it as 0% visible because ancestor clipping wipes
+ * out the visible area before the rootMargin can save it. Scoping the
+ * observer to the scroll container fixes the off-screen math/citation
+ * placeholders that otherwise stay "pending" forever.
+ */
+function findScrollRoot(el: Element): Element | null {
+  let cursor: Element | null = el.parentElement;
+  while (cursor) {
+    const cs = getComputedStyle(cursor);
+    if (cs.overflow !== "visible" || cs.overflowY !== "visible" || cs.overflowX !== "visible") {
+      if (cursor !== document.scrollingElement && cursor !== document.documentElement) {
+        return cursor;
+      }
+    }
+    cursor = cursor.parentElement;
+  }
+  return null;
+}
+
+/**
  * Returns true once the element enters the viewport (with a generous margin
  * so scrolling rarely sees the placeholder). Stays true once flipped, so the
  * caller can render expensive content lazily without unmounting it again.
@@ -102,12 +126,13 @@ export function useLazyVisibility(ref: RefObject<Element | null>): boolean {
       setVisible(true);
       return;
     }
+    const root = findScrollRoot(el);
     const io = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) {
         setVisible(true);
         io.disconnect();
       }
-    }, { rootMargin: LAZY_VISIBILITY_ROOT_MARGIN });
+    }, { root, rootMargin: LAZY_VISIBILITY_ROOT_MARGIN });
     io.observe(el);
     return () => io.disconnect();
   }, [ref, visible]);

@@ -27,6 +27,7 @@ import {
   $getSelection,
   $isElementNode,
   $isTextNode,
+  $setSelection,
   CLICK_COMMAND,
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
@@ -220,6 +221,12 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       if (!node) {
         return;
       }
+      // The user's selection may still point inside the node we are about to
+      // remove (e.g. clicking a link briefly placed a Lexical selection inside
+      // it before focus moved to the floating input). Drop the live selection
+      // before the swap so Lexical doesn't throw "selection has been lost…"
+      // when reconciling the removed subtree.
+      $setSelection(null);
       // Floating mode never plain-swaps the subtree, so adapters expect a
       // TextNode they can replace. Wrap the live node in a sacrificial
       // TextNode and let the adapter rebuild from `nextRaw`.

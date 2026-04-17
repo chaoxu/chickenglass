@@ -281,6 +281,19 @@ export function createEditorSessionService({
       clearPathBuffers(runtime, previousPath);
     }
 
+    // Ensure the synthetic document exists in the underlying filesystem so a
+    // subsequent saveFile() can write to it. MemoryFileSystem.writeFile
+    // throws when the path is unknown — without this, dropped files and
+    // fixtures opened via openFileWithContent would never clean their dirty
+    // state on save.
+    if (!(await fs.exists(path))) {
+      try {
+        await fs.createFile(path, content);
+      } catch (error: unknown) {
+        console.error("[session] failed to seed file for openFileWithContent:", path, error);
+      }
+    }
+
     runtime.sourceMaps.delete(path);
     runtime.buffers.set(path, emptyEditorDocument);
     runtime.liveDocs.set(path, createEditorDocumentText(content));

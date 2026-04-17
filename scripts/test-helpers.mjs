@@ -89,6 +89,40 @@ export async function findLine(page, needle) {
   return -1;
 }
 
+/**
+ * Switch the cursor-reveal presentation between "inline" (default — swaps
+ * the styled subtree for a plain TextNode containing markdown source) and
+ * "floating" (renders a floating panel anchored to the live subtree).
+ *
+ * Tests that drive floating-panel selectors (.cf-lexical-inline-token-panel-shell,
+ * .cf-lexical-inline-math-source) must call `setRevealPresentation(page, "floating")`
+ * after openRegressionDocument so the live editor mounts the floating variant.
+ */
+export async function setRevealPresentation(page, presentation) {
+  if (presentation !== "inline" && presentation !== "floating") {
+    throw new Error(`Unsupported reveal presentation "${presentation}". Use inline or floating.`);
+  }
+  await page.evaluate((next) => {
+    const SETTINGS_KEY = "cf-settings";
+    let parsed = {};
+    try {
+      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      if (raw) {
+        parsed = JSON.parse(raw);
+      }
+    } catch {
+      parsed = {};
+    }
+    parsed.revealPresentation = next;
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+  }, presentation);
+  await page.reload({ waitUntil: "load" });
+  await page.waitForFunction(() => Boolean(window.__app && window.__cfDebug), { timeout: 15000 });
+  await page.evaluate(async () => {
+    await Promise.all([window.__app.ready, window.__cfDebug.ready]);
+  });
+}
+
 export async function switchToMode(page, mode) {
   const normalizedMode = mode.toLowerCase();
   if (!(normalizedMode in MODE_LABELS)) {
@@ -373,6 +407,32 @@ export async function resetEditorState(page) {
   await page.evaluate(() => {
     window.__app?.setSearchOpen?.(false);
   }).catch(() => {});
+  // Reset reveal presentation to the default ("inline") so a previous test
+  // that switched to "floating" doesn't leak its setting into the next test.
+  // Done before discard/open so the next document mounts the right plugin.
+  const presentationDrifted = await page.evaluate(() => {
+    const SETTINGS_KEY = "cf-settings";
+    let parsed = {};
+    try {
+      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      if (raw) parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+    if (parsed.revealPresentation && parsed.revealPresentation !== "inline") {
+      parsed.revealPresentation = "inline";
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+      return true;
+    }
+    return false;
+  });
+  if (presentationDrifted) {
+    await page.reload({ waitUntil: "load" });
+    await page.waitForFunction(() => Boolean(window.__app && window.__cfDebug), { timeout: 15000 });
+    await page.evaluate(async () => {
+      await Promise.all([window.__app.ready, window.__cfDebug.ready]);
+    });
+  }
   const discarded = await discardCurrentFile(page).catch(() => false);
   if (!discarded) {
     throw new Error("Failed to discard the current document during reset");

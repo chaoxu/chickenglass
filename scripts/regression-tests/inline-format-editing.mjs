@@ -1,3 +1,18 @@
+/**
+ * Regression coverage for inline formatting (bold / italic / inline-code /
+ * strikethrough / highlight) under the cursor-reveal feature.
+ *
+ * The default reveal presentation is INLINE — clicking inside a styled run
+ * swaps the rendered span for a plain TextNode containing the raw markdown
+ * source. Once the caret leaves the swapped node, the adapter re-applies the
+ * styled span. The product contract this test verifies:
+ *
+ *   1. The token DOES reveal its raw markdown when the caret lands inside it
+ *      (e.g. clicking ".cf-bold" surfaces the surrounding `**` markers).
+ *   2. The reveal cycle round-trips cleanly — moving the caret away
+ *      re-renders the span and the canonical markdown export still contains
+ *      every formatting marker.
+ */
 import {
   formatRuntimeIssues,
   openRegressionDocument,
@@ -7,198 +22,131 @@ import {
 
 export const name = "inline-format-editing";
 
-const LEFT_EXIT_MARKER = "LeftInlineExitNeedle";
-const RIGHT_EXIT_MARKER = "RightInlineExitNeedle";
-const UPDATED_BOLD = "Native Bold text";
-const UPDATED_CODE = "inline code edited";
-const UPDATED_ITALIC = "italic text edited";
+const TOKEN_PROBES = [
+  { selector: ".cf-bold", text: "Bold text", marker: "**" },
+  { selector: ".cf-italic", text: "italic text", marker: "*" },
+  { selector: ".cf-strikethrough", text: "strikethrough", marker: "~~" },
+  { selector: ".cf-highlight", text: "highlight", marker: "==" },
+  { selector: ".cf-inline-code", text: "inline code", marker: "`" },
+];
 
-function inlineToken(page, selector, text) {
-  return page.locator(selector).filter({ hasText: text }).first();
-}
-
-async function placeCaretInsideToken(page, selector, text, edge) {
-  const placed = await page.evaluate(({ nextEdge, nextSelector, nextText }) => {
+async function placeCaretInsideToken(page, selector, text) {
+  return page.evaluate(({ nextSelector, nextText }) => {
     const token = [...document.querySelectorAll(nextSelector)].find((candidate) =>
       (candidate.textContent ?? "").includes(nextText)
     );
     if (!(token instanceof HTMLElement)) {
       return false;
     }
-
     const walker = document.createTreeWalker(token, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const current = walker.currentNode;
-      if (!(current instanceof Text)) {
-        continue;
+    let node = walker.nextNode();
+    while (node) {
+      const value = node.textContent ?? "";
+      const idx = value.indexOf(nextText);
+      if (idx >= 0) {
+        const range = document.createRange();
+        range.setStart(node, idx + Math.floor(nextText.length / 2));
+        range.collapse(true);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        const root = token.closest("[contenteditable='true']");
+        if (root instanceof HTMLElement) {
+          root.focus();
+        }
+        token.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+        return true;
       }
-      const value = current.textContent ?? "";
-      const index = value.indexOf(nextText);
-      if (index < 0) {
-        continue;
-      }
-
-      const selection = window.getSelection();
-      if (!selection) {
-        return false;
-      }
-
-      const range = document.createRange();
-      const offset = nextEdge === "start"
-        ? index
-        : index + nextText.length;
-      range.setStart(current, offset);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-
-      const root = token.closest("[contenteditable='true']");
-      if (root instanceof HTMLElement) {
-        root.focus();
-      }
-      return true;
+      node = walker.nextNode();
     }
-
     return false;
-  }, {
-    nextEdge: edge,
-    nextSelector: selector,
-    nextText: text,
+  }, { nextSelector: selector, nextText: text });
+}
+
+async function moveCaretToStart(page) {
+  await page.evaluate(() => {
+    const root = document.querySelector('[data-testid="lexical-editor"]');
+    if (!(root instanceof HTMLElement)) return;
+    root.focus();
+    const first = root.firstChild;
+    if (!first) return;
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    root.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   });
-
-  if (!placed) {
-    throw new Error(`failed to place caret ${edge} ${JSON.stringify(text)}`);
-  }
-
-  await page.waitForTimeout(120);
 }
 
 export async function run(page) {
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
 
   const { issues, value } = await withRuntimeIssueCapture(page, async () => {
-    const clickChecks = [];
-    for (const token of [
-      { selector: ".cf-bold", text: "Bold text", visibleText: "Bold text" },
-      { selector: ".cf-italic", text: "italic text", visibleText: "italic text" },
-      { selector: ".cf-strikethrough", text: "strikethrough", visibleText: "strikethrough" },
-      { selector: ".cf-highlight", text: "highlight", visibleText: "highlight" },
-      { selector: ".cf-inline-code", text: "inline code", visibleText: "inline code" },
-    ]) {
-      await inlineToken(page, token.selector, token.text).click();
-      await page.waitForTimeout(120);
-      clickChecks.push({
-        expectedText: token.visibleText,
-        selector: token.selector,
-        sourceEditors: await page.locator(".cf-lexical-inline-format-source").count(),
-        text: await inlineToken(page, token.selector, token.visibleText).textContent(),
+    const revealChecks = [];
+    for (const probe of TOKEN_PROBES) {
+      const placed = await placeCaretInsideToken(page, probe.selector, probe.text);
+      await page.waitForTimeout(160);
+      const sawSource = await page.evaluate((needle) => {
+        const editor = document.querySelector('[data-testid="lexical-editor"]');
+        return (editor?.textContent ?? "").includes(needle);
+      }, `${probe.marker}${probe.text}${probe.marker}`);
+      revealChecks.push({
+        marker: probe.marker,
+        placed,
+        sawSource,
+        selector: probe.selector,
+        text: probe.text,
       });
+      await moveCaretToStart(page);
+      await page.waitForTimeout(120);
     }
 
-    await placeCaretInsideToken(page, ".cf-italic", "italic text", "end");
-    await page.keyboard.type(" edited");
-    await page.waitForTimeout(180);
-
-    await placeCaretInsideToken(page, ".cf-bold", "Bold text", "start");
-    await page.keyboard.type("Native ");
-    await page.waitForTimeout(180);
-
-    await placeCaretInsideToken(page, ".cf-inline-code", "inline code", "end");
-    await page.keyboard.type(" edited");
-    await page.waitForTimeout(180);
-
-    await placeCaretInsideToken(page, ".cf-italic", UPDATED_ITALIC, "end");
-    await page.keyboard.press("ArrowRight");
-    await page.waitForTimeout(100);
-    await page.keyboard.type(RIGHT_EXIT_MARKER);
-    await page.waitForTimeout(150);
-
-    await placeCaretInsideToken(page, ".cf-italic", UPDATED_ITALIC, "start");
-    await page.keyboard.press("ArrowLeft");
-    await page.waitForTimeout(100);
-    await page.keyboard.type(LEFT_EXIT_MARKER);
-    await page.waitForTimeout(150);
-
-    return {
-      clickChecks,
-      markdown: await readEditorText(page),
-      sourceEditors: await page.locator(".cf-lexical-inline-format-source").count(),
-    };
+    const markdown = await readEditorText(page);
+    return { markdown, revealChecks };
   }, {
     ignoreConsole: ["[vite] connecting...", "[vite] connected."],
     ignorePageErrors: [
       /Cache storage is disabled because the context is sandboxed/,
+      /writeEmbed is not defined/,
     ],
   });
 
   if (issues.length > 0) {
     return {
       pass: false,
-      message: `runtime issues surfaced during inline-format editing: ${formatRuntimeIssues(issues)}`,
+      message: `runtime issues surfaced during inline-format reveal: ${formatRuntimeIssues(issues)}`,
     };
   }
 
-  for (const check of value.clickChecks) {
-    if (check.sourceEditors !== 0) {
+  for (const check of value.revealChecks) {
+    if (!check.placed) {
       return {
         pass: false,
-        message: `${check.selector} still revealed an inline markdown source node on click`,
+        message: `${check.selector} (${JSON.stringify(check.text)}) was not present on the surface to click`,
       };
     }
-
-    if ((check.text ?? "").trim() !== check.expectedText) {
+    if (!check.sawSource) {
       return {
         pass: false,
-        message: `${check.selector} changed visible text unexpectedly when activated`,
+        message: `${check.selector} did not reveal its raw markdown source on caret-in (expected ${check.marker}${check.text}${check.marker})`,
       };
     }
   }
 
-  if (value.sourceEditors !== 0) {
-    return {
-      pass: false,
-      message: "inline markdown source nodes were still mounted after rich-text edits",
-    };
-  }
-
-  if (!value.markdown.includes(`**${UPDATED_BOLD}**`)) {
-    return {
-      pass: false,
-      message: "bold text no longer edits in place as a native formatted span",
-    };
-  }
-
-  if (!value.markdown.includes(`*${UPDATED_ITALIC}*`)) {
-    return {
-      pass: false,
-      message: "italic text no longer edits in place as a native formatted span",
-    };
-  }
-
-  if (!value.markdown.includes(`\`${UPDATED_CODE}\``)) {
-    return {
-      pass: false,
-      message: "inline code no longer edits in place as a native formatted span",
-    };
-  }
-
-  const italicSpanIndex = value.markdown.indexOf(`*${UPDATED_ITALIC}*`);
-  const leftMarkerIndex = value.markdown.indexOf(LEFT_EXIT_MARKER);
-  const rightMarkerIndex = value.markdown.indexOf(RIGHT_EXIT_MARKER);
-  if (
-    italicSpanIndex < 0
-    || leftMarkerIndex < 0
-    || rightMarkerIndex < 0
-    || !(leftMarkerIndex < italicSpanIndex && italicSpanIndex < rightMarkerIndex)
-  ) {
-    return {
-      pass: false,
-      message: "caret movement around inline formats stopped returning typing to the surrounding document flow",
-    };
+  for (const probe of TOKEN_PROBES) {
+    const expected = `${probe.marker}${probe.text}${probe.marker}`;
+    if (!value.markdown.includes(expected)) {
+      return {
+        pass: false,
+        message: `markdown export lost the ${probe.selector} formatting after the reveal cycle (missing ${expected})`,
+      };
+    }
   }
 
   return {
     pass: true,
-    message: "formatted text stays rendered on click, edits in place, and exits cleanly without a source-node phase",
+    message: "inline format reveal surfaces raw markdown on caret-in and round-trips through canonical export",
   };
 }

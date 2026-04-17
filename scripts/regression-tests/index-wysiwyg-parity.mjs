@@ -2,6 +2,7 @@ import {
   formatRuntimeIssues,
   openRegressionDocument,
   readEditorText,
+  setRevealPresentation,
   withRuntimeIssueCapture,
 } from "../test-helpers.mjs";
 
@@ -11,6 +12,11 @@ const UPDATED_LINK = "[Link text](https://example.org)";
 const UPDATED_CITATION = "[@cormen2009, p. 7]";
 
 export async function run(page) {
+  // This test exercises the floating panel reveal UX (panel shell + source
+  // editor input). Switch to that presentation explicitly — the default is
+  // inline reveal which swaps the rendered token for plain markdown text and
+  // would not surface the panel selectors below.
+  await setRevealPresentation(page, "floating");
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
 
   const { issues, value } = await withRuntimeIssueCapture(page, async () => {
