@@ -5,6 +5,7 @@ import type { LexicalEditor } from "lexical";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
 import { type DiagnosticEntry } from "../diagnostics";
+import { useDiagnostics } from "../../state/diagnostics-store";
 import { type HeadingEntry } from "../heading-ancestry";
 import type { Settings } from "../lib/types";
 import { normalizeEditorMode, type EditorMode } from "../editor-mode";
@@ -70,7 +71,6 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   readonly headings: HeadingEntry[];
   readonly diagnostics: DiagnosticEntry[];
   readonly handleHeadingsChange: (headings: HeadingEntry[]) => void;
-  readonly handleDiagnosticsChange: (diagnostics: DiagnosticEntry[]) => void;
   readonly handleLexicalEditorReady: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly handleEditorDocumentReady: (docPath: string | undefined) => void;
   readonly handleOutlineSelect: (from: number) => void;
@@ -118,7 +118,7 @@ export function useAppEditorShell({
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
-  const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
+  const diagnostics = useDiagnostics((s) => s.diagnostics);
 
   const navigation = useEditorNavigation({
     openFile,
@@ -142,10 +142,6 @@ export function useAppEditorShell({
 
   const handleHeadingsChange = useCallback((nextHeadings: HeadingEntry[]) => {
     setHeadings(nextHeadings);
-  }, []);
-
-  const handleDiagnosticsChange = useCallback((nextDiagnostics: DiagnosticEntry[]) => {
-    setDiagnostics(nextDiagnostics);
   }, []);
 
   const handleInsertImage = useCallback(() => {
@@ -258,7 +254,6 @@ export function useAppEditorShell({
     headings,
     diagnostics,
     handleHeadingsChange,
-    handleDiagnosticsChange,
     handleLexicalEditorReady,
     handleEditorDocumentReady,
     handleOutlineSelect,

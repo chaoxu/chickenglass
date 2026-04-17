@@ -4,10 +4,11 @@ import type { LexicalEditor } from "lexical";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
 import { type MarkdownEditorHandle, type MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { computeLiveStats } from "../writing-stats";
-import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
+import { extractDiagnostics } from "../diagnostics";
 import type { HeadingEntry } from "../heading-ancestry";
 import { useEditorTelemetryStore } from "../../state/editor-telemetry-store";
 import { useHeadingIndex } from "../../state/heading-index-store";
+import { useDiagnosticsStore } from "../../state/diagnostics-store";
 import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import type { EditorMode, RevealPresentation } from "../editor-mode";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -20,7 +21,6 @@ export interface EditorPaneProps {
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onDocumentReady?: (docPath: string | undefined) => void;
   readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
-  readonly onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly onOutlineSelect?: (from: number) => void;
   readonly spellCheck?: boolean;
@@ -34,7 +34,6 @@ export function EditorPane({
   onDocChange,
   onDocumentReady,
   onHeadingsChange,
-  onDiagnosticsChange,
   onLexicalEditorReady,
   onOutlineSelect,
   spellCheck = false,
@@ -65,8 +64,8 @@ export function EditorPane({
   }, [headings, onHeadingsChange]);
 
   useEffect(() => {
-    onDiagnosticsChange?.(diagnostics);
-  }, [diagnostics, onDiagnosticsChange]);
+    useDiagnosticsStore.getState().setDiagnostics(diagnostics);
+  }, [diagnostics]);
 
   const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
     useEditorTelemetryStore.getState().setTelemetry({

@@ -33,7 +33,6 @@ export function AppMainShell({
             docPath={currentPath}
             onDocChange={editor.handleDocChange}
             onHeadingsChange={editor.handleHeadingsChange}
-            onDiagnosticsChange={editor.handleDiagnosticsChange}
             onDocumentReady={editor.handleEditorDocumentReady}
             onLexicalEditorReady={editor.handleLexicalEditorReady}
             onOutlineSelect={editor.handleOutlineSelect}
