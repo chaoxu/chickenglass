@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { useLexicalNodeSelection } from "@lexical/react/useLexicalNodeSelection";
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -17,6 +16,8 @@ import {
   $isDecoratorNode,
   $isNodeSelection,
   $setSelection,
+  CLICK_COMMAND,
+  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   createCommand,
   mergeRegister,
@@ -83,13 +84,9 @@ function syncDecoratorNodeSelection(
       return;
     }
 
-    const currentSelection = $getSelection();
-    if ($isNodeSelection(currentSelection)) {
-      currentSelection.clear();
-      currentSelection.add(blockKey);
-      return;
-    }
-
+    // Always replace via $setSelection — mutating the existing NodeSelection
+    // can fail with "Cannot assign to read only property 'dirty'" when the
+    // pending state holds a clone whose mutation guard wasn't properly reset.
     const nextSelection = $createNodeSelection();
     nextSelection.add(blockKey);
     $setSelection(nextSelection);
@@ -139,6 +136,26 @@ export function StructureEditProvider({
     };
 
     return mergeRegister(
+      // Lexical commits the prior NodeSelection as frozen, then
+      // @lexical/rich-text's CLICK_COMMAND handler tries to mutate it via
+      // selection.clear() — crashing dev mode with "Cannot assign to read
+      // only property 'dirty'". Pre-empt that by replacing any node-selection
+      // with a fresh, mutable instance before downstream handlers run.
+      editor.registerCommand(
+        CLICK_COMMAND,
+        () => {
+          const selection = $getSelection();
+          if ($isNodeSelection(selection)) {
+            const fresh = $createNodeSelection();
+            for (const key of selection.getNodes().map((n) => n.getKey())) {
+              fresh.add(key);
+            }
+            $setSelection(fresh);
+          }
+          return false;
+        },
+        COMMAND_PRIORITY_HIGH,
+      ),
       editor.registerCommand(
         ACTIVATE_STRUCTURE_EDIT_COMMAND,
         (request) => {
@@ -232,14 +249,13 @@ export function useStructureEditToggle(
   readonly deactivate: () => void;
 } {
   const context = useStructureEditContext();
-  const [isSelected, setSelected] = useLexicalNodeSelection(blockKey);
 
+  // Selection is set inside ACTIVATE_STRUCTURE_EDIT_COMMAND via
+  // syncDecoratorNodeSelection — don't double-set via useLexicalNodeSelection
+  // here, which crashes when the selection state holds a frozen NodeSelection.
   const activate = useCallback(() => {
-    if (!isSelected) {
-      setSelected(true);
-    }
     context.activate({ blockKey, surface, variant });
-  }, [blockKey, context, isSelected, setSelected, surface, variant]);
+  }, [blockKey, context, surface, variant]);
 
   const deactivate = useCallback(() => {
     context.deactivate({ blockKey, surface });

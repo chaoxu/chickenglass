@@ -63,9 +63,15 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
             <div
               className="cf-lexical-display-math-body"
               data-coflat-display-math-pending=""
+              onMouseDown={preventKatexMouseDown}
               ref={bodyRef}
-              style={{ minHeight: "3em" }}
-            />
+              style={{ minHeight: "3em", minWidth: "8em" }}
+              {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+                onBeforeActivate: rememberSourcePosition,
+              })}
+            >
+              {"\u00A0"}
+            </div>
           ) : (
             <div
               className="cf-lexical-display-math-body"
