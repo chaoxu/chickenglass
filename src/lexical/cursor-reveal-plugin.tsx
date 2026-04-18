@@ -19,12 +19,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $createNodeSelection,
   $createParagraphNode,
   $createTextNode,
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getSelection,
+  $isDecoratorNode,
   $isElementNode,
   $isTextNode,
   $setSelection,
@@ -48,15 +48,13 @@ import {
   PARAGRAPH_REVEAL_ADAPTERS,
   REVEAL_ADAPTERS,
   pickRevealSubject,
+  pickRevealSubjectFromNode,
+  type RevealBoundaryDirection,
   type RevealAdapter,
   type RevealSubject,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
-import { inlineMathSourceOffsetFromTarget } from "./math-source-position";
-import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
-import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { $isReferenceNode } from "./nodes/reference-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 // Re-exports kept so existing unit tests can continue importing the
@@ -94,7 +92,7 @@ export function CursorRevealPlugin({
 function useDecoratorClickEntry(
   editor: LexicalEditor,
   adapters: readonly RevealAdapter[],
-  onOpen: (subject: RevealSubject, adapter: RevealAdapter, event: MouseEvent) => void,
+  onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
 ): void {
   useEffect(() => {
     return editor.registerCommand(
@@ -107,12 +105,18 @@ function useDecoratorClickEntry(
         const pendingRef: { value: { subject: RevealSubject; adapter: RevealAdapter } | null } = { value: null };
         editor.read(() => {
           const node = $getNearestNodeFromDOMNode(target);
-          if (!node || !isRevealableDecorator(node)) {
+          if (!node || !$isDecoratorNode(node)) {
             return;
           }
-          const selection = $createNodeSelection();
-          selection.add(node.getKey());
-          const pick = pickRevealSubject(selection, adapters);
+          const pick = pickRevealSubjectFromNode(
+            node,
+            {
+              clientX: event.clientX,
+              entry: "pointer",
+              target: event.target,
+            },
+            adapters,
+          );
           if (!pick) {
             return;
           }
@@ -125,7 +129,7 @@ function useDecoratorClickEntry(
         // Deferring escapes the editor.read context so the presentation can
         // run a discrete editor.update without hitting "empty pending editor
         // state on discrete nested update".
-        setTimeout(() => onOpen(opened.subject, opened.adapter, event), 0);
+        setTimeout(() => onOpen(opened.subject, opened.adapter), 0);
         event.preventDefault();
         event.stopPropagation();
         return true;
@@ -135,15 +139,166 @@ function useDecoratorClickEntry(
   }, [editor, onOpen, adapters]);
 }
 
-function isRevealableDecorator(node: LexicalNode): boolean {
-  return $isInlineMathNode(node)
-    || $isReferenceNode(node)
-    || $isFootnoteReferenceNode(node)
-    // Block-scope decorator (e.g. theorem) — only the paragraph adapter
-    // claims it, so in cursor mode this is a no-op (pickRevealSubject
-    // returns null and nothing happens). In paragraph mode the click
-    // produces a NodeSelection that the paragraph adapter handles.
-    || $isRawBlockNode(node);
+function useDecoratorKeyboardBoundaryEntry(
+  editor: LexicalEditor,
+  adapters: readonly RevealAdapter[],
+  onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
+): void {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const direction = directionFromArrowKey(event.key);
+      if (
+        direction === null
+        || event.altKey
+        || event.ctrlKey
+        || event.metaKey
+        || event.shiftKey
+      ) {
+        return;
+      }
+
+      const root = editor.getRootElement();
+      const target = event.target instanceof Element ? event.target : null;
+      if (!root || target?.closest("[contenteditable='true']") !== root) {
+        return;
+      }
+
+      const opened = findRevealSubjectFromDomBoundary(editor, adapters, direction);
+      if (!opened) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      setTimeout(() => onOpen(opened.subject, opened.adapter), 0);
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [adapters, editor, onOpen]);
+}
+
+function directionFromArrowKey(key: string): RevealBoundaryDirection | null {
+  if (key === "ArrowRight") {
+    return "forward";
+  }
+  if (key === "ArrowLeft") {
+    return "backward";
+  }
+  return null;
+}
+
+function findRevealSubjectFromDomBoundary(
+  editor: LexicalEditor,
+  adapters: readonly RevealAdapter[],
+  direction: RevealBoundaryDirection,
+): { adapter: RevealAdapter; subject: RevealSubject } | null {
+  const root = editor.getRootElement();
+  const decorator = root ? findAdjacentDecoratorFromDomSelection(root, direction) : null;
+  if (!decorator) {
+    return null;
+  }
+
+  let opened: { adapter: RevealAdapter; subject: RevealSubject } | null = null;
+  editor.read(() => {
+    const node = $getNearestNodeFromDOMNode(decorator);
+    if (!node || !$isDecoratorNode(node) || !node.isInline()) {
+      return;
+    }
+    opened = pickRevealSubjectFromNode(
+      node,
+      { direction, entry: "keyboard-boundary" },
+      adapters,
+    );
+  });
+  return opened;
+}
+
+function findAdjacentDecoratorFromDomSelection(
+  root: HTMLElement,
+  direction: RevealBoundaryDirection,
+): HTMLElement | null {
+  const selection = window.getSelection();
+  if (!selection || !selection.isCollapsed || !selection.anchorNode || !root.contains(selection.anchorNode)) {
+    return null;
+  }
+
+  const candidate = adjacentDomBoundaryNode(
+    selection.anchorNode,
+    selection.anchorOffset,
+    direction,
+  );
+  return decoratorElementFromCandidate(candidate);
+}
+
+function adjacentDomBoundaryNode(
+  anchorNode: Node,
+  anchorOffset: number,
+  direction: RevealBoundaryDirection,
+): Node | null {
+  if (anchorNode.nodeType === Node.TEXT_NODE) {
+    const text = anchorNode.textContent ?? "";
+    const boundaryNode = lexicalTextBoundaryNode(anchorNode);
+    if (direction === "forward") {
+      return anchorOffset === text.length ? nextMeaningfulSibling(boundaryNode) : null;
+    }
+    return anchorOffset === 0 ? previousMeaningfulSibling(boundaryNode) : null;
+  }
+
+  if (!(anchorNode instanceof Element)) {
+    return null;
+  }
+
+  if (direction === "forward") {
+    return anchorOffset < anchorNode.childNodes.length
+      ? firstMeaningfulNode(anchorNode.childNodes[anchorOffset] ?? null, direction)
+      : nextMeaningfulSibling(anchorNode);
+  }
+  return anchorOffset > 0
+    ? firstMeaningfulNode(anchorNode.childNodes[anchorOffset - 1] ?? null, direction)
+    : previousMeaningfulSibling(anchorNode);
+}
+
+function lexicalTextBoundaryNode(node: Node): Node {
+  const parent = node.parentElement;
+  return parent?.hasAttribute("data-lexical-text") ? parent : node;
+}
+
+function decoratorElementFromCandidate(node: Node | null): HTMLElement | null {
+  if (!(node instanceof Element)) {
+    return null;
+  }
+  const decorator = node.matches("[data-lexical-decorator='true']")
+    ? node
+    : node.closest("[data-lexical-decorator='true']");
+  return decorator instanceof HTMLElement ? decorator : null;
+}
+
+function isIgnorableDomBoundaryNode(node: Node): boolean {
+  return node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").length === 0;
+}
+
+function firstMeaningfulNode(
+  node: Node | null,
+  direction: RevealBoundaryDirection,
+): Node | null {
+  let current = node;
+  while (current && isIgnorableDomBoundaryNode(current)) {
+    current = direction === "forward"
+      ? current.nextSibling
+      : current.previousSibling;
+  }
+  return current;
+}
+
+function nextMeaningfulSibling(node: Node): Node | null {
+  return firstMeaningfulNode(node.nextSibling, "forward");
+}
+
+function previousMeaningfulSibling(node: Node): Node | null {
+  return firstMeaningfulNode(node.previousSibling, "backward");
 }
 
 // ─── Floating presentation ──────────────────────────────────────────────
@@ -182,15 +337,15 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
     [editor],
   );
 
-  const openFloatingFromDecoratorClick = useCallback((
+  const openFloatingFromDecoratorEntry = useCallback((
     subject: RevealSubject,
     adapter: RevealAdapter,
-    event: MouseEvent,
   ) => {
-    openFloating(subject, adapter, clickCaretOffset(subject, event) ?? subject.source.length);
+    openFloating(subject, adapter, subject.caretOffset ?? subject.source.length);
   }, [openFloating]);
 
-  useDecoratorClickEntry(editor, adapters, openFloatingFromDecoratorClick);
+  useDecoratorClickEntry(editor, adapters, openFloatingFromDecoratorEntry);
+  useDecoratorKeyboardBoundaryEntry(editor, adapters, openFloatingFromDecoratorEntry);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -301,20 +456,21 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
 
-  const openFromDecoratorClick = useCallback(
-    (subject: RevealSubject, adapter: RevealAdapter, event: MouseEvent) => {
+  const openFromDecoratorEntry = useCallback(
+    (subject: RevealSubject, adapter: RevealAdapter) => {
       openInlineReveal(
         editor,
         subject,
         adapter,
-        clickCaretOffset(subject, event) ?? subject.source.length,
+        subject.caretOffset ?? subject.source.length,
         activeRef,
       );
     },
     [editor],
   );
 
-  useDecoratorClickEntry(editor, adapters, openFromDecoratorClick);
+  useDecoratorClickEntry(editor, adapters, openFromDecoratorEntry);
+  useDecoratorKeyboardBoundaryEntry(editor, adapters, openFromDecoratorEntry);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -365,13 +521,6 @@ function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | n
   return node && typeof (node as { getKey?: () => string }).getKey === "function"
     ? (node as { getKey: () => string }).getKey()
     : null;
-}
-
-function clickCaretOffset(subject: RevealSubject, event: MouseEvent): number | null {
-  if ($isInlineMathNode(subject.node)) {
-    return inlineMathSourceOffsetFromTarget(event.target, subject.source, event.clientX);
-  }
-  return null;
 }
 
 function isBlockRevealSubject(node: LexicalNode): boolean {

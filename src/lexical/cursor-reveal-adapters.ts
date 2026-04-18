@@ -40,14 +40,34 @@ import {
 import {
   $createFootnoteReferenceNode,
   $isFootnoteReferenceNode,
+  type FootnoteReferenceNode,
 } from "./nodes/footnote-reference-node";
+import {
+  inlineMathBodyEndOffset,
+  inlineMathBodyStartOffset,
+  inlineMathSourceOffsetFromTarget,
+} from "./math-source-position";
 import {
   $createInlineMathNode,
   $isInlineMathNode,
+  type InlineMathNode,
   type InlineMathDelimiter,
 } from "./nodes/inline-math-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { $createReferenceNode, $isReferenceNode } from "./nodes/reference-node";
+import { $createReferenceNode, $isReferenceNode, type ReferenceNode } from "./nodes/reference-node";
+
+export type RevealBoundaryDirection = "backward" | "forward";
+
+export type RevealEntryContext =
+  | {
+      readonly entry: "pointer";
+      readonly clientX?: number;
+      readonly target: EventTarget | null;
+    }
+  | {
+      readonly direction: RevealBoundaryDirection;
+      readonly entry: "keyboard-boundary";
+    };
 
 export interface RevealSubject {
   /** The live node the user is currently "inside". Will be replaced on commit. */
@@ -69,6 +89,15 @@ export interface RevealAdapter {
   readonly id: string;
   /** Find the subject this adapter owns for the given selection, or null. */
   findSubject(selection: BaseSelection): RevealSubject | null;
+  /**
+   * Find the subject this adapter owns for a concrete node entered by
+   * non-range-selection mechanisms: decorator click, or keyboard movement
+   * across an inline decorator boundary.
+   */
+  findSubjectFromNode?(
+    node: LexicalNode,
+    context: RevealEntryContext,
+  ): RevealSubject | null;
   /**
    * Replace `live` (a plain TextNode the inline reveal swapped in) with a
    * fresh node parsed from `raw`. Adapters fall back to a plain TextNode
@@ -284,10 +313,13 @@ const inlineMathAdapter: RevealAdapter = {
     if (!math) {
       return null;
     }
-    // InlineMathNode.__raw already includes its delimiters (the markdown
-    // text-match transformer in `markdown.ts` stores the full match, so
-    // `getTextContent()` round-trips identically). Don't re-wrap.
-    return { node: math, source: math.getRaw() };
+    return inlineMathSubject(math);
+  },
+  findSubjectFromNode(node, context) {
+    if (!$isInlineMathNode(node)) {
+      return null;
+    }
+    return inlineMathSubject(node, context);
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
@@ -306,6 +338,30 @@ const inlineMathAdapter: RevealAdapter = {
   },
 };
 
+function inlineMathSubject(
+  math: InlineMathNode,
+  context?: RevealEntryContext,
+): RevealSubject {
+  const source = math.getRaw();
+  let caretOffset: number | undefined;
+  if (context?.entry === "pointer") {
+    caretOffset = inlineMathSourceOffsetFromTarget(
+      context.target,
+      source,
+      context.clientX,
+    ) ?? undefined;
+  } else if (context?.entry === "keyboard-boundary") {
+    caretOffset = context.direction === "forward"
+      ? inlineMathBodyStartOffset(source)
+      : inlineMathBodyEndOffset(source);
+  }
+
+  // InlineMathNode.__raw already includes its delimiters (the markdown
+  // text-match transformer in `markdown.ts` stores the full match, so
+  // `getTextContent()` round-trips identically). Don't re-wrap.
+  return { caretOffset, node: math, source };
+}
+
 const BRACKETED_REFERENCE = /^\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]$/;
 const NARRATIVE_REFERENCE = /^@[A-Za-z0-9_](?:[\w.:-]*\w)?$/;
 
@@ -316,7 +372,13 @@ const referenceAdapter: RevealAdapter = {
     if (!ref) {
       return null;
     }
-    return { node: ref, source: ref.getRaw() };
+    return rawDecoratorSubject(ref);
+  },
+  findSubjectFromNode(node, context) {
+    if (!$isReferenceNode(node)) {
+      return null;
+    }
+    return rawDecoratorSubject(node, context);
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
@@ -338,7 +400,13 @@ const footnoteReferenceAdapter: RevealAdapter = {
     if (!ref) {
       return null;
     }
-    return { node: ref, source: ref.getRaw() };
+    return rawDecoratorSubject(ref);
+  },
+  findSubjectFromNode(node, context) {
+    if (!$isFootnoteReferenceNode(node)) {
+      return null;
+    }
+    return rawDecoratorSubject(node, context);
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
@@ -350,6 +418,17 @@ const footnoteReferenceAdapter: RevealAdapter = {
     return ref;
   },
 };
+
+function rawDecoratorSubject(
+  node: FootnoteReferenceNode | ReferenceNode,
+  context?: RevealEntryContext,
+): RevealSubject {
+  const source = node.getRaw();
+  const caretOffset = context?.entry === "keyboard-boundary"
+    ? context.direction === "forward" ? 0 : source.length
+    : undefined;
+  return { caretOffset, node, source };
+}
 
 // ─── Paragraph (block-scope) adapter ────────────────────────────────────
 
@@ -454,6 +533,13 @@ const paragraphAdapter: RevealAdapter = {
     const source = serializeBlockToMarkdown($exportLexicalNodeToJSON(top)).replace(/\n+$/, "");
     return { node: top, source, caretOffset };
   },
+  findSubjectFromNode(node) {
+    if (!isRevealableTopLevelBlock(node)) {
+      return null;
+    }
+    const source = serializeBlockToMarkdown($exportLexicalNodeToJSON(node)).replace(/\n+$/, "");
+    return { node, source };
+  },
   reparse(live, raw) {
     // For paragraph scope the live node is the placeholder TextNode
     // inside the wrapper paragraph that openInlineReveal swapped in for
@@ -515,6 +601,20 @@ export function pickRevealSubject(
 ): { adapter: RevealAdapter; subject: RevealSubject } | null {
   for (const adapter of adapters) {
     const subject = adapter.findSubject(selection);
+    if (subject) {
+      return { adapter, subject };
+    }
+  }
+  return null;
+}
+
+export function pickRevealSubjectFromNode(
+  node: LexicalNode,
+  context: RevealEntryContext,
+  adapters: readonly RevealAdapter[] = REVEAL_ADAPTERS,
+): { adapter: RevealAdapter; subject: RevealSubject } | null {
+  for (const adapter of adapters) {
+    const subject = adapter.findSubjectFromNode?.(node, context);
     if (subject) {
       return { adapter, subject };
     }

@@ -42,6 +42,33 @@ async function placeCaretInsideFirstText(page, selector, offset) {
   await page.waitForTimeout(250);
 }
 
+async function placeCaretAtVisibleText(page, textContent, edge) {
+  await page.evaluate(({ edge, textContent }) => {
+    const root = document.querySelector(".cf-lexical-editor--rich[contenteditable='true']");
+    if (!root) {
+      throw new Error("missing rich editor root");
+    }
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let text = walker.nextNode();
+    while (text && text.textContent !== textContent) {
+      text = walker.nextNode();
+    }
+    if (!text) {
+      throw new Error(`missing visible text node ${JSON.stringify(textContent)}`);
+    }
+    root.focus({ preventScroll: true });
+    const offset = edge === "end" ? text.textContent.length : 0;
+    const range = document.createRange();
+    range.setStart(text, offset);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+  }, { edge, textContent });
+  await page.waitForTimeout(250);
+}
+
 export async function run(page) {
   await setRevealPresentation(page, "inline");
 
@@ -80,6 +107,55 @@ export async function run(page) {
     return {
       pass: false,
       message: `inline math left-edge reveal opened at the wrong offset: ${JSON.stringify(inlineMathLeft)}`,
+    };
+  }
+
+  await openScratch(page, "scratch-inline-math-keyboard-forward.md", "Before $x+1$ after\n");
+  await placeCaretAtVisibleText(page, "Before ", "end");
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(250);
+  const inlineMathKeyboardForward = await page.evaluate(() => {
+    const selection = window.getSelection();
+    return {
+      anchorOffset: selection?.anchorOffset ?? null,
+      anchorText: selection?.anchorNode?.textContent ?? "",
+      inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
+      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+    };
+  });
+  if (
+    inlineMathKeyboardForward.anchorText !== "$x+1$"
+    || inlineMathKeyboardForward.anchorOffset === null
+    || inlineMathKeyboardForward.anchorOffset > 1
+    || inlineMathKeyboardForward.inlineMathStillRendered
+  ) {
+    return {
+      pass: false,
+      message: `ArrowRight into inline math did not reveal at the left edge: ${JSON.stringify(inlineMathKeyboardForward)}`,
+    };
+  }
+
+  await openScratch(page, "scratch-inline-math-keyboard-backward.md", "Before $x+1$ after\n");
+  await placeCaretAtVisibleText(page, " after", "start");
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(250);
+  const inlineMathKeyboardBackward = await page.evaluate(() => {
+    const selection = window.getSelection();
+    return {
+      anchorOffset: selection?.anchorOffset ?? null,
+      anchorText: selection?.anchorNode?.textContent ?? "",
+      inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
+      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+    };
+  });
+  if (
+    inlineMathKeyboardBackward.anchorText !== "$x+1$"
+    || inlineMathKeyboardBackward.anchorOffset !== 4
+    || inlineMathKeyboardBackward.inlineMathStillRendered
+  ) {
+    return {
+      pass: false,
+      message: `ArrowLeft into inline math did not reveal at the right edge: ${JSON.stringify(inlineMathKeyboardBackward)}`,
     };
   }
 
@@ -159,6 +235,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: "cursor reveal stays inline in headings/nested blocks and maps math clicks to source offsets",
+    message: "cursor reveal stays inline in headings/nested blocks and maps math keyboard/click entry to source offsets",
   };
 }
