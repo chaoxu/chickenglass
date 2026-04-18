@@ -10,21 +10,15 @@ import {
 import { $isTableCellNode } from "./nodes/table-cell-node";
 import { $isTableNode } from "./nodes/table-node";
 import { $isTableRowNode } from "./nodes/table-row-node";
+import {
+  getInsertFocusBehavior,
+  type InsertFocusTarget,
+} from "./block-insert-focus-targets";
 import { ACTIVATE_STRUCTURE_EDIT_COMMAND } from "./structure-edit-plugin";
+import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
-export type InsertFocusTarget =
-  | "block-body"
-  | "display-math"
-  | "footnote-body"
-  | "frontmatter"
-  | "include-path"
-  | "none"
-  | "table-cell";
-
-const FOCUS_SELECTORS: Partial<Record<InsertFocusTarget, string>> = {
-  "include-path": ".cf-lexical-structure-toggle--include",
-};
+export type { InsertFocusTarget };
 
 export function ensureTrailingParagraph(insertedNode: LexicalNode, afterNode?: LexicalNode | null): void {
   if (afterNode ?? insertedNode.getNextSibling()) {
@@ -65,35 +59,32 @@ export function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
 }
 
 export function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focusTarget: InsertFocusTarget): void {
-  if (focusTarget === "block-body" || focusTarget === "footnote-body") {
+  const behavior = getInsertFocusBehavior(focusTarget);
+  const pendingFocus = behavior.pendingFocus;
+  if (pendingFocus) {
+    queueEmbeddedSurfaceFocus(
+      editor.getKey(),
+      key,
+      pendingFocus.target,
+      pendingFocus.request,
+    );
+  }
+
+  if (behavior.activation.kind === "none") {
     return;
   }
 
-  if (focusTarget === "display-math") {
-    // Dispatch directly — the empty-equation body doesn't carry
-    // structureToggleProps, so a synthetic click has no handler.
+  if (behavior.activation.kind === "structure-edit") {
     editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, {
       blockKey: key,
-      surface: "display-math-source",
-      variant: "display-math",
-    });
-    return;
-  }
-
-  if (focusTarget === "frontmatter") {
-    editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, {
-      blockKey: key,
-      surface: "frontmatter-source",
-      variant: "frontmatter",
+      surface: behavior.activation.surface,
+      variant: behavior.activation.variant,
     });
     return;
   }
 
   requestAnimationFrame(() => {
-    if (focusTarget === "none") {
-      return;
-    }
-    if (focusTarget === "table-cell") {
+    if (behavior.activation.kind === "table-cell") {
       focusFirstTableCell(editor, key);
       return;
     }
@@ -103,11 +94,10 @@ export function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focus
       return;
     }
 
-    const selector = FOCUS_SELECTORS[focusTarget];
-    if (!selector) {
+    if (behavior.activation.kind !== "dom-selector") {
       return;
     }
-    const target = element.querySelector<HTMLElement>(selector);
+    const target = element.querySelector<HTMLElement>(behavior.activation.selector);
     if (target) {
       target.focus();
       target.click();

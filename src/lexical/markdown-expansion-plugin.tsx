@@ -17,9 +17,10 @@ import {
   ensureTrailingParagraph,
   type InsertFocusTarget,
 } from "./block-insert-focus";
-import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
-import { createTableNodeFromMarkdown } from "./markdown";
-import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
+import {
+  createInsertBlockNode,
+  type InsertBlockVariant,
+} from "./block-insert-node";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 // Require a non-empty class/attrs suffix so a bare `:::` is treated as literal
@@ -36,7 +37,7 @@ interface ExpansionCandidate {
   readonly focusTarget: InsertFocusTarget;
   readonly raw: string;
   readonly replaceNodes: readonly LexicalNode[];
-  readonly variant: RawBlockVariant | "table";
+  readonly variant: InsertBlockVariant;
 }
 
 function getSelectionParagraph(selection: RangeSelection): ElementNode | null {
@@ -170,19 +171,11 @@ function insertExpandedBlock(
     const firstNode = candidate.replaceNodes[0];
     const lastNode = candidate.replaceNodes[candidate.replaceNodes.length - 1];
     const afterNode = lastNode?.getNextSibling() ?? null;
-    const insertedNode = candidate.variant === "table"
-      ? createTableNodeFromMarkdown(candidate.raw)
-      : $createRawBlockNode(candidate.variant, candidate.raw);
+    const insertedNode = createInsertBlockNode(candidate.variant, candidate.raw);
     if (!insertedNode) {
       return;
     }
     insertedNodeKey = insertedNode.getKey();
-    if (candidate.focusTarget === "block-body" || candidate.focusTarget === "footnote-body") {
-      queueEmbeddedSurfaceFocus(editor.getKey(), insertedNodeKey, candidate.focusTarget, "end");
-    } else if (candidate.focusTarget === "display-math" || candidate.focusTarget === "frontmatter") {
-      queueEmbeddedSurfaceFocus(editor.getKey(), insertedNodeKey, "structure-source", "start");
-    }
-
     firstNode.insertBefore(insertedNode);
     for (const node of candidate.replaceNodes) {
       node.remove();

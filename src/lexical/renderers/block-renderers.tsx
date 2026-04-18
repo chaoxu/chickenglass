@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type JSX } from "react";
+import { memo, useMemo, useState, type ComponentType, type JSX } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { NodeKey } from "lexical";
 
@@ -29,7 +29,6 @@ import { registerRenderers } from "../nodes/renderer-registry";
 import type { RawBlockVariant } from "../nodes/raw-block-node";
 import { DisplayMathBlockRenderer } from "./math-renderers";
 import { structureToggleProps, useRawBlockUpdater } from "./shared";
-import { TableBlockRenderer } from "./table-renderer";
 
 function getFirstLine(raw: string): string {
   return raw.split("\n")[0] ?? "";
@@ -549,6 +548,23 @@ export const FootnoteReferenceRenderer = memo(function FootnoteReferenceRenderer
   );
 });
 
+interface RawBlockContentRendererProps {
+  readonly nodeKey: NodeKey;
+  readonly raw: string;
+}
+
+function RawFallbackRenderer({ raw }: RawBlockContentRendererProps): JSX.Element {
+  return <div className="cf-lexical-raw-fallback">{raw}</div>;
+}
+
+const RAW_BLOCK_CONTENT_RENDERERS = {
+  "display-math": DisplayMathBlockRenderer,
+  "fenced-div": FencedDivBlockRenderer,
+  "footnote-definition": FootnoteDefinitionBlockRenderer,
+  frontmatter: FrontmatterRenderer,
+  image: ImageBlockRenderer,
+} satisfies Record<RawBlockVariant, ComponentType<RawBlockContentRendererProps>>;
+
 // Lexical recreates the decorator React element on every reconciliation pass
 // with primitive props (`nodeKey`, `raw`, `variant`). Memoizing skips the
 // dispatch logic AND the inner variant component re-render whenever those
@@ -563,22 +579,7 @@ export const RawBlockRenderer = memo(function RawBlockRenderer({
   readonly raw: string;
   readonly variant: RawBlockVariant;
 }) {
-  let content: JSX.Element;
-  if (variant === "frontmatter") {
-    content = <FrontmatterRenderer nodeKey={nodeKey} raw={raw} />;
-  } else if (variant === "image") {
-    content = <ImageBlockRenderer raw={raw} />;
-  } else if (variant === "display-math") {
-    content = <DisplayMathBlockRenderer nodeKey={nodeKey} raw={raw} />;
-  } else if (variant === "fenced-div") {
-    content = <FencedDivBlockRenderer nodeKey={nodeKey} raw={raw} />;
-  } else if (variant === "footnote-definition") {
-    content = <FootnoteDefinitionBlockRenderer nodeKey={nodeKey} raw={raw} />;
-  } else if (variant === "table") {
-    content = <TableBlockRenderer nodeKey={nodeKey} raw={raw} />;
-  } else {
-    content = <div className="cf-lexical-raw-fallback">{raw}</div>;
-  }
+  const ContentRenderer = RAW_BLOCK_CONTENT_RENDERERS[variant] ?? RawFallbackRenderer;
 
   return (
     <section
@@ -586,7 +587,7 @@ export const RawBlockRenderer = memo(function RawBlockRenderer({
       data-coflat-raw-block="true"
       data-coflat-raw-block-variant={variant}
     >
-      {content}
+      <ContentRenderer nodeKey={nodeKey} raw={raw} />
     </section>
   );
 });

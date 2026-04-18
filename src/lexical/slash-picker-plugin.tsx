@@ -19,16 +19,15 @@ import {
   ensureTrailingParagraph,
   type InsertFocusTarget,
 } from "./block-insert-focus";
-import { $createRawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
-import { createTableNodeFromMarkdown } from "./markdown";
-import { EditorChromePanel } from "./editor-chrome";
 import {
-  queueEmbeddedSurfaceFocus,
-} from "./pending-surface-focus";
+  createInsertBlockNode,
+  type InsertBlockVariant,
+} from "./block-insert-node";
+import { EditorChromePanel } from "./editor-chrome";
 import { $isForbiddenTypeaheadContext } from "./typeahead-context";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
-type SlashInsertVariant = RawBlockVariant | "code-block" | "table";
+type SlashInsertVariant = InsertBlockVariant | "code-block";
 
 interface SlashPickerEntry {
   readonly focusTarget: InsertFocusTarget;
@@ -219,26 +218,14 @@ export function SlashPickerPlugin() {
         return;
       }
 
-      if (entry.variant === "table") {
-        const tableNode = createTableNodeFromMarkdown(entry.raw);
-        if (tableNode) {
-          paragraph.replace(tableNode);
-          ensureTrailingParagraph(tableNode);
-          activateInsertedBlock(editor, tableNode.getKey(), "table-cell");
-        }
+      const blockNode = createInsertBlockNode(entry.variant, entry.raw);
+      if (!blockNode) {
         return;
       }
+      const nodeKey = blockNode.getKey();
 
-      const variant = entry.variant as RawBlockVariant;
-      const rawBlockNode = $createRawBlockNode(variant, entry.raw);
-      const nodeKey = rawBlockNode.getKey();
-
-      if (entry.focusTarget === "block-body" || entry.focusTarget === "footnote-body") {
-        queueEmbeddedSurfaceFocus(editor.getKey(), nodeKey, entry.focusTarget, "end");
-      }
-
-      paragraph.replace(rawBlockNode);
-      ensureTrailingParagraph(rawBlockNode);
+      paragraph.replace(blockNode);
+      ensureTrailingParagraph(blockNode);
       activateInsertedBlock(editor, nodeKey, entry.focusTarget);
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 

@@ -59,10 +59,10 @@ Shadow roots create selection boundaries: Lexical treats them as nested editor
 roots for selection, keyboard navigation, and copy/paste. This is correct for
 a rich WYSIWYG table but conflicts with coflat's architecture where:
 
-- Table cells use `EmbeddedFieldEditor` (separate `LexicalRichMarkdownEditor`
-  instances per cell) for the rich rendering surface
-- The Lexical tree table nodes are structural carriers for the markdown bridge,
-  not interactive editing surfaces
+- Table cells are native Lexical element subtrees so cursor movement, typing,
+  copy/paste, and markdown transforms stay on one editor surface.
+- The custom nodes still carry pandoc-specific table metadata directly in the
+  Lexical tree.
 
 Enabling shadow-root behavior on the structural nodes would interfere with
 the existing embedded-field editing model.
@@ -84,16 +84,16 @@ Lexical children for the markdown bridge, but the *editing* surface is a
 separate `EmbeddedFieldEditor` React component. Adopting upstream nodes would
 mean either:
 
-- Using the upstream cell nodes as the editing surface (losing the embedded
-  field editor activation/deactivation model)
-- Continuing to use embedded field editors alongside upstream nodes (defeating
-  the purpose of adoption)
+- Using the upstream cell nodes as the editing surface while re-adding
+  pandoc-specific alignment and divider preservation.
+- Continuing to maintain a custom adapter layer alongside upstream nodes,
+  defeating the purpose of adoption.
 
 ## What coflat gains from the current approach
 
-- **~350 lines total** across `table-node.ts`, `table-cell-node.ts`,
-  `table-row-node.ts`, `table-markdown.ts`, `table-edit.ts`, and
-  `table-renderer.tsx`. This is small, self-contained, and stable.
+- **A small custom surface** across `table-node.ts`, `table-cell-node.ts`,
+  `table-row-node.ts`, `table-markdown.ts`, and `table-lexical.ts`. This is
+  self-contained and stable.
 - **Lossless markdown round-trip** including alignment and divider preservation.
 - **Clean separation** between structural Lexical nodes (markdown bridge) and
   rich React rendering (EmbeddedFieldEditor per cell).

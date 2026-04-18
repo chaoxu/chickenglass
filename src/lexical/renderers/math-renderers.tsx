@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, type SyntheticEvent } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import { $createParagraphNode, $getNodeByKey, type NodeKey } from "lexical";
@@ -9,11 +9,9 @@ import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
 import {
   getPendingEmbeddedSurfaceFocusId,
-  queuePendingSurfaceFocus,
 } from "../pending-surface-focus";
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
-import { readSourcePositionFromElement } from "../source-position-plugin";
-import { SET_SOURCE_SELECTION_COMMAND } from "../source-selection-command";
+import { useStructureSourcePositionEntry } from "../structure-source-position-entry";
 import { displayMathSourceOffsetFromTarget } from "../math-source-position";
 import { buildKatexOptions } from "../../lib/katex-options";
 import {
@@ -100,22 +98,12 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
     [config.math, parsed.body, visible],
   );
   const label = parsed.id ? renderIndex.references.get(parsed.id)?.shortLabel : undefined;
-  const rememberSourcePosition = useCallback((element: HTMLElement, event: SyntheticEvent) => {
-    const nativeEvent = event.nativeEvent;
-    const clientX = nativeEvent instanceof MouseEvent ? nativeEvent.clientX : undefined;
-    const sourceOffset = displayMathSourceOffsetFromTarget(event.target, raw, clientX);
-    if (sourceOffset !== null) {
-      queuePendingSurfaceFocus(sourceFocusId, { offset: sourceOffset });
-    }
-    const blockSourcePosition = readSourcePositionFromElement(element);
-    if (blockSourcePosition === null) {
-      return;
-    }
-    editor.dispatchCommand(
-      SET_SOURCE_SELECTION_COMMAND,
-      blockSourcePosition + (sourceOffset ?? 0),
-    );
-  }, [editor, raw, sourceFocusId]);
+  const rememberSourcePosition = useStructureSourcePositionEntry({
+    editor,
+    raw,
+    sourceFocusId,
+    sourceOffsetFromTarget: displayMathSourceOffsetFromTarget,
+  });
 
   return (
     <div
