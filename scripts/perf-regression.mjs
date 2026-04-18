@@ -506,6 +506,10 @@ Fixtures:
   Fallback public fixture: demo/index.md
 
 Examples:
+  # Standard baseline/check workflow, including dev-server management
+  pnpm perf:baseline
+  pnpm perf:check
+
   # Capture a baseline using the heavy fixture
   pnpm perf:capture:heavy -- --scenario scroll-step-lexical --output /tmp/baseline.json
 

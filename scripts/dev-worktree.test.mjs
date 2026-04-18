@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, lstatSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, lstatSync, symlinkSync } from "node:fs";
 import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import {
   resolveDefaultWorktreePath,
   sanitizeDevWorktreeName,
 } from "./dev-worktree.mjs";
+import { ensureNodeModulesLink } from "./dev-worktree/deps.mjs";
 
 const cliPath = join(process.cwd(), "scripts", "dev-worktree.mjs");
 
@@ -119,6 +120,26 @@ describe("dev-worktree", () => {
 
     expect(result.rootDirty).toBe(true);
     expect(readFileSync(join(result.worktreePath, "tracked.txt"), "utf8")).toBe("base\n");
+  });
+
+  it("repairs placeholder node_modules directories in managed worktrees", () => {
+    const repoRoot = initRepo();
+    cleanup.push(repoRoot);
+    mkdirSync(join(repoRoot, "node_modules"));
+
+    const result = createDevWorktree({
+      repoRoot,
+      name: "repair-deps",
+    });
+    rmSync(join(result.worktreePath, "node_modules"), { force: true });
+    mkdirSync(join(result.worktreePath, "node_modules", ".cache"), { recursive: true });
+    symlinkSync(join(repoRoot, "node_modules"), join(result.worktreePath, "node_modules", "node_modules"));
+
+    const repaired = ensureNodeModulesLink({ repoRoot: result.worktreePath, primaryRepoRoot: repoRoot });
+
+    expect(repaired).toMatchObject({ action: "repaired", ok: true });
+    expect(lstatSync(join(result.worktreePath, "node_modules")).isSymbolicLink()).toBe(true);
+    expect(realpathSync(join(result.worktreePath, "node_modules"))).toBe(realpathSync(join(repoRoot, "node_modules")));
   });
 
   it("fails when the target branch already exists", () => {

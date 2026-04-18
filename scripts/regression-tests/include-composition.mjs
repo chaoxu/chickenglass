@@ -1,9 +1,52 @@
 import { openFixtureDocument, switchToMode } from "../test-helpers.mjs";
+import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 
 export const name = "include-composition";
 
+const MAIN_CONTENT = [
+  "# Include Composition",
+  "",
+  "::: {.include}",
+  "included.md",
+  ":::",
+  "",
+  "# After Include",
+].join("\n");
+
+const INCLUDED_CONTENT = [
+  "# Included Section",
+  "",
+  "This content comes from an included file.",
+  "",
+  "::: {.definition #def:included} Included Definition",
+  "Included Definition body.",
+  ":::",
+].join("\n");
+
+const PUBLIC_INCLUDE_FALLBACK = {
+  content: MAIN_CONTENT,
+  displayPath: "public include-composition fallback",
+  projectFiles: [
+    {
+      content: MAIN_CONTENT,
+      kind: "text",
+      path: "public-include/main.md",
+    },
+    {
+      content: INCLUDED_CONTENT,
+      kind: "text",
+      path: "public-include/included.md",
+    },
+  ],
+  virtualPath: "public-include/main.md",
+};
+
 export async function run(page) {
-  await openFixtureDocument(page, "cogirth/include-labels.md", { project: "full-project" });
+  await openFixtureDocument(
+    page,
+    resolveFixtureDocumentWithFallback("cogirth/include-labels.md", PUBLIC_INCLUDE_FALLBACK),
+    { project: "full-project" },
+  );
   await page.waitForTimeout(500);
 
   const lexicalState = await page.evaluate(() => ({

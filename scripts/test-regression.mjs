@@ -11,7 +11,8 @@
  *
  * Usage:
  *   pnpm test:browser
- *   node scripts/test-regression.mjs [--browser managed|cdp] [--headed] [--filter headings,math]
+ *   pnpm test:browser:list
+ *   node scripts/test-regression.mjs [--browser managed|cdp] [--headed] [--group reveal] [--filter headings,math]
  */
 
 import console from "node:console";
@@ -19,6 +20,10 @@ import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import {
+  expandBrowserTestSelection,
+  formatBrowserTestList,
+} from "./browser-test-groups.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import {
   connectEditor,
@@ -27,12 +32,13 @@ import {
   resetEditorState,
   waitForDebugBridge,
 } from "./test-helpers.mjs";
+import { isMissingFixtureError } from "./test-helpers/fixtures.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
 
 /** Dynamically import all test modules from the regression-tests directory. */
-async function loadTests(filter) {
+export async function loadTests() {
   const files = readdirSync(TESTS_DIR)
     .filter((f) => f.endsWith(".mjs"))
     .sort();
@@ -44,24 +50,46 @@ async function loadTests(filter) {
       console.warn(`  Skipping ${file}: missing name or run export`);
       continue;
     }
-    if (filter.length > 0 && !filter.includes(mod.name)) {
-      continue;
-    }
     tests.push({ file, name: mod.name, run: mod.run });
   }
 
   return tests;
 }
 
-async function main() {
+export async function main() {
   const args = process.argv.slice(2);
   const chromeArgs = parseChromeArgs(args, { browser: "managed" });
-  const { getFlag } = createArgParser(args);
+  const { getFlag, hasFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
-  const filter = filterArg ? filterArg.split(",").map((s) => s.trim()) : [];
+  const groupArg = getFlag("--group", "");
 
   console.log("Browser Regression Tests");
   console.log("========================\n");
+
+  const allTests = await loadTests();
+  if (hasFlag("--list")) {
+    console.log(formatBrowserTestList(allTests));
+    return;
+  }
+
+  const selection = expandBrowserTestSelection({
+    availableTestNames: allTests.map((test) => test.name),
+    filterArg,
+    groupArg,
+  });
+  if (selection.unknownGroups.length > 0 || selection.unknownTests.length > 0) {
+    if (selection.unknownGroups.length > 0) {
+      console.error(`Unknown group(s): ${selection.unknownGroups.join(", ")}`);
+    }
+    if (selection.unknownTests.length > 0) {
+      console.error(`Unknown test(s): ${selection.unknownTests.join(", ")}`);
+    }
+    console.error("");
+    console.error(formatBrowserTestList(allTests));
+    process.exit(1);
+  }
+  const selectedNames = new Set(selection.selected);
+  const tests = allTests.filter((test) => selectedNames.has(test.name));
 
   // Connect to the browser harness
   let page;
@@ -94,12 +122,11 @@ async function main() {
     process.exit(1);
   }
 
-  // Load test modules
-  const tests = await loadTests(filter);
   if (tests.length === 0) {
     console.error("No test modules found.");
-    if (filter.length > 0) {
-      console.error(`Filter: ${filter.join(", ")}`);
+    if (filterArg || groupArg) {
+      console.error(`Filter: ${filterArg || "<none>"}`);
+      console.error(`Group: ${groupArg || "<none>"}`);
     }
     process.exit(1);
   }
@@ -140,9 +167,10 @@ async function main() {
       results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
     } catch (err) {
       const elapsed = Date.now() - startTime;
-      if (err.message?.includes("Missing fixture for")) {
-        console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${err.message}`);
-        results.push({ name: test.name, pass: true, skipped: true, message: err.message, elapsed });
+      if (isMissingFixtureError(err)) {
+        const message = `optional fixture unavailable: ${err.message}`;
+        console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${message}`);
+        results.push({ name: test.name, pass: true, skipped: true, skipKind: "missing-fixture", message, elapsed });
         skipped++;
         continue;
       }
@@ -162,6 +190,10 @@ async function main() {
   // Summary
   console.log("\n========================");
   console.log(`Results: ${passed} passed, ${failed} failed, ${skipped} skipped, ${results.length} total`);
+  const missingFixtureSkips = results.filter((result) => result.skipKind === "missing-fixture");
+  if (missingFixtureSkips.length > 0) {
+    console.log(`Missing fixture skips: ${missingFixtureSkips.length}`);
+  }
 
   if (failed > 0) {
     console.log("\nFailed tests:");
@@ -178,7 +210,9 @@ async function main() {
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error(err.message ?? String(err));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file:").href) {
+  main().catch((err) => {
+    console.error(err.message ?? String(err));
+    process.exit(1);
+  });
+}

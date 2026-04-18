@@ -49,6 +49,10 @@ pnpm install
 pnpm dev
 pnpm preview
 pnpm dev:worktree -- perf-444 --base origin/main --fetch
+pnpm dev:deps
+pnpm devx:status
+pnpm verify
+pnpm verify:quick
 pnpm build
 pnpm lint
 pnpm lint:fix
@@ -58,6 +62,9 @@ pnpm typecheck
 pnpm tauri:dev
 pnpm tauri:build
 pnpm test:browser
+pnpm test:browser:list
+pnpm test:browser:core
+pnpm test:browser:full
 pnpm chrome
 ```
 
@@ -126,8 +133,8 @@ The preview script binds `0.0.0.0` for IPv4 access.
 Prefer the managed Playwright harness for automated verification.
 
 Managed harness:
-1. Start `pnpm dev`
-2. Run `pnpm test:browser` or `node scripts/perf-regression.mjs ...`
+1. Start `pnpm dev`, or use `pnpm verify` / `pnpm perf:baseline` to start or reuse Vite automatically
+2. Run `pnpm test:browser`, `pnpm test:browser:core`, or `node scripts/perf-regression.mjs ...`
 3. Default mode is Playwright-owned Chromium; use `--browser cdp` only when you intentionally want the shared manual lane
 
 Manual CDP lane:
@@ -142,7 +149,13 @@ Do not use the Playwright MCP plugin for this repo.
 
 - `scripts/test-regression.mjs` — main `pnpm test:browser` entry; auto-loads
   every file under `scripts/regression-tests/` and runs them against a live
-  dev server.
+  dev server. Use `pnpm test:browser:list` to list tests and groups.
+- `scripts/verify.mjs` (`pnpm verify`) — canonical local verification runner;
+  runs typecheck, lint, unit tests, knip, build, and the core browser group,
+  starting or reusing Vite as needed.
+- `scripts/new-browser-regression.mjs` (`pnpm test:browser:new -- <name>`) —
+  scaffolds a browser regression test from templates in
+  `scripts/regression-tests/templates/`.
 - `scripts/test-chrome.mjs` (`pnpm chrome:test`) — standalone Chromium connect
   probe that verifies the `pnpm chrome` CDP lane is reachable and takes a
   screenshot. Use when diagnosing the manual CDP lane, not as part of the
@@ -156,7 +169,8 @@ Do not use the Playwright MCP plugin for this repo.
 
 ## Perf benchmarking
 
-- Use `scripts/perf-regression.mjs`
+- Use `pnpm perf:baseline` and `pnpm perf:check` for the standard workflow, or
+  `scripts/perf-regression.mjs` for custom scenarios
 - Preferred heavy fixture: `fixtures/rankdecrease/main.md`
 - Fallback public fixture: `demo/index.md`
 - Every perf change must report before/after numbers on a real document
@@ -269,6 +283,12 @@ tea logins
 - `demo/` is public showcase content only
 - Use `fixtures/` for regression, heavy, or private documents
 - Prefer `pnpm dev:worktree -- <name>` for isolated local work
+- `pnpm dev:worktree` links the primary checkout's `node_modules` into managed
+  worktrees. If hooks or tools report missing binaries, run `pnpm dev:deps`
+  inside the worktree to repair the dependency link.
+- `pnpm devx:status` reports branch state, dependency link state, dev server
+  reachability, CDP browser reachability, optional fixture availability, and
+  the last `pnpm verify` result.
 - Clean up stale worktrees with the subcommands:
   - `pnpm dev:worktree list` lists Coflat-managed worktrees (branch, age, merged?)
   - `pnpm dev:worktree remove <name>` removes a worktree and its branch

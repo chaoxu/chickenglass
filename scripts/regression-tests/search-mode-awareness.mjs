@@ -1,9 +1,23 @@
 import { closeAppSearch, openAppSearch, openFixtureDocument } from "../test-helpers.mjs";
+import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 
 export const name = "search-mode-awareness";
 
 const RAW_TOKEN = "raw_token_785_only_in_source";
 const SEMANTIC_LABEL = "#thm-search-785";
+const PUBLIC_SEARCH_FALLBACK = {
+  content: [
+    "# Search Mode Fixture",
+    "",
+    "::: {.theorem #thm-search-785} Mode-aware theorem",
+    "Semantic theorem body.",
+    ":::",
+    "",
+    `<!-- ${RAW_TOKEN} -->`,
+  ].join("\n"),
+  displayPath: "public search-mode fallback",
+  virtualPath: "public-search/search-mode-awareness.md",
+};
 
 function dialogSnapshot() {
   const dialog = document.querySelector('[role="dialog"]');
@@ -32,7 +46,11 @@ async function setMode(page, mode) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, "cogirth/search-mode-awareness.md", { project: "full-project" });
+  await openFixtureDocument(
+    page,
+    resolveFixtureDocumentWithFallback("cogirth/search-mode-awareness.md", PUBLIC_SEARCH_FALLBACK),
+    { project: "full-project" },
+  );
   await setMode(page, "lexical");
 
   await openAppSearch(page);

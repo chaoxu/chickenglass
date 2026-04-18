@@ -1,4 +1,5 @@
 import { openFixtureDocument, sleep } from "../test-helpers.mjs";
+import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 
 export const name = "scroll-stability";
 
@@ -12,6 +13,10 @@ const REVERSE_TOLERANCE_PX = 40;
 const HEAVY_FIXTURE = {
   displayPath: "fixtures/rankdecrease/main.md",
   virtualPath: "rankdecrease/main.md",
+};
+const PUBLIC_SCROLL_FALLBACK = {
+  displayPath: "demo/index.md",
+  virtualPath: "index.md",
 };
 
 function describeSample(sample) {
@@ -47,7 +52,8 @@ function findScrollAnomalies(samples) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, HEAVY_FIXTURE, { mode: "lexical" });
+  const fixture = resolveFixtureDocumentWithFallback(HEAVY_FIXTURE, PUBLIC_SCROLL_FALLBACK);
+  await openFixtureDocument(page, fixture, { mode: "lexical" });
   await sleep(600);
 
   const samples = await page.evaluate(
@@ -103,6 +109,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: `stable rich scroll on the heavy fixture (${samples.length} samples)`,
+    message: `stable rich scroll on ${fixture.displayPath} (${samples.length} samples)`,
   };
 }

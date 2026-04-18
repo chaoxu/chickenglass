@@ -86,7 +86,7 @@ function buildFixtureProjectFiles(virtualPath, resolvedPath) {
   return files;
 }
 
-function isMissingFixtureError(error) {
+export function isMissingFixtureError(error) {
   return error instanceof Error && error.message.startsWith("Missing fixture for ");
 }
 
@@ -107,7 +107,7 @@ export function resolveFixtureDocument(fixture) {
     return {
       ...normalized,
       displayPath: fallbackDisplayPath,
-      resolvedPath: null,
+      resolvedPath: normalized.resolvedPath ?? null,
       content: normalized.content,
       candidates: normalized.candidates ?? defaultFixtureCandidates(normalized.virtualPath),
     };
@@ -162,8 +162,10 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   const preferOpenFile = Boolean(
     resolved.resolvedPath?.startsWith(resolve(REPO_ROOT, "demo")),
   );
-  const fixtureProjectFiles = project === "full-project" && resolved.resolvedPath
-    ? buildFixtureProjectFiles(resolved.virtualPath, resolved.resolvedPath)
+  const fixtureProjectFiles = project === "full-project"
+    ? resolved.projectFiles ?? (resolved.resolvedPath
+      ? buildFixtureProjectFiles(resolved.virtualPath, resolved.resolvedPath)
+      : null)
     : null;
   const verificationWindow = 200;
 

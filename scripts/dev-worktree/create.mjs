@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
 
+import { ensureNodeModulesLink } from "./deps.mjs";
 import {
   branchExists,
   git,
@@ -39,18 +40,6 @@ function parseRemoteBaseRef(repoRoot, baseRef) {
   if (!remoteExists) return null;
 
   return { remote, ref: rest.join("/") };
-}
-
-function linkNodeModules(repoRoot, worktreePath) {
-  const source = join(repoRoot, "node_modules");
-  const target = join(worktreePath, "node_modules");
-
-  if (!existsSync(source) || existsSync(target)) {
-    return false;
-  }
-
-  symlinkSync(source, target, process.platform === "win32" ? "junction" : "dir");
-  return true;
 }
 
 export function createDevWorktree({
@@ -100,9 +89,16 @@ export function createDevWorktree({
     true,
   );
 
-  const linkedNodeModules = shouldLinkNodeModules
-    ? linkNodeModules(resolvedRepoRoot, resolvedPath)
-    : false;
+  const nodeModulesResult = shouldLinkNodeModules
+    ? ensureNodeModulesLink({
+        primaryRepoRoot: resolvedRepoRoot,
+        repoRoot: resolvedPath,
+      })
+    : {
+        action: "skipped",
+        ok: true,
+        target: join(resolvedPath, "node_modules"),
+      };
 
   return {
     repoRoot: resolvedRepoRoot,
@@ -110,7 +106,9 @@ export function createDevWorktree({
     worktreePath: resolvedPath,
     baseRef,
     rootDirty,
-    linkedNodeModules,
+    linkedNodeModules: nodeModulesResult.action === "linked" || nodeModulesResult.action === "repaired",
+    nodeModulesAction: nodeModulesResult.action,
+    nodeModulesMessage: nodeModulesResult.message,
     nodeModulesPath: join(resolvedPath, "node_modules"),
   };
 }
@@ -122,10 +120,14 @@ export function printCreateSummary(result) {
 
   if (result.linkedNodeModules) {
     console.log("Dependencies: linked repo node_modules");
+  } else if (result.nodeModulesAction === "source-missing") {
+    console.log("Dependencies: repo node_modules missing; run 'pnpm install' in the primary checkout");
+  } else if (result.nodeModulesAction === "target-exists") {
+    console.log(`Dependencies: ${result.nodeModulesMessage}`);
   } else if (existsSync(join(result.repoRoot, "node_modules"))) {
     console.log("Dependencies: repo node_modules already available in worktree");
   } else {
-    console.log("Dependencies: run 'npm install' inside the worktree");
+    console.log("Dependencies: run 'pnpm install' inside the worktree");
   }
 
   if (result.rootDirty) {

@@ -3,16 +3,16 @@ pre-commit:
   commands:
     lint:
       glob: "*.{ts,tsx,js,mjs,json}"
-      run: pnpm biome lint {staged_files}
+      run: node scripts/ensure-node-modules.mjs && pnpm biome lint {staged_files}
 
 pre-push:
   commands:
     typecheck:
-      run: pnpm typecheck
+      run: node scripts/ensure-node-modules.mjs && pnpm typecheck
     test:
       # Run only tests whose module graph touches files being pushed.
       # The `glob` filter lets lefthook skip the command entirely when
       # the push contains no JS/TS changes. Use `pnpm test` to run the
       # full suite manually.
       glob: "*.{ts,tsx,js,mjs,cjs}"
-      run: pnpm vitest related {push_files} --run
+      run: node scripts/ensure-node-modules.mjs && pnpm vitest related {push_files} --run
