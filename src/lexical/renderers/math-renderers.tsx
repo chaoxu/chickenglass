@@ -165,7 +165,6 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
           </div>
           <EditorChromePanel className="cf-lexical-display-math-preview-shell">
             <EditorChromeBody className="cf-lexical-display-math-preview-surface">
-              <div className="cf-lexical-display-math-preview-label">KaTeX</div>
               <div className="cf-lexical-display-math-preview-row">
                 <div
                   className="cf-lexical-display-math-preview-equation"

@@ -603,22 +603,13 @@
 .cf-lexical-inline-reveal-preview-surface {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
   padding: 0.35rem 0.5rem;
   white-space: nowrap;
 }
 
-.cf-lexical-inline-reveal-preview-label {
-  color: var(--cf-muted);
-  font-family: var(--cf-ui-font);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .cf-lexical-inline-math-preview {
   overflow: hidden;
-  max-width: min(24rem, calc(100vw - 7rem));
+  max-width: min(24rem, calc(100vw - 2rem));
   color: var(--cf-fg);
   text-overflow: ellipsis;
 }
@@ -879,15 +870,6 @@
 
 .cf-lexical-display-math-preview-surface {
   padding: 0.55rem 0.75rem;
-}
-
-.cf-lexical-display-math-preview-label {
-  margin-bottom: 0.35rem;
-  color: var(--cf-muted);
-  font-family: var(--cf-ui-font);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .cf-lexical-display-math-preview-row {

@@ -145,6 +145,31 @@ export async function run(page) {
     };
   }
 
+  await openScratch(page, "scratch-citation-keyboard-forward.md", "Before [@cormen2009] after\n");
+  await placeCaretAtVisibleText(page, "Before ", "end");
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(250);
+  const citationKeyboardForward = await page.evaluate(() => {
+    const selection = window.getSelection();
+    return {
+      anchorOffset: selection?.anchorOffset ?? null,
+      anchorText: selection?.anchorNode?.textContent ?? "",
+      referenceStillRendered: Boolean(document.querySelector("[data-coflat-reference='true']")),
+      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+    };
+  });
+  if (
+    citationKeyboardForward.anchorText !== "[@cormen2009]"
+    || citationKeyboardForward.anchorOffset !== 0
+    || citationKeyboardForward.referenceStillRendered
+    || !citationKeyboardForward.text.includes("[@cormen2009]")
+  ) {
+    return {
+      pass: false,
+      message: `ArrowRight into citation did not keep inline source reveal open: ${JSON.stringify(citationKeyboardForward)}`,
+    };
+  }
+
   await openScratch(page, "scratch-inline-math-keyboard-backward.md", "Before $x+1$ after\n");
   await placeCaretAtVisibleText(page, " after", "start");
   await page.keyboard.press("ArrowLeft");

@@ -453,9 +453,12 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
   readonly adapter: RevealAdapter;
+  readonly selectionState: "opening" | "active";
 }
 
-interface InlineRevealChromeState extends InlineRevealHandle {
+interface InlineRevealChromeState {
+  readonly plainKey: NodeKey;
+  readonly adapter: RevealAdapter;
   readonly source: string;
 }
 
@@ -496,13 +499,23 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         // node, do nothing. Selection-change while inside the reveal
         // (typing, arrow within) shouldn't disturb it.
         if (activeRef.current) {
+          const active = activeRef.current;
           const anchorKey = anchorTextKey(sel);
-          if (anchorKey && anchorKey === activeRef.current.plainKey) {
+          if (anchorKey && anchorKey === active.plainKey) {
+            activeRef.current = { ...active, selectionState: "active" };
+            return false;
+          }
+          // Opening a decorator reveal is a two-step transition: replace the
+          // decorator with a TextNode, then let Lexical publish the selection
+          // inside that TextNode. Selection-change events from the pre-swap
+          // state are not exits; only commit after the reveal has reached
+          // the active state at least once.
+          if (active.selectionState === "opening") {
             return false;
           }
           // Caret moved off the reveal — commit and exit. The replacement
           // will trigger another SELECTION_CHANGE that we evaluate fresh.
-          commitInlineReveal(editor, activeRef.current);
+          commitInlineReveal(editor, active);
           activeRef.current = null;
           setChromeState(null);
           return false;
@@ -621,7 +634,6 @@ function InlineMathRevealPreview({
     >
       <EditorChromePanel className="cf-lexical-inline-reveal-preview-shell">
         <EditorChromeBody className="cf-lexical-inline-reveal-preview-surface">
-          <span className="cf-lexical-inline-reveal-preview-label">KaTeX</span>
           <span
             aria-hidden="true"
             className="cf-lexical-inline-math-preview"
@@ -700,7 +712,7 @@ function openInlineReveal(
     }
     plain.select(caretOffset, caretOffset);
     const plainKey = plain.getKey();
-    activeRef.current = { adapter, plainKey };
+    activeRef.current = { adapter, plainKey, selectionState: "opening" };
     const hasPreview = Boolean(adapter.getChromePreview?.(initialRaw));
     setTimeout(() => {
       if (activeRef.current?.plainKey !== plainKey) {
