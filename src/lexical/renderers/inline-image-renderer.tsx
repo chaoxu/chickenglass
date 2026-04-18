@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
+import { useLexicalSurfaceEditable } from "../editability-context";
 import { EditorChromeInput } from "../editor-chrome";
 import { useAssetPreview } from "../media-preview";
 import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
@@ -17,11 +18,14 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
   readonly raw: string;
 }) {
   const [editor] = useLexicalComposerContext();
+  const surfaceEditable = useLexicalSurfaceEditable();
+  const surfaceEditableRef = useRef(surfaceEditable);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(raw);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const parsed = useMemo(() => parseMarkdownImage(raw), [raw]);
   const preview = useAssetPreview(parsed?.src ?? "");
+  surfaceEditableRef.current = surfaceEditable;
 
   useEffect(() => {
     if (!editing) {
@@ -30,17 +34,30 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
   }, [editing, raw]);
 
   useEffect(() => {
-    if (editing) {
+    if (!surfaceEditable && editing) {
+      setDraft(raw);
+      setEditing(false);
+      return;
+    }
+
+    if (surfaceEditable && editing) {
       inputRef.current?.focus({ preventScroll: true });
       inputRef.current?.select();
     }
-  }, [editing]);
+  }, [editing, raw, surfaceEditable]);
 
   const commitDraft = useCallback((nextRaw: string) => {
+    if (!surfaceEditableRef.current) {
+      return;
+    }
+
     editor.update(() => {
       const node = $getNodeByKey(nodeKey);
-      const imageNode = node as { setRaw?: (value: string) => unknown } | null;
-      if (imageNode?.setRaw) {
+      const imageNode = node as {
+        getRaw?: () => string;
+        setRaw?: (value: string) => unknown;
+      } | null;
+      if (imageNode?.setRaw && imageNode.getRaw?.() !== nextRaw) {
         imageNode.setRaw(nextRaw);
       }
     }, {
@@ -51,7 +68,7 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
 
   const inputWidthCh = Math.max(3, draft.length + 1);
 
-  if (editing) {
+  if (editing && surfaceEditable) {
     return (
       <EditorChromeInput
         className="cf-lexical-inline-token-source h-auto w-auto font-mono text-[13px]"
@@ -93,7 +110,7 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
     return (
       <span
         className="cf-lexical-inline-image-fallback"
-        {...structureToggleProps(true, () => setEditing(true), { stopPropagation: true })}
+        {...structureToggleProps(surfaceEditable, () => setEditing(true), { stopPropagation: true })}
       >
         {parsed.alt || parsed.src}
       </span>
@@ -103,7 +120,7 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
   return (
     <span
       className="cf-lexical-inline-image-shell"
-      {...structureToggleProps(true, () => setEditing(true), { stopPropagation: true })}
+      {...structureToggleProps(surfaceEditable, () => setEditing(true), { stopPropagation: true })}
     >
       <img
         alt={parsed.alt || parsed.src}
