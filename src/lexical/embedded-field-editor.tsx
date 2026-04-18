@@ -14,6 +14,10 @@ import {
   type EmbeddedFieldFamily,
   getEmbeddedFieldFamilySpec,
 } from "../lexical-next";
+import {
+  BLOCK_KEYBOARD_ENTRY_ATTRIBUTE,
+  type BlockKeyboardEntryPriority,
+} from "./block-keyboard-entry";
 import { useLexicalSurfaceEditable } from "./editability-context";
 import { scheduleRegisteredSurfaceFocus, type FocusRequestEdge } from "./editor-focus-plugin";
 import { consumePendingSurfaceFocus } from "./pending-surface-focus";
@@ -29,6 +33,7 @@ export interface EmbeddedFieldEditorProps {
   readonly doc: string;
   readonly editable?: boolean;
   readonly family: EmbeddedFieldFamily;
+  readonly keyboardEntryPriority?: BlockKeyboardEntryPriority;
   readonly namespace: string;
   readonly onTextChange?: (text: string) => void;
   readonly pendingFocusId?: string;
@@ -40,6 +45,7 @@ export function EmbeddedFieldEditor({
   doc,
   editable,
   family,
+  keyboardEntryPriority,
   namespace,
   onTextChange,
   pendingFocusId,
@@ -123,6 +129,9 @@ export function EmbeddedFieldEditor({
   return (
     <div
       className={canActivate ? "cf-embedded-field-shell cf-embedded-field-shell--focus" : "cf-embedded-field-shell"}
+      {...(keyboardEntryPriority
+        ? { [BLOCK_KEYBOARD_ENTRY_ATTRIBUTE]: keyboardEntryPriority }
+        : {})}
       onBlurCapture={canActivate
         ? (event) => {
             if (requestedFocusRef.current) {

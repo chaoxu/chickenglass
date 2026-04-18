@@ -77,6 +77,7 @@ export function TableBlockRenderer({
                     className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--table-cell"
                     doc={cell}
                     family="table-cell"
+                    keyboardEntryPriority="primary"
                     namespace={`coflat-table-${nodeKey}-${rowIndex}-${columnIndex}`}
                     onTextChange={(nextValue) => updateBodyCell(rowIndex, columnIndex, nextValue)}
                   />

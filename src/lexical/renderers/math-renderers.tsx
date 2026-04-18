@@ -131,6 +131,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
               ref={bodyRef}
               style={{ minHeight: "3em", minWidth: "8em" }}
               {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+                keyboardActivation: true,
                 onBeforeActivate: rememberSourcePosition,
               })}
             >
@@ -143,6 +144,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
               onMouseDown={preventKatexMouseDown}
               ref={bodyRef}
               {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+                keyboardActivation: true,
                 onBeforeActivate: rememberSourcePosition,
               })}
             />
@@ -151,6 +153,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
             <div
               className="cf-lexical-display-math-label"
               {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+                keyboardActivation: true,
                 onBeforeActivate: rememberSourcePosition,
               })}
             >

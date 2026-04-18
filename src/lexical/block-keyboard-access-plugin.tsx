@@ -27,6 +27,10 @@ import {
   $findAdjacentTopLevelSiblingFromSelection,
   $isAtTopLevelBlockEdge,
 } from "./selection-boundary";
+import {
+  BLOCK_KEYBOARD_ACTIVATION_SELECTOR,
+  BLOCK_KEYBOARD_PRIMARY_ENTRY_SELECTOR,
+} from "./block-keyboard-entry";
 import { requestRegisteredSurfaceFocus } from "./editor-focus-plugin";
 import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
 
@@ -130,11 +134,11 @@ function findAdjacentDecoratorKeyFromDomBoundary(
 }
 
 function queryEditableTargets(target: HTMLElement): HTMLElement[] {
-  const bodyCells = [...target.querySelectorAll<HTMLElement>(
-    ".cf-lexical-table-block tbody [contenteditable='true']",
+  const primaryEntries = [...target.querySelectorAll<HTMLElement>(
+    `${BLOCK_KEYBOARD_PRIMARY_ENTRY_SELECTOR} [contenteditable='true']`,
   )];
-  if (bodyCells.length > 0) {
-    return bodyCells;
+  if (primaryEntries.length > 0) {
+    return primaryEntries;
   }
 
   return [...target.querySelectorAll<HTMLElement>("[contenteditable='true']")];
@@ -182,12 +186,10 @@ function enterDecoratorTarget(
   target: HTMLElement,
   direction: NavigationDirection,
 ): boolean {
-  const displayMathActivator = target.querySelector<HTMLElement>(
-    ".cf-lexical-display-math-body, .cf-lexical-display-math-label",
-  );
-  if (displayMathActivator) {
-    displayMathActivator.focus();
-    displayMathActivator.click();
+  const activationTarget = target.querySelector<HTMLElement>(BLOCK_KEYBOARD_ACTIVATION_SELECTOR);
+  if (activationTarget) {
+    activationTarget.focus();
+    activationTarget.click();
     return true;
   }
 

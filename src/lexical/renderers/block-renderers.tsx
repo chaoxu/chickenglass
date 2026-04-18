@@ -124,7 +124,9 @@ function FrontmatterRenderer({
       ) : (
         <div
           className="cf-lexical-structure-toggle cf-lexical-structure-toggle--frontmatter"
-          {...structureToggleProps(surfaceEditable, sourceEdit.activate)}
+          {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+            keyboardActivation: true,
+          })}
         >
           {title ? (
             <div
@@ -207,11 +209,10 @@ function IncludeBlockRenderer({
         {surfaceEditable ? (
           <button
             className="cf-lexical-include-path-toggle cf-lexical-structure-toggle cf-lexical-structure-toggle--include"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              pathEdit.activate();
-            }}
             type="button"
+            {...structureToggleProps(surfaceEditable, pathEdit.activate, {
+              keyboardActivation: true,
+            })}
           >
             {parsed.bodyMarkdown.trim()}
           </button>
