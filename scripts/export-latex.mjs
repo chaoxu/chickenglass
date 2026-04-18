@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+/**
+ * Export a Coflat-flavored markdown document to LaTeX via pandoc.
+ *
+ * Pipeline:
+ *   1. Read the source .md.
+ *   2. Resolve `::: {.include}` blocks.
+ *   3. Lift inline fenced-div titles into `title="..."` attributes.
+ *   4. Pipe into pandoc with our Lua filter and template of choice.
+ *
+ * Usage:
+ *   node scripts/export-latex.mjs <input.md> [--output=out.tex]
+ *                                 [--template=article|lipics|/path.tex]
+ *                                 [--bibliography=refs.bib]
+ *                                 [--pandoc=/path/to/pandoc]
+ */
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { preprocess } from "../src/latex/preprocess.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, "..");
+const LATEX_DIR = resolve(REPO_ROOT, "src/latex");
+const FILTER_PATH = resolve(LATEX_DIR, "filter.lua");
+
+function parseArgs(argv) {
+  const positional = [];
+  const flags = {};
+  for (const arg of argv) {
+    if (arg.startsWith("--")) {
+      const eq = arg.indexOf("=");
+      if (eq === -1) {
+        flags[arg.slice(2)] = true;
+      } else {
+        flags[arg.slice(2, eq)] = arg.slice(eq + 1);
+      }
+    } else {
+      positional.push(arg);
+    }
+  }
+  return { positional, flags };
+}
+
+function resolveTemplate(name) {
+  if (!name || name === "article") return resolve(LATEX_DIR, "template/article.tex");
+  if (name === "lipics") return resolve(LATEX_DIR, "template/lipics.tex");
+  return isAbsolute(name) ? name : resolve(process.cwd(), name);
+}
+
+async function runPandoc({ markdown, output, template, bibliography, pandocBin }) {
+  const args = [
+    "--from=markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash",
+    "--to=latex",
+    "--wrap=preserve",
+    "--syntax-highlighting=none",
+    `--lua-filter=${FILTER_PATH}`,
+    `--template=${template}`,
+    `--output=${output}`,
+  ];
+  if (bibliography) {
+    const base = basename(bibliography, ".bib");
+    args.push(`--metadata=bibliography=${base}`);
+  }
+
+  const child = spawn(pandocBin, args, { stdio: ["pipe", "inherit", "inherit"] });
+  child.stdin.write(markdown);
+  child.stdin.end();
+  return new Promise((resolvePromise, rejectPromise) => {
+    child.on("error", rejectPromise);
+    child.on("exit", (code) => {
+      if (code === 0) resolvePromise();
+      else rejectPromise(new Error(`pandoc exited with code ${code}`));
+    });
+  });
+}
+
+async function main() {
+  const { positional, flags } = parseArgs(process.argv.slice(2));
+  if (positional.length === 0) {
+    console.error("usage: export-latex <input.md> [--output=] [--template=] [--bibliography=]");
+    process.exit(2);
+  }
+
+  const input = resolve(process.cwd(), positional[0]);
+  const output = resolve(process.cwd(), flags.output ?? input.replace(/\.md$/, ".tex"));
+  const template = resolveTemplate(flags.template);
+  const bibliography = flags.bibliography;
+  const pandocBin = flags.pandoc ?? "pandoc";
+
+  const source = await readFile(input, "utf8");
+  const processed = await preprocess(source, input);
+
+  await mkdir(dirname(output), { recursive: true });
+
+  if (flags["dump-markdown"]) {
+    await writeFile(output.replace(/\.tex$/, ".pandoc.md"), processed, "utf8");
+  }
+
+  await runPandoc({ markdown: processed, output, template, bibliography, pandocBin });
+  console.error(`wrote ${output}`);
+}
+
+main().catch((error) => {
+  console.error(error.message ?? error);
+  process.exit(1);
+});

@@ -35,6 +35,50 @@ blocks:
 
 Project-level config in `coflat.yaml` uses the same keys. File frontmatter overrides project config. Math macros merge additively (file adds to project).
 
+### Publisher metadata
+
+Fields consumed by the LaTeX export pipeline (e.g. LIPIcs, LNCS). The editor ignores unknown keys; exporters read them via `latex-ctx.json`.
+
+```yaml
+---
+title: Main Title
+titlerunning: Short title for running head
+authorrunning: Short author line
+copyright: Firstname Lastname and coauthors
+category: Track A
+relatedversion: "A full version at https://arxiv.org/abs/..."
+acknowledgements: "We thank ..."
+funding: "NSF grant ..."
+keywords:
+  - keyword one
+  - keyword two
+ccsdesc:
+  - weight: 500
+    text: "Theory of computation → Graph algorithms"
+authors:
+  - name: First Author
+    affiliation: University A, Country
+    email: first@example.org
+    orcid: 0000-0000-0000-0000
+    funding: "Supported by grant X"
+---
+```
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `titlerunning` | string | Short title for running head |
+| `authorrunning` | string | Short author line for running head |
+| `copyright` | string | Rendered into publisher copyright block |
+| `category` | string | Track / session label |
+| `relatedversion` | string | Preprint or extended-version pointer |
+| `acknowledgements` | string | Plain text, before bibliography |
+| `funding` | string | Document-level funding statement |
+| `keywords` | list of string | Keyword list |
+| `ccsdesc` | list of `{weight, text}` | ACM CCS subject descriptors (higher weight → more prominent) |
+| `authors` | list of author objects | Per-author `name`, `affiliation`, `email`, `orcid`, `funding` |
+
+These fields are not rendered in the live editor surface. They flow only through the LaTeX export.
+
 ## Text Formatting
 
 | Syntax | Renders as |
@@ -234,6 +278,33 @@ Typical numbered figure/table usage:
 :::
 ```
 
+#### Multi-image figures (subfigures)
+
+A figure div may contain more than one image. Each image becomes a subfigure in LaTeX (`\subfigure` / `\subcaptionbox`). Alt text per image is used as the subcaption:
+
+```markdown
+::: {.figure #fig:compare} Before and after
+![Before](before.png)
+![After](after.png)
+:::
+```
+
+#### Algorithm body
+
+Algorithm blocks use a fenced code block (language `text` or none) for the pseudocode body. The exporter lifts the body verbatim into a LaTeX `algorithm` environment; the div's inline title becomes the `\caption`:
+
+````markdown
+::: {.algorithm #alg:dijkstra} Shortest paths
+```text
+Input: graph G, source s
+Output: distances d[v]
+  for each v in V: d[v] <- infinity
+  d[s] <- 0
+  ...
+```
+:::
+````
+
 ### Custom block types
 
 Define in frontmatter:
@@ -260,6 +331,25 @@ blocks:
 ## Cross-References
 
 Reference any fenced block, heading, or equation by its `#id` attribute.
+
+### ID prefixes
+
+IDs are conventionally prefixed by target kind. The LaTeX exporter uses these prefixes to route `[@id]` to `\cref{id}` vs `\cite{id}`:
+
+| Prefix | Target |
+|--------|--------|
+| `sec:` | heading |
+| `thm:` | theorem |
+| `lem:` | lemma |
+| `cor:` | corollary |
+| `prop:` | proposition |
+| `def:` | definition |
+| `eq:` | equation |
+| `fig:` | figure |
+| `tbl:` | table |
+| `alg:` | algorithm |
+
+Any other bare key (e.g. `karger2000`) is treated as a citation key. IDs with unrecognized prefixes still resolve if they match a fenced block `#id`.
 
 ### Bracketed (rendered inline)
 
@@ -349,6 +439,29 @@ Pipe-delimited tables with optional alignment:
 
 Alignment: `|:---|` left, `|:---:|` center, `|---:|` right. Math works inside table cells.
 
+### Line breaks inside cells
+
+Inline `<br>` forces a visible line break inside a cell. The LaTeX exporter maps `<br>` in a cell to `\newline` (within a `tabularx` column).
+
+```markdown
+| Case | Notes |
+|------|-------|
+| A    | first line<br>second line |
+```
+
+### Grid tables
+
+Grid tables (pandoc `grid_tables`) are accepted for cells that need multiple paragraphs, lists, or block content. Coflat's live renderer may present these as a simpler table; the LaTeX exporter preserves the block structure:
+
+```markdown
++-----------+---------------------------+
+| Input     | Output                    |
++===========+===========================+
+| graph `G` | - cut value $\lambda$     |
+|           | - partition $(S, V\!\!\setminus\!\!S)$ |
++-----------+---------------------------+
+```
+
 ## Lists
 
 Ordered, unordered, and task lists. Math works inside list items:
@@ -403,6 +516,8 @@ chapters/introduction.md
 
 The included file's content replaces the block seamlessly. Paths are relative to the current document. Included files are re-read on change.
 
+The LaTeX exporter resolves includes **before** handing the document to pandoc: each `::: {.include}` block is spliced in-place with the target file's body (after stripping its own frontmatter). Nested includes are followed transitively. A cycle aborts the export.
+
 ## Removed Features
 
 These standard markdown features are **intentionally disabled**:
@@ -421,3 +536,85 @@ The read/export pipeline still parses standard `>` blockquotes for compatibility
 ```
 
 Three or more hyphens on a line. Must not be at the start of the document (where `---` is frontmatter). A blank line before `---` distinguishes it from frontmatter.
+
+## LaTeX Export
+
+The LaTeX export pipeline (`scripts/export-latex.mjs`, `src/latex/`) emits a compilable `.tex` file from a Coflat markdown document. The stages are:
+
+1. **Resolve** — splice `::: {.include}` blocks, inline bibliography entries cited by the document, and extract the frontmatter into a `latex-ctx.json` sidecar.
+2. **Lift inline titles** — any `::: {#id .class} Inline Title` opener is rewritten to `::: {#id .class title="Inline Title"}` so pandoc's `Div` node carries the title as an attribute.
+3. **Pandoc** — invoked as:
+
+   ```text
+   pandoc --from markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars \
+          --to latex --wrap=preserve --no-highlight \
+          --lua-filter=src/latex/filter.lua \
+          --template=src/latex/template/<variant>.tex \
+          --bibliography=<resolved.bib> \
+          --output=out/<doc>.tex
+   ```
+
+4. **Compile** — `latexmk -pdf out/<doc>.tex` (optional; separate target).
+
+### Block vocabulary mapping
+
+Each built-in block maps to a LaTeX environment. Unknown classes are passed through as raw text.
+
+| Fenced div class | LaTeX environment | Notes |
+|------------------|-------------------|-------|
+| `.theorem` | `theorem` | |
+| `.lemma` | `lemma` | |
+| `.corollary` | `corollary` | |
+| `.proposition` | `proposition` | |
+| `.conjecture` | `conjecture` | Requires `\newtheorem{conjecture}` |
+| `.definition` | `definition` | |
+| `.problem` | `problem` | |
+| `.example` | `example` | |
+| `.remark` | `remark` | |
+| `.proof` | `proof` | |
+| `.algorithm` | `algorithm` | Body becomes pseudocode; title → `\caption`, `#id` → `\label` |
+| `.figure` | `figure` | Multi-image → subfigures |
+| `.table` | `table` + `tabularx` | Supports `<br>` → `\newline`, grid tables → multi-paragraph cells |
+| `.blockquote` | `quote` | |
+| `.include` | (resolved pre-export) | Content spliced before pandoc |
+| `.embed` / `.iframe` / `.youtube` / `.gist` | (dropped with warning) | No reasonable LaTeX target; exporter emits a footnote URL |
+
+### Inline mapping
+
+| Coflat markdown | LaTeX |
+|-----------------|-------|
+| `$...$` | `\(...\)` |
+| `\(...\)` | `\(...\)` (passthrough) |
+| `$$...$$` (unlabeled) | `\[...\]` |
+| `$$...$$` with `{#eq:id}` closer | `\begin{equation}\label{eq:id}...\end{equation}` |
+| `==highlight==` | `\hl{highlight}` (requires `\usepackage{soul}`) |
+| `[@id]` where `id` begins with an xref prefix | `\cref{id}` |
+| `[@id]` otherwise | `\cite{id}` |
+| `[- @thm:foo]` (unbracketed) | `\cref{thm:foo}` (no surrounding brackets) |
+| `- [ ] task` / `- [x] done` | `\item[$\square$]` / `\item[$\boxtimes$]` inside `itemize` |
+| `<br>` inside a table cell | `\newline` |
+| `<br>` outside a table | `\\` |
+
+### Math macro injection
+
+Frontmatter `math:` entries become `\newcommand` declarations in the preamble. The exporter detects argument arity by scanning the RHS for `#1`, `#2`, ...:
+
+```yaml
+math:
+  R: "\\mathbb{R}"
+  floor: "\\lfloor #1 \\rfloor"
+```
+
+→
+
+```latex
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\floor}[1]{\lfloor #1 \rfloor}
+```
+
+### Template variants
+
+- `template/article.tex` — plain `\documentclass{article}` fallback with `amsthm`, `cleveref`, `soul`, `tabularx`, `booktabs`, `algorithm`, `hyperref`.
+- `template/lipics.tex` — LIPIcs submissions; consumes the Publisher metadata frontmatter (authors, ccsdesc, keywords, copyright, titlerunning, authorrunning, funding, acknowledgements, category, relatedversion).
+
+Select a variant with `scripts/export-latex.mjs --template lipics` or by setting `latex.template: lipics` in frontmatter.
