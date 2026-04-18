@@ -110,7 +110,7 @@ export function EmbeddedFieldEditor({
     }
 
     const edge = consumePendingSurfaceFocus(pendingFocusId);
-    if (!edge) {
+    if (!edge || typeof edge === "object") {
       return;
     }
 

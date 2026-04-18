@@ -37,7 +37,11 @@ import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
-import { EDITOR_MODE, REVEAL_PRESENTATION } from "../app/editor-mode";
+import { EDITOR_MODE, type RevealPresentation } from "../app/editor-mode";
+import {
+  RevealPresentationProvider,
+  useRevealPresentation,
+} from "./reveal-presentation-context";
 import { StructureEditProvider } from "./structure-edit-plugin";
 import {
   coflatMarkdownNodes,
@@ -101,6 +105,7 @@ interface LexicalRichMarkdownEditorProps {
   readonly repairBlankClickSelection?: boolean;
   readonly requireUserEditFlag?: boolean;
   readonly renderContextValue?: LexicalRenderContextValue;
+  readonly revealPresentation?: RevealPresentation;
   readonly showBibliography?: boolean;
   readonly showCodeBlockChrome?: boolean;
   readonly showHeadingChrome?: boolean;
@@ -132,6 +137,7 @@ export function LexicalRichMarkdownEditor({
   repairBlankClickSelection: shouldRepairBlankClickSelection = false,
   requireUserEditFlag = true,
   renderContextValue,
+  revealPresentation,
   showBibliography = false,
   showCodeBlockChrome = true,
   showHeadingChrome = true,
@@ -142,6 +148,8 @@ export function LexicalRichMarkdownEditor({
   spellCheck = false,
   testId = "lexical-editor",
 }: LexicalRichMarkdownEditorProps) {
+  const inheritedRevealPresentation = useRevealPresentation();
+  const resolvedRevealPresentation = revealPresentation ?? inheritedRevealPresentation;
   const inheritedSurface = useEditorScrollSurface();
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
@@ -223,8 +231,9 @@ export function LexicalRichMarkdownEditor({
   }, [doc]);
 
   return (
-    <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
-      <LexicalSurfaceEditableProvider editable={editable}>
+    <RevealPresentationProvider value={resolvedRevealPresentation}>
+      <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
+        <LexicalSurfaceEditableProvider editable={editable}>
         <div
           className={shellClassName}
           onScroll={layoutMode === "block" && showBibliography
@@ -317,7 +326,7 @@ export function LexicalRichMarkdownEditor({
                 <TableScrollShadowPlugin />
                 {editable ? <TableActionMenuPlugin /> : null}
                 {editable
-                  ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={REVEAL_PRESENTATION.FLOATING} />
+                  ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
                   : <ClickableLinkPlugin />}
                 {editable ? <MarkdownExpansionPlugin /> : null}
                 {editable ? <BlockKeyboardAccessPlugin /> : null}
@@ -338,7 +347,8 @@ export function LexicalRichMarkdownEditor({
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
         </div>
-      </LexicalSurfaceEditableProvider>
-    </LexicalRenderContextProvider>
+        </LexicalSurfaceEditableProvider>
+      </LexicalRenderContextProvider>
+    </RevealPresentationProvider>
   );
 }

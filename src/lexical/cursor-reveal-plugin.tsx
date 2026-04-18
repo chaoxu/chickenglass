@@ -52,6 +52,7 @@ import {
   type RevealSubject,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
+import { inlineMathSourceOffsetFromTarget } from "./math-source-position";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
@@ -93,7 +94,7 @@ export function CursorRevealPlugin({
 function useDecoratorClickEntry(
   editor: LexicalEditor,
   adapters: readonly RevealAdapter[],
-  onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
+  onOpen: (subject: RevealSubject, adapter: RevealAdapter, event: MouseEvent) => void,
 ): void {
   useEffect(() => {
     return editor.registerCommand(
@@ -124,7 +125,7 @@ function useDecoratorClickEntry(
         // Deferring escapes the editor.read context so the presentation can
         // run a discrete editor.update without hitting "empty pending editor
         // state on discrete nested update".
-        setTimeout(() => onOpen(opened.subject, opened.adapter), 0);
+        setTimeout(() => onOpen(opened.subject, opened.adapter, event), 0);
         event.preventDefault();
         event.stopPropagation();
         return true;
@@ -151,6 +152,7 @@ interface FloatingState {
   readonly nodeKey: NodeKey;
   readonly anchor: HTMLElement;
   readonly adapter: RevealAdapter;
+  readonly caretOffset: number;
 }
 
 function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
@@ -164,7 +166,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
   const lastRevealedKeyRef = useRef<NodeKey | null>(null);
 
   const openFloating = useCallback(
-    (subject: RevealSubject, adapter: RevealAdapter) => {
+    (subject: RevealSubject, adapter: RevealAdapter, caretOffset = subject.source.length) => {
       const key = subject.node.getKey();
       if (key === lastRevealedKeyRef.current) {
         return;
@@ -175,12 +177,20 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       }
       lastRevealedKeyRef.current = key;
       setDraft(subject.source);
-      setState({ adapter, anchor: dom, nodeKey: key });
+      setState({ adapter, anchor: dom, caretOffset, nodeKey: key });
     },
     [editor],
   );
 
-  useDecoratorClickEntry(editor, adapters, openFloating);
+  const openFloatingFromDecoratorClick = useCallback((
+    subject: RevealSubject,
+    adapter: RevealAdapter,
+    event: MouseEvent,
+  ) => {
+    openFloating(subject, adapter, clickCaretOffset(subject, event) ?? subject.source.length);
+  }, [openFloating]);
+
+  useDecoratorClickEntry(editor, adapters, openFloatingFromDecoratorClick);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -211,8 +221,8 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       return;
     }
     input.focus({ preventScroll: true });
-    const len = input.value.length;
-    input.setSelectionRange(len, len);
+    const offset = Math.max(0, Math.min(state.caretOffset, input.value.length));
+    input.setSelectionRange(offset, offset);
   }, [state]);
 
   const commitDraft = (current: FloatingState, nextRaw: string) => {
@@ -292,9 +302,14 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   const activeRef = useRef<InlineRevealHandle | null>(null);
 
   const openFromDecoratorClick = useCallback(
-    (subject: RevealSubject, adapter: RevealAdapter) => {
-      // Decorator subjects have no meaningful caret offset; land at end.
-      openInlineReveal(editor, subject, adapter, subject.source.length, activeRef);
+    (subject: RevealSubject, adapter: RevealAdapter, event: MouseEvent) => {
+      openInlineReveal(
+        editor,
+        subject,
+        adapter,
+        clickCaretOffset(subject, event) ?? subject.source.length,
+        activeRef,
+      );
     },
     [editor],
   );
@@ -352,6 +367,20 @@ function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | n
     : null;
 }
 
+function clickCaretOffset(subject: RevealSubject, event: MouseEvent): number | null {
+  if ($isInlineMathNode(subject.node)) {
+    return inlineMathSourceOffsetFromTarget(event.target, subject.source, event.clientX);
+  }
+  return null;
+}
+
+function isBlockRevealSubject(node: LexicalNode): boolean {
+  if ($isRawBlockNode(node)) {
+    return true;
+  }
+  return $isElementNode(node) && !node.isInline();
+}
+
 /**
  * Replace the subject node with a plain-text node containing its
  * markdown source, then position the caret inside. Records the key +
@@ -381,7 +410,7 @@ function openInlineReveal(
     // we lose the key we use to find the run on commit. The CSS
     // variable is a no-op visually.
     plain.setStyle("--cf-reveal:1");
-    if ($isElementNode(live) || $isRawBlockNode(live)) {
+    if (isBlockRevealSubject(live)) {
       // Block-scope reveal (paragraph adapter): the subject is a
       // top-level block, not an inline node. A bare TextNode at the
       // root would violate Lexical's structural invariants, so wrap the
@@ -413,7 +442,7 @@ function computeCaretOffset(subject: RevealSubject, preferredOffset: number): nu
     return Math.max(0, Math.min(subject.caretOffset, subject.source.length));
   }
   if (!$isTextNode(subject.node)) {
-    return subject.source.length;
+    return Math.max(0, Math.min(preferredOffset, subject.source.length));
   }
   const text = subject.node.getTextContent();
   const openMarkerLen = subject.source.length - text.length - (subject.source.length - text.length) / 2;

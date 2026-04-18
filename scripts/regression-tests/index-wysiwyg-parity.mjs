@@ -18,10 +18,21 @@ export async function run(page) {
   // would not surface the panel selectors below.
   await setRevealPresentation(page, "floating");
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
+  await page.waitForFunction(
+    () =>
+      Boolean(document.querySelector("img[alt='Generated showcase figure rendered from a local PDF asset']")) ||
+      [...document.querySelectorAll(".cf-lexical-media-fallback")]
+        .some((element) => (element.textContent ?? "").includes("showcase/generated-figure.pdf")),
+    {},
+    { timeout: 10000 },
+  );
 
   const { issues, value } = await withRuntimeIssueCapture(page, async () => {
     const initialState = await page.evaluate(() => {
       const inlineImage = document.querySelector("img[alt='Local hover-preview figure']");
+      const pdfPreview = document.querySelector("img[alt='Generated showcase figure rendered from a local PDF asset']");
+      const pdfFallback = [...document.querySelectorAll(".cf-lexical-media-fallback")]
+        .find((element) => (element.textContent ?? "").includes("showcase/generated-figure.pdf"));
       const problemStrong = document.querySelector(".cf-lexical-block--problem .cf-lexical-block-title strong");
       const figureRef = document.querySelector("[data-coflat-ref-id='fig:pdf-local'], [data-coflat-single-ref-id='fig:pdf-local']");
       const tableRef = document.querySelector("[data-coflat-ref-id='tbl:feature-matrix'], [data-coflat-single-ref-id='tbl:feature-matrix']");
@@ -29,7 +40,9 @@ export async function run(page) {
       return {
         figureRefText: figureRef?.textContent?.trim() ?? "",
         hasInlineImage: Boolean(inlineImage),
+        hasPdfPreview: Boolean(pdfPreview),
         inlineImageBlockAncestor: Boolean(inlineImage?.closest(".cf-lexical-block")),
+        pdfFallbackText: pdfFallback?.textContent?.trim() ?? "",
         problemStrongText: problemStrong?.textContent?.trim() ?? "",
         tableRefText: tableRef?.textContent?.trim() ?? "",
       };
@@ -102,6 +115,13 @@ export async function run(page) {
     return {
       pass: false,
       message: "inline markdown images still are not rendering as inline media on the Lexical surface",
+    };
+  }
+
+  if (!value.initialState.hasPdfPreview || value.initialState.pdfFallbackText) {
+    return {
+      pass: false,
+      message: `showcase PDF preview did not render: ${value.initialState.pdfFallbackText || "missing generated-figure preview image"}`,
     };
   }
 

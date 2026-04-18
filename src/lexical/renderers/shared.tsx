@@ -27,7 +27,7 @@ export function structureToggleProps(
   onActivate: () => void,
   options?: {
     stopPropagation?: boolean;
-    onBeforeActivate?: (element: HTMLElement) => void;
+    onBeforeActivate?: (element: HTMLElement, event: SyntheticEvent) => void;
   },
 ): Record<string, unknown> {
   if (!active) return {};
@@ -38,7 +38,7 @@ export function structureToggleProps(
     onClick: (event: SyntheticEvent) => {
       event.preventDefault();
       if (event.currentTarget instanceof HTMLElement) {
-        onBeforeActivate?.(event.currentTarget);
+        onBeforeActivate?.(event.currentTarget, event);
       }
       if (stop) {
         event.stopPropagation();
@@ -49,7 +49,7 @@ export function structureToggleProps(
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         if (event.currentTarget instanceof HTMLElement) {
-          onBeforeActivate?.(event.currentTarget);
+          onBeforeActivate?.(event.currentTarget, event);
         }
         if (stop) {
           event.stopPropagation();

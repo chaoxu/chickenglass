@@ -170,6 +170,43 @@ function findAncestor<T extends LexicalNode>(
   return null;
 }
 
+function computeVisibleOffsetWithin(
+  root: LexicalNode,
+  anchorNode: LexicalNode,
+  anchorOffset: number,
+): number {
+  let visible = 0;
+  let found = false;
+
+  function walk(node: LexicalNode): void {
+    if (found) {
+      return;
+    }
+    if (node === anchorNode) {
+      visible += anchorOffset;
+      found = true;
+      return;
+    }
+    if ($isTextNode(node)) {
+      visible += node.getTextContentSize();
+      return;
+    }
+    if ($isElementNode(node)) {
+      for (const child of node.getChildren()) {
+        walk(child);
+        if (found) {
+          return;
+        }
+      }
+      return;
+    }
+    visible += node.getTextContent().length;
+  }
+
+  walk(root);
+  return visible;
+}
+
 const linkAdapter: RevealAdapter = {
   id: "link",
   findSubject(selection) {
@@ -180,7 +217,14 @@ const linkAdapter: RevealAdapter = {
     if (!link) {
       return null;
     }
+    const visibleOffset = computeVisibleOffsetWithin(
+      link,
+      selection.anchor.getNode(),
+      selection.anchor.offset,
+    );
+    const linkTextLength = link.getTextContent().length;
     return {
+      caretOffset: 1 + Math.max(0, Math.min(visibleOffset, linkTextLength)),
       node: link,
       source: `[${link.getTextContent()}](${link.getURL()})`,
     };

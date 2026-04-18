@@ -65,6 +65,7 @@ import {
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
+import { RevealPresentationProvider } from "./reveal-presentation-context";
 import { StructureEditProvider } from "./structure-edit-plugin";
 import {
   coflatMarkdownNodes,
@@ -711,8 +712,9 @@ export function LexicalMarkdownEditor({
   }, [onSelectionChange]);
 
   return (
-    <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
-      <LexicalSurfaceEditableProvider editable={editable}>
+    <RevealPresentationProvider value={revealPresentation}>
+      <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
+        <LexicalSurfaceEditableProvider editable={editable}>
         <div
           className={shellClassName}
           onScroll={!isSourceMode
@@ -861,7 +863,8 @@ export function LexicalMarkdownEditor({
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
         </div>
-      </LexicalSurfaceEditableProvider>
-    </LexicalRenderContextProvider>
+        </LexicalSurfaceEditableProvider>
+      </LexicalRenderContextProvider>
+    </RevealPresentationProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef, type SyntheticEvent } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import { $createParagraphNode, $getNodeByKey, type NodeKey } from "lexical";
@@ -7,10 +7,14 @@ import { useLexicalSurfaceEditable } from "../editability-context";
 import { useLexicalRenderContext } from "../render-context";
 import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
-import { getPendingEmbeddedSurfaceFocusId } from "../pending-surface-focus";
+import {
+  getPendingEmbeddedSurfaceFocusId,
+  queuePendingSurfaceFocus,
+} from "../pending-surface-focus";
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
 import { readSourcePositionFromElement } from "../source-position-plugin";
 import { SET_SOURCE_SELECTION_COMMAND } from "../source-selection-command";
+import { displayMathSourceOffsetFromTarget } from "../math-source-position";
 import { buildKatexOptions } from "../../lib/katex-options";
 import {
   preventKatexMouseDown,
@@ -81,6 +85,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
     updateRawInner(nextRaw);
   }, [updateRawInner, sourceEdit, editor, nodeKey]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const sourceFocusId = getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source");
   // Display math always renders eagerly. The KaTeX string is memoized on
   // parsed.body, and there are rarely enough display-math blocks per doc for
   // lazy gating to matter. Lazy gating also interacts badly with Lexical's
@@ -95,13 +100,22 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
     [config.math, parsed.body, visible],
   );
   const label = parsed.id ? renderIndex.references.get(parsed.id)?.shortLabel : undefined;
-  const rememberSourcePosition = useCallback((element: HTMLElement) => {
-    const sourcePosition = readSourcePositionFromElement(element);
-    if (sourcePosition === null) {
+  const rememberSourcePosition = useCallback((element: HTMLElement, event: SyntheticEvent) => {
+    const nativeEvent = event.nativeEvent;
+    const clientX = nativeEvent instanceof MouseEvent ? nativeEvent.clientX : undefined;
+    const sourceOffset = displayMathSourceOffsetFromTarget(event.target, raw, clientX);
+    if (sourceOffset !== null) {
+      queuePendingSurfaceFocus(sourceFocusId, { offset: sourceOffset });
+    }
+    const blockSourcePosition = readSourcePositionFromElement(element);
+    if (blockSourcePosition === null) {
       return;
     }
-    editor.dispatchCommand(SET_SOURCE_SELECTION_COMMAND, sourcePosition);
-  }, [editor]);
+    editor.dispatchCommand(
+      SET_SOURCE_SELECTION_COMMAND,
+      blockSourcePosition + (sourceOffset ?? 0),
+    );
+  }, [editor, raw, sourceFocusId]);
 
   return (
     <div
@@ -153,7 +167,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
             namespace={`coflat-display-math-${nodeKey}`}
             onChange={updateRaw}
             onClose={sourceEdit.deactivate}
-            pendingFocusId={getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source")}
+            pendingFocusId={sourceFocusId}
           />
         </div>
       )}

@@ -11,6 +11,27 @@ async function resetToRichIndex(page) {
   await page.waitForTimeout(250);
 }
 
+async function openScratchDocument(page, path, text) {
+  await page.evaluate(async ({ path, text }) => {
+    const app = window.__app;
+    if (app.closeFile) {
+      try {
+        await app.closeFile({ discard: true });
+      } catch {
+        // Ignore cleanup between cases.
+      }
+    }
+    app.setMode("lexical");
+    await app.openFileWithContent(path, text);
+  }, { path, text });
+  await page.waitForFunction(
+    ({ expected }) => window.__editor?.getDoc?.() === expected,
+    { expected: text },
+    { timeout: 10000 },
+  );
+  await page.waitForTimeout(250);
+}
+
 async function clickVisibleParagraph(page, text) {
   await page
     .locator(".cf-lexical-editor--rich[contenteditable='true'] > .cf-lexical-paragraph", { hasText: text })
@@ -26,6 +47,42 @@ async function clickVisibleHeading(page, text) {
 }
 
 export async function run(page) {
+  await openScratchDocument(
+    page,
+    "scratch-display-math-horizontal-nav.md",
+    "Before paragraph\n\n$$\nx+1\n$$\n\nAfter paragraph\n",
+  );
+  await page.evaluate(() => {
+    const root = document.querySelector(".cf-lexical-editor--rich[contenteditable='true']");
+    const paragraph = [...document.querySelectorAll(".cf-lexical-editor--rich > .cf-lexical-paragraph")]
+      .find((element) => (element.textContent ?? "").includes("Before paragraph"));
+    const text = paragraph ? document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT).nextNode() : null;
+    if (!root || !text) {
+      throw new Error("missing before paragraph text");
+    }
+    root.focus({ preventScroll: true });
+    const range = document.createRange();
+    range.setStart(text, text.textContent?.length ?? 0);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+  });
+  await page.waitForTimeout(120);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(200);
+
+  const enteredDisplayWithArrowRight = await page.evaluate(() => ({
+    editorOpen: Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-editor")),
+    activeInsideDisplay: Boolean(
+      document.activeElement?.closest(".cf-lexical-display-math"),
+    ),
+  }));
+  if (!enteredDisplayWithArrowRight.editorOpen || !enteredDisplayWithArrowRight.activeInsideDisplay) {
+    return { pass: false, message: "ArrowRight did not enter display-math editing from the previous paragraph edge" };
+  }
+
   await resetToRichIndex(page);
 
   await clickVisibleParagraph(page, "Standard:");

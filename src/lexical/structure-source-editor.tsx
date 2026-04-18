@@ -19,12 +19,17 @@ import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 import { consumePendingSurfaceFocus } from "./pending-surface-focus";
 
+type InitialCaretRequest = "start" | "end" | { readonly offset: number };
+
 function computeInitialCaretOffset(
-  edge: "start" | "end",
+  request: InitialCaretRequest,
   draft: string,
   multiline: boolean,
 ): number {
-  if (edge === "end") {
+  if (typeof request === "object") {
+    return Math.max(0, Math.min(request.offset, draft.length));
+  }
+  if (request === "end") {
     return draft.length;
   }
   if (!multiline) {
@@ -62,12 +67,19 @@ export function StructureSourceEditor({
   const [draft, setDraft] = useState(() => doc);
   const originalDocRef = useRef(doc);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
-  // Resolve the requested initial caret edge exactly once, at mount, before
-  // any onEditorReady/onFocus callback fires. Subsequent focus events fall
-  // back to the default end-of-draft snap.
-  const initialEdgeRef = useRef<"start" | "end">(
-    pendingFocusId && consumePendingSurfaceFocus(pendingFocusId) === "start" ? "start" : "end",
-  );
+  // Resolve the requested initial caret position exactly once, at mount,
+  // before any onEditorReady/onFocus callback fires. Subsequent focus events
+  // fall back to the default end-of-draft snap.
+  const initialCaretRequestRef = useRef<InitialCaretRequest>((() => {
+    if (!pendingFocusId) {
+      return "end";
+    }
+    const request = consumePendingSurfaceFocus(pendingFocusId);
+    if (request === "start" || (request && typeof request === "object" && "offset" in request)) {
+      return request;
+    }
+    return "end";
+  })());
   const initialCaretAppliedRef = useRef(false);
 
   const focusEditor = useCallback(() => {
@@ -78,7 +90,7 @@ export function StructureSourceEditor({
 
     if (!initialCaretAppliedRef.current) {
       const offset = computeInitialCaretOffset(
-        initialEdgeRef.current,
+        initialCaretRequestRef.current,
         draft,
         multiline,
       );

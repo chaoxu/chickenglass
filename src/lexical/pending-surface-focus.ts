@@ -2,12 +2,16 @@ import type { NodeKey } from "lexical";
 
 import type { FocusRequestEdge } from "./editor-focus-plugin";
 
+export type PendingSurfaceFocusRequest =
+  | FocusRequestEdge
+  | { readonly offset: number };
+
 export type PendingEmbeddedSurfaceFocusTarget =
   | "block-body"
   | "footnote-body"
   | "structure-source";
 
-const pendingSurfaceFocus = new Map<string, FocusRequestEdge>();
+const pendingSurfaceFocus = new Map<string, PendingSurfaceFocusRequest>();
 
 export function getPendingEmbeddedSurfaceFocusId(
   editorKey: string,
@@ -19,31 +23,31 @@ export function getPendingEmbeddedSurfaceFocusId(
 
 export function queuePendingSurfaceFocus(
   focusId: string,
-  edge: FocusRequestEdge = "current",
+  request: PendingSurfaceFocusRequest = "current",
 ): void {
-  pendingSurfaceFocus.set(focusId, edge);
+  pendingSurfaceFocus.set(focusId, request);
 }
 
 export function consumePendingSurfaceFocus(
   focusId: string,
-): FocusRequestEdge | null {
-  const edge = pendingSurfaceFocus.get(focusId);
-  if (!edge) {
+): PendingSurfaceFocusRequest | null {
+  const request = pendingSurfaceFocus.get(focusId);
+  if (!request) {
     return null;
   }
 
   pendingSurfaceFocus.delete(focusId);
-  return edge;
+  return request;
 }
 
 export function queueEmbeddedSurfaceFocus(
   editorKey: string,
   nodeKey: NodeKey,
   target: PendingEmbeddedSurfaceFocusTarget,
-  edge: FocusRequestEdge = "current",
+  request: PendingSurfaceFocusRequest = "current",
 ): void {
   queuePendingSurfaceFocus(
     getPendingEmbeddedSurfaceFocusId(editorKey, nodeKey, target),
-    edge,
+    request,
   );
 }
