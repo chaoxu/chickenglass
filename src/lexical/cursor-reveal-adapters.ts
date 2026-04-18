@@ -85,6 +85,11 @@ export interface RevealSubject {
   readonly caretOffset?: number;
 }
 
+export type RevealChromePreview =
+  | {
+      readonly kind: "inline-math";
+    };
+
 export interface RevealAdapter {
   readonly id: string;
   /** Find the subject this adapter owns for the given selection, or null. */
@@ -98,6 +103,8 @@ export interface RevealAdapter {
     node: LexicalNode,
     context: RevealEntryContext,
   ): RevealSubject | null;
+  /** Optional chrome shown next to the live source while inline reveal is active. */
+  getChromePreview?(source: string): RevealChromePreview | null;
   /**
    * Replace `live` (a plain TextNode the inline reveal swapped in) with a
    * fresh node parsed from `raw`. Adapters fall back to a plain TextNode
@@ -320,6 +327,9 @@ const inlineMathAdapter: RevealAdapter = {
       return null;
     }
     return inlineMathSubject(node, context);
+  },
+  getChromePreview() {
+    return { kind: "inline-math" };
   },
   reparse(live, raw) {
     const trimmed = raw.trim();

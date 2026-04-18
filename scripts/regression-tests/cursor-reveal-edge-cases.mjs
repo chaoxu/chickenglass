@@ -100,13 +100,21 @@ export async function run(page) {
     return {
       anchorOffset: selection?.anchorOffset ?? null,
       anchorText: selection?.anchorNode?.textContent ?? "",
+      hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+      previewText: document.querySelector(".cf-lexical-inline-math-preview")?.textContent ?? "",
       text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
     };
   });
-  if (inlineMathLeft.anchorText !== "$x+1$" || inlineMathLeft.anchorOffset === null || inlineMathLeft.anchorOffset > 1) {
+  if (
+    inlineMathLeft.anchorText !== "$x+1$"
+    || inlineMathLeft.anchorOffset === null
+    || inlineMathLeft.anchorOffset > 1
+    || !inlineMathLeft.hasPreview
+    || !inlineMathLeft.previewText.includes("x")
+  ) {
     return {
       pass: false,
-      message: `inline math left-edge reveal opened at the wrong offset: ${JSON.stringify(inlineMathLeft)}`,
+      message: `inline math left-edge reveal did not show source plus KaTeX preview at the right offset: ${JSON.stringify(inlineMathLeft)}`,
     };
   }
 
@@ -119,6 +127,7 @@ export async function run(page) {
     return {
       anchorOffset: selection?.anchorOffset ?? null,
       anchorText: selection?.anchorNode?.textContent ?? "",
+      hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
       inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
       text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
     };
@@ -127,6 +136,7 @@ export async function run(page) {
     inlineMathKeyboardForward.anchorText !== "$x+1$"
     || inlineMathKeyboardForward.anchorOffset === null
     || inlineMathKeyboardForward.anchorOffset > 1
+    || !inlineMathKeyboardForward.hasPreview
     || inlineMathKeyboardForward.inlineMathStillRendered
   ) {
     return {

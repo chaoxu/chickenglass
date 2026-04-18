@@ -46,15 +46,21 @@ export async function run(page) {
   await page.waitForTimeout(150);
 
   const editingState = await page.evaluate(() => ({
-    hasEditingBody: Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-body")),
     hasEditingEditor: Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-editor")),
+    hasEditingPreview: Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-preview-shell")),
+    hasEditingPreviewKatex: Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-preview-equation .katex")),
   }));
-  if (editingState.hasEditingBody || !editingState.hasEditingEditor) {
-    return { pass: false, message: "display math did not switch cleanly into source-edit mode" };
+  if (!editingState.hasEditingEditor || !editingState.hasEditingPreview || !editingState.hasEditingPreviewKatex) {
+    return { pass: false, message: `display math did not keep source editor and KaTeX preview visible: ${JSON.stringify(editingState)}` };
   }
 
   const displayEditor = page.locator(".cf-lexical-display-math.is-editing [contenteditable='true']").first();
   await displayEditor.fill(`$$\n${DISPLAY_MARKER}\n$$`);
+  await page.waitForTimeout(150);
+  const displayPreviewText = await page.locator(".cf-lexical-display-math.is-editing .cf-lexical-display-math-preview-equation").first().textContent();
+  if (!displayPreviewText?.includes("q") || !displayPreviewText.includes("r")) {
+    return { pass: false, message: `display math live preview did not update while editing: ${JSON.stringify(displayPreviewText)}` };
+  }
   await displayEditor.press("Tab");
   await page.waitForTimeout(200);
 

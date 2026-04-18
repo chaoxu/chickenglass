@@ -15,9 +15,10 @@
  *   the text is re-parsed via the same adapter — valid syntax becomes
  *   the original kind of node, anything else stays plain text.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import katex from "katex";
 import {
   $createParagraphNode,
   $createTextNode,
@@ -54,7 +55,11 @@ import {
   type RevealSubject,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
+import { stripInlineMathDelimiters } from "./inline-math-source";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
+import { useLexicalRenderContext } from "./render-context";
+import { buildKatexOptions } from "../lib/katex-options";
+import { preventKatexMouseDown } from "./renderers/shared";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 // Re-exports kept so existing unit tests can continue importing the
@@ -450,8 +455,13 @@ interface InlineRevealHandle {
   readonly adapter: RevealAdapter;
 }
 
+interface InlineRevealChromeState extends InlineRevealHandle {
+  readonly source: string;
+}
+
 function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
+  const [chromeState, setChromeState] = useState<InlineRevealChromeState | null>(null);
   // Key of the in-flight plain-text reveal node. When the caret moves off
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
@@ -464,6 +474,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         adapter,
         subject.caretOffset ?? subject.source.length,
         activeRef,
+        setChromeState,
       );
     },
     [editor],
@@ -493,6 +504,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           // will trigger another SELECTION_CHANGE that we evaluate fresh.
           commitInlineReveal(editor, activeRef.current);
           activeRef.current = null;
+          setChromeState(null);
           return false;
         }
 
@@ -501,14 +513,125 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           return false;
         }
         const preferredOffset = "anchor" in sel ? (sel.anchor as { offset: number }).offset : 0;
-        openInlineReveal(editor, pick.subject, pick.adapter, preferredOffset, activeRef);
+        openInlineReveal(
+          editor,
+          pick.subject,
+          pick.adapter,
+          preferredOffset,
+          activeRef,
+          setChromeState,
+        );
         return false;
       },
       COMMAND_PRIORITY_LOW,
     );
   }, [editor, adapters]);
 
+  useEffect(() => {
+    const plainKey = chromeState?.plainKey ?? null;
+    if (!plainKey) {
+      return;
+    }
+
+    return editor.registerUpdateListener(({ editorState }) => {
+      let nextSource: string | null = null;
+      editorState.read(() => {
+        const live = $getNodeByKey(plainKey);
+        nextSource = $isTextNode(live) ? live.getTextContent() : null;
+      });
+      setChromeState((current) => {
+        if (current?.plainKey !== plainKey) {
+          return current;
+        }
+        if (nextSource === null) {
+          return null;
+        }
+        return current.source === nextSource
+          ? current
+          : { ...current, source: nextSource };
+      });
+    });
+  }, [chromeState?.plainKey, editor]);
+
+  return (
+    <InlineRevealChrome
+      editor={editor}
+      onClose={() => setChromeState(null)}
+      state={chromeState}
+    />
+  );
+}
+
+function InlineRevealChrome({
+  editor,
+  onClose,
+  state,
+}: {
+  readonly editor: LexicalEditor;
+  readonly onClose: () => void;
+  readonly state: InlineRevealChromeState | null;
+}) {
+  if (!state) {
+    return null;
+  }
+
+  const preview = state.adapter.getChromePreview?.(state.source) ?? null;
+  const anchor = editor.getElementByKey(state.plainKey);
+  if (!preview || !anchor) {
+    return null;
+  }
+
+  if (preview.kind === "inline-math") {
+    return (
+      <InlineMathRevealPreview
+        anchor={anchor}
+        onAnchorLost={onClose}
+        source={state.source}
+      />
+    );
+  }
+
   return null;
+}
+
+function InlineMathRevealPreview({
+  anchor,
+  onAnchorLost,
+  source,
+}: {
+  readonly anchor: HTMLElement;
+  readonly onAnchorLost: () => void;
+  readonly source: string;
+}) {
+  const { config } = useLexicalRenderContext();
+  const body = useMemo(() => stripInlineMathDelimiters(source.trim()), [source]);
+  const html = useMemo(
+    () => katex.renderToString(body, buildKatexOptions(false, config.math)),
+    [body, config.math],
+  );
+
+  return (
+    <SurfaceFloatingPortal
+      anchor={anchor}
+      className="cf-lexical-inline-reveal-preview-portal"
+      offsetPx={4}
+      onAnchorLost={onAnchorLost}
+      placement="bottom-start"
+      zIndex={62}
+    >
+      <EditorChromePanel className="cf-lexical-inline-reveal-preview-shell">
+        <EditorChromeBody className="cf-lexical-inline-reveal-preview-surface">
+          <span className="cf-lexical-inline-reveal-preview-label">KaTeX</span>
+          <span
+            aria-hidden="true"
+            className="cf-lexical-inline-math-preview"
+            dangerouslySetInnerHTML={{ __html: html }}
+            onMouseDown={preventKatexMouseDown}
+          />
+        </EditorChromeBody>
+      </EditorChromePanel>
+    </SurfaceFloatingPortal>
+  );
 }
 
 function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | null {
@@ -543,6 +666,7 @@ function openInlineReveal(
   adapter: RevealAdapter,
   preferredOffset: number,
   activeRef: { current: InlineRevealHandle | null },
+  setChromeState: (state: InlineRevealChromeState | null) => void,
 ): void {
   const subjectKey = subject.node.getKey();
   const initialRaw = subject.source;
@@ -575,7 +699,15 @@ function openInlineReveal(
       live.replace(plain);
     }
     plain.select(caretOffset, caretOffset);
-    activeRef.current = { adapter, plainKey: plain.getKey() };
+    const plainKey = plain.getKey();
+    activeRef.current = { adapter, plainKey };
+    const hasPreview = Boolean(adapter.getChromePreview?.(initialRaw));
+    setTimeout(() => {
+      if (activeRef.current?.plainKey !== plainKey) {
+        return;
+      }
+      setChromeState(hasPreview ? { adapter, plainKey, source: initialRaw } : null);
+    }, 0);
   }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
 }
 

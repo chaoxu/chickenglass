@@ -13,6 +13,7 @@ import {
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
 import { useStructureSourcePositionEntry } from "../structure-source-position-entry";
 import { displayMathSourceOffsetFromTarget } from "../math-source-position";
+import { EditorChromeBody, EditorChromePanel } from "../editor-chrome";
 import { buildKatexOptions } from "../../lib/katex-options";
 import {
   preventKatexMouseDown,
@@ -150,17 +151,36 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
           ) : null}
         </>
       ) : (
-        <div className="cf-lexical-display-math-editor">
-          <StructureSourceEditor
-            className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--math"
-            doc={raw}
-            multiline
-            namespace={`coflat-display-math-${nodeKey}`}
-            onChange={updateRaw}
-            onClose={sourceEdit.deactivate}
-            pendingFocusId={sourceFocusId}
-          />
-        </div>
+        <>
+          <div className="cf-lexical-display-math-editor">
+            <StructureSourceEditor
+              className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--math"
+              doc={raw}
+              multiline
+              namespace={`coflat-display-math-${nodeKey}`}
+              onChange={updateRaw}
+              onClose={sourceEdit.deactivate}
+              pendingFocusId={sourceFocusId}
+            />
+          </div>
+          <EditorChromePanel className="cf-lexical-display-math-preview-shell">
+            <EditorChromeBody className="cf-lexical-display-math-preview-surface">
+              <div className="cf-lexical-display-math-preview-label">KaTeX</div>
+              <div className="cf-lexical-display-math-preview-row">
+                <div
+                  className="cf-lexical-display-math-preview-equation"
+                  dangerouslySetInnerHTML={{ __html: equation ?? "" }}
+                  onMouseDown={preventKatexMouseDown}
+                />
+                {label ? (
+                  <div className="cf-lexical-display-math-preview-number">
+                    {label}
+                  </div>
+                ) : null}
+              </div>
+            </EditorChromeBody>
+          </EditorChromePanel>
+        </>
       )}
     </div>
   );

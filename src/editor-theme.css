@@ -591,6 +591,38 @@
   background: transparent;
 }
 
+.cf-lexical-inline-reveal-preview-portal {
+  pointer-events: none;
+}
+
+.cf-lexical-inline-reveal-preview-shell {
+  max-width: min(32rem, calc(100vw - 10px));
+  box-shadow: 0 8px 24px color-mix(in srgb, black 14%, transparent);
+}
+
+.cf-lexical-inline-reveal-preview-surface {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  white-space: nowrap;
+}
+
+.cf-lexical-inline-reveal-preview-label {
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cf-lexical-inline-math-preview {
+  overflow: hidden;
+  max-width: min(24rem, calc(100vw - 7rem));
+  color: var(--cf-fg);
+  text-overflow: ellipsis;
+}
+
 .cf-lexical-reference {
   color: var(--cf-fg);
   text-decoration: underline;
@@ -837,6 +869,52 @@
 
 .cf-lexical-display-math-editor {
   grid-column: 1 / -1;
+}
+
+.cf-lexical-display-math-preview-shell {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  margin-top: -0.25rem;
+}
+
+.cf-lexical-display-math-preview-surface {
+  padding: 0.55rem 0.75rem;
+}
+
+.cf-lexical-display-math-preview-label {
+  margin-bottom: 0.35rem;
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cf-lexical-display-math-preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.cf-lexical-display-math-preview-equation {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.cf-lexical-display-math-preview-equation .katex-display {
+  margin: 0;
+}
+
+.cf-lexical-display-math-preview-equation .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-lexical-display-math-preview-number {
+  color: var(--cf-muted);
+  white-space: nowrap;
 }
 
 .cf-lexical-block {

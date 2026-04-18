@@ -3,19 +3,10 @@ import katex from "katex";
 import type { NodeKey } from "lexical";
 
 import { useLexicalRenderContext } from "../render-context";
+import { stripInlineMathDelimiters } from "../inline-math-source";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { preventKatexMouseDown, useLazyVisibility } from "./shared";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
-
-function stripInlineMathDelimiters(raw: string): string {
-  if (raw.startsWith("\\(") && raw.endsWith("\\)")) {
-    return raw.slice(2, -2);
-  }
-  if (raw.startsWith("$") && raw.endsWith("$")) {
-    return raw.slice(1, -1);
-  }
-  return raw;
-}
 
 // `nodeKey` and `raw` are primitive props that Lexical recreates with stable
 // values whenever the underlying node hasn't changed. Memoizing skips the
