@@ -66,6 +66,7 @@ export function renamePathBuffers(
   runtime: EditorSessionRuntime,
   oldPath: string,
   newPath: string,
+  rawDiskContent?: string,
 ): { buffered?: EditorDocumentText; liveDoc?: EditorDocumentText } {
   const buffered = runtime.buffers.get(oldPath);
   if (buffered !== undefined) {
@@ -88,7 +89,7 @@ export function renamePathBuffers(
   runtime.pipeline.clear(oldPath);
   runtime.pipeline.initPath(
     newPath,
-    editorDocumentToString(liveDoc ?? buffered ?? emptyEditorDocument),
+    rawDiskContent ?? editorDocumentToString(liveDoc ?? buffered ?? emptyEditorDocument),
   );
 
   return { buffered, liveDoc };

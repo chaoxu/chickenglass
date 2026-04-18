@@ -78,9 +78,6 @@ export async function run(page) {
       "[vite] connected.",
       "flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.",
     ],
-    ignorePageErrors: [
-      /Cache storage is disabled because the context is sandboxed/,
-    ],
   });
 
   if (issues.length > 0) {

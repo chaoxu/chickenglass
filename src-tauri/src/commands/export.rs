@@ -3,9 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use tauri::{State, WebviewWindow, command};
+use tauri::{command, State, WebviewWindow};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::context::{run_command, CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::{project_relative_path, resolve_project_path};
 
@@ -142,14 +142,18 @@ mod tests {
     };
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn create_temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time before unix epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
+        let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}-{counter}"));
         fs::create_dir_all(&path).expect("create temp dir");
         path.canonicalize().expect("canonicalize temp dir")
     }

@@ -7,6 +7,7 @@ interface HarnessProps {
   isDirty: boolean;
   onSave: () => Promise<void>;
   interval?: number;
+  onError?: (error: unknown) => void;
   suspended?: boolean;
   suspendedRef?: { current: boolean };
   suspendedVersionRef?: { current: number };
@@ -16,11 +17,12 @@ const Harness: FC<HarnessProps> = ({
   isDirty,
   onSave,
   interval = 30_000,
+  onError,
   suspended = false,
   suspendedRef,
   suspendedVersionRef,
 }) => {
-  useAutoSave(isDirty, onSave, interval, suspended, suspendedRef, suspendedVersionRef);
+  useAutoSave(isDirty, onSave, interval, suspended, suspendedRef, suspendedVersionRef, onError);
   return null;
 };
 
@@ -28,6 +30,7 @@ describe("useAutoSave", () => {
   let container: HTMLDivElement;
   let root: Root;
   let originalHasFocus: typeof document.hasFocus;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   let hiddenState = false;
 
   beforeEach(() => {
@@ -42,6 +45,7 @@ describe("useAutoSave", () => {
       get: () => hiddenState,
     });
     document.hasFocus = vi.fn(() => true);
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
@@ -49,6 +53,7 @@ describe("useAutoSave", () => {
     act(() => root.unmount());
     container.remove();
     document.hasFocus = originalHasFocus;
+    consoleErrorSpy.mockRestore();
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
     vi.useRealTimers();
   });
@@ -69,6 +74,31 @@ describe("useAutoSave", () => {
     });
 
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports auto-save failures instead of swallowing them silently", async () => {
+    const error = new Error("disk full");
+    const onSave = vi.fn(async () => {
+      throw error;
+    });
+    const onError = vi.fn();
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onError,
+        onSave,
+        interval: 0,
+      }));
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event("blur"));
+      await Promise.resolve();
+    });
+
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(consoleErrorSpy).toHaveBeenCalledWith("[auto-save] save failed", error);
   });
 
   it("delays Tauri blur saves so a suspended close flow can cancel them", async () => {

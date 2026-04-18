@@ -166,6 +166,27 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.liveDocs.get("main.md") ?? emptyEditorDocument)).toBe(edited);
   });
 
+  it("saveFile rejects when the disk write fails", async () => {
+    const fs = new MemoryFileSystem({ "main.md": "Old" });
+    fs.writeFile = async () => {
+      throw new Error("disk full");
+    };
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: true,
+      },
+      editorDoc: "New",
+      buffers: createDocumentMap({ "main.md": "Old" }),
+      liveDocs: createDocumentMap({ "main.md": "New" }),
+    });
+
+    await expect(ref.result.saveFile()).rejects.toThrow("Save did not complete");
+    expect(ref.runtime.getCurrentDocument()?.dirty).toBe(true);
+  });
+
   it("renames the active document buffers and source map after a successful rename", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const sourceMap = new SourceMap([]);
@@ -204,6 +225,48 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.liveDocs.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
     expect(ref.runtime.sourceMaps.has("draft.md")).toBe(false);
     expect(ref.runtime.sourceMaps.get("notes/final.md")).toBe(sourceMap);
+  });
+
+  it("seeds renamed projected documents with raw disk content for watcher suppression", async () => {
+    const includeRef = [
+      "::: {.include}",
+      "chapter.md",
+      ":::",
+    ].join("\n");
+    const header = "# Main\n\n";
+    const footer = "\n\n# End";
+    const rawMain = `${header}${includeRef}${footer}`;
+    const expanded = `${header}Chapter body\n${footer}`;
+    const sourceMap = new SourceMap([{
+      from: header.length,
+      to: header.length + "Chapter body\n".length,
+      file: "chapter.md",
+      originalRef: includeRef,
+      rawFrom: header.length,
+      rawTo: header.length + includeRef.length,
+      children: [],
+    }]);
+    const fs = new MemoryFileSystem({
+      "main.md": rawMain,
+      "chapter.md": "Chapter body\n",
+    });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: false,
+      },
+      editorDoc: expanded,
+      buffers: createDocumentMap({ "main.md": expanded }),
+      liveDocs: createDocumentMap({ "main.md": expanded }),
+      sourceMaps: new Map([["main.md", sourceMap]]),
+    });
+
+    await ref.result.handleRename("main.md", "renamed.md");
+
+    expect(ref.runtime.pipeline.isSelfChange("renamed.md", rawMain)).toBe(true);
+    expect(ref.runtime.pipeline.isSelfChange("renamed.md", expanded)).toBe(false);
   });
 
   it("clears the current session when deleting a parent directory", async () => {
@@ -298,5 +361,7 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.liveDocs.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
     expect(ref.runtime.sourceMaps.has("main.md")).toBe(false);
     expect(ref.runtime.sourceMaps.get("copy.md")).toBe(sourceMap);
+    expect(ref.runtime.pipeline.isSelfChange("copy.md", rawMain)).toBe(true);
+    expect(ref.runtime.pipeline.isSelfChange("copy.md", edited)).toBe(false);
   });
 });

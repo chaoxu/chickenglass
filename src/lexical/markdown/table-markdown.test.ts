@@ -32,4 +32,16 @@ describe("table-markdown", () => {
       "| a | 1 |",
     ].join("\n"));
   });
+
+  it("escapes literal pipes when serializing cells", () => {
+    expect(serializeMarkdownTable({
+      alignments: [null],
+      headers: ["A | B"],
+      rows: [["x | y"]],
+    })).toBe([
+      "| A \\| B |",
+      "|---|",
+      "| x \\| y |",
+    ].join("\n"));
+  });
 });

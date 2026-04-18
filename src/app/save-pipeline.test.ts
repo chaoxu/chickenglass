@@ -89,19 +89,21 @@ describe("SavePipeline", () => {
 
     // Queue two more saves while first is in flight
     pipeline.bumpRevision("a.md");
-    pipeline.save("a.md", () => ({
+    const secondPromise = pipeline.save("a.md", () => ({
       content: "v2",
       sourceMap: null,
     }));
     pipeline.bumpRevision("a.md");
-    pipeline.save("a.md", () => ({
+    const thirdPromise = pipeline.save("a.md", () => ({
       content: "v3",
       sourceMap: null,
     }));
 
     // Release the first write
     gate.resolve("");
-    await firstPromise;
+    const firstResult = await firstPromise;
+    const secondResult = await secondPromise;
+    const thirdResult = await thirdPromise;
 
     // Wait for microtasks
     await new Promise((r) => setTimeout(r, 0));
@@ -111,6 +113,11 @@ describe("SavePipeline", () => {
     expect(writeFn).toHaveBeenNthCalledWith(1, "a.md", "v1", null);
     expect(writeFn).toHaveBeenNthCalledWith(2, "a.md", "v3", null);
     expect(pipeline.getLastSavedHash("a.md")).toBe(fnv1aHash("v3"));
+    expect(firstResult.saved).toBe(true);
+    expect(secondResult.saved).toBe(true);
+    expect(thirdResult.saved).toBe(true);
+    expect(secondResult.lastSavedRevision).toBe(3);
+    expect(thirdResult.lastSavedRevision).toBe(3);
   });
 
   it("does not re-save when revision did not advance during in-flight write", async () => {
@@ -192,7 +199,7 @@ describe("SavePipeline", () => {
     expect(pipeline.isSelfChange("a.md", "saved")).toBe(true);
   });
 
-  it("detects external rewrite within suppression window", async () => {
+  it("detects external rewrites with different disk content", async () => {
     const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
     pipeline.bumpRevision("a.md");
 
@@ -202,13 +209,12 @@ describe("SavePipeline", () => {
     expect(pipeline.isSelfChange("a.md", "external")).toBe(false);
   });
 
-  it("self-change flag expires after the window", async () => {
+  it("does not expire content-equivalent watcher events by wall-clock time", async () => {
     const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
 
     await pipeline.save("a.md", () => ({ content: "hello", sourceMap: null }));
 
-    // With a 0ms window, the flag should have already expired
-    expect(pipeline.isSelfChange("a.md", "hello", 0)).toBe(false);
+    expect(pipeline.isSelfChange("a.md", "hello")).toBe(true);
   });
 
   it("hashes disk content from writeFn, not editor content (projected saves)", async () => {

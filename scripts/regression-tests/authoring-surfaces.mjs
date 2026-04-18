@@ -94,10 +94,6 @@ export async function run(page) {
     };
   }, {
     ignoreConsole: ["[vite] connecting...", "[vite] connected."],
-    ignorePageErrors: [
-      /Cache storage is disabled because the context is sandboxed/,
-      /writeEmbed is not defined/,
-    ],
   });
 
   if (issues.length > 0) {

@@ -1,10 +1,13 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
 import {
+  $createNodeSelection,
   $getRoot,
   $getSelection,
   $isElementNode,
+  $isNodeSelection,
   $isRangeSelection,
+  $setSelection,
   CLICK_COMMAND,
   UNDO_COMMAND,
 } from "lexical";
@@ -14,13 +17,19 @@ import { describe, expect, it } from "vitest";
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
+import "./renderers/block-renderers";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
+import { ACTIVATE_STRUCTURE_EDIT_COMMAND } from "./structure-edit-plugin";
 
 type RichMarkdownEditorProps = ComponentProps<typeof LexicalRichMarkdownEditor>;
 
 const TABLE_MD = `| H1 | H2 |
 | --- | --- |
 | a | b |`;
+
+const DISPLAY_MATH_MD = `$$
+x + 1
+$$`;
 
 async function mountEditor(overrides: Partial<RichMarkdownEditorProps> = {}) {
   let editor: LexicalEditor | null = null;
@@ -77,6 +86,37 @@ async function mountEditor(overrides: Partial<RichMarkdownEditorProps> = {}) {
       view.unmount();
     },
   };
+}
+
+function readSelectionKind(editor: LexicalEditor): "none" | "node" | "other" {
+  return editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (selection === null) {
+      return "none";
+    }
+    if ($isNodeSelection(selection)) {
+      return "node";
+    }
+    return "other";
+  });
+}
+
+function getFirstTopLevelKey(editor: LexicalEditor): string {
+  const key = editor.getEditorState().read(() => $getRoot().getFirstChild()?.getKey() ?? null);
+  if (!key) {
+    throw new Error("expected a first top-level node");
+  }
+  return key;
+}
+
+function selectNode(editor: LexicalEditor, key: string): void {
+  act(() => {
+    editor.update(() => {
+      const selection = $createNodeSelection();
+      selection.add(key);
+      $setSelection(selection);
+    }, { discrete: true });
+  });
 }
 
 describe("ClickableLinkPlugin in read-only mode", () => {
@@ -238,6 +278,93 @@ describe("TableActionMenuPlugin", () => {
         expect(menu?.textContent).toContain("Insert row above");
         expect(menu?.textContent).not.toContain("header column");
       });
+    } finally {
+      editor.unmount();
+    }
+  });
+});
+
+describe("StructureEditProvider selection ownership", () => {
+  it("releases parent selection when activating a structure surface by command", async () => {
+    const editor = await mountEditor({
+      doc: DISPLAY_MATH_MD,
+      editable: true,
+    });
+
+    try {
+      await waitFor(() => {
+        expect(
+          editor.editor.getRootElement()?.querySelector(
+            ".cf-lexical-display-math-body",
+          ),
+        ).not.toBeNull();
+      });
+      const blockKey = getFirstTopLevelKey(editor.editor);
+      selectNode(editor.editor, blockKey);
+      expect(readSelectionKind(editor.editor)).toBe("node");
+
+      let handled = false;
+      act(() => {
+        handled = editor.editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, {
+          blockKey,
+          surface: "display-math-source",
+          variant: "display-math",
+        });
+      });
+
+      expect(handled).toBe(true);
+      await waitFor(() => {
+        expect(readSelectionKind(editor.editor)).toBe("none");
+      });
+      await waitFor(() => {
+        expect(
+          editor.editor.getRootElement()?.querySelector(
+            ".cf-lexical-structure-source-editor--math",
+          ),
+        ).not.toBeNull();
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("opens a structure surface from a selected block without repairing NodeSelection on click", async () => {
+    const editor = await mountEditor({
+      doc: DISPLAY_MATH_MD,
+      editable: true,
+    });
+
+    try {
+      await waitFor(() => {
+        expect(
+          editor.editor.getRootElement()?.querySelector(
+            ".cf-lexical-display-math-body",
+          ),
+        ).not.toBeNull();
+      });
+      const blockKey = getFirstTopLevelKey(editor.editor);
+      selectNode(editor.editor, blockKey);
+      expect(readSelectionKind(editor.editor)).toBe("node");
+
+      const body = editor.editor.getRootElement()?.querySelector(
+        ".cf-lexical-display-math-body",
+      );
+      if (!body) {
+        throw new Error("expected display math body");
+      }
+
+      act(() => {
+        fireEvent.click(body);
+      });
+
+      await waitFor(() => {
+        expect(
+          editor.editor.getRootElement()?.querySelector(
+            ".cf-lexical-structure-source-editor--math",
+          ),
+        ).not.toBeNull();
+      });
+      expect(readSelectionKind(editor.editor)).toBe("none");
     } finally {
       editor.unmount();
     }

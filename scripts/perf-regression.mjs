@@ -17,6 +17,7 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
+  formatRuntimeIssues,
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
@@ -24,8 +25,10 @@ import {
   sleep,
   switchToMode,
   waitForDebugBridge,
+  withRuntimeIssueCapture,
 } from "./test-helpers.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
+import { resolveFixtureDocument } from "./test-helpers/fixtures.mjs";
 
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
@@ -169,6 +172,22 @@ export function availableTypingBurstCases(caseDefinitions = TYPING_BURST_CASES) 
   return caseDefinitions.filter((caseDef) => hasFixtureDocument(caseDef));
 }
 
+export function unavailableTypingBurstCases(caseDefinitions = TYPING_BURST_CASES) {
+  return caseDefinitions.filter((caseDef) => !hasFixtureDocument(caseDef));
+}
+
+function formatFixtureCandidates(fixture) {
+  return (fixture.candidates ?? []).join(", ") || "<default fixture search paths>";
+}
+
+function formatMissingTypingBurstFixtures(missingCases) {
+  return [
+    "Missing required typing benchmark fixture(s); perf coverage would be incomplete.",
+    ...missingCases.map((caseDef) =>
+      `- ${caseDef.displayPath}: tried ${formatFixtureCandidates(caseDef)}`),
+  ].join("\n");
+}
+
 function splitLinesWithOffsets(text) {
   const lines = text.split("\n");
   const result = [];
@@ -309,6 +328,48 @@ function resolveScrollFixture() {
   return resolveFixtureDocumentWithFallback(SCROLL_FIXTURE, PUBLIC_SCROLL_FALLBACK);
 }
 
+function scrollFixtureCoverageWarnings() {
+  if (hasFixtureDocument(SCROLL_FIXTURE)) {
+    return [];
+  }
+  const fallback = resolveFixtureDocument(PUBLIC_SCROLL_FALLBACK);
+  return [
+    `Missing preferred scroll perf fixture ${SCROLL_FIXTURE.displayPath}; using ${fallback.displayPath}. Perf coverage is public fallback only.`,
+  ];
+}
+
+function perfFixtureCoverageWarnings(scenarioName) {
+  if (
+    scenarioName === "open-scroll-fixture" ||
+    scenarioName === "scroll-step-lexical" ||
+    scenarioName === "scroll-step-source"
+  ) {
+    return scrollFixtureCoverageWarnings();
+  }
+  return [];
+}
+
+function validatePerfFixtureCoverage(scenarioName) {
+  if (scenarioName === "typing-lexical-burst") {
+    const missingCases = unavailableTypingBurstCases();
+    if (missingCases.length > 0) {
+      throw new Error(formatMissingTypingBurstFixtures(missingCases));
+    }
+  }
+  return perfFixtureCoverageWarnings(scenarioName);
+}
+
+async function waitForScrollableEditor(page) {
+  await page.waitForFunction(
+    () => {
+      const editor = document.querySelector('[data-testid="lexical-editor"]');
+      return editor instanceof HTMLElement && editor.scrollHeight > editor.clientHeight;
+    },
+    {},
+    { timeout: 10000 },
+  );
+}
+
 async function openCleanLexicalDocument(page, path, content) {
   const verificationWindow = 200;
   await evaluateStep(page, "openCleanLexicalDocument", async ({ nextPath, nextContent }) => {
@@ -341,7 +402,6 @@ async function openCleanLexicalDocument(page, path, content) {
     },
     { timeout: 10000 },
   );
-  await sleep(200);
   return content;
 }
 
@@ -432,10 +492,10 @@ export const scenarios = {
   "typing-lexical-burst": {
     description: "Measure Lexical-mode typing bursts across prose, inline math, and citation/ref hotspots.",
     defaultSettleMs: 200,
-    requiredMetrics: typingBurstRequiredMetricNames(availableTypingBurstCases()),
+    requiredMetrics: typingBurstRequiredMetricNames(),
     run: async (page) => {
       const metrics = [];
-      for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
+      for (const testCase of TYPING_BURST_CASES.map(resolveTypingBurstFixture)) {
         const originalText = await openCleanLexicalDocument(
           page,
           testCase.virtualPath,
@@ -459,7 +519,7 @@ export const scenarios = {
     defaultSettleMs: 400,
     run: async (page) => {
       await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical" });
-      await sleep(800);
+      await waitForScrollableEditor(page);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
     },
@@ -469,7 +529,7 @@ export const scenarios = {
     defaultSettleMs: 400,
     run: async (page) => {
       await openFixtureDocument(page, resolveScrollFixture(), { mode: "source" });
-      await sleep(800);
+      await waitForScrollableEditor(page);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
     },
@@ -545,18 +605,28 @@ async function runScenarioSamples(page, scenarioName, iterations, warmup, settle
   const totalRuns = warmup + iterations;
 
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
-    await discardDirtyPerfState(page);
-    await page.goto(appUrl, { waitUntil: "domcontentloaded" });
-    await waitForDebugBridge(page);
-    await clearPerf(page);
-    const scenarioResult = await scenario.run(page);
-    await sleep(settleMs);
-    await assertEditorHealth(page, `${scenarioName} run ${runIndex + 1}`);
-    const snapshot = await getPerfSnapshot(page);
+    const { value, issues } = await withRuntimeIssueCapture(
+      page,
+      async () => {
+        await discardDirtyPerfState(page);
+        await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+        await waitForDebugBridge(page);
+        await clearPerf(page);
+        const scenarioResult = await scenario.run(page);
+        await sleep(settleMs);
+        await assertEditorHealth(page, `${scenarioName} run ${runIndex + 1}`);
+        const snapshot = await getPerfSnapshot(page);
+        return { scenarioResult, snapshot };
+      },
+      scenario.runtimeIssueOptions ?? {},
+    );
+    if (issues.length > 0) {
+      throw new Error(`${scenarioName} run ${runIndex + 1}: runtime issues: ${formatRuntimeIssues(issues)}`);
+    }
     if (runIndex >= warmup) {
       snapshots.push({
-        ...snapshot,
-        metrics: scenarioResult?.metrics ?? [],
+        ...value.snapshot,
+        metrics: value.scenarioResult?.metrics ?? [],
       });
     }
     await discardDirtyPerfState(page);
@@ -599,6 +669,12 @@ function printReportSummary(report) {
       max: entry.maxValue,
       samples: entry.samples,
     })));
+  }
+  if ((report.fixtureWarnings ?? []).length > 0) {
+    console.log("\nFixture coverage warnings");
+    for (const warning of report.fixtureWarnings) {
+      console.log(`- ${warning}`);
+    }
   }
 }
 
@@ -659,6 +735,10 @@ export async function main(argv = process.argv.slice(2)) {
   const warmup = getIntFlag("--warmup", 1);
   const defaultSettleMs = heavyDoc ? Math.max(scenario.defaultSettleMs, 3000) : scenario.defaultSettleMs;
   const settleMs = getIntFlag("--settle-ms", defaultSettleMs);
+  const fixtureWarnings = validatePerfFixtureCoverage(scenarioName);
+  for (const warning of fixtureWarnings) {
+    console.warn(`Perf fixture coverage: ${warning}`);
+  }
 
   const page = await connectEditor({
     browser: chromeArgs.browser,
@@ -679,6 +759,7 @@ export async function main(argv = process.argv.slice(2)) {
       appUrl,
       snapshots,
     });
+    report.fixtureWarnings = fixtureWarnings;
 
     if (command === "capture") {
       const outputPath = getFlag("--output");

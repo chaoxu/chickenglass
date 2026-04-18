@@ -119,11 +119,14 @@ export function createEditorSessionPersistence({
   };
 
   const saveFile = async (): Promise<void> => {
-    await saveCurrentDocument();
+    const saved = await saveCurrentDocument();
+    if (!saved) {
+      throw new Error("Save did not complete");
+    }
   };
 
-  const renameBuffers = (oldPath: string, newPath: string) => {
-    renamePathBuffers(runtime, oldPath, newPath);
+  const renameBuffers = (oldPath: string, newPath: string, rawDiskContent: string) => {
+    renamePathBuffers(runtime, oldPath, newPath, rawDiskContent);
 
     runtime.commit(
       renameSessionDocument(runtime.getState(), oldPath, newPath, basename(newPath)),
@@ -135,12 +138,13 @@ export function createEditorSessionPersistence({
 
   const handleRename = async (oldPath: string, newPath: string) => {
     try {
+      const rawDiskContent = await fs.readFile(oldPath);
       await fs.renameFile(oldPath, newPath);
       const oldDir = oldPath.substring(0, Math.max(0, oldPath.lastIndexOf("/")));
       const newDir = newPath.substring(0, Math.max(0, newPath.lastIndexOf("/")));
       // Same-directory rename: scoped refresh. Cross-directory: full refresh.
       await refreshTree(oldDir === newDir ? newPath : undefined);
-      renameBuffers(oldPath, newPath);
+      renameBuffers(oldPath, newPath, rawDiskContent);
       addRecentFile(newPath);
     } catch (e: unknown) {
       console.error("[session] rename failed:", e);
@@ -196,7 +200,7 @@ export function createEditorSessionPersistence({
 
         const { toProjectRelativePathCommand } = await import("./tauri-client/fs");
         const relativePath = await toProjectRelativePathCommand(savePath);
-        await writeDocumentSnapshot(relativePath, doc, sourceMap, {
+        const mainDiskContent = await writeDocumentSnapshot(relativePath, doc, sourceMap, {
           createTargetIfMissing: true,
         });
 
@@ -206,7 +210,7 @@ export function createEditorSessionPersistence({
         }
 
         runtime.pipeline.clear(currentPath);
-        runtime.pipeline.initPath(relativePath, doc);
+        runtime.pipeline.initPath(relativePath, mainDiskContent);
 
         runtime.commit(
           applySaveAsResult({

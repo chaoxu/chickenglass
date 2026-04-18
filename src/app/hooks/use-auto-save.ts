@@ -33,6 +33,7 @@ export function useAutoSave(
   suspended = false,
   suspendedRef?: { current: boolean },
   suspendedVersionRef?: { current: number },
+  onError?: (error: unknown) => void,
 ): void {
   // savingRef lives outside the effect so the guard persists across
   // re-registrations that happen when isDirty or onSave change.
@@ -60,8 +61,9 @@ export function useAutoSave(
       if (isSuspended()) return;
       if (!isDirty || savingRef.current) return;
       savingRef.current = true;
-      onSave().catch(() => {
-        // Auto-save is best-effort — swallow errors silently.
+      onSave().catch((error: unknown) => {
+        console.error("[auto-save] save failed", error);
+        onError?.(error);
       }).finally(() => {
         savingRef.current = false;
       });
@@ -118,5 +120,5 @@ export function useAutoSave(
       clearPendingEventSave();
       if (timerId !== null) clearInterval(timerId);
     };
-  }, [interval, isDirty, onSave, suspended, suspendedRef, suspendedVersionRef]);
+  }, [interval, isDirty, onError, onSave, suspended, suspendedRef, suspendedVersionRef]);
 }

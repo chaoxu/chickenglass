@@ -10,18 +10,11 @@ import {
 } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $createNodeSelection,
   $getNodeByKey,
-  $getSelection,
-  $isDecoratorNode,
-  $isNodeSelection,
   $setSelection,
-  CLICK_COMMAND,
-  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   createCommand,
   mergeRegister,
-  type LexicalEditor,
   type NodeKey,
 } from "lexical";
 
@@ -66,31 +59,16 @@ interface StructureEditContextValue {
 
 const StructureEditContext = createContext<StructureEditContextValue | null>(null);
 
+function $releaseParentSelection(): void {
+  $setSelection(null);
+}
+
 function useStructureEditContext(): StructureEditContextValue {
   const value = useContext(StructureEditContext);
   if (!value) {
     throw new Error("useStructureEditContext must be used within a StructureEditProvider");
   }
   return value;
-}
-
-function syncDecoratorNodeSelection(
-  editor: LexicalEditor,
-  blockKey: NodeKey,
-): void {
-  editor.update(() => {
-    const node = $getNodeByKey(blockKey);
-    if (!$isDecoratorNode(node)) {
-      return;
-    }
-
-    // Always replace via $setSelection — mutating the existing NodeSelection
-    // can fail with "Cannot assign to read only property 'dirty'" when the
-    // pending state holds a clone whose mutation guard wasn't properly reset.
-    const nextSelection = $createNodeSelection();
-    nextSelection.add(blockKey);
-    $setSelection(nextSelection);
-  }, { discrete: true });
 }
 
 export function StructureEditProvider({
@@ -136,30 +114,14 @@ export function StructureEditProvider({
     };
 
     return mergeRegister(
-      // Lexical commits the prior NodeSelection as frozen, then
-      // @lexical/rich-text's CLICK_COMMAND handler tries to mutate it via
-      // selection.clear() — crashing dev mode with "Cannot assign to read
-      // only property 'dirty'". Pre-empt that by replacing any node-selection
-      // with a fresh, mutable instance before downstream handlers run.
-      editor.registerCommand(
-        CLICK_COMMAND,
-        () => {
-          const selection = $getSelection();
-          if ($isNodeSelection(selection)) {
-            const fresh = $createNodeSelection();
-            for (const key of selection.getNodes().map((n) => n.getKey())) {
-              fresh.add(key);
-            }
-            $setSelection(fresh);
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_HIGH,
-      ),
       editor.registerCommand(
         ACTIVATE_STRUCTURE_EDIT_COMMAND,
         (request) => {
-          syncDecoratorNodeSelection(editor, request.blockKey);
+          // Once a structure surface opens, the nested editor owns focus and
+          // caret state. Leaving a parent NodeSelection behind lets Lexical's
+          // rich-text click handler mutate stale selection state on the next
+          // click, so activation releases parent selection instead.
+          $releaseParentSelection();
           setState((current) => activateStructureEdit(
             current,
             request.blockKey,
@@ -173,6 +135,15 @@ export function StructureEditProvider({
       editor.registerCommand(
         DEACTIVATE_STRUCTURE_EDIT_COMMAND,
         (request) => {
+          const current = stateRef.current;
+          const shouldReleaseSelection = request?.blockKey && request.surface
+            ? current.status === "editing"
+              && current.blockKey === request.blockKey
+              && current.surface === request.surface
+            : current.status === "editing";
+          if (shouldReleaseSelection) {
+            $releaseParentSelection();
+          }
           setState((current) => {
             if (request?.blockKey && request.surface) {
               return deactivateStructureEditIfMatch(
@@ -250,9 +221,9 @@ export function useStructureEditToggle(
 } {
   const context = useStructureEditContext();
 
-  // Selection is set inside ACTIVATE_STRUCTURE_EDIT_COMMAND via
-  // syncDecoratorNodeSelection — don't double-set via useLexicalNodeSelection
-  // here, which crashes when the selection state holds a frozen NodeSelection.
+  // Structure editing is represented by StructureEditState, not by keeping the
+  // parent editor's decorator NodeSelection alive while the nested surface owns
+  // focus.
   const activate = useCallback(() => {
     context.activate({ blockKey, surface, variant });
   }, [blockKey, context, surface, variant]);

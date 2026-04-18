@@ -42,6 +42,7 @@ export async function run(page) {
     sel?.removeAllRanges();
     sel?.addRange(range);
     italic.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+    document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   });
   await page.waitForTimeout(200);
 
@@ -61,17 +62,19 @@ export async function run(page) {
       return;
     }
     root.focus();
-    const first = root.firstChild;
-    if (!first) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const firstText = walker.nextNode();
+    if (!firstText) {
       return;
     }
     const range = document.createRange();
-    range.setStart(first, 0);
+    range.setStart(firstText, 0);
     range.collapse(true);
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
     root.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+    document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   });
   await page.waitForTimeout(200);
 

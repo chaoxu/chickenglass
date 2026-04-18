@@ -55,6 +55,7 @@ async function placeCaretInsideToken(page, selector, text) {
           root.focus();
         }
         token.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+        document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
         return true;
       }
       node = walker.nextNode();
@@ -77,6 +78,7 @@ async function moveCaretToStart(page) {
     selection?.removeAllRanges();
     selection?.addRange(range);
     root.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+    document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   });
 }
 
@@ -87,11 +89,16 @@ export async function run(page) {
     const revealChecks = [];
     for (const probe of TOKEN_PROBES) {
       const placed = await placeCaretInsideToken(page, probe.selector, probe.text);
-      await page.waitForTimeout(160);
+      const sourceNeedle = `${probe.marker}${probe.text}${probe.marker}`;
+      await page.waitForFunction(
+        (needle) => (document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "").includes(needle),
+        sourceNeedle,
+        { timeout: 1000 },
+      ).catch(() => {});
       const sawSource = await page.evaluate((needle) => {
         const editor = document.querySelector('[data-testid="lexical-editor"]');
         return (editor?.textContent ?? "").includes(needle);
-      }, `${probe.marker}${probe.text}${probe.marker}`);
+      }, sourceNeedle);
       revealChecks.push({
         marker: probe.marker,
         placed,
@@ -100,17 +107,17 @@ export async function run(page) {
         text: probe.text,
       });
       await moveCaretToStart(page);
-      await page.waitForTimeout(120);
+      await page.waitForFunction(
+        (needle) => !(document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "").includes(needle),
+        sourceNeedle,
+        { timeout: 1000 },
+      ).catch(() => {});
     }
 
     const markdown = await readEditorText(page);
     return { markdown, revealChecks };
   }, {
     ignoreConsole: ["[vite] connecting...", "[vite] connected."],
-    ignorePageErrors: [
-      /Cache storage is disabled because the context is sandboxed/,
-      /writeEmbed is not defined/,
-    ],
   });
 
   if (issues.length > 0) {

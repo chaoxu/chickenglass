@@ -1,5 +1,10 @@
 import { $isCodeHighlightNode, $isCodeNode, registerCodeHighlighting } from "@lexical/code";
-import { $getRoot } from "lexical";
+import {
+  $createLineBreakNode,
+  $createTextNode,
+  $getRoot,
+  $isElementNode,
+} from "lexical";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -121,6 +126,67 @@ describe("coflat lexical markdown", () => {
     });
 
     expect(getLexicalMarkdown(editor)).toBe(markdown);
+  });
+
+  it("serializes visible table-cell line breaks as pipe-table br markers", () => {
+    const editor = createHeadlessCoflatEditor();
+    const markdown = [
+      "| Case | Notes |",
+      "|------|-------|",
+      "| A | one |",
+    ].join("\n");
+
+    setLexicalMarkdown(editor, markdown);
+    editor.update(() => {
+      const table = $getRoot().getFirstChild();
+      if (!$isTableNode(table)) {
+        throw new Error("expected table node");
+      }
+      const row = table.getChildAtIndex(1);
+      if (!$isElementNode(row)) {
+        throw new Error("expected table row");
+      }
+      const cell = row.getChildAtIndex(1);
+      if (!$isElementNode(cell)) {
+        throw new Error("expected table cell");
+      }
+      const paragraph = cell.getFirstChild();
+      if (!$isElementNode(paragraph)) {
+        throw new Error("expected table cell paragraph");
+      }
+      paragraph.clear();
+      paragraph.append(
+        $createTextNode("first line"),
+        $createLineBreakNode(),
+        $createTextNode("second line"),
+      );
+    }, { discrete: true });
+
+    expect(getLexicalMarkdown(editor)).toBe([
+      "| Case | Notes |",
+      "|------|-------|",
+      "| A | first line<br>second line |",
+    ].join("\n"));
+  });
+
+  it("imports pipe-table br markers as visible table-cell line breaks", () => {
+    const markdown = [
+      "| Case | Notes |",
+      "|------|-------|",
+      "| A | first line<br>second line |",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("preserves literal br text in table-cell code spans", () => {
+    const markdown = [
+      "| Case | Notes |",
+      "|------|-------|",
+      "| A | `<br>` and first line<br>second line |",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
   it("imports inline markdown formats as native formatted text nodes", () => {

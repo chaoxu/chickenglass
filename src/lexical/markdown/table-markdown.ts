@@ -39,8 +39,12 @@ function formatAlignment(align: "center" | "left" | "right" | null): string {
   return "---";
 }
 
+function serializeTableCell(cell: string): string {
+  return cell.replaceAll("|", "\\|");
+}
+
 function serializeTableRow(cells: readonly string[]): string {
-  return `| ${cells.join(" | ")} |`;
+  return `| ${cells.map(serializeTableCell).join(" | ")} |`;
 }
 
 function serializeTableDivider(cells: readonly string[]): string {

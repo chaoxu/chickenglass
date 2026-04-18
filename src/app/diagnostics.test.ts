@@ -32,4 +32,17 @@ describe("extractDiagnostics", () => {
       }),
     ]);
   });
+
+  it("warns when include blocks remain unresolved in the loaded document", () => {
+    expect(extractDiagnostics([
+      "# Main",
+      "",
+      "::: {.include}",
+      "missing.md",
+      ":::",
+    ].join("\n"))).toContainEqual(expect.objectContaining({
+      severity: "warning",
+      message: 'Unresolved include "missing.md"',
+    }));
+  });
 });

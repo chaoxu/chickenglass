@@ -1,7 +1,8 @@
 /* global window */
 
 import process from "node:process";
-import { MODE_LABELS, sleep, waitForEditorSurface } from "./test-helpers/shared.mjs";
+import { MODE_LABELS, waitForEditorSurface } from "./test-helpers/shared.mjs";
+import { waitForDebugBridge as waitForDebugBridgeImpl } from "./test-helpers/browser.mjs";
 import { openRegressionDocument } from "./test-helpers/fixtures.mjs";
 export { PUBLIC_SHOWCASE_FIXTURE, sleep } from "./test-helpers/shared.mjs";
 export {
@@ -25,7 +26,11 @@ export async function focusEditor(page) {
   await page.evaluate(() => {
     window.__editor.focus();
   });
-  await sleep(100);
+  await page.waitForFunction(
+    () => Boolean(document.activeElement?.closest('[data-testid="lexical-editor"]')),
+    undefined,
+    { timeout: 5000 },
+  );
 }
 
 export async function readEditorText(page) {
@@ -43,14 +48,18 @@ export async function setSelection(page, anchor, focus = anchor) {
   await page.evaluate(({ nextAnchor, nextFocus }) => {
     window.__editor.setSelection(nextAnchor, nextFocus);
   }, { nextAnchor: anchor, nextFocus: focus });
-  await sleep(100);
+  await waitForEditorSelection(page, anchor, focus);
 }
 
 export async function saveCurrentFile(page) {
   await page.evaluate(async () => {
     await window.__app.saveFile();
   });
-  await sleep(150);
+  await page.waitForFunction(
+    () => window.__app?.isDirty?.() === false,
+    undefined,
+    { timeout: 5000 },
+  );
 }
 
 export async function discardCurrentFile(page) {
@@ -68,14 +77,22 @@ export async function discardCurrentFile(page) {
     }
     return !app.getCurrentDocument?.();
   });
-  await sleep(150);
+  await page.waitForFunction(
+    () => !window.__app?.getCurrentDocument?.(),
+    undefined,
+    { timeout: 5000 },
+  ).catch(() => {});
   return discarded;
 }
 
 export async function openFile(page, path) {
   await page.evaluate((nextPath) => window.__app.openFile(nextPath), path);
   await waitForEditorSurface(page);
-  await sleep(300);
+  await page.waitForFunction(
+    (expectedPath) => window.__app?.getCurrentDocument?.()?.path === expectedPath,
+    path,
+    { timeout: 10000 },
+  );
 }
 
 export async function findLine(page, needle) {
@@ -117,10 +134,7 @@ export async function setRevealPresentation(page, presentation) {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
   }, presentation);
   await page.reload({ waitUntil: "load" });
-  await page.waitForFunction(() => Boolean(window.__app && window.__cfDebug), { timeout: 15000 });
-  await page.evaluate(async () => {
-    await Promise.all([window.__app.ready, window.__cfDebug.ready]);
-  });
+  await waitForDebugBridgeImpl(page);
 }
 
 export async function switchToMode(page, mode) {
@@ -134,15 +148,19 @@ export async function switchToMode(page, mode) {
       return null;
     }
     window.__app.setMode(nextMode);
-    await new Promise((resolve) => setTimeout(resolve, 200));
     return window.__app.getMode();
   }, normalizedMode);
 
   if (changedViaApp !== null) {
-    if (changedViaApp !== normalizedMode) {
-      throw new Error(`Failed to switch editor mode to ${normalizedMode}; current mode is ${changedViaApp}.`);
+    await page.waitForFunction(
+      (nextMode) => window.__app?.getMode?.() === nextMode,
+      normalizedMode,
+      { timeout: 5000 },
+    );
+    const finalMode = await page.evaluate(() => window.__app.getMode());
+    if (finalMode !== normalizedMode) {
+      throw new Error(`Failed to switch editor mode to ${normalizedMode}; current mode is ${finalMode}.`);
     }
-    await sleep(200);
     return;
   }
 
@@ -153,7 +171,11 @@ export async function switchToMode(page, mode) {
     const currentLabel = (await modeButton.textContent())?.trim();
     if (currentLabel === targetLabel) return;
     await modeButton.click();
-    await sleep(200);
+    await page.waitForFunction(
+      ({ label }) => document.querySelector('[data-testid="mode-button"]')?.textContent?.trim() === label,
+      { label: targetLabel },
+      { timeout: 5000 },
+    ).catch(() => {});
   }
 
   const finalLabel = (await modeButton.textContent())?.trim();
@@ -166,9 +188,9 @@ export async function openAppSearch(page) {
   });
   await page.waitForFunction(
     () => Boolean(document.querySelector('[role="dialog"] input')),
+    undefined,
     { timeout: 5000 },
   );
-  await sleep(150);
 }
 
 export async function clickSearchDialogResult(page, needle) {
@@ -199,26 +221,26 @@ export async function closeAppSearch(page) {
   });
   await page.waitForFunction(
     () => !document.querySelector('[role="dialog"] input'),
+    undefined,
     { timeout: 5000 },
   );
-  await sleep(100);
 }
 
 export async function insertEditorText(page, text) {
   await waitForEditorSurface(page);
-  await page.evaluate((nextText) => {
+  const expectedText = await page.evaluate((nextText) => {
     window.__editor.insertText(nextText);
+    return window.__editor.getDoc();
   }, text);
-  await sleep(100);
+  await waitForEditorText(page, expectedText);
 }
 
 export async function replaceEditorText(page, text) {
   await waitForEditorSurface(page);
   await page.evaluate((nextText) => {
     window.__editor.setDoc(nextText);
-    window.__editor.setSelection(nextText.length);
   }, text);
-  await sleep(100);
+  await waitForEditorText(page, text);
 }
 
 export async function withRestoredFixture(page, fixture, run) {
@@ -259,15 +281,41 @@ function issueMatches(text, patterns) {
     typeof pattern === "string" ? text.includes(pattern) : pattern.test(text));
 }
 
+const runtimeIssueIgnoreStackByPage = new WeakMap();
+
+function activeRuntimeIssueIgnores(page) {
+  return runtimeIssueIgnoreStackByPage.get(page) ?? [];
+}
+
+function pushRuntimeIssueIgnores(page, options) {
+  const stack = activeRuntimeIssueIgnores(page);
+  stack.push({
+    ignoreConsole: options.ignoreConsole ?? [],
+    ignorePageErrors: options.ignorePageErrors ?? [],
+  });
+  runtimeIssueIgnoreStackByPage.set(page, stack);
+}
+
+function popRuntimeIssueIgnores(page) {
+  const stack = activeRuntimeIssueIgnores(page);
+  stack.pop();
+  if (stack.length === 0) {
+    runtimeIssueIgnoreStackByPage.delete(page);
+  }
+}
+
+function runtimeIssueIsIgnored(page, source, text) {
+  const key = source === "pageerror" ? "ignorePageErrors" : "ignoreConsole";
+  return activeRuntimeIssueIgnores(page).some((entry) => issueMatches(text, entry[key]));
+}
+
 export async function withRuntimeIssueCapture(page, run, options = {}) {
   const issues = [];
-  const ignoreConsole = options.ignoreConsole ?? [];
-  const ignorePageErrors = options.ignorePageErrors ?? [];
 
   const onConsole = (msg) => {
     if (msg.type() !== "error") return;
     const text = msg.text();
-    if (issueMatches(text, ignoreConsole)) return;
+    if (runtimeIssueIsIgnored(page, "console", text)) return;
     issues.push({ source: "console", text });
   };
 
@@ -275,20 +323,27 @@ export async function withRuntimeIssueCapture(page, run, options = {}) {
     const text = error instanceof Error
       ? `${error.name}: ${error.message}`
       : String(error);
-    if (issueMatches(text, ignorePageErrors)) return;
+    if (runtimeIssueIsIgnored(page, "pageerror", text)) return;
     issues.push({ source: "pageerror", text });
   };
 
+  pushRuntimeIssueIgnores(page, options);
   page.on("console", onConsole);
   page.on("pageerror", onPageError);
 
   try {
     const value = await run();
-    await sleep(100);
+    await waitForBrowserSettled(page);
     return { value, issues };
+  } catch (error) {
+    if (error instanceof Error) {
+      error.runtimeIssues = issues;
+    }
+    throw error;
   } finally {
     page.off("console", onConsole);
     page.off("pageerror", onPageError);
+    popRuntimeIssueIgnores(page);
   }
 }
 
@@ -298,6 +353,38 @@ export function formatRuntimeIssues(issues, limit = 3) {
     .slice(0, limit)
     .map((issue) => `[${issue.source}] ${issue.text}`)
     .join(" | ");
+}
+
+export async function waitForBrowserSettled(page, frames = 2) {
+  await page.evaluate(async (frameCount) => {
+    for (let index = 0; index < frameCount; index += 1) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }, frames);
+}
+
+export async function waitForEditorText(page, expectedText, timeout = 5000) {
+  await waitForEditorSurface(page);
+  await page.waitForFunction(
+    (text) => window.__editor?.getDoc?.() === text,
+    expectedText,
+    { timeout },
+  );
+}
+
+export async function waitForEditorSelection(page, anchor, focus = anchor, timeout = 5000) {
+  await waitForEditorSurface(page);
+  await page.waitForFunction(
+    ({ expectedAnchor, expectedFocus }) => {
+      const selection = window.__editor?.getSelection?.();
+      return selection?.anchor === expectedAnchor && selection?.focus === expectedFocus;
+    },
+    {
+      expectedAnchor: anchor,
+      expectedFocus: focus,
+    },
+    { timeout },
+  );
 }
 
 async function collectEditorHealth(page, options = {}) {
@@ -403,9 +490,29 @@ export function createArgParser(argv = process.argv.slice(2)) {
 
 export async function resetEditorState(page) {
   await page.mouse.move(2, 2).catch(() => {});
-  await sleep(50);
+  await page.waitForFunction(
+    () => !document.querySelector(".cf-hover-preview-tooltip[data-visible='true']"),
+    undefined,
+    { timeout: 1000 },
+  ).catch(() => {});
   await page.evaluate(() => {
     window.__app?.setSearchOpen?.(false);
+  }).catch(() => {});
+  await page.evaluate(() => {
+    for (const key of Object.keys(window.localStorage)) {
+      if (key !== "cf-window-state" && !key.startsWith("cf-window-state:")) {
+        continue;
+      }
+      try {
+        const state = JSON.parse(window.localStorage.getItem(key) ?? "null");
+        if (state && typeof state === "object") {
+          state.currentDocument = null;
+          window.localStorage.setItem(key, JSON.stringify(state));
+        }
+      } catch {
+        window.localStorage.removeItem(key);
+      }
+    }
   }).catch(() => {});
   // Reset reveal presentation to the default ("inline") so a previous test
   // that switched to "floating" doesn't leak its setting into the next test.
@@ -428,10 +535,7 @@ export async function resetEditorState(page) {
   });
   if (presentationDrifted) {
     await page.reload({ waitUntil: "load" });
-    await page.waitForFunction(() => Boolean(window.__app && window.__cfDebug), { timeout: 15000 });
-    await page.evaluate(async () => {
-      await Promise.all([window.__app.ready, window.__cfDebug.ready]);
-    });
+    await waitForDebugBridgeImpl(page);
   }
   const discarded = await discardCurrentFile(page).catch(() => false);
   if (!discarded) {
@@ -446,6 +550,7 @@ export async function resetEditorState(page) {
       const doc = window.__editor?.getDoc?.() ?? "";
       return doc.includes("Coflat Feature Showcase") && doc.includes("SearchNeedle");
     },
+    undefined,
     { timeout: 5000 },
   );
 }

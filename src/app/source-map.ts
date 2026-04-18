@@ -65,6 +65,26 @@ function mapRegionsThrough(regions: IncludeRegion[], changes: PositionMapping): 
   }
 }
 
+function rangeCrossesRegionBoundary(
+  regions: readonly IncludeRegion[],
+  from: number,
+  to: number,
+): boolean {
+  for (const region of regions) {
+    if (from === to && (from === region.from || from === region.to)) {
+      return true;
+    }
+    if ((from < region.from && to > region.from) || (from < region.to && to > region.to)) {
+      return true;
+    }
+    if (rangeCrossesRegionBoundary(region.children, from, to)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** Build a position mapping for sorted, non-overlapping editor document changes. */
 export function createEditorDocumentChangePositionMapping(
   changes: readonly EditorDocumentChange[],
@@ -141,6 +161,13 @@ export class SourceMap {
   /** Update all region positions through a position-mapping adapter. */
   mapThrough(changes: PositionMapping): void {
     mapRegionsThrough(this.regions, changes);
+  }
+
+  /** Whether all changes stay within a single source owner boundary. */
+  canMapDocumentChanges(changes: readonly EditorDocumentChange[]): boolean {
+    return changes.every((change) =>
+      !rangeCrossesRegionBoundary(this.regions, change.from, change.to)
+    );
   }
 
   /** Find which file owns a given position (null = main file). */

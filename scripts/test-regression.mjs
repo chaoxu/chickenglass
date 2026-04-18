@@ -29,13 +29,18 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
+  formatRuntimeIssues,
   resetEditorState,
   waitForDebugBridge,
+  withRuntimeIssueCapture,
 } from "./test-helpers.mjs";
 import { isMissingFixtureError } from "./test-helpers/fixtures.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
+const EXTERNAL_EMBED_ROUTE_PATTERNS = [
+  /^https:\/\/www\.youtube\.com\/embed\//,
+];
 
 /** Dynamically import all test modules from the regression-tests directory. */
 export async function loadTests() {
@@ -50,10 +55,26 @@ export async function loadTests() {
       console.warn(`  Skipping ${file}: missing name or run export`);
       continue;
     }
-    tests.push({ file, name: mod.name, run: mod.run });
+    tests.push({
+      file,
+      name: mod.name,
+      run: mod.run,
+      runtimeIssueOptions: mod.runtimeIssueOptions ?? {},
+    });
   }
 
   return tests;
+}
+
+async function installExternalEmbedStubs(page) {
+  for (const pattern of EXTERNAL_EMBED_ROUTE_PATTERNS) {
+    await page.route(pattern, (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body data-coflat-embed-stub=\"youtube\"></body></html>",
+      })
+    ).catch(() => {});
+  }
 }
 
 export async function main() {
@@ -116,6 +137,7 @@ export async function main() {
       await page.reload({ waitUntil: "load" });
     }
     await waitForDebugBridge(page);
+    await installExternalEmbedStubs(page);
   } catch {
     console.error("Timed out waiting for debug bridge (__app, __cfDebug).");
     console.error("The dev server may not have finished loading.");
@@ -139,24 +161,25 @@ export async function main() {
   let skipped = 0;
 
   for (const test of tests) {
-    // Reset state before each test
-    try {
-      await resetEditorState(page);
-    } catch (err) {
-      console.log(`  FAIL  ${test.name} (reset failed: ${err.message})`);
-      results.push({ name: test.name, pass: false, message: `Reset failed: ${err.message}` });
-      failed++;
-      continue;
-    }
-
-    // Run the test
     const startTime = Date.now();
     try {
-      const result = await test.run(page);
+      const { value: result, issues } = await withRuntimeIssueCapture(
+        page,
+        async () => {
+          await resetEditorState(page);
+          return test.run(page);
+        },
+        test.runtimeIssueOptions,
+      );
       const elapsed = Date.now() - startTime;
-      const suffix = result.message ? ` — ${result.message}` : "";
+      const runtimeMessage = issues.length > 0
+        ? `runtime issues: ${formatRuntimeIssues(issues)}`
+        : "";
+      const message = [runtimeMessage, result.message].filter(Boolean).join("; ");
+      const pass = result.pass && issues.length === 0;
+      const suffix = message ? ` — ${message}` : "";
 
-      if (result.pass) {
+      if (pass) {
         console.log(`  PASS  ${test.name} (${elapsed}ms)${suffix}`);
         passed++;
       } else {
@@ -164,14 +187,18 @@ export async function main() {
         failed++;
       }
 
-      results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
+      results.push({ name: test.name, pass, message, elapsed });
     } catch (err) {
       const elapsed = Date.now() - startTime;
+      const runtimeIssues = Array.isArray(err.runtimeIssues) ? err.runtimeIssues : [];
+      const runtimeSuffix = runtimeIssues.length > 0
+        ? `; runtime issues: ${formatRuntimeIssues(runtimeIssues)}`
+        : "";
       if (isMissingFixtureError(err)) {
-        const message = `optional fixture unavailable: ${err.message}`;
-        console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${message}`);
-        results.push({ name: test.name, pass: true, skipped: true, skipKind: "missing-fixture", message, elapsed });
-        skipped++;
+        const message = `missing required fixture: ${err.message}`;
+        console.log(`  FAIL  ${test.name} (${elapsed}ms) — ${message}`);
+        results.push({ name: test.name, pass: false, failureKind: "missing-fixture", message, elapsed });
+        failed++;
         continue;
       }
       // Detect Chrome disconnection — abort remaining tests
@@ -181,8 +208,8 @@ export async function main() {
         failed++;
         break;
       }
-      console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}`);
-      results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, elapsed });
+      console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}${runtimeSuffix}`);
+      results.push({ name: test.name, pass: false, message: `Error: ${err.message}${runtimeSuffix}`, elapsed });
       failed++;
     }
   }
@@ -190,9 +217,9 @@ export async function main() {
   // Summary
   console.log("\n========================");
   console.log(`Results: ${passed} passed, ${failed} failed, ${skipped} skipped, ${results.length} total`);
-  const missingFixtureSkips = results.filter((result) => result.skipKind === "missing-fixture");
-  if (missingFixtureSkips.length > 0) {
-    console.log(`Missing fixture skips: ${missingFixtureSkips.length}`);
+  const missingFixtureFailures = results.filter((result) => result.failureKind === "missing-fixture");
+  if (missingFixtureFailures.length > 0) {
+    console.log(`Missing fixture failures: ${missingFixtureFailures.length}`);
   }
 
   if (failed > 0) {

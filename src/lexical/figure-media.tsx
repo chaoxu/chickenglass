@@ -10,11 +10,25 @@ export function FigureMedia({
   const preview = useAssetPreview(src);
 
   if (preview.kind === "loading") {
-    return <div className="cf-lexical-media-fallback">{`Loading preview: ${src}`}</div>;
+    return (
+      <div
+        className="cf-lexical-media-fallback cf-lexical-media-fallback--loading"
+        data-preview-state="loading"
+      >
+        {`Loading preview: ${src}`}
+      </div>
+    );
   }
 
   if (preview.kind === "error" || !preview.previewUrl) {
-    return <div className="cf-lexical-media-fallback">{`Preview unavailable: ${src}`}</div>;
+    return (
+      <div
+        className="cf-lexical-media-fallback cf-lexical-media-fallback--error"
+        data-preview-state="error"
+      >
+        {`Preview unavailable: ${src}`}
+      </div>
+    );
   }
 
   return (

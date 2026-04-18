@@ -22,8 +22,11 @@ export async function run(page) {
     () =>
       Boolean(document.querySelector("img[alt='Generated showcase figure rendered from a local PDF asset']")) ||
       [...document.querySelectorAll(".cf-lexical-media-fallback")]
-        .some((element) => (element.textContent ?? "").includes("showcase/generated-figure.pdf")),
-    {},
+        .some((element) =>
+          element.getAttribute("data-preview-state") === "error"
+          && (element.textContent ?? "").includes("showcase/generated-figure.pdf")
+        ),
+    undefined,
     { timeout: 10000 },
   );
 
@@ -98,10 +101,6 @@ export async function run(page) {
     };
   }, {
     ignoreConsole: ["[vite] connecting...", "[vite] connected."],
-    ignorePageErrors: [
-      /Cache storage is disabled because the context is sandboxed/,
-      /writeEmbed is not defined/,
-    ],
   });
 
   if (issues.length > 0) {

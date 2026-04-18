@@ -186,15 +186,27 @@ function enterDecoratorTarget(
   return focusTarget(target, direction);
 }
 
-function selectDecoratorTarget(editor: LexicalEditor, nodeKey: NodeKey): void {
+function $selectDecoratorTarget(nodeKey: NodeKey): void {
+  const node = $getNodeByKey(nodeKey);
+  if (!$isDecoratorNode(node)) {
+    return;
+  }
+  const selection = $createNodeSelection();
+  selection.add(node.getKey());
+  $setSelection(selection);
+}
+
+function selectDecoratorTarget(
+  editor: LexicalEditor,
+  nodeKey: NodeKey,
+  inLexicalCommand: boolean,
+): void {
+  if (inLexicalCommand) {
+    $selectDecoratorTarget(nodeKey);
+    return;
+  }
   editor.update(() => {
-    const node = $getNodeByKey(nodeKey);
-    if (!$isDecoratorNode(node)) {
-      return;
-    }
-    const selection = $createNodeSelection();
-    selection.add(node.getKey());
-    $setSelection(selection);
+    $selectDecoratorTarget(nodeKey);
   }, { discrete: true });
 }
 
@@ -202,7 +214,10 @@ function handleDecoratorArrowNavigation(
   editor: LexicalEditor,
   event: KeyboardEvent,
   direction: NavigationDirection,
-  options: { readonly requireBlockEdge: boolean },
+  options: {
+    readonly inLexicalCommand: boolean;
+    readonly requireBlockEdge: boolean;
+  },
 ): boolean {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
     return false;
@@ -227,7 +242,7 @@ function handleDecoratorArrowNavigation(
 
   event.preventDefault();
   event.stopPropagation();
-  selectDecoratorTarget(editor, targetKey);
+  selectDecoratorTarget(editor, targetKey, options.inLexicalCommand);
   queueEmbeddedSurfaceFocus(
     editor.getKey(),
     targetKey,
@@ -249,7 +264,10 @@ function registerDecoratorArrowNavigation(
       if (!event) {
         return false;
       }
-      return handleDecoratorArrowNavigation(editor, event, direction, options);
+      return handleDecoratorArrowNavigation(editor, event, direction, {
+        ...options,
+        inLexicalCommand: true,
+      });
     },
     COMMAND_PRIORITY_HIGH,
   );
@@ -266,11 +284,17 @@ function registerDomHorizontalArrowNavigation(editor: LexicalEditor): () => void
       return;
     }
     if (event.key === "ArrowRight") {
-      handleDecoratorArrowNavigation(editor, event, "forward", { requireBlockEdge: true });
+      handleDecoratorArrowNavigation(editor, event, "forward", {
+        inLexicalCommand: false,
+        requireBlockEdge: true,
+      });
       return;
     }
     if (event.key === "ArrowLeft") {
-      handleDecoratorArrowNavigation(editor, event, "backward", { requireBlockEdge: true });
+      handleDecoratorArrowNavigation(editor, event, "backward", {
+        inLexicalCommand: false,
+        requireBlockEdge: true,
+      });
     }
   };
 

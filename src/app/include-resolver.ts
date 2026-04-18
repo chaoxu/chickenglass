@@ -13,6 +13,33 @@ export interface ResolvedInclude {
   readonly children: readonly ResolvedInclude[];
 }
 
+export type IncludeCompositionFailure =
+  | {
+      readonly kind: "cycle";
+      readonly chain: readonly string[];
+      readonly message: string;
+    }
+  | {
+      readonly kind: "not-found";
+      readonly path: string;
+      readonly message: string;
+    }
+  | {
+      readonly kind: "unavailable";
+      readonly path: string;
+      readonly causeMessage: string;
+      readonly message: string;
+    };
+
+export type DocumentIncludeExpansionStatus = "expanded" | "failed" | "unchanged";
+
+export interface DocumentIncludeExpansion {
+  readonly failure: IncludeCompositionFailure | null;
+  readonly sourceMap: SourceMap | null;
+  readonly status: DocumentIncludeExpansionStatus;
+  readonly text: string;
+}
+
 export class IncludeCycleError extends Error {
   readonly chain: readonly string[];
 
@@ -29,6 +56,19 @@ export class IncludeNotFoundError extends Error {
   constructor(path: string) {
     super(`Included file not found: ${path}`);
     this.name = "IncludeNotFoundError";
+    this.path = path;
+  }
+}
+
+export class IncludeUnavailableError extends Error {
+  readonly causeMessage: string;
+  readonly path: string;
+
+  constructor(path: string, cause: unknown) {
+    const causeMessage = formatUnknownError(cause);
+    super(`Included file unavailable: ${path}${causeMessage ? `: ${causeMessage}` : ""}`);
+    this.name = "IncludeUnavailableError";
+    this.causeMessage = causeMessage;
     this.path = path;
   }
 }
@@ -50,15 +90,22 @@ interface FlattenRegion {
   readonly to: number;
 }
 
-interface IncludeExpansionResult {
+interface FlattenedIncludeExpansion {
   readonly regions: readonly FlattenRegion[];
   readonly text: string;
 }
 
 interface CacheEntry {
   readonly fileContents: ReadonlyMap<string, string>;
-  readonly result: IncludeExpansionResult;
+  readonly result: FlattenedIncludeExpansion;
   readonly rootContent: string;
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function findIncludeBlocks(content: string): readonly IncludeMatch[] {
@@ -79,11 +126,25 @@ function resolveIncludePath(fromPath: string, includePath: string): string {
 
 async function readFileChecked(path: string, fs: FileSystem): Promise<string> {
   const normalized = normalizeProjectPath(path);
-  const exists = await fs.exists(normalized);
+  let exists: boolean;
+  try {
+    exists = await fs.exists(normalized);
+  } catch (error: unknown) {
+    throw new IncludeUnavailableError(normalized, error);
+  }
   if (!exists) {
     throw new IncludeNotFoundError(normalized);
   }
-  return fs.readFile(normalized);
+  let content: unknown;
+  try {
+    content = await fs.readFile(normalized);
+  } catch (error: unknown) {
+    throw new IncludeUnavailableError(normalized, error);
+  }
+  if (typeof content !== "string") {
+    throw new TypeError(`Included file returned non-string content: ${normalized}`);
+  }
+  return content;
 }
 
 async function resolveIncludesCore(
@@ -134,7 +195,7 @@ function offsetRegions(regions: readonly FlattenRegion[], base: number): Flatten
 function flattenIncludesWithSourceMap(
   rootContent: string,
   includes: readonly ResolvedInclude[],
-): IncludeExpansionResult {
+): FlattenedIncludeExpansion {
   if (includes.length === 0) {
     return { text: rootContent, regions: [] };
   }
@@ -210,7 +271,7 @@ class IncludeExpansionCache {
     rootPath: string,
     rootContent: string,
     fs: FileSystem,
-  ): Promise<IncludeExpansionResult | null> {
+  ): Promise<FlattenedIncludeExpansion | null> {
     const entry = this.entries.get(rootPath);
     if (!entry || entry.rootContent !== rootContent) {
       return null;
@@ -237,7 +298,7 @@ class IncludeExpansionCache {
     rootPath: string,
     rootContent: string,
     includes: readonly ResolvedInclude[],
-    result: IncludeExpansionResult,
+    result: FlattenedIncludeExpansion,
   ): void {
     const fileContents = new Map<string, string>();
     collectFileContents(includes, fileContents);
@@ -263,16 +324,52 @@ function cloneRegions(regions: readonly FlattenRegion[]): IncludeRegion[] {
   }));
 }
 
+function isExpectedIncludeFailure(error: unknown): error is
+  | IncludeCycleError
+  | IncludeNotFoundError
+  | IncludeUnavailableError {
+  return error instanceof IncludeCycleError
+    || error instanceof IncludeNotFoundError
+    || error instanceof IncludeUnavailableError;
+}
+
+function createIncludeFailure(error: IncludeCycleError | IncludeNotFoundError | IncludeUnavailableError): IncludeCompositionFailure {
+  if (error instanceof IncludeCycleError) {
+    return {
+      kind: "cycle",
+      chain: error.chain,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof IncludeNotFoundError) {
+    return {
+      kind: "not-found",
+      path: error.path,
+      message: error.message,
+    };
+  }
+
+  return {
+    kind: "unavailable",
+    path: error.path,
+    causeMessage: error.causeMessage,
+    message: error.message,
+  };
+}
+
 export async function expandDocumentIncludes(
   mainPath: string,
   rawContent: string,
   fs: FileSystem,
-): Promise<{ readonly sourceMap: SourceMap | null; readonly text: string }> {
+): Promise<DocumentIncludeExpansion> {
   const cached = await includeExpansionCache.get(mainPath, rawContent, fs);
   if (cached) {
     const regions = cloneRegions(cached.regions);
     return {
+      failure: null,
       sourceMap: regions.length > 0 ? new SourceMap(regions) : null,
+      status: regions.length > 0 ? "expanded" : "unchanged",
       text: cached.text,
     };
   }
@@ -280,7 +377,9 @@ export async function expandDocumentIncludes(
   const includeBlocks = findIncludeBlocks(rawContent);
   if (includeBlocks.length === 0) {
     return {
+      failure: null,
       sourceMap: null,
+      status: "unchanged",
       text: rawContent,
     };
   }
@@ -291,14 +390,19 @@ export async function expandDocumentIncludes(
     includeExpansionCache.set(mainPath, rawContent, includes, result);
     const regions = cloneRegions(result.regions);
     return {
+      failure: null,
       sourceMap: regions.length > 0 ? new SourceMap(regions) : null,
+      status: "expanded",
       text: result.text,
     };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn("[includes] expansion failed, falling back to raw content:", message);
+    if (!isExpectedIncludeFailure(error)) {
+      throw error;
+    }
     return {
+      failure: createIncludeFailure(error),
       sourceMap: null,
+      status: "failed",
       text: rawContent,
     };
   }

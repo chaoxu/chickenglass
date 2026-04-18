@@ -564,11 +564,29 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           if (active.selectionState === "opening") {
             return false;
           }
-          // Caret moved off the reveal — commit and exit. The replacement
-          // will trigger another SELECTION_CHANGE that we evaluate fresh.
-          commitInlineReveal(editor, active);
+          // Caret moved off the reveal. Commit the previous source, then
+          // evaluate the current selection in the same transition so moving
+          // directly from one formatted token to another does not require a
+          // second selection event.
+          $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
+          $commitInlineReveal(active);
           activeRef.current = null;
           setChromeState(null);
+          const nextSelection = $getSelection();
+          if (!nextSelection) {
+            return false;
+          }
+          const nextPick = pickRevealSubject(nextSelection, adapters);
+          if (!nextPick) {
+            return false;
+          }
+          const preferredOffset = "anchor" in nextSelection
+            ? (nextSelection.anchor as { offset: number }).offset
+            : 0;
+          editor.dispatchCommand(
+            OPEN_CURSOR_REVEAL_COMMAND,
+            createRevealOpenRequest(nextPick.subject, nextPick.adapter, preferredOffset),
+          );
           return false;
         }
 
@@ -744,11 +762,13 @@ function openInlineReveal(
   activeRef: { current: InlineRevealHandle | null },
   setChromeState: (state: InlineRevealChromeState | null) => void,
 ): void {
-  $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
   const live = $getNodeByKey(request.nodeKey);
   if (!live) {
     return;
   }
+  const selectionState: InlineRevealHandle["selectionState"] = $isDecoratorNode(live)
+    ? "opening"
+    : "active";
   const plain = $createTextNode(request.source);
   // A non-empty style prevents Lexical from merging this plain node
   // with its unstyled siblings during normalization — without it the
@@ -773,7 +793,7 @@ function openInlineReveal(
   }
   plain.select(request.caretOffset, request.caretOffset);
   const plainKey = plain.getKey();
-  activeRef.current = { adapter, plainKey, selectionState: "opening" };
+  activeRef.current = { adapter, plainKey, selectionState };
   setChromeState(
     adapter.getChromePreview?.(request.source)
       ? { adapter, plainKey, source: request.source }
@@ -806,12 +826,10 @@ function computeCaretOffset(subject: RevealSubject, preferredOffset: number): nu
   return openLen + clamped;
 }
 
-function commitInlineReveal(editor: LexicalEditor, handle: InlineRevealHandle): void {
-  editor.update(() => {
-    const live = $getNodeByKey(handle.plainKey);
-    if (!$isTextNode(live)) {
-      return;
-    }
-    handle.adapter.reparse(live, live.getTextContent());
-  }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
+function $commitInlineReveal(handle: InlineRevealHandle): void {
+  const live = $getNodeByKey(handle.plainKey);
+  if (!$isTextNode(live)) {
+    return;
+  }
+  handle.adapter.reparse(live, live.getTextContent());
 }

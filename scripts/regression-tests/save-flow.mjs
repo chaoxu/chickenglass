@@ -1,7 +1,7 @@
 import {
-  insertEditorText,
   openFixtureDocument,
   readEditorText,
+  replaceEditorText,
   saveCurrentFile,
 } from "../test-helpers.mjs";
 
@@ -16,12 +16,7 @@ const FIXTURE = {
 export async function run(page) {
   await openFixtureDocument(page, FIXTURE, { mode: "lexical" });
   const original = await readEditorText(page);
-  const anchor = original.length;
-
-  await page.evaluate((nextAnchor) => {
-    window.__editor.setSelection(nextAnchor);
-  }, anchor);
-  await insertEditorText(page, "\nAppended line.\n");
+  await replaceEditorText(page, `${original}\nAppended line.\n`);
 
   const dirtyBeforeSave = await page.evaluate(() => window.__app?.isDirty?.() ?? false);
   if (!dirtyBeforeSave) {

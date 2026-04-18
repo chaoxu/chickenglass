@@ -5,7 +5,7 @@
  * - Each document edit bumps a monotonic revision.
  * - Older queued saves cannot overwrite newer in-memory content.
  * - Repeated writes while a save is in flight are coalesced into one.
- * - A saved-content hash lets the file watcher suppress self-originated events.
+ * - Exact saved disk content lets the file watcher suppress self-origin events.
  * - `clear()` / `initPath()` invalidate in-flight saves via a generation counter.
  */
 
@@ -30,7 +30,7 @@ export interface SaveSnapshot {
  * For projected/source-mapped saves the bytes actually written to disk
  * may differ from `content` (e.g. include directives are reconstructed).
  * The function MUST return the main-file disk content so the pipeline
- * can hash what was actually written.
+ * can remember what was actually written.
  */
 export type WriteFn = (
   path: string,
@@ -52,11 +52,8 @@ export class SavePipeline {
   /** Last revision that was successfully persisted to disk. */
   private readonly savedRevisions = new Map<string, number>();
 
-  /** FNV-1a hash of the content most recently written to disk. */
-  private readonly savedHashes = new Map<string, string>();
-
-  /** Timestamp of the most recent successful save per path. */
-  private readonly savedTimestamps = new Map<string, number>();
+  /** Content most recently written to or loaded from disk for each path. */
+  private readonly savedDiskContents = new Map<string, string>();
 
   /** Generation counter: bumped by clear() / initPath() to invalidate in-flight saves. */
   private readonly generations = new Map<string, number>();
@@ -69,6 +66,9 @@ export class SavePipeline {
    * snapshot so only the latest content is written on the next iteration.
    */
   private readonly pending = new Map<string, (() => SaveSnapshot) | null>();
+
+  /** Save callers queued behind an already-running save loop. */
+  private readonly waiters = new Map<string, Array<(result: SaveResult) => void>>();
 
   constructor(writeFn: WriteFn) {
     this.writeFn = writeFn;
@@ -93,7 +93,8 @@ export class SavePipeline {
   }
 
   getLastSavedHash(path: string): string | undefined {
-    return this.savedHashes.get(path);
+    const content = this.savedDiskContents.get(path);
+    return content === undefined ? undefined : fnv1aHash(content);
   }
 
   // ---------------------------------------------------------------------------
@@ -101,18 +102,15 @@ export class SavePipeline {
   // ---------------------------------------------------------------------------
 
   /**
-   * Returns true if the content on disk matches what the pipeline last wrote
-   * and the write happened within the suppression window.
+   * Returns true if the file watcher is reporting bytes already known to be
+   * the current disk content for this path.
+   *
+   * This intentionally uses content identity instead of a wall-clock window:
+   * delayed self-origin watcher events still compare equal, while external
+   * rewrites with different bytes are never suppressed.
    */
-  isSelfChange(path: string, diskContent: string, windowMs = 2000): boolean {
-    const savedHash = this.savedHashes.get(path);
-    if (savedHash === undefined) return false;
-
-    const savedTs = this.savedTimestamps.get(path);
-    if (savedTs === undefined) return false;
-    if (Date.now() - savedTs >= windowMs) return false;
-
-    return fnv1aHash(diskContent) === savedHash;
+  isSelfChange(path: string, diskContent: string): boolean {
+    return this.savedDiskContents.get(path) === diskContent;
   }
 
   // ---------------------------------------------------------------------------
@@ -123,7 +121,7 @@ export class SavePipeline {
   initPath(path: string, content: string): void {
     this.revisions.set(path, 0);
     this.savedRevisions.set(path, 0);
-    this.savedHashes.set(path, fnv1aHash(content));
+    this.savedDiskContents.set(path, content);
     this.generations.set(path, (this.generations.get(path) ?? 0) + 1);
   }
 
@@ -131,10 +129,10 @@ export class SavePipeline {
   clear(path: string): void {
     this.revisions.delete(path);
     this.savedRevisions.delete(path);
-    this.savedHashes.delete(path);
-    this.savedTimestamps.delete(path);
+    this.savedDiskContents.delete(path);
     this.generations.set(path, (this.generations.get(path) ?? 0) + 1);
     this.pending.delete(path);
+    this.resolveWaiters(path, { saved: false, lastSavedRevision: 0 });
   }
 
   // ---------------------------------------------------------------------------
@@ -160,11 +158,25 @@ export class SavePipeline {
     if (this.saving.get(path)) {
       // A save loop is already running — replace the pending snapshot.
       this.pending.set(path, getSnapshot);
-      // Return a deferred result — the loop will handle it.
-      return { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
+      return new Promise((resolve) => {
+        const waiters = this.waiters.get(path) ?? [];
+        waiters.push(resolve);
+        this.waiters.set(path, waiters);
+      });
     }
 
     return this.runSaveLoop(path, getSnapshot);
+  }
+
+  private resolveWaiters(path: string, result: SaveResult): void {
+    const waiters = this.waiters.get(path);
+    if (!waiters) {
+      return;
+    }
+    this.waiters.delete(path);
+    for (const resolve of waiters) {
+      resolve(result);
+    }
   }
 
   private async runSaveLoop(
@@ -196,8 +208,7 @@ export class SavePipeline {
           if (isInvalidated()) break;
 
           this.savedRevisions.set(path, revisionAtStart);
-          this.savedHashes.set(path, fnv1aHash(diskContent));
-          this.savedTimestamps.set(path, Date.now());
+          this.savedDiskContents.set(path, diskContent);
 
           lastResult = { saved: true, lastSavedRevision: revisionAtStart };
         } catch (e: unknown) {
@@ -221,9 +232,12 @@ export class SavePipeline {
     }
 
     if (isInvalidated()) {
-      return { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
+      const invalidatedResult = { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
+      this.resolveWaiters(path, invalidatedResult);
+      return invalidatedResult;
     }
 
+    this.resolveWaiters(path, lastResult);
     return lastResult;
   }
 }

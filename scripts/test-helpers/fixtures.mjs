@@ -7,7 +7,6 @@ import {
   REPO_DEMO_ROOT,
   REPO_FIXTURE_ROOT,
   REPO_ROOT,
-  sleep,
   TEXT_FIXTURE_EXTENSIONS,
   waitForEditorSurface,
 } from "./shared.mjs";
@@ -175,14 +174,17 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   }
 
   const result = await page.evaluate(
-    async ({ path, expectedContent, tryOpenFileFirst, fixtureProjectFiles }) => {
+    async ({ allowOpenFile, path, expectedContent, tryOpenFileFirst, fixtureProjectFiles }) => {
       const app = window.__app;
       if (!app?.openFile) {
         throw new Error("window.__app.openFile is unavailable.");
       }
 
-      const canOpenInCurrentProject = tryOpenFileFirst
-        || (fixtureProjectFiles && app.hasFile ? await app.hasFile(path) : false);
+      const canOpenInCurrentProject = allowOpenFile
+        ? app.hasFile
+          ? await app.hasFile(path)
+          : tryOpenFileFirst
+        : false;
 
       if (canOpenInCurrentProject) {
         try {
@@ -208,6 +210,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
       return { method: "openFileWithContent" };
     },
     {
+      allowOpenFile: project === "full-project",
       path: resolved.virtualPath,
       expectedContent: resolved.content,
       tryOpenFileFirst: preferOpenFile,
@@ -246,7 +249,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
     const { switchToMode } = await import("../test-helpers.mjs");
     await switchToMode(page, mode);
   }
-  await sleep(200);
+  await waitForEditorSurface(page);
 
   return {
     ...resolved,
@@ -261,6 +264,6 @@ export async function openRegressionDocument(page, path = "index.md", options = 
 
 export async function openAndSettleRegressionDocument(page, path = "index.md", options = {}) {
   const virtualPath = await openRegressionDocument(page, path, options);
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await waitForEditorSurface(page);
   return virtualPath;
 }

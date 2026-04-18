@@ -137,6 +137,48 @@ describe("editor session lower-layer invariants", () => {
     expect(runtime.liveDocs.has("a.md")).toBe(false);
   });
 
+  it("does not switch documents when openFileWithContent cannot create its backing file", async () => {
+    const fs = createHybridFileSystem({ "current.md": "Current" });
+    fs.createFile = async () => {
+      throw new Error("create denied");
+    };
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFile("current.md");
+    await expect(service.openFileWithContent("scratch.md", "# Scratch")).rejects.toThrow(
+      "create denied",
+    );
+
+    expect(runtime.getCurrentPath()).toBe("current.md");
+    expect(runtime.getEditorDoc()).toBe("Current");
+    expect(runtime.hasPath("scratch.md")).toBe(false);
+  });
+
+  it("opens new synthetic content as a clean backed document", async () => {
+    const fs = createHybridFileSystem({});
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFileWithContent("scratch.md", "# Scratch");
+
+    expect(runtime.getCurrentPath()).toBe("scratch.md");
+    expect(runtime.getCurrentDocument()?.dirty).toBe(false);
+    expect(runtime.getEditorDoc()).toBe("# Scratch");
+    expect(runtime.pipeline.isSelfChange("scratch.md", "# Scratch")).toBe(true);
+    await expect(fs.readFile("scratch.md")).resolves.toBe("# Scratch");
+  });
+
+  it("opens synthetic content over an existing backing path as dirty", async () => {
+    const fs = createHybridFileSystem({ "scratch.md": "Existing" });
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFileWithContent("scratch.md", "# Scratch");
+
+    expect(runtime.getCurrentPath()).toBe("scratch.md");
+    expect(runtime.getCurrentDocument()?.dirty).toBe(true);
+    expect(runtime.getEditorDoc()).toBe("# Scratch");
+    await expect(fs.readFile("scratch.md")).resolves.toBe("Existing");
+  });
+
   it("cleans up renamed path state when a later async open replaces the current document", async () => {
     const reads = {
       "slow.md": createDeferred<string>(),
@@ -216,5 +258,74 @@ describe("editor session lower-layer invariants", () => {
 
     await expect(fs.readFile("main.md")).resolves.toBe(`${header}${includeRef}${footer}`);
     await expect(fs.readFile("chapter.md")).resolves.toBe(editedChapter);
+  });
+
+  it("drops projection when an edit crosses an include boundary", async () => {
+    const header = "# Main\n\n";
+    const footer = "\n\n# End\n";
+    const chapter = "Chapter body\n";
+    const fs = new MemoryFileSystem({
+      "main.md": `${header}${includeRef}${footer}`,
+      "chapter.md": chapter,
+    });
+    const { persistence, service } = createSessionHarness(fs);
+
+    await service.openFile("main.md");
+    const previousDoc = service.getCurrentDocText();
+    const nextDoc = previousDoc.replace("\n\nChapter", "\nCross-boundary");
+    service.handleDocChange(createMinimalEditorDocumentChanges(previousDoc, nextDoc));
+
+    expect(service.getCurrentSourceMap()).toBeNull();
+
+    await persistence.saveCurrentDocument();
+
+    await expect(fs.readFile("main.md")).resolves.toBe(nextDoc);
+    await expect(fs.readFile("chapter.md")).resolves.toBe(chapter);
+  });
+
+  it("drops projection for insertions at include boundaries instead of guessing ownership", async () => {
+    const header = "# Main\n\n";
+    const footer = "\n\n# End\n";
+    const chapter = "Chapter body\n";
+    const fs = new MemoryFileSystem({
+      "main.md": `${header}${includeRef}${footer}`,
+      "chapter.md": chapter,
+    });
+    const { persistence, service } = createSessionHarness(fs);
+
+    await service.openFile("main.md");
+    const previousDoc = service.getCurrentDocText();
+    const nextDoc = `${header}Boundary insertion\n${chapter}${footer}`;
+    service.handleDocChange(createMinimalEditorDocumentChanges(previousDoc, nextDoc));
+
+    expect(service.getCurrentSourceMap()).toBeNull();
+
+    await persistence.saveCurrentDocument();
+
+    await expect(fs.readFile("main.md")).resolves.toBe(nextDoc);
+    await expect(fs.readFile("chapter.md")).resolves.toBe(chapter);
+  });
+
+  it("drops projection for insertions at include end boundaries", async () => {
+    const header = "# Main\n\n";
+    const footer = "\n\n# End\n";
+    const chapter = "Chapter body\n";
+    const fs = new MemoryFileSystem({
+      "main.md": `${header}${includeRef}${footer}`,
+      "chapter.md": chapter,
+    });
+    const { persistence, service } = createSessionHarness(fs);
+
+    await service.openFile("main.md");
+    const previousDoc = service.getCurrentDocText();
+    const nextDoc = `${header}${chapter}Boundary insertion\n${footer}`;
+    service.handleDocChange(createMinimalEditorDocumentChanges(previousDoc, nextDoc));
+
+    expect(service.getCurrentSourceMap()).toBeNull();
+
+    await persistence.saveCurrentDocument();
+
+    await expect(fs.readFile("main.md")).resolves.toBe(nextDoc);
+    await expect(fs.readFile("chapter.md")).resolves.toBe(chapter);
   });
 });

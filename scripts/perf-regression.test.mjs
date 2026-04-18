@@ -6,6 +6,7 @@ import {
   findTypingBurstPositions,
   scenarios,
   typingBurstMetrics,
+  unavailableTypingBurstCases,
 } from "./perf-regression.mjs";
 
 describe("perf regression scenarios", () => {
@@ -23,18 +24,28 @@ describe("perf regression scenarios", () => {
     expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
       "typing.wall_ms.index.after_frontmatter",
     );
-    if (availableCases.some(({ key }) => key === "cogirth_main2")) {
-      expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
-        "typing.wall_ms.cogirth_main2.inline_math",
-      );
-      expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
-        "typing.settle_ms.cogirth_main2.citation_ref",
-      );
-    } else {
-      expect(scenarios["typing-lexical-burst"].requiredMetrics).not.toContain(
-        "typing.wall_ms.cogirth_main2.inline_math",
-      );
-    }
+    expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
+      "typing.wall_ms.cogirth_main2.inline_math",
+    );
+    expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
+      "typing.settle_ms.cogirth_main2.citation_ref",
+    );
+  });
+
+  it("reports unavailable typing fixtures instead of shrinking required metrics", () => {
+    const missingCases = unavailableTypingBurstCases([
+      {
+        key: "missing_private",
+        displayPath: "fixtures/private/missing.md",
+        virtualPath: "private/missing.md",
+        candidates: ["/tmp/coflat-missing-fixture.md"],
+      },
+    ]);
+
+    expect(missingCases.map(({ key }) => key)).toEqual(["missing_private"]);
+    expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
+      "typing.wall_ms.rankdecrease.after_frontmatter",
+    );
   });
 
   it("emits the required typing metrics for each document position", () => {

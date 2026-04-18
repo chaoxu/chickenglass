@@ -170,7 +170,11 @@ export function createEditorSessionService({
     const doc = applyEditorDocumentChanges(previousDoc, changes);
     const sourceMap = runtime.sourceMaps.get(currentPath);
     if (sourceMap && changes.length > 0) {
-      sourceMap.mapThrough(createEditorDocumentChangePositionMapping(changes));
+      if (sourceMap.canMapDocumentChanges(changes)) {
+        sourceMap.mapThrough(createEditorDocumentChangePositionMapping(changes));
+      } else {
+        runtime.sourceMaps.delete(currentPath);
+      }
     }
     runtime.liveDocs.set(currentPath, doc);
     runtime.pipeline.bumpRevision(currentPath);
@@ -207,6 +211,19 @@ export function createEditorSessionService({
       return;
     }
     runtime.sourceMaps.delete(path);
+  };
+
+  const reportIncludeExpansionFailure = (
+    path: string,
+    expanded: {
+      readonly failure?: { readonly message: string } | null;
+      readonly sourceMap: SourceMap | null;
+      readonly text: string;
+    },
+  ) => {
+    if (expanded.failure) {
+      console.warn("[includes] expansion failed:", path, expanded.failure.message);
+    }
   };
 
   const openFile = async (path: string) => {
@@ -252,6 +269,7 @@ export function createEditorSessionService({
 
         const documentText = createEditorDocumentText(expanded.text);
         runtime.sourceMaps.delete(path);
+        reportIncludeExpansionFailure(path, expanded);
         installPathDocument(runtime, path, documentText, rawContent, expanded.sourceMap ?? null);
         runtime.commit(
           setCurrentSessionDocument(runtime.getState(), {
@@ -283,32 +301,33 @@ export function createEditorSessionService({
     });
     if (!canLeave || !runtime.isLatestOpenFileRequest(requestId)) return;
 
+    const existingContent = await fs.exists(path) ? await fs.readFile(path) : null;
+    if (!runtime.isLatestOpenFileRequest(requestId)) {
+      return;
+    }
+    if (existingContent === null) {
+      await fs.createFile(path, content);
+    }
+    if (!runtime.isLatestOpenFileRequest(requestId)) {
+      return;
+    }
+
     const previousPath = runtime.getCurrentPath();
     if (previousPath && previousPath !== path) {
       clearPathBuffers(runtime, previousPath);
     }
 
-    // Ensure the synthetic document exists in the underlying filesystem so a
-    // subsequent saveFile() can write to it. MemoryFileSystem.writeFile
-    // throws when the path is unknown — without this, dropped files and
-    // fixtures opened via openFileWithContent would never clean their dirty
-    // state on save.
-    if (!(await fs.exists(path))) {
-      try {
-        await fs.createFile(path, content);
-      } catch (error: unknown) {
-        console.error("[session] failed to seed file for openFileWithContent:", path, error);
-      }
-    }
-
+    const documentText = createEditorDocumentText(content);
+    const bufferText = createEditorDocumentText(existingContent ?? content);
     runtime.sourceMaps.delete(path);
-    runtime.buffers.set(path, emptyEditorDocument);
-    runtime.liveDocs.set(path, createEditorDocumentText(content));
+    runtime.pipeline.initPath(path, existingContent ?? content);
+    runtime.buffers.set(path, bufferText);
+    runtime.liveDocs.set(path, documentText);
     runtime.commit(
       setCurrentSessionDocument(runtime.getState(), {
         path,
         name: basename(path),
-        dirty: true,
+        dirty: documentText !== bufferText,
       }),
       { editorDoc: content },
     );
@@ -322,6 +341,7 @@ export function createEditorSessionService({
       const expanded = path.endsWith(".md")
         ? await expandDocumentIncludes(path, rawContent, fs)
         : { sourceMap: null, text: rawContent };
+      reportIncludeExpansionFailure(path, expanded);
       applyReloadedDocument(path, expanded.text, expanded.sourceMap, rawContent);
     } catch (error: unknown) {
       console.error("[session] reload failed:", path, error);
@@ -363,6 +383,7 @@ export function createEditorSessionService({
     const expanded = path.endsWith(".md")
       ? await expandDocumentIncludes(path, rawContent, fs)
       : { sourceMap: null, text: rawContent };
+    reportIncludeExpansionFailure(path, expanded);
     applyReloadedDocument(path, expanded.text, expanded.sourceMap, rawContent);
     return "reloaded";
   };
