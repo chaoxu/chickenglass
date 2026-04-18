@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
 import {
   $getRoot,
@@ -17,6 +17,10 @@ import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 
 type RichMarkdownEditorProps = ComponentProps<typeof LexicalRichMarkdownEditor>;
+
+const TABLE_MD = `| H1 | H2 |
+| --- | --- |
+| a | b |`;
 
 async function mountEditor(overrides: Partial<RichMarkdownEditorProps> = {}) {
   let editor: LexicalEditor | null = null;
@@ -199,6 +203,41 @@ describe("LexicalRichMarkdownEditor nested history", () => {
         editor.editor.dispatchCommand(UNDO_COMMAND, undefined);
       });
       await waitFor(() => expect(editor.handle.getDoc()).toBe("draft one"));
+    } finally {
+      editor.unmount();
+    }
+  });
+});
+
+describe("TableActionMenuPlugin", () => {
+  it("does not expose header-column actions for pipe tables", async () => {
+    const editor = await mountEditor({
+      doc: TABLE_MD,
+      editable: true,
+    });
+
+    try {
+      const tableCellSelector = "table.cf-lexical-table-block th";
+      await waitFor(() => {
+        const tableCell = editor.editor.getRootElement()?.querySelector(tableCellSelector);
+        expect(tableCell).not.toBeNull();
+      });
+
+      const tableCell = editor.editor.getRootElement()?.querySelector(tableCellSelector);
+      if (!tableCell) {
+        throw new Error("expected a table header cell to open the action menu");
+      }
+
+      act(() => {
+        fireEvent.contextMenu(tableCell);
+      });
+
+      await waitFor(() => {
+        const menu = document.querySelector(".cf-table-action-menu");
+        expect(menu).not.toBeNull();
+        expect(menu?.textContent).toContain("Insert row above");
+        expect(menu?.textContent).not.toContain("header column");
+      });
     } finally {
       editor.unmount();
     }
