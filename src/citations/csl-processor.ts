@@ -273,8 +273,10 @@ export class CslProcessor {
       if (suppressed) {
         return `${author} ${suppressed}`;
       }
-    } catch (error) {
-      console.warn("[csl] citeNarrative() engine error", error);
+    } catch {
+      // citeproc's makeCitationCluster can throw for numeric styles while the
+      // per-item `seq` registry is still warming up — fall through to the
+      // manual author/year fallback below.
     }
 
     const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";

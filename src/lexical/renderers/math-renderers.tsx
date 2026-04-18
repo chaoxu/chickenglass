@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
-import type { NodeKey } from "lexical";
+import { $createParagraphNode, $getNodeByKey, type NodeKey } from "lexical";
 
 import { useLexicalSurfaceEditable } from "../editability-context";
 import { useLexicalRenderContext } from "../render-context";
@@ -15,9 +15,31 @@ import { buildKatexOptions } from "../../lib/katex-options";
 import {
   preventKatexMouseDown,
   structureToggleProps,
-  useLazyVisibility,
   useRawBlockUpdater,
 } from "./shared";
+
+const DISPLAY_MATH_CLOSE_RE = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
+
+/**
+ * Detect the "user typed an extra `$$` to exit" gesture. The source editor
+ * is pre-populated with `$$\n\n$$`; if the user — expecting to type the close
+ * themselves — adds a second `$$` on its own line, everything subsequent
+ * leaks into the raw block until something else deactivates it. Recognize
+ * the double-close pattern, trim the raw back to one clean block, and
+ * signal the caller to deactivate the source editor.
+ */
+function tryTrimOnDoubleClose(raw: string): string | null {
+  const lines = raw.split("\n");
+  const closeIndices: number[] = [];
+  for (let i = 1; i < lines.length; i += 1) {
+    if (DISPLAY_MATH_CLOSE_RE.test(lines[i])) {
+      closeIndices.push(i);
+      if (closeIndices.length >= 2) break;
+    }
+  }
+  if (closeIndices.length < 2) return null;
+  return lines.slice(0, closeIndices[0] + 1).join("\n");
+}
 
 export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
   nodeKey,
@@ -30,14 +52,42 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
   const [editor] = useLexicalComposerContext();
   const surfaceEditable = useLexicalSurfaceEditable();
   const parsed = useMemo(() => parseStructuredDisplayMathRaw(raw), [raw]);
-  const updateRaw = useRawBlockUpdater(nodeKey);
+  const updateRawInner = useRawBlockUpdater(nodeKey);
   const sourceEdit = useStructureEditToggle(
     nodeKey,
     "display-math",
     "display-math-source",
   );
+  const updateRaw = useCallback((nextRaw: string) => {
+    const trimmed = tryTrimOnDoubleClose(nextRaw);
+    if (trimmed !== null) {
+      updateRawInner(trimmed);
+      sourceEdit.deactivate();
+      editor.update(() => {
+        const node = $getNodeByKey(nodeKey);
+        if (!node) return;
+        const next = node.getNextSibling();
+        if (next) {
+          next.selectStart();
+          return;
+        }
+        const paragraph = $createParagraphNode();
+        node.insertAfter(paragraph);
+        paragraph.selectStart();
+      });
+      editor.focus();
+      return;
+    }
+    updateRawInner(nextRaw);
+  }, [updateRawInner, sourceEdit, editor, nodeKey]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const visible = useLazyVisibility(bodyRef);
+  // Display math always renders eagerly. The KaTeX string is memoized on
+  // parsed.body, and there are rarely enough display-math blocks per doc for
+  // lazy gating to matter. Lazy gating also interacts badly with Lexical's
+  // node-key churn: each raw-block mutation spawns a fresh renderer instance
+  // with visible=false, and IntersectionObserver often does not catch up
+  // before the next mount.
+  const visible = true;
   const equation = useMemo(
     () => visible
       ? katex.renderToString(parsed.body, buildKatexOptions(true, config.math))

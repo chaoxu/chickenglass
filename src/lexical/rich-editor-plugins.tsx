@@ -1,25 +1,29 @@
 import { useEffect } from "react";
 import type { MutableRefObject } from "react";
-import { CodeNode, registerCodeHighlighting } from "@lexical/code";
-import { $nodesOfType } from "lexical";
+import { $isCodeNode, CodeNode, registerCodeHighlighting } from "@lexical/code";
 import { copyToClipboard } from "@lexical/clipboard";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $createParagraphNode,
   $getRoot,
   $getSelection,
   $isElementNode,
+  $isLineBreakNode,
   $isNodeSelection,
   $isRangeSelection,
+  $nodesOfType,
   CLEAR_HISTORY_COMMAND,
   COMMAND_PRIORITY_HIGH,
   COPY_COMMAND,
   CUT_COMMAND,
   FORMAT_TEXT_COMMAND,
   HISTORY_MERGE_TAG,
+  KEY_ENTER_COMMAND,
   PASTE_COMMAND,
   PASTE_TAG,
   type LexicalEditor,
+  type LexicalNode,
   isDOMNode,
   isSelectionCapturedInDecoratorInput,
   mergeRegister,
@@ -214,6 +218,79 @@ export function CodeHighlightPlugin() {
       }
     });
     return cleanup;
+  }, [editor]);
+
+  return null;
+}
+
+const CLOSING_FENCE_RE = /^\s*```\s*$/;
+
+function findCodeAncestor(node: LexicalNode): CodeNode | null {
+  let current: LexicalNode | null = node;
+  while (current) {
+    if ($isCodeNode(current)) return current;
+    current = current.getParent();
+  }
+  return null;
+}
+
+export function CodeFenceExitPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      (event) => {
+        let shouldExit = false;
+        editor.getEditorState().read(() => {
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
+          const codeNode = findCodeAncestor(selection.anchor.getNode());
+          if (!codeNode) return;
+          const text = codeNode.getTextContent();
+          const lines = text.split("\n");
+          if (lines.length === 0) return;
+          const lastLine = lines[lines.length - 1];
+          if (!CLOSING_FENCE_RE.test(lastLine)) return;
+          const lastDescendant = codeNode.getLastDescendant();
+          if (!lastDescendant) return;
+          if (selection.anchor.key !== lastDescendant.getKey()) return;
+          if (selection.anchor.offset !== lastDescendant.getTextContentSize()) return;
+          shouldExit = true;
+        });
+
+        if (!shouldExit) return false;
+
+        (event as KeyboardEvent | null)?.preventDefault();
+        editor.update(() => {
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) return;
+          const codeNode = findCodeAncestor(selection.anchor.getNode());
+          if (!codeNode) return;
+
+          // Walk children backward, removing them until (and including) the
+          // last LineBreakNode. That strips the closing-fence line plus the
+          // newline that separated it from the preceding line.
+          let child: LexicalNode | null = codeNode.getLastChild();
+          while (child) {
+            const prev: LexicalNode | null = child.getPreviousSibling();
+            const isBreak = $isLineBreakNode(child);
+            child.remove();
+            if (isBreak) break;
+            child = prev;
+          }
+
+          const paragraph = $createParagraphNode();
+          codeNode.insertAfter(paragraph);
+          if (codeNode.getChildrenSize() === 0) {
+            codeNode.remove();
+          }
+          paragraph.selectStart();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
   }, [editor]);
 
   return null;

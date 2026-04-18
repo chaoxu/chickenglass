@@ -66,6 +66,7 @@ import { InteractionTracePlugin } from "./interaction-trace-plugin";
 
 import {
   CoflatClipboardPlugin,
+  CodeFenceExitPlugin,
   CodeHighlightPlugin,
   createMarkdownSelection,
   EditableSyncPlugin,
@@ -300,6 +301,7 @@ export function LexicalRichMarkdownEditor({
                   placeholder={null}
                 />
                 <CodeHighlightPlugin />
+                <CodeFenceExitPlugin />
                 {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
                 {showIncludeAffordances ? <IncludeRegionAffordancePlugin editable={editable} /> : null}
                 {editable ? <FormatEventPlugin /> : null}
