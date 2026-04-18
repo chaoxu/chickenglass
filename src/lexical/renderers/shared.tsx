@@ -127,22 +127,6 @@ export function useLazyVisibility(ref: RefObject<Element | null>): boolean {
       return;
     }
     const root = findScrollRoot(el);
-    // Fast-path: if the element is already inside the root viewport (even with
-    // the generous margin) at mount time, skip IO entirely. IntersectionObserver
-    // sometimes stays silent in headless browsers until the next frame paint;
-    // for an element that is plainly on-screen we can just commit immediately.
-    const elRect = el.getBoundingClientRect();
-    const rootRect = root ? root.getBoundingClientRect() : {
-      top: 0,
-      bottom: typeof window !== "undefined" ? window.innerHeight : 0,
-    };
-    const margin = 1500;
-    const inView = elRect.bottom >= rootRect.top - margin
-      && elRect.top <= rootRect.bottom + margin;
-    if (inView) {
-      setVisible(true);
-      return;
-    }
     const io = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) {
         setVisible(true);
