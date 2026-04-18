@@ -20,6 +20,7 @@ import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import {
+  $addUpdateTag,
   $createParagraphNode,
   $createTextNode,
   $getNearestNodeFromDOMNode,
@@ -33,6 +34,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
+  createCommand,
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
@@ -66,6 +68,17 @@ import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 // pure markdown helpers from this module.
 export { wrapWithSpecs, unwrapSource } from "./cursor-reveal-adapters";
 
+interface CursorRevealOpenRequest {
+  readonly adapterId: string;
+  readonly caretOffset: number;
+  readonly nodeKey: NodeKey;
+  readonly source: string;
+}
+
+const OPEN_CURSOR_REVEAL_COMMAND = createCommand<CursorRevealOpenRequest>(
+  "OPEN_CURSOR_REVEAL_COMMAND",
+);
+
 export function CursorRevealPlugin({
   editorMode,
   presentation,
@@ -97,7 +110,7 @@ export function CursorRevealPlugin({
 function useDecoratorClickEntry(
   editor: LexicalEditor,
   adapters: readonly RevealAdapter[],
-  onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
+  onOpen: (request: CursorRevealOpenRequest) => void,
 ): void {
   useEffect(() => {
     return editor.registerCommand(
@@ -106,37 +119,30 @@ function useDecoratorClickEntry(
         if (!(event.target instanceof Node)) {
           return false;
         }
-        const target = event.target;
-        const pendingRef: { value: { subject: RevealSubject; adapter: RevealAdapter } | null } = { value: null };
-        editor.read(() => {
-          const node = $getNearestNodeFromDOMNode(target);
-          if (!node || !$isDecoratorNode(node)) {
-            return;
-          }
-          const pick = pickRevealSubjectFromNode(
-            node,
-            {
-              clientX: event.clientX,
-              entry: "pointer",
-              target: event.target,
-            },
-            adapters,
-          );
-          if (!pick) {
-            return;
-          }
-          pendingRef.value = { adapter: pick.adapter, subject: pick.subject };
-        });
-        const opened = pendingRef.value;
-        if (!opened) {
+        const node = $getNearestNodeFromDOMNode(event.target);
+        if (!node || !$isDecoratorNode(node)) {
           return false;
         }
-        // Deferring escapes the editor.read context so the presentation can
-        // run a discrete editor.update without hitting "empty pending editor
-        // state on discrete nested update".
-        setTimeout(() => onOpen(opened.subject, opened.adapter), 0);
+        const pick = pickRevealSubjectFromNode(
+          node,
+          {
+            clientX: event.clientX,
+            entry: "pointer",
+            target: event.target,
+          },
+          adapters,
+        );
+        if (!pick) {
+          return false;
+        }
+        const request = createRevealOpenRequest(
+          pick.subject,
+          pick.adapter,
+          pick.subject.caretOffset ?? pick.subject.source.length,
+        );
         event.preventDefault();
         event.stopPropagation();
+        onOpen(request);
         return true;
       },
       COMMAND_PRIORITY_HIGH,
@@ -147,7 +153,6 @@ function useDecoratorClickEntry(
 function useDecoratorKeyboardBoundaryEntry(
   editor: LexicalEditor,
   adapters: readonly RevealAdapter[],
-  onOpen: (subject: RevealSubject, adapter: RevealAdapter) => void,
 ): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -168,21 +173,21 @@ function useDecoratorKeyboardBoundaryEntry(
         return;
       }
 
-      const opened = findRevealSubjectFromDomBoundary(editor, adapters, direction);
-      if (!opened) {
+      const request = findRevealRequestFromDomBoundary(editor, adapters, direction);
+      if (!request) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
-      setTimeout(() => onOpen(opened.subject, opened.adapter), 0);
+      editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, request);
     };
 
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [adapters, editor, onOpen]);
+  }, [adapters, editor]);
 }
 
 function directionFromArrowKey(key: string): RevealBoundaryDirection | null {
@@ -195,30 +200,38 @@ function directionFromArrowKey(key: string): RevealBoundaryDirection | null {
   return null;
 }
 
-function findRevealSubjectFromDomBoundary(
+function findRevealRequestFromDomBoundary(
   editor: LexicalEditor,
   adapters: readonly RevealAdapter[],
   direction: RevealBoundaryDirection,
-): { adapter: RevealAdapter; subject: RevealSubject } | null {
+): CursorRevealOpenRequest | null {
   const root = editor.getRootElement();
   const decorator = root ? findAdjacentDecoratorFromDomSelection(root, direction) : null;
   if (!decorator) {
     return null;
   }
 
-  let opened: { adapter: RevealAdapter; subject: RevealSubject } | null = null;
+  let request: CursorRevealOpenRequest | null = null;
   editor.read(() => {
     const node = $getNearestNodeFromDOMNode(decorator);
     if (!node || !$isDecoratorNode(node) || !node.isInline()) {
       return;
     }
-    opened = pickRevealSubjectFromNode(
+    const pick = pickRevealSubjectFromNode(
       node,
       { direction, entry: "keyboard-boundary" },
       adapters,
     );
+    if (!pick) {
+      return;
+    }
+    request = createRevealOpenRequest(
+      pick.subject,
+      pick.adapter,
+      pick.subject.caretOffset ?? pick.subject.source.length,
+    );
   });
-  return opened;
+  return request;
 }
 
 function findAdjacentDecoratorFromDomSelection(
@@ -306,6 +319,26 @@ function previousMeaningfulSibling(node: Node): Node | null {
   return firstMeaningfulNode(node.previousSibling, "backward");
 }
 
+function createRevealOpenRequest(
+  subject: RevealSubject,
+  adapter: RevealAdapter,
+  preferredOffset: number,
+): CursorRevealOpenRequest {
+  return {
+    adapterId: adapter.id,
+    caretOffset: computeCaretOffset(subject, preferredOffset),
+    nodeKey: subject.node.getKey(),
+    source: subject.source,
+  };
+}
+
+function findRevealAdapter(
+  adapters: readonly RevealAdapter[],
+  adapterId: string,
+): RevealAdapter | null {
+  return adapters.find((adapter) => adapter.id === adapterId) ?? null;
+}
+
 // ─── Floating presentation ──────────────────────────────────────────────
 
 interface FloatingState {
@@ -325,32 +358,38 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
   // post-commit selection still points at the replacement node.
   const lastRevealedKeyRef = useRef<NodeKey | null>(null);
 
-  const openFloating = useCallback(
-    (subject: RevealSubject, adapter: RevealAdapter, caretOffset = subject.source.length) => {
-      const key = subject.node.getKey();
-      if (key === lastRevealedKeyRef.current) {
-        return;
-      }
-      const dom = editor.getElementByKey(key);
-      if (!dom) {
-        return;
-      }
-      lastRevealedKeyRef.current = key;
-      setDraft(subject.source);
-      setState({ adapter, anchor: dom, caretOffset, nodeKey: key });
-    },
-    [editor],
-  );
+  const openFloatingRequest = useCallback((request: CursorRevealOpenRequest) => {
+    const adapter = findRevealAdapter(adapters, request.adapterId);
+    if (!adapter || request.nodeKey === lastRevealedKeyRef.current) {
+      return;
+    }
+    const dom = editor.getElementByKey(request.nodeKey);
+    if (!dom) {
+      return;
+    }
+    lastRevealedKeyRef.current = request.nodeKey;
+    setDraft(request.source);
+    setState({
+      adapter,
+      anchor: dom,
+      caretOffset: request.caretOffset,
+      nodeKey: request.nodeKey,
+    });
+  }, [adapters, editor]);
 
-  const openFloatingFromDecoratorEntry = useCallback((
-    subject: RevealSubject,
-    adapter: RevealAdapter,
-  ) => {
-    openFloating(subject, adapter, subject.caretOffset ?? subject.source.length);
-  }, [openFloating]);
+  useDecoratorClickEntry(editor, adapters, openFloatingRequest);
+  useDecoratorKeyboardBoundaryEntry(editor, adapters);
 
-  useDecoratorClickEntry(editor, adapters, openFloatingFromDecoratorEntry);
-  useDecoratorKeyboardBoundaryEntry(editor, adapters, openFloatingFromDecoratorEntry);
+  useEffect(() => {
+    return editor.registerCommand(
+      OPEN_CURSOR_REVEAL_COMMAND,
+      (request) => {
+        openFloatingRequest(request);
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor, openFloatingRequest]);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -365,12 +404,19 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
           lastRevealedKeyRef.current = null;
           return false;
         }
-        openFloating(pick.subject, pick.adapter);
+        editor.dispatchCommand(
+          OPEN_CURSOR_REVEAL_COMMAND,
+          createRevealOpenRequest(
+            pick.subject,
+            pick.adapter,
+            pick.subject.caretOffset ?? pick.subject.source.length,
+          ),
+        );
         return false;
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, openFloating, adapters]);
+  }, [editor, adapters]);
 
   useEffect(() => {
     if (!state) {
@@ -469,22 +515,27 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
 
-  const openFromDecoratorEntry = useCallback(
-    (subject: RevealSubject, adapter: RevealAdapter) => {
-      openInlineReveal(
-        editor,
-        subject,
-        adapter,
-        subject.caretOffset ?? subject.source.length,
-        activeRef,
-        setChromeState,
-      );
-    },
-    [editor],
-  );
+  const openInlineRequest = useCallback((request: CursorRevealOpenRequest) => {
+    const adapter = findRevealAdapter(adapters, request.adapterId);
+    if (!adapter) {
+      return;
+    }
+    openInlineReveal(request, adapter, activeRef, setChromeState);
+  }, [adapters]);
 
-  useDecoratorClickEntry(editor, adapters, openFromDecoratorEntry);
-  useDecoratorKeyboardBoundaryEntry(editor, adapters, openFromDecoratorEntry);
+  useDecoratorClickEntry(editor, adapters, openInlineRequest);
+  useDecoratorKeyboardBoundaryEntry(editor, adapters);
+
+  useEffect(() => {
+    return editor.registerCommand(
+      OPEN_CURSOR_REVEAL_COMMAND,
+      (request) => {
+        openInlineRequest(request);
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor, openInlineRequest]);
 
   useEffect(() => {
     return editor.registerCommand(
@@ -526,13 +577,9 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           return false;
         }
         const preferredOffset = "anchor" in sel ? (sel.anchor as { offset: number }).offset : 0;
-        openInlineReveal(
-          editor,
-          pick.subject,
-          pick.adapter,
-          preferredOffset,
-          activeRef,
-          setChromeState,
+        editor.dispatchCommand(
+          OPEN_CURSOR_REVEAL_COMMAND,
+          createRevealOpenRequest(pick.subject, pick.adapter, preferredOffset),
         );
         return false;
       },
@@ -584,12 +631,13 @@ function InlineRevealChrome({
   readonly onClose: () => void;
   readonly state: InlineRevealChromeState | null;
 }) {
+  const anchor = useLexicalElementByKey(editor, state?.plainKey ?? null);
+
   if (!state) {
     return null;
   }
 
   const preview = state.adapter.getChromePreview?.(state.source) ?? null;
-  const anchor = editor.getElementByKey(state.plainKey);
   if (!preview || !anchor) {
     return null;
   }
@@ -605,6 +653,25 @@ function InlineRevealChrome({
   }
 
   return null;
+}
+
+function useLexicalElementByKey(
+  editor: LexicalEditor,
+  key: NodeKey | null,
+): HTMLElement | null {
+  const [element, setElement] = useState<HTMLElement | null>(() => (
+    key ? editor.getElementByKey(key) : null
+  ));
+
+  useEffect(() => {
+    const resolve = () => {
+      setElement(key ? editor.getElementByKey(key) : null);
+    };
+    resolve();
+    return editor.registerUpdateListener(resolve);
+  }, [editor, key]);
+
+  return element;
 }
 
 function InlineMathRevealPreview({
@@ -668,59 +735,50 @@ function isBlockRevealSubject(node: LexicalNode): boolean {
 /**
  * Replace the subject node with a plain-text node containing its
  * markdown source, then position the caret inside. Records the key +
- * adapter via `activeRef` from inside the queued update — we can't
- * return synchronously because we're called from another command
- * handler.
+ * adapter via `activeRef` while still inside Lexical's command/update
+ * context.
  */
 function openInlineReveal(
-  editor: LexicalEditor,
-  subject: RevealSubject,
+  request: CursorRevealOpenRequest,
   adapter: RevealAdapter,
-  preferredOffset: number,
   activeRef: { current: InlineRevealHandle | null },
   setChromeState: (state: InlineRevealChromeState | null) => void,
 ): void {
-  const subjectKey = subject.node.getKey();
-  const initialRaw = subject.source;
-  const caretOffset = computeCaretOffset(subject, preferredOffset);
-  editor.update(() => {
-    const live = $getNodeByKey(subjectKey);
-    if (!live) {
-      return;
-    }
-    const plain = $createTextNode(initialRaw);
-    // A non-empty style prevents Lexical from merging this plain node
-    // with its unstyled siblings during normalization — without it the
-    // reveal text immediately fuses into the surrounding paragraph and
-    // we lose the key we use to find the run on commit. The CSS
-    // variable is a no-op visually.
-    plain.setStyle("--cf-reveal:1");
-    if (isBlockRevealSubject(live)) {
-      // Block-scope reveal (paragraph adapter): the subject is a
-      // top-level block, not an inline node. A bare TextNode at the
-      // root would violate Lexical's structural invariants, so wrap the
-      // placeholder in a fresh ParagraphNode and swap the whole block.
-      // `RawBlockNode` (theorem etc.) is a DecoratorBlockNode rather
-      // than an ElementNode, so we cover that case explicitly. On
-      // commit, the paragraph adapter walks `plain` up to this wrapper
-      // and splices in the parsed blocks.
-      const wrapper = $createParagraphNode();
-      wrapper.append(plain);
-      live.replace(wrapper);
-    } else {
-      live.replace(plain);
-    }
-    plain.select(caretOffset, caretOffset);
-    const plainKey = plain.getKey();
-    activeRef.current = { adapter, plainKey, selectionState: "opening" };
-    const hasPreview = Boolean(adapter.getChromePreview?.(initialRaw));
-    setTimeout(() => {
-      if (activeRef.current?.plainKey !== plainKey) {
-        return;
-      }
-      setChromeState(hasPreview ? { adapter, plainKey, source: initialRaw } : null);
-    }, 0);
-  }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
+  $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
+  const live = $getNodeByKey(request.nodeKey);
+  if (!live) {
+    return;
+  }
+  const plain = $createTextNode(request.source);
+  // A non-empty style prevents Lexical from merging this plain node
+  // with its unstyled siblings during normalization — without it the
+  // reveal text immediately fuses into the surrounding paragraph and
+  // we lose the key we use to find the run on commit. The CSS
+  // variable is a no-op visually.
+  plain.setStyle("--cf-reveal:1");
+  if (isBlockRevealSubject(live)) {
+    // Block-scope reveal (paragraph adapter): the subject is a
+    // top-level block, not an inline node. A bare TextNode at the
+    // root would violate Lexical's structural invariants, so wrap the
+    // placeholder in a fresh ParagraphNode and swap the whole block.
+    // `RawBlockNode` (theorem etc.) is a DecoratorBlockNode rather
+    // than an ElementNode, so we cover that case explicitly. On
+    // commit, the paragraph adapter walks `plain` up to this wrapper
+    // and splices in the parsed blocks.
+    const wrapper = $createParagraphNode();
+    wrapper.append(plain);
+    live.replace(wrapper);
+  } else {
+    live.replace(plain);
+  }
+  plain.select(request.caretOffset, request.caretOffset);
+  const plainKey = plain.getKey();
+  activeRef.current = { adapter, plainKey, selectionState: "opening" };
+  setChromeState(
+    adapter.getChromePreview?.(request.source)
+      ? { adapter, plainKey, source: request.source }
+      : null,
+  );
 }
 
 /**
