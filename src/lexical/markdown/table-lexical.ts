@@ -40,26 +40,7 @@ import {
   parseMarkdownTable,
   serializeMarkdownTable,
 } from "./table-markdown";
-
-function matchTableEnd(
-  lines: readonly string[],
-  startLineIndex: number,
-): number {
-  const startLine = lines[startLineIndex] ?? "";
-  const dividerLine = lines[startLineIndex + 1] ?? "";
-  if (!/\|/.test(startLine) || !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(dividerLine)) {
-    return -1;
-  }
-  let endLineIndex = startLineIndex + 1;
-  for (let lineIndex = startLineIndex + 2; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex] ?? "";
-    if (!/\|/.test(line) || /^\s*$/.test(line)) {
-      break;
-    }
-    endLineIndex = lineIndex;
-  }
-  return endLineIndex;
-}
+import { matchTableEndLine } from "./block-scanner";
 
 function normalizeTableAlignments(
   alignments: readonly TableColumnAlignment[],
@@ -198,7 +179,7 @@ export function createTableBlockTransformer(
       rootNode,
       startLineIndex,
     }) {
-      const endLineIndex = matchTableEnd(lines, startLineIndex);
+      const endLineIndex = matchTableEndLine(lines, startLineIndex);
       if (endLineIndex < 0) {
         return null;
       }

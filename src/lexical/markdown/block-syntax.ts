@@ -1,10 +1,9 @@
 import { humanizeBlockType, normalizeBlockType } from "./block-metadata";
-
-const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
-const DISPLAY_MATH_DOLLAR_START_RE = /^\s*\$\$(?!\$).*$/;
-const DISPLAY_MATH_DOLLAR_END_RE = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
-const DISPLAY_MATH_BRACKET_START_RE = /^\s*\\\[\s*$/;
-const DISPLAY_MATH_BRACKET_END_RE = /^\s*\\\](?:\s+\{#[^}]+\})?\s*$/;
+import {
+  collectSourceBlockRanges,
+  FENCED_DIV_START_RE,
+  type SourceBlockRange,
+} from "./block-scanner";
 
 export interface FencedDivInfo {
   readonly blockType: string;
@@ -34,12 +33,9 @@ export interface ParsedDisplayMathBlock extends DisplayMathInfo {
   readonly openingDelimiter: "\\[" | "$$";
 }
 
-export interface SpecialBlockRange {
-  readonly from: number;
-  readonly raw: string;
-  readonly to: number;
+export type SpecialBlockRange = SourceBlockRange & {
   readonly variant: "display-math" | "fenced-div";
-}
+};
 
 export function parseDisplayMathRaw(raw: string): DisplayMathInfo {
   const lines = raw.split("\n");
@@ -213,82 +209,10 @@ export function serializeDisplayMathRaw(
   ].join("\n");
 }
 
-function matchDisplayMathRange(lines: readonly string[], startLineIndex: number): number | null {
-  const startLine = lines[startLineIndex] ?? "";
-  if (DISPLAY_MATH_DOLLAR_START_RE.test(startLine)) {
-    for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-      if (DISPLAY_MATH_DOLLAR_END_RE.test(lines[lineIndex] ?? "")) {
-        return lineIndex;
-      }
-    }
-  }
-  if (DISPLAY_MATH_BRACKET_START_RE.test(startLine)) {
-    for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-      if (DISPLAY_MATH_BRACKET_END_RE.test(lines[lineIndex] ?? "")) {
-        return lineIndex;
-      }
-    }
-  }
-  return null;
-}
-
 export function collectSpecialBlockRanges(markdown: string): SpecialBlockRange[] {
-  const ranges: SpecialBlockRange[] = [];
-  const lines = markdown.split("\n");
-  let offset = 0;
-  const lineOffsets: number[] = [];
-  for (const line of lines) {
-    lineOffsets.push(offset);
-    offset += line.length + 1;
-  }
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex] ?? "";
-
-    const fencedMatch = line.match(FENCED_DIV_START_RE);
-    if (fencedMatch) {
-      const fenceLength = fencedMatch[1].length;
-      if (!/^\s*$/.test(fencedMatch[2])) {
-        const closingFence = new RegExp(`^\\s*:{${fenceLength},}\\s*$`);
-        let depth = 0;
-        for (let innerIndex = lineIndex; innerIndex < lines.length; innerIndex += 1) {
-          const innerLine = lines[innerIndex] ?? "";
-          const innerMatch = innerLine.match(FENCED_DIV_START_RE);
-          if (innerMatch && !/^\s*$/.test(innerMatch[2])) {
-            depth += 1;
-          } else if (closingFence.test(innerLine)) {
-            depth -= 1;
-            if (depth === 0) {
-              const from = lineOffsets[lineIndex];
-              const to = lineOffsets[innerIndex] + innerLine.length;
-              ranges.push({
-                from,
-                raw: markdown.slice(from, to),
-                to,
-                variant: "fenced-div",
-              });
-              lineIndex = innerIndex;
-              break;
-            }
-          }
-        }
-      }
-      continue;
-    }
-
-    const displayMathEndLine = matchDisplayMathRange(lines, lineIndex);
-    if (displayMathEndLine !== null) {
-      const from = lineOffsets[lineIndex];
-      const to = lineOffsets[displayMathEndLine] + (lines[displayMathEndLine] ?? "").length;
-      ranges.push({
-        from,
-        raw: markdown.slice(from, to),
-        to,
-        variant: "display-math",
-      });
-      lineIndex = displayMathEndLine;
-    }
-  }
-
-  return ranges;
+  return collectSourceBlockRanges(markdown).filter((range): range is SpecialBlockRange =>
+    range.variant === "display-math"
+    || (range.variant === "fenced-div"
+      && Boolean((range.raw.split("\n")[0] ?? "").match(FENCED_DIV_START_RE)?.[2]?.trim()))
+  );
 }

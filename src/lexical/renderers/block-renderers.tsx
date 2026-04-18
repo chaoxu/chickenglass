@@ -16,8 +16,8 @@ import {
   parseStructuredFencedDivRaw,
   serializeFencedDivRaw,
 } from "../markdown/block-syntax";
+import { createFencedDivViewModel } from "../markdown/fenced-div-view-model";
 import { getPendingEmbeddedSurfaceFocusId } from "../pending-surface-focus";
-import { humanizeBlockType } from "../markdown/block-metadata";
 import {
   parseFootnoteDefinition,
   serializeFootnoteDefinition,
@@ -410,27 +410,25 @@ function FencedDivBlockRenderer({
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
-  const referenceEntry = parsed.id ? context.renderIndex.references.get(parsed.id) : undefined;
-  const blockOverride = context.config.blocks?.[parsed.blockType];
-  const labelOverride = blockOverride && typeof blockOverride === "object"
-    ? blockOverride.title
-    : undefined;
-  const label = referenceEntry?.label ?? labelOverride ?? humanizeBlockType(parsed.blockType);
+  const referenceLabel = parsed.id ? context.renderIndex.references.get(parsed.id)?.label : undefined;
+  const viewModel = useMemo(
+    () => createFencedDivViewModel(parsed, {
+      config: context.config,
+      referenceLabel,
+    }),
+    [context.config, parsed, referenceLabel],
+  );
+  const label = viewModel.label;
 
-  if (parsed.blockType === "include") {
+  if (viewModel.kind === "include") {
     return <IncludeBlockRenderer nodeKey={nodeKey} raw={raw} />;
   }
 
-  if (
-    parsed.blockType === "embed"
-    || parsed.blockType === "gist"
-    || parsed.blockType === "iframe"
-    || parsed.blockType === "youtube"
-  ) {
+  if (viewModel.kind === "embed") {
     return <EmbedBlockRenderer label={label} nodeKey={nodeKey} parsed={parsed} raw={raw} />;
   }
 
-  if (parsed.blockType === "blockquote") {
+  if (viewModel.kind === "blockquote") {
     return (
       <blockquote className="cf-lexical-blockquote-shell">
         <EmbeddedFieldEditor
@@ -447,7 +445,7 @@ function FencedDivBlockRenderer({
     );
   }
 
-  if (parsed.blockType === "figure" || parsed.blockType === "table") {
+  if (viewModel.kind === "captioned") {
     return <CaptionedBlockRenderer label={label} nodeKey={nodeKey} parsed={parsed} raw={raw} />;
   }
 

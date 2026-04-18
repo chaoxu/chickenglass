@@ -14,147 +14,17 @@ import {
   NAVIGATE_SOURCE_POSITION_EVENT,
   type NavigateSourcePositionEventDetail,
 } from "../constants/events";
+import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 
-const FRONTMATTER_DELIMITER = /^---\s*$/;
-const FENCED_DIV_START = /^\s*(:{3,})(.*)$/;
-const DISPLAY_MATH_DOLLAR_START = /^\s*\$\$(?!\$).*$/;
-const DISPLAY_MATH_BRACKET_START = /^\s*\\\[\s*$/;
-const DISPLAY_MATH_DOLLAR_END = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
-const DISPLAY_MATH_BRACKET_END = /^\s*\\\](?:\s+\{#[^}]+\})?\s*$/;
-const IMAGE_BLOCK_START = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
-const FOOTNOTE_DEFINITION_START = /^\[\^[^\]]+\]:\s*(.*)$/;
 const SOURCE_BLOCK_SELECTOR = "[data-coflat-raw-block='true'], [data-coflat-table-block='true']";
-
-function computeLineOffsets(lines: readonly string[]): number[] {
-  const offsets: number[] = [];
-  let offset = 0;
-  for (const line of lines) {
-    offsets.push(offset);
-    offset += line.length + 1;
-  }
-  return offsets;
-}
-
-function matchDisplayMathEnd(
-  lines: readonly string[],
-  startLineIndex: number,
-  endRegExp: RegExp,
-): number {
-  const startLine = lines[startLineIndex] ?? "";
-  if (DISPLAY_MATH_DOLLAR_START.test(startLine)) {
-    const sameLineEnd = startLine.indexOf("$$", startLine.indexOf("$$") + 2);
-    if (sameLineEnd !== -1) {
-      return startLineIndex;
-    }
-  }
-
-  for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-    if (endRegExp.test(lines[lineIndex] ?? "")) {
-      return lineIndex;
-    }
-  }
-
-  return -1;
-}
-
-function collectSourceBlockStarts(doc: string): number[] {
-  const lines = doc.split("\n");
-  const offsets = computeLineOffsets(lines);
-  const starts: number[] = [];
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex] ?? "";
-
-    if (lineIndex === 0 && FRONTMATTER_DELIMITER.test(line)) {
-      starts.push(offsets[lineIndex] ?? 0);
-      for (let endLine = 1; endLine < lines.length; endLine += 1) {
-        if (FRONTMATTER_DELIMITER.test(lines[endLine] ?? "")) {
-          lineIndex = endLine;
-          break;
-        }
-      }
-      continue;
-    }
-
-    const fencedMatch = line.match(FENCED_DIV_START);
-    if (fencedMatch) {
-      const colonCount = fencedMatch[1]?.length ?? 0;
-      const closingFence = new RegExp(`^\\s*:{${colonCount}}\\s*$`);
-      starts.push(offsets[lineIndex] ?? 0);
-      for (let endLine = lineIndex + 1; endLine < lines.length; endLine += 1) {
-        if (closingFence.test(lines[endLine] ?? "")) {
-          lineIndex = endLine;
-          break;
-        }
-      }
-      continue;
-    }
-
-    if (DISPLAY_MATH_DOLLAR_START.test(line)) {
-      const endLine = matchDisplayMathEnd(lines, lineIndex, DISPLAY_MATH_DOLLAR_END);
-      if (endLine >= 0) {
-        starts.push(offsets[lineIndex] ?? 0);
-        lineIndex = endLine;
-        continue;
-      }
-    }
-
-    if (DISPLAY_MATH_BRACKET_START.test(line)) {
-      const endLine = matchDisplayMathEnd(lines, lineIndex, DISPLAY_MATH_BRACKET_END);
-      if (endLine >= 0) {
-        starts.push(offsets[lineIndex] ?? 0);
-        lineIndex = endLine;
-        continue;
-      }
-    }
-
-    if (IMAGE_BLOCK_START.test(line)) {
-      starts.push(offsets[lineIndex] ?? 0);
-      continue;
-    }
-
-    if (FOOTNOTE_DEFINITION_START.test(line)) {
-      starts.push(offsets[lineIndex] ?? 0);
-      for (let endLine = lineIndex + 1; endLine < lines.length; endLine += 1) {
-        const nextLine = lines[endLine] ?? "";
-        if (/^\s*$/.test(nextLine) || !/^\s{2,4}\S/.test(nextLine)) {
-          lineIndex = endLine - 1;
-          break;
-        }
-        if (endLine === lines.length - 1) {
-          lineIndex = endLine;
-        }
-      }
-      continue;
-    }
-
-    const dividerLine = lines[lineIndex + 1] ?? "";
-    if (/\|/.test(line) && /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(dividerLine)) {
-      starts.push(offsets[lineIndex] ?? 0);
-      lineIndex += 1;
-      for (let endLine = lineIndex + 1; endLine < lines.length; endLine += 1) {
-        const nextLine = lines[endLine] ?? "";
-        if (!/\|/.test(nextLine) || /^\s*$/.test(nextLine)) {
-          lineIndex = endLine - 1;
-          break;
-        }
-        if (endLine === lines.length - 1) {
-          lineIndex = endLine;
-        }
-      }
-    }
-  }
-
-  return starts;
-}
 
 export function syncSourceBlockPositions(root: HTMLElement | null, doc: string): void {
   if (!root) {
     return;
   }
 
-  const starts = collectSourceBlockStarts(doc);
+  const starts = collectSourceBlockRanges(doc).map((range) => range.from);
   const elements = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)];
 
   elements.forEach((element, index) => {

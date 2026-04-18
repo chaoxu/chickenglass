@@ -17,70 +17,14 @@ import { createPortal } from "react-dom";
 import {
   activateInsertedBlock,
   ensureTrailingParagraph,
-  type InsertFocusTarget,
 } from "./block-insert-focus";
+import { SLASH_INSERT_SPECS, type SlashInsertSpec } from "./block-insert-catalog";
 import {
   createInsertBlockNode,
-  type InsertBlockVariant,
 } from "./block-insert-node";
 import { EditorChromePanel } from "./editor-chrome";
 import { $isForbiddenTypeaheadContext } from "./typeahead-context";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-
-type SlashInsertVariant = InsertBlockVariant | "code-block";
-
-interface SlashPickerEntry {
-  readonly focusTarget: InsertFocusTarget;
-  readonly keywords: readonly string[];
-  readonly raw: string;
-  readonly title: string;
-  readonly variant: SlashInsertVariant;
-}
-
-const SLASH_PICKER_ENTRIES: readonly SlashPickerEntry[] = [
-  {
-    focusTarget: "table-cell",
-    keywords: ["table", "grid", "columns", "rows"],
-    raw: "| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |",
-    title: "Table",
-    variant: "table",
-  },
-  {
-    focusTarget: "none",
-    keywords: ["code", "block", "snippet", "fence"],
-    raw: "```\n\n```",
-    title: "Code block",
-    variant: "code-block",
-  },
-  {
-    focusTarget: "display-math",
-    keywords: ["math", "display", "equation", "formula", "latex"],
-    raw: "$$\n\n$$",
-    title: "Display math",
-    variant: "display-math",
-  },
-  {
-    focusTarget: "footnote-body",
-    keywords: ["footnote", "note", "annotation"],
-    raw: "[^1]: ",
-    title: "Footnote",
-    variant: "footnote-definition",
-  },
-  {
-    focusTarget: "include-path",
-    keywords: ["include", "import", "file", "embed"],
-    raw: ":::: {.include}\n\n::::",
-    title: "Include",
-    variant: "fenced-div",
-  },
-  {
-    focusTarget: "block-body",
-    keywords: ["theorem", "definition", "proof", "lemma", "block", "div"],
-    raw: "::: {.theorem}\n\n:::",
-    title: "Theorem / Definition",
-    variant: "fenced-div",
-  },
-];
 
 function findSlashMatch(text: string): MenuTextMatch | null {
   const match = text.match(/(^|\s)\/([\w\s]*)$/);
@@ -97,15 +41,15 @@ function findSlashMatch(text: string): MenuTextMatch | null {
 }
 
 class SlashPickerOption extends MenuOption {
-  readonly entry: SlashPickerEntry;
+  readonly entry: SlashInsertSpec;
 
-  constructor(entry: SlashPickerEntry) {
+  constructor(entry: SlashInsertSpec) {
     super(entry.title);
     this.entry = entry;
   }
 }
 
-const ALL_OPTIONS = SLASH_PICKER_ENTRIES.map((e) => new SlashPickerOption(e));
+const ALL_OPTIONS = SLASH_INSERT_SPECS.map((e) => new SlashPickerOption(e));
 
 function filterEntries(query: string): SlashPickerOption[] {
   const q = query.toLowerCase().trim();

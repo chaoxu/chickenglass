@@ -15,7 +15,7 @@ import {
   getEmbeddedFieldFamilySpec,
 } from "../lexical-next";
 import {
-  BLOCK_KEYBOARD_ENTRY_ATTRIBUTE,
+  blockKeyboardEntryProps,
   type BlockKeyboardEntryPriority,
 } from "./block-keyboard-entry";
 import { useLexicalSurfaceEditable } from "./editability-context";
@@ -129,9 +129,7 @@ export function EmbeddedFieldEditor({
   return (
     <div
       className={canActivate ? "cf-embedded-field-shell cf-embedded-field-shell--focus" : "cf-embedded-field-shell"}
-      {...(keyboardEntryPriority
-        ? { [BLOCK_KEYBOARD_ENTRY_ATTRIBUTE]: keyboardEntryPriority }
-        : {})}
+      {...blockKeyboardEntryProps(keyboardEntryPriority)}
       onBlurCapture={canActivate
         ? (event) => {
             if (requestedFocusRef.current) {

@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { mergeRegister } from "lexical";
 
-import { useEditorScrollSurface } from "../lexical-next";
+import {
+  useEditorScrollSurface,
+  useSurfaceOverlaySync,
+  type SurfaceOverlaySync,
+  type SurfaceOverlaySyncContext,
+  type SurfaceScrollPosition,
+} from "../lexical-next";
 
 const ID_ATTR = "data-coflat-codeblock-id";
 const LANGUAGE_ATTR = "data-coflat-codeblock-language";
@@ -19,11 +24,6 @@ interface CodeBlockOverlay {
     readonly width: number;
   };
   readonly text: string;
-}
-
-interface ScrollPosition {
-  readonly left: number;
-  readonly top: number;
 }
 
 function ensureCodeBlockId(codeElement: HTMLElement): string {
@@ -44,7 +44,7 @@ function formatLanguage(codeElement: HTMLElement): string {
 export function collectCodeBlockOverlays(
   rootElement: HTMLElement,
   surfaceElement: HTMLElement,
-  scrollPosition: ScrollPosition,
+  scrollPosition: SurfaceScrollPosition,
 ): readonly CodeBlockOverlay[] {
   const overlays: CodeBlockOverlay[] = [];
   const surfaceRect = surfaceElement.getBoundingClientRect();
@@ -76,68 +76,29 @@ export function CodeBlockChromePlugin() {
   const [overlays, setOverlays] = useState<readonly CodeBlockOverlay[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const surfaceElement = useEditorScrollSurface();
-  const scrollPositionRef = useRef<ScrollPosition>({ left: 0, top: 0 });
-
-  useEffect(() => {
-    let raf = 0;
-    let timeout = 0;
-
-    const sync = () => {
-      if (!rootElement || !surfaceElement) {
-        setOverlays([]);
-        return;
-      }
-
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timeout);
-
-      const commit = () => {
-        if (!rootElement || !surfaceElement) {
-          setOverlays([]);
-          return;
-        }
-        setOverlays(collectCodeBlockOverlays(rootElement, surfaceElement, scrollPositionRef.current));
-      };
-
-      raf = requestAnimationFrame(commit);
-      timeout = window.setTimeout(commit, 120);
-    };
-
-    if (!rootElement || !surfaceElement) {
-      setOverlays([]);
-      return undefined;
-    }
-
-    const syncScrollPosition = () => {
-      scrollPositionRef.current = {
-        left: surfaceElement.scrollLeft,
-        top: surfaceElement.scrollTop,
-      };
+  const clearOverlays = useCallback(() => {
+    setOverlays([]);
+  }, []);
+  const syncOverlays = useCallback((context: SurfaceOverlaySyncContext) => {
+    setOverlays(collectCodeBlockOverlays(
+      context.rootElement,
+      context.surfaceElement,
+      context.scrollPosition,
+    ));
+  }, []);
+  const subscribeOverlayUpdates = useCallback((sync: SurfaceOverlaySync) =>
+    editor.registerUpdateListener(() => {
       sync();
-    };
+    }), [editor]);
 
-    syncScrollPosition();
-    surfaceElement.addEventListener("scroll", syncScrollPosition, { passive: true });
-    if (surfaceElement !== rootElement) {
-      rootElement.addEventListener("scroll", syncScrollPosition, { passive: true });
-    }
-    window.addEventListener("resize", sync);
-
-    return mergeRegister(
-      editor.registerUpdateListener(() => {
-        sync();
-      }),
-      () => {
-        cancelAnimationFrame(raf);
-        window.clearTimeout(timeout);
-        surfaceElement.removeEventListener("scroll", syncScrollPosition);
-        if (surfaceElement !== rootElement) {
-          rootElement.removeEventListener("scroll", syncScrollPosition);
-        }
-        window.removeEventListener("resize", sync);
-      },
-    );
-  }, [editor, rootElement, surfaceElement]);
+  useSurfaceOverlaySync({
+    observeRootScroll: true,
+    onClear: clearOverlays,
+    onSync: syncOverlays,
+    rootElement,
+    subscribe: subscribeOverlayUpdates,
+    surfaceElement,
+  });
 
   useEffect(() => editor.registerRootListener((nextRootElement) => {
     setRootElement(nextRootElement);

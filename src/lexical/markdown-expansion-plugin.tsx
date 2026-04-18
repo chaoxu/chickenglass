@@ -15,12 +15,23 @@ import {
 import {
   activateInsertedBlock,
   ensureTrailingParagraph,
-  type InsertFocusTarget,
 } from "./block-insert-focus";
 import {
-  createInsertBlockNode,
-  type InsertBlockVariant,
-} from "./block-insert-node";
+  createFencedDivInsertSpec,
+  createFootnoteDefinitionInsertSpec,
+  createImageInsertSpec,
+  createTableInsertSpec,
+  DISPLAY_MATH_BRACKET_INSERT_SPEC,
+  DISPLAY_MATH_DOLLAR_INSERT_SPEC,
+  FRONTMATTER_INSERT_SPEC,
+  type BlockInsertSpec,
+} from "./block-insert-catalog";
+import { createInsertBlockNode } from "./block-insert-node";
+import {
+  FOOTNOTE_DEFINITION_START_RE,
+  IMAGE_BLOCK_START_RE,
+  TABLE_DIVIDER_RE,
+} from "./markdown/block-scanner";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 
 // Require a non-empty class/attrs suffix so a bare `:::` is treated as literal
@@ -29,15 +40,9 @@ import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
 const FENCED_DIV_START_RE = /^\s*(:{3,})\s*(\S.*)$/;
 const DISPLAY_MATH_DOLLAR_RE = /^\s*\$\$\s*$/;
 const DISPLAY_MATH_BRACKET_RE = /^\s*\\\[\s*$/;
-const FOOTNOTE_DEFINITION_RE = /^\[\^[^\]]+\]:\s*(.*)$/;
-const IMAGE_BLOCK_RE = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
-const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
 
-interface ExpansionCandidate {
-  readonly focusTarget: InsertFocusTarget;
-  readonly raw: string;
+interface ExpansionCandidate extends BlockInsertSpec {
   readonly replaceNodes: readonly LexicalNode[];
-  readonly variant: InsertBlockVariant;
 }
 
 function getSelectionParagraph(selection: RangeSelection): ElementNode | null {
@@ -56,20 +61,14 @@ function isFirstTopLevelNode(node: LexicalNode): boolean {
   return node.getPreviousSibling() === null;
 }
 
-function buildTablePlaceholderRow(headerLine: string): string {
-  const cells = headerLine
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim())
-    .filter((cell) => cell.length > 0);
-
-  if (cells.length === 0) {
-    return "|  |";
-  }
-
-  return `| ${cells.map(() => "").join(" | ")} |`;
+function withReplacement(
+  spec: BlockInsertSpec,
+  replaceNodes: readonly LexicalNode[],
+): ExpansionCandidate {
+  return {
+    ...spec,
+    replaceNodes,
+  };
 }
 
 export function getMarkdownExpansionCandidate(selection: RangeSelection): ExpansionCandidate | null {
@@ -85,60 +84,28 @@ export function getMarkdownExpansionCandidate(selection: RangeSelection): Expans
   }
 
   if (trimmed === "---" && isFirstTopLevelNode(paragraph)) {
-    return {
-      focusTarget: "frontmatter",
-      raw: "---\ntitle: \n---",
-      replaceNodes: [paragraph],
-      variant: "frontmatter",
-    };
+    return withReplacement(FRONTMATTER_INSERT_SPEC, [paragraph]);
   }
 
   if (DISPLAY_MATH_DOLLAR_RE.test(text)) {
-    return {
-      focusTarget: "display-math",
-      raw: "$$\n\n$$",
-      replaceNodes: [paragraph],
-      variant: "display-math",
-    };
+    return withReplacement(DISPLAY_MATH_DOLLAR_INSERT_SPEC, [paragraph]);
   }
 
   if (DISPLAY_MATH_BRACKET_RE.test(text)) {
-    return {
-      focusTarget: "display-math",
-      raw: "\\[\n\n\\]",
-      replaceNodes: [paragraph],
-      variant: "display-math",
-    };
+    return withReplacement(DISPLAY_MATH_BRACKET_INSERT_SPEC, [paragraph]);
   }
 
   const fencedDivMatch = text.match(FENCED_DIV_START_RE);
   if (fencedDivMatch && (fencedDivMatch[1]?.length ?? 0) >= 3) {
-    const closingFence = ":".repeat(fencedDivMatch[1]?.length ?? 3);
-    const focusTarget = /\{[^}]*\.include\b/.test(text) ? "include-path" : "block-body";
-    return {
-      focusTarget,
-      raw: `${text}\n\n${closingFence}`,
-      replaceNodes: [paragraph],
-      variant: "fenced-div",
-    };
+    return withReplacement(createFencedDivInsertSpec(text), [paragraph]);
   }
 
-  if (FOOTNOTE_DEFINITION_RE.test(text)) {
-    return {
-      focusTarget: "footnote-body",
-      raw: text,
-      replaceNodes: [paragraph],
-      variant: "footnote-definition",
-    };
+  if (FOOTNOTE_DEFINITION_START_RE.test(text)) {
+    return withReplacement(createFootnoteDefinitionInsertSpec(text), [paragraph]);
   }
 
-  if (IMAGE_BLOCK_RE.test(text)) {
-    return {
-      focusTarget: "none",
-      raw: text,
-      replaceNodes: [paragraph],
-      variant: "image",
-    };
+  if (IMAGE_BLOCK_START_RE.test(text)) {
+    return withReplacement(createImageInsertSpec(text), [paragraph]);
   }
 
   const previousSibling = paragraph.getPreviousSibling();
@@ -149,12 +116,7 @@ export function getMarkdownExpansionCandidate(selection: RangeSelection): Expans
   ) {
     const headerLine = previousSibling.getTextContent();
     if (headerLine.includes("|")) {
-      return {
-        focusTarget: "table-cell",
-        raw: `${headerLine}\n${text}\n${buildTablePlaceholderRow(headerLine)}`,
-        replaceNodes: [previousSibling, paragraph],
-        variant: "table",
-      };
+      return withReplacement(createTableInsertSpec(headerLine, text), [previousSibling, paragraph]);
     }
   }
 

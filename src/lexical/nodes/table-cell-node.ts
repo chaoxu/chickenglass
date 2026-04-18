@@ -7,7 +7,7 @@ import {
   type Spread,
 } from "lexical";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
-import { BLOCK_KEYBOARD_ENTRY_ATTRIBUTE } from "../block-keyboard-entry";
+import { syncBlockKeyboardEntryAttribute } from "../block-keyboard-entry";
 
 export type SerializedTableCellNode = Spread<{
   header: boolean;
@@ -27,9 +27,9 @@ function syncTableCellDom(
     dom.removeAttribute("scope");
   }
   if (node.isHeader()) {
-    dom.removeAttribute(BLOCK_KEYBOARD_ENTRY_ATTRIBUTE);
+    syncBlockKeyboardEntryAttribute(dom);
   } else {
-    dom.setAttribute(BLOCK_KEYBOARD_ENTRY_ATTRIBUTE, "primary");
+    syncBlockKeyboardEntryAttribute(dom, "primary");
   }
 }
 

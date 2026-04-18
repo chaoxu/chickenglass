@@ -12,9 +12,9 @@ import {
   buildPreviewFencedDivRaw,
   collectSpecialBlockRanges,
   parseDisplayMathRaw,
-  parseFencedDivRaw,
+  parseStructuredFencedDivRaw,
 } from "./block-syntax";
-import { resolveBlockTitle } from "./block-metadata";
+import { createFencedDivViewModel } from "./fenced-div-view-model";
 import {
   BRACKETED_REFERENCE_RE,
   NARRATIVE_REFERENCE_RE,
@@ -215,27 +215,29 @@ export function renderDisplayMathHtml(raw: string, options: RichHtmlOptions): st
 }
 
 export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): string {
-  const parsed = parseFencedDivRaw(raw);
-  const referenceEntry = parsed.id ? options.renderIndex.references.get(parsed.id) : undefined;
-  const titleHtml = parsed.title
-    ? renderInlineMarkdownHtml(parsed.title, options)
+  const parsed = parseStructuredFencedDivRaw(raw);
+  const referenceLabel = parsed.id ? options.renderIndex.references.get(parsed.id)?.label : undefined;
+  const viewModel = createFencedDivViewModel(parsed, {
+    config: options.config,
+    referenceLabel,
+  });
+  const titleHtml = parsed.titleMarkdown
+    ? renderInlineMarkdownHtml(parsed.titleMarkdown, options)
     : "";
-  const bodyHtml = parsed.blockType === "include"
-    ? `<p class="cf-lexical-include-path">${encodeHtml(parsed.body)}</p>`
+  const bodyHtml = viewModel.kind === "include"
+    ? `<p class="cf-lexical-include-path">${encodeHtml(parsed.bodyMarkdown.trim())}</p>`
     : renderMarkdownRichHtml(parsed.body, options);
-  const label = referenceEntry?.label ?? resolveBlockTitle(parsed.blockType, options.config);
-  const isCaptionBlock = parsed.blockType === "figure" || parsed.blockType === "table";
 
-  if (parsed.blockType === "gist" || parsed.blockType === "youtube") {
-    return `<section class="cf-lexical-block cf-lexical-block--embed cf-lexical-block--${encodeAttr(parsed.blockType)}"><div class="cf-lexical-block-label">${encodeHtml(label)}</div><a class="cf-lexical-embed-link" href="${encodeAttr(parsed.body)}" target="_blank" rel="noreferrer">${encodeHtml(parsed.body)}</a></section>`;
+  if (viewModel.kind === "embed") {
+    return `<section class="cf-lexical-block cf-lexical-block--embed cf-lexical-block--${encodeAttr(parsed.blockType)}"><div class="cf-lexical-block-label">${encodeHtml(viewModel.label)}</div><a class="cf-lexical-embed-link" href="${encodeAttr(parsed.body.trim())}" target="_blank" rel="noreferrer">${encodeHtml(parsed.body.trim())}</a></section>`;
   }
 
-  if (parsed.blockType === "blockquote") {
+  if (viewModel.kind === "blockquote") {
     return `<blockquote class="cf-lexical-blockquote-shell">${bodyHtml}</blockquote>`;
   }
 
-  const headerHtml = `<header class="cf-lexical-block-header"><span class="cf-lexical-block-label">${encodeHtml(label)}</span>${titleHtml ? `<span class="cf-lexical-block-title">${titleHtml}</span>` : ""}</header>`;
-  if (isCaptionBlock) {
+  const headerHtml = `<header class="cf-lexical-block-header"><span class="cf-lexical-block-label">${encodeHtml(viewModel.label)}</span>${titleHtml ? `<span class="cf-lexical-block-title">${titleHtml}</span>` : ""}</header>`;
+  if (viewModel.kind === "captioned") {
     return `<section class="cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}"><div class="cf-lexical-block-body">${bodyHtml}</div>${headerHtml}</section>`;
   }
   return `<section class="cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}">${headerHtml}<div class="cf-lexical-block-body">${bodyHtml}</div></section>`;

@@ -10,7 +10,7 @@ import {
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
-import { BLOCK_KEYBOARD_ACTIVATION_ATTRIBUTE } from "../block-keyboard-entry";
+import { blockKeyboardActivationProps } from "../block-keyboard-entry";
 import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
 
 type RawUpdatableNode = {
@@ -59,7 +59,7 @@ export function structureToggleProps(
         onActivate();
       }
     },
-    [BLOCK_KEYBOARD_ACTIVATION_ATTRIBUTE]: options?.keyboardActivation ? "true" : undefined,
+    ...blockKeyboardActivationProps(Boolean(options?.keyboardActivation)),
     role: "button",
     tabIndex: 0,
   };

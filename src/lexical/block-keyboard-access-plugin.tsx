@@ -28,8 +28,9 @@ import {
   $isAtTopLevelBlockEdge,
 } from "./selection-boundary";
 import {
-  BLOCK_KEYBOARD_ACTIVATION_SELECTOR,
-  BLOCK_KEYBOARD_PRIMARY_ENTRY_SELECTOR,
+  queryBlockKeyboardActivationTarget,
+  queryBlockKeyboardEditableTargets,
+  queryBlockKeyboardFocusableTargets,
 } from "./block-keyboard-entry";
 import { requestRegisteredSurfaceFocus } from "./editor-focus-plugin";
 import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
@@ -133,17 +134,6 @@ function findAdjacentDecoratorKeyFromDomBoundary(
   return findDecoratorKeyForElement(editor, sibling);
 }
 
-function queryEditableTargets(target: HTMLElement): HTMLElement[] {
-  const primaryEntries = [...target.querySelectorAll<HTMLElement>(
-    `${BLOCK_KEYBOARD_PRIMARY_ENTRY_SELECTOR} [contenteditable='true']`,
-  )];
-  if (primaryEntries.length > 0) {
-    return primaryEntries;
-  }
-
-  return [...target.querySelectorAll<HTMLElement>("[contenteditable='true']")];
-}
-
 function activateNestedEditor(
   editable: HTMLElement,
   direction: NavigationDirection,
@@ -158,8 +148,7 @@ function focusTarget(
   target: HTMLElement,
   direction: NavigationDirection,
 ): boolean {
-  const editableTargets = queryEditableTargets(target)
-    .filter((element) => !element.classList.contains("cf-lexical-editor--hidden"));
+  const editableTargets = queryBlockKeyboardEditableTargets(target);
 
   const editable = direction === "forward"
     ? editableTargets[0]
@@ -168,9 +157,7 @@ function focusTarget(
     return true;
   }
 
-  const focusableTargets = [...target.querySelectorAll<HTMLElement>(
-    "button, [role='button'], a[href], [tabindex]:not([tabindex='-1'])",
-  )];
+  const focusableTargets = queryBlockKeyboardFocusableTargets(target);
   const focusable = direction === "forward"
     ? focusableTargets[0]
     : focusableTargets[focusableTargets.length - 1];
@@ -186,7 +173,7 @@ function enterDecoratorTarget(
   target: HTMLElement,
   direction: NavigationDirection,
 ): boolean {
-  const activationTarget = target.querySelector<HTMLElement>(BLOCK_KEYBOARD_ACTIVATION_SELECTOR);
+  const activationTarget = queryBlockKeyboardActivationTarget(target);
   if (activationTarget) {
     activationTarget.focus();
     activationTarget.click();

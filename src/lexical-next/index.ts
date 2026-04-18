@@ -22,4 +22,10 @@ export {
   useRequiredEditorScrollSurface,
 } from "./surface/editor-scroll-surface";
 export { SurfaceFloatingPortal, type SurfaceFloatingPortalProps } from "./surface/surface-floating-portal";
+export {
+  useSurfaceOverlaySync,
+  type SurfaceOverlaySync,
+  type SurfaceOverlaySyncContext,
+  type SurfaceScrollPosition,
+} from "./surface/use-surface-overlay-sync";
 export { SurfacePortal } from "./surface/surface-portal";

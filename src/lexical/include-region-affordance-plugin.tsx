@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { mergeRegister } from "lexical";
 
-import { SurfacePortal, useEditorScrollSurface } from "../lexical-next";
+import {
+  SurfacePortal,
+  useEditorScrollSurface,
+  useSurfaceOverlaySync,
+  type SurfaceOverlaySync,
+  type SurfaceOverlaySyncContext,
+} from "../lexical-next";
 import type { IncludeRegion } from "../app/source-map";
 import { useEditorTelemetryStore } from "../state/editor-telemetry-store";
 
@@ -34,39 +40,32 @@ export function IncludeRegionAffordancePlugin({
     setRootElement(nextRootElement);
   }), [editor]);
 
-  useEffect(() => {
-    if (!rootElement || !surface) {
+  const clearAffordance = useCallback(() => {
+    setPosition(null);
+    setPath(null);
+  }, []);
+  const syncAffordance = useCallback((context: SurfaceOverlaySyncContext) => {
+    const sourceMap = window.__cfSourceMap;
+    const telemetry = useEditorTelemetryStore.getState();
+    const activePos = telemetry.cursorPos > 0
+      ? telemetry.cursorPos
+      : telemetry.viewportFrom;
+    const nextRegion = sourceMap
+      ? findActiveIncludeRegion(sourceMap.regions, activePos)
+      : null;
+    const nextPath = nextRegion?.file ?? null;
+    setPath(nextPath);
+    if (!nextPath) {
       setPosition(null);
-      setPath(null);
-      return undefined;
+      return;
     }
-
-    const sync = () => {
-      const sourceMap = window.__cfSourceMap;
-      const telemetry = useEditorTelemetryStore.getState();
-      const activePos = telemetry.cursorPos > 0
-        ? telemetry.cursorPos
-        : telemetry.viewportFrom;
-      const nextRegion = sourceMap
-        ? findActiveIncludeRegion(sourceMap.regions, activePos)
-        : null;
-      const nextPath = nextRegion?.file ?? null;
-      setPath(nextPath);
-      if (!nextPath) {
-        setPosition(null);
-        return;
-      }
-      setPosition({
-        left: surface.scrollLeft + 24,
-        top: surface.scrollTop + 12,
-      });
-    };
-
-    sync();
-    surface.addEventListener("scroll", sync, { passive: true });
-    window.addEventListener("resize", sync);
-
-    return mergeRegister(
+    setPosition({
+      left: context.scrollPosition.left + 24,
+      top: context.scrollPosition.top + 12,
+    });
+  }, []);
+  const subscribeAffordanceUpdates = useCallback((sync: SurfaceOverlaySync) =>
+    mergeRegister(
       editor.registerUpdateListener(() => {
         sync();
       }),
@@ -78,12 +77,15 @@ export function IncludeRegionAffordancePlugin({
           sync();
         }
       }),
-      () => {
-        surface.removeEventListener("scroll", sync);
-        window.removeEventListener("resize", sync);
-      },
-    );
-  }, [editor, rootElement, surface]);
+    ), [editor]);
+
+  useSurfaceOverlaySync({
+    onClear: clearAffordance,
+    onSync: syncAffordance,
+    rootElement,
+    subscribe: subscribeAffordanceUpdates,
+    surfaceElement: surface,
+  });
 
   if (!position || !path) {
     return null;

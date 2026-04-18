@@ -27,7 +27,6 @@ import {
 
 import { measureSync } from "../app/perf";
 import { getInlineTextFormatSpecs } from "../lexical-next";
-import { FRONTMATTER_DELIMITER_RE } from "../lib/frontmatter";
 import {
   $createInlineImageNode,
   $isInlineImageNode,
@@ -48,13 +47,18 @@ import {
   createTableBlockTransformer,
   createTableNodeFromMarkdown as createTableNodeFromMarkdownInner,
 } from "./markdown/table-lexical";
+import {
+  DISPLAY_MATH_BRACKET_START_RE,
+  DISPLAY_MATH_DOLLAR_START_RE,
+  FENCED_DIV_START_RE,
+  FOOTNOTE_DEFINITION_START_RE,
+  FRONTMATTER_DELIMITER_RE,
+  IMAGE_BLOCK_START_RE,
+  matchDisplayMathEndLine,
+  matchFencedDivEndLine,
+  matchFootnoteDefinitionEndLine,
+} from "./markdown/block-scanner";
 
-
-const FENCED_DIV_START = /^\s*(:{3,})(.*)$/;
-const DISPLAY_MATH_DOLLAR_START = /^\s*\$\$(?!\$).*$/;
-const DISPLAY_MATH_BRACKET_START = /^\s*\\\[\s*$/;
-const DISPLAY_MATH_DOLLAR_END = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
-const DISPLAY_MATH_BRACKET_END = /^\s*\\\](?:\s+\{#[^}]+\})?\s*$/;
 const INLINE_MATH_DOLLAR_IMPORT = /\$(?:[^$\n\\]|\\.)+\$/;
 const INLINE_MATH_DOLLAR_SHORTCUT = /\$(?:[^$\n\\]|\\.)+\$$/;
 const INLINE_MATH_PAREN_IMPORT = /\\\((?:[^\\\n]|\\.)+\\\)/;
@@ -67,8 +71,6 @@ const NARRATIVE_REFERENCE_IMPORT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)/;
 const NARRATIVE_REFERENCE_SHORTCUT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)$/;
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
-const IMAGE_BLOCK_START = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
-const FOOTNOTE_DEFINITION_START = /^\[\^[^\]]+\]:\s*(.*)$/;
 
 function joinRawLines(lines: readonly string[], startLineIndex: number, endLineIndex: number): string {
   return lines.slice(startLineIndex, endLineIndex + 1).join("\n");
@@ -77,28 +79,6 @@ function joinRawLines(lines: readonly string[], startLineIndex: number, endLineI
 function appendRawBlock(rootNode: ElementNode, variant: RawBlockVariant, raw: string): boolean {
   rootNode.append($createRawBlockNode(variant, raw));
   return true;
-}
-
-function matchDisplayMathEnd(
-  lines: readonly string[],
-  startLineIndex: number,
-  endRegExp: RegExp,
-): number {
-  const startLine = lines[startLineIndex];
-  if (DISPLAY_MATH_DOLLAR_START.test(startLine)) {
-    const sameLineEnd = startLine.indexOf("$$", startLine.indexOf("$$") + 2);
-    if (sameLineEnd !== -1) {
-      return startLineIndex;
-    }
-  }
-
-  for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-    if (endRegExp.test(lines[lineIndex])) {
-      return lineIndex;
-    }
-  }
-
-  return -1;
 }
 
 // Suppress live markdown-shortcut conversion for raw-block multiline
@@ -168,75 +148,50 @@ frontmatterTransformer.regExpStart = FRONTMATTER_DELIMITER_RE;
 
 const fencedDivTransformer = createRawBlockTransformer(
   "fenced-div",
-  (lines, startLineIndex, startMatch) => {
-    const colonCount = startMatch[1]?.length ?? 0;
-    if (colonCount < 3) {
-      return -1;
-    }
-    const closingFence = new RegExp(`^\\s*:{${colonCount}}\\s*$`);
-    for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-      if (closingFence.test(lines[lineIndex])) {
-        return lineIndex;
-      }
-    }
-    return -1;
-  },
+  (lines, startLineIndex, startMatch) =>
+    matchFencedDivEndLine(lines, startLineIndex, startMatch),
 );
-fencedDivTransformer.regExpStart = FENCED_DIV_START;
+fencedDivTransformer.regExpStart = FENCED_DIV_START_RE;
 
 const displayMathDollarTransformer = createRawBlockTransformer(
   "display-math",
   (lines, startLineIndex) => {
-    if (!DISPLAY_MATH_DOLLAR_START.test(lines[startLineIndex])) {
+    if (!DISPLAY_MATH_DOLLAR_START_RE.test(lines[startLineIndex])) {
       return -1;
     }
-    return matchDisplayMathEnd(lines, startLineIndex, DISPLAY_MATH_DOLLAR_END);
+    return matchDisplayMathEndLine(lines, startLineIndex);
   },
 );
-displayMathDollarTransformer.regExpStart = DISPLAY_MATH_DOLLAR_START;
+displayMathDollarTransformer.regExpStart = DISPLAY_MATH_DOLLAR_START_RE;
 
 const displayMathBracketTransformer = createRawBlockTransformer(
   "display-math",
   (lines, startLineIndex) => {
-    if (!DISPLAY_MATH_BRACKET_START.test(lines[startLineIndex])) {
+    if (!DISPLAY_MATH_BRACKET_START_RE.test(lines[startLineIndex])) {
       return -1;
     }
-    return matchDisplayMathEnd(lines, startLineIndex, DISPLAY_MATH_BRACKET_END);
+    return matchDisplayMathEndLine(lines, startLineIndex);
   },
 );
-displayMathBracketTransformer.regExpStart = DISPLAY_MATH_BRACKET_START;
+displayMathBracketTransformer.regExpStart = DISPLAY_MATH_BRACKET_START_RE;
 
 const imageBlockTransformer = createRawBlockTransformer(
   "image",
   (lines, startLineIndex) =>
-    IMAGE_BLOCK_START.test(lines[startLineIndex] ?? "")
+    IMAGE_BLOCK_START_RE.test(lines[startLineIndex] ?? "")
       ? startLineIndex
       : -1,
 );
-imageBlockTransformer.regExpStart = IMAGE_BLOCK_START;
+imageBlockTransformer.regExpStart = IMAGE_BLOCK_START_RE;
 
 const footnoteDefinitionTransformer = createRawBlockTransformer(
   "footnote-definition",
-  (lines, startLineIndex) => {
-    if (!FOOTNOTE_DEFINITION_START.test(lines[startLineIndex] ?? "")) {
-      return -1;
-    }
-    let endLineIndex = startLineIndex;
-    for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-      const line = lines[lineIndex] ?? "";
-      if (/^\s*$/.test(line)) {
-        endLineIndex = lineIndex;
-        break;
-      }
-      if (!/^\s{2,4}\S/.test(line)) {
-        break;
-      }
-      endLineIndex = lineIndex;
-    }
-    return endLineIndex;
-  },
+  (lines, startLineIndex) =>
+    matchFootnoteDefinitionEndLine(lines, startLineIndex, {
+      includeTerminatingBlank: true,
+    }),
 );
-footnoteDefinitionTransformer.regExpStart = FOOTNOTE_DEFINITION_START;
+footnoteDefinitionTransformer.regExpStart = FOOTNOTE_DEFINITION_START_RE;
 
 function createInlineMathTransformer(
   delimiter: "dollar" | "paren",
@@ -505,4 +460,3 @@ export function roundTripMarkdown(markdown: string): string {
   setLexicalMarkdown(editor, markdown);
   return getLexicalMarkdown(editor);
 }
-
