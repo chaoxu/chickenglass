@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createMinimalEditorDocumentChanges } from "../lib/editor-doc-change";
 import type { FileSystem } from "./file-manager";
 import { MemoryFileSystem } from "./file-manager";
 import { createEditorSessionPersistence } from "./editor-session-persistence";
@@ -110,6 +111,12 @@ function createSessionHarness(fs: FileSystem) {
   };
 }
 
+const includeRef = [
+  "::: {.include}",
+  "chapter.md",
+  ":::",
+].join("\n");
+
 describe("editor session lower-layer invariants", () => {
   it("drops stale async file data when an in-memory document wins the race", async () => {
     const reads = {
@@ -156,5 +163,58 @@ describe("editor session lower-layer invariants", () => {
     expect(runtime.getEditorDoc()).toBe("Slow");
     expect(runtime.buffers.has("renamed.md")).toBe(false);
     expect(runtime.liveDocs.has("renamed.md")).toBe(false);
+  });
+
+  it("keeps projected include saves correct after edits before include regions", async () => {
+    const header = "# Main\n\n";
+    const footer = "\n\n# End\n";
+    const chapter = "Chapter body\n";
+    const inserted = "Preface\n";
+    const editedHeader = "# Main\nPreface\n\n";
+    const fs = new MemoryFileSystem({
+      "main.md": `${header}${includeRef}${footer}`,
+      "chapter.md": chapter,
+    });
+    const { persistence, service } = createSessionHarness(fs);
+
+    await service.openFile("main.md");
+    const previousDoc = service.getCurrentDocText();
+    const nextDoc = previousDoc.replace("\n\n", `\n${inserted}\n`);
+    service.handleDocChange(createMinimalEditorDocumentChanges(previousDoc, nextDoc));
+
+    const [chapterRegion] = service.getCurrentSourceMap()?.regions ?? [];
+    expect(chapterRegion?.from).toBe(editedHeader.length);
+    expect(chapterRegion?.to).toBe((editedHeader + chapter).length);
+
+    await persistence.saveCurrentDocument();
+
+    await expect(fs.readFile("main.md")).resolves.toBe(`${editedHeader}${includeRef}${footer}`);
+    await expect(fs.readFile("chapter.md")).resolves.toBe(chapter);
+  });
+
+  it("keeps projected include saves correct after edits inside include regions", async () => {
+    const header = "# Main\n\n";
+    const footer = "\n\n# End\n";
+    const chapter = "Chapter body\n";
+    const editedChapter = "Revised chapter body\n";
+    const fs = new MemoryFileSystem({
+      "main.md": `${header}${includeRef}${footer}`,
+      "chapter.md": chapter,
+    });
+    const { persistence, service } = createSessionHarness(fs);
+
+    await service.openFile("main.md");
+    const previousDoc = service.getCurrentDocText();
+    const nextDoc = `${header}${editedChapter}${footer}`;
+    service.handleDocChange(createMinimalEditorDocumentChanges(previousDoc, nextDoc));
+
+    const [chapterRegion] = service.getCurrentSourceMap()?.regions ?? [];
+    expect(chapterRegion?.from).toBe(header.length);
+    expect(chapterRegion?.to).toBe((header + editedChapter).length);
+
+    await persistence.saveCurrentDocument();
+
+    await expect(fs.readFile("main.md")).resolves.toBe(`${header}${includeRef}${footer}`);
+    await expect(fs.readFile("chapter.md")).resolves.toBe(editedChapter);
   });
 });

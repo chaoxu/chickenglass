@@ -9,7 +9,10 @@ import {
 } from "./editor-session-model";
 import type { FileSystem } from "./file-manager";
 import { measureAsync, withPerfOperation } from "./perf";
-import type { SourceMap } from "./source-map";
+import {
+  createEditorDocumentChangePositionMapping,
+  type SourceMap,
+} from "./source-map";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -165,6 +168,10 @@ export function createEditorSessionService({
 
     const previousDoc = documentTextForPath(currentPath, runtime.liveDocs, runtime.buffers);
     const doc = applyEditorDocumentChanges(previousDoc, changes);
+    const sourceMap = runtime.sourceMaps.get(currentPath);
+    if (sourceMap && changes.length > 0) {
+      sourceMap.mapThrough(createEditorDocumentChangePositionMapping(changes));
+    }
     runtime.liveDocs.set(currentPath, doc);
     runtime.pipeline.bumpRevision(currentPath);
     runtime.activeDocumentSignal.publish(currentPath);

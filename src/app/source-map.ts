@@ -1,3 +1,5 @@
+import type { EditorDocumentChange } from "../lib/editor-doc-change";
+
 interface PositionMapping {
   mapPos: (pos: number, assoc?: number) => number;
 }
@@ -61,6 +63,43 @@ function mapRegionsThrough(regions: IncludeRegion[], changes: PositionMapping): 
     region.to = Math.max(newFrom, newTo);
     mapRegionsThrough(region.children, changes);
   }
+}
+
+/** Build a position mapping for sorted, non-overlapping editor document changes. */
+export function createEditorDocumentChangePositionMapping(
+  changes: readonly EditorDocumentChange[],
+): PositionMapping {
+  return {
+    mapPos: (pos: number, assoc = 1): number => {
+      let offset = 0;
+
+      for (const change of changes) {
+        if (pos < change.from) {
+          break;
+        }
+
+        const insertedLength = change.insert.length;
+        const deletedLength = change.to - change.from;
+
+        if (pos > change.to) {
+          offset += insertedLength - deletedLength;
+          continue;
+        }
+
+        if (deletedLength === 0) {
+          return change.from + offset + (assoc < 0 ? 0 : insertedLength);
+        }
+
+        if (pos === change.from) {
+          return change.from + offset + (assoc < 0 ? 0 : insertedLength);
+        }
+
+        return change.from + offset + insertedLength;
+      }
+
+      return pos + offset;
+    },
+  };
 }
 
 /**
