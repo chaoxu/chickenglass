@@ -843,10 +843,10 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
                 {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}
                 {!isSourceMode && editable ? <SlashPickerPlugin /> : null}
-                {!isSourceMode ? <HeadingChromeAndIndexPlugin doc={renderContextValue?.doc ?? doc} /> : null}
+                {!isSourceMode ? <HeadingChromeAndIndexPlugin doc={doc} /> : null}
                 {!isSourceMode ? (
                 <SourcePositionPlugin
-                  doc={renderContextValue?.doc ?? doc}
+                  doc={doc}
                   enableNavigation
                 />
                 ) : null}

@@ -333,8 +333,8 @@ export function LexicalRichMarkdownEditor({
                 {editable ? <TabKeyPlugin /> : null}
                 {editable ? <ReferenceTypeaheadPlugin /> : null}
                 {editable ? <SlashPickerPlugin /> : null}
-                {showHeadingChrome ? <HeadingChromeAndIndexPlugin doc={renderContextValue?.doc ?? doc} /> : null}
-                <SourcePositionPlugin doc={renderContextValue?.doc ?? doc} enableNavigation={enableSourceNavigation} />
+                {showHeadingChrome ? <HeadingChromeAndIndexPlugin doc={doc} /> : null}
+                <SourcePositionPlugin doc={doc} enableNavigation={enableSourceNavigation} />
                 {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
                 {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
