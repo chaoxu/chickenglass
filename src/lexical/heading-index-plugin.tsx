@@ -2,9 +2,7 @@ import { $getRoot } from "lexical";
 import { $isHeadingNode } from "@lexical/rich-text";
 
 import {
-  extractLabelId,
-  findTrailingHeadingAttributes,
-  hasUnnumberedHeadingAttributes,
+  parseHeadingText,
   type HeadingEntry,
 } from "../app/markdown/headings";
 import {
@@ -41,26 +39,25 @@ export function $collectHeadingEntries(): Omit<HeadingEntry, "pos">[] {
 
     const level = TAG_TO_LEVEL[child.getTag()] ?? 1;
     const rawText = child.getTextContent();
-    const attrs = findTrailingHeadingAttributes(rawText);
-    const text = (
-      attrs ? rawText.slice(0, rawText.lastIndexOf(attrs)) : rawText
-    ).trim();
-    const unnumbered = hasUnnumberedHeadingAttributes(attrs);
+    const heading = parseHeadingText(rawText);
 
-    if (!unnumbered) {
+    if (!heading.unnumbered) {
       counters[level - 1] += 1;
       for (let i = level; i < counters.length; i += 1) {
         counters[i] = 0;
       }
     }
 
-    const number = unnumbered
+    const number = heading.unnumbered
       ? ""
       : counters.slice(0, level).filter((v) => v > 0).join(".");
 
-    const id = extractLabelId(attrs);
-
-    entries.push({ level, text, number, ...(id ? { id } : {}) });
+    entries.push({
+      level,
+      text: heading.text,
+      number,
+      ...(heading.id ? { id: heading.id } : {}),
+    });
   }
 
   return entries;

@@ -31,16 +31,12 @@ import { createInsertBlockNode } from "./block-insert-node";
 import {
   FOOTNOTE_DEFINITION_START_RE,
   IMAGE_BLOCK_START_RE,
+  isDisplayMathBracketExpansionLine,
+  isDisplayMathDollarExpansionLine,
+  matchFencedDivStartLine,
   TABLE_DIVIDER_RE,
 } from "./markdown/block-scanner";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
-
-// Require a non-empty class/attrs suffix so a bare `:::` is treated as literal
-// text (or as a close gesture by the user) rather than expanding into an
-// empty Div.
-const FENCED_DIV_START_RE = /^\s*(:{3,})\s*(\S.*)$/;
-const DISPLAY_MATH_DOLLAR_RE = /^\s*\$\$\s*$/;
-const DISPLAY_MATH_BRACKET_RE = /^\s*\\\[\s*$/;
 
 interface ExpansionCandidate extends BlockInsertSpec {
   readonly replaceNodes: readonly LexicalNode[];
@@ -88,16 +84,15 @@ export function getMarkdownExpansionCandidate(selection: RangeSelection): Expans
     return withReplacement(FRONTMATTER_INSERT_SPEC, [paragraph]);
   }
 
-  if (DISPLAY_MATH_DOLLAR_RE.test(text)) {
+  if (isDisplayMathDollarExpansionLine(text)) {
     return withReplacement(DISPLAY_MATH_DOLLAR_INSERT_SPEC, [paragraph]);
   }
 
-  if (DISPLAY_MATH_BRACKET_RE.test(text)) {
+  if (isDisplayMathBracketExpansionLine(text)) {
     return withReplacement(DISPLAY_MATH_BRACKET_INSERT_SPEC, [paragraph]);
   }
 
-  const fencedDivMatch = text.match(FENCED_DIV_START_RE);
-  if (fencedDivMatch && (fencedDivMatch[1]?.length ?? 0) >= 3) {
+  if (matchFencedDivStartLine(text, { requireHeader: true })) {
     return withReplacement(createFencedDivInsertSpec(text), [paragraph]);
   }
 

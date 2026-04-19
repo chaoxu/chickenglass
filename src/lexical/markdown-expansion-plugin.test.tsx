@@ -74,6 +74,22 @@ describe("getMarkdownExpansionCandidate", () => {
     });
   });
 
+  it("does not expand a bare fenced-div close marker", () => {
+    expect(getCandidateFromLines([":::"], 0)).toBeNull();
+  });
+
+  it("creates image and footnote blocks through shared block-scanner syntax", () => {
+    expect(getCandidateFromLines(["![Alt](figure.png)"], 0)).toMatchObject({
+      raw: "![Alt](figure.png)",
+      variant: "image",
+    });
+    expect(getCandidateFromLines(["[^main]: "], 0)).toMatchObject({
+      focusTarget: "footnote-body",
+      raw: "[^main]: ",
+      variant: "footnote-definition",
+    });
+  });
+
   it("creates a table from a header and divider row", () => {
     expect(getCandidateFromLines(["| A | B |", "| --- | --- |"], 1)).toMatchObject({
       focusTarget: "table-cell",

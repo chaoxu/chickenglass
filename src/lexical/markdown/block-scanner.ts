@@ -4,6 +4,7 @@ export { FRONTMATTER_DELIMITER_RE };
 
 export const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
 export const DISPLAY_MATH_DOLLAR_START_RE = /^\s*\$\$(?!\$).*$/;
+export const DISPLAY_MATH_DOLLAR_EMPTY_START_RE = /^\s*\$\$\s*$/;
 export const DISPLAY_MATH_DOLLAR_END_RE = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
 export const DISPLAY_MATH_BRACKET_START_RE = /^\s*\\\[\s*$/;
 export const DISPLAY_MATH_BRACKET_END_RE = /^\s*\\\](?:\s+\{#[^}]+\})?\s*$/;
@@ -26,6 +27,28 @@ export interface SourceBlockRange {
   readonly startLineIndex: number;
   readonly to: number;
   readonly variant: SourceBlockVariant;
+}
+
+export function matchFencedDivStartLine(
+  line: string,
+  options: { readonly requireHeader?: boolean } = {},
+): RegExpMatchArray | null {
+  const match = line.match(FENCED_DIV_START_RE);
+  if (!match || (match[1]?.length ?? 0) < 3) {
+    return null;
+  }
+  if (options.requireHeader && (match[2] ?? "").trim().length === 0) {
+    return null;
+  }
+  return match;
+}
+
+export function isDisplayMathDollarExpansionLine(line: string): boolean {
+  return DISPLAY_MATH_DOLLAR_EMPTY_START_RE.test(line);
+}
+
+export function isDisplayMathBracketExpansionLine(line: string): boolean {
+  return DISPLAY_MATH_BRACKET_START_RE.test(line);
 }
 
 function computeLineOffsets(lines: readonly string[]): number[] {
@@ -208,7 +231,7 @@ export function collectSourceBlockRanges(markdown: string): SourceBlockRange[] {
       continue;
     }
 
-    const fencedMatch = line.match(FENCED_DIV_START_RE);
+    const fencedMatch = matchFencedDivStartLine(line);
     if (fencedMatch) {
       const endLineIndex = matchFencedDivEndLine(lines, lineIndex, fencedMatch, {
         allowLongerClosingFence: true,

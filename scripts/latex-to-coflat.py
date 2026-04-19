@@ -29,7 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-THEOREM_CLASSES = ("theorem", "lemma", "proposition", "corollary", "definition")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+BLOCK_MANIFEST_TS = REPO_ROOT / "src" / "constants" / "block-manifest.ts"
 GRAPHICS_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".svg", ".eps")
 INLINE_REPLACEMENTS = (
     ("\\gets", " <- "),
@@ -44,6 +45,63 @@ INLINE_REPLACEMENTS = (
     ("\\supp", "supp"),
     ("\\|", "||"),
 )
+
+
+@dataclass(frozen=True)
+class BlockManifestEntry:
+    name: str
+    numbered: bool
+    special_behavior: str | None = None
+
+
+def load_block_manifest_entries(path: Path = BLOCK_MANIFEST_TS) -> tuple[BlockManifestEntry, ...]:
+    source = path.read_text()
+    manifest_match = re.search(r"export const BLOCK_MANIFEST = \[([\s\S]*?)\] as const", source)
+    if not manifest_match:
+        raise RuntimeError(f"Cannot find BLOCK_MANIFEST in {path}")
+
+    entries: list[BlockManifestEntry] = []
+    for entry_match in re.finditer(r"\{([^{}]+)\}", manifest_match.group(1)):
+        raw_entry = entry_match.group(1)
+        name_match = re.search(r'name:\s*"([^"]+)"', raw_entry)
+        if not name_match:
+            continue
+        numbered_match = re.search(r"numbered:\s*(true|false)", raw_entry)
+        special_match = re.search(r'specialBehavior:\s*"([^"]+)"', raw_entry)
+        entries.append(
+            BlockManifestEntry(
+                name=name_match.group(1),
+                numbered=numbered_match.group(1) == "true" if numbered_match else False,
+                special_behavior=special_match.group(1) if special_match else None,
+            )
+        )
+
+    if not entries:
+        raise RuntimeError(f"BLOCK_MANIFEST in {path} did not contain parseable entries")
+    return tuple(entries)
+
+
+def latex_rewrite_block_classes(
+    entries: tuple[BlockManifestEntry, ...] = load_block_manifest_entries(),
+) -> tuple[str, ...]:
+    excluded = {"figure", "table"}
+    return tuple(
+        entry.name
+        for entry in entries
+        if entry.name not in excluded and entry.special_behavior not in {"embed", "blockquote"}
+    )
+
+
+LATEX_REWRITE_BLOCK_CLASSES = latex_rewrite_block_classes()
+LATEX_NUMBERED_REWRITE_BLOCK_CLASSES = tuple(
+    entry.name
+    for entry in load_block_manifest_entries()
+    if entry.numbered and entry.name in LATEX_REWRITE_BLOCK_CLASSES
+)
+
+
+def class_pattern(classes: tuple[str, ...]) -> str:
+    return "|".join(re.escape(name) for name in classes)
 
 
 @dataclass
@@ -402,14 +460,16 @@ def rewrite_problem_blocks(text: str) -> str:
 
 
 def rewrite_theorem_blocks(text: str) -> str:
+    numbered_classes = class_pattern(LATEX_NUMBERED_REWRITE_BLOCK_CLASSES)
+    rewrite_classes = class_pattern(LATEX_REWRITE_BLOCK_CLASSES)
     text = re.sub(
-        r'^::: (theorem|lemma|proposition|corollary)\n\[\]\{#([^ ]+) label="[^"]+"\}\s*',
+        rf'^::: ({numbered_classes})\n\[\]\{{#([^ ]+) label="[^"]+"\}}\s*',
         lambda m: f'::: {{#{m.group(2)} .{m.group(1)}}}\n',
         text,
         flags=re.M,
     )
     text = re.sub(
-        r"^::: (definition|theorem|lemma|proposition|corollary)\s*$",
+        rf"^::: ({rewrite_classes})\s*$",
         lambda m: f"::: {{.{m.group(1)}}}",
         text,
         flags=re.M,

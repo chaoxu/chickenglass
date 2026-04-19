@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { collectSourceBlockRanges } from "./block-scanner";
+import {
+  collectSourceBlockRanges,
+  isDisplayMathBracketExpansionLine,
+  isDisplayMathDollarExpansionLine,
+  matchFencedDivStartLine,
+} from "./block-scanner";
 
 describe("block-scanner", () => {
   it("collects source-backed block ranges without scanning through following prose", () => {
@@ -72,5 +77,13 @@ describe("block-scanner", () => {
         variant: "fenced-div",
       },
     ]);
+  });
+
+  it("exposes shared markdown-expansion start-line matchers", () => {
+    expect(matchFencedDivStartLine("::: {.theorem}", { requireHeader: true })?.[1]).toBe(":::");
+    expect(matchFencedDivStartLine(":::", { requireHeader: true })).toBeNull();
+    expect(isDisplayMathDollarExpansionLine("$$")).toBe(true);
+    expect(isDisplayMathDollarExpansionLine("$$x + y$$")).toBe(false);
+    expect(isDisplayMathBracketExpansionLine("\\[")).toBe(true);
   });
 });

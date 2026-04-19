@@ -32,6 +32,7 @@ import {
 } from "lexical";
 
 import { measureSync } from "../app/perf";
+import { HEADING_TRAILING_ATTRIBUTES_RE } from "../app/markdown/heading-syntax";
 import { getInlineTextFormatSpecs } from "../lexical-next";
 import {
   $createInlineImageNode,
@@ -83,7 +84,6 @@ const NARRATIVE_REFERENCE_IMPORT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)/;
 const NARRATIVE_REFERENCE_SHORTCUT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)$/;
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
-const HEADING_ATTRIBUTE_IMPORT = /\s+\{[^{}\n]*\}$/;
 
 function joinRawLines(lines: readonly string[], startLineIndex: number, endLineIndex: number): string {
   return lines.slice(startLineIndex, endLineIndex + 1).join("\n");
@@ -342,8 +342,8 @@ const headingAttributeTransformer: TextMatchTransformer = {
   export(node) {
     return $isHeadingAttributeNode(node) ? node.getRaw() : null;
   },
-  importRegExp: HEADING_ATTRIBUTE_IMPORT,
-  regExp: HEADING_ATTRIBUTE_IMPORT,
+  importRegExp: HEADING_TRAILING_ATTRIBUTES_RE,
+  regExp: HEADING_TRAILING_ATTRIBUTES_RE,
   replace(node, match) {
     if (isRevealSourceTextNode(node)) {
       return;

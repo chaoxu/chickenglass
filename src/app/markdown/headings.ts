@@ -1,4 +1,16 @@
 import { getTextLines } from "./text-lines";
+import {
+  parseHeadingLine,
+  type ParsedHeadingLine,
+} from "./heading-syntax";
+
+export {
+  extractLabelId,
+  findTrailingHeadingAttributes,
+  hasUnnumberedHeadingAttributes,
+  parseHeadingLine,
+  parseHeadingText,
+} from "./heading-syntax";
 
 export interface HeadingEntry {
   readonly level: number;
@@ -16,25 +28,6 @@ export interface HeadingDefinition extends HeadingEntry {
   readonly labelTo?: number;
 }
 
-const HEADING_RE = /^(#{1,6})[ \t]+(.+?)\s*$/;
-const TRAILING_ATTRIBUTES_RE = /\s+(\{[^{}\n]*\})\s*$/;
-const LABEL_RE = /#([A-Za-z0-9_][\w.:-]*)/;
-
-export function extractLabelId(attrs: string | undefined): string | undefined {
-  return attrs?.match(LABEL_RE)?.[1];
-}
-
-export function findTrailingHeadingAttributes(text: string): string | undefined {
-  return text.match(TRAILING_ATTRIBUTES_RE)?.[1];
-}
-
-export function hasUnnumberedHeadingAttributes(attrs: string | undefined): boolean {
-  if (!attrs) {
-    return false;
-  }
-  return /\{\s*-[^}]*\}/.test(attrs) || /\.unnumbered\b/.test(attrs);
-}
-
 export function extractHeadingDefinitions(
   doc: string,
   scanDoc = doc,
@@ -47,19 +40,13 @@ export function extractHeadingDefinitions(
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const scanLine = scanLines[index];
-    const match = scanLine.text.match(HEADING_RE);
-    if (!match) {
+    const scanHeading = parseHeadingLine(scanLine.text);
+    if (!scanHeading) {
       continue;
     }
 
-    const level = match[1].length;
-    const rawText = match[2];
-    const attrs = findTrailingHeadingAttributes(rawText);
-    const text = (attrs
-      ? rawText.slice(0, rawText.lastIndexOf(attrs))
-      : rawText
-    ).trim();
-    const unnumbered = hasUnnumberedHeadingAttributes(attrs);
+    const heading: ParsedHeadingLine = parseHeadingLine(line.text) ?? scanHeading;
+    const { attrs, id, level, text, unnumbered } = heading;
 
     if (!unnumbered) {
       counters[level - 1] += 1;
@@ -71,10 +58,6 @@ export function extractHeadingDefinitions(
     const number = unnumbered
       ? ""
       : counters.slice(0, level).filter((value) => value > 0).join(".");
-    const id = extractLabelId(attrs);
-    const attrsStart = attrs ? line.text.lastIndexOf(attrs) : -1;
-    const labelStart = id && attrs ? attrs.indexOf(`#${id}`) : -1;
-
     headings.push({
       level,
       text,
@@ -84,11 +67,11 @@ export function extractHeadingDefinitions(
       from: line.start,
       to: line.end,
       attrs,
-      labelFrom: id && attrsStart >= 0 && labelStart >= 0
-        ? line.start + attrsStart + labelStart + 1
+      labelFrom: heading.labelFrom !== undefined
+        ? line.start + heading.labelFrom
         : undefined,
-      labelTo: id && attrsStart >= 0 && labelStart >= 0
-        ? line.start + attrsStart + labelStart + 1 + id.length
+      labelTo: heading.labelTo !== undefined
+        ? line.start + heading.labelTo
         : undefined,
     });
   }
