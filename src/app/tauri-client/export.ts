@@ -1,4 +1,4 @@
-import type { ExportFormat } from "../lib/types";
+import type { NativeExportFormat } from "../lib/types";
 import { TAURI_COMMANDS } from "./bridge-metadata";
 import { tauriCommand, tauriArgs } from "./make-command";
 
@@ -7,7 +7,7 @@ export const checkPandocCommand = tauriCommand<string>(TAURI_COMMANDS.checkPando
 
 /** Export a document to PDF or LaTeX via the Rust/Pandoc backend. */
 export const exportDocumentCommand = tauriArgs<string>(TAURI_COMMANDS.exportDocument)(
-  (content: string, format: ExportFormat, outputPath: string, sourcePath: string) => ({
+  (content: string, format: NativeExportFormat, outputPath: string, sourcePath: string) => ({
     content,
     format,
     outputPath,
