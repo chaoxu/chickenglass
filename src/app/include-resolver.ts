@@ -1,11 +1,10 @@
 import type { FileSystem } from "./file-manager";
 import { type IncludeRegion, SourceMap } from "./source-map";
-import { extractMarkdownBlocks } from "./markdown/labels";
-import { maskMarkdownCodeSpansAndBlocks } from "./markdown/masking";
 import {
   normalizeProjectPath,
   resolveProjectPathFromDocument,
 } from "../lib/project-paths";
+import { extractMarkdownIncludeReferences } from "./markdown/includes";
 
 export interface ResolvedInclude {
   readonly path: string;
@@ -73,13 +72,6 @@ export class IncludeUnavailableError extends Error {
   }
 }
 
-interface IncludeMatch {
-  readonly from: number;
-  readonly path: string;
-  readonly text: string;
-  readonly to: number;
-}
-
 interface FlattenRegion {
   readonly children: readonly FlattenRegion[];
   readonly file: string;
@@ -106,18 +98,6 @@ function formatUnknownError(error: unknown): string {
     return error.message;
   }
   return String(error);
-}
-
-function findIncludeBlocks(content: string): readonly IncludeMatch[] {
-  return extractMarkdownBlocks(content, maskMarkdownCodeSpansAndBlocks(content))
-    .filter((block) => block.blockType === "include")
-    .map((block) => ({
-      from: block.from,
-      path: block.content.trim(),
-      text: content.slice(block.from, block.to),
-      to: block.to,
-    }))
-    .filter((block) => block.path.length > 0);
 }
 
 function resolveIncludePath(fromPath: string, includePath: string): string {
@@ -154,7 +134,7 @@ async function resolveIncludesCore(
   ancestorChain: readonly string[],
 ): Promise<readonly ResolvedInclude[]> {
   const selfChain = [...ancestorChain, filePath];
-  const includeBlocks = findIncludeBlocks(content);
+  const includeBlocks = extractMarkdownIncludeReferences(content);
   const results: ResolvedInclude[] = [];
 
   for (const block of includeBlocks) {
@@ -210,7 +190,7 @@ function flattenIncludesWithSourceMap(
     readonly text: string;
   }> = [];
 
-  for (const block of findIncludeBlocks(rootContent)) {
+  for (const block of extractMarkdownIncludeReferences(rootContent)) {
     if (includeIndex >= includes.length) {
       break;
     }
@@ -374,7 +354,7 @@ export async function expandDocumentIncludes(
     };
   }
 
-  const includeBlocks = findIncludeBlocks(rawContent);
+  const includeBlocks = extractMarkdownIncludeReferences(rawContent);
   if (includeBlocks.length === 0) {
     return {
       failure: null,

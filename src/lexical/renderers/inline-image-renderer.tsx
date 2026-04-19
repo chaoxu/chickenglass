@@ -3,6 +3,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { $getNodeByKey, type NodeKey } from "lexical";
 
 import { useLexicalSurfaceEditable } from "../editability-context";
+import { AssetPreviewView } from "../asset-preview-view";
 import { EditorChromeInput } from "../editor-chrome";
 import { useAssetPreview } from "../media-preview";
 import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
@@ -102,31 +103,16 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
     return <span className="cf-lexical-raw-fallback">{raw}</span>;
   }
 
-  if (preview.kind === "loading") {
-    return <span className="cf-lexical-inline-image-fallback">{parsed.alt || parsed.src}</span>;
-  }
-
-  if (preview.kind === "error" || !preview.previewUrl) {
-    return (
-      <span
-        className="cf-lexical-inline-image-fallback"
-        {...structureToggleProps(surfaceEditable, () => setEditing(true), { stopPropagation: true })}
-      >
-        {parsed.alt || parsed.src}
-      </span>
-    );
-  }
-
   return (
-    <span
-      className="cf-lexical-inline-image-shell"
-      {...structureToggleProps(surfaceEditable, () => setEditing(true), { stopPropagation: true })}
-    >
-      <img
-        alt={parsed.alt || parsed.src}
-        className={LEXICAL_NODE_CLASS.INLINE_IMAGE}
-        src={preview.previewUrl}
-      />
-    </span>
+    <AssetPreviewView
+      activationProps={structureToggleProps(surfaceEditable, () => setEditing(true), {
+        stopPropagation: true,
+      })}
+      alt={parsed.alt}
+      imageClassName={LEXICAL_NODE_CLASS.INLINE_IMAGE}
+      layout="inline"
+      preview={preview}
+      src={parsed.src}
+    />
   );
 });

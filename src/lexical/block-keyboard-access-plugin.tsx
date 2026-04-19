@@ -3,7 +3,6 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
   $createParagraphNode,
   $createNodeSelection,
-  $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getRoot,
   $getSelection,
@@ -28,163 +27,13 @@ import {
   $isAtTopLevelBlockEdge,
 } from "./selection-boundary";
 import {
-  queryBlockKeyboardActivationTarget,
-  queryBlockKeyboardEditableTargets,
-  queryBlockKeyboardFocusableTargets,
-} from "./block-keyboard-entry";
-import { requestRegisteredSurfaceFocus } from "./editor-focus-plugin";
+  directionFromHorizontalArrowKey,
+  findAdjacentTopLevelDecoratorKeyFromDomBoundary,
+  hasNavigationModifier,
+  type BoundaryDirection,
+} from "./boundary-navigation";
 import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
-
-type NavigationDirection = "forward" | "backward";
-
-function rootChildContaining(root: HTMLElement, node: Node | null): HTMLElement | null {
-  let current = node instanceof Element ? node : node?.parentElement ?? null;
-  while (current && current.parentElement !== root) {
-    current = current.parentElement;
-  }
-  return current instanceof HTMLElement && current.parentElement === root ? current : null;
-}
-
-function isDomSelectionAtEdge(rootChild: HTMLElement, isBackward: boolean): boolean {
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed || !selection.anchorNode) {
-    return false;
-  }
-
-  try {
-    const beforeRange = document.createRange();
-    beforeRange.selectNodeContents(rootChild);
-    beforeRange.setEnd(selection.anchorNode, selection.anchorOffset);
-    const beforeLength = beforeRange.toString().length;
-    const totalLength = rootChild.textContent?.length ?? 0;
-    return isBackward ? beforeLength === 0 : beforeLength === totalLength;
-  } catch {
-    return false;
-  }
-}
-
-function isIgnorableEmptyRootBlock(element: Element): boolean {
-  return element.classList.contains("cf-lexical-paragraph")
-    && (element.textContent ?? "").trim().length === 0;
-}
-
-function adjacentNonEmptyRootSibling(
-  rootChild: HTMLElement,
-  direction: NavigationDirection,
-): HTMLElement | null {
-  let sibling: Element | null = direction === "forward"
-    ? rootChild.nextElementSibling
-    : rootChild.previousElementSibling;
-  while (sibling && isIgnorableEmptyRootBlock(sibling)) {
-    sibling = direction === "forward"
-      ? sibling.nextElementSibling
-      : sibling.previousElementSibling;
-  }
-  return sibling instanceof HTMLElement ? sibling : null;
-}
-
-function findDecoratorKeyForElement(
-  editor: LexicalEditor,
-  element: HTMLElement,
-): NodeKey | null {
-  let key: NodeKey | null = null;
-  editor.read(() => {
-    const nearestNode = $getNearestNodeFromDOMNode(element);
-    if ($isDecoratorNode(nearestNode)) {
-      key = nearestNode.getKey();
-      return;
-    }
-
-    for (const child of $getRoot().getChildren()) {
-      if (!$isDecoratorNode(child)) {
-        continue;
-      }
-      const childElement = editor.getElementByKey(child.getKey());
-      if (
-        childElement instanceof HTMLElement
-        && (childElement === element || childElement.contains(element) || element.contains(childElement))
-      ) {
-        key = child.getKey();
-        return;
-      }
-    }
-  });
-  return key;
-}
-
-function findAdjacentDecoratorKeyFromDomBoundary(
-  editor: LexicalEditor,
-  direction: NavigationDirection,
-): NodeKey | null {
-  const root = editor.getRootElement();
-  const selection = window.getSelection();
-  if (!root || !selection?.anchorNode || !root.contains(selection.anchorNode)) {
-    return null;
-  }
-
-  const rootChild = rootChildContaining(root, selection.anchorNode);
-  if (!rootChild || !isDomSelectionAtEdge(rootChild, direction === "backward")) {
-    return null;
-  }
-
-  const sibling = adjacentNonEmptyRootSibling(rootChild, direction);
-  if (!sibling) {
-    return null;
-  }
-  return findDecoratorKeyForElement(editor, sibling);
-}
-
-function activateNestedEditor(
-  editable: HTMLElement,
-  direction: NavigationDirection,
-): boolean {
-  return requestRegisteredSurfaceFocus(
-    editable,
-    direction === "forward" ? "start" : "end",
-  );
-}
-
-function focusTarget(
-  target: HTMLElement,
-  direction: NavigationDirection,
-): boolean {
-  const editableTargets = queryBlockKeyboardEditableTargets(target);
-
-  const editable = direction === "forward"
-    ? editableTargets[0]
-    : editableTargets[editableTargets.length - 1];
-  if (editable && activateNestedEditor(editable, direction)) {
-    return true;
-  }
-
-  const focusableTargets = queryBlockKeyboardFocusableTargets(target);
-  const focusable = direction === "forward"
-    ? focusableTargets[0]
-    : focusableTargets[focusableTargets.length - 1];
-  if (focusable) {
-    focusable.focus();
-    return true;
-  }
-
-  return false;
-}
-
-function enterDecoratorTarget(
-  target: HTMLElement,
-  direction: NavigationDirection,
-): boolean {
-  const activationTarget = queryBlockKeyboardActivationTarget(target);
-  if (activationTarget) {
-    activationTarget.focus();
-    activationTarget.click();
-    return true;
-  }
-
-  requestAnimationFrame(() => {
-    focusTarget(target, direction);
-  });
-  return focusTarget(target, direction);
-}
+import { enterBlockSurfaceTarget } from "./surface-activation";
 
 function $selectDecoratorTarget(nodeKey: NodeKey): void {
   const node = $getNodeByKey(nodeKey);
@@ -213,13 +62,13 @@ function selectDecoratorTarget(
 function handleDecoratorArrowNavigation(
   editor: LexicalEditor,
   event: KeyboardEvent,
-  direction: NavigationDirection,
+  direction: BoundaryDirection,
   options: {
     readonly inLexicalCommand: boolean;
     readonly requireBlockEdge: boolean;
   },
 ): boolean {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+  if (hasNavigationModifier(event)) {
     return false;
   }
 
@@ -230,7 +79,9 @@ function handleDecoratorArrowNavigation(
     return $findAdjacentTopLevelSiblingFromSelection(direction, $isDecoratorNode)?.getKey() ?? null;
   });
   const targetKey = lexicalTargetKey
-    ?? (options.requireBlockEdge ? findAdjacentDecoratorKeyFromDomBoundary(editor, direction) : null);
+    ?? (options.requireBlockEdge
+      ? findAdjacentTopLevelDecoratorKeyFromDomBoundary(editor, direction)
+      : null);
   if (!targetKey) {
     return false;
   }
@@ -249,13 +100,13 @@ function handleDecoratorArrowNavigation(
     "structure-source",
     direction === "forward" ? "start" : "end",
   );
-  return enterDecoratorTarget(target, direction);
+  return enterBlockSurfaceTarget(target, direction);
 }
 
 function registerDecoratorArrowNavigation(
   editor: LexicalEditor,
   command: LexicalCommand<KeyboardEvent | null>,
-  direction: NavigationDirection,
+  direction: BoundaryDirection,
   options: { readonly requireBlockEdge: boolean },
 ): () => void {
   return editor.registerCommand(
@@ -283,19 +134,14 @@ function registerDomHorizontalArrowNavigation(editor: LexicalEditor): () => void
     if (target?.closest("[contenteditable='true']") !== rootElement) {
       return;
     }
-    if (event.key === "ArrowRight") {
-      handleDecoratorArrowNavigation(editor, event, "forward", {
-        inLexicalCommand: false,
-        requireBlockEdge: true,
-      });
+    const direction = directionFromHorizontalArrowKey(event.key);
+    if (!direction) {
       return;
     }
-    if (event.key === "ArrowLeft") {
-      handleDecoratorArrowNavigation(editor, event, "backward", {
-        inLexicalCommand: false,
-        requireBlockEdge: true,
-      });
-    }
+    handleDecoratorArrowNavigation(editor, event, direction, {
+      inLexicalCommand: false,
+      requireBlockEdge: true,
+    });
   };
 
   document.addEventListener("keydown", onKeyDown, true);

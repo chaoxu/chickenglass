@@ -1,4 +1,9 @@
-import { openRegressionDocument, readEditorText, setRevealPresentation } from "../test-helpers.mjs";
+import {
+  openRegressionDocument,
+  readEditorText,
+  setRevealPresentation,
+  waitForBrowserSettled,
+} from "../test-helpers.mjs";
 
 export const name = "math-editing";
 
@@ -23,9 +28,17 @@ export async function run(page) {
 
   await page.locator(".cf-lexical-inline-math").first().click();
   const inlineInput = page.locator(".cf-lexical-inline-token-panel-editor").first();
+  await inlineInput.waitFor({ state: "visible", timeout: 5000 });
   const initialInlineWidth = await inlineInput.evaluate((node) => node.getBoundingClientRect().width);
   await inlineInput.fill(INLINE_MARKER);
-  await page.waitForTimeout(150);
+  await page.waitForFunction(
+    ({ selector, width }) => {
+      const input = document.querySelector(selector);
+      return input instanceof HTMLElement && input.getBoundingClientRect().width > width;
+    },
+    { selector: ".cf-lexical-inline-token-panel-editor", width: initialInlineWidth },
+    { timeout: 5000 },
+  );
 
   const expandedInlineWidth = await inlineInput.evaluate((node) => node.getBoundingClientRect().width);
   if (expandedInlineWidth <= initialInlineWidth) {
@@ -35,7 +48,11 @@ export async function run(page) {
   // Floating reveal commits on Enter/blur, not on every keystroke; press
   // Enter and then verify the markdown reflects the edit.
   await inlineInput.press("Enter");
-  await page.waitForTimeout(200);
+  await page.waitForFunction(
+    (marker) => window.__editor?.getDoc?.().includes(marker),
+    INLINE_MARKER,
+    { timeout: 5000 },
+  );
 
   const liveText = await readEditorText(page);
   if (!liveText.includes(INLINE_MARKER)) {
@@ -43,7 +60,11 @@ export async function run(page) {
   }
 
   await page.locator(".cf-lexical-display-math-body").first().click();
-  await page.waitForTimeout(150);
+  await page.waitForFunction(
+    () => Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-preview-equation .katex")),
+    undefined,
+    { timeout: 5000 },
+  );
 
   const editingState = await page.evaluate(() => ({
     hasEditingEditor: Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-editor")),
@@ -56,13 +77,20 @@ export async function run(page) {
 
   const displayEditor = page.locator(".cf-lexical-display-math.is-editing [contenteditable='true']").first();
   await displayEditor.fill(`$$\n${DISPLAY_MARKER}\n$$`);
-  await page.waitForTimeout(150);
+  await page.waitForFunction(
+    () => {
+      const text = document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-display-math-preview-equation")?.textContent ?? "";
+      return text.includes("q") && text.includes("r");
+    },
+    undefined,
+    { timeout: 5000 },
+  );
   const displayPreviewText = await page.locator(".cf-lexical-display-math.is-editing .cf-lexical-display-math-preview-equation").first().textContent();
   if (!displayPreviewText?.includes("q") || !displayPreviewText.includes("r")) {
     return { pass: false, message: `display math live preview did not update while editing: ${JSON.stringify(displayPreviewText)}` };
   }
   await displayEditor.press("Tab");
-  await page.waitForTimeout(200);
+  await waitForBrowserSettled(page);
 
   const text = await readEditorText(page);
   if (!text.includes(INLINE_MARKER)) {

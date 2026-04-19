@@ -45,4 +45,14 @@ describe("extractDiagnostics", () => {
       message: 'Unresolved include "missing.md"',
     }));
   });
+
+  it("does not infer includes from fenced code", () => {
+    expect(extractDiagnostics([
+      "```",
+      "::: {.include}",
+      "not-an-include.md",
+      ":::",
+      "```",
+    ].join("\n"))).toEqual([]);
+  });
 });

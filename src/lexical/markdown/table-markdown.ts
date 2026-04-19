@@ -51,6 +51,92 @@ function serializeTableDivider(cells: readonly string[]): string {
   return `|${cells.join("|")}|`;
 }
 
+function isEscaped(text: string, index: number): boolean {
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor--) {
+    slashCount++;
+  }
+  return slashCount % 2 === 1;
+}
+
+function backtickRunLength(text: string, index: number): number {
+  let cursor = index;
+  while (text[cursor] === "`") {
+    cursor++;
+  }
+  return cursor - index;
+}
+
+function htmlBreakLength(text: string, index: number): number {
+  return /^<br\s*\/?>/i.exec(text.slice(index))?.[0].length ?? 0;
+}
+
+export function decodePipeTableCellMarkdown(markdown: string): string {
+  let result = "";
+  let index = 0;
+  let codeTickLength = 0;
+  let mathDelimiter: "$" | "\\(" | null = null;
+
+  while (index < markdown.length) {
+    if (markdown[index] === "`") {
+      const runLength = backtickRunLength(markdown, index);
+      if (codeTickLength === 0) {
+        codeTickLength = runLength;
+      } else if (runLength === codeTickLength) {
+        codeTickLength = 0;
+      }
+      result += markdown.slice(index, index + runLength);
+      index += runLength;
+      continue;
+    }
+
+    if (codeTickLength === 0) {
+      if (mathDelimiter === "\\(") {
+        if (markdown.startsWith("\\)", index) && !isEscaped(markdown, index)) {
+          mathDelimiter = null;
+          result += "\\)";
+          index += 2;
+          continue;
+        }
+      } else if (mathDelimiter === "$") {
+        if (markdown[index] === "$" && !isEscaped(markdown, index)) {
+          mathDelimiter = null;
+        }
+      } else if (markdown.startsWith("\\(", index) && !isEscaped(markdown, index)) {
+        mathDelimiter = "\\(";
+        result += "\\(";
+        index += 2;
+        continue;
+      } else if (markdown[index] === "$" && !isEscaped(markdown, index)) {
+        mathDelimiter = "$";
+      }
+
+      if (mathDelimiter === null) {
+        const breakLength = htmlBreakLength(markdown, index);
+        if (breakLength > 0) {
+          result += "  \n";
+          index += breakLength;
+          continue;
+        }
+      }
+    }
+
+    result += markdown[index];
+    index++;
+  }
+
+  return result;
+}
+
+export function encodePipeTableCellMarkdown(markdown: string): string {
+  return markdown
+    .trim()
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join("<br>");
+}
+
 export function parseMarkdownTable(raw: string): MarkdownTable | null {
   const lines = raw.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length < 2) {

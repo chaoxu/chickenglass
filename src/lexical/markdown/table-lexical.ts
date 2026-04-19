@@ -36,6 +36,8 @@ import {
   TableRowNode,
 } from "../nodes/table-row-node";
 import {
+  decodePipeTableCellMarkdown,
+  encodePipeTableCellMarkdown,
   type MarkdownTable,
   parseMarkdownTable,
   serializeMarkdownTable,
@@ -59,7 +61,7 @@ function writeTableCellMarkdown(
   cellTransformers: readonly Transformer[],
 ): void {
   $convertFromMarkdownString(
-    decodeTableCellLineBreaks(markdown),
+    decodePipeTableCellMarkdown(markdown),
     [...cellTransformers],
     cellNode,
     true,
@@ -69,99 +71,13 @@ function writeTableCellMarkdown(
   }
 }
 
-function isEscaped(text: string, index: number): boolean {
-  let slashCount = 0;
-  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor--) {
-    slashCount++;
-  }
-  return slashCount % 2 === 1;
-}
-
-function backtickRunLength(text: string, index: number): number {
-  let cursor = index;
-  while (text[cursor] === "`") {
-    cursor++;
-  }
-  return cursor - index;
-}
-
-function htmlBreakLength(text: string, index: number): number {
-  return /^<br\s*\/?>/i.exec(text.slice(index))?.[0].length ?? 0;
-}
-
-function decodeTableCellLineBreaks(markdown: string): string {
-  let result = "";
-  let index = 0;
-  let codeTickLength = 0;
-  let mathDelimiter: "$" | "\\(" | null = null;
-
-  while (index < markdown.length) {
-    if (markdown[index] === "`") {
-      const runLength = backtickRunLength(markdown, index);
-      if (codeTickLength === 0) {
-        codeTickLength = runLength;
-      } else if (runLength === codeTickLength) {
-        codeTickLength = 0;
-      }
-      result += markdown.slice(index, index + runLength);
-      index += runLength;
-      continue;
-    }
-
-    if (codeTickLength === 0) {
-      if (mathDelimiter === "\\(") {
-        if (markdown.startsWith("\\)", index) && !isEscaped(markdown, index)) {
-          mathDelimiter = null;
-          result += "\\)";
-          index += 2;
-          continue;
-        }
-      } else if (mathDelimiter === "$") {
-        if (markdown[index] === "$" && !isEscaped(markdown, index)) {
-          mathDelimiter = null;
-        }
-      } else if (markdown.startsWith("\\(", index) && !isEscaped(markdown, index)) {
-        mathDelimiter = "\\(";
-        result += "\\(";
-        index += 2;
-        continue;
-      } else if (markdown[index] === "$" && !isEscaped(markdown, index)) {
-        mathDelimiter = "$";
-      }
-
-      if (mathDelimiter === null) {
-        const breakLength = htmlBreakLength(markdown, index);
-        if (breakLength > 0) {
-          result += "  \n";
-          index += breakLength;
-          continue;
-        }
-      }
-    }
-
-    result += markdown[index];
-    index++;
-  }
-
-  return result;
-}
-
 function readTableCellMarkdown(
   cellNode: TableCellNode,
   cellTransformers: readonly Transformer[],
 ): string {
-  return normalizePipeTableCellMarkdown(
+  return encodePipeTableCellMarkdown(
     $convertToMarkdownString([...cellTransformers], cellNode, true),
   );
-}
-
-function normalizePipeTableCellMarkdown(markdown: string): string {
-  return markdown
-    .trim()
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join("<br>");
 }
 
 function readTableRowMarkdown(

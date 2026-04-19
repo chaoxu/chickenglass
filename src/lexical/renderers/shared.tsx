@@ -2,16 +2,17 @@ import {
   useCallback,
   useEffect,
   useState,
-  type KeyboardEvent,
   type MouseEvent,
   type RefObject,
-  type SyntheticEvent,
 } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
-import { blockKeyboardActivationProps } from "../block-keyboard-entry";
 import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
+import {
+  surfaceActivationProps,
+  type SurfaceActivationPropsOptions,
+} from "../surface-activation";
 
 type RawUpdatableNode = {
   getRaw?: () => string;
@@ -26,43 +27,9 @@ export function preventKatexMouseDown(event: MouseEvent) {
 export function structureToggleProps(
   active: boolean,
   onActivate: () => void,
-  options?: {
-    keyboardActivation?: boolean;
-    stopPropagation?: boolean;
-    onBeforeActivate?: (element: HTMLElement, event: SyntheticEvent) => void;
-  },
+  options?: SurfaceActivationPropsOptions,
 ): Record<string, unknown> {
-  if (!active) return {};
-
-  const stop = options?.stopPropagation;
-  const onBeforeActivate = options?.onBeforeActivate;
-  return {
-    onClick: (event: SyntheticEvent) => {
-      event.preventDefault();
-      if (event.currentTarget instanceof HTMLElement) {
-        onBeforeActivate?.(event.currentTarget, event);
-      }
-      if (stop) {
-        event.stopPropagation();
-      }
-      onActivate();
-    },
-    onKeyDown: (event: KeyboardEvent) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        if (event.currentTarget instanceof HTMLElement) {
-          onBeforeActivate?.(event.currentTarget, event);
-        }
-        if (stop) {
-          event.stopPropagation();
-        }
-        onActivate();
-      }
-    },
-    ...blockKeyboardActivationProps(Boolean(options?.keyboardActivation)),
-    role: "button",
-    tabIndex: 0,
-  };
+  return surfaceActivationProps(active, onActivate, options);
 }
 
 export function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {

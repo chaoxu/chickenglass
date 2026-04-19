@@ -49,6 +49,10 @@ vi.mock("./tauri-client/watch", () => ({
 
 import { FileWatcher } from "./file-watcher";
 
+function processFileChanged(watcher: FileWatcher) {
+  return watcher.processFileChanged.bind(watcher);
+}
+
 function createWatcher(
   options: {
     refreshTree?: (path?: string) => Promise<void>;
@@ -152,9 +156,7 @@ describe("FileWatcher", () => {
 
   it("queues dirty-file notifications instead of dropping earlier ones", async () => {
     const { container, watcher } = createWatcher();
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
@@ -170,9 +172,7 @@ describe("FileWatcher", () => {
 
   it("suppresses duplicate notifications while a file is already pending", async () => {
     const { container, watcher } = createWatcher();
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged("a.md");
     await handleFileChanged("a.md");
@@ -184,9 +184,7 @@ describe("FileWatcher", () => {
   it("reloads the current file and advances to the next pending notification", async () => {
     const reloadFile = vi.fn(async () => {});
     const { container, watcher } = createWatcher({ reloadFile });
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
@@ -207,9 +205,7 @@ describe("FileWatcher", () => {
       throw new Error("boom");
     });
     const { container, watcher } = createWatcher({ reloadFile });
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
@@ -234,13 +230,7 @@ describe("FileWatcher", () => {
       refreshTree,
       syncExternalChange: async () => "ignore",
     });
-    const handleFileChanged = (
-      watcher as unknown as {
-        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-      }
-    ).handleFileChanged.bind(watcher as unknown as {
-      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-    });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged({ path: "docs/new-subdir", treeChanged: true });
 
@@ -253,13 +243,7 @@ describe("FileWatcher", () => {
       refreshTree,
       syncExternalChange: async () => "ignore",
     });
-    const handleFileChanged = (
-      watcher as unknown as {
-        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-      }
-    ).handleFileChanged.bind(watcher as unknown as {
-      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-    });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged({ path: "docs/a.md", treeChanged: false });
 
@@ -272,13 +256,7 @@ describe("FileWatcher", () => {
       handleWatchedPathChange,
       syncExternalChange: async () => "ignore",
     });
-    const handleFileChanged = (
-      watcher as unknown as {
-        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-      }
-    ).handleFileChanged.bind(watcher as unknown as {
-      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-    });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged({ path: "assets/diagram.png", treeChanged: false });
 
@@ -289,13 +267,7 @@ describe("FileWatcher", () => {
     const { container, watcher } = createWatcher({
       syncExternalChange: async () => "reloaded",
     });
-    const handleFileChanged = (
-      watcher as unknown as {
-        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-      }
-    ).handleFileChanged.bind(watcher as unknown as {
-      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
-    });
+    const handleFileChanged = processFileChanged(watcher);
 
     await handleFileChanged({ path: "a.md", treeChanged: false });
 

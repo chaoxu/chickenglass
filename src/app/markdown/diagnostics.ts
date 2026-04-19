@@ -2,6 +2,7 @@ import {
   buildDocumentLabelGraph,
   isLikelyLocalReferenceId,
 } from "./labels";
+import { extractMarkdownIncludeReferences } from "./includes";
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -11,8 +12,6 @@ export interface DiagnosticEntry {
   readonly from: number;
   readonly to: number;
 }
-
-const INCLUDE_BLOCK_RE = /^:::\s*\{\.include\}\s*\n([\s\S]*?)\n:::\s*$/gm;
 
 export function extractDiagnosticsFromMarkdown(doc: string): DiagnosticEntry[] {
   const graph = buildDocumentLabelGraph(doc);
@@ -44,17 +43,12 @@ export function extractDiagnosticsFromMarkdown(doc: string): DiagnosticEntry[] {
     });
   }
 
-  for (const match of doc.matchAll(INCLUDE_BLOCK_RE)) {
-    const includePath = match[1]?.trim();
-    if (!includePath) {
-      continue;
-    }
-    const from = match.index ?? 0;
+  for (const includeReference of extractMarkdownIncludeReferences(doc)) {
     diagnostics.push({
       severity: "warning",
-      message: `Unresolved include "${includePath}"`,
-      from,
-      to: from + match[0].length,
+      message: `Unresolved include "${includeReference.path}"`,
+      from: includeReference.from,
+      to: includeReference.to,
     });
   }
 

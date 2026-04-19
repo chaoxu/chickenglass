@@ -17,6 +17,7 @@ import {
 import { ACTIVATE_STRUCTURE_EDIT_COMMAND } from "./structure-edit-plugin";
 import { queueEmbeddedSurfaceFocus } from "./pending-surface-focus";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { activateDomSurface } from "./surface-activation";
 
 export type { InsertFocusTarget };
 
@@ -99,8 +100,7 @@ export function activateInsertedBlock(editor: LexicalEditor, key: NodeKey, focus
     }
     const target = element.querySelector<HTMLElement>(behavior.activation.selector);
     if (target) {
-      target.focus();
-      target.click();
+      activateDomSurface(target);
     }
   });
 }

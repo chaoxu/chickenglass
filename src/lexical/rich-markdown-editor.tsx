@@ -72,16 +72,18 @@ import {
   CoflatClipboardPlugin,
   CodeFenceExitPlugin,
   CodeHighlightPlugin,
+  EditorHandlePlugin,
+  MarkdownSyncPlugin,
+  SelectionAlwaysOnPlugin,
+} from "./rich-editor-plugins";
+import {
   createMarkdownSelection,
   EditableSyncPlugin,
-  EditorHandlePlugin,
   FormatEventPlugin,
-  MarkdownSyncPlugin,
   repairBlankClickSelection,
   RootElementPlugin,
-  SelectionAlwaysOnPlugin,
   ViewportTrackingPlugin,
-} from "./rich-editor-plugins";
+} from "./editor-surface-shared";
 
 export type { LexicalRichMarkdownEditorProps };
 

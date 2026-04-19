@@ -1,3 +1,4 @@
+import { AssetPreviewView } from "./asset-preview-view";
 import { useAssetPreview } from "./media-preview";
 
 export function FigureMedia({
@@ -9,31 +10,13 @@ export function FigureMedia({
 }) {
   const preview = useAssetPreview(src);
 
-  if (preview.kind === "loading") {
-    return (
-      <div
-        className="cf-lexical-media-fallback cf-lexical-media-fallback--loading"
-        data-preview-state="loading"
-      >
-        {`Loading preview: ${src}`}
-      </div>
-    );
-  }
-
-  if (preview.kind === "error" || !preview.previewUrl) {
-    return (
-      <div
-        className="cf-lexical-media-fallback cf-lexical-media-fallback--error"
-        data-preview-state="error"
-      >
-        {`Preview unavailable: ${src}`}
-      </div>
-    );
-  }
-
   return (
-    <div className="cf-lexical-media">
-      <img alt={alt || src} className="cf-lexical-image" src={preview.previewUrl} />
-    </div>
+    <AssetPreviewView
+      alt={alt}
+      imageClassName="cf-lexical-image"
+      layout="block"
+      preview={preview}
+      src={src}
+    />
   );
 }

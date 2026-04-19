@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMarkdownTable, serializeMarkdownTable } from "./table-markdown";
+import {
+  decodePipeTableCellMarkdown,
+  encodePipeTableCellMarkdown,
+  parseMarkdownTable,
+  serializeMarkdownTable,
+} from "./table-markdown";
 
 describe("table-markdown", () => {
   it("parses alignments, escaped pipes, and short rows", () => {
@@ -43,5 +48,16 @@ describe("table-markdown", () => {
       "|---|",
       "| x \\| y |",
     ].join("\n"));
+  });
+
+  it("decodes HTML breaks as markdown hard breaks outside code and math", () => {
+    expect(decodePipeTableCellMarkdown("a<br>b")).toBe("a  \nb");
+    expect(decodePipeTableCellMarkdown("`a<br>b`")).toBe("`a<br>b`");
+    expect(decodePipeTableCellMarkdown("$a<br>b$")).toBe("$a<br>b$");
+    expect(decodePipeTableCellMarkdown("\\(a<br>b\\)")).toBe("\\(a<br>b\\)");
+  });
+
+  it("encodes multiline table-cell markdown with HTML breaks", () => {
+    expect(encodePipeTableCellMarkdown(" a  \n b \n\n c ")).toBe("a<br>b<br>c");
   });
 });

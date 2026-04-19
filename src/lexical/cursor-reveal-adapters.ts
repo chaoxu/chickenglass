@@ -55,6 +55,7 @@ import {
 } from "./nodes/inline-math-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $createReferenceNode, $isReferenceNode, type ReferenceNode } from "./nodes/reference-node";
+import type { RevealChromePreview } from "./reveal-chrome-types";
 
 export type RevealBoundaryDirection = "backward" | "forward";
 
@@ -84,11 +85,6 @@ export interface RevealSubject {
    */
   readonly caretOffset?: number;
 }
-
-export type RevealChromePreview =
-  | {
-      readonly kind: "inline-math";
-    };
 
 export interface RevealAdapter {
   readonly id: string;
@@ -329,7 +325,7 @@ const inlineMathAdapter: RevealAdapter = {
     return inlineMathSubject(node, context);
   },
   getChromePreview() {
-    return { kind: "inline-math" };
+    return { kind: "inline-math-preview" };
   },
   reparse(live, raw) {
     const trimmed = raw.trim();

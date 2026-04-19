@@ -49,7 +49,7 @@ export interface FileChangedEvent {
   generation?: number;
 }
 
-type FileChangedPayload = FileChangedEvent | string;
+export type FileChangedPayload = FileChangedEvent | string;
 
 function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEvent {
   if (typeof payload === "string") {
@@ -107,8 +107,8 @@ export class FileWatcher {
       if (payload.generation !== undefined && payload.generation !== watchToken) {
         return;
       }
-      void this.handleFileChanged(payload).catch(
-        logCatchError("[file-watcher] handleFileChanged failed", payload),
+      void this.processFileChanged(payload).catch(
+        logCatchError("[file-watcher] processFileChanged failed", payload),
       );
     });
 
@@ -163,8 +163,8 @@ export class FileWatcher {
     this.activeNotificationPath = null;
   }
 
-  /** Handle a file-changed event from the backend. */
-  private async handleFileChanged(payload: FileChangedPayload): Promise<void> {
+  /** Process a file-changed event from the backend or a test harness. */
+  async processFileChanged(payload: FileChangedPayload): Promise<void> {
     const { path: relativePath, treeChanged } = normalizeFileChangedEvent(payload);
 
     if (treeChanged) {

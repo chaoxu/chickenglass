@@ -15,26 +15,21 @@
  *   the text is re-parsed via the same adapter — valid syntax becomes
  *   the original kind of node, anything else stays plain text.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import katex from "katex";
 import {
   $addUpdateTag,
   $createParagraphNode,
   $createTextNode,
-  $getNearestNodeFromDOMNode,
   $getNodeByKey,
   $getSelection,
   $isDecoratorNode,
   $isElementNode,
   $isTextNode,
   $setSelection,
-  CLICK_COMMAND,
-  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   SELECTION_CHANGE_COMMAND,
-  createCommand,
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
@@ -51,33 +46,24 @@ import {
   PARAGRAPH_REVEAL_ADAPTERS,
   REVEAL_ADAPTERS,
   pickRevealSubject,
-  pickRevealSubjectFromNode,
-  type RevealBoundaryDirection,
   type RevealAdapter,
-  type RevealSubject,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
-import { stripInlineMathDelimiters } from "./inline-math-source";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { useLexicalRenderContext } from "./render-context";
-import { buildKatexOptions } from "../lib/katex-options";
-import { preventKatexMouseDown } from "./renderers/shared";
 import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import {
+  createRevealOpenRequest,
+  findRevealAdapter,
+  OPEN_CURSOR_REVEAL_COMMAND,
+  registerDecoratorClickRevealEntry,
+  registerDecoratorKeyboardBoundaryRevealEntry,
+  type CursorRevealOpenRequest,
+} from "./cursor-reveal-controller";
+import { renderRevealChromePreview } from "./reveal-chrome";
 
 // Re-exports kept so existing unit tests can continue importing the
 // pure markdown helpers from this module.
 export { wrapWithSpecs, unwrapSource } from "./cursor-reveal-adapters";
-
-interface CursorRevealOpenRequest {
-  readonly adapterId: string;
-  readonly caretOffset: number;
-  readonly nodeKey: NodeKey;
-  readonly source: string;
-}
-
-const OPEN_CURSOR_REVEAL_COMMAND = createCommand<CursorRevealOpenRequest>(
-  "OPEN_CURSOR_REVEAL_COMMAND",
-);
 
 export function CursorRevealPlugin({
   editorMode,
@@ -98,245 +84,6 @@ export function CursorRevealPlugin({
     return <InlineCursorReveal adapters={adapters} />;
   }
   return <FloatingCursorReveal adapters={adapters} />;
-}
-
-/**
- * Decorator nodes never receive range selections, and the browser's default
- * click handling stops at their DOM, so SELECTION_CHANGE never sees them.
- * This hook fires on any click, finds the nearest revealable decorator, and
- * hands its subject directly to the presentation via `onOpen`, bypassing the
- * SELECTION_CHANGE path we use for text-format and link reveals.
- */
-function useDecoratorClickEntry(
-  editor: LexicalEditor,
-  adapters: readonly RevealAdapter[],
-  onOpen: (request: CursorRevealOpenRequest) => void,
-): void {
-  useEffect(() => {
-    return editor.registerCommand(
-      CLICK_COMMAND,
-      (event) => {
-        if (!(event.target instanceof Node)) {
-          return false;
-        }
-        const node = $getNearestNodeFromDOMNode(event.target);
-        if (!node || !$isDecoratorNode(node)) {
-          return false;
-        }
-        const pick = pickRevealSubjectFromNode(
-          node,
-          {
-            clientX: event.clientX,
-            entry: "pointer",
-            target: event.target,
-          },
-          adapters,
-        );
-        if (!pick) {
-          return false;
-        }
-        const request = createRevealOpenRequest(
-          pick.subject,
-          pick.adapter,
-          pick.subject.caretOffset ?? pick.subject.source.length,
-        );
-        event.preventDefault();
-        event.stopPropagation();
-        onOpen(request);
-        return true;
-      },
-      COMMAND_PRIORITY_HIGH,
-    );
-  }, [editor, onOpen, adapters]);
-}
-
-function useDecoratorKeyboardBoundaryEntry(
-  editor: LexicalEditor,
-  adapters: readonly RevealAdapter[],
-): void {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const direction = directionFromArrowKey(event.key);
-      if (
-        direction === null
-        || event.altKey
-        || event.ctrlKey
-        || event.metaKey
-        || event.shiftKey
-      ) {
-        return;
-      }
-
-      const root = editor.getRootElement();
-      const target = event.target instanceof Element ? event.target : null;
-      if (!root || target?.closest("[contenteditable='true']") !== root) {
-        return;
-      }
-
-      const request = findRevealRequestFromDomBoundary(editor, adapters, direction);
-      if (!request) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, request);
-    };
-
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [adapters, editor]);
-}
-
-function directionFromArrowKey(key: string): RevealBoundaryDirection | null {
-  if (key === "ArrowRight") {
-    return "forward";
-  }
-  if (key === "ArrowLeft") {
-    return "backward";
-  }
-  return null;
-}
-
-function findRevealRequestFromDomBoundary(
-  editor: LexicalEditor,
-  adapters: readonly RevealAdapter[],
-  direction: RevealBoundaryDirection,
-): CursorRevealOpenRequest | null {
-  const root = editor.getRootElement();
-  const decorator = root ? findAdjacentDecoratorFromDomSelection(root, direction) : null;
-  if (!decorator) {
-    return null;
-  }
-
-  let request: CursorRevealOpenRequest | null = null;
-  editor.read(() => {
-    const node = $getNearestNodeFromDOMNode(decorator);
-    if (!node || !$isDecoratorNode(node) || !node.isInline()) {
-      return;
-    }
-    const pick = pickRevealSubjectFromNode(
-      node,
-      { direction, entry: "keyboard-boundary" },
-      adapters,
-    );
-    if (!pick) {
-      return;
-    }
-    request = createRevealOpenRequest(
-      pick.subject,
-      pick.adapter,
-      pick.subject.caretOffset ?? pick.subject.source.length,
-    );
-  });
-  return request;
-}
-
-function findAdjacentDecoratorFromDomSelection(
-  root: HTMLElement,
-  direction: RevealBoundaryDirection,
-): HTMLElement | null {
-  const selection = window.getSelection();
-  if (!selection || !selection.isCollapsed || !selection.anchorNode || !root.contains(selection.anchorNode)) {
-    return null;
-  }
-
-  const candidate = adjacentDomBoundaryNode(
-    selection.anchorNode,
-    selection.anchorOffset,
-    direction,
-  );
-  return decoratorElementFromCandidate(candidate);
-}
-
-function adjacentDomBoundaryNode(
-  anchorNode: Node,
-  anchorOffset: number,
-  direction: RevealBoundaryDirection,
-): Node | null {
-  if (anchorNode.nodeType === Node.TEXT_NODE) {
-    const text = anchorNode.textContent ?? "";
-    const boundaryNode = lexicalTextBoundaryNode(anchorNode);
-    if (direction === "forward") {
-      return anchorOffset === text.length ? nextMeaningfulSibling(boundaryNode) : null;
-    }
-    return anchorOffset === 0 ? previousMeaningfulSibling(boundaryNode) : null;
-  }
-
-  if (!(anchorNode instanceof Element)) {
-    return null;
-  }
-
-  if (direction === "forward") {
-    return anchorOffset < anchorNode.childNodes.length
-      ? firstMeaningfulNode(anchorNode.childNodes[anchorOffset] ?? null, direction)
-      : nextMeaningfulSibling(anchorNode);
-  }
-  return anchorOffset > 0
-    ? firstMeaningfulNode(anchorNode.childNodes[anchorOffset - 1] ?? null, direction)
-    : previousMeaningfulSibling(anchorNode);
-}
-
-function lexicalTextBoundaryNode(node: Node): Node {
-  const parent = node.parentElement;
-  return parent?.hasAttribute("data-lexical-text") ? parent : node;
-}
-
-function decoratorElementFromCandidate(node: Node | null): HTMLElement | null {
-  if (!(node instanceof Element)) {
-    return null;
-  }
-  const decorator = node.matches("[data-lexical-decorator='true']")
-    ? node
-    : node.closest("[data-lexical-decorator='true']");
-  return decorator instanceof HTMLElement ? decorator : null;
-}
-
-function isIgnorableDomBoundaryNode(node: Node): boolean {
-  return node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").length === 0;
-}
-
-function firstMeaningfulNode(
-  node: Node | null,
-  direction: RevealBoundaryDirection,
-): Node | null {
-  let current = node;
-  while (current && isIgnorableDomBoundaryNode(current)) {
-    current = direction === "forward"
-      ? current.nextSibling
-      : current.previousSibling;
-  }
-  return current;
-}
-
-function nextMeaningfulSibling(node: Node): Node | null {
-  return firstMeaningfulNode(node.nextSibling, "forward");
-}
-
-function previousMeaningfulSibling(node: Node): Node | null {
-  return firstMeaningfulNode(node.previousSibling, "backward");
-}
-
-function createRevealOpenRequest(
-  subject: RevealSubject,
-  adapter: RevealAdapter,
-  preferredOffset: number,
-): CursorRevealOpenRequest {
-  return {
-    adapterId: adapter.id,
-    caretOffset: computeCaretOffset(subject, preferredOffset),
-    nodeKey: subject.node.getKey(),
-    source: subject.source,
-  };
-}
-
-function findRevealAdapter(
-  adapters: readonly RevealAdapter[],
-  adapterId: string,
-): RevealAdapter | null {
-  return adapters.find((adapter) => adapter.id === adapterId) ?? null;
 }
 
 // ─── Floating presentation ──────────────────────────────────────────────
@@ -377,8 +124,14 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
     });
   }, [adapters, editor]);
 
-  useDecoratorClickEntry(editor, adapters, openFloatingRequest);
-  useDecoratorKeyboardBoundaryEntry(editor, adapters);
+  useEffect(
+    () => registerDecoratorClickRevealEntry(editor, adapters, openFloatingRequest),
+    [adapters, editor, openFloatingRequest],
+  );
+  useEffect(
+    () => registerDecoratorKeyboardBoundaryRevealEntry(editor, adapters),
+    [adapters, editor],
+  );
 
   useEffect(() => {
     return editor.registerCommand(
@@ -523,8 +276,14 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     openInlineReveal(request, adapter, activeRef, setChromeState);
   }, [adapters]);
 
-  useDecoratorClickEntry(editor, adapters, openInlineRequest);
-  useDecoratorKeyboardBoundaryEntry(editor, adapters);
+  useEffect(
+    () => registerDecoratorClickRevealEntry(editor, adapters, openInlineRequest),
+    [adapters, editor, openInlineRequest],
+  );
+  useEffect(
+    () => registerDecoratorKeyboardBoundaryRevealEntry(editor, adapters),
+    [adapters, editor],
+  );
 
   useEffect(() => {
     return editor.registerCommand(
@@ -660,17 +419,11 @@ function InlineRevealChrome({
     return null;
   }
 
-  if (preview.kind === "inline-math") {
-    return (
-      <InlineMathRevealPreview
-        anchor={anchor}
-        onAnchorLost={onClose}
-        source={state.source}
-      />
-    );
-  }
-
-  return null;
+  return renderRevealChromePreview(preview, {
+    anchor,
+    onAnchorLost: onClose,
+    source: state.source,
+  });
 }
 
 function useLexicalElementByKey(
@@ -690,45 +443,6 @@ function useLexicalElementByKey(
   }, [editor, key]);
 
   return element;
-}
-
-function InlineMathRevealPreview({
-  anchor,
-  onAnchorLost,
-  source,
-}: {
-  readonly anchor: HTMLElement;
-  readonly onAnchorLost: () => void;
-  readonly source: string;
-}) {
-  const { config } = useLexicalRenderContext();
-  const body = useMemo(() => stripInlineMathDelimiters(source.trim()), [source]);
-  const html = useMemo(
-    () => katex.renderToString(body, buildKatexOptions(false, config.math)),
-    [body, config.math],
-  );
-
-  return (
-    <SurfaceFloatingPortal
-      anchor={anchor}
-      className="cf-lexical-inline-reveal-preview-portal"
-      offsetPx={4}
-      onAnchorLost={onAnchorLost}
-      placement="bottom-start"
-      zIndex={62}
-    >
-      <EditorChromePanel className="cf-lexical-inline-reveal-preview-shell">
-        <EditorChromeBody className="cf-lexical-inline-reveal-preview-surface">
-          <span
-            aria-hidden="true"
-            className="cf-lexical-inline-math-preview"
-            dangerouslySetInnerHTML={{ __html: html }}
-            onMouseDown={preventKatexMouseDown}
-          />
-        </EditorChromeBody>
-      </EditorChromePanel>
-    </SurfaceFloatingPortal>
-  );
 }
 
 function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | null {
@@ -799,31 +513,6 @@ function openInlineReveal(
       ? { adapter, plainKey, source: request.source }
       : null,
   );
-}
-
-/**
- * For text-format subjects, map the caret's offset within the visible
- * text to an offset inside the source string (skipping past the open
- * marker). For other subjects the offset is meaningless — land at end.
- */
-function computeCaretOffset(subject: RevealSubject, preferredOffset: number): number {
-  if (subject.caretOffset !== undefined) {
-    // Adapter (typically the paragraph adapter) computed an explicit
-    // offset within `source` — clamp and trust it.
-    return Math.max(0, Math.min(subject.caretOffset, subject.source.length));
-  }
-  if (!$isTextNode(subject.node)) {
-    return Math.max(0, Math.min(preferredOffset, subject.source.length));
-  }
-  const text = subject.node.getTextContent();
-  const openMarkerLen = subject.source.length - text.length - (subject.source.length - text.length) / 2;
-  // The wrap is symmetric (open + text + close), so the open length is
-  // (source.length - text.length) / 2.
-  const openLen = Math.max(0, Math.floor((subject.source.length - text.length) / 2));
-  const clamped = Math.max(0, Math.min(preferredOffset, text.length));
-  // openMarkerLen kept above for future asymmetric markers; ignore it.
-  void openMarkerLen;
-  return openLen + clamped;
 }
 
 function $commitInlineReveal(handle: InlineRevealHandle): void {

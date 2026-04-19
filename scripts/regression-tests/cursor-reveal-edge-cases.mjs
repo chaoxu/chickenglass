@@ -1,4 +1,7 @@
-import { setRevealPresentation } from "../test-helpers.mjs";
+import {
+  setRevealPresentation,
+  waitForBrowserSettled,
+} from "../test-helpers.mjs";
 
 export const name = "cursor-reveal-edge-cases";
 
@@ -20,7 +23,7 @@ async function openScratch(page, path, text) {
     { expected: text },
     { timeout: 10000 },
   );
-  await page.waitForTimeout(200);
+  await waitForBrowserSettled(page);
 }
 
 async function placeCaretInsideFirstText(page, selector, offset) {
@@ -39,7 +42,7 @@ async function placeCaretInsideFirstText(page, selector, offset) {
     selection?.addRange(range);
     element.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   }, { selector, offset });
-  await page.waitForTimeout(250);
+  await waitForBrowserSettled(page);
 }
 
 async function placeCaretAtVisibleText(page, textContent, edge) {
@@ -66,7 +69,31 @@ async function placeCaretAtVisibleText(page, textContent, edge) {
     selection?.addRange(range);
     document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
   }, { edge, textContent });
-  await page.waitForTimeout(250);
+  await waitForBrowserSettled(page);
+}
+
+async function waitForSelectionAnchorText(page, expectedText) {
+  await page.waitForFunction(
+    (expected) => window.getSelection()?.anchorNode?.textContent === expected,
+    expectedText,
+    { timeout: 5000 },
+  );
+}
+
+async function waitForInlineMathRevealPreview(page) {
+  await page.waitForFunction(
+    () => Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+    undefined,
+    { timeout: 5000 },
+  );
+}
+
+async function waitForDisplayMathSourceEditor(page) {
+  await page.waitForFunction(
+    () => Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-structure-source-editor")),
+    undefined,
+    { timeout: 5000 },
+  );
 }
 
 export async function run(page) {
@@ -94,7 +121,8 @@ export async function run(page) {
 
   await openScratch(page, "scratch-inline-math-left-reveal.md", "Before $x+1$ after\n");
   await page.locator(".cf-lexical-inline-math").first().click({ position: { x: 1, y: 5 } });
-  await page.waitForTimeout(250);
+  await waitForSelectionAnchorText(page, "$x+1$");
+  await waitForInlineMathRevealPreview(page);
   const inlineMathLeft = await page.evaluate(() => {
     const selection = window.getSelection();
     return {
@@ -121,7 +149,8 @@ export async function run(page) {
   await openScratch(page, "scratch-inline-math-keyboard-forward.md", "Before $x+1$ after\n");
   await placeCaretAtVisibleText(page, "Before ", "end");
   await page.keyboard.press("ArrowRight");
-  await page.waitForTimeout(250);
+  await waitForSelectionAnchorText(page, "$x+1$");
+  await waitForInlineMathRevealPreview(page);
   const inlineMathKeyboardForward = await page.evaluate(() => {
     const selection = window.getSelection();
     return {
@@ -148,7 +177,7 @@ export async function run(page) {
   await openScratch(page, "scratch-citation-keyboard-forward.md", "Before [@cormen2009] after\n");
   await placeCaretAtVisibleText(page, "Before ", "end");
   await page.keyboard.press("ArrowRight");
-  await page.waitForTimeout(250);
+  await waitForSelectionAnchorText(page, "[@cormen2009]");
   const citationKeyboardForward = await page.evaluate(() => {
     const selection = window.getSelection();
     return {
@@ -173,7 +202,7 @@ export async function run(page) {
   await openScratch(page, "scratch-inline-math-keyboard-backward.md", "Before $x+1$ after\n");
   await placeCaretAtVisibleText(page, " after", "start");
   await page.keyboard.press("ArrowLeft");
-  await page.waitForTimeout(250);
+  await waitForSelectionAnchorText(page, "$x+1$");
   const inlineMathKeyboardBackward = await page.evaluate(() => {
     const selection = window.getSelection();
     return {
@@ -196,7 +225,7 @@ export async function run(page) {
 
   await openScratch(page, "scratch-inline-math-click-map.md", "Inline $a+b+c$ test.\n");
   await page.locator(".cf-lexical-inline-math [data-loc-start='1']").first().click({ force: true });
-  await page.waitForTimeout(250);
+  await waitForSelectionAnchorText(page, "$a+b+c$");
   const inlineMathToken = await page.evaluate(() => {
     const selection = window.getSelection();
     return {
@@ -222,7 +251,7 @@ export async function run(page) {
     "Before\n\n$$\na+b+c\n$$\n\nAfter\n",
   );
   await page.locator(".cf-lexical-display-math [data-loc-start='1']").first().click({ force: true });
-  await page.waitForTimeout(300);
+  await waitForDisplayMathSourceEditor(page);
   const displayMathToken = await page.evaluate(() => {
     const source = document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-structure-source-editor");
     const selection = window.getSelection();
