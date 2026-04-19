@@ -3,9 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use tauri::{command, State, WebviewWindow};
+use tauri::{State, WebviewWindow, command};
 
-use super::context::{run_command, CommandSpec, WindowCommandContext};
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::{project_relative_path, resolve_project_path};
 

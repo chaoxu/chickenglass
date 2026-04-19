@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use tauri::{command, State};
+use tauri::{State, command};
 
 use super::state::{PerfSnapshot, PerfState};
 
@@ -19,9 +19,13 @@ where
     let started = Instant::now();
     let result = task();
     let duration_ms = started.elapsed().as_secs_f64() * 1000.0;
-    let _ = perf
-        .inner()
-        .record_span(span_name, category, duration_ms, Some(operation_name), detail);
+    let _ = perf.inner().record_span(
+        span_name,
+        category,
+        duration_ms,
+        Some(operation_name),
+        detail,
+    );
     let _ = perf
         .inner()
         .record_operation(operation_name, started_at, detail);

@@ -161,24 +161,28 @@ pub fn setup_menu_events(app: &App<Wry>) {
 
         // Route app-menu events to the focused webview window when possible so
         // multiple editor windows don't all execute the same command.
-        if let Some(label) = focused_webview_label(app_handle)
-            .or_else(|| last_focused_webview_label(app_handle))
+        if let Some(label) =
+            focused_webview_label(app_handle).or_else(|| last_focused_webview_label(app_handle))
         {
             let _ = app_handle.emit_to(label.as_str(), "menu-event", id);
             return;
         }
 
-        eprintln!("[menu] dropped menu event '{}' because no target window was available", id);
+        eprintln!(
+            "[menu] dropped menu event '{}' because no target window was available",
+            id
+        );
     });
 }
 
 fn focused_webview_label(app_handle: &AppHandle<Wry>) -> Option<String> {
-    app_handle.webview_windows().into_iter().find_map(|(label, window)| {
-        match window.is_focused() {
+    app_handle
+        .webview_windows()
+        .into_iter()
+        .find_map(|(label, window)| match window.is_focused() {
             Ok(true) => Some(label),
             _ => None,
-        }
-    })
+        })
 }
 
 fn last_focused_webview_label(app_handle: &AppHandle<Wry>) -> Option<String> {
