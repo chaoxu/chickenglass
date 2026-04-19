@@ -1,7 +1,7 @@
 {
-  "productName": "Coflat",
+  "productName": "Coflat2",
   "version": "2.0.0",
-  "identifier": "com.coflat.app",
+  "identifier": "com.coflat.desktop2",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Coflat",
+        "title": "Coflat2",
         "width": 1200,
         "height": 800,
         "minWidth": 800,

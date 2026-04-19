@@ -42,6 +42,7 @@
     "clean": "rm -rf dist",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build --bundles app",
+    "tauri:install": "node scripts/install-macos-app.mjs",
     "tauri:bundle": "tauri build",
     "rust:check": "cargo check --manifest-path src-tauri/Cargo.toml",
     "rust:test": "cargo nextest run --manifest-path src-tauri/Cargo.toml",
