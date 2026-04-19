@@ -1,23 +1,23 @@
+import {
+  readHeadingSourcePos,
+  readSourceFrom,
+  SOURCE_POSITION_SELECTOR,
+} from "./source-position-contract";
+
 function sourcePositionFromMarkedElement(element: HTMLElement | null): number | null {
   if (!element) {
     return null;
   }
 
-  const sourceFrom = element.dataset.coflatSourceFrom;
-  if (sourceFrom !== undefined) {
-    const parsed = Number(sourceFrom);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
+  const sourceFrom = readSourceFrom(element);
+  if (sourceFrom !== null) {
+    return sourceFrom;
   }
 
   if (element.classList.contains("cf-lexical-heading")) {
-    const headingPos = element.dataset.coflatHeadingPos;
-    if (headingPos !== undefined) {
-      const parsed = Number(headingPos);
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
+    const headingPos = readHeadingSourcePos(element);
+    if (headingPos !== null) {
+      return headingPos;
     }
   }
 
@@ -34,9 +34,7 @@ export function sourcePositionFromElement(element: HTMLElement | null): number |
     current = current.parentElement;
   }
 
-  const markedDescendant = element?.querySelector<HTMLElement>(
-    "[data-coflat-source-from], .cf-lexical-heading[data-coflat-heading-pos]",
-  ) ?? null;
+  const markedDescendant = element?.querySelector<HTMLElement>(SOURCE_POSITION_SELECTOR) ?? null;
   const descendantPosition = sourcePositionFromMarkedElement(markedDescendant);
   if (descendantPosition !== null) {
     return descendantPosition;

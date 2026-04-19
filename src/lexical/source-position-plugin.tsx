@@ -17,8 +17,14 @@ import {
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { sourcePositionFromElement } from "./source-position-dom";
-
-const SOURCE_BLOCK_SELECTOR = "[data-coflat-raw-block='true'], [data-coflat-table-block='true']";
+import {
+  clearSourceRange,
+  HEADING_SOURCE_SELECTOR,
+  readSourceFrom,
+  readSourceTo,
+  setSourceRange,
+  SOURCE_BLOCK_SELECTOR,
+} from "./source-position-contract";
 
 export { readSourcePositionFromElement } from "./source-position-dom";
 export {
@@ -38,12 +44,10 @@ export function syncSourceBlockPositions(root: HTMLElement | null, doc: string):
   elements.forEach((element, index) => {
     const range = ranges[index];
     if (!range) {
-      delete element.dataset.coflatSourceFrom;
-      delete element.dataset.coflatSourceTo;
+      clearSourceRange(element);
       return;
     }
-    element.dataset.coflatSourceFrom = String(range.from);
-    element.dataset.coflatSourceTo = String(range.to);
+    setSourceRange(element, range.from, range.to);
   });
 }
 
@@ -127,17 +131,18 @@ export function scrollSourcePositionIntoView(
     return false;
   }
 
-  const heading = root.querySelector<HTMLElement>(`.cf-lexical-heading[data-coflat-heading-pos="${String(pos)}"]`);
+  const heading = [...root.querySelectorAll<HTMLElement>(HEADING_SOURCE_SELECTOR)]
+    .find((candidate) => sourcePositionFromElement(candidate) === pos);
   if (heading) {
     return selectNavigationTarget(editor, heading);
   }
 
-  const rawBlocks = [...root.querySelectorAll<HTMLElement>("[data-coflat-source-from]")];
+  const rawBlocks = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)];
   let target: HTMLElement | null = null;
   for (const block of rawBlocks) {
-    const start = Number(block.dataset.coflatSourceFrom ?? "");
-    const end = Number(block.dataset.coflatSourceTo ?? "");
-    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    const start = readSourceFrom(block);
+    const end = readSourceTo(block);
+    if (start === null || end === null) {
       continue;
     }
     if (start <= pos && pos <= end) {

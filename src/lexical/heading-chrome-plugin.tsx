@@ -1,4 +1,5 @@
 import { extractHeadingDefinitions } from "../app/markdown/headings";
+import { SOURCE_POSITION_DATASET } from "./source-position-contract";
 
 // NOTE: Never mutate the Text node contents under a heading element. Lexical
 // reconciles from its internal state into the DOM, and its MutationObserver
@@ -16,7 +17,7 @@ export function syncHeadingChrome(root: HTMLElement | null, doc: string): void {
   const elements = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading")];
 
   for (const element of elements) {
-    delete element.dataset.coflatHeadingNumber;
+    delete element.dataset[SOURCE_POSITION_DATASET.headingNumber];
   }
 
   elements.forEach((element, index) => {
@@ -25,10 +26,10 @@ export function syncHeadingChrome(root: HTMLElement | null, doc: string): void {
       return;
     }
 
-    element.dataset.coflatHeadingPos = String(heading.pos);
+    element.dataset[SOURCE_POSITION_DATASET.headingPos] = String(heading.pos);
 
     if (heading.number) {
-      element.dataset.coflatHeadingNumber = heading.number;
+      element.dataset[SOURCE_POSITION_DATASET.headingNumber] = heading.number;
     }
   });
 }

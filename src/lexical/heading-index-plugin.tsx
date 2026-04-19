@@ -7,6 +7,10 @@ import {
   hasUnnumberedHeadingAttributes,
   type HeadingEntry,
 } from "../app/markdown/headings";
+import {
+  HEADING_SOURCE_SELECTOR,
+  SOURCE_POSITION_DATASET,
+} from "./source-position-contract";
 
 const TAG_TO_LEVEL: Record<string, number> = {
   h1: 1,
@@ -76,10 +80,10 @@ export function mergeHeadingDomPositions(
     return entries.map((e, i) => ({ ...e, pos: i }));
   }
 
-  const elements = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
+  const elements = [...root.querySelectorAll<HTMLElement>(HEADING_SOURCE_SELECTOR)];
   return entries.map((entry, i) => {
     const el = elements[i];
-    const pos = el ? Number(el.dataset.coflatHeadingPos ?? i) : i;
+    const pos = el ? Number(el.dataset[SOURCE_POSITION_DATASET.headingPos] ?? i) : i;
     return { ...entry, pos: Number.isFinite(pos) ? pos : i };
   });
 }

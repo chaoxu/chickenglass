@@ -12,6 +12,7 @@ import { useIncludedDocument, useLexicalRenderContext } from "../render-context"
 import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
 import { useLexicalSurfaceEditable } from "../editability-context";
+import { rawBlockSourceAttrs } from "../source-position-contract";
 import {
   fencedDivBodyMarkdownOffset,
   fencedDivTitleMarkdownOffset,
@@ -661,8 +662,7 @@ export const RawBlockRenderer = memo(function RawBlockRenderer({
   return (
     <section
       className={`cf-lexical-raw-block-shell cf-lexical-raw-block-shell--${variant}`}
-      data-coflat-raw-block="true"
-      data-coflat-raw-block-variant={variant}
+      {...rawBlockSourceAttrs(variant)}
     >
       <ContentRenderer nodeKey={nodeKey} raw={raw} />
     </section>

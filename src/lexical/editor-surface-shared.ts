@@ -7,6 +7,10 @@ import { FORMAT_TEXT_COMMAND } from "lexical";
 import { getInlineTextFormatSpec, useEditorScrollSurface } from "../lexical-next";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
+import {
+  HEADING_SOURCE_SELECTOR,
+  SOURCE_POSITION_DATASET,
+} from "./source-position-contract";
 import { COFLAT_FORMAT_EVENT_TAG } from "./update-tags";
 import {
   $readSourceTextSelectionFromLexicalRoot,
@@ -23,7 +27,7 @@ import {
  */
 
 export function getViewportFromRichSurface(root: HTMLElement): number {
-  const headings = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading[data-coflat-heading-pos]")];
+  const headings = [...root.querySelectorAll<HTMLElement>(HEADING_SOURCE_SELECTOR)];
   if (headings.length === 0) {
     return 0;
   }
@@ -32,7 +36,7 @@ export function getViewportFromRichSurface(root: HTMLElement): number {
   let active = 0;
 
   for (const heading of headings) {
-    const pos = Number(heading.dataset.coflatHeadingPos ?? "");
+    const pos = Number(heading.dataset[SOURCE_POSITION_DATASET.headingPos] ?? "");
     if (!Number.isFinite(pos)) {
       continue;
     }

@@ -18,6 +18,7 @@
 import { createElement, type ComponentType, type JSX } from "react";
 
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
+import { rawBlockSourceAttrs } from "../source-position-contract";
 import type { RawBlockVariant } from "./raw-block-types";
 
 export interface FootnoteReferenceRendererProps {
@@ -49,9 +50,7 @@ function FallbackFootnoteReferenceRenderer(
 function FallbackRawBlockRenderer(props: RawBlockRendererProps): JSX.Element {
   return createElement("section", {
     className: `cf-lexical-raw-block-shell cf-lexical-raw-block-shell--${props.variant}`,
-    "data-coflat-raw-block": "true",
-    "data-coflat-raw-block-variant": props.variant,
-    "data-coflat-raw-block-fallback": "true",
+    ...rawBlockSourceAttrs(props.variant, true),
   });
 }
 

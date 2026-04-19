@@ -19,6 +19,7 @@ import { MemoryFileSystem } from "../app/file-manager";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import "./renderers/block-renderers";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
+import { HEADING_SOURCE_SELECTOR } from "./source-position-contract";
 import { ACTIVATE_STRUCTURE_EDIT_COMMAND } from "./structure-edit-plugin";
 
 type RichMarkdownEditorProps = ComponentProps<typeof LexicalRichMarkdownEditor>;
@@ -400,7 +401,7 @@ describe("__editor selection bridge (rich mode)", () => {
     try {
       await waitFor(() => {
         const heading = editor.editor.getRootElement()?.querySelector<HTMLElement>(
-          ".cf-lexical-heading[data-coflat-heading-pos]",
+          HEADING_SOURCE_SELECTOR,
         );
         expect(heading).not.toBeNull();
       });

@@ -19,6 +19,7 @@ import { MemoryFileSystem } from "../app/file-manager";
 import { setActiveEditor } from "./active-editor-tracker";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
+import { RAW_BLOCK_SOURCE_SELECTOR } from "./source-position-contract";
 
 type MarkdownEditorProps = ComponentProps<typeof LexicalMarkdownEditor>;
 
@@ -336,12 +337,12 @@ describe("LexicalMarkdownEditor rich selection bridge", () => {
     try {
       setActiveEditor(editor.editor);
       await waitFor(() => {
-        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        const rawBlock = editor.editor.getRootElement()?.querySelector(RAW_BLOCK_SOURCE_SELECTOR);
         expect(rawBlock).not.toBeNull();
       });
 
       act(() => {
-        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        const rawBlock = editor.editor.getRootElement()?.querySelector(RAW_BLOCK_SOURCE_SELECTOR);
         if (!(rawBlock instanceof HTMLElement)) {
           throw new Error("expected display math element");
         }
@@ -388,12 +389,12 @@ describe("LexicalMarkdownEditor rich selection bridge", () => {
     try {
       setActiveEditor(editor.editor);
       await waitFor(() => {
-        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        const rawBlock = editor.editor.getRootElement()?.querySelector(RAW_BLOCK_SOURCE_SELECTOR);
         expect(rawBlock).not.toBeNull();
       });
 
       act(() => {
-        const rawBlock = editor.editor.getRootElement()?.querySelector("[data-coflat-raw-block='true']");
+        const rawBlock = editor.editor.getRootElement()?.querySelector(RAW_BLOCK_SOURCE_SELECTOR);
         if (!(rawBlock instanceof HTMLElement)) {
           throw new Error("expected display math element");
         }
