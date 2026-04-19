@@ -23,6 +23,7 @@ describe("browser regression test groups", () => {
     expect(selection.unknownTests).toEqual([
       "focus-command-surfaces",
       "nested-blank-click-selection",
+      "source-rich-nested-offsets",
       "undo-bridge",
     ]);
     expect(selection.selected).toEqual([
