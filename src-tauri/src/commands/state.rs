@@ -27,6 +27,7 @@ pub struct FileWatcherState(pub Mutex<HashMap<String, FileWatcherEntry>>);
 pub struct LastFocusedWindow(pub Mutex<Option<String>>);
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PerfRecord {
     pub id: String,
     pub name: String,
@@ -40,6 +41,7 @@ pub struct PerfRecord {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PerfSummaryEntry {
     pub name: String,
     pub category: String,
@@ -53,6 +55,7 @@ pub struct PerfSummaryEntry {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PerfOperationEntry {
     pub id: String,
     pub name: String,
@@ -63,6 +66,7 @@ pub struct PerfOperationEntry {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PerfSnapshot {
     pub summaries: Vec<PerfSummaryEntry>,
     pub recent: Vec<PerfRecord>,
@@ -277,5 +281,45 @@ mod tests {
             perf.0.lock().is_ok(),
             "recovery should clear the poison flag"
         );
+    }
+
+    #[test]
+    fn perf_snapshot_serializes_with_frontend_camel_case_keys() {
+        let perf = PerfState::new();
+
+        let operation_started_at = perf.now_ms().expect("read perf clock");
+        perf.record_span(
+            "open_file.read",
+            "open_file",
+            12.5,
+            Some("open_file"),
+            Some("demo.md"),
+        )
+        .expect("record span");
+        perf.record_operation("open_file", operation_started_at, Some("demo.md"))
+            .expect("record operation");
+
+        let snapshot = perf.snapshot().expect("snapshot");
+        let json = serde_json::to_value(&snapshot).expect("serialize perf snapshot");
+        let summary = &json["summaries"][0];
+        let recent = &json["recent"][0];
+        let operation = &json["operations"][0];
+
+        assert!(json.get("summaries").is_some());
+        assert!(summary.get("totalMs").is_some());
+        assert!(summary.get("avgMs").is_some());
+        assert!(summary.get("maxMs").is_some());
+        assert!(summary.get("lastMs").is_some());
+        assert!(summary.get("lastEndedAt").is_some());
+        assert!(summary.get("total_ms").is_none());
+        assert!(recent.get("durationMs").is_some());
+        assert!(recent.get("startedAt").is_some());
+        assert!(recent.get("endedAt").is_some());
+        assert!(recent.get("operationName").is_some());
+        assert!(recent.get("duration_ms").is_none());
+        assert!(operation.get("startedAt").is_some());
+        assert!(operation.get("endedAt").is_some());
+        assert!(operation.get("durationMs").is_some());
+        assert!(operation.get("duration_ms").is_none());
     }
 }
