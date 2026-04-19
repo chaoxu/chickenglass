@@ -8,6 +8,7 @@ import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
 import { measureAsync, withPerfOperation } from "../perf";
 import { isTauri } from "../../lib/tauri";
+import { isSameOrDescendantProjectPath } from "../../lib/project-paths";
 
 // Lazy-loaded to keep tauri-fs out of the browser startup chunk (#446).
 // Other modules already dynamically import tauri-fs; this static import
@@ -54,7 +55,7 @@ export function replaceChildrenInTree(
   let changed = false;
   const mapped = tree.children.map((child) => {
     if (!child.isDirectory) return child;
-    if (child.path !== dirPath && !dirPath.startsWith(child.path + "/")) return child;
+    if (!isSameOrDescendantProjectPath(dirPath, child.path)) return child;
     const replaced = replaceChildrenInTree(child, dirPath, newChildren);
     if (replaced !== child) changed = true;
     return replaced;
@@ -85,7 +86,7 @@ export function mergeChildrenIntoTree(
   let changed = false;
   const mapped = tree.children.map((child) => {
     if (!child.isDirectory) return child;
-    if (child.path !== dirPath && !dirPath.startsWith(child.path + "/")) return child;
+    if (!isSameOrDescendantProjectPath(dirPath, child.path)) return child;
     const merged = mergeChildrenIntoTree(child, dirPath, children);
     if (merged !== child) changed = true;
     return merged;

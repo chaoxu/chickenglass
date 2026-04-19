@@ -1,4 +1,5 @@
 import { isTauri } from "../lib/tauri";
+import { isSameOrDescendantProjectPath } from "../lib/project-paths";
 import {
   clearSessionDocument,
   markSessionDocumentDirty,
@@ -168,10 +169,7 @@ export function createEditorSessionPersistence({
     }
 
     const currentDocument = getCurrentSessionDocument(runtime.getState());
-    if (currentDocument && (
-      currentDocument.path === path
-      || currentDocument.path.startsWith(`${path}/`)
-    )) {
+    if (currentDocument && isSameOrDescendantProjectPath(currentDocument.path, path)) {
       clearPathBuffersKeepPipeline(runtime, currentDocument.path);
       runtime.commit(
         clearSessionDocument(runtime.getState(), currentDocument.path),

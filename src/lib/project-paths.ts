@@ -18,8 +18,31 @@ import { dirname } from "./utils";
  * project-specific policy: strip leading slashes and map `"."` to `""`.
  */
 export function normalizeProjectPath(path: string): string {
-  const n = normalize(path).replace(/^\/+/, "");
+  const n = normalize(path)
+    .replace(/^\/+/, "")
+    .replace(/^\.\/+/, "")
+    .replace(/\/+$/, "");
   return n === "." ? "" : n;
+}
+
+export function isSameProjectPath(left: string, right: string): boolean {
+  return normalizeProjectPath(left) === normalizeProjectPath(right);
+}
+
+export function isDescendantProjectPath(child: string, parent: string): boolean {
+  const normalizedChild = normalizeProjectPath(child);
+  const normalizedParent = normalizeProjectPath(parent);
+  if (normalizedChild === normalizedParent) {
+    return false;
+  }
+  if (normalizedParent === "") {
+    return normalizedChild !== "";
+  }
+  return normalizedChild.startsWith(`${normalizedParent}/`);
+}
+
+export function isSameOrDescendantProjectPath(child: string, parent: string): boolean {
+  return isSameProjectPath(child, parent) || isDescendantProjectPath(child, parent);
 }
 
 /**

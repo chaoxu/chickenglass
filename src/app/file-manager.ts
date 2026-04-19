@@ -5,7 +5,10 @@ import {
   uint8ArrayToBase64,
 } from "./lib/utils";
 import { getDemoFiles } from "./demo-files";
-import { normalizeProjectPath } from "../lib/project-paths";
+import {
+  isDescendantProjectPath,
+  normalizeProjectPath,
+} from "../lib/project-paths";
 import type { FileEntry } from "../lib/types";
 
 // Re-export `FileEntry` so existing `from "./file-manager"` imports keep
@@ -253,9 +256,8 @@ export class MemoryFileSystem implements FileSystem {
     if (this.files.has(path)) return true;
     if (this.dirs.has(path)) return true;
     // Check for implicit directories (created by file paths)
-    const prefix = path + "/";
     for (const key of this.files.keys()) {
-      if (key.startsWith(prefix)) return true;
+      if (isDescendantProjectPath(key, path)) return true;
     }
     return false;
   }
@@ -278,9 +280,8 @@ export class MemoryFileSystem implements FileSystem {
       throw new Error(`Directory already exists: ${path}`);
     }
     // A "directory" is also implicitly present if any file lives inside it
-    const prefix = path + "/";
     for (const key of this.files.keys()) {
-      if (key.startsWith(prefix)) {
+      if (isDescendantProjectPath(key, path)) {
         throw new Error(`Directory already exists: ${path}`);
       }
     }
@@ -333,11 +334,10 @@ export class MemoryFileSystem implements FileSystem {
     }
 
     // Check if it's a directory (explicit or implicit via children)
-    const prefix = path + "/";
     let found = this.dirs.has(path);
     if (!found) {
       for (const key of this.files.keys()) {
-        if (key.startsWith(prefix)) {
+        if (isDescendantProjectPath(key, path)) {
           found = true;
           break;
         }
@@ -351,10 +351,10 @@ export class MemoryFileSystem implements FileSystem {
     // Delete the directory and all its children
     this.dirs.delete(path);
     for (const dir of [...this.dirs]) {
-      if (dir.startsWith(prefix)) this.dirs.delete(dir);
+      if (isDescendantProjectPath(dir, path)) this.dirs.delete(dir);
     }
     for (const key of [...this.files.keys()]) {
-      if (key.startsWith(prefix)) this.files.delete(key);
+      if (isDescendantProjectPath(key, path)) this.files.delete(key);
     }
     this.invalidateImmediateChildrenCache();
   }

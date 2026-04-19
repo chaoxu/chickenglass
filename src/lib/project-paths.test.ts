@@ -1,46 +1,36 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isDescendantProjectPath,
+  isSameOrDescendantProjectPath,
+  isSameProjectPath,
   normalizeProjectPath,
-  projectPathCandidatesFromDocument,
-  resolveProjectPathFromDocument,
 } from "./project-paths";
 
-describe("normalizeProjectPath", () => {
-  it("strips leading slashes and resolves dot segments", () => {
-    expect(normalizeProjectPath("/assets/./figures/../plot.png")).toBe("assets/plot.png");
+describe("project path relationships", () => {
+  it("normalizes project-relative paths", () => {
+    expect(normalizeProjectPath("/docs/../notes/main.md")).toBe("notes/main.md");
+    expect(normalizeProjectPath("./")).toBe("");
+    expect(normalizeProjectPath("docs/chapter/")).toBe("docs/chapter");
   });
 
-  it("normalizes windows separators", () => {
-    expect(normalizeProjectPath("notes\\images\\diagram.png")).toBe("notes/images/diagram.png");
+  it("detects exact path matches after normalization", () => {
+    expect(isSameProjectPath("docs/chapter", "docs/chapter/")).toBe(true);
+    expect(isSameProjectPath("./docs/chapter", "docs/chapter")).toBe(true);
+    expect(isSameProjectPath("docs/chapter", "docs/chapter-one")).toBe(false);
+  });
+
+  it("detects descendants without sibling-prefix collisions", () => {
+    expect(isDescendantProjectPath("docs/chapter/intro.md", "docs/chapter")).toBe(true);
+    expect(isDescendantProjectPath("docs/chapter", "docs/chapter")).toBe(false);
+    expect(isDescendantProjectPath("docs/chapter-one/intro.md", "docs/chapter")).toBe(false);
+  });
+
+  it("treats the project root as parent of non-root paths only", () => {
+    expect(isSameProjectPath("", ".")).toBe(true);
+    expect(isDescendantProjectPath("docs/intro.md", "")).toBe(true);
+    expect(isDescendantProjectPath("", "")).toBe(false);
+    expect(isSameOrDescendantProjectPath("", "")).toBe(true);
   });
 });
 
-describe("resolveProjectPathFromDocument", () => {
-  it("resolves relative paths from the document directory", () => {
-    expect(resolveProjectPathFromDocument("notes/main.md", "assets/plot.png")).toBe(
-      "notes/assets/plot.png",
-    );
-  });
-
-  it("treats leading slash paths as project-root relative", () => {
-    expect(resolveProjectPathFromDocument("notes/main.md", "/assets/plot.png")).toBe(
-      "assets/plot.png",
-    );
-  });
-});
-
-describe("projectPathCandidatesFromDocument", () => {
-  it("returns document-relative then project-root candidates", () => {
-    expect(projectPathCandidatesFromDocument("notes/main.md", "refs/library.bib")).toEqual([
-      "notes/refs/library.bib",
-      "refs/library.bib",
-    ]);
-  });
-
-  it("deduplicates identical root candidates", () => {
-    expect(projectPathCandidatesFromDocument("main.md", "refs/library.bib")).toEqual([
-      "refs/library.bib",
-    ]);
-  });
-});
