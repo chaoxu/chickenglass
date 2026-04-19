@@ -110,7 +110,7 @@ $$ F = ma $$ {#eq:newton}`;
       expect(equations[1].label).toBe("eq:newton");
     });
 
-    it("ignores stray #tokens after closing equation fences", () => {
+    it("ignores stray #tokens after valid closing equation fences and rejects malformed closers", () => {
       const content = `$$ x $$ #todo
 
 \\[
@@ -119,9 +119,8 @@ y
       const result = extractFileIndex(content, "math.md");
 
       const equations = result.entries.filter((e) => e.type === "equation");
-      expect(equations).toHaveLength(2);
+      expect(equations).toHaveLength(1);
       expect(equations[0].label).toBeUndefined();
-      expect(equations[1].label).toBeUndefined();
     });
   });
 
