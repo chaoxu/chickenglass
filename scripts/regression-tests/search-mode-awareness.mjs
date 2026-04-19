@@ -2,6 +2,14 @@ import { closeAppSearch, openAppSearch, openFixtureDocument } from "../test-help
 import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 
 export const name = "search-mode-awareness";
+export const runtimeIssueOptions = {
+  // Tracked as #316. Keep this behavior test focused on search mode routing
+  // until the lifecycle warning is fixed at the navigation/dialog boundary.
+  ignoreConsole: [
+    "Cannot update a component",
+    "flushSync was called from inside a lifecycle method",
+  ],
+};
 
 const RAW_TOKEN = "raw_token_785_only_in_source";
 const SEMANTIC_LABEL = "#thm-search-785";

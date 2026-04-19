@@ -2,9 +2,15 @@ import type { InitialEditorStateType } from "@lexical/react/LexicalComposer";
 import { CodeHighlightNode, CodeNode } from "@lexical/code";
 import { createHeadlessEditor } from "@lexical/headless";
 import { LinkNode } from "@lexical/link";
-import { ListItemNode, ListNode } from "@lexical/list";
+import { $isListNode, ListItemNode, ListNode } from "@lexical/list";
 import {
   CHECK_LIST,
+  CODE,
+  HEADING,
+  ORDERED_LIST,
+  QUOTE,
+  UNORDERED_LIST,
+  type ElementTransformer,
   type MultilineElementTransformer,
   type TextMatchTransformer,
   type Transformer,
@@ -12,7 +18,6 @@ import {
   TEXT_MATCH_TRANSFORMERS,
   $convertFromMarkdownString,
   $convertToMarkdownString,
-  TRANSFORMERS,
 } from "@lexical/markdown";
 import { $isHeadingNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
@@ -64,6 +69,7 @@ import {
   matchFencedDivEndLine,
   matchFootnoteDefinitionEndLine,
 } from "./markdown/block-scanner";
+import { isRevealSourceStyle } from "./reveal-source-style";
 
 const INLINE_MATH_DOLLAR_IMPORT = /\$(?:[^$\n\\]|\\.)+\$/;
 const INLINE_MATH_DOLLAR_SHORTCUT = /\$(?:[^$\n\\]|\\.)+\$$/;
@@ -217,6 +223,9 @@ function createInlineMathTransformer(
     importRegExp,
     regExp,
     replace(node) {
+      if (isRevealSourceTextNode(node)) {
+        return;
+      }
       const mathNode = $createInlineMathNode(
         node.getTextContent(),
         delimiter,
@@ -271,6 +280,9 @@ function createInlineTokenTransformer(
     importRegExp,
     regExp,
     replace(node, match) {
+      if (isRevealSourceTextNode(node)) {
+        return;
+      }
       replaceMatch(node, match);
     },
     trigger,
@@ -333,6 +345,9 @@ const headingAttributeTransformer: TextMatchTransformer = {
   importRegExp: HEADING_ATTRIBUTE_IMPORT,
   regExp: HEADING_ATTRIBUTE_IMPORT,
   replace(node, match) {
+    if (isRevealSourceTextNode(node)) {
+      return;
+    }
     if (!isTrailingHeadingTextNode(node)) {
       return;
     }
@@ -342,21 +357,51 @@ const headingAttributeTransformer: TextMatchTransformer = {
   type: "text-match",
 };
 
+function isRevealSourceTextNode(node: TextNode): boolean {
+  return isRevealSourceStyle(node.getStyle());
+}
+
 const tableCellMarkdownTransformers = [
   ...TEXT_FORMAT_TRANSFORMERS,
   inlineMathDollarTransformer,
   inlineMathParenTransformer,
   inlineImageTransformer,
-  bracketedReferenceTransformer,
   footnoteReferenceTransformer,
   narrativeReferenceTransformer,
   ...TEXT_MATCH_TRANSFORMERS,
+  bracketedReferenceTransformer,
 ] satisfies readonly Transformer[];
 
 const tableBlockTransformer = createTableBlockTransformer(
   tableCellMarkdownTransformers,
   joinRawLines,
 );
+
+function nextSiblingRequiresListSeparator(node: LexicalNode): boolean {
+  const next = node.getNextSibling();
+  return Boolean(
+    next
+    && next.getType() !== "list"
+    && !(next.getType() === "paragraph" && next.getTextContent().trim() === ""),
+  );
+}
+
+function withListExportSeparator(transformer: ElementTransformer): ElementTransformer {
+  return {
+    ...transformer,
+    export(node, exportChildren) {
+      const markdown = transformer.export(node, exportChildren);
+      if (markdown === null || !$isListNode(node) || !nextSiblingRequiresListSeparator(node)) {
+        return markdown;
+      }
+      return `${markdown}\n`;
+    },
+  };
+}
+
+const unorderedListTransformer = withListExportSeparator(UNORDERED_LIST);
+const orderedListTransformer = withListExportSeparator(ORDERED_LIST);
+const checkListTransformer = withListExportSeparator(CHECK_LIST);
 
 export const createTableNodeFromMarkdown = (raw: string) =>
   createTableNodeFromMarkdownInner(raw, tableCellMarkdownTransformers);
@@ -423,12 +468,18 @@ export const coflatMarkdownTransformers = [
   inlineMathDollarTransformer,
   inlineMathParenTransformer,
   inlineImageTransformer,
-  bracketedReferenceTransformer,
   footnoteReferenceTransformer,
   narrativeReferenceTransformer,
   headingAttributeTransformer,
-  ...TRANSFORMERS,
-  CHECK_LIST,
+  HEADING,
+  QUOTE,
+  unorderedListTransformer,
+  orderedListTransformer,
+  checkListTransformer,
+  CODE,
+  ...TEXT_FORMAT_TRANSFORMERS,
+  ...TEXT_MATCH_TRANSFORMERS,
+  bracketedReferenceTransformer,
 ];
 
 export const lexicalMarkdownTheme: EditorThemeClasses = {

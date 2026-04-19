@@ -6,9 +6,11 @@ import {
 } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import {
   $addUpdateTag,
+  $createTextNode,
   $getSelection,
   $isRangeSelection,
   type LexicalEditor,
+  type LexicalNode,
   type TextNode,
 } from "lexical";
 import { useCallback, useMemo, useState } from "react";
@@ -44,6 +46,18 @@ class ReferenceCompletionOption extends MenuOption {
     this.candidate = candidate;
     this.preview = preview;
   }
+}
+
+function $selectAfterInlineCompletion(node: LexicalNode): void {
+  const nextSibling = node.getNextSibling();
+  if (nextSibling) {
+    node.selectNext();
+    return;
+  }
+
+  const caretNode = $createTextNode(" ");
+  node.insertAfter(caretNode);
+  caretNode.selectEnd();
 }
 
 function ReferenceCompletionMenu({
@@ -184,13 +198,15 @@ export function ReferenceTypeaheadPlugin({
     }
 
     if (raw.startsWith("[")) {
+      const referenceNode = $createReferenceNode(nextRaw);
       if (textNodeContainingQuery) {
-        textNodeContainingQuery.setTextContent(nextRaw);
-        textNodeContainingQuery.selectEnd();
+        textNodeContainingQuery.replace(referenceNode);
+        $selectAfterInlineCompletion(referenceNode);
       } else {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
-          selection.insertText(nextRaw);
+          selection.insertNodes([referenceNode]);
+          $selectAfterInlineCompletion(referenceNode);
         }
       }
       closeMenu();
@@ -200,11 +216,12 @@ export function ReferenceTypeaheadPlugin({
     const referenceNode = $createReferenceNode(`@${option.candidate.id}`);
     if (textNodeContainingQuery) {
       textNodeContainingQuery.replace(referenceNode);
-      referenceNode.selectNext();
+      $selectAfterInlineCompletion(referenceNode);
     } else {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
         selection.insertNodes([referenceNode]);
+        $selectAfterInlineCompletion(referenceNode);
       }
     }
     closeMenu();

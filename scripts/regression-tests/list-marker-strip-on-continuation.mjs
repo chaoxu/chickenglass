@@ -18,6 +18,11 @@ const CASES = [
   { label: "star", typed: "* one\n* two", expect: "* one\n* two" },
   { label: "plus", typed: "+ one\n+ two", expect: "+ one\n+ two" },
   { label: "ordered", typed: "1. one\n2. two", expect: "1. one\n2. two" },
+  {
+    label: "exit",
+    typed: "- one\n- two\n\nafter",
+    expect: "- one\n- two\n\nafter",
+  },
 ];
 
 export async function run(page) {
@@ -44,6 +49,6 @@ export async function run(page) {
   }
   return {
     pass: true,
-    message: "list markers do not double on Enter continuation",
+    message: "list markers do not double and exited lists keep following paragraphs separate",
   };
 }

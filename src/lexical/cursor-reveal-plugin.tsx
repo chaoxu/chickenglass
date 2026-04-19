@@ -15,7 +15,7 @@
  *   the text is re-parsed via the same adapter — valid syntax becomes
  *   the original kind of node, anything else stays plain text.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
@@ -55,6 +55,7 @@ import {
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
+import { $isInlineImageNode } from "./nodes/inline-image-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $isReferenceNode } from "./nodes/reference-node";
 import {
@@ -73,6 +74,10 @@ import {
 import { renderRevealChromePreview } from "./reveal-chrome";
 import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
 import { setCursorRevealActive } from "./cursor-reveal-state";
+import {
+  REVEAL_SOURCE_STYLE_PROPERTY,
+  REVEAL_SOURCE_TEXT_STYLE,
+} from "./reveal-source-style";
 
 // Re-exports kept so existing unit tests can continue importing the
 // pure markdown helpers from this module.
@@ -93,10 +98,98 @@ export function CursorRevealPlugin({
   const adapters = editorMode === EDITOR_MODE.PARAGRAPH
     ? PARAGRAPH_REVEAL_ADAPTERS
     : REVEAL_ADAPTERS;
-  if (presentation === REVEAL_PRESENTATION.INLINE) {
+  if (editorMode === EDITOR_MODE.PARAGRAPH || presentation === REVEAL_PRESENTATION.INLINE) {
     return <InlineCursorReveal adapters={adapters} />;
   }
   return <FloatingCursorReveal adapters={adapters} />;
+}
+
+function useUserDrivenSelectionReveal(editor: LexicalEditor): MutableRefObject<boolean> {
+  const enabledRef = useRef(false);
+
+  useEffect(() => {
+    const markUserSelectionIntent = (event: Event) => {
+      const root = editor.getRootElement();
+      const target = event.target instanceof Node ? event.target : null;
+      const targetElement = target instanceof Element ? target : target?.parentElement ?? null;
+      if (!root || !target || !root.contains(target) || targetElement?.closest("[contenteditable='true']") !== root) {
+        return;
+      }
+      enabledRef.current = true;
+    };
+
+    document.addEventListener("pointerdown", markUserSelectionIntent, true);
+    document.addEventListener("keydown", markUserSelectionIntent, true);
+    return () => {
+      document.removeEventListener("pointerdown", markUserSelectionIntent, true);
+      document.removeEventListener("keydown", markUserSelectionIntent, true);
+    };
+  }, [editor]);
+
+  return enabledRef;
+}
+
+function canOpenUserDrivenReveal(
+  adapter: RevealAdapter,
+  userSelectionRevealRef: MutableRefObject<boolean>,
+): boolean {
+  if (adapter.id !== "paragraph") {
+    return true;
+  }
+  if (!userSelectionRevealRef.current) {
+    return false;
+  }
+  userSelectionRevealRef.current = false;
+  return true;
+}
+
+function usePointerSelectionReveal(
+  editor: LexicalEditor,
+  adapters: readonly RevealAdapter[],
+  userSelectionRevealRef: MutableRefObject<boolean>,
+): void {
+  useEffect(() => {
+    const handlePointerUp = (event: PointerEvent) => {
+      const root = editor.getRootElement();
+      const target = event.target instanceof Node ? event.target : null;
+      const targetElement = target instanceof Element ? target : target?.parentElement ?? null;
+      if (
+        !root
+        || !target
+        || !root.contains(target)
+        || targetElement?.closest("[contenteditable='true']") !== root
+      ) {
+        return;
+      }
+      window.setTimeout(() => {
+        editor.update(() => {
+          const selection = $getSelection();
+          if (!selection) {
+            return;
+          }
+          const pick = pickRevealSubject(selection, adapters);
+          if (!pick) {
+            return;
+          }
+          if (!canOpenUserDrivenReveal(pick.adapter, userSelectionRevealRef)) {
+            return;
+          }
+          const preferredOffset = "anchor" in selection
+            ? (selection.anchor as { offset: number }).offset
+            : pick.subject.caretOffset ?? pick.subject.source.length;
+          editor.dispatchCommand(
+            OPEN_CURSOR_REVEAL_COMMAND,
+            createRevealOpenRequest(pick.subject, pick.adapter, preferredOffset),
+          );
+        }, { discrete: true });
+      }, 0);
+    };
+
+    document.addEventListener("pointerup", handlePointerUp, true);
+    return () => {
+      document.removeEventListener("pointerup", handlePointerUp, true);
+    };
+  }, [adapters, editor, userSelectionRevealRef]);
 }
 
 // ─── Floating presentation ──────────────────────────────────────────────
@@ -113,10 +206,17 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
   const [state, setState] = useState<FloatingState | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const userSelectionRevealRef = useUserDrivenSelectionReveal(editor);
   // Key we last revealed (or committed to). Prevents the floating editor
   // from reopening on the same node right after it closes, since Lexical's
   // post-commit selection still points at the replacement node.
   const lastRevealedKeyRef = useRef<NodeKey | null>(null);
+
+  useEffect(() => {
+    setState(null);
+    setDraft("");
+    lastRevealedKeyRef.current = null;
+  }, [adapters]);
 
   const openFloatingRequest = useCallback((request: CursorRevealOpenRequest) => {
     const adapter = findRevealAdapter(adapters, request.adapterId);
@@ -146,7 +246,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
     [adapters, editor],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     return editor.registerCommand(
       OPEN_CURSOR_REVEAL_COMMAND,
       (request) => {
@@ -170,6 +270,9 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
           lastRevealedKeyRef.current = null;
           return false;
         }
+        if (!canOpenUserDrivenReveal(pick.adapter, userSelectionRevealRef)) {
+          return false;
+        }
         editor.dispatchCommand(
           OPEN_CURSOR_REVEAL_COMMAND,
           createRevealOpenRequest(
@@ -182,7 +285,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, adapters]);
+  }, [editor, adapters, userSelectionRevealRef]);
 
   useEffect(() => {
     if (!state) {
@@ -198,6 +301,22 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
   }, [state]);
 
   const commitDraft = (current: FloatingState, nextRaw: string) => {
+    if (current.adapter.id === "raw-block") {
+      editor.update(() => {
+        const node = $getNodeByKey(current.nodeKey);
+        if (!$isRawBlockNode(node)) {
+          return;
+        }
+        node.setRaw(nextRaw);
+        lastRevealedKeyRef.current = node.getKey();
+      }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
+      return;
+    }
+    if (current.adapter.id === "paragraph") {
+      setState(null);
+      setDraft("");
+      return;
+    }
     editor.update(() => {
       const node = $getNodeByKey(current.nodeKey);
       if (!node) {
@@ -262,12 +381,6 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
 
 // ─── Inline (Typora-style) presentation ─────────────────────────────────
 
-const REVEAL_SOURCE_TEXT_STYLE = [
-  "--cf-reveal:1",
-  "font-family:var(--cf-code-font)",
-  "font-size:14px",
-].join(";");
-
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
   readonly adapter: RevealAdapter;
@@ -291,6 +404,8 @@ interface InlineRevealChromeState {
 function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
   const [chromeState, setChromeState] = useState<InlineRevealChromeState | null>(null);
+  const userSelectionRevealRef = useUserDrivenSelectionReveal(editor);
+  usePointerSelectionReveal(editor, adapters, userSelectionRevealRef);
   // Key of the in-flight plain-text reveal node. When the caret moves off
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
@@ -338,7 +453,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     [adapters, editor],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     return editor.registerCommand(
       OPEN_CURSOR_REVEAL_COMMAND,
       (request) => {
@@ -419,6 +534,9 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         if (!pick) {
           return false;
         }
+        if (!canOpenUserDrivenReveal(pick.adapter, userSelectionRevealRef)) {
+          return false;
+        }
         const preferredOffset = "anchor" in sel ? (sel.anchor as { offset: number }).offset : 0;
         editor.dispatchCommand(
           OPEN_CURSOR_REVEAL_COMMAND,
@@ -428,7 +546,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, adapters]);
+  }, [editor, adapters, userSelectionRevealRef]);
 
   useEffect(() => {
     const handleArrow = (
@@ -738,7 +856,11 @@ function getDomSelectionOffsetInsideRevealText(text: string): number | null {
     return null;
   }
   const element = getLexicalTextElement(anchor);
-  if (!element || element.textContent !== text || !element.style.getPropertyValue("--cf-reveal")) {
+  if (
+    !element
+    || element.textContent !== text
+    || !element.style.getPropertyValue(REVEAL_SOURCE_STYLE_PROPERTY)
+  ) {
     return null;
   }
   const range = document.createRange();
@@ -882,7 +1004,12 @@ function openInlineReveal(
 }
 
 function getSourceBackedFormat(node: LexicalNode): number {
-  if ($isInlineMathNode(node) || $isReferenceNode(node) || $isFootnoteReferenceNode(node)) {
+  if (
+    $isInlineMathNode(node)
+    || $isInlineImageNode(node)
+    || $isReferenceNode(node)
+    || $isFootnoteReferenceNode(node)
+  ) {
     return node.getFormat();
   }
   return 0;

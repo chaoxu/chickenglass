@@ -222,19 +222,25 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   await page.waitForFunction(
     ({ method, path, expectedLength, expectedPrefix, expectedSuffix }) => {
       const text = window.__editor?.getDoc();
+      const editorText = window.__editor?.peekDoc?.() ?? null;
       const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
-      const sourceMapRegions = window.__cfSourceMap?.regions.length ?? 0;
-      if (typeof text !== "string" || currentPath !== path) {
+      if (typeof text !== "string" || typeof editorText !== "string" || currentPath !== path) {
         return false;
       }
 
-      if (method !== "openFile" && sourceMapRegions === 0) {
-        return text.length === expectedLength &&
-          text.startsWith(expectedPrefix) &&
-          text.endsWith(expectedSuffix);
+      if (method === "openFile") {
+        return text.startsWith(expectedPrefix) &&
+          text.endsWith(expectedSuffix) &&
+          editorText.startsWith(expectedPrefix) &&
+          editorText.endsWith(expectedSuffix);
       }
 
-      return text.length > 0;
+      return text.length === expectedLength &&
+        text.startsWith(expectedPrefix) &&
+        text.endsWith(expectedSuffix) &&
+        editorText.length === expectedLength &&
+        editorText.startsWith(expectedPrefix) &&
+        editorText.endsWith(expectedSuffix);
     },
     {
       method: result.method,

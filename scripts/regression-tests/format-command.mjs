@@ -1,7 +1,6 @@
 import {
   openFixtureDocument,
   readEditorText,
-  setSelection,
   switchToMode,
 } from "../test-helpers.mjs";
 
@@ -13,50 +12,37 @@ const FIXTURE = {
   content: "Alpha Beta\n",
 };
 
-async function selectVisibleRichText(page, text) {
-  const selected = await page.evaluate((nextText) => {
-    const root = document.querySelector(".cf-lexical-editor--rich");
-    if (!(root instanceof HTMLElement)) {
+async function selectVisibleText(page, text) {
+  return page.evaluate((needle) => {
+    const root = document.querySelector("[data-testid='lexical-editor'][contenteditable='true']");
+    if (!root) {
       return false;
     }
-
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const current = walker.currentNode;
-      if (!(current instanceof Text)) {
-        continue;
+    let node = walker.nextNode();
+    while (node) {
+      const index = (node.textContent ?? "").indexOf(needle);
+      if (index >= 0) {
+        const range = document.createRange();
+        range.setStart(node, index);
+        range.setEnd(node, index + needle.length);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        root.focus();
+        root.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+        return true;
       }
-      const value = current.textContent ?? "";
-      const index = value.indexOf(nextText);
-      if (index < 0) {
-        continue;
-      }
-
-      const selection = window.getSelection();
-      if (!selection) {
-        return false;
-      }
-
-      const range = document.createRange();
-      range.setStart(current, index);
-      range.setEnd(current, index + nextText.length);
-      root.focus();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return true;
+      node = walker.nextNode();
     }
-
     return false;
   }, text);
-
-  await page.waitForTimeout(100);
-  return selected;
 }
 
 export async function run(page) {
   await openFixtureDocument(page, FIXTURE, { mode: "lexical" });
 
-  if (!(await selectVisibleRichText(page, "Beta"))) {
+  if (!await selectVisibleText(page, "Beta")) {
     return { pass: false, message: "fixture text missing the visible lexical selection target" };
   }
 
@@ -79,12 +65,9 @@ export async function run(page) {
   }
 
   const alphaStart = sourceFormatted.indexOf("Alpha");
-  const alphaEnd = alphaStart + "Alpha".length;
-  if (alphaStart < 0) {
-    return { pass: false, message: "source-mode selection target disappeared after rich formatting" };
+  if (alphaStart < 0 || !await selectVisibleText(page, "Alpha")) {
+    return { pass: false, message: "fixture text missing the source selection target" };
   }
-
-  await setSelection(page, alphaStart, alphaEnd);
   await page.evaluate(() => {
     document.dispatchEvent(new CustomEvent("cf:format", {
       detail: { type: "italic" },
@@ -92,9 +75,9 @@ export async function run(page) {
   });
   await page.waitForTimeout(150);
 
-  const sourceReformatted = await readEditorText(page);
-  if (sourceReformatted !== "*Alpha* **Beta**\n") {
-    return { pass: false, message: `source format event updated the wrong canonical markdown: ${JSON.stringify(sourceReformatted)}` };
+  const sourceModeFormatted = await readEditorText(page);
+  if (sourceModeFormatted !== "*Alpha* **Beta**\n") {
+    return { pass: false, message: `source format event updated the wrong document text: ${JSON.stringify(sourceModeFormatted)}` };
   }
 
   return { pass: true, message: "format events rewrite markdown through the Lexical surface" };

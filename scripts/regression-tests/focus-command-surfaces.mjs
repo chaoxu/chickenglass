@@ -12,6 +12,9 @@ async function openScratchDocument(page, path, content) {
     if (!window.__app?.openFileWithContent) {
       throw new Error("window.__app.openFileWithContent is unavailable");
     }
+    if (window.__app.getCurrentDocument?.()) {
+      await window.__app.closeFile({ discard: true });
+    }
     await window.__app.openFileWithContent(nextPath, nextContent);
   }, {
     nextContent: content,

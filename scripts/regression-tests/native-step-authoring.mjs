@@ -7,11 +7,26 @@ import {
 
 export const name = "native-step-authoring";
 
-const PATH = "rankdecrease/native-step-authoring.md";
+const AUTHORING_TIMEOUT = 10_000;
 
 function assertAuthoring(condition, message, details) {
   if (!condition) {
     throw new Error(details ? `${message}: ${JSON.stringify(details)}` : message);
+  }
+}
+
+async function waitForAuthoringCondition(page, label, predicate) {
+  try {
+    await page.waitForFunction(predicate, undefined, { timeout: AUTHORING_TIMEOUT });
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      activeClass: document.activeElement instanceof HTMLElement
+        ? document.activeElement.className
+        : null,
+      docTail: window.__editor?.getDoc?.().slice(-500) ?? null,
+      mode: window.__app?.getMode?.() ?? null,
+    })).catch(() => null);
+    throw new Error(`${label} timed out: ${error instanceof Error ? error.message : String(error)}; state=${JSON.stringify(state)}`);
   }
 }
 
@@ -37,13 +52,17 @@ async function clickLastTopLevelParagraph(page) {
 }
 
 export async function run(page) {
+  const path = `rankdecrease/native-step-authoring-${Date.now()}.md`;
   await openRegressionDocument(page, "rankdecrease/main.md", { mode: "lexical" });
   await page.evaluate(async (path) => {
+    if (window.__app.getCurrentDocument?.()) {
+      await window.__app.closeFile({ discard: true });
+    }
     await window.__app.openFileWithContent(path, "");
-  }, PATH);
+  }, path);
   await page.waitForFunction(
     (path) => window.__app?.getCurrentDocument?.()?.path === path,
-    PATH,
+    path,
     { timeout: 10_000 },
   );
   await focusEditor(page);
@@ -57,30 +76,30 @@ export async function run(page) {
 
   await page.keyboard.type("$$");
   await page.keyboard.press("Enter");
-  await page.waitForFunction(
+  await waitForAuthoringCondition(
+    page,
+    "display math source editor",
     () => Boolean(document.querySelector(".cf-lexical-display-math.is-editing .cf-lexical-structure-source-editor--math")),
-    undefined,
-    { timeout: 5_000 },
   );
   await page.keyboard.type("\\rho(M)=\\lambda(M)/\\sigma(M)");
   await clickLastTopLevelParagraph(page);
 
   await page.keyboard.type("::: {.theorem #thm:native-step} Native Step Theorem");
   await page.keyboard.press("Enter");
-  await page.waitForFunction(
+  await waitForAuthoringCondition(
+    page,
+    "theorem body focus",
     () => Boolean(document.activeElement?.closest(".cf-lexical-nested-editor--block-body")),
-    undefined,
-    { timeout: 5_000 },
   );
   await page.keyboard.type("Let $M$ be a matroid. The native theorem body remains editable.");
   await clickLastTopLevelParagraph(page);
 
   await page.keyboard.type("::: {.proof}");
   await page.keyboard.press("Enter");
-  await page.waitForFunction(
+  await waitForAuthoringCondition(
+    page,
+    "proof body focus",
     () => Boolean(document.activeElement?.closest(".cf-lexical-nested-editor--block-body")),
-    undefined,
-    { timeout: 5_000 },
   );
   await page.keyboard.type("The proof edits $\\lambda_w$ and $\\sigma_w$ inside the block body.");
   await clickLastTopLevelParagraph(page);
@@ -89,7 +108,9 @@ export async function run(page) {
   await page.keyboard.press("Enter");
   await page.keyboard.type("| :--- | ---: |");
   await page.keyboard.press("Enter");
-  await page.waitForFunction(
+  await waitForAuthoringCondition(
+    page,
+    "table first cell focus",
     () => {
       const selection = window.getSelection();
       const anchorElement = selection?.anchorNode instanceof Element
@@ -98,16 +119,14 @@ export async function run(page) {
       const cell = anchorElement?.closest("td");
       return Boolean(cell && Array.from(cell.parentElement?.children ?? []).indexOf(cell) === 0);
     },
-    undefined,
-    { timeout: 5_000 },
   );
-  await page.keyboard.type("$M$");
+  await page.keyboard.insertText("$M$");
   await page.keyboard.press("Tab");
   await page.keyboard.type("1");
-  await page.waitForFunction(
+  await waitForAuthoringCondition(
+    page,
+    "table markdown update",
     () => window.__editor?.getDoc?.().includes("| $M$ | 1 |"),
-    undefined,
-    { timeout: 5_000 },
   );
   await waitForBrowserSettled(page, 4);
 
@@ -152,12 +171,12 @@ export async function run(page) {
   });
   await page.evaluate(async (path) => {
     await window.__app.openFile(path);
-  }, PATH);
+  }, path);
   await page.waitForFunction(
     (path) =>
       window.__app?.getCurrentDocument?.()?.path === path &&
       window.__editor?.getDoc?.().includes("Native Step Theorem"),
-    PATH,
+    path,
     { timeout: 10_000 },
   );
   const afterReopen = await readEditorText(page);

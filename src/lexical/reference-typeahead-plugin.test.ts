@@ -83,12 +83,12 @@ describe("findReferenceCompletionMatch", () => {
 describe("applyBracketedReferenceCompletion", () => {
   it("replaces the active slot inside a clustered reference", () => {
     expect(applyBracketedReferenceCompletion("[@eq:one; @thm", "thm:autocomplete"))
-      .toBe("[@eq:one; @thm:autocomplete");
+      .toBe("[@eq:one; @thm:autocomplete]");
   });
 
   it("preserves leading whitespace in the active slot", () => {
     expect(applyBracketedReferenceCompletion("[ @thm", "thm:autocomplete"))
-      .toBe("[ @thm:autocomplete");
+      .toBe("[ @thm:autocomplete]");
   });
 });
 

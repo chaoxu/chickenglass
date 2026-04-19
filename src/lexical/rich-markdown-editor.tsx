@@ -271,6 +271,9 @@ export function LexicalRichMarkdownEditor({
               <StructureEditProvider>
                 <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
                 <EditableSyncPlugin editable={editable} />
+                {editable
+                  ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
+                  : <ClickableLinkPlugin />}
                 <EditorHandlePlugin
                   focusOwner={focusOwner}
                   onEditorReady={onEditorReady}
@@ -351,9 +354,6 @@ export function LexicalRichMarkdownEditor({
                 <LinkPlugin />
                 <TableScrollShadowPlugin />
                 {editable ? <TableActionMenuPlugin /> : null}
-                {editable
-                  ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
-                  : <ClickableLinkPlugin />}
                 {editable ? <MarkdownExpansionPlugin /> : null}
                 {editable ? <BlockKeyboardAccessPlugin /> : null}
                 {editable ? <TabKeyPlugin /> : null}

@@ -13,6 +13,13 @@ import { StructureSourceEditor } from "../structure-source-editor";
 import { useStructureEditToggle } from "../structure-edit-plugin";
 import { useLexicalSurfaceEditable } from "../editability-context";
 import {
+  fencedDivBodyMarkdownOffset,
+  fencedDivTitleMarkdownOffset,
+  fencedDivTrimmedBodyMarkdownOffset,
+  footnoteDefinitionBodyOffset,
+  useStructureSourceSelectionBridge,
+} from "../structure-source-selection";
+import {
   parseStructuredFencedDivRaw,
   serializeFencedDivRaw,
 } from "../markdown/block-syntax";
@@ -77,7 +84,9 @@ function FencedDivStructureSourceEditor({
   readonly onClose: () => void;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const updateRaw = useRawBlockUpdater(nodeKey);
+  const onSelectionChange = useStructureSourceSelectionBridge(editor, nodeKey);
 
   return (
     <div className="cf-lexical-block-source-line">
@@ -87,6 +96,7 @@ function FencedDivStructureSourceEditor({
         namespace={`coflat-block-opener-${nodeKey}`}
         onChange={(nextOpener) => updateRaw((currentRaw) => replaceFirstLine(currentRaw, nextOpener))}
         onClose={onClose}
+        onSelectionChange={onSelectionChange}
       />
     </div>
   );
@@ -109,6 +119,7 @@ function FrontmatterRenderer({
     "frontmatter",
     "frontmatter-source",
   );
+  const onSelectionChange = useStructureSourceSelectionBridge(editor, nodeKey);
 
   const titleHtml = useMemo(
     () => title ? renderMarkdownRichHtml(title, richHtmlOptions(context)) : "",
@@ -125,6 +136,7 @@ function FrontmatterRenderer({
           namespace={`coflat-frontmatter-source-${nodeKey}`}
           onChange={updateRaw}
           onClose={sourceEdit.deactivate}
+          onSelectionChange={onSelectionChange}
           pendingFocusId={getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source")}
         />
       ) : (
@@ -168,10 +180,16 @@ function FootnoteDefinitionBlockRenderer({
   readonly nodeKey: NodeKey;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const { renderIndex } = useLexicalRenderContext();
   const parsed = useMemo(() => parseFootnoteDefinition(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const pendingFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "footnote-body");
+  const onBodySelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    footnoteDefinitionBodyOffset(raw),
+  );
 
   if (!parsed) {
     return <div className="cf-lexical-raw-fallback">{raw}</div>;
@@ -188,6 +206,7 @@ function FootnoteDefinitionBlockRenderer({
           doc={parsed.body}
           family="footnote-body"
           namespace={`coflat-footnote-${nodeKey}`}
+          onSelectionChange={onBodySelectionChange}
           onTextChange={(nextBody) => updateRaw(serializeFootnoteDefinition(parsed.id, nextBody))}
           pendingFocusId={pendingFocusId}
         />
@@ -204,10 +223,17 @@ function IncludeBlockRenderer({
   readonly raw: string;
 }) {
   const surfaceEditable = useLexicalSurfaceEditable();
+  const [editor] = useLexicalComposerContext();
   const parsed = useMemo(() => parseStructuredFencedDivRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
-  const content = useIncludedDocument(parsed.bodyMarkdown.trim());
+  const pathText = parsed.bodyMarkdown.trim();
+  const content = useIncludedDocument(pathText);
   const pathEdit = useStructureEditToggle(nodeKey, "fenced-div", "include-path");
+  const onPathSelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    fencedDivTrimmedBodyMarkdownOffset(raw),
+  );
 
   return (
     <section className="cf-lexical-include-shell">
@@ -220,21 +246,22 @@ function IncludeBlockRenderer({
               keyboardActivation: true,
             })}
           >
-            {parsed.bodyMarkdown.trim()}
+            {pathText}
           </button>
         ) : (
-          <span className="cf-lexical-include-path-label">{parsed.bodyMarkdown.trim()}</span>
+          <span className="cf-lexical-include-path-label">{pathText}</span>
         )}
       </div>
       {pathEdit.active ? (
         <StructureSourceEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--include"
-          doc={parsed.bodyMarkdown.trim()}
+          doc={pathText}
           namespace={`coflat-include-path-${nodeKey}`}
           onChange={(nextPath) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextPath,
           }))}
           onClose={pathEdit.deactivate}
+          onSelectionChange={onPathSelectionChange}
         />
       ) : null}
       <div className="cf-lexical-include-content">
@@ -249,7 +276,7 @@ function IncludeBlockRenderer({
             testId={null}
           />
         ) : (
-          <div className="cf-lexical-media-fallback">{`Missing include: ${parsed.bodyMarkdown.trim()}`}</div>
+          <div className="cf-lexical-media-fallback">{`Missing include: ${pathText}`}</div>
         )}
       </div>
     </section>
@@ -267,10 +294,22 @@ function CaptionedBlockRenderer({
   readonly parsed: ReturnType<typeof parseStructuredFencedDivRaw>;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const surfaceEditable = useLexicalSurfaceEditable();
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
+  const onBodySelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    fencedDivBodyMarkdownOffset(raw),
+  );
+  const titleOffset = fencedDivTitleMarkdownOffset(raw, parsed);
+  const onTitleSelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    titleOffset ?? 0,
+  );
 
   return (
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`}>
@@ -287,6 +326,7 @@ function CaptionedBlockRenderer({
           doc={parsed.bodyMarkdown}
           family="block-body"
           namespace={`coflat-captioned-block-${nodeKey}`}
+          onSelectionChange={onBodySelectionChange}
           onTextChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextBody,
           }))}
@@ -308,6 +348,7 @@ function CaptionedBlockRenderer({
               doc={parsed.titleMarkdown}
               family="caption"
               namespace={`coflat-block-caption-${nodeKey}`}
+              onSelectionChange={titleOffset === null ? undefined : onTitleSelectionChange}
               onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
                 titleMarkdown: nextTitle,
               }))}
@@ -331,12 +372,19 @@ function EmbedBlockRenderer({
   readonly raw: string;
 }) {
   const surfaceEditable = useLexicalSurfaceEditable();
+  const [editor] = useLexicalComposerContext();
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const bodyEdit = useStructureEditToggle(nodeKey, "fenced-div", "embed-url");
+  const bodyText = parsed.bodyMarkdown.trim();
   const src = useMemo(
     () => computeEmbedSrc(parsed.blockType, parsed.bodyMarkdown),
     [parsed.blockType, parsed.bodyMarkdown],
+  );
+  const onBodySelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    fencedDivTrimmedBodyMarkdownOffset(raw),
   );
 
   return (
@@ -360,12 +408,13 @@ function EmbedBlockRenderer({
         {bodyEdit.active ? (
           <StructureSourceEditor
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--embed"
-            doc={parsed.bodyMarkdown.trim()}
+            doc={bodyText}
             namespace={`coflat-embed-${nodeKey}`}
             onChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
               bodyMarkdown: nextBody,
             }))}
             onClose={bodyEdit.deactivate}
+            onSelectionChange={onBodySelectionChange}
           />
         ) : src ? (
           <div className="cf-lexical-embed-frame-shell">
@@ -410,12 +459,24 @@ function FencedDivBlockRenderer({
   readonly nodeKey: NodeKey;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const surfaceEditable = useLexicalSurfaceEditable();
   const context = useLexicalRenderContext();
   const parsed = useMemo(() => parseStructuredFencedDivRaw(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
+  const onBodySelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    fencedDivBodyMarkdownOffset(raw),
+  );
+  const titleOffset = fencedDivTitleMarkdownOffset(raw, parsed);
+  const onTitleSelectionChange = useStructureSourceSelectionBridge(
+    editor,
+    nodeKey,
+    titleOffset ?? 0,
+  );
   const referenceLabel = parsed.id ? context.renderIndex.references.get(parsed.id)?.label : undefined;
   const viewModel = useMemo(
     () => createFencedDivViewModel(parsed, {
@@ -442,6 +503,7 @@ function FencedDivBlockRenderer({
           doc={parsed.bodyMarkdown}
           family="block-body"
           namespace={`coflat-blockquote-${nodeKey}`}
+          onSelectionChange={onBodySelectionChange}
           onTextChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextBody,
           }))}
@@ -479,6 +541,7 @@ function FencedDivBlockRenderer({
               doc={parsed.titleMarkdown}
               family="title"
               namespace={`coflat-block-title-${nodeKey}`}
+              onSelectionChange={titleOffset === null ? undefined : onTitleSelectionChange}
               onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
                 titleMarkdown: nextTitle,
               }))}
@@ -492,6 +555,7 @@ function FencedDivBlockRenderer({
           doc={parsed.bodyMarkdown}
           family="block-body"
           namespace={`coflat-block-body-${nodeKey}`}
+          onSelectionChange={onBodySelectionChange}
           onTextChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextBody,
           }))}

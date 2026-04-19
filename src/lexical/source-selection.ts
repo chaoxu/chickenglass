@@ -12,17 +12,26 @@ import {
   type LexicalNode,
   type TextNode,
 } from "lexical";
+import { $isLinkNode, type LinkNode } from "@lexical/link";
 
-import { OPEN_CURSOR_REVEAL_COMMAND } from "./cursor-reveal-controller";
+import {
+  OPEN_CURSOR_REVEAL_COMMAND,
+  type CursorRevealOpenRequest,
+} from "./cursor-reveal-controller";
 import {
   createHeadlessCoflatEditor,
   exportMarkdownFromSerializedState,
   setLexicalMarkdown,
 } from "./markdown";
+import { getInlineTextFormatSpecs } from "../lexical-next";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
+import { $isHeadingAttributeNode } from "./nodes/heading-attribute-node";
+import { $isInlineImageNode } from "./nodes/inline-image-node";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
+import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $isReferenceNode } from "./nodes/reference-node";
+import { isRevealSourceStyle } from "./reveal-source-style";
 import { sourcePositionFromElement } from "./source-position-dom";
 
 const SOURCE_SELECTION_MARKER = "\uE000coflat-source-selection\uE001";
@@ -144,6 +153,103 @@ function readExactTextOffsetWithMarker(
   return markerIndex >= 0 ? markerIndex : null;
 }
 
+function getBoundarySource(node: LexicalNode): string | null {
+  if ($isLinkNode(node)) {
+    return getLinkSource(node);
+  }
+  const reveal = getRevealSource(node);
+  if (reveal) {
+    return reveal.source;
+  }
+  if ($isTextNode(node)) {
+    return getFormattedTextSource(node)?.source ?? node.getTextContent();
+  }
+  return null;
+}
+
+function getBoundarySourceNode(
+  node: LexicalNode,
+  boundary: "end" | "start",
+): LexicalNode | null {
+  const source = getBoundarySource(node);
+  if (source !== null && source.length > 0) {
+    return node;
+  }
+  if (!$isElementNode(node)) {
+    return null;
+  }
+
+  const children = node.getChildren();
+  const orderedChildren = boundary === "start" ? children : [...children].reverse();
+  for (const child of orderedChildren) {
+    const found = getBoundarySourceNode(child, boundary);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function findBoundaryOffsetInMarkdown(
+  markdown: string,
+  target: LexicalNode,
+  boundary: "end" | "start",
+): number | null {
+  let searchFrom = 0;
+  let boundaryOffset: number | null = null;
+
+  const visit = (node: LexicalNode): boolean => {
+    const source = getBoundarySource(node);
+    if (source !== null && source.length > 0) {
+      const markdownIndex = markdown.indexOf(source, searchFrom);
+      if (markdownIndex >= 0) {
+        if (node.is(target)) {
+          boundaryOffset = boundary === "end"
+            ? markdownIndex + source.length
+            : markdownIndex;
+          return true;
+        }
+        searchFrom = markdownIndex + source.length;
+        return false;
+      }
+    }
+
+    if (!$isElementNode(node)) {
+      return false;
+    }
+    return node.getChildren().some((child) => visit(child));
+  };
+
+  visit($getRoot());
+  return boundaryOffset;
+}
+
+function readSourceOffsetFromElementBoundary(
+  node: LexicalNode,
+  offset: number,
+  markdown: string | undefined,
+): number | null {
+  if (!markdown || !$isElementNode(node)) {
+    return null;
+  }
+
+  const children = node.getChildren();
+  if (offset > 0) {
+    const previous = children[offset - 1];
+    const target = previous ? getBoundarySourceNode(previous, "end") : null;
+    if (target) {
+      const sourceOffset = findBoundaryOffsetInMarkdown(markdown, target, "end");
+      if (sourceOffset !== null) {
+        return sourceOffset;
+      }
+    }
+  }
+
+  const next = children[offset];
+  const target = next ? getBoundarySourceNode(next, "start") : null;
+  return target ? findBoundaryOffsetInMarkdown(markdown, target, "start") : null;
+}
+
 function readSourceOffsetFromRangePoint(
   editor: LexicalEditor,
   editorState: EditorState,
@@ -152,6 +258,17 @@ function readSourceOffsetFromRangePoint(
 ): number | null {
   const node = point.getNode();
   if ($isTextNode(node)) {
+    if (options.markdown && isRevealSourceStyle(node.getStyle())) {
+      const revealOffset = findUniquePlainTextOffset(
+        options.markdown,
+        node.getTextContent(),
+        point.offset,
+      );
+      if (revealOffset !== null) {
+        return revealOffset;
+      }
+    }
+
     if (options.markdown && plainParagraphTextCanMapDirectly(node)) {
       const direct = findUniquePlainTextOffset(
         options.markdown,
@@ -164,6 +281,11 @@ function readSourceOffsetFromRangePoint(
     }
 
     return readExactTextOffsetWithMarker(editorState, node, point.offset);
+  }
+
+  const boundaryOffset = readSourceOffsetFromElementBoundary(node, point.offset, options.markdown);
+  if (boundaryOffset !== null) {
+    return boundaryOffset;
   }
 
   const element = editor.getElementByKey(node.getKey());
@@ -192,9 +314,19 @@ interface TextMarkerLocation {
 
 type LiveSourceLocation =
   | {
-      readonly kind: "decorator";
+      readonly adapterId:
+        | "footnote-reference"
+        | "heading-attribute"
+        | "inline-image"
+        | "inline-math"
+        | "link"
+        | "raw-block"
+        | "reference"
+        | "text-format";
+      readonly kind: "reveal";
       readonly node: LexicalNode;
       readonly offset: number;
+      readonly source: string;
     }
   | {
       readonly kind: "text";
@@ -269,23 +401,159 @@ function getNodeAtPath(path: readonly number[]): LexicalNode | null {
   return current;
 }
 
-function getInlineDecoratorSource(node: LexicalNode): string | null {
-  if ($isInlineMathNode(node) || $isReferenceNode(node) || $isFootnoteReferenceNode(node)) {
-    return node.getRaw();
+function getRevealSource(
+  node: LexicalNode,
+): Pick<Extract<LiveSourceLocation, { kind: "reveal" }>, "adapterId" | "source"> | null {
+  if ($isInlineMathNode(node)) {
+    return { adapterId: "inline-math", source: node.getRaw() };
+  }
+  if ($isInlineImageNode(node)) {
+    return { adapterId: "inline-image", source: node.getRaw() };
+  }
+  if ($isReferenceNode(node)) {
+    return { adapterId: "reference", source: node.getRaw() };
+  }
+  if ($isFootnoteReferenceNode(node)) {
+    return { adapterId: "footnote-reference", source: node.getRaw() };
+  }
+  if ($isHeadingAttributeNode(node)) {
+    return { adapterId: "heading-attribute", source: node.getRaw() };
+  }
+  if ($isRawBlockNode(node)) {
+    return { adapterId: "raw-block", source: node.getRaw() };
   }
   return null;
 }
 
-function findNearestLiveSourceLocation(markdown: string, offset: number): LiveSourceLocation | null {
+function getLinkSource(node: LinkNode): string {
+  return `[${node.getTextContent()}](${node.getURL()})`;
+}
+
+function getFormattedTextSource(node: TextNode): {
+  readonly closeLength: number;
+  readonly openLength: number;
+  readonly source: string;
+} | null {
+  const specs = getInlineTextFormatSpecs().filter((spec) => node.hasFormat(spec.lexicalFormat));
+  if (specs.length === 0) {
+    return null;
+  }
+  const open = specs.map((spec) => spec.markdownOpen).join("");
+  const close = [...specs].reverse().map((spec) => spec.markdownClose).join("");
+  return {
+    closeLength: close.length,
+    openLength: open.length,
+    source: `${open}${node.getTextContent()}${close}`,
+  };
+}
+
+function findTextLocationInElement(
+  node: LexicalNode,
+  visibleOffset: number,
+): Extract<LiveSourceLocation, { kind: "text" }> | null {
+  let remaining = Math.max(0, visibleOffset);
+  let lastText: TextNode | null = null;
+
+  const visit = (current: LexicalNode): Extract<LiveSourceLocation, { kind: "text" }> | null => {
+    if ($isTextNode(current)) {
+      lastText = current;
+      const length = current.getTextContentSize();
+      if (remaining <= length) {
+        return {
+          kind: "text",
+          node: current,
+          offset: remaining,
+        };
+      }
+      remaining -= length;
+      return null;
+    }
+    if (!$isElementNode(current)) {
+      remaining -= current.getTextContent().length;
+      return null;
+    }
+    for (const child of current.getChildren()) {
+      const found = visit(child);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  };
+
+  const found = visit(node);
+  if (found) {
+    return found;
+  }
+  const fallbackText = lastText as TextNode | null;
+  return fallbackText
+    ? {
+        kind: "text",
+        node: fallbackText,
+        offset: fallbackText.getTextContentSize(),
+      }
+    : null;
+}
+
+function findNearestLiveSourceLocation(
+  markdown: string,
+  offset: number,
+): LiveSourceLocation | null {
   const targetOffset = Math.max(0, Math.min(offset, markdown.length));
   let searchFrom = 0;
   let previous: LiveSourceLocation | null = null;
   let nearest: LiveSourceLocation | null = null;
 
   const visit = (node: LexicalNode): boolean => {
-    const source = $isTextNode(node)
-      ? node.getTextContent()
-      : getInlineDecoratorSource(node);
+    if ($isLinkNode(node)) {
+      const source = getLinkSource(node);
+      const markdownIndex = markdown.indexOf(source, searchFrom);
+      if (source.length > 0 && markdownIndex >= 0) {
+        const sourceEnd = markdownIndex + source.length;
+        const labelStart = markdownIndex + 1;
+        const labelEnd = labelStart + node.getTextContent().length;
+        if (targetOffset <= markdownIndex) {
+          nearest = {
+            adapterId: "link",
+            kind: "reveal",
+            node,
+            offset: 0,
+            source,
+          };
+          return true;
+        }
+        if (targetOffset >= labelStart && targetOffset <= labelEnd) {
+          const textLocation = findTextLocationInElement(node, targetOffset - labelStart);
+          if (textLocation) {
+            nearest = textLocation;
+            return true;
+          }
+        }
+        if (targetOffset <= sourceEnd) {
+          nearest = {
+            adapterId: "link",
+            kind: "reveal",
+            node,
+            offset: targetOffset - markdownIndex,
+            source,
+          };
+          return true;
+        }
+        previous = {
+          adapterId: "link",
+          kind: "reveal",
+          node,
+          offset: source.length,
+          source,
+        };
+        searchFrom = sourceEnd;
+        return false;
+      }
+    }
+
+    const reveal = getRevealSource(node);
+    const formattedText = $isTextNode(node) ? getFormattedTextSource(node) : null;
+    const source = formattedText?.source ?? ($isTextNode(node) ? node.getTextContent() : reveal?.source ?? null);
     if (source !== null) {
       if (source.length === 0) {
         return false;
@@ -297,18 +565,54 @@ function findNearestLiveSourceLocation(markdown: string, offset: number): LiveSo
       }
 
       const sourceEnd = markdownIndex + source.length;
-      const kind = $isTextNode(node) ? "text" : "decorator";
+      const location = (sourceOffset: number): LiveSourceLocation => {
+        if ($isTextNode(node) && formattedText) {
+          const visibleStart = formattedText.openLength;
+          const visibleEnd = source.length - formattedText.closeLength;
+          if (sourceOffset < visibleStart || sourceOffset > visibleEnd) {
+            return {
+              adapterId: "text-format",
+              kind: "reveal",
+              node,
+              offset: sourceOffset,
+              source,
+            };
+          }
+          return {
+            kind: "text",
+            node,
+            offset: Math.max(0, Math.min(sourceOffset - visibleStart, node.getTextContentSize())),
+          };
+        }
+        if ($isTextNode(node)) {
+          return {
+            kind: "text",
+            node,
+            offset: sourceOffset,
+          };
+        }
+        if (!reveal) {
+          throw new Error("Expected source-backed reveal metadata.");
+        }
+        return {
+          adapterId: reveal.adapterId,
+          kind: "reveal",
+          node,
+          offset: sourceOffset,
+          source: reveal.source,
+        };
+      };
       if (targetOffset <= markdownIndex) {
-        nearest = { kind, node, offset: 0 } as LiveSourceLocation;
+        nearest = location(0);
         return true;
       }
 
       if (targetOffset <= sourceEnd) {
-        nearest = { kind, node, offset: targetOffset - markdownIndex } as LiveSourceLocation;
+        nearest = location(targetOffset - markdownIndex);
         return true;
       }
 
-      previous = { kind, node, offset: source.length } as LiveSourceLocation;
+      previous = location(source.length);
       searchFrom = sourceEnd;
       return false;
     }
@@ -338,51 +642,49 @@ function applyCollapsedTextFormat(node: TextNode, collapsed: boolean): void {
   selection.style = node.getStyle();
 }
 
-function openInlineDecoratorRevealFromSourceLocation(
-  editor: LexicalEditor,
+interface SelectSourceOffsetsOptions {
+  readonly revealRawBlockAtBoundary?: boolean;
+  readonly revealRawBlocks?: boolean;
+}
+
+function createRevealRequestFromSourceLocation(
+  location: Extract<LiveSourceLocation, { kind: "reveal" }>,
+  options: SelectSourceOffsetsOptions,
+): CursorRevealOpenRequest | null {
+  if (location.adapterId === "raw-block" && options.revealRawBlocks === false) {
+    return null;
+  }
+  if (
+    location.adapterId === "raw-block"
+    && location.offset === 0
+    && options.revealRawBlockAtBoundary === false
+  ) {
+    return null;
+  }
+  return {
+    adapterId: location.adapterId,
+    caretOffset: Math.max(0, Math.min(location.offset, location.source.length)),
+    entry: "selection",
+    nodeKey: location.node.getKey(),
+    source: location.source,
+  };
+}
+
+function createRevealRequestFromNode(
   node: LexicalNode,
   offset: number,
-): boolean {
-  const requestBase = (() => {
-    if ($isInlineMathNode(node)) {
-      return {
-        adapterId: "inline-math",
-        source: node.getRaw(),
-      };
-    }
-    if ($isReferenceNode(node)) {
-      return {
-        adapterId: "reference",
-        source: node.getRaw(),
-      };
-    }
-    if ($isFootnoteReferenceNode(node)) {
-      return {
-        adapterId: "footnote-reference",
-        source: node.getRaw(),
-      };
-    }
+  options: SelectSourceOffsetsOptions,
+): CursorRevealOpenRequest | null {
+  const reveal = getRevealSource(node);
+  if (!reveal) {
     return null;
-  })();
-
-  if (!requestBase) {
-    return false;
   }
-
-  const request = {
-    adapterId: requestBase.adapterId,
-    caretOffset: Math.max(0, Math.min(offset, requestBase.source.length)),
-    entry: "selection",
-    nodeKey: node.getKey(),
-    source: requestBase.source,
-  } as const;
-  const handled = editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, request);
-  if (!handled && typeof window !== "undefined") {
-    window.setTimeout(() => {
-      editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, request);
-    }, 0);
-  }
-  return true;
+  return createRevealRequestFromSourceLocation({
+    ...reveal,
+    kind: "reveal",
+    node,
+    offset,
+  }, options);
 }
 
 export function selectSourceOffsetsInRichLexicalRoot(
@@ -390,6 +692,7 @@ export function selectSourceOffsetsInRichLexicalRoot(
   markdown: string,
   anchor: number,
   focus = anchor,
+  options: SelectSourceOffsetsOptions = {},
 ): boolean {
   const anchorLocation = findTextMarkerLocationInState(markdown, anchor);
   const focusLocation = focus === anchor
@@ -397,22 +700,26 @@ export function selectSourceOffsetsInRichLexicalRoot(
     : findTextMarkerLocationInState(markdown, focus);
 
   let didSelect = false;
+  let pendingRevealRequest: CursorRevealOpenRequest | null = null;
   editor.update(() => {
     const collapsed = anchor === focus;
     const directAnchorLocation = findNearestLiveSourceLocation(markdown, anchor);
     const directFocusLocation = collapsed
       ? directAnchorLocation
       : findNearestLiveSourceLocation(markdown, focus);
+    const queueReveal = (request: CursorRevealOpenRequest | null): boolean => {
+      if (!request) {
+        return false;
+      }
+      pendingRevealRequest = request;
+      didSelect = true;
+      return true;
+    };
     if (
       collapsed
-      && directAnchorLocation?.kind === "decorator"
-      && openInlineDecoratorRevealFromSourceLocation(
-        editor,
-        directAnchorLocation.node,
-        directAnchorLocation.offset,
-      )
+      && directAnchorLocation?.kind === "reveal"
+      && queueReveal(createRevealRequestFromSourceLocation(directAnchorLocation, options))
     ) {
-      didSelect = true;
       return;
     }
     if (
@@ -446,9 +753,8 @@ export function selectSourceOffsetsInRichLexicalRoot(
     if (
       collapsed
       && anchorPathNode
-      && openInlineDecoratorRevealFromSourceLocation(editor, anchorPathNode, anchorLocation.offset)
+      && queueReveal(createRevealRequestFromNode(anchorPathNode, anchorLocation.offset, options))
     ) {
-      didSelect = true;
       return;
     }
     const anchorLocationWithNode = $isTextNode(anchorPathNode)
@@ -477,6 +783,10 @@ export function selectSourceOffsetsInRichLexicalRoot(
     applyCollapsedTextFormat(anchorNode, collapsed);
     didSelect = true;
   }, { discrete: true });
+
+  if (pendingRevealRequest) {
+    editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, pendingRevealRequest);
+  }
 
   return didSelect;
 }

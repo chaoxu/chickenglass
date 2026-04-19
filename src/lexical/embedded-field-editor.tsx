@@ -21,7 +21,7 @@ import {
   type EmbeddedFieldFamily,
   getEmbeddedFieldFamilySpec,
 } from "../lexical-next";
-import type { MarkdownEditorHandle } from "./markdown-editor-types";
+import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import {
   blockKeyboardEntryProps,
   type BlockKeyboardEntryPriority,
@@ -44,8 +44,13 @@ export interface EmbeddedFieldEditorProps {
   readonly family: EmbeddedFieldFamily;
   readonly keyboardEntryPriority?: BlockKeyboardEntryPriority;
   readonly namespace: string;
+  readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly onTextChange?: (text: string) => void;
   readonly pendingFocusId?: string;
+}
+
+function normalizeEmbeddedFieldDoc(doc: string, spec: { readonly needsSingleLineLayout: boolean }): string {
+  return spec.needsSingleLineLayout ? doc.replace(/\n+$/, "") : doc;
 }
 
 export function EmbeddedFieldEditor({
@@ -56,6 +61,7 @@ export function EmbeddedFieldEditor({
   family,
   keyboardEntryPriority,
   namespace,
+  onSelectionChange,
   onTextChange,
   pendingFocusId,
 }: EmbeddedFieldEditorProps) {
@@ -63,10 +69,13 @@ export function EmbeddedFieldEditor({
   const surfaceEditable = useLexicalSurfaceEditable();
   const [nestedRoot, setNestedRoot] = useState<HTMLElement | null>(null);
   // Raw-block parent updates can remount decorator content in large documents.
-  // Keep the focused field pinned to its local draft; publish body edits after
-  // a short idle window, and publish focus-activated title/caption edits on blur.
+  // Keep the focused field pinned to its local draft while still publishing
+  // idle edits, so app-level dirty state tracks focused titles/captions too.
   const [draftDoc, setDraftDoc] = useState(doc);
   const publishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preserveFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preserveFocusAfterPublishRef = useRef(false);
+  const lastPointerDownOutsideRef = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const nestedEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const pendingDraftRef = useRef<string | null>(null);
@@ -102,15 +111,35 @@ export function EmbeddedFieldEditor({
     publishTimerRef.current = null;
   }, []);
 
-  const publishDraft = useCallback((options?: { readonly clearPending?: boolean }) => {
+  const clearPreserveFocusTimer = useCallback(() => {
+    if (preserveFocusTimerRef.current === null) {
+      return;
+    }
+    clearTimeout(preserveFocusTimerRef.current);
+    preserveFocusTimerRef.current = null;
+  }, []);
+
+  const publishDraft = useCallback((options?: {
+    readonly clearPending?: boolean;
+    readonly preserveFocus?: boolean;
+  }) => {
     const pendingDraft = pendingDraftRef.current;
-    if (pendingDraft !== null && pendingDraft !== doc) {
+    const currentDoc = normalizeEmbeddedFieldDoc(doc, spec);
+    if (pendingDraft !== null && pendingDraft !== currentDoc) {
+      if (options?.preserveFocus) {
+        preserveFocusAfterPublishRef.current = true;
+        clearPreserveFocusTimer();
+        preserveFocusTimerRef.current = setTimeout(() => {
+          preserveFocusAfterPublishRef.current = false;
+          preserveFocusTimerRef.current = null;
+        }, 250);
+      }
       onTextChange?.(pendingDraft);
     }
     if (options?.clearPending) {
       pendingDraftRef.current = null;
     }
-  }, [doc, onTextChange]);
+  }, [clearPreserveFocusTimer, doc, onTextChange, spec]);
 
   const commitDraft = useCallback(() => {
     nestedEditorHandleRef.current?.flushPendingEdits();
@@ -122,7 +151,23 @@ export function EmbeddedFieldEditor({
 
   useEffect(() => () => {
     clearPublishTimer();
-  }, [clearPublishTimer]);
+    clearPreserveFocusTimer();
+  }, [clearPreserveFocusTimer, clearPublishTimer]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const shell = shellRef.current;
+      lastPointerDownOutsideRef.current = Boolean(
+        shell
+        && event.target instanceof Node
+        && !shell.contains(event.target),
+      );
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, []);
 
   const activate = useCallback((focusRequest: FocusRequest = "end") => {
     if (!canActivateRef.current) {
@@ -141,17 +186,15 @@ export function EmbeddedFieldEditor({
   }, [doc]);
 
   const handleTextChange = useCallback((nextDoc: string) => {
-    pendingDraftRef.current = nextDoc;
-    setDraftDoc(nextDoc);
-    if (activation === "focus") {
-      return;
-    }
+    const normalizedDoc = normalizeEmbeddedFieldDoc(nextDoc, spec);
+    pendingDraftRef.current = normalizedDoc;
+    setDraftDoc(normalizedDoc);
     clearPublishTimer();
     publishTimerRef.current = setTimeout(() => {
       publishTimerRef.current = null;
-      publishDraft();
+      publishDraft({ preserveFocus: true });
     }, 150);
-  }, [activation, clearPublishTimer, publishDraft]);
+  }, [clearPublishTimer, publishDraft, spec]);
 
   const handleNestedEditorReady = useCallback((handle: MarkdownEditorHandle) => {
     nestedEditorHandleRef.current = handle;
@@ -164,11 +207,18 @@ export function EmbeddedFieldEditor({
     if (nextFocused instanceof Node && shellRef.current?.contains(nextFocused)) {
       return;
     }
+    const pointerDownOutside = lastPointerDownOutsideRef.current;
+    lastPointerDownOutsideRef.current = false;
+    if (preserveFocusAfterPublishRef.current && !pointerDownOutside && nextFocused === null) {
+      scheduleRegisteredSurfaceFocus(() => nestedRoot, { edge: "current", maxAttempts: 6 });
+      return;
+    }
+    preserveFocusAfterPublishRef.current = false;
     commitDraft();
     if (canActivate) {
       setActive(false);
     }
-  }, [canActivate, commitDraft]);
+  }, [canActivate, commitDraft, nestedRoot]);
 
   const handleBlurCapture = useCallback((event: ReactFocusEvent<HTMLDivElement>) => {
     handleFocusExit(event.relatedTarget);
@@ -267,6 +317,7 @@ export function EmbeddedFieldEditor({
         namespace={namespace}
         onEditorReady={handleNestedEditorReady}
         onRootElementChange={setNestedRoot}
+        onSelectionChange={onSelectionChange}
         onTextChange={handleTextChange}
         preserveLocalHistory
         repairBlankClickSelection={spec.fieldKind !== "inline"}

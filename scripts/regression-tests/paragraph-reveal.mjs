@@ -24,6 +24,7 @@ async function placeCaretInFirstParagraph(page) {
     if (!(paragraph instanceof HTMLElement)) {
       return;
     }
+    paragraph.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     const range = document.createRange();
     const firstText = paragraph.firstChild ?? paragraph;
     if (firstText.nodeType === Node.TEXT_NODE && firstText.textContent) {
@@ -50,7 +51,10 @@ export async function run(page) {
   // the React-owned source of truth so the next mode switch keeps it.
   await setMode(page, "lexical");
   await page.evaluate(async (text) => {
-    await window.__app.openFileWithContent("scratch-paragraph-reveal.md", text);
+    if (window.__app.getCurrentDocument?.()) {
+      await window.__app.closeFile({ discard: true });
+    }
+    await window.__app.openFileWithContent(`scratch-paragraph-reveal-${Date.now()}.md`, text);
   }, FIXTURE);
   await page.waitForTimeout(200);
 
@@ -122,16 +126,8 @@ export async function run(page) {
   await placeCaretInFirstParagraph(page);
   await page.waitForTimeout(200);
 
-  await page.evaluate(() => {
-    const paragraph = document.querySelector(".cf-lexical-paragraph, p");
-    const text = paragraph?.firstChild;
-    if (!(text instanceof Node) || text.nodeType !== Node.TEXT_NODE) {
-      return;
-    }
-    text.textContent = "# " + (text.textContent ?? "");
-    // Notify Lexical of the DOM mutation by dispatching an input event.
-    paragraph?.dispatchEvent(new InputEvent("input", { bubbles: true }));
-  });
+  await page.keyboard.press("Home");
+  await page.keyboard.type("# ");
   await page.waitForTimeout(150);
 
   // Move caret out to commit (same constraint as above — must land in a
@@ -157,11 +153,11 @@ export async function run(page) {
   await page.waitForTimeout(250);
 
   const afterHeading = (await readEditorText(page)).trim();
-  // We don't insist exactly on `# ` (DOM-text mutation may not flow
-  // through Lexical cleanly in all environments), but we do insist that
-  // the tree is still valid and round-trips.
-  if (!afterHeading.length) {
-    return { pass: false, message: "doc became empty after paragraph reveal commit" };
+  if (!afterHeading.startsWith("# Paragraph reveal probe")) {
+    return {
+      pass: false,
+      message: `paragraph reveal did not reparse edited source as a heading: ${JSON.stringify(afterHeading)}`,
+    };
   }
 
   // Reset mode for downstream tests.

@@ -43,6 +43,16 @@ import {
   type FootnoteReferenceNode,
 } from "./nodes/footnote-reference-node";
 import {
+  $createHeadingAttributeNode,
+  $isHeadingAttributeNode,
+  type HeadingAttributeNode,
+} from "./nodes/heading-attribute-node";
+import {
+  $createInlineImageNode,
+  $isInlineImageNode,
+  type InlineImageNode,
+} from "./nodes/inline-image-node";
+import {
   inlineMathBodyEndOffset,
   inlineMathBodyStartOffset,
   inlineMathSourceOffsetFromTarget,
@@ -275,7 +285,7 @@ const linkAdapter: RevealAdapter = {
   },
 };
 
-// ─── Decorator adapters (math / reference / footnote) ──────────────────
+// ─── Decorator adapters (math / image / reference / footnote) ──────────
 
 function findSelectedDecorator<T extends LexicalNode>(
   selection: BaseSelection,
@@ -341,6 +351,61 @@ const inlineMathAdapter: RevealAdapter = {
     const math = $createInlineMathNode(trimmed, delimiter, live.getFormat());
     live.replace(math);
     return math;
+  },
+};
+
+const INLINE_IMAGE = /^!\[[^\]\n]*\]\([^)]+\)$/;
+
+const inlineImageAdapter: RevealAdapter = {
+  id: "inline-image",
+  findSubject(selection) {
+    const image = findSelectedDecorator(selection, $isInlineImageNode);
+    if (!image) {
+      return null;
+    }
+    return rawDecoratorSubject(image);
+  },
+  findSubjectFromNode(node, context) {
+    if (!$isInlineImageNode(node)) {
+      return null;
+    }
+    return rawDecoratorSubject(node, context);
+  },
+  reparse(live, raw) {
+    const trimmed = raw.trim();
+    if (!INLINE_IMAGE.test(trimmed)) {
+      return live;
+    }
+    const image = $createInlineImageNode(trimmed, live.getFormat());
+    live.replace(image);
+    return image;
+  },
+};
+
+const HEADING_ATTRIBUTE = /^\s+\{[^{}\n]*\}$/;
+
+const headingAttributeAdapter: RevealAdapter = {
+  id: "heading-attribute",
+  findSubject(selection) {
+    const attribute = findSelectedDecorator(selection, $isHeadingAttributeNode);
+    if (!attribute) {
+      return null;
+    }
+    return rawDecoratorSubject(attribute);
+  },
+  findSubjectFromNode(node, context) {
+    if (!$isHeadingAttributeNode(node)) {
+      return null;
+    }
+    return rawDecoratorSubject(node, context);
+  },
+  reparse(live, raw) {
+    if (!HEADING_ATTRIBUTE.test(raw)) {
+      return live;
+    }
+    const attribute = $createHeadingAttributeNode(raw);
+    live.replace(attribute);
+    return attribute;
   },
 };
 
@@ -426,7 +491,11 @@ const footnoteReferenceAdapter: RevealAdapter = {
 };
 
 function rawDecoratorSubject(
-  node: FootnoteReferenceNode | ReferenceNode,
+  node:
+    | FootnoteReferenceNode
+    | HeadingAttributeNode
+    | InlineImageNode
+    | ReferenceNode,
   context?: RevealEntryContext,
 ): RevealSubject {
   const source = node.getRaw();
@@ -436,7 +505,7 @@ function rawDecoratorSubject(
   return { caretOffset, node, source };
 }
 
-// ─── Paragraph (block-scope) adapter ────────────────────────────────────
+// ─── Raw block / paragraph-scope adapters ───────────────────────────────
 
 /**
  * Top-level block kinds we surface as raw markdown source. Most
@@ -547,33 +616,49 @@ const paragraphAdapter: RevealAdapter = {
     return { node, source };
   },
   reparse(live, raw) {
-    // For paragraph scope the live node is the placeholder TextNode
-    // inside the wrapper paragraph that openInlineReveal swapped in for
-    // the original block. Splice the parsed block(s) in before the
-    // wrapper, then drop the wrapper.
-    const wrapper = live.getTopLevelElement();
-    if (!wrapper) {
-      return live;
-    }
-    const blocks = parseMarkdownFragmentToJSON(raw);
-    if (blocks.length === 0) {
-      const empty = $createParagraphNode();
-      wrapper.replace(empty);
-      return empty;
-    }
-    const nodes = $generateNodesFromSerializedNodes([...blocks]);
-    if (nodes.length === 0) {
-      const empty = $createParagraphNode();
-      wrapper.replace(empty);
-      return empty;
-    }
-    for (const node of nodes) {
-      wrapper.insertBefore(node);
-    }
-    wrapper.remove();
-    return nodes[0];
+    return reparseBlockReveal(live, raw);
   },
 };
+
+const rawBlockAdapter: RevealAdapter = {
+  id: "raw-block",
+  findSubject() {
+    return null;
+  },
+  findSubjectFromNode() {
+    return null;
+  },
+  reparse(live, raw) {
+    return reparseBlockReveal(live, raw);
+  },
+};
+
+function reparseBlockReveal(live: TextNode, raw: string): LexicalNode {
+  // The live node is the placeholder TextNode inside the wrapper paragraph
+  // that openInlineReveal swapped in for the original block. Splice parsed
+  // block(s) in before the wrapper, then drop the wrapper.
+  const wrapper = live.getTopLevelElement();
+  if (!wrapper) {
+    return live;
+  }
+  const blocks = parseMarkdownFragmentToJSON(raw);
+  if (blocks.length === 0) {
+    const empty = $createParagraphNode();
+    wrapper.replace(empty);
+    return empty;
+  }
+  const nodes = $generateNodesFromSerializedNodes([...blocks]);
+  if (nodes.length === 0) {
+    const empty = $createParagraphNode();
+    wrapper.replace(empty);
+    return empty;
+  }
+  for (const node of nodes) {
+    wrapper.insertBefore(node);
+  }
+  wrapper.remove();
+  return nodes[0];
+}
 
 // ─── Registry ───────────────────────────────────────────────────────────
 
@@ -584,8 +669,11 @@ const paragraphAdapter: RevealAdapter = {
  */
 export const REVEAL_ADAPTERS: readonly RevealAdapter[] = [
   inlineMathAdapter,
+  inlineImageAdapter,
   referenceAdapter,
   footnoteReferenceAdapter,
+  headingAttributeAdapter,
+  rawBlockAdapter,
   linkAdapter,
   textFormatAdapter,
 ];

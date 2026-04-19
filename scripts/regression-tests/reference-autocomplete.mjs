@@ -17,7 +17,13 @@ async function placeVisibleCaretAtEnd(page) {
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
     let lastTextNode = null;
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if ((node.textContent?.length ?? 0) > 0) {
+      const parent = node.parentElement;
+      if (!(parent instanceof HTMLElement)) {
+        continue;
+      }
+      const owningEditable = parent.closest("[contenteditable='true']");
+      const insideDecorator = Boolean(parent.closest("[contenteditable='false']"));
+      if (owningEditable === editor && !insideDecorator && (node.textContent?.length ?? 0) > 0) {
         lastTextNode = node;
       }
     }
@@ -120,14 +126,14 @@ export async function run(page) {
 
   await pickCompletionOption(page, "thm:hover-preview");
   const afterBracketed = await readEditorText(page);
-  if (!afterBracketed.includes("Bracketed [@thm:hover-preview")) {
+  if (!afterBracketed.includes("Bracketed [@thm:hover-preview]")) {
     return {
       pass: false,
-      message: "bracketed autocomplete did not insert the selected cross-reference id",
+      message: "bracketed autocomplete did not insert a closed selected cross-reference id",
     };
   }
 
-  await page.keyboard.type("] and narrative @");
+  await page.keyboard.type(" and narrative @");
   await waitForReferenceCompletion(page);
 
   const narrativeOptions = await readCompletionOptions(page);
@@ -147,23 +153,22 @@ export async function run(page) {
     };
   }
 
-  const citationCountBeforeManual = await page.evaluate(() =>
-    document.querySelectorAll("[data-coflat-citation='true']").length
-  );
   await page.keyboard.type(" and manual [@cormen2009]");
   await page.waitForFunction(
-    (previousCount) =>
-      document.querySelectorAll("[data-coflat-citation='true']").length > previousCount,
-    citationCountBeforeManual,
+    () =>
+      [...document.querySelectorAll("[data-coflat-citation='true']")].some((citation) =>
+        citation.closest("p, li, td")?.textContent?.includes("manual")),
+    undefined,
     { timeout: 5000 },
   ).catch(() => {});
   const afterManual = await readEditorText(page);
-  const citationCountAfterManual = await page.evaluate(() =>
-    document.querySelectorAll("[data-coflat-citation='true']").length
+  const manualCitationRendered = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-coflat-citation='true']")].some((citation) =>
+      citation.closest("p, li, td")?.textContent?.includes("manual"))
   );
   if (
     !afterManual.includes("manual [@cormen2009]")
-    || citationCountAfterManual <= citationCountBeforeManual
+    || !manualCitationRendered
   ) {
     return {
       pass: false,

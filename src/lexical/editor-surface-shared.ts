@@ -4,10 +4,16 @@ import type { MouseEvent as ReactMouseEvent, MutableRefObject } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { FORMAT_TEXT_COMMAND } from "lexical";
 
-import { useEditorScrollSurface } from "../lexical-next";
+import { getInlineTextFormatSpec, useEditorScrollSurface } from "../lexical-next";
 import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import { COFLAT_FORMAT_EVENT_TAG } from "./update-tags";
+import {
+  $readSourceTextSelectionFromLexicalRoot,
+  readSourceTextFromLexicalRoot,
+  selectSourceOffsetsInLexicalRoot,
+  writeSourceTextToLexicalRoot,
+} from "./source-text";
 
 /**
  * Pure helpers and shared plugins for the rich/source markdown editor
@@ -252,6 +258,73 @@ function editorOwnsActiveSelection(root: HTMLElement | null): boolean {
     && (activeElement === root || root.contains(activeElement));
 }
 
+function isSourceEditorRoot(root: HTMLElement | null): boolean {
+  return root?.classList.contains("cf-lexical-editor--source") ?? false;
+}
+
+function sourceDomOffset(root: HTMLElement, target: Node, targetOffset: number): number | null {
+  let offset = 0;
+  for (const [paragraphIndex, paragraph] of [...root.childNodes].entries()) {
+    const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node === target) {
+        return offset + Math.max(0, Math.min(targetOffset, node.textContent?.length ?? 0));
+      }
+      offset += node.textContent?.length ?? 0;
+    }
+    if (target === paragraph) {
+      return offset;
+    }
+    if (paragraphIndex < root.childNodes.length - 1) {
+      offset += 1;
+    }
+  }
+  return null;
+}
+
+function readSourceDomSelection(root: HTMLElement): MarkdownEditorSelection | null {
+  const selection = window.getSelection();
+  const { anchorNode, focusNode } = selection ?? {};
+  if (!selection || !anchorNode || !focusNode || !root.contains(anchorNode) || !root.contains(focusNode)) {
+    return null;
+  }
+  const anchor = sourceDomOffset(root, anchorNode, selection.anchorOffset);
+  const focus = sourceDomOffset(root, focusNode, selection.focusOffset);
+  if (anchor === null || focus === null) {
+    return null;
+  }
+  return {
+    anchor,
+    focus,
+    from: Math.min(anchor, focus),
+    to: Math.max(anchor, focus),
+  };
+}
+
+function applySourceFormat(
+  detail: Extract<FormatEventDetail, { type: "bold" | "code" | "highlight" | "italic" | "strikethrough" }>,
+  domSelection: MarkdownEditorSelection | null,
+): void {
+  const selection = domSelection ?? $readSourceTextSelectionFromLexicalRoot();
+  if (selection.from === selection.to) {
+    return;
+  }
+
+  const spec = getInlineTextFormatSpec(detail.type);
+  const text = readSourceTextFromLexicalRoot();
+  const selected = text.slice(selection.from, selection.to);
+  const nextText = [
+    text.slice(0, selection.from),
+    spec.markdownOpen,
+    selected,
+    spec.markdownClose,
+    text.slice(selection.to),
+  ].join("");
+  const nextAnchor = selection.from + spec.markdownOpen.length + selected.length + spec.markdownClose.length;
+  writeSourceTextToLexicalRoot(nextText);
+  selectSourceOffsetsInLexicalRoot(nextAnchor, nextAnchor);
+}
+
 export function FormatEventPlugin(): null {
   const [editor] = useLexicalComposerContext();
 
@@ -266,13 +339,22 @@ export function FormatEventPlugin(): null {
       if (!editorOwnsActiveSelection(root)) {
         return;
       }
+      if (!root) {
+        return;
+      }
 
       editor.update(() => {
+        if (isSourceEditorRoot(root)) {
+          const domSelection = readSourceDomSelection(root);
+          applySourceFormat(detail, domSelection);
+          return;
+        }
         editor.dispatchCommand(FORMAT_TEXT_COMMAND, detail.type);
       }, {
         discrete: true,
         tag: COFLAT_FORMAT_EVENT_TAG,
       });
+      event.stopImmediatePropagation();
     };
 
     document.addEventListener(FORMAT_EVENT, handleFormat);

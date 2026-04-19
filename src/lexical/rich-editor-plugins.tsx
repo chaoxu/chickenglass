@@ -249,10 +249,6 @@ export function EditorHandlePlugin({
       return;
     }
 
-    const flushPendingEdits = () => {
-      embeddedFieldFlushRegistry?.flush();
-    };
-
     const readDocumentSnapshot = () => getLexicalMarkdown(editor);
 
     const readSelectionSnapshot = () => {
@@ -266,6 +262,13 @@ export function EditorHandlePlugin({
       }
       selectionRef.current = liveSelection;
       return liveSelection;
+    };
+
+    const flushPendingEdits = () => {
+      const selection = readSelectionSnapshot();
+      embeddedFieldFlushRegistry?.flush();
+      selectionRef.current = selection;
+      onSelectionChange?.(selection);
     };
 
     const readFreshDocument = () => {
@@ -307,10 +310,7 @@ export function EditorHandlePlugin({
       },
       flushPendingEdits,
       getDoc: readFreshDocument,
-      getSelection: () => {
-        flushPendingEdits();
-        return readSelectionSnapshot();
-      },
+      getSelection: readSelectionSnapshot,
       peekDoc: readDocumentSnapshot,
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {

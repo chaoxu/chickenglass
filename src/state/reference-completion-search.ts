@@ -13,7 +13,7 @@ export interface ReferenceCompletionMatch {
 
 export function applyBracketedReferenceCompletion(raw: string, nextId: string): string {
   if (!raw.startsWith("[")) {
-    return `[@${nextId}`;
+    return `[@${nextId}]`;
   }
 
   const body = raw.slice(1);
@@ -25,7 +25,7 @@ export function applyBracketedReferenceCompletion(raw: string, nextId: string): 
     return raw;
   }
 
-  return `[${prefix}${activeMatch[1]}${nextId}`;
+  return `[${prefix}${activeMatch[1]}${nextId}]`;
 }
 
 function findBracketedReferenceCompletionMatch(text: string): ReferenceCompletionMatch | null {

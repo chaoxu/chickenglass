@@ -104,6 +104,30 @@ describe("coflat lexical markdown", () => {
     expect(getLexicalMarkdown(editor)).toBe(markdown);
   });
 
+  it("keeps a blank line between an exited list and following paragraph", () => {
+    const markdown = [
+      "- one",
+      "- two",
+      "",
+      "after",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("does not inject list separators inside fenced code blocks", () => {
+    const markdown = [
+      "```",
+      "- not a list item",
+      "next code line",
+      "```",
+      "",
+      "after",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
   it("tokenizes fenced code blocks into highlighted code nodes", () => {
     const editor = createHeadlessCoflatEditor();
     const unregister = registerCodeHighlighting(editor);

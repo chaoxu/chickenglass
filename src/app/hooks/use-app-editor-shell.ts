@@ -2,8 +2,12 @@ import { useState, useCallback, useMemo, useRef } from "react";
 
 import type { LexicalEditor } from "lexical";
 
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import type {
+  MarkdownEditorHandle,
+  MarkdownEditorSelection,
+} from "../../lexical/markdown-editor-types";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
+import { createMinimalEditorDocumentChanges } from "../../lib/editor-doc-change";
 import { type DiagnosticEntry } from "../diagnostics";
 import { useDiagnostics } from "../../state/diagnostics-store";
 import { type HeadingEntry } from "../heading-ancestry";
@@ -19,6 +23,11 @@ interface PendingModeOverride {
   readonly path: string;
   readonly mode: EditorMode;
   readonly requestId: number;
+}
+
+interface PendingEditorFlushResult {
+  readonly selection: MarkdownEditorSelection | null;
+  readonly shouldDeferModeSwitch: boolean;
 }
 
 async function pickImageAsDataUrl(): Promise<string | null> {
@@ -104,6 +113,7 @@ export function useAppEditorShell({
   const {
     currentDocument,
     currentPath,
+    editorDoc,
     activeDocumentSignal,
     getCurrentDocText,
     openFile,
@@ -115,12 +125,40 @@ export function useAppEditorShell({
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
   const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
+  const currentPathRef = useRef<string | undefined>(currentPath);
+  const selectionRestoreRequestIdRef = useRef(0);
+  currentPathRef.current = currentPath;
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const diagnostics = useDiagnostics((s) => s.diagnostics);
 
-  const flushPendingEditorEdits = useCallback(() => {
-    editorHandleRef.current?.flushPendingEdits();
-  }, []);
+  const flushPendingEditorEdits = useCallback((): PendingEditorFlushResult => {
+    const handle = editorHandleRef.current;
+    if (!handle || !currentPath) {
+      return {
+        selection: null,
+        shouldDeferModeSwitch: false,
+      };
+    }
+
+    // Capture source-position intent before committing reveal/nested editors;
+    // after commit the live Lexical selection may sit on the replacement node.
+    const selection = handle.getSelection();
+    handle.flushPendingEdits();
+    const freshDoc = handle.peekDoc();
+    const currentDoc = getCurrentDocText();
+    const changes = createMinimalEditorDocumentChanges(currentDoc, freshDoc);
+    if (changes.length > 0) {
+      session.handleDocChange(changes);
+      return {
+        selection,
+        shouldDeferModeSwitch: true,
+      };
+    }
+    return {
+      selection,
+      shouldDeferModeSwitch: freshDoc !== editorDoc,
+    };
+  }, [currentPath, editorDoc, getCurrentDocText, session]);
 
   const getFreshCurrentDocText = useCallback(() => {
     flushPendingEditorEdits();
@@ -190,17 +228,45 @@ export function useAppEditorShell({
   }, [currentPath, isMarkdownFile, modeOverrides, pendingModeOverride, settings.editorMode]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
+    const flushResult = flushPendingEditorEdits();
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
-    if (currentPath) {
-      setModeOverrides((previous) => ({
-        ...previous,
-        [currentPath]: normalizedMode,
-      }));
+    const path = currentPath;
+    const requestingHandle = editorHandleRef.current;
+    const restoreRequestId = ++selectionRestoreRequestIdRef.current;
+    const applyModeOverride = () => {
+      if (path) {
+        setModeOverrides((previous) => ({
+          ...previous,
+          [path]: normalizedMode,
+        }));
+      }
+      setPendingModeOverride((previous) =>
+        previous?.path === path ? null : previous,
+      );
+      const selection = flushResult.selection;
+      if (selection) {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(() => {
+            if (
+              currentPathRef.current !== path
+              || selectionRestoreRequestIdRef.current !== restoreRequestId
+              || editorHandleRef.current !== requestingHandle
+            ) {
+              return;
+            }
+            requestingHandle?.setSelection(selection.anchor, selection.focus, {
+              skipScrollIntoView: true,
+            });
+          }, 0);
+        });
+      }
+    };
+    if (flushResult.shouldDeferModeSwitch) {
+      window.setTimeout(applyModeOverride, 0);
+    } else {
+      applyModeOverride();
     }
-    setPendingModeOverride((previous) =>
-      previous?.path === currentPath ? null : previous,
-    );
-  }, [currentPath, isMarkdownFile]);
+  }, [currentPath, flushPendingEditorEdits, isMarkdownFile]);
 
   const handleSearchResult = useCallback((
     target: SearchNavigationTarget,
@@ -220,22 +286,24 @@ export function useAppEditorShell({
       { focusSelection: normalizedMode === "source" },
       onComplete,
     ).then((opened) => {
-      setPendingModeOverride((previous) => {
-        if (!previous || previous.requestId !== requestId) {
-          return previous;
+      window.setTimeout(() => {
+        setPendingModeOverride((previous) => {
+          if (!previous || previous.requestId !== requestId) {
+            return previous;
+          }
+          return null;
+        });
+        if (!opened) {
+          return;
         }
-        return null;
-      });
-      if (!opened) {
-        return;
-      }
-      setModeOverrides((previous) => ({
-        ...previous,
-        [target.file]: normalizedMode,
-      }));
-      if (normalizedMode === "lexical") {
-        dispatchNavigateSourcePositionEvent(target.pos);
-      }
+        setModeOverrides((previous) => ({
+          ...previous,
+          [target.file]: normalizedMode,
+        }));
+        if (normalizedMode === "lexical") {
+          dispatchNavigateSourcePositionEvent(target.pos);
+        }
+      }, 0);
     });
   }, [handleSearchResultNavigation]);
 

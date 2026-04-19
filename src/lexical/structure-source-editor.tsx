@@ -16,6 +16,7 @@ import {
 } from "react";
 
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
+import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 import { consumePendingSurfaceFocus } from "./pending-surface-focus";
 
@@ -52,6 +53,7 @@ interface StructureSourceEditorProps {
   readonly namespace: string;
   readonly onChange: (nextValue: string) => void;
   readonly onClose: () => void;
+  readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly pendingFocusId?: string;
 }
 
@@ -62,6 +64,7 @@ export function StructureSourceEditor({
   namespace,
   onChange,
   onClose,
+  onSelectionChange,
   pendingFocusId,
 }: StructureSourceEditorProps) {
   const [draft, setDraft] = useState(() => doc);
@@ -152,6 +155,7 @@ export function StructureSourceEditor({
       }}
       onFocus={focusEditor}
       onKeyDown={handleKeyDown}
+      onSelectionChange={onSelectionChange}
       onTextChange={(nextValue) => {
         setDraft(nextValue);
         onChange(nextValue);

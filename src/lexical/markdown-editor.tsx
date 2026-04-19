@@ -342,7 +342,9 @@ function MarkdownModeSyncPlugin({
     // (YAML frontmatter, some heading markers, bullet lists) and the re-
     // serialization silently destroyed large fractions of the document on
     // rich → source → rich round-trips (issue #99).
-    const nextDoc = doc;
+    const nextDoc = pendingLocalEchoDoc !== null && modeChanged
+      ? pendingLocalEchoDoc
+      : doc;
     const nextSelection = createMarkdownSelection(
       selectionRef.current.anchor,
       selectionRef.current.focus,
@@ -371,15 +373,25 @@ function MarkdownModeSyncPlugin({
       if (cancelled) {
         return;
       }
+      const selectionToApply = createMarkdownSelection(
+        selectionRef.current.anchor,
+        selectionRef.current.focus,
+        nextDoc.length,
+      );
+      selectionRef.current = selectionToApply;
       if (editorMode === "source") {
-        replaceSourceText(editor, nextDoc, nextSelection, syncOptions);
+        replaceSourceText(editor, nextDoc, selectionToApply, syncOptions);
       } else {
         setLexicalMarkdown(editor, nextDoc, syncOptions);
         selectSourceOffsetsInRichLexicalRoot(
           editor,
           nextDoc,
-          nextSelection.anchor,
-          nextSelection.focus,
+          selectionToApply.anchor,
+          selectionToApply.focus,
+          {
+            revealRawBlockAtBoundary: false,
+            revealRawBlocks: false,
+          },
         );
       }
     });
@@ -416,10 +428,6 @@ function EditorHandlePlugin({
       return;
     }
 
-    const flushPendingEdits = () => {
-      embeddedFieldFlushRegistry?.flush();
-    };
-
     const readDocumentSnapshot = () => readEditorDocument(editor, editorModeRef.current);
 
     const readSelectionSnapshot = () => {
@@ -442,6 +450,13 @@ function EditorHandlePlugin({
 
       selectionRef.current = liveSelection;
       return liveSelection;
+    };
+
+    const flushPendingEdits = () => {
+      const selection = readSelectionSnapshot();
+      embeddedFieldFlushRegistry?.flush();
+      selectionRef.current = selection;
+      onSelectionChange?.(selection);
     };
 
     const readFreshDocument = () => {
@@ -491,10 +506,7 @@ function EditorHandlePlugin({
       },
       flushPendingEdits,
       getDoc: readFreshDocument,
-      getSelection: () => {
-        flushPendingEdits();
-        return readSelectionSnapshot();
-      },
+      getSelection: readSelectionSnapshot,
       peekDoc: readDocumentSnapshot,
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {
@@ -658,6 +670,7 @@ export function LexicalMarkdownEditor({
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
   const selectionAlwaysOn = useDevSettings((s) => s.selectionAlwaysOn);
   const isSourceMode = editorMode === "source";
+  editorModeRef.current = editorMode;
   const focusOwner = useMemo(
     () => focusSurface(
       focusOwnerRole ?? (isSourceMode ? "source-surface" : "rich-surface"),
@@ -797,6 +810,7 @@ export function LexicalMarkdownEditor({
               <StructureEditProvider>
                 <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
                 <EditableSyncPlugin editable={editable} />
+                {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
                 <EditorHandlePlugin
                   editorModeRef={editorModeRef}
                   focusOwnerRef={focusOwnerRef}
@@ -909,8 +923,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode && editable ? <ListMarkerStripPlugin /> : null}
                 {!isSourceMode ? <LinkPlugin /> : null}
                 {!isSourceMode && editable ? <TabKeyPlugin /> : null}
-                {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
-                {!isSourceMode && editable ? <FormatEventPlugin /> : null}
+                {editable ? <FormatEventPlugin /> : null}
                 {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}
                 {!isSourceMode && editable ? <BlockKeyboardAccessPlugin /> : null}
                 {!isSourceMode && editable ? <ReferenceTypeaheadPlugin /> : null}

@@ -3,6 +3,13 @@ import { useRef, useEffect, useCallback } from "react";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { getOffsetForLineAndColumn } from "../markdown/text-lines";
 
+function completeNavigation(onComplete: (() => void) | undefined): void {
+  if (!onComplete) {
+    return;
+  }
+  window.setTimeout(onComplete, 0);
+}
+
 export interface EditorNavigationDeps {
   readonly openFile: (path: string) => Promise<void>;
   readonly isPathOpen: (path: string) => boolean;
@@ -118,18 +125,18 @@ export function useEditorNavigation({
     try {
       await openFile(file);
       if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
-        onComplete?.();
+        completeNavigation(onComplete);
         return false;
       }
 
       const didBecomeReady = await waitForEditorDocumentReady(file);
       if (!didBecomeReady) {
-        onComplete?.();
+        completeNavigation(onComplete);
         return isPathOpen(file);
       }
 
       if (requestId !== searchRequestRef.current || !isPathOpen(file)) {
-        onComplete?.();
+        completeNavigation(onComplete);
         return false;
       }
 
@@ -138,7 +145,7 @@ export function useEditorNavigation({
         handle.setSelection(pos);
         handle.focus();
       }
-      onComplete?.();
+      completeNavigation(onComplete);
       return true;
     } catch (error: unknown) {
       console.error("[editor] handleSearchResult: failed to open file", file, error);

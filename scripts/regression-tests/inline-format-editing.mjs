@@ -17,6 +17,7 @@ import {
   formatRuntimeIssues,
   openRegressionDocument,
   readEditorText,
+  setRevealPresentation,
   withRuntimeIssueCapture,
 } from "../test-helpers.mjs";
 
@@ -31,37 +32,15 @@ const TOKEN_PROBES = [
 ];
 
 async function placeCaretInsideToken(page, selector, text) {
-  return page.evaluate(({ nextSelector, nextText }) => {
-    const token = [...document.querySelectorAll(nextSelector)].find((candidate) =>
-      (candidate.textContent ?? "").includes(nextText)
-    );
-    if (!(token instanceof HTMLElement)) {
-      return false;
-    }
-    const walker = document.createTreeWalker(token, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
-    while (node) {
-      const value = node.textContent ?? "";
-      const idx = value.indexOf(nextText);
-      if (idx >= 0) {
-        const range = document.createRange();
-        range.setStart(node, idx + Math.floor(nextText.length / 2));
-        range.collapse(true);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-        const root = token.closest("[contenteditable='true']");
-        if (root instanceof HTMLElement) {
-          root.focus();
-        }
-        token.dispatchEvent(new Event("selectionchange", { bubbles: true }));
-        document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
-        return true;
-      }
-      node = walker.nextNode();
-    }
+  const token = page.locator(selector).filter({ hasText: text }).first();
+  await token.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+  await token.scrollIntoViewIfNeeded().catch(() => {});
+  const box = await token.boundingBox();
+  if (!box) {
     return false;
-  }, { nextSelector: selector, nextText: text });
+  }
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  return true;
 }
 
 async function moveCaretToStart(page) {
@@ -83,6 +62,7 @@ async function moveCaretToStart(page) {
 }
 
 export async function run(page) {
+  await setRevealPresentation(page, "inline");
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
 
   const { issues, value } = await withRuntimeIssueCapture(page, async () => {
