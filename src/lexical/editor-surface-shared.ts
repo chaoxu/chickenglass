@@ -81,12 +81,16 @@ function getCaretRangeFromPoint(
 }
 
 export function repairBlankClickSelection(root: HTMLElement, event: ReactMouseEvent): void {
-  if (hasEditableTextSelection(root)) {
+  const selection = window.getSelection();
+  if (!selection) {
     return;
   }
 
-  const selection = window.getSelection();
-  if (!selection) {
+  if (!selection.isCollapsed) {
+    return;
+  }
+
+  if (hasEditableTextSelection(root)) {
     return;
   }
 

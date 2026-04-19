@@ -13,6 +13,7 @@ import {
   roundTripMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { $isHeadingAttributeNode } from "./nodes/heading-attribute-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $isTableNode } from "./nodes/table-node";
 
@@ -58,6 +59,25 @@ describe("coflat lexical markdown", () => {
     ].join("\n");
 
     expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("keeps Pandoc heading attributes as source-owned heading chrome", () => {
+    const editor = createHeadlessCoflatEditor();
+    const markdown = "# Intro {#sec:intro}";
+
+    setLexicalMarkdown(editor, markdown);
+
+    const headingAttributeRaw = editor.getEditorState().read(() => {
+      const heading = $getRoot().getFirstChild();
+      if (!$isElementNode(heading)) {
+        return null;
+      }
+      const suffix = heading.getLastChild();
+      return $isHeadingAttributeNode(suffix) ? suffix.getRaw() : null;
+    });
+
+    expect(headingAttributeRaw).toBe(" {#sec:intro}");
+    expect(getLexicalMarkdown(editor)).toBe(markdown);
   });
 
   it("syncs markdown through a reusable editor instance", () => {

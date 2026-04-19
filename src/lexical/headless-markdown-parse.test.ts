@@ -57,6 +57,13 @@ describe("serializeBlockToMarkdown", () => {
     expect(markdown.trim()).toBe("## A heading");
   });
 
+  it("round-trips a heading with Pandoc attributes", () => {
+    const [block] = parseMarkdownFragmentToJSON("## A heading {#sec:a-heading}");
+    expect(block).toBeDefined();
+    const markdown = serializeBlockToMarkdown(block);
+    expect(markdown.trim()).toBe("## A heading {#sec:a-heading}");
+  });
+
   it("round-trips a quote", () => {
     const [block] = parseMarkdownFragmentToJSON("> a quote");
     expect(block).toBeDefined();

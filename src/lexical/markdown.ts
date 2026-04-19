@@ -14,7 +14,7 @@ import {
   $convertToMarkdownString,
   TRANSFORMERS,
 } from "@lexical/markdown";
-import { HeadingNode, QuoteNode } from "@lexical/rich-text";
+import { $isHeadingNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
   type EditorUpdateOptions,
   type EditorThemeClasses,
@@ -37,6 +37,11 @@ import {
   $isFootnoteReferenceNode,
   FootnoteReferenceNode,
 } from "./nodes/footnote-reference-node";
+import {
+  $createHeadingAttributeNode,
+  $isHeadingAttributeNode,
+  HeadingAttributeNode,
+} from "./nodes/heading-attribute-node";
 import { $createInlineMathNode, $isInlineMathNode, InlineMathNode } from "./nodes/inline-math-node";
 import { $createReferenceNode, $isReferenceNode, ReferenceNode } from "./nodes/reference-node";
 import { $createRawBlockNode, $isRawBlockNode, type RawBlockVariant, RawBlockNode } from "./nodes/raw-block-node";
@@ -71,6 +76,7 @@ const NARRATIVE_REFERENCE_IMPORT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)/;
 const NARRATIVE_REFERENCE_SHORTCUT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)$/;
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
+const HEADING_ATTRIBUTE_IMPORT = /\s+\{[^{}\n]*\}$/;
 
 function joinRawLines(lines: readonly string[], startLineIndex: number, endLineIndex: number): string {
   return lines.slice(startLineIndex, endLineIndex + 1).join("\n");
@@ -294,6 +300,38 @@ const footnoteReferenceTransformer = createInlineTokenTransformer(
   FOOTNOTE_REFERENCE_SHORTCUT,
 );
 
+function isTrailingHeadingTextNode(node: TextNode): boolean {
+  const parent = node.getParent();
+  if (!$isHeadingNode(parent)) {
+    return false;
+  }
+  let sibling = node.getNextSibling();
+  while (sibling) {
+    if (sibling.getTextContent().length > 0) {
+      return false;
+    }
+    sibling = sibling.getNextSibling();
+  }
+  return true;
+}
+
+const headingAttributeTransformer: TextMatchTransformer = {
+  dependencies: [HeadingAttributeNode],
+  export(node) {
+    return $isHeadingAttributeNode(node) ? node.getRaw() : null;
+  },
+  importRegExp: HEADING_ATTRIBUTE_IMPORT,
+  regExp: HEADING_ATTRIBUTE_IMPORT,
+  replace(node, match) {
+    if (!isTrailingHeadingTextNode(node)) {
+      return;
+    }
+    node.replace($createHeadingAttributeNode(match[0]));
+  },
+  trigger: "}",
+  type: "text-match",
+};
+
 const tableCellMarkdownTransformers = [
   ...TEXT_FORMAT_TRANSFORMERS,
   inlineMathDollarTransformer,
@@ -325,6 +363,7 @@ export const coflatMarkdownNodes = [
   InlineImageNode,
   ReferenceNode,
   FootnoteReferenceNode,
+  HeadingAttributeNode,
   RawBlockNode,
   TableNode,
   TableRowNode,
@@ -377,6 +416,7 @@ export const coflatMarkdownTransformers = [
   bracketedReferenceTransformer,
   footnoteReferenceTransformer,
   narrativeReferenceTransformer,
+  headingAttributeTransformer,
   ...TRANSFORMERS,
   CHECK_LIST,
 ];

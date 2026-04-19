@@ -31,6 +31,30 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
+  it("hides trailing label syntax from fenced div title fields while preserving source", () => {
+    const parsed = parseStructuredFencedDivRaw([
+      "::: {.theorem} Pythagoras {#thm:pythagoras}",
+      "Body",
+      ":::",
+    ].join("\n"));
+
+    expect(parsed).toMatchObject({
+      blockType: "theorem",
+      id: "thm:pythagoras",
+      title: "Pythagoras",
+      titleLabelSuffix: "{#thm:pythagoras}",
+      titleMarkdown: "Pythagoras",
+      titleKind: "trailing",
+    });
+    expect(serializeFencedDivRaw(parsed, {
+      titleMarkdown: "Updated",
+    })).toBe([
+      "::: {.theorem} Updated {#thm:pythagoras}",
+      "Body",
+      ":::",
+    ].join("\n"));
+  });
+
   it("parses and serializes structured display math", () => {
     const parsed = parseStructuredDisplayMathRaw([
       "$$",

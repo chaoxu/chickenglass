@@ -433,6 +433,10 @@
   line-height: 1.3;
 }
 
+.cf-heading-attribute-token {
+  display: none;
+}
+
 .cf-lexical-heading--h1 {
   margin: 1.5em 0 0.5em;
   font-size: var(--cf-h1-size, 1.15em);

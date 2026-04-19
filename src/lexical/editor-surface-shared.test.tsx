@@ -116,4 +116,33 @@ describe("repairBlankClickSelection", () => {
 
     expectSelectionToMatch(createCollapsedRange(text, 3));
   });
+
+  it("preserves an existing range selection", () => {
+    const root = document.createElement("div");
+    const paragraph = document.createElement("p");
+    const text = document.createTextNode("Selectable text");
+    paragraph.append(text);
+    root.append(paragraph);
+    document.body.append(root);
+
+    const selectedRange = document.createRange();
+    selectedRange.setStart(text, 0);
+    selectedRange.setEnd(text, 10);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRange);
+
+    setDocumentCaretApis({
+      caretRangeFromPoint: undefined,
+      caretPositionFromPoint: () => ({
+        getClientRect: () => null,
+        offset: 3,
+        offsetNode: text,
+      } as CaretPosition),
+    });
+
+    repairBlankClickSelection(root, createMouseEvent(24, 10));
+
+    expectSelectionToMatch(selectedRange);
+  });
 });

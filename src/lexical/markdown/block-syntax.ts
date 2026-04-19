@@ -17,6 +17,7 @@ export interface ParsedFencedDivBlock extends FencedDivInfo {
   readonly bodyMarkdown: string;
   readonly closingFence: string;
   readonly fence: string;
+  readonly titleLabelSuffix?: string;
   readonly titleMarkdown?: string;
   readonly titleKind: "attribute" | "implicit" | "none" | "trailing";
 }
@@ -36,6 +37,22 @@ export interface ParsedDisplayMathBlock extends DisplayMathInfo {
 export type SpecialBlockRange = SourceBlockRange & {
   readonly variant: "display-math" | "fenced-div";
 };
+
+function splitTrailingTitleLabel(title: string): {
+  readonly id?: string;
+  readonly labelSuffix?: string;
+  readonly title: string;
+} {
+  const match = title.match(/\s+(\{#([A-Za-z0-9_][\w.:-]*)\})\s*$/);
+  if (!match) {
+    return { title };
+  }
+  return {
+    id: match[2],
+    labelSuffix: match[1],
+    title: title.slice(0, match.index).trimEnd(),
+  };
+}
 
 export function parseDisplayMathRaw(raw: string): DisplayMathInfo {
   const lines = raw.split("\n");
@@ -90,10 +107,12 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
 
   const attrsEnd = header.indexOf("}");
   const attrs = attrsEnd >= 0 ? header.slice(0, attrsEnd + 1) : header;
-  const trailingTitle = attrsEnd >= 0 ? header.slice(attrsEnd + 1).trim() : "";
+  const trailingTitleRaw = attrsEnd >= 0 ? header.slice(attrsEnd + 1).trim() : "";
+  const trailing = splitTrailingTitleLabel(trailingTitleRaw);
+  const trailingTitle = trailing.title;
   const titleAttrMatch = attrs.match(/\btitle=(?:"([^"]*)"|'([^']*)')/);
   const classes = [...attrs.matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]);
-  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1];
+  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1] ?? trailing.id;
 
   return {
     attrsRaw: attrs,
@@ -104,8 +123,9 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
     fence,
     id,
     title: titleAttrMatch?.[1] || titleAttrMatch?.[2] || trailingTitle || undefined,
+    titleLabelSuffix: trailing.labelSuffix,
     titleMarkdown: trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined,
-    titleKind: trailingTitle
+    titleKind: trailingTitle || trailing.labelSuffix
       ? "trailing"
       : titleAttrMatch
         ? "attribute"
@@ -128,8 +148,11 @@ export function serializeFencedDivRaw(
         `title=${JSON.stringify(titleMarkdown)}`,
       )
     : parsed.attrsRaw;
+  const trailingTitle = parsed.titleKind === "trailing" && (titleMarkdown || parsed.titleLabelSuffix)
+    ? `${titleMarkdown}${titleMarkdown && parsed.titleLabelSuffix ? " " : ""}${parsed.titleLabelSuffix ?? ""}`
+    : "";
   const header = attrsRaw
-    ? `${attrsRaw}${parsed.titleKind === "trailing" && titleMarkdown ? ` ${titleMarkdown}` : ""}`
+    ? `${attrsRaw}${trailingTitle ? ` ${trailingTitle}` : ""}`
     : titleMarkdown || parsed.title || humanizeBlockType(parsed.blockType);
   return [
     `${parsed.fence}${header ? ` ${header}` : ""}`,
