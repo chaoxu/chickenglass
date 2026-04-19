@@ -37,7 +37,7 @@ Project-level config in `coflat.yaml` uses the same keys. File frontmatter overr
 
 ### Publisher metadata
 
-Fields consumed by the LaTeX export pipeline (e.g. LIPIcs, LNCS). The editor ignores unknown keys; exporters read them via `latex-ctx.json`.
+Fields consumed by the LaTeX export pipeline (e.g. LIPIcs, LNCS). The editor ignores unknown keys; exporters preserve supported metadata in frontmatter and pass it through the pre-pandoc pipeline.
 
 ```yaml
 ---
@@ -541,7 +541,7 @@ Three or more hyphens on a line. Must not be at the start of the document (where
 
 The LaTeX export pipeline (`scripts/export-latex.mjs`, `src/latex/`) emits a compilable `.tex` file from a Coflat markdown document. The stages are:
 
-1. **Resolve** — splice `::: {.include}` blocks, inline bibliography entries cited by the document, and extract the frontmatter into a `latex-ctx.json` sidecar.
+1. **Resolve** — splice `::: {.include}` blocks, preserve root frontmatter as pandoc metadata, and hoist supported export-only fields such as `math:` into pandoc-compatible metadata.
 2. **Lift inline titles** — any `::: {#id .class} Inline Title` opener is rewritten to `::: {#id .class title="Inline Title"}` so pandoc's `Div` node carries the title as an attribute.
 3. **Pandoc** — invoked as:
 
