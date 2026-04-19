@@ -43,6 +43,7 @@ export const BROWSER_TEST_GROUPS = {
     "cursor-reveal",
     "cursor-reveal-edge-cases",
     "inline-format-editing",
+    "inline-token-source-offsets",
     "math-editing",
     "paragraph-reveal",
     "reveal-no-trigger-after-markdown-transform",
