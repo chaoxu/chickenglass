@@ -12,6 +12,7 @@ import {
   sleep,
 } from "./shared.mjs";
 import { CORE_DEBUG_GLOBAL_NAMES } from "../../src/debug/debug-bridge-contract.js";
+import { assertAppUrl } from "../tooling/http.mjs";
 
 const browserCleanupByPage = new WeakMap();
 
@@ -41,27 +42,9 @@ export function normalizeConnectEditorOptions(portOrOptions = DEFAULT_PORT, opti
 
 export async function waitForAppUrl(
   url,
-  { timeout = 15000, intervalMs = 250 } = {},
+  options = {},
 ) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeout) {
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        redirect: "manual",
-      });
-      if (response.ok || response.status < 500) {
-        return;
-      }
-    } catch {
-      // Retry until the timeout expires.
-    }
-
-    await sleep(intervalMs);
-  }
-
-  throw new Error(`Timed out waiting for app URL ${url}`);
+  await assertAppUrl(url, options);
 }
 
 export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) {

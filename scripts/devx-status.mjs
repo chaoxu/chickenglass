@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import process from "node:process";
 
 import { formatLastVerifyStatus, readLastVerifyStatus } from "./devx-cache.mjs";
-import { waitForAppUrl } from "./dev-server.mjs";
+import { probeAppUrl } from "./tooling/http.mjs";
 import { fixtureStatus as catalogFixtureStatus } from "./tooling-fixtures.mjs";
 
 const OPTIONAL_FIXTURE_KEYS = [
@@ -68,7 +68,8 @@ export async function main() {
   const branch = tryRun("git", ["branch", "--show-current"]) ?? "<unknown>";
   const shortStatus = tryRun("git", ["status", "--short"]) ?? "";
   const upstream = tryRun("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]) ?? "<none>";
-  const devServer = await waitForAppUrl("http://localhost:5173", { timeout: 750 })
+  const devServerProbe = await probeAppUrl("http://localhost:5173", { timeout: 750 });
+  const devServer = devServerProbe.ok
     ? "reachable at http://localhost:5173"
     : "not reachable at http://localhost:5173";
 

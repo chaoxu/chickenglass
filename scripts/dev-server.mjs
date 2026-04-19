@@ -1,30 +1,16 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
+import {
+  assertAppUrl,
+  probeAppUrl,
+} from "./tooling/http.mjs";
 
 export async function waitForAppUrl(
   url,
-  { timeout = 15000, intervalMs = 250 } = {},
+  options = {},
 ) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeout) {
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        redirect: "manual",
-      });
-      if (response.ok || response.status < 500) {
-        return true;
-      }
-    } catch {
-      // Retry until timeout.
-    }
-
-    await sleep(intervalMs);
-  }
-
-  return false;
+  return (await probeAppUrl(url, options)).ok;
 }
 
 async function isPortAvailable(port) {
@@ -54,9 +40,7 @@ export async function startOrReuseDevServer({
   url,
 } = {}) {
   if (url) {
-    if (!(await waitForAppUrl(url, { timeout }))) {
-      throw new Error(`App URL is not reachable: ${url}`);
-    }
+    await assertAppUrl(url, { timeout });
     return {
       reused: true,
       url,
