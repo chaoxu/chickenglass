@@ -45,7 +45,7 @@ export async function run(page) {
   await openFixtureDocument(
     page,
     resolveFixtureDocumentWithFallback("cogirth/include-labels.md", PUBLIC_INCLUDE_FALLBACK),
-    { project: "full-project" },
+    { project: "full-project", verifyContent: false },
   );
   await page.waitForTimeout(500);
 

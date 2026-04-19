@@ -26,7 +26,10 @@ import {
   serializeFencedDivRaw,
 } from "../markdown/block-syntax";
 import { createFencedDivViewModel } from "../markdown/fenced-div-view-model";
-import { getPendingEmbeddedSurfaceFocusId } from "../pending-surface-focus";
+import {
+  getPendingEmbeddedSurfaceFocusId,
+  type PendingEmbeddedSurfaceFocusTarget,
+} from "../pending-surface-focus";
 import {
   parseFootnoteDefinition,
   serializeFootnoteDefinition,
@@ -68,7 +71,7 @@ function richHtmlOptions(context: ReturnType<typeof useLexicalRenderContext>) {
 
 function usePendingEmbeddedSurfaceFocusId(
   nodeKey: NodeKey,
-  target: "block-body" | "footnote-body",
+  target: PendingEmbeddedSurfaceFocusTarget,
 ): string {
   const [editor] = useLexicalComposerContext();
   return useMemo(
@@ -302,6 +305,7 @@ function CaptionedBlockRenderer({
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
+  const pendingCaptionFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-caption");
   const bodyOffset = fencedDivBodyMarkdownOffset(raw);
   const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
@@ -356,6 +360,7 @@ function CaptionedBlockRenderer({
               onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
                 titleMarkdown: nextTitle,
               }))}
+              pendingFocusId={pendingCaptionFocusId}
             />
           </div>
         </footer>
@@ -470,6 +475,7 @@ function FencedDivBlockRenderer({
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
+  const pendingTitleFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-title");
   const bodyOffset = fencedDivBodyMarkdownOffset(raw);
   const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
@@ -550,6 +556,7 @@ function FencedDivBlockRenderer({
               onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
                 titleMarkdown: nextTitle,
               }))}
+              pendingFocusId={pendingTitleFocusId}
             />
           </div>
         ) : null}

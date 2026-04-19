@@ -36,6 +36,7 @@ export const BROWSER_TEST_GROUPS = {
     "block-widget-keyboard-access",
     "focus-command-surfaces",
     "nested-blank-click-selection",
+    "source-rich-nested-offsets",
     "undo-bridge",
   ],
   reveal: [
@@ -45,6 +46,7 @@ export const BROWSER_TEST_GROUPS = {
     "math-editing",
     "paragraph-reveal",
     "reveal-no-trigger-after-markdown-transform",
+    "table-inline-math-keyboard-reveal",
   ],
   smoke: [
     "lexical-smoke",
@@ -58,6 +60,7 @@ export const BROWSER_TEST_GROUPS = {
     "rich-surface-overlays",
     "rich-surface-parity",
     "tables",
+    "source-rich-nested-offsets",
   ],
 };
 

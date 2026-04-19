@@ -157,7 +157,12 @@ export function resolveFixtureDocumentWithFallback(
 
 export async function openFixtureDocument(page, fixture, options = {}) {
   const resolved = resolveFixtureDocument(fixture);
-  const { mode, discardCurrent = true, project = "single-file" } = options;
+  const {
+    mode,
+    discardCurrent = true,
+    project = "single-file",
+    verifyContent = true,
+  } = options;
   const preferOpenFile = Boolean(
     resolved.resolvedPath?.startsWith(resolve(REPO_ROOT, "demo")),
   );
@@ -180,6 +185,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
         throw new Error("window.__app.openFile is unavailable.");
       }
 
+      if (app.loadFixtureProject && fixtureProjectFiles) {
+        await app.loadFixtureProject(fixtureProjectFiles, path);
+        return { method: "loadFixtureProject" };
+      }
+
       const canOpenInCurrentProject = allowOpenFile
         ? app.hasFile
           ? await app.hasFile(path)
@@ -191,15 +201,10 @@ export async function openFixtureDocument(page, fixture, options = {}) {
           await app.openFile(path);
           return { method: "openFile" };
         } catch (error) {
-          if (!app.loadFixtureProject && !app.openFileWithContent) {
+          if (!app.openFileWithContent) {
             throw error;
           }
         }
-      }
-
-      if (app.loadFixtureProject && fixtureProjectFiles) {
-        await app.loadFixtureProject(fixtureProjectFiles, path);
-        return { method: "loadFixtureProject" };
       }
 
       if (!app.openFileWithContent) {
@@ -220,7 +225,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
 
   await waitForEditorSurface(page);
   await page.waitForFunction(
-    ({ method, path, expectedLength, expectedPrefix, expectedSuffix }) => {
+    ({ method, path, expectedLength, expectedPrefix, expectedSuffix, verifyContent }) => {
       const text = window.__editor?.getDoc();
       const editorText = window.__editor?.peekDoc?.() ?? null;
       const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
@@ -228,7 +233,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
         return false;
       }
 
-      if (method === "openFile") {
+      if (!verifyContent) {
+        return true;
+      }
+
+      if (method === "openFile" || method === "loadFixtureProject") {
         return text.startsWith(expectedPrefix) &&
           text.endsWith(expectedSuffix) &&
           editorText.startsWith(expectedPrefix) &&
@@ -248,6 +257,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
       expectedLength: resolved.content.length,
       expectedPrefix: resolved.content.slice(0, verificationWindow),
       expectedSuffix: resolved.content.slice(-verificationWindow),
+      verifyContent,
     },
     { timeout: 10000 },
   );

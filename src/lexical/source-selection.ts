@@ -25,14 +25,26 @@ import {
 } from "./markdown";
 import { getInlineTextFormatSpecs } from "../lexical-next";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
+import { parseStructuredFencedDivRaw } from "./markdown/block-syntax";
+import { parseFootnoteDefinition } from "./markdown/footnotes";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isHeadingAttributeNode } from "./nodes/heading-attribute-node";
 import { $isInlineImageNode } from "./nodes/inline-image-node";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $isReferenceNode } from "./nodes/reference-node";
+import {
+  getPendingEmbeddedSurfaceFocusId,
+  queuePendingSurfaceFocus,
+  type PendingEmbeddedSurfaceFocusTarget,
+} from "./pending-surface-focus";
 import { isRevealSourceStyle } from "./reveal-source-style";
 import { sourcePositionFromElement } from "./source-position-dom";
+import {
+  fencedDivBodyMarkdownOffset,
+  fencedDivTitleMarkdownOffset,
+  footnoteDefinitionBodyOffset,
+} from "./structure-source-offsets";
 
 const SOURCE_SELECTION_MARKER = "\uE000coflat-source-selection\uE001";
 const SOURCE_NAVIGATION_MARKER = "\uE000coflat-source-navigation\uE001";
@@ -420,6 +432,13 @@ type LiveSourceLocation =
       readonly offset: number;
     };
 
+type RevealSourceLocation = Extract<LiveSourceLocation, { kind: "reveal" }>;
+type RawBlockSourceLocation = RevealSourceLocation & { readonly adapterId: "raw-block" };
+
+function isRawBlockSourceLocation(location: LiveSourceLocation | null): location is RawBlockSourceLocation {
+  return location?.kind === "reveal" && location.adapterId === "raw-block";
+}
+
 function findTextMarkerLocationInState(
   markdown: string,
   offset: number,
@@ -773,6 +792,80 @@ function createRevealRequestFromNode(
   }, options);
 }
 
+function createRawBlockLocationFromNode(
+  node: LexicalNode,
+  offset: number,
+): RawBlockSourceLocation | null {
+  const reveal = getRevealSource(node);
+  return reveal?.adapterId === "raw-block"
+    ? {
+        adapterId: "raw-block",
+        kind: "reveal",
+        node,
+        offset,
+        source: reveal.source,
+      }
+    : null;
+}
+
+function clampedFieldOffset(offset: number, fieldStart: number, fieldLength: number): number {
+  return Math.max(0, Math.min(offset - fieldStart, fieldLength));
+}
+
+function queueEmbeddedRawBlockFocus(
+  editor: LexicalEditor,
+  location: RawBlockSourceLocation,
+): boolean {
+  if (!$isRawBlockNode(location.node)) {
+    return false;
+  }
+
+  const raw = location.source;
+  const offset = Math.max(0, Math.min(location.offset, raw.length));
+  let target: PendingEmbeddedSurfaceFocusTarget | null = null;
+  let fieldOffset = 0;
+
+  const footnote = parseFootnoteDefinition(raw);
+  if (footnote) {
+    const bodyStart = footnoteDefinitionBodyOffset(raw);
+    if (offset >= bodyStart) {
+      target = "footnote-body";
+      fieldOffset = clampedFieldOffset(offset, bodyStart, footnote.body.length);
+    }
+  } else if (/^\s*:{3,}/.test(raw)) {
+    const parsed = parseStructuredFencedDivRaw(raw);
+    const titleStart = fencedDivTitleMarkdownOffset(raw, parsed);
+    const titleMarkdown = parsed.titleMarkdown ?? "";
+    if (titleStart !== null && titleMarkdown) {
+      const titleEnd = titleStart + titleMarkdown.length;
+      if (offset >= titleStart && offset <= titleEnd) {
+        target = parsed.blockType === "figure" || parsed.blockType === "table"
+          ? "block-caption"
+          : "block-title";
+        fieldOffset = clampedFieldOffset(offset, titleStart, titleMarkdown.length);
+      }
+    }
+
+    if (target === null) {
+      const bodyStart = fencedDivBodyMarkdownOffset(raw);
+      if (offset >= bodyStart) {
+        target = "block-body";
+        fieldOffset = clampedFieldOffset(offset, bodyStart, parsed.bodyMarkdown.length);
+      }
+    }
+  }
+
+  if (target === null) {
+    return false;
+  }
+
+  queuePendingSurfaceFocus(
+    getPendingEmbeddedSurfaceFocusId(editor.getKey(), location.node.getKey(), target),
+    { offset: fieldOffset },
+  );
+  return true;
+}
+
 export function selectSourceOffsetsInRichLexicalRoot(
   editor: LexicalEditor,
   markdown: string,
@@ -801,10 +894,23 @@ export function selectSourceOffsetsInRichLexicalRoot(
       didSelect = true;
       return true;
     };
+    const queueEmbeddedFocus = (location: LiveSourceLocation | null): boolean => {
+      if (
+        !isRawBlockSourceLocation(location)
+        || !queueEmbeddedRawBlockFocus(editor, location)
+      ) {
+        return false;
+      }
+      didSelect = true;
+      return true;
+    };
     if (
       collapsed
       && directAnchorLocation?.kind === "reveal"
-      && queueReveal(createRevealRequestFromSourceLocation(directAnchorLocation, options))
+      && (
+        queueReveal(createRevealRequestFromSourceLocation(directAnchorLocation, options))
+        || queueEmbeddedFocus(directAnchorLocation)
+      )
     ) {
       return;
     }
@@ -839,7 +945,10 @@ export function selectSourceOffsetsInRichLexicalRoot(
     if (
       collapsed
       && anchorPathNode
-      && queueReveal(createRevealRequestFromNode(anchorPathNode, anchorLocation.offset, options))
+      && (
+        queueReveal(createRevealRequestFromNode(anchorPathNode, anchorLocation.offset, options))
+        || queueEmbeddedFocus(createRawBlockLocationFromNode(anchorPathNode, anchorLocation.offset))
+      )
     ) {
       return;
     }

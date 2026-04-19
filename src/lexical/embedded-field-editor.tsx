@@ -30,11 +30,12 @@ import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
 import { useLexicalSurfaceEditable } from "./editability-context";
 import { scheduleRegisteredSurfaceFocus, type FocusRequestEdge } from "./editor-focus-plugin";
 import { consumePendingSurfaceFocus } from "./pending-surface-focus";
+import type { PendingSurfaceFocusRequest } from "./pending-surface-focus";
 import { useLexicalRenderContext } from "./render-context";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 
 type ActivationMode = "always" | "focus";
-type FocusRequest = FocusRequestEdge | "pointer";
+type FocusRequest = FocusRequestEdge | "pointer" | Extract<PendingSurfaceFocusRequest, { readonly offset: number }>;
 
 export interface EmbeddedFieldEditorProps {
   readonly activation?: ActivationMode;
@@ -85,6 +86,7 @@ export function EmbeddedFieldEditor({
   const canActivateRef = useRef(canActivate);
   canActivateRef.current = canActivate;
   const [active, setActive] = useState(activation === "always");
+  const [focusRequestVersion, setFocusRequestVersion] = useState(0);
 
   useEffect(() => {
     if (activation === "always") {
@@ -176,6 +178,7 @@ export function EmbeddedFieldEditor({
     pendingDraftRef.current = null;
     setDraftDoc(doc);
     requestedFocusRef.current = focusRequest;
+    setFocusRequestVersion((version) => version + 1);
     if (focusRequest === "pointer") {
       flushSync(() => {
         setActive(true);
@@ -252,6 +255,16 @@ export function EmbeddedFieldEditor({
       return;
     }
 
+    if (typeof requestedFocus === "object") {
+      nestedEditorHandleRef.current?.setSelection(
+        requestedFocus.offset,
+        requestedFocus.offset,
+        { skipScrollIntoView: true },
+      );
+      requestedFocusRef.current = null;
+      return;
+    }
+
     return scheduleRegisteredSurfaceFocus(nestedRoot, {
       edge: requestedFocus === "pointer" ? "current" : requestedFocus,
       maxAttempts: 6,
@@ -265,7 +278,7 @@ export function EmbeddedFieldEditor({
         requestedFocusRef.current = null;
       },
     });
-  }, [active, nestedRoot]);
+  }, [active, focusRequestVersion, nestedRoot]);
 
   useEffect(() => {
     if (!pendingFocusId) {
@@ -273,11 +286,12 @@ export function EmbeddedFieldEditor({
     }
 
     const edge = consumePendingSurfaceFocus(pendingFocusId);
-    if (!edge || typeof edge === "object") {
+    if (!edge) {
       return;
     }
 
     requestedFocusRef.current = edge;
+    setFocusRequestVersion((version) => version + 1);
     if (activation === "focus") {
       setActive(true);
     }

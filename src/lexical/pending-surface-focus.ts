@@ -8,6 +8,8 @@ export type PendingSurfaceFocusRequest =
 
 export type PendingEmbeddedSurfaceFocusTarget =
   | "block-body"
+  | "block-caption"
+  | "block-title"
   | "footnote-body"
   | "structure-source";
 
