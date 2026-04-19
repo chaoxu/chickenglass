@@ -5,6 +5,7 @@ import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
+import { isPluginEnabled } from "../plugin-manager";
 
 interface AppMainShellProps {
   sidebarLayout: Pick<
@@ -37,7 +38,7 @@ export function AppMainShell({
             onLexicalEditorReady={editor.handleLexicalEditorReady}
             onOutlineSelect={editor.handleOutlineSelect}
             editorMode={editor.editorMode}
-            spellCheck={workspace.settings.enabledPlugins.spellcheck ?? workspace.settings.spellCheck}
+            spellCheck={isPluginEnabled(workspace.settings, "spellcheck")}
             revealPresentation={workspace.settings.revealPresentation}
           />
         ) : (

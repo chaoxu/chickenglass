@@ -1,3 +1,5 @@
+import type { Settings } from "./lib/types";
+
 export interface EditorPlugin {
   readonly id: string;
   readonly name: string;
@@ -65,3 +67,19 @@ export const defaultEditorPlugins = [
     defaultEnabled: false,
   },
 ] as const satisfies readonly EditorPlugin[];
+
+export function resolvePluginEnabled(
+  settings: Pick<Settings, "enabledPlugins">,
+  plugin: EditorPlugin,
+): boolean {
+  return settings.enabledPlugins[plugin.id] ?? plugin.defaultEnabled;
+}
+
+export function isPluginEnabled(
+  settings: Pick<Settings, "enabledPlugins">,
+  pluginId: string,
+  plugins: readonly EditorPlugin[] = defaultEditorPlugins,
+): boolean {
+  const plugin = plugins.find((candidate) => candidate.id === pluginId);
+  return plugin ? resolvePluginEnabled(settings, plugin) : false;
+}

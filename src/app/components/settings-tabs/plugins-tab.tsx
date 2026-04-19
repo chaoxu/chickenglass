@@ -1,4 +1,5 @@
 import type { Settings } from "../../lib/types";
+import { resolvePluginEnabled } from "../../plugin-manager";
 import { Checkbox } from "../ui/checkbox";
 import { Section } from "./shared";
 
@@ -35,7 +36,7 @@ export function PluginsTab({ settings, onUpdateSetting, plugins }: PluginsTabPro
     >
       <div className="rounded-md border border-[var(--cf-border)] divide-y divide-[var(--cf-border)] overflow-hidden">
         {plugins.map(({ plugin }) => {
-          const isEnabled = settings.enabledPlugins[plugin.id] ?? plugin.defaultEnabled;
+          const isEnabled = resolvePluginEnabled(settings, plugin);
           return (
             <div
               key={plugin.id}
