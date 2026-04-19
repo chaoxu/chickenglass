@@ -1,5 +1,6 @@
 import { openFixtureDocument, sleep } from "../test-helpers.mjs";
 import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
+import { fallbackFixtureFor, fixtureForHarness } from "../tooling-fixtures.mjs";
 
 export const name = "scroll-stability";
 
@@ -10,14 +11,8 @@ const DOWN_OVERSHOOT_TOLERANCE_PX = 120;
 const UP_OVERSHOOT_TOLERANCE_PX = 120;
 const REVERSE_TOLERANCE_PX = 40;
 
-const HEAVY_FIXTURE = {
-  displayPath: "fixtures/rankdecrease/main.md",
-  virtualPath: "rankdecrease/main.md",
-};
-const PUBLIC_SCROLL_FALLBACK = {
-  displayPath: "demo/index.md",
-  virtualPath: "index.md",
-};
+const HEAVY_FIXTURE = fixtureForHarness("rankdecrease");
+const PUBLIC_SCROLL_FALLBACK = fallbackFixtureFor("rankdecrease");
 
 function describeSample(sample) {
   return `${sample.label}: scrollTop=${sample.scrollTop}`;

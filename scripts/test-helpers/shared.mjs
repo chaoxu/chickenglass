@@ -1,8 +1,6 @@
 /* global window */
 
-import { dirname, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
 import {
   EDITOR_MODE,
   EDITOR_MODE_LABELS,
@@ -25,22 +23,19 @@ import {
   MODE_BUTTON_SELECTOR,
   MODE_BUTTON_TEST_ID,
 } from "../../src/debug/debug-bridge-contract.js";
+import {
+  REPO_DEMO_ROOT,
+  REPO_FIXTURE_ROOT,
+  REPO_ROOT,
+  fixtureForHarness,
+} from "../tooling-fixtures.mjs";
 
 export const DEFAULT_PORT = 9322;
 export const DEFAULT_APP_URL = "http://localhost:5173";
 export const DEFAULT_BROWSER_MODE = "cdp";
 export const DEFAULT_MANAGED_VIEWPORT = { width: 1280, height: 900 };
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-export const REPO_ROOT = resolve(SCRIPT_DIR, "../..");
-export const REPO_DEMO_ROOT = resolve(REPO_ROOT, "demo");
-export const REPO_FIXTURE_ROOT = resolve(REPO_ROOT, "fixtures");
-export const PUBLIC_SHOWCASE_FIXTURE = {
-  displayPath: "demo/index.md",
-  virtualPath: "index.md",
-  candidates: [
-    resolve(REPO_ROOT, "demo/index.md"),
-  ],
-};
+export { REPO_DEMO_ROOT, REPO_FIXTURE_ROOT, REPO_ROOT };
+export const PUBLIC_SHOWCASE_FIXTURE = fixtureForHarness("publicShowcase");
 export {
   DEBUG_EDITOR_SELECTOR,
   DEBUG_EDITOR_TEST_ID,

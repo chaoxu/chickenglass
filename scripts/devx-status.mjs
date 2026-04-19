@@ -7,28 +7,13 @@ import process from "node:process";
 
 import { formatLastVerifyStatus, readLastVerifyStatus } from "./devx-cache.mjs";
 import { waitForAppUrl } from "./dev-server.mjs";
+import { fixtureStatus as catalogFixtureStatus } from "./tooling-fixtures.mjs";
 
-const OPTIONAL_FIXTURES = [
-  {
-    fallback: "demo/index.md",
-    path: "fixtures/rankdecrease/main.md",
-    purpose: "heavy scroll/perf fixture",
-  },
-  {
-    fallback: "demo/index.md",
-    path: "fixtures/cogirth/main2.md",
-    purpose: "typing/perf semantic hotspots",
-  },
-  {
-    fallback: "inline public fallback",
-    path: "fixtures/cogirth/include-labels.md",
-    purpose: "include composition browser regression",
-  },
-  {
-    fallback: "inline public fallback",
-    path: "fixtures/cogirth/search-mode-awareness.md",
-    purpose: "search mode browser regression",
-  },
+const OPTIONAL_FIXTURE_KEYS = [
+  "rankdecrease",
+  "cogirthMain2",
+  "cogirthIncludeLabels",
+  "cogirthSearchModeAwareness",
 ];
 
 function tryRun(command, args) {
@@ -76,13 +61,7 @@ function lastVerifyStatus() {
 }
 
 function fixtureStatus() {
-  return OPTIONAL_FIXTURES.map((fixture) => {
-    const present = existsSync(resolve(fixture.path));
-    return {
-      ...fixture,
-      status: present ? "present" : `missing; fallback: ${fixture.fallback}`,
-    };
-  });
+  return OPTIONAL_FIXTURE_KEYS.map((key) => catalogFixtureStatus(key));
 }
 
 export async function main() {

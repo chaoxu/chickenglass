@@ -4,7 +4,12 @@ Use `scripts/perf-regression.mjs` for repeatable browser-side measurements.
 
 ## Preferred fixtures
 
-- Private/local: `fixtures/cogirth/main2.md`
+Fixture defaults live in `scripts/tooling-fixtures.mjs`; update that catalog
+instead of editing perf scripts, browser regressions, or DevX status output
+directly.
+
+- Preferred heavy scroll/perf fixture: `fixtures/rankdecrease/main.md`
+- Typing/perf semantic hotspot fixture: `fixtures/cogirth/main2.md`
 - Public fallback: `demo/index.md`
 
 ## Common scenarios

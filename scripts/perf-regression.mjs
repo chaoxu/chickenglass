@@ -6,7 +6,6 @@ import console from "node:console";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import {
   PERF_REPORT_VERSION,
   buildPerfRegressionReport,
@@ -20,7 +19,6 @@ import {
   formatRuntimeIssues,
   hasFixtureDocument,
   openFixtureDocument,
-  PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocumentWithFallback,
   sleep,
   switchToMode,
@@ -29,7 +27,11 @@ import {
 } from "./test-helpers.mjs";
 import { DEBUG_EDITOR_SELECTOR } from "./test-helpers/shared.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
-import { resolveFixtureDocument } from "./test-helpers/fixtures.mjs";
+import {
+  TOOLING_FIXTURES,
+  fixtureCoverageWarning,
+  fixtureForHarness,
+} from "./tooling-fixtures.mjs";
 
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
@@ -75,16 +77,8 @@ async function discardDirtyPerfState(page) {
   }
 }
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-const SCROLL_FIXTURE = {
-  displayPath: "fixtures/cogirth/main2.md",
-  virtualPath: "cogirth/main2.md",
-  candidates: [
-    resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-  ],
-};
-const PUBLIC_SCROLL_FALLBACK = PUBLIC_SHOWCASE_FIXTURE;
+const SCROLL_FIXTURE = fixtureForHarness("rankdecrease");
+const PUBLIC_SCROLL_FALLBACK = fixtureForHarness("publicShowcase");
 
 export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.wall_ms",
@@ -136,34 +130,25 @@ function steppedScrollMetrics(result) {
 
 export const TYPING_BURST_CASES = [
   {
+    ...fixtureForHarness("publicShowcase"),
+    catalogKey: "publicShowcase",
     key: "index",
-    displayPath: "demo/index.md",
-    virtualPath: "index.md",
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
-    candidates: [
-      resolve(REPO_ROOT, "demo/index.md"),
-    ],
   },
   {
+    ...fixtureForHarness("rankdecrease"),
+    catalogKey: "rankdecrease",
     key: "rankdecrease",
-    displayPath: "fixtures/rankdecrease/main.md",
-    virtualPath: "rankdecrease/main.md",
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
-    ],
   },
   {
+    ...fixtureForHarness("cogirthMain2"),
+    catalogKey: "cogirthMain2",
     key: "cogirth_main2",
-    displayPath: "fixtures/cogirth/main2.md",
-    virtualPath: "cogirth/main2.md",
     positionKeys: [
       ...DEFAULT_TYPING_BURST_POSITION_KEYS,
       "inline_math",
       "citation_ref",
-    ],
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
     ],
   },
 ];
@@ -184,8 +169,10 @@ function formatFixtureCandidates(fixture) {
 function formatMissingTypingBurstFixtures(missingCases) {
   return [
     "Missing required typing benchmark fixture(s); perf coverage would be incomplete.",
-    ...missingCases.map((caseDef) =>
-      `- ${caseDef.displayPath}: tried ${formatFixtureCandidates(caseDef)}`),
+    ...missingCases.map((caseDef) => {
+      const purpose = TOOLING_FIXTURES[caseDef.catalogKey]?.purpose ?? "typing benchmark fixture";
+      return `- ${caseDef.displayPath}: ${purpose}; tried ${formatFixtureCandidates(caseDef)}`;
+    }),
   ].join("\n");
 }
 
@@ -333,9 +320,8 @@ function scrollFixtureCoverageWarnings() {
   if (hasFixtureDocument(SCROLL_FIXTURE)) {
     return [];
   }
-  const fallback = resolveFixtureDocument(PUBLIC_SCROLL_FALLBACK);
   return [
-    `Missing preferred scroll perf fixture ${SCROLL_FIXTURE.displayPath}; using ${fallback.displayPath}. Perf coverage is public fallback only.`,
+    `${fixtureCoverageWarning("rankdecrease", "publicShowcase")} Perf coverage is public fallback only.`,
   ];
 }
 
@@ -563,8 +549,8 @@ Options:
   -h, --help               Show this help text
 
 Fixtures:
-  Preferred heavy fixture: fixtures/rankdecrease/main.md
-  Fallback public fixture: demo/index.md
+  Preferred heavy fixture: ${TOOLING_FIXTURES.rankdecrease.displayPath}
+  Fallback public fixture: ${TOOLING_FIXTURES.publicShowcase.displayPath}
 
 Examples:
   # Standard baseline/check workflow, including dev-server management
