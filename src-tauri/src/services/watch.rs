@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::commands::state::FileWatcherEntry;
 use crate::services::project_visibility::is_ignored_relative_path;
+use crate::services::window_generation::{accepts_generation, matches_generation};
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -210,9 +211,11 @@ pub fn reserve_watcher_slot(
     root: PathBuf,
     generation: u64,
 ) -> bool {
-    if matches!(
-        watchers.get(window_label),
-        Some(existing) if existing.generation > generation
+    if !accepts_generation(
+        watchers
+            .get(window_label)
+            .map(|existing| existing.generation),
+        generation,
     ) {
         return false;
     }
@@ -237,7 +240,7 @@ pub fn attach_watcher(
     let Some(entry) = watchers.get_mut(window_label) else {
         return false;
     };
-    if entry.generation != generation {
+    if !matches_generation(Some(entry.generation), generation) {
         return false;
     }
 
@@ -250,9 +253,11 @@ pub fn remove_watcher_generation(
     window_label: &str,
     generation: u64,
 ) -> bool {
-    if !matches!(
-        watchers.get(window_label),
-        Some(existing) if existing.generation == generation
+    if !matches_generation(
+        watchers
+            .get(window_label)
+            .map(|existing| existing.generation),
+        generation,
     ) {
         return false;
     }
@@ -530,6 +535,27 @@ mod tests {
     }
 
     #[test]
+    fn watcher_slots_replace_equal_generations() {
+        let mut watchers = HashMap::from([(
+            "main".to_string(),
+            FileWatcherEntry {
+                generation: 7,
+                root: PathBuf::from("/tmp/project-a"),
+                watcher: None,
+            },
+        )]);
+
+        let reserved =
+            reserve_watcher_slot(&mut watchers, "main", PathBuf::from("/tmp/project-b"), 7);
+
+        assert!(reserved);
+        assert_eq!(
+            watchers.get("main").map(|entry| entry.root.clone()),
+            Some(PathBuf::from("/tmp/project-b")),
+        );
+    }
+
+    #[test]
     fn watcher_slots_ignore_stale_unwatch_requests() {
         let mut watchers = HashMap::from([(
             "main".to_string(),
@@ -544,5 +570,22 @@ mod tests {
 
         assert!(!removed);
         assert!(watchers.contains_key("main"));
+    }
+
+    #[test]
+    fn watcher_slots_remove_matching_generation() {
+        let mut watchers = HashMap::from([(
+            "main".to_string(),
+            FileWatcherEntry {
+                generation: 9,
+                root: PathBuf::from("/tmp/project-b"),
+                watcher: None,
+            },
+        )]);
+
+        let removed = remove_watcher_generation(&mut watchers, "main", 9);
+
+        assert!(removed);
+        assert!(!watchers.contains_key("main"));
     }
 }

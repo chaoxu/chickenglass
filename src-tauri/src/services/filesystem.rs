@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use crate::commands::state::ProjectRootEntry;
 use crate::services::project_visibility::is_ignored_entry_name;
+use crate::services::window_generation::accepts_generation;
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -27,9 +28,9 @@ pub fn install_project_root(
     path: PathBuf,
     generation: u64,
 ) -> bool {
-    if matches!(
-        roots.get(window_label),
-        Some(existing) if existing.generation > generation
+    if !accepts_generation(
+        roots.get(window_label).map(|existing| existing.generation),
+        generation,
     ) {
         return false;
     }
@@ -308,6 +309,25 @@ mod tests {
             "main".to_string(),
             ProjectRootEntry {
                 generation: 1,
+                path: PathBuf::from("/tmp/project-a"),
+            },
+        )]);
+
+        let installed =
+            install_project_root(&mut roots, "main", PathBuf::from("/tmp/project-b"), 2);
+
+        assert!(installed);
+        let entry = roots.get("main").expect("project root entry");
+        assert_eq!(entry.generation, 2);
+        assert_eq!(entry.path, PathBuf::from("/tmp/project-b"));
+    }
+
+    #[test]
+    fn replaces_project_root_with_equal_generation() {
+        let mut roots = HashMap::from([(
+            "main".to_string(),
+            ProjectRootEntry {
+                generation: 2,
                 path: PathBuf::from("/tmp/project-a"),
             },
         )]);
