@@ -11,6 +11,7 @@ import type { ExternalDocumentSyncResult } from "./editor-session-service";
 import { logCatchError } from "./lib/log-catch-error";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
+import { TAURI_FILE_CHANGED_EVENT_CHANNEL } from "./tauri-client/bridge-metadata";
 import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
 
 let latestFileWatcherToken = 0;
@@ -102,7 +103,7 @@ export class FileWatcher {
     // race ahead of the frontend subscription.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
-    const unlisten = await listen<FileChangedPayload>("file-changed", (event) => {
+    const unlisten = await listen<FileChangedPayload>(TAURI_FILE_CHANGED_EVENT_CHANNEL, (event) => {
       const payload = normalizeFileChangedEvent(event.payload);
       if (payload.generation !== undefined && payload.generation !== watchToken) {
         return;

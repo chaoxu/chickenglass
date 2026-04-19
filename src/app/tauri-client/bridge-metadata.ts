@@ -1,6 +1,18 @@
 import type { SimpleFormatEventType } from "../../constants/events";
 
-export const TAURI_MENU_EVENT_CHANNEL = "menu-event";
+export const TAURI_EVENT_CHANNELS = {
+  fileChanged: "file-changed",
+  menu: "menu-event",
+} as const;
+
+export const TAURI_FILE_CHANGED_EVENT_CHANNEL = TAURI_EVENT_CHANNELS.fileChanged;
+export const TAURI_MENU_EVENT_CHANNEL = TAURI_EVENT_CHANNELS.menu;
+
+export const TAURI_FILE_CHANGED_EVENT_FIELDS = [
+  "generation",
+  "path",
+  "treeChanged",
+] as const;
 
 export const TAURI_COMMANDS = {
   openFolder: "open_folder",
