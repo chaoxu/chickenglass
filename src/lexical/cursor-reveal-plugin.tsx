@@ -24,7 +24,6 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getSelection,
-  $nodesOfType,
   $isDecoratorNode,
   $isElementNode,
   $isRangeSelection,
@@ -54,10 +53,10 @@ import {
   type RevealAdapter,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
-import { $isInlineMathNode, InlineMathNode } from "./nodes/inline-math-node";
-import { $isFootnoteReferenceNode, FootnoteReferenceNode } from "./nodes/footnote-reference-node";
+import { $isInlineMathNode } from "./nodes/inline-math-node";
+import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { $isReferenceNode, ReferenceNode } from "./nodes/reference-node";
+import { $isReferenceNode } from "./nodes/reference-node";
 import {
   COFLAT_NESTED_EDIT_TAG,
   COFLAT_REVEAL_COMMIT_TAG,
@@ -73,8 +72,6 @@ import {
 } from "./cursor-reveal-controller";
 import { renderRevealChromePreview } from "./reveal-chrome";
 import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
-import { useLexicalRenderContext } from "./render-context";
-import { setLexicalMarkdown } from "./markdown";
 import { setCursorRevealActive } from "./cursor-reveal-state";
 
 // Re-exports kept so existing unit tests can continue importing the
@@ -271,16 +268,13 @@ interface InlineRevealHandle {
   readonly plainKey: NodeKey;
   readonly adapter: RevealAdapter;
   readonly source: string;
-  readonly sourceBacked: SourceBackedReveal | null;
   readonly sourceFormat: number;
   readonly selectionState: "opening" | "active";
 }
 
-type SourceBackedRevealKind = "footnote-reference" | "inline-math" | "reference";
-
-interface SourceBackedReveal {
-  readonly kind: SourceBackedRevealKind;
-  readonly occurrence: number;
+interface InlineRevealCommitResult {
+  readonly replacement: LexicalNode | null;
+  readonly sourceChanged: boolean;
 }
 
 interface InlineRevealChromeState {
@@ -291,52 +285,31 @@ interface InlineRevealChromeState {
 
 function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
-  const renderContext = useLexicalRenderContext();
   const [chromeState, setChromeState] = useState<InlineRevealChromeState | null>(null);
   // Key of the in-flight plain-text reveal node. When the caret moves off
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
-  const canonicalDocRef = useRef(renderContext.doc);
   const lastArrowDirectionRef = useRef<"left" | "right" | null>(null);
   const skipOpeningArrowUntilRef = useRef(0);
 
-  useEffect(() => {
-    canonicalDocRef.current = renderContext.doc;
-  }, [renderContext.doc]);
-
-  const restoreCanonicalDocumentAfterUiCommit = useCallback((handle: InlineRevealHandle | null = null) => {
+  const selectAfterRevealCommit = useCallback((replacement: LexicalNode | null) => {
     const direction = lastArrowDirectionRef.current;
-    queueMicrotask(() => {
-      setLexicalMarkdown(editor, canonicalDocRef.current, {
-        tag: COFLAT_REVEAL_UI_TAG,
-      });
-      const sourceBacked = handle?.sourceBacked ?? null;
-      if (handle && sourceBacked && direction) {
-        editor.update(() => {
-          const token = findSourceBackedNode(
-            sourceBacked.kind,
-            handle.source,
-            sourceBacked.occurrence,
-          );
-          const sibling = direction === "right"
-            ? token?.getNextSibling()
-            : token?.getPreviousSibling();
-          if ($isTextNode(sibling)) {
-            if (direction === "right") {
-              sibling.select(0, 0);
-            } else {
-              const size = sibling.getTextContentSize();
-              sibling.select(size, size);
-            }
-          }
-        }, {
-          discrete: true,
-          tag: COFLAT_REVEAL_UI_TAG,
-        });
-      }
-      setCursorRevealActive(editor, false);
-    });
-  }, [editor]);
+    if (!direction || !replacement) {
+      return;
+    }
+    const sibling = direction === "right"
+      ? replacement.getNextSibling()
+      : replacement.getPreviousSibling();
+    if (!$isTextNode(sibling)) {
+      return;
+    }
+    if (direction === "right") {
+      sibling.select(0, 0);
+      return;
+    }
+    const size = sibling.getTextContentSize();
+    sibling.select(size, size);
+  }, []);
 
   const openInlineRequest = useCallback((request: CursorRevealOpenRequest) => {
     const adapter = findRevealAdapter(adapters, request.adapterId);
@@ -408,14 +381,13 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           // directly from one formatted token to another does not require a
           // second selection event.
           $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
-          const sourceUnchanged = $commitInlineReveal(active);
+          const commit = $commitInlineReveal(active);
           activeRef.current = null;
           setChromeState(null);
-          if (sourceUnchanged) {
-            restoreCanonicalDocumentAfterUiCommit(active);
+          setCursorRevealActive(editor, false);
+          if (!commit.sourceChanged) {
             return false;
           }
-          setCursorRevealActive(editor, false);
           const nextSelection = $getSelection();
           if (!nextSelection) {
             return false;
@@ -447,7 +419,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, adapters, restoreCanonicalDocumentAfterUiCommit]);
+  }, [editor, adapters]);
 
   useEffect(() => {
     const handleArrow = (
@@ -464,7 +436,6 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       lastArrowDirectionRef.current = direction;
 
       let handled = false;
-      let sourceUnchanged = false;
       const live = $getNodeByKey(active.plainKey);
       const selection = $getSelection();
       if (!$isTextNode(live) || !$isRangeSelection(selection) || !selection.isCollapsed()) {
@@ -483,12 +454,11 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         activeRef.current = { ...active, selectionState: "active" };
         handled = true;
       } else {
-        sourceUnchanged = $commitInlineReveal(active);
+        const commit = $commitInlineReveal(active);
+        selectAfterRevealCommit(commit.replacement);
         activeRef.current = null;
         setChromeState(null);
-        if (!sourceUnchanged) {
-          setCursorRevealActive(editor, false);
-        }
+        setCursorRevealActive(editor, false);
         handled = true;
       }
 
@@ -497,9 +467,6 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       }
       event?.preventDefault();
       event?.stopPropagation();
-      if (sourceUnchanged) {
-        restoreCanonicalDocumentAfterUiCommit(active);
-      }
       return true;
     };
 
@@ -517,7 +484,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       unregisterLeft();
       unregisterRight();
     };
-  }, [editor, restoreCanonicalDocumentAfterUiCommit]);
+  }, [editor, selectAfterRevealCommit]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -540,7 +507,6 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       const domAnchorText = domSelection?.anchorNode?.textContent ?? null;
       const domAnchorOffset = domSelection?.anchorOffset ?? null;
       let handled = false;
-      let sourceUnchanged = false;
 
       editor.update(() => {
         const live = $getNodeByKey(active.plainKey);
@@ -570,12 +536,11 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           return;
         }
 
-        sourceUnchanged = $commitInlineReveal(active);
+        const commit = $commitInlineReveal(active);
+        selectAfterRevealCommit(commit.replacement);
         activeRef.current = null;
         setChromeState(null);
-        if (!sourceUnchanged) {
-          setCursorRevealActive(editor, false);
-        }
+        setCursorRevealActive(editor, false);
         handled = true;
       }, { discrete: true });
 
@@ -584,16 +549,13 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       }
       event.preventDefault();
       event.stopPropagation();
-      if (sourceUnchanged) {
-        restoreCanonicalDocumentAfterUiCommit(active);
-      }
     };
 
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [editor, restoreCanonicalDocumentAfterUiCommit]);
+  }, [editor, selectAfterRevealCommit]);
 
   useEffect(() => {
     const onSelectionChange = () => {
@@ -608,8 +570,6 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           return;
         }
 
-        let sourceUnchanged = false;
-        let committed = false;
         editor.update(() => {
           const latest = activeRef.current;
           if (!latest || latest.plainKey !== active.plainKey) {
@@ -630,18 +590,11 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
             return;
           }
 
-          sourceUnchanged = $commitInlineReveal(latest);
+          $commitInlineReveal(latest);
           activeRef.current = null;
           setChromeState(null);
-          if (!sourceUnchanged) {
-            setCursorRevealActive(editor, false);
-          }
-          committed = true;
+          setCursorRevealActive(editor, false);
         }, { discrete: true });
-
-        if (committed && sourceUnchanged) {
-          restoreCanonicalDocumentAfterUiCommit(active);
-        }
       });
     };
 
@@ -649,24 +602,19 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
     };
-  }, [editor, restoreCanonicalDocumentAfterUiCommit]);
+  }, [editor]);
 
   useRegisterEmbeddedFieldFlush(() => {
     const active = activeRef.current;
     if (!active) {
       return;
     }
-    let sourceUnchanged = false;
     editor.update(() => {
-      sourceUnchanged = $commitInlineReveal(active);
+      $commitInlineReveal(active);
+      setCursorRevealActive(editor, false);
     }, { discrete: true });
     activeRef.current = null;
     setChromeState(null);
-    if (sourceUnchanged) {
-      restoreCanonicalDocumentAfterUiCommit(active);
-    } else {
-      setCursorRevealActive(editor, false);
-    }
   }, true);
 
   useEffect(() => () => {
@@ -820,7 +768,6 @@ function openInlineReveal(
   const selectionState: InlineRevealHandle["selectionState"] = $isDecoratorNode(live)
     ? "opening"
     : "active";
-  const sourceBacked = getSourceBackedReveal(live);
   const sourceFormat = getSourceBackedFormat(live);
   const plain = $createTextNode(request.source);
   $addUpdateTag(COFLAT_REVEAL_UI_TAG);
@@ -852,7 +799,6 @@ function openInlineReveal(
     plainKey,
     selectionState,
     source: request.source,
-    sourceBacked,
     sourceFormat,
   };
   setChromeState(
@@ -862,28 +808,6 @@ function openInlineReveal(
   );
 }
 
-function getSourceBackedReveal(node: LexicalNode): SourceBackedReveal | null {
-  if ($isInlineMathNode(node)) {
-    return {
-      kind: "inline-math",
-      occurrence: countSourceBackedOccurrenceBefore("inline-math", node),
-    };
-  }
-  if ($isReferenceNode(node)) {
-    return {
-      kind: "reference",
-      occurrence: countSourceBackedOccurrenceBefore("reference", node),
-    };
-  }
-  if ($isFootnoteReferenceNode(node)) {
-    return {
-      kind: "footnote-reference",
-      occurrence: countSourceBackedOccurrenceBefore("footnote-reference", node),
-    };
-  }
-  return null;
-}
-
 function getSourceBackedFormat(node: LexicalNode): number {
   if ($isInlineMathNode(node) || $isReferenceNode(node) || $isFootnoteReferenceNode(node)) {
     return node.getFormat();
@@ -891,67 +815,25 @@ function getSourceBackedFormat(node: LexicalNode): number {
   return 0;
 }
 
-function countSourceBackedOccurrenceBefore(
-  kind: SourceBackedRevealKind,
-  target: InlineMathNode | ReferenceNode | FootnoteReferenceNode,
-): number {
-  const source = target.getRaw();
-  let occurrence = 0;
-  for (const node of sourceBackedNodes(kind)) {
-    if (node.getKey() === target.getKey()) {
-      return occurrence;
-    }
-    if (node.getRaw() === source) {
-      occurrence += 1;
-    }
-  }
-  return occurrence;
-}
-
-function findSourceBackedNode(
-  kind: SourceBackedRevealKind,
-  source: string,
-  occurrence: number,
-): InlineMathNode | ReferenceNode | FootnoteReferenceNode | null {
-  let seen = 0;
-  for (const node of sourceBackedNodes(kind)) {
-    if (node.getRaw() !== source) {
-      continue;
-    }
-    if (seen === occurrence) {
-      return node;
-    }
-    seen += 1;
-  }
-  return null;
-}
-
-function sourceBackedNodes(
-  kind: SourceBackedRevealKind,
-): Array<InlineMathNode | ReferenceNode | FootnoteReferenceNode> {
-  switch (kind) {
-    case "footnote-reference":
-      return $nodesOfType(FootnoteReferenceNode);
-    case "inline-math":
-      return $nodesOfType(InlineMathNode);
-    case "reference":
-      return $nodesOfType(ReferenceNode);
-  }
-}
-
-function $commitInlineReveal(handle: InlineRevealHandle): boolean {
+function $commitInlineReveal(handle: InlineRevealHandle): InlineRevealCommitResult {
   const live = $getNodeByKey(handle.plainKey);
   if (!$isTextNode(live)) {
-    return false;
+    return {
+      replacement: null,
+      sourceChanged: false,
+    };
   }
   const nextSource = live.getTextContent();
-  const sourceUnchanged = nextSource === handle.source;
-  if (sourceUnchanged) {
+  const sourceChanged = nextSource !== handle.source;
+  if (sourceChanged) {
+    $addUpdateTag(COFLAT_REVEAL_COMMIT_TAG);
+  } else {
     $addUpdateTag(COFLAT_REVEAL_UI_TAG);
-    return true;
   }
-  $addUpdateTag(COFLAT_REVEAL_COMMIT_TAG);
   live.setFormat(handle.sourceFormat);
-  handle.adapter.reparse(live, nextSource);
-  return false;
+  const replacement = handle.adapter.reparse(live, nextSource);
+  return {
+    replacement,
+    sourceChanged,
+  };
 }

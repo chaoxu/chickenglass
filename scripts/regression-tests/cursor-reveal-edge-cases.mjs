@@ -191,23 +191,35 @@ export async function run(page) {
       message: `formatted inline math arrow navigation left the reveal source: ${JSON.stringify(formattedMathInside)}`,
     };
   }
+  await page.evaluate(async () => {
+    await window.__cfDebug?.clearPerf?.();
+  });
   await page.keyboard.press("ArrowRight");
   await waitForBrowserSettled(page);
-  const formattedMathClosed = await page.evaluate(() => ({
-    dirty: window.__app.isDirty(),
-    doc: window.__editor.getDoc(),
-    hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
-    inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
-    selection: {
-      anchorOffset: window.getSelection()?.anchorOffset ?? null,
-      anchorText: window.getSelection()?.anchorNode?.textContent ?? "",
-    },
-  }));
+  const formattedMathClosed = await page.evaluate(async () => {
+    const perfSummary = window.__cfDebug?.perfSummary
+      ? await window.__cfDebug.perfSummary()
+      : null;
+    return {
+      dirty: window.__app.isDirty(),
+      doc: window.__editor.getDoc(),
+      hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+      inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
+      setMarkdownCalls: perfSummary?.frontend.operations
+        .filter((operation) => operation.name === "lexical.setLexicalMarkdown")
+        .length ?? 0,
+      selection: {
+        anchorOffset: window.getSelection()?.anchorOffset ?? null,
+        anchorText: window.getSelection()?.anchorNode?.textContent ?? "",
+      },
+    };
+  });
   if (
     formattedMathClosed.dirty
     || formattedMathClosed.doc !== "A **$k$-hitting set** B\n"
     || formattedMathClosed.hasPreview
     || !formattedMathClosed.inlineMathStillRendered
+    || formattedMathClosed.setMarkdownCalls !== 0
     || formattedMathClosed.selection.anchorText !== "-hitting set"
     || formattedMathClosed.selection.anchorOffset !== 0
   ) {
