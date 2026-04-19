@@ -95,6 +95,18 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
+  it("parses single-line display math label suffixes without folding body into the label", () => {
+    const parsed = parseStructuredDisplayMathRaw("$$x + y$$ {#eq:sum}");
+
+    expect(parsed).toMatchObject({
+      body: "x + y",
+      bodyMarkdown: "x + y",
+      id: "eq:sum",
+      labelSuffix: "{#eq:sum}",
+      openingDelimiter: "$$",
+    });
+  });
+
   it("finds fenced div and display math ranges without swallowing surrounding markdown", () => {
     const markdown = [
       "Intro",

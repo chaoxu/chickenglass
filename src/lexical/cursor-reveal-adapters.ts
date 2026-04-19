@@ -57,15 +57,16 @@ import {
   inlineMathBodyStartOffset,
   inlineMathSourceOffsetFromTarget,
 } from "./math-source-position";
+import { parseInlineMathSource } from "./inline-math-source";
 import {
   $createInlineMathNode,
   $isInlineMathNode,
   type InlineMathNode,
-  type InlineMathDelimiter,
 } from "./nodes/inline-math-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $createReferenceNode, $isReferenceNode, type ReferenceNode } from "./nodes/reference-node";
 import type { RevealChromePreview } from "./reveal-chrome-types";
+import { isMarkdownImageLine } from "../lib/markdown-image";
 
 export type RevealBoundaryDirection = "backward" | "forward";
 
@@ -339,22 +340,15 @@ const inlineMathAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    let delimiter: InlineMathDelimiter | null = null;
-    if (trimmed.startsWith("$") && trimmed.endsWith("$") && trimmed.length >= 3) {
-      delimiter = "dollar";
-    } else if (trimmed.startsWith("\\(") && trimmed.endsWith("\\)") && trimmed.length >= 5) {
-      delimiter = "paren";
-    }
-    if (delimiter == null) {
+    const parsed = parseInlineMathSource(trimmed);
+    if (!parsed) {
       return live;
     }
-    const math = $createInlineMathNode(trimmed, delimiter, live.getFormat());
+    const math = $createInlineMathNode(trimmed, parsed.delimiter, live.getFormat());
     live.replace(math);
     return math;
   },
 };
-
-const INLINE_IMAGE = /^!\[[^\]\n]*\]\([^)]+\)$/;
 
 const inlineImageAdapter: RevealAdapter = {
   id: "inline-image",
@@ -373,7 +367,7 @@ const inlineImageAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    if (!INLINE_IMAGE.test(trimmed)) {
+    if (!isMarkdownImageLine(trimmed)) {
       return live;
     }
     const image = $createInlineImageNode(trimmed, live.getFormat());

@@ -1,4 +1,5 @@
 import { FRONTMATTER_DELIMITER_RE } from "../../lib/frontmatter";
+import { MARKDOWN_IMAGE_LINE_RE, isMarkdownImageLine } from "../../lib/markdown-image";
 
 export { FRONTMATTER_DELIMITER_RE };
 
@@ -8,7 +9,7 @@ export const DISPLAY_MATH_DOLLAR_EMPTY_START_RE = /^\s*\$\$\s*$/;
 export const DISPLAY_MATH_DOLLAR_END_RE = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
 export const DISPLAY_MATH_BRACKET_START_RE = /^\s*\\\[\s*$/;
 export const DISPLAY_MATH_BRACKET_END_RE = /^\s*\\\](?:\s+\{#[^}]+\})?\s*$/;
-export const IMAGE_BLOCK_START_RE = /^\s*!\[[^\]\n]*\]\([^)]+\)\s*$/;
+export const IMAGE_BLOCK_START_RE = MARKDOWN_IMAGE_LINE_RE;
 export const FOOTNOTE_DEFINITION_START_RE = /^\[\^[^\]]+\]:\s*(.*)$/;
 export const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
 
@@ -251,7 +252,7 @@ export function collectSourceBlockRanges(markdown: string): SourceBlockRange[] {
       continue;
     }
 
-    if (IMAGE_BLOCK_START_RE.test(line)) {
+    if (isMarkdownImageLine(line)) {
       ranges.push(rangeFromLines(markdown, lines, lineOffsets, lineIndex, lineIndex, "image"));
       continue;
     }

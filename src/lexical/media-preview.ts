@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { readImageFileAsDataUrl } from "../lib/image-data-url";
+import { classifyAssetTarget } from "../lib/markdown-image";
 import { projectPathCandidatesFromDocument } from "../lib/project-paths";
 import { useLexicalRenderResources } from "./render-context";
 import { rasterizePdfPage1 } from "./pdf-rasterizer";
-
-function isLocalAssetTarget(target: string): boolean {
-  return !/^(?:[a-z]+:|\/\/|\/)/i.test(target);
-}
-
-function isPdfTarget(target: string): boolean {
-  return /\.pdf(?:$|[?#])/i.test(target);
-}
 
 export interface AssetPreviewState {
   readonly fallbackUrl: string;
@@ -43,19 +36,20 @@ export function useAssetPreview(target: string): AssetPreviewState {
     () => resolveAssetUrl(target) ?? target,
     [resolveAssetUrl, target],
   );
-  const initiallyNeedsLocalProbe = isLocalAssetTarget(target);
+  const targetInfo = useMemo(() => classifyAssetTarget(target), [target]);
+  const initiallyNeedsLocalProbe = targetInfo.isLocal;
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(() =>
-    isPdfTarget(target) || initiallyNeedsLocalProbe ? undefined : fallbackUrl,
+    targetInfo.isPdf || initiallyNeedsLocalProbe ? undefined : fallbackUrl,
   );
   const [kind, setKind] = useState<AssetPreviewState["kind"]>(() =>
-    isPdfTarget(target) || initiallyNeedsLocalProbe ? "loading" : "ready",
+    targetInfo.isPdf || initiallyNeedsLocalProbe ? "loading" : "ready",
   );
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!isPdfTarget(target)) {
-      if (!isLocalAssetTarget(target) || !docPath) {
+    if (!targetInfo.isPdf) {
+      if (!targetInfo.isLocal || !docPath) {
         setPreviewUrl(fallbackUrl);
         setKind("ready");
         return () => {
@@ -84,7 +78,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
       };
     }
 
-    if (!isLocalAssetTarget(target) || !docPath) {
+    if (!targetInfo.isLocal || !docPath) {
       setPreviewUrl(undefined);
       setKind("error");
       return () => {
@@ -123,7 +117,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
     return () => {
       cancelled = true;
     };
-  }, [docPath, fallbackUrl, fs, target]);
+  }, [docPath, fallbackUrl, fs, target, targetInfo]);
 
   return {
     fallbackUrl,
@@ -139,7 +133,7 @@ export function useLocalImageDataUrl(target: string): string | null {
   useEffect(() => {
     let cancelled = false;
 
-    if (!isLocalAssetTarget(target) || !docPath) {
+    if (!classifyAssetTarget(target).isLocal || !docPath) {
       setDataUrl(null);
       return () => {
         cancelled = true;

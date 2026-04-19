@@ -3,9 +3,10 @@ import { extractHeadingDefinitions } from "./headings";
 import { maskMarkdownCodeSpansAndBlocks } from "./masking";
 import { getTextLines } from "./text-lines";
 import { measureSync } from "../perf";
+import { collectSourceBlockRanges } from "../../lexical/markdown/block-scanner";
+import { parseStructuredDisplayMathRaw } from "../../lexical/markdown/block-syntax";
 
 const LABEL_ID_RE = /#([A-Za-z0-9_][\w.:-]*)/;
-const BRACED_LABEL_ID_RE = /\{#([A-Za-z0-9_][\w.:-]*)\}/;
 const CLASS_RE = /\.([A-Za-z][\w-]*)/;
 const BRACKETED_REFERENCE_RE = /\[(?:[^\]\n]|\\.)*?@[^\]\n]*\]/g;
 const REFERENCE_ID_RE = /(?<![\w@])@([A-Za-z0-9_](?:[\w.:-]*\w)?)(?![\w@])/g;
@@ -61,24 +62,6 @@ interface OpenBlock {
   readonly blockType?: string;
   readonly title?: string;
   readonly bodyFrom: number;
-}
-
-function getBracedLabelSpan(lineText: string, lineStart: number): {
-  id?: string;
-  labelFrom?: number;
-  labelTo?: number;
-} {
-  const labelMatch = lineText.match(BRACED_LABEL_ID_RE);
-  if (!labelMatch) {
-    return {};
-  }
-  const id = labelMatch[1];
-  const tokenIndex = lineText.indexOf(`{#${id}}`);
-  return {
-    id,
-    labelFrom: lineStart + tokenIndex + 2,
-    labelTo: lineStart + tokenIndex + 2 + id.length,
-  };
 }
 
 function normalizeText(text: string): string {
@@ -195,82 +178,28 @@ export function extractMarkdownBlocks(doc: string, scanDoc = doc): MarkdownBlock
 }
 
 export function extractMarkdownEquations(doc: string, scanDoc = doc): MarkdownEquation[] {
-  const lines = getTextLines(doc);
-  const scanLines = getTextLines(scanDoc);
   const equations: MarkdownEquation[] = [];
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    const scanLine = scanLines[lineIndex];
-    const trimmed = scanLine.text.trim();
-
-    if (trimmed.startsWith("$$")) {
-      const secondFence = scanLine.text.indexOf("$$", scanLine.text.indexOf("$$") + 2);
-      if (secondFence >= 0) {
-        const afterFence = line.text.slice(secondFence + 2);
-        const { id, labelFrom, labelTo } = getBracedLabelSpan(afterFence, line.start + secondFence + 2);
-        equations.push({
-          from: line.start,
-          to: line.end,
-          id,
-          labelFrom,
-          labelTo,
-          text: line.text.slice(line.text.indexOf("$$") + 2, secondFence).trim(),
-        });
-        continue;
-      }
-
-      for (let endIndex = lineIndex + 1; endIndex < lines.length; endIndex += 1) {
-        const endLine = lines[endIndex];
-        const scanEndLine = scanLines[endIndex];
-        if (!scanEndLine.text.trim().startsWith("$$")) {
-          continue;
-        }
-        const { id, labelFrom, labelTo } = getBracedLabelSpan(endLine.text, endLine.start);
-        const text = lines
-          .slice(lineIndex + 1, endIndex)
-          .map((entry) => entry.text)
-          .join("\n")
-          .trim();
-        equations.push({
-          from: line.start,
-          to: endLine.end,
-          id,
-          labelFrom,
-          labelTo,
-          text,
-        });
-        lineIndex = endIndex;
-        break;
-      }
+  for (const range of collectSourceBlockRanges(scanDoc)) {
+    if (range.variant !== "display-math") {
       continue;
     }
-
-    if (trimmed === "\\[") {
-      for (let endIndex = lineIndex + 1; endIndex < lines.length; endIndex += 1) {
-        const endLine = lines[endIndex];
-        const scanEndLine = scanLines[endIndex];
-        if (!scanEndLine.text.trim().startsWith("\\]")) {
-          continue;
-        }
-        const { id, labelFrom, labelTo } = getBracedLabelSpan(endLine.text, endLine.start);
-        const text = lines
-          .slice(lineIndex + 1, endIndex)
-          .map((entry) => entry.text)
-          .join("\n")
-          .trim();
-        equations.push({
-          from: line.start,
-          to: endLine.end,
-          id,
-          labelFrom,
-          labelTo,
-          text,
-        });
-        lineIndex = endIndex;
-        break;
-      }
-    }
+    const raw = doc.slice(range.from, range.to);
+    const parsed = parseStructuredDisplayMathRaw(raw);
+    const labelToken = parsed.id ? `{#${parsed.id}}` : undefined;
+    const labelTokenIndex = labelToken ? raw.lastIndexOf(labelToken) : -1;
+    equations.push({
+      from: range.from,
+      to: range.to,
+      id: parsed.id,
+      labelFrom: parsed.id && labelTokenIndex >= 0
+        ? range.from + labelTokenIndex + 2
+        : undefined,
+      labelTo: parsed.id && labelTokenIndex >= 0
+        ? range.from + labelTokenIndex + 2 + parsed.id.length
+        : undefined,
+      text: parsed.body,
+    });
   }
 
   return equations;

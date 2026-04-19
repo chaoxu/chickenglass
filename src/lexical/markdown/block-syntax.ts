@@ -212,16 +212,23 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
     };
   }
 
-  const bodyMarkdown = lines.length === 1
-    ? raw.slice(raw.indexOf("$$") + 2, raw.lastIndexOf("$$"))
+  const openingIndex = raw.indexOf("$$");
+  const sameLineClosingIndex = lines.length === 1
+    ? raw.indexOf("$$", openingIndex + 2)
+    : -1;
+  const bodyMarkdown = sameLineClosingIndex >= 0
+    ? raw.slice(openingIndex + 2, sameLineClosingIndex)
     : lines.slice(1, -1).join("\n");
+  const labelSuffix = sameLineClosingIndex >= 0
+    ? raw.slice(sameLineClosingIndex + 2).trim()
+    : lastLine.replace(/^\$\$/, "").trim();
 
   return {
     body: bodyMarkdown.trim(),
     bodyMarkdown,
     closingDelimiter: "$$",
-    id: lastLine.match(/\{#([^}]+)\}\s*$/)?.[1],
-    labelSuffix: lastLine.replace(/^\$\$/, "").trim(),
+    id: labelSuffix.match(/\{#([^}]+)\}\s*$/)?.[1],
+    labelSuffix,
     openingDelimiter: "$$",
   };
 }

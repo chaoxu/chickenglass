@@ -33,6 +33,16 @@ import {
 
 import { measureSync } from "../app/perf";
 import { HEADING_TRAILING_ATTRIBUTES_RE } from "../app/markdown/heading-syntax";
+import {
+  INLINE_MATH_DOLLAR_IMPORT_RE,
+  INLINE_MATH_DOLLAR_SHORTCUT_RE,
+  INLINE_MATH_PAREN_IMPORT_RE,
+  INLINE_MATH_PAREN_SHORTCUT_RE,
+} from "../lib/inline-math-source";
+import {
+  MARKDOWN_IMAGE_IMPORT_RE,
+  MARKDOWN_IMAGE_SHORTCUT_RE,
+} from "../lib/markdown-image";
 import { getInlineTextFormatSpecs } from "../lexical-next";
 import {
   $createInlineImageNode,
@@ -72,12 +82,6 @@ import {
 } from "./markdown/block-scanner";
 import { isRevealSourceStyle } from "./reveal-source-style";
 
-const INLINE_MATH_DOLLAR_IMPORT = /\$(?:[^$\n\\]|\\.)+\$/;
-const INLINE_MATH_DOLLAR_SHORTCUT = /\$(?:[^$\n\\]|\\.)+\$$/;
-const INLINE_MATH_PAREN_IMPORT = /\\\((?:[^\\\n]|\\.)+\\\)/;
-const INLINE_MATH_PAREN_SHORTCUT = /\\\((?:[^\\\n]|\\.)+\\\)$/;
-const INLINE_IMAGE_IMPORT = /!\[[^\]\n]*\]\([^)]+\)/;
-const INLINE_IMAGE_SHORTCUT = /!\[[^\]\n]*\]\([^)]+\)$/;
 const BRACKETED_REFERENCE_IMPORT = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/;
 const BRACKETED_REFERENCE_SHORTCUT = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]$/;
 const NARRATIVE_REFERENCE_IMPORT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)/;
@@ -241,15 +245,15 @@ function createInlineMathTransformer(
 
 const inlineMathDollarTransformer = createInlineMathTransformer(
   "dollar",
-  INLINE_MATH_DOLLAR_IMPORT,
-  INLINE_MATH_DOLLAR_SHORTCUT,
+  INLINE_MATH_DOLLAR_IMPORT_RE,
+  INLINE_MATH_DOLLAR_SHORTCUT_RE,
   "$",
 );
 
 const inlineMathParenTransformer = createInlineMathTransformer(
   "paren",
-  INLINE_MATH_PAREN_IMPORT,
-  INLINE_MATH_PAREN_SHORTCUT,
+  INLINE_MATH_PAREN_IMPORT_RE,
+  INLINE_MATH_PAREN_SHORTCUT_RE,
   ")",
 );
 
@@ -259,8 +263,8 @@ const inlineImageTransformer = createInlineTokenTransformer(
   (node, match) => {
     node.replace($createInlineImageNode(match[0], node.getFormat()));
   },
-  INLINE_IMAGE_IMPORT,
-  INLINE_IMAGE_SHORTCUT,
+  MARKDOWN_IMAGE_IMPORT_RE,
+  MARKDOWN_IMAGE_SHORTCUT_RE,
   ")",
 );
 

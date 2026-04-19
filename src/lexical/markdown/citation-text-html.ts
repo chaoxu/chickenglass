@@ -2,6 +2,7 @@ import katex from "katex";
 
 import { buildKatexOptions } from "../../lib/katex-options";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
+import { findNextInlineMathSource } from "../../lib/inline-math-source";
 import { containsMarkdownMath } from "../../lib/markdown-math";
 
 export interface CitationTextRenderOptions {
@@ -14,21 +15,6 @@ function encodeHtml(text: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-function findClosingDollar(text: string, start: number): number {
-  let index = start;
-  while (index < text.length) {
-    if (text[index] === "\\" && index + 1 < text.length) {
-      index += 2;
-      continue;
-    }
-    if (text[index] === "$") {
-      return index;
-    }
-    index += 1;
-  }
-  return -1;
 }
 
 function renderInlineMath(source: string, options: CitationTextRenderOptions): string {
@@ -52,37 +38,15 @@ export function renderCitationTextHtml(
 
   const html: string[] = [];
   let cursor = 0;
-  let index = 0;
 
-  while (index < text.length) {
-    if (text.startsWith("\\(", index)) {
-      const close = text.indexOf("\\)", index + 2);
-      if (close >= 0) {
-        html.push(encodeHtml(text.slice(cursor, index)));
-        html.push(renderInlineMath(text.slice(index + 2, close), options));
-        index = close + 2;
-        cursor = index;
-        continue;
-      }
+  while (cursor < text.length) {
+    const math = findNextInlineMathSource(text, cursor, { requireTightDollar: true });
+    if (!math) {
+      break;
     }
-
-    if (
-      text[index] === "$"
-      && text[index - 1] !== "\\"
-      && text[index + 1] != null
-      && !/\s/.test(text[index + 1])
-    ) {
-      const close = findClosingDollar(text, index + 1);
-      if (close > index + 1 && !/\s/.test(text[close - 1])) {
-        html.push(encodeHtml(text.slice(cursor, index)));
-        html.push(renderInlineMath(text.slice(index + 1, close), options));
-        index = close + 1;
-        cursor = index;
-        continue;
-      }
-    }
-
-    index += 1;
+    html.push(encodeHtml(text.slice(cursor, math.from)));
+    html.push(renderInlineMath(math.body, options));
+    cursor = math.to;
   }
 
   html.push(encodeHtml(text.slice(cursor)));

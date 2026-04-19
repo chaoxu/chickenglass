@@ -1,3 +1,5 @@
+import { parseInlineMathSource } from "./inline-math-source";
+
 function textNodeParent(target: EventTarget | null): Element | null {
   if (target instanceof Element) {
     return target;
@@ -71,23 +73,11 @@ function fallbackBodyLocationFromMathRoot(
 }
 
 export function inlineMathBodyStartOffset(raw: string): number {
-  if (raw.startsWith("\\(")) {
-    return 2;
-  }
-  if (raw.startsWith("$")) {
-    return 1;
-  }
-  return 0;
+  return parseInlineMathSource(raw)?.bodyFrom ?? 0;
 }
 
 export function inlineMathBodyEndOffset(raw: string): number {
-  if (raw.startsWith("\\(") && raw.endsWith("\\)")) {
-    return Math.max(inlineMathBodyStartOffset(raw), raw.length - 2);
-  }
-  if (raw.startsWith("$") && raw.endsWith("$")) {
-    return Math.max(inlineMathBodyStartOffset(raw), raw.length - 1);
-  }
-  return raw.length;
+  return parseInlineMathSource(raw)?.bodyTo ?? raw.length;
 }
 
 export function inlineMathSourceOffsetFromTarget(
