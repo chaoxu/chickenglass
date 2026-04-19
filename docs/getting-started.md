@@ -18,6 +18,7 @@ pnpm tauri:dev
 
 - [Architecture decisions](architecture/architecture-decisions.md) — Lexical-native editing and markdown ownership
 - [Development rules](architecture/development-rules.md) — testing gates, shell rules, and editor constraints
+- [Editing bug rubric](architecture/editing-bug-rubric.md) — invariants and severity for day-to-day editing failures
 - [Subsystem pattern](architecture/subsystem-pattern.md) — ownership boundaries for non-trivial features
 - [Theme contract](architecture/theme-contract.md) — token groups and surface responsibilities
 - [Inline rendering policy](design/inline-rendering-policy.md) — inline math and formatting behavior

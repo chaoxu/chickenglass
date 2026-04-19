@@ -1,12 +1,15 @@
 import type { DebugDocumentState } from "../app/hooks/use-app-debug-types";
 import { useDevSettings } from "../state/dev-settings";
-import { getConnectedApp } from "./debug-bridge";
+import { getConnectedApp, getConnectedEditor } from "./debug-bridge";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
+const DEBUG_SESSION_EVENTS_STORAGE_KEY = "coflat-debug-session-events";
 const DEBUG_RECORDER_ENDPOINT = "/__coflat/debug-event";
 const JSON_CONTENT_TYPE = "application/json";
 const FLUSH_DELAY_MS = 400;
 const MAX_BATCH_SIZE = 100;
+const MAX_LOCAL_EVENTS = 500;
+const EDITOR_EXCERPT_RADIUS = 240;
 
 export interface DebugSessionEvent {
   readonly timestamp: number;
@@ -42,6 +45,12 @@ interface EditorSelectionSnapshot {
 interface EditorTextSnapshot {
   readonly docLength: number;
   readonly docHash: string;
+  readonly selection: {
+    readonly anchor: number;
+    readonly focus: number;
+    readonly from: number;
+    readonly to: number;
+  } | null;
   readonly excerpt: {
     readonly from: number;
     readonly to: number;
@@ -72,6 +81,60 @@ const pendingEvents: PendingEvent[] = [];
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
+}
+
+function hashText(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function parseLocalEvents(): PendingEvent[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(DEBUG_SESSION_EVENTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((event): event is PendingEvent => (
+      typeof event === "object"
+      && event !== null
+      && typeof event.type === "string"
+      && typeof event.timestamp === "number"
+    )) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalEvents(events: readonly PendingEvent[]): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(
+      DEBUG_SESSION_EVENTS_STORAGE_KEY,
+      JSON.stringify(events.slice(-MAX_LOCAL_EVENTS)),
+    );
+  } catch {
+    // A full or unavailable localStorage must not break editing.
+  }
+}
+
+function persistLocalEvents(events: readonly PendingEvent[]): void {
+  if (events.length === 0) return;
+
+  const existing = parseLocalEvents();
+  const seen = new Set(existing.map((event) => `${event.sessionId}:${event.seq}`));
+  const merged = [...existing];
+  for (const event of events) {
+    const key = `${event.sessionId}:${event.seq}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(event);
+  }
+  writeLocalEvents(merged);
 }
 
 function ensureSessionId(): string | null {
@@ -136,6 +199,31 @@ function currentSelection(): EditorSelectionSnapshot | null {
   };
 }
 
+function currentEditorSnapshot(): EditorTextSnapshot | null {
+  const editor = getConnectedEditor();
+  if (!editor) return null;
+
+  try {
+    const doc = editor.peekDoc();
+    const selection = editor.peekSelection();
+    const center = selection?.from ?? 0;
+    const from = Math.max(0, center - EDITOR_EXCERPT_RADIUS);
+    const to = Math.min(doc.length, center + EDITOR_EXCERPT_RADIUS);
+    return {
+      docHash: hashText(doc),
+      docLength: doc.length,
+      excerpt: {
+        from,
+        text: doc.slice(from, to),
+        to,
+      },
+      selection,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function currentContext(): DebugSessionEvent["context"] {
   if (!isBrowser()) {
     return {
@@ -156,7 +244,7 @@ function currentContext(): DebugSessionEvent["context"] {
   return {
     activeElement: activeElementSnapshot(),
     document: app ? app.getCurrentDocument() : null,
-    editor: null,
+    editor: currentEditorSnapshot(),
     mode: app ? app.getMode() : null,
     selection,
     settings: readSettingsSnapshot(),
@@ -197,12 +285,14 @@ export function recordDebugSessionEvent(
   if (!nextSessionId) return;
   ensureLifecycleHooks();
 
-  pendingEvents.push({
+  const pendingEvent = {
     ...event,
     context: event.context ?? currentContext(),
     sessionId: nextSessionId,
     seq: ++nextSequence,
-  });
+  };
+
+  pendingEvents.push(pendingEvent);
 
   if (pendingEvents.length >= MAX_BATCH_SIZE) {
     void flushDebugSessionEvents();
@@ -213,9 +303,8 @@ export function recordDebugSessionEvent(
 
 export async function flushDebugSessionEvents(): Promise<void> {
   if (!isBrowser() || flushInFlight || pendingEvents.length === 0) return;
-  // The recorder endpoint is only mounted by the Vite dev middleware. In
-  // preview/production builds there is no sink, so draining the queue over
-  // the network just produces 404s and re-queues forever.
+  // The recorder endpoint is only mounted by the Vite dev middleware. Local
+  // storage keeps compiled-app sessions exportable without retrying 404s.
   if (!import.meta.env.DEV) {
     pendingEvents.length = 0;
     connected = false;
@@ -223,6 +312,7 @@ export async function flushDebugSessionEvents(): Promise<void> {
   }
   flushInFlight = true;
   const batch = pendingEvents.splice(0, pendingEvents.length);
+  persistLocalEvents(batch);
   try {
     const response = await fetch(DEBUG_RECORDER_ENDPOINT, {
       method: "POST",
@@ -256,11 +346,37 @@ export function getDebugSessionRecorderStatus(): {
   readonly sessionKind: DebugSessionKind;
   readonly connected: boolean;
   readonly queued: number;
+  readonly localEventCount: number;
 } {
   return {
     sessionId: ensureSessionId(),
     sessionKind: sessionKind(),
     connected,
     queued: pendingEvents.length,
+    localEventCount: parseLocalEvents().length,
   };
+}
+
+export function exportDebugSessionEvents({
+  includeDocument = true,
+}: {
+  readonly includeDocument?: boolean;
+} = {}): {
+  readonly currentDocument: string | null;
+  readonly events: readonly PendingEvent[];
+  readonly status: ReturnType<typeof getDebugSessionRecorderStatus>;
+} {
+  const editor = getConnectedEditor();
+  persistLocalEvents(pendingEvents);
+  return {
+    currentDocument: includeDocument && editor ? editor.peekDoc() : null,
+    events: parseLocalEvents(),
+    status: getDebugSessionRecorderStatus(),
+  };
+}
+
+export function clearDebugSessionEvents(): void {
+  if (!isBrowser()) return;
+  pendingEvents.length = 0;
+  window.localStorage.removeItem(DEBUG_SESSION_EVENTS_STORAGE_KEY);
 }

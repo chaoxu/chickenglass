@@ -110,6 +110,8 @@ __cfDebug.printPerfSummary()
 __cfDebug.clearPerf()
 __cfDebug.togglePerfPanel()
 __cfDebug.toggleFps()
+__cfDebug.exportSession({ includeDocument: false })
+__cfDebug.clearSession()
 
 __tauriSmoke.openProject("/abs/path")
 __tauriSmoke.openFile("notes.md")

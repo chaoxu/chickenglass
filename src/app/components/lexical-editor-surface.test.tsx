@@ -93,6 +93,13 @@ describe("LexicalEditorSurface", () => {
         from: 1,
         to: 4,
       })),
+      peekDoc: vi.fn(() => "abcde"),
+      peekSelection: vi.fn(() => ({
+        anchor: 1,
+        focus: 4,
+        from: 1,
+        to: 4,
+      })),
       insertText: vi.fn(),
       setDoc: vi.fn(),
       setSelection: vi.fn(),

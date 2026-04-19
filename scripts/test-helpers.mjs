@@ -565,7 +565,8 @@ export async function captureDebugState(page, label = "capture") {
     const doc = window.__editor?.getDoc?.() ?? "";
     const selection = window.__editor?.getSelection?.() ?? null;
     const mode = window.__app?.getMode?.() ?? null;
-    return { document: doc, selection, mode };
+    const debugSession = window.__cfDebug?.exportSession?.({ includeDocument: false });
+    return { debugSessionStatus: debugSession?.status ?? null, document: doc, selection, mode };
   });
   return { label, ...state, capturedAt: new Date().toISOString() };
 }

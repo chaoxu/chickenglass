@@ -6,9 +6,7 @@ import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysO
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createParagraphNode,
-  $getRoot,
   $getSelection,
-  $isElementNode,
   $isLineBreakNode,
   $isNodeSelection,
   $isRangeSelection,
@@ -45,7 +43,8 @@ import {
 } from "./markdown";
 import { useEmbeddedFieldFlushRegistry } from "./embedded-field-flush-registry";
 import {
-  readSourcePositionFromLexicalSelection,
+  readSourceSelectionFromLexicalSelection,
+  selectSourceOffsetsInRichLexicalRoot,
   scrollSourcePositionIntoView,
 } from "./source-position-plugin";
 import { useDevSettings } from "../state/dev-settings";
@@ -254,9 +253,24 @@ export function EditorHandlePlugin({
       embeddedFieldFlushRegistry?.flush();
     };
 
+    const readDocumentSnapshot = () => getLexicalMarkdown(editor);
+
+    const readSelectionSnapshot = () => {
+      const currentDoc = readDocumentSnapshot();
+      const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
+        fallback: selectionRef.current,
+        markdown: currentDoc,
+      });
+      if (!liveSelection) {
+        return selectionRef.current;
+      }
+      selectionRef.current = liveSelection;
+      return liveSelection;
+    };
+
     const readFreshDocument = () => {
       flushPendingEdits();
-      return getLexicalMarkdown(editor);
+      return readDocumentSnapshot();
     };
 
     onEditorReady({
@@ -295,13 +309,10 @@ export function EditorHandlePlugin({
       getDoc: readFreshDocument,
       getSelection: () => {
         flushPendingEdits();
-        const livePosition = readSourcePositionFromLexicalSelection(editor);
-        if (livePosition === null) {
-          return selectionRef.current;
-        }
-        const docLength = getLexicalMarkdown(editor).length;
-        return createMarkdownSelection(livePosition, livePosition, docLength);
+        return readSelectionSnapshot();
       },
+      peekDoc: readDocumentSnapshot,
+      peekSelection: readSelectionSnapshot,
       insertText: (text) => {
         const currentDoc = readFreshDocument();
         const selection = createMarkdownSelection(
@@ -355,19 +366,15 @@ export function EditorHandlePlugin({
           anchor,
           focus,
         );
-        const moved = scrollSourcePositionIntoView(
+        const currentDoc = getLexicalMarkdown(editor);
+        const moved = selectSourceOffsetsInRichLexicalRoot(
           editor,
-          editor.getRootElement(),
-          nextSelection.from,
+          currentDoc,
+          nextSelection.anchor,
+          nextSelection.focus,
         );
         if (!moved) {
-          editor.update(() => {
-            const root = $getRoot();
-            const firstChild = root.getFirstChild();
-            if (firstChild && $isElementNode(firstChild)) {
-              firstChild.selectStart();
-            }
-          }, { discrete: true });
+          scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },

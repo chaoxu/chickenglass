@@ -565,9 +565,9 @@ function transformFormattedInlineSourceNodes(
   };
 }
 
-function exportMarkdownFromSerializedState(
+export function exportMarkdownFromSerializedState(
   state: SerializedEditorState,
-  sourceReplacements: readonly string[],
+  sourceReplacements: readonly string[] = [],
 ): string {
   const exportEditor = createHeadlessCoflatEditor();
   exportEditor.setEditorState(exportEditor.parseEditorState(JSON.stringify(state)));

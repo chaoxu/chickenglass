@@ -83,6 +83,41 @@ export async function run(page) {
     };
   }
 
+  await page.waitForFunction(
+    () => {
+      const figureOption = [...document.querySelectorAll(".cf-reference-completion-preview")]
+        .find((option) => option.textContent?.includes("fig:pdf-local"));
+      return figureOption
+        && figureOption.querySelector(".cf-lexical-block--figure")
+        && figureOption.querySelector("img")
+        && !figureOption.querySelector("object")
+        && !figureOption.textContent?.includes("Preview unavailable");
+    },
+    undefined,
+    { timeout: 5000 },
+  ).catch(() => {});
+  const pdfCompletionPreview = await page.evaluate(() => {
+    const figureOption = [...document.querySelectorAll(".cf-reference-completion-preview")]
+      .find((option) => option.textContent?.includes("fig:pdf-local"));
+    return {
+      hasFigureBlock: Boolean(figureOption?.querySelector(".cf-lexical-block--figure")),
+      hasImage: Boolean(figureOption?.querySelector("img")),
+      hasObject: Boolean(figureOption?.querySelector("object")),
+      text: figureOption?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    };
+  });
+  if (
+    !pdfCompletionPreview.hasFigureBlock
+    || !pdfCompletionPreview.hasImage
+    || pdfCompletionPreview.hasObject
+    || pdfCompletionPreview.text.includes("Preview unavailable")
+  ) {
+    return {
+      pass: false,
+      message: `PDF figure completion preview did not use the shared figure preview path: ${JSON.stringify(pdfCompletionPreview)}`,
+    };
+  }
+
   await pickCompletionOption(page, "thm:hover-preview");
   const afterBracketed = await readEditorText(page);
   if (!afterBracketed.includes("Bracketed [@thm:hover-preview")) {

@@ -1,14 +1,15 @@
-import DOMPurify from "dompurify";
-import { useMemo } from "react";
 import type { FrontmatterConfig } from "../lib/frontmatter";
 import type { ReferenceCompletionCandidate } from "../state/reference-completion-engine";
+import { FigurePreviewBlock } from "./figure-preview-block";
 import {
   buildPreviewFencedDivRaw,
 } from "./markdown/block-syntax";
 import { renderCitationTextHtml } from "./markdown/citation-text-html";
+import { parseMarkdownImage } from "./markdown/image-markdown";
 import type { RenderCitations } from "./markdown/reference-display";
 import type { RenderIndex } from "./markdown/reference-index";
-import { renderDisplayMathHtml, renderFencedDivHtml } from "./markdown/rich-html-preview";
+import { renderDisplayMathHtml, renderFencedDivHtml, renderMarkdownRichHtml } from "./markdown/rich-html-preview";
+import { PreviewHtml } from "./preview-html";
 
 export interface ReferenceCompletionPreviewRenderOptions {
   readonly citations: RenderCitations;
@@ -22,6 +23,13 @@ export type ReferenceCompletionPreviewModel =
   | {
     readonly kind: "heading";
     readonly text: string;
+  }
+  | {
+    readonly alt: string;
+    readonly kind: "figure";
+    readonly label: string;
+    readonly src: string;
+    readonly titleHtml?: string;
   }
   | {
     readonly html: string;
@@ -53,6 +61,21 @@ export function buildReferenceCompletionPreviewModel(
         kind: "rich-html",
       };
     case "block":
+      if (candidate.previewSource.blockType === "figure") {
+        const image = parseMarkdownImage(candidate.previewSource.bodyMarkdown.trim());
+        if (image) {
+          const titleHtml = candidate.previewSource.title
+            ? renderMarkdownRichHtml(candidate.previewSource.title, options)
+            : undefined;
+          return {
+            alt: image.alt,
+            kind: "figure",
+            label: options.renderIndex.references.get(candidate.id)?.label ?? "Figure",
+            src: image.src,
+            titleHtml,
+          };
+        }
+      }
       return {
         html: renderFencedDivHtml(buildPreviewFencedDivRaw({
           blockType: candidate.previewSource.blockType,
@@ -63,17 +86,6 @@ export function buildReferenceCompletionPreviewModel(
         kind: "rich-html",
       };
   }
-}
-
-function ReferenceCompletionPreviewHtml({
-  className,
-  html,
-}: {
-  readonly className: string;
-  readonly html: string;
-}) {
-  const sanitized = useMemo(() => DOMPurify.sanitize(html), [html]);
-  return <div className={className} dangerouslySetInnerHTML={{ __html: sanitized }} />;
 }
 
 export function ReferenceCompletionPreview({
@@ -93,9 +105,22 @@ export function ReferenceCompletionPreview({
     );
   }
 
+  if (preview.kind === "figure") {
+    return (
+      <div className="cf-reference-completion-content">
+        <FigurePreviewBlock
+          alt={preview.alt}
+          label={preview.label}
+          src={preview.src}
+          titleHtml={preview.titleHtml}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="cf-reference-completion-content">
-      <ReferenceCompletionPreviewHtml
+      <PreviewHtml
         className="cf-reference-completion-rich-preview"
         html={preview.html}
       />

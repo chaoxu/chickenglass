@@ -271,6 +271,7 @@ const REVEAL_SOURCE_TEXT_STYLE = [
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
   readonly adapter: RevealAdapter;
+  readonly caretOffset: number;
   readonly source: string;
   readonly sourceFormat: number;
   readonly selectionState: "opening" | "active";
@@ -324,6 +325,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       ? Date.now() + 100
       : 0;
     openInlineReveal(request, adapter, activeRef, setChromeState);
+    scheduleOpeningRevealSelectionSync(editor, activeRef);
     setCursorRevealActive(editor, activeRef.current !== null);
   }, [adapters, editor]);
 
@@ -362,22 +364,25 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         if (activeRef.current) {
           const active = activeRef.current;
           const anchorKey = anchorTextKey(sel);
+          const live = $getNodeByKey(active.plainKey);
+          const domInsideReveal = $isTextNode(live)
+            && domSelectionInsideRevealText(live.getTextContent());
           if (anchorKey && anchorKey === active.plainKey) {
-            activeRef.current = { ...active, selectionState: "active" };
+            activeRef.current = domInsideReveal
+              ? { ...active, selectionState: "active" }
+              : active;
             return false;
           }
-          const live = $getNodeByKey(active.plainKey);
-          if ($isTextNode(live) && domSelectionInsideText(live.getTextContent())) {
+          if (domInsideReveal) {
             activeRef.current = { ...active, selectionState: "active" };
             return false;
           }
           // Opening a decorator reveal is a two-step transition: replace the
           // decorator with a TextNode, then let Lexical publish the selection
-          // inside that TextNode. Selection-change events from the pre-swap
-          // state are not exits; only commit after the reveal has reached
-          // the active state at least once.
-          if (active.selectionState === "opening") {
-            activeRef.current = { ...active, selectionState: "active" };
+          // inside that TextNode. If a browser selectionchange races in from
+          // the pre-swap state, restore the requested source caret instead of
+          // treating an outside selection as a successful open.
+          if (restoreOpeningRevealSelection(active, live)) {
             return false;
           }
           // Caret moved off the reveal. Commit the previous source, then
@@ -507,9 +512,6 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
 
       const direction = event.key === "ArrowRight" ? "right" : "left";
       lastArrowDirectionRef.current = direction;
-      const domSelection = document.getSelection();
-      const domAnchorText = domSelection?.anchorNode?.textContent ?? null;
-      const domAnchorOffset = domSelection?.anchorOffset ?? null;
       let handled = false;
 
       editor.update(() => {
@@ -523,8 +525,9 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           && selection.anchor.getNode().getKey() === active.plainKey
           ? selection.anchor.offset
           : null;
+        const domOffset = getDomSelectionOffsetInsideRevealText(live.getTextContent());
         const offset = lexicalOffset ?? (
-          domAnchorText === live.getTextContent() ? domAnchorOffset : null
+          domOffset === null ? null : Math.min(domOffset, live.getTextContentSize())
         );
         if (offset === null) {
           return;
@@ -581,16 +584,19 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           }
           const live = $getNodeByKey(latest.plainKey);
           const selection = $getSelection();
+          const domInsideReveal = $isTextNode(live)
+            && domSelectionInsideRevealText(live.getTextContent());
           if (anchorTextKey(selection) === latest.plainKey) {
+            activeRef.current = domInsideReveal
+              ? { ...latest, selectionState: "active" }
+              : latest;
+            return;
+          }
+          if (domInsideReveal) {
             activeRef.current = { ...latest, selectionState: "active" };
             return;
           }
-          if ($isTextNode(live) && domSelectionInsideText(live.getTextContent())) {
-            activeRef.current = { ...latest, selectionState: "active" };
-            return;
-          }
-          if (latest.selectionState === "opening") {
-            activeRef.current = { ...latest, selectionState: "active" };
+          if (restoreOpeningRevealSelection(latest, live)) {
             return;
           }
 
@@ -718,11 +724,41 @@ function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | n
     : null;
 }
 
-function domSelectionInsideText(text: string): boolean {
+function domSelectionInsideRevealText(text: string): boolean {
+  return getDomSelectionOffsetInsideRevealText(text) !== null;
+}
+
+function getDomSelectionOffsetInsideRevealText(text: string): number | null {
   if (typeof document === "undefined") {
-    return false;
+    return null;
   }
-  return document.getSelection()?.anchorNode?.textContent === text;
+  const selection = document.getSelection();
+  const anchor = selection?.anchorNode ?? null;
+  if (!anchor) {
+    return null;
+  }
+  const element = getLexicalTextElement(anchor);
+  if (!element || element.textContent !== text || !element.style.getPropertyValue("--cf-reveal")) {
+    return null;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  try {
+    range.setEnd(anchor, selection?.anchorOffset ?? 0);
+  } catch {
+    return null;
+  }
+  return range.toString().length;
+}
+
+function getLexicalTextElement(anchor: Node | null): HTMLElement | null {
+  if (!anchor) {
+    return null;
+  }
+  const element = anchor instanceof HTMLElement
+    ? anchor
+    : anchor.parentElement;
+  return element?.closest<HTMLElement>("[data-lexical-text='true']") ?? null;
 }
 
 function shouldSkipOpeningArrow(
@@ -737,10 +773,44 @@ function shouldSkipOpeningArrow(
   return true;
 }
 
+function scheduleOpeningRevealSelectionSync(
+  editor: LexicalEditor,
+  activeRef: { current: InlineRevealHandle | null },
+): void {
+  const active = activeRef.current;
+  if (!active || active.selectionState !== "opening") {
+    return;
+  }
+  queueMicrotask(() => {
+    editor.update(() => {
+      const latest = activeRef.current;
+      if (!latest || latest.plainKey !== active.plainKey) {
+        return;
+      }
+      const live = $getNodeByKey(latest.plainKey);
+      restoreOpeningRevealSelection(latest, live);
+    }, { discrete: true });
+  });
+}
+
+function restoreOpeningRevealSelection(
+  active: InlineRevealHandle,
+  live: LexicalNode | null | undefined,
+): boolean {
+  if (active.selectionState !== "opening" || !$isTextNode(live)) {
+    return false;
+  }
+  $addUpdateTag(COFLAT_REVEAL_UI_TAG);
+  $setSelection(null);
+  selectRevealText(live, active.caretOffset);
+  return true;
+}
+
 function selectRevealText(node: ReturnType<typeof $createTextNode>, offset: number): void {
   node.select(offset, offset);
   const selection = $getSelection();
   if ($isRangeSelection(selection)) {
+    selection.dirty = true;
     selection.setFormat(0);
     selection.setStyle(REVEAL_SOURCE_TEXT_STYLE);
   }
@@ -793,10 +863,12 @@ function openInlineReveal(
   } else {
     live.replace(plain);
   }
-  selectRevealText(plain, request.caretOffset);
+  const caretOffset = Math.max(0, Math.min(request.caretOffset, plain.getTextContentSize()));
+  selectRevealText(plain, caretOffset);
   const plainKey = plain.getKey();
   activeRef.current = {
     adapter,
+    caretOffset,
     plainKey,
     selectionState,
     source: request.source,

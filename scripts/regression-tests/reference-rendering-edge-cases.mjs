@@ -14,9 +14,15 @@ const MAIN = [
   "",
   "Before [@mathref] after citation.",
   "",
+  "Cluster [@mathref; @secondref] after cluster.",
+  "",
   "::: Proof",
   "The proof body.",
   ":::",
+  "",
+  ":::: {.figure #fig:missing-png} Missing PNG",
+  "![Missing PNG](missing-preview.png)",
+  "::::",
   "",
 ].join("\n");
 
@@ -25,6 +31,12 @@ const BIB = [
   "  author = {Doe, Jane},",
   "  title = {A $k$-hitting set},",
   "  year = {2020},",
+  "}",
+  "",
+  "@article{secondref,",
+  "  author = {Smith, Ada},",
+  "  title = {Second clustered citation},",
+  "  year = {2021},",
   "}",
   "",
 ].join("\n");
@@ -133,6 +145,28 @@ export async function run(page) {
     };
   }
 
+  await page.waitForFunction(
+    () => document.querySelector("[data-preview-state='error']")?.textContent?.includes("missing-preview.png"),
+    undefined,
+    { timeout: 5000 },
+  );
+  const missingMediaState = await page.evaluate(() => {
+    const fallback = [...document.querySelectorAll("[data-preview-state='error']")]
+      .find((element) => element.textContent?.includes("missing-preview.png"));
+    return {
+      hasFallback: Boolean(fallback),
+      hasBrokenImage: Boolean([...document.querySelectorAll("img")]
+        .some((image) => image instanceof HTMLImageElement && image.currentSrc.includes("missing-preview.png"))),
+      text: fallback?.textContent ?? "",
+    };
+  });
+  if (!missingMediaState.hasFallback || missingMediaState.hasBrokenImage) {
+    return {
+      pass: false,
+      message: `missing PNG did not render as a local unavailable preview: ${JSON.stringify(missingMediaState)}`,
+    };
+  }
+
   await page.locator("[data-coflat-citation='true']").first().hover();
   await page.waitForFunction(
     () => Boolean(document.querySelector(".cf-hover-preview-tooltip[data-visible='true']")),
@@ -166,6 +200,16 @@ export async function run(page) {
     undefined,
     { timeout: 5000 },
   );
+
+  const clusteredCitationItem = page.locator(".cf-lexical-reference [data-coflat-ref-id='secondref']").first();
+  await clusteredCitationItem.hover();
+  await page.waitForFunction(
+    () => document.querySelector(".cf-hover-preview-tooltip[data-visible='true']")?.textContent?.includes("Second clustered citation"),
+    undefined,
+    { timeout: 5000 },
+  );
+  await page.mouse.move(10, 10);
+  await page.waitForTimeout(150);
 
   const inlineBeforeReveal = await readCitationInlineState(page);
   if (!inlineBeforeReveal.citationAfterSameLine) {

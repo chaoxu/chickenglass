@@ -15,6 +15,10 @@ export interface InteractionTraceEntry {
   nodeKey: string | null;
   /** Short DOM selector summary of the event target. */
   target: string;
+  clientX?: number;
+  clientY?: number;
+  editorX?: number | null;
+  editorY?: number | null;
   scrollBefore: number;
   scrollAfter: number;
   /** Whether a click handler returned true/default-prevented. */

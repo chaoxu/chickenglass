@@ -3,6 +3,11 @@ import type { LexicalEditor } from "lexical";
 import {
   $createNodeSelection,
   $getNearestNodeFromDOMNode,
+  $getRoot,
+  $getSelection,
+  $isElementNode,
+  $isRangeSelection,
+  $isTextNode,
   $setSelection,
   UNDO_COMMAND,
 } from "lexical";
@@ -235,6 +240,84 @@ describe("LexicalMarkdownEditor mode round-trip (issue #99)", () => {
 });
 
 describe("LexicalMarkdownEditor rich selection bridge", () => {
+  it("keeps the source selection at the deletion point after rich prose deletion", async () => {
+    const doc = [
+      "Alpha bravo charlie delta.",
+      "",
+      "Second paragraph.",
+    ].join("\n");
+    const editor = await mountEditor({
+      doc,
+      editorMode: "lexical",
+    });
+
+    try {
+      act(() => {
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected first paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected first text node");
+          }
+          text.select(6, 12);
+        }, { discrete: true });
+      });
+
+      expect(editor.handle.getSelection()).toMatchObject({
+        anchor: 6,
+        focus: 12,
+      });
+
+      act(() => {
+        editor.editor.update(() => {
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) {
+            throw new Error("expected range selection");
+          }
+          selection.removeText();
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(editor.handle.getDoc()).toBe(doc.replace("bravo ", ""));
+      });
+      await waitFor(() => {
+        expect(editor.handle.getSelection()).toMatchObject({
+          anchor: 6,
+          focus: 6,
+        });
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("maps rich setSelection ranges across formatted text nodes", async () => {
+    const doc = "Alpha **bravo** charlie";
+    const editor = await mountEditor({
+      doc,
+      editorMode: "lexical",
+    });
+
+    try {
+      act(() => {
+        editor.handle.setSelection(0, doc.length);
+      });
+
+      await waitFor(() => {
+        expect(editor.handle.getSelection()).toMatchObject({
+          anchor: 0,
+          focus: doc.length,
+        });
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("reports the live source position when display math owns the selection", async () => {
     const doc = [
       "Before",

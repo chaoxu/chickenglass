@@ -3,7 +3,11 @@ import type { LexicalEditor } from "lexical";
 import type { EditorMode } from "../editor-mode";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { isTauri } from "../../lib/tauri";
-import { recordDebugSessionEvent } from "../../debug/session-recorder";
+import {
+  clearDebugSessionEvents,
+  exportDebugSessionEvents,
+  recordDebugSessionEvent,
+} from "../../debug/session-recorder";
 import type { SourceMap } from "../source-map";
 import {
   clearCombinedPerf,
@@ -222,6 +226,8 @@ export function useAppDebug({
             },
             getDoc: () => getCurrentDocText(),
             getSelection: () => editorHandle.getSelection(),
+            peekDoc: () => editorHandle.peekDoc(),
+            peekSelection: () => editorHandle.peekSelection(),
             insertText: (text) => {
               recordDebugSessionEvent({
                 timestamp: Date.now(),
@@ -264,6 +270,8 @@ export function useAppDebug({
       toggleFps: () => useDevSettings.getState().toggle("fpsCounter"),
       interactionLog: getInteractionLog,
       clearInteractionLog,
+      exportSession: exportDebugSessionEvents,
+      clearSession: clearDebugSessionEvents,
     });
     if (import.meta.env.DEV && isTauri()) {
       connectTauriSmoke({

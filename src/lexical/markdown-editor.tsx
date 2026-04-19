@@ -93,7 +93,9 @@ import {
 import {
   $readSourcePositionFromLexicalSelection,
   readSourcePositionFromLexicalSelection,
+  readSourceSelectionFromLexicalSelection,
   readSourcePositionFromElement,
+  selectSourceOffsetsInRichLexicalRoot,
   scrollSourcePositionIntoView,
   SourcePositionPlugin,
 } from "./source-position-plugin";
@@ -243,7 +245,6 @@ function RichSelectionPlugin({
       syncSelection(selectionFromLivePosition(readLivePosition()));
     };
 
-    syncLiveSelection(() => readSourcePositionFromLexicalSelection(editor));
     return mergeRegister(
       editor.registerCommand(
         SELECTION_CHANGE_COMMAND,
@@ -374,6 +375,12 @@ function MarkdownModeSyncPlugin({
         replaceSourceText(editor, nextDoc, nextSelection, syncOptions);
       } else {
         setLexicalMarkdown(editor, nextDoc, syncOptions);
+        selectSourceOffsetsInRichLexicalRoot(
+          editor,
+          nextDoc,
+          nextSelection.anchor,
+          nextSelection.focus,
+        );
       }
     });
     return () => {
@@ -413,9 +420,33 @@ function EditorHandlePlugin({
       embeddedFieldFlushRegistry?.flush();
     };
 
+    const readDocumentSnapshot = () => readEditorDocument(editor, editorModeRef.current);
+
+    const readSelectionSnapshot = () => {
+      const currentDoc = readDocumentSnapshot();
+      if (editorModeRef.current === "source") {
+        return selectionRef.current;
+      }
+
+      if (!canReadLiveSelectionFromEditor(editor)) {
+        return selectionRef.current;
+      }
+
+      const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
+        fallback: selectionRef.current,
+        markdown: currentDoc,
+      });
+      if (!liveSelection) {
+        return selectionRef.current;
+      }
+
+      selectionRef.current = liveSelection;
+      return liveSelection;
+    };
+
     const readFreshDocument = () => {
       flushPendingEdits();
-      return readEditorDocument(editor, editorModeRef.current);
+      return readDocumentSnapshot();
     };
 
     onEditorReady({
@@ -462,27 +493,10 @@ function EditorHandlePlugin({
       getDoc: readFreshDocument,
       getSelection: () => {
         flushPendingEdits();
-        if (editorModeRef.current === "source") {
-          return selectionRef.current;
-        }
-
-        if (!canReadLiveSelectionFromEditor(editor)) {
-          return selectionRef.current;
-        }
-
-        const livePosition = readSourcePositionFromLexicalSelection(editor);
-        if (livePosition === null) {
-          return selectionRef.current;
-        }
-
-        const liveSelection = createMarkdownSelection(
-          livePosition,
-          livePosition,
-          readEditorDocument(editor, editorModeRef.current).length,
-        );
-        selectionRef.current = liveSelection;
-        return liveSelection;
+        return readSelectionSnapshot();
       },
+      peekDoc: readDocumentSnapshot,
+      peekSelection: readSelectionSnapshot,
       insertText: (text) => {
         const currentDoc = readFreshDocument();
         const selection = createMarkdownSelection(
@@ -555,7 +569,16 @@ function EditorHandlePlugin({
             selectSourceOffsetsInLexicalRoot(nextSelection.anchor, nextSelection.focus);
           }, { discrete: true, tag: tags });
         } else {
-          scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
+          const currentDoc = readEditorDocument(editor, editorModeRef.current);
+          const moved = selectSourceOffsetsInRichLexicalRoot(
+            editor,
+            currentDoc,
+            nextSelection.anchor,
+            nextSelection.focus,
+          );
+          if (!moved) {
+            scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
+          }
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
@@ -712,11 +735,19 @@ export function LexicalMarkdownEditor({
     }
 
     userEditPendingRef.current = false;
+    const nextSelection = readSourceSelectionFromLexicalSelection(editor, {
+      fallback: sourceSelectionRef.current,
+      markdown: nextDoc,
+    });
+    if (nextSelection) {
+      sourceSelectionRef.current = nextSelection;
+      onSelectionChange?.(nextSelection);
+    }
     pendingLocalEchoDocRef.current = nextDoc;
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
-  }, [onDocChange, onTextChange]);
+  }, [onDocChange, onSelectionChange, onTextChange]);
 
   const shellClassName = isSourceMode
     ? "cf-lexical-surface cf-lexical-surface--block"

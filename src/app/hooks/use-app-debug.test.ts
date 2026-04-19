@@ -51,6 +51,8 @@ const editorHandle = {
   flushPendingEdits: vi.fn(),
   getDoc: vi.fn(() => "# Notes"),
   getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
+  peekDoc: vi.fn(() => "# Notes"),
+  peekSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
   insertText: vi.fn(),
   setDoc: vi.fn(),
   setSelection: vi.fn(),

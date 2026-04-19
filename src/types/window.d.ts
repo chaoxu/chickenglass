@@ -86,6 +86,8 @@ declare global {
       toggleFps: () => boolean;
       interactionLog: () => readonly import("../lexical/interaction-trace").InteractionTraceEntry[];
       clearInteractionLog: () => void;
+      exportSession: (options?: { includeDocument?: boolean }) => unknown;
+      clearSession: () => void;
       /**
        * Resolves once `connectPerfBridge` runs. Prefer `await __cfDebug.ready`
        * over retry loops that poll for methods to stop throwing.

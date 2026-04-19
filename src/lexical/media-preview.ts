@@ -19,25 +19,66 @@ export interface AssetPreviewState {
   readonly previewUrl?: string;
 }
 
+async function readLocalImageDataUrl(
+  docPath: string,
+  target: string,
+  fs: { readFileBinary(path: string): Promise<Uint8Array> },
+): Promise<string | null> {
+  for (const candidate of projectPathCandidatesFromDocument(docPath, target)) {
+    try {
+      const next = await readImageFileAsDataUrl(candidate, fs);
+      if (next) {
+        return next;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return null;
+}
+
 export function useAssetPreview(target: string): AssetPreviewState {
   const { docPath, fs, resolveAssetUrl } = useLexicalRenderResources();
   const fallbackUrl = useMemo(
     () => resolveAssetUrl(target) ?? target,
     [resolveAssetUrl, target],
   );
+  const initiallyNeedsLocalProbe = isLocalAssetTarget(target);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(() =>
-    isPdfTarget(target) ? undefined : fallbackUrl,
+    isPdfTarget(target) || initiallyNeedsLocalProbe ? undefined : fallbackUrl,
   );
   const [kind, setKind] = useState<AssetPreviewState["kind"]>(() =>
-    isPdfTarget(target) ? "loading" : "ready",
+    isPdfTarget(target) || initiallyNeedsLocalProbe ? "loading" : "ready",
   );
 
   useEffect(() => {
     let cancelled = false;
 
     if (!isPdfTarget(target)) {
-      setPreviewUrl(fallbackUrl);
-      setKind("ready");
+      if (!isLocalAssetTarget(target) || !docPath) {
+        setPreviewUrl(fallbackUrl);
+        setKind("ready");
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      setPreviewUrl(undefined);
+      setKind("loading");
+
+      void (async () => {
+        const dataUrl = await readLocalImageDataUrl(docPath, target, fs);
+        if (cancelled) {
+          return;
+        }
+        if (dataUrl) {
+          setPreviewUrl(dataUrl);
+          setKind("ready");
+          return;
+        }
+        setPreviewUrl(undefined);
+        setKind("error");
+      })();
       return () => {
         cancelled = true;
       };
@@ -106,24 +147,11 @@ export function useLocalImageDataUrl(target: string): string | null {
     }
 
     void (async () => {
-      for (const candidate of projectPathCandidatesFromDocument(docPath, target)) {
-        try {
-          const next = await readImageFileAsDataUrl(candidate, fs);
-          if (!next) {
-            continue;
-          }
-          if (!cancelled) {
-            setDataUrl(next);
-          }
-          return;
-        } catch {
-          // Try the next candidate.
-        }
+      const next = await readLocalImageDataUrl(docPath, target, fs);
+      if (cancelled) {
+        return;
       }
-
-      if (!cancelled) {
-        setDataUrl(null);
-      }
+      setDataUrl(next);
     })();
 
     return () => {

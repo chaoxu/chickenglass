@@ -5,6 +5,7 @@
 - Prefer Lexical nodes, commands, and editor-state transforms over ad hoc DOM mutation.
 - Any change that touches markdown semantics must update carryover coverage in `src/lexical/`.
 - Any change that touches browser automation must update `scripts/test-helpers.mjs`, `src/types/window.d.ts`, and `AGENTS.md` together.
+- Classify user-facing editing failures with the [editing bug rubric](editing-bug-rubric.md) before deciding whether a fix is structural or cosmetic.
 - Run `pnpm typecheck` and `pnpm test` before claiming a fix.
 - When user-facing editing behavior changes, also run `pnpm test:browser` or document why it could not be run.
 - Study existing libraries before building custom editor infrastructure from scratch.

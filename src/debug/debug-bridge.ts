@@ -48,6 +48,13 @@ export interface EditorBridgeMethods {
     from: number;
     to: number;
   };
+  peekDoc: () => string;
+  peekSelection: () => {
+    anchor: number;
+    focus: number;
+    from: number;
+    to: number;
+  };
   insertText: (text: string) => void;
   setDoc: (doc: string) => void;
   setSelection: (anchor: number, focus?: number) => void;
@@ -214,6 +221,8 @@ function installWindowBridge(): void {
     focus: () => requireEditor().focus(),
     getDoc: () => requireEditor().getDoc(),
     getSelection: () => requireEditor().getSelection(),
+    peekDoc: () => requireEditor().peekDoc(),
+    peekSelection: () => requireEditor().peekSelection(),
     insertText: (text) => requireEditor().insertText(text),
     setDoc: (doc) => requireEditor().setDoc(doc),
     setSelection: (anchor, focus) => requireEditor().setSelection(anchor, focus),
@@ -273,6 +282,12 @@ function installWindowBridge(): void {
     clearInteractionLog: () => {
       throw new DebugBridgeError("__cfDebug.clearInteractionLog");
     },
+    exportSession: () => {
+      throw new DebugBridgeError("__cfDebug.exportSession");
+    },
+    clearSession: () => {
+      throw new DebugBridgeError("__cfDebug.clearSession");
+    },
     ready: readyPromises.perf,
   };
 
@@ -299,6 +314,8 @@ export interface PerfBridgeMethods {
   toggleFps: () => boolean;
   interactionLog: () => readonly import("../lexical/interaction-trace").InteractionTraceEntry[];
   clearInteractionLog: () => void;
+  exportSession: (options?: { includeDocument?: boolean }) => unknown;
+  clearSession: () => void;
 }
 
 export function connectPerfBridge(methods: PerfBridgeMethods): void {
@@ -311,6 +328,8 @@ export function connectPerfBridge(methods: PerfBridgeMethods): void {
     toggleFps: methods.toggleFps,
     interactionLog: methods.interactionLog,
     clearInteractionLog: methods.clearInteractionLog,
+    exportSession: methods.exportSession,
+    clearSession: methods.clearSession,
     ready: readyPromises.perf,
   };
   markReady("perf");

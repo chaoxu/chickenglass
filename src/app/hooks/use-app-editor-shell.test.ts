@@ -96,6 +96,8 @@ function createHandle(): MarkdownEditorHandle {
     flushPendingEdits: vi.fn(),
     getDoc: vi.fn(() => ""),
     getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
+    peekDoc: vi.fn(() => ""),
+    peekSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
     insertText: vi.fn(),
     setDoc: vi.fn(),
     setSelection: vi.fn(),

@@ -13,6 +13,8 @@ export interface MarkdownEditorHandle {
   flushPendingEdits: () => void;
   getDoc: () => string;
   getSelection: () => MarkdownEditorSelection;
+  peekDoc: () => string;
+  peekSelection: () => MarkdownEditorSelection;
   insertText: (text: string) => void;
   setDoc: (doc: string) => void;
   setSelection: (anchor: number, focus?: number, options?: { skipScrollIntoView?: boolean }) => void;

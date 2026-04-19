@@ -19,7 +19,7 @@ import { INLINE_TOKEN_KEY_ATTR } from "../inline-token-boundary";
 
 function renderReferenceCluster(
   parsed: ParsedReferenceToken,
-  renderItem: (itemRaw: string, id: string, citation: boolean) => JSX.Element,
+  renderItem: (itemRaw: string, id: string, citation: boolean, displayText?: string) => JSX.Element,
 ) {
   return parsed.ids.flatMap((id, index) => {
     const nodes: Array<JSX.Element | string> = [];
@@ -29,6 +29,44 @@ function renderReferenceCluster(
     nodes.push(renderItem(`[@${id}]`, id, false));
     return nodes;
   });
+}
+
+function stripReferenceWrapper(rendered: string): string {
+  const trimmed = rendered.trim();
+  if (
+    (trimmed.startsWith("(") && trimmed.endsWith(")"))
+    || (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function buildBracketedCitationRaw(id: string, locator: string | undefined): string {
+  return locator ? `[@${id}, ${locator}]` : `[@${id}]`;
+}
+
+function renderCitationCluster(
+  parsed: ParsedReferenceToken,
+  renderIndex: Parameters<typeof renderReferenceDisplay>[1],
+  citations: Parameters<typeof renderReferenceDisplay>[2],
+  renderItem: (itemRaw: string, id: string, citation: boolean, displayText?: string) => JSX.Element,
+) {
+  const nodes: Array<JSX.Element | string> = ["["];
+  parsed.ids.forEach((id, index) => {
+    if (index > 0) {
+      nodes.push("; ");
+    }
+    const itemRaw = buildBracketedCitationRaw(id, parsed.locators[index]);
+    nodes.push(renderItem(
+      itemRaw,
+      id,
+      true,
+      stripReferenceWrapper(renderReferenceDisplay(itemRaw, renderIndex, citations)),
+    ));
+  });
+  nodes.push("]");
+  return nodes;
 }
 
 /**
@@ -66,15 +104,16 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
     itemRaw: string,
     id: string,
     citation: boolean,
+    displayText?: string,
   ) => (
     <span
       className={citation ? "cf-citation" : "cf-crossref"}
       data-coflat-ref-id={id}
-      key={id}
+      key={`${id}:${itemRaw}`}
       onMouseEnter={handleHoverStart(id)}
       onMouseLeave={handleHoverEnd}
     >
-      {renderReferenceDisplay(itemRaw, renderIndex, citations)}
+      {displayText ?? renderReferenceDisplay(itemRaw, renderIndex, citations)}
     </span>
   ), [citations, handleHoverEnd, handleHoverStart, renderIndex]);
 
@@ -120,6 +159,22 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
   const allCitations = parsed.ids.every((id) => citations.store.has(id));
   if (allCitations) {
     const singleId = parsed.ids.length === 1 ? parsed.ids[0] : undefined;
+    if (!singleId) {
+      return (
+        <>
+          <span
+            className={wrapperClass}
+            {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
+            data-coflat-citation="true"
+            data-coflat-reference="true"
+          >
+            {renderCitationCluster(parsed, renderIndex, citations, renderSingleItem)}
+          </span>
+          {hoverPortal}
+        </>
+      );
+    }
+
     return (
       <>
         <span

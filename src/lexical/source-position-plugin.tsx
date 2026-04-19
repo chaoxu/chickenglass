@@ -16,24 +16,34 @@ import {
 } from "../constants/events";
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
+import { sourcePositionFromElement } from "./source-position-dom";
 
 const SOURCE_BLOCK_SELECTOR = "[data-coflat-raw-block='true'], [data-coflat-table-block='true']";
+
+export { readSourcePositionFromElement } from "./source-position-dom";
+export {
+  readSourceSelectionFromLexicalSelection,
+  selectSourceOffsetsInRichLexicalRoot,
+} from "./source-selection";
 
 export function syncSourceBlockPositions(root: HTMLElement | null, doc: string): void {
   if (!root) {
     return;
   }
 
-  const starts = collectSourceBlockRanges(doc).map((range) => range.from);
-  const elements = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)];
+  const ranges = collectSourceBlockRanges(doc);
+  const elements = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)]
+    .filter((element) => element.closest(".cf-lexical-root") === root);
 
   elements.forEach((element, index) => {
-    const start = starts[index];
-    if (start === undefined) {
+    const range = ranges[index];
+    if (!range) {
       delete element.dataset.coflatSourceFrom;
+      delete element.dataset.coflatSourceTo;
       return;
     }
-    element.dataset.coflatSourceFrom = String(start);
+    element.dataset.coflatSourceFrom = String(range.from);
+    element.dataset.coflatSourceTo = String(range.to);
   });
 }
 
@@ -71,58 +81,6 @@ function selectNavigationTarget(
   }
 
   return didSelect;
-}
-
-function sourcePositionFromMarkedElement(element: HTMLElement | null): number | null {
-  if (!element) {
-    return null;
-  }
-
-  const sourceFrom = element.dataset.coflatSourceFrom;
-  if (sourceFrom !== undefined) {
-    const parsed = Number(sourceFrom);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  if (element.classList.contains("cf-lexical-heading")) {
-    const headingPos = element.dataset.coflatHeadingPos;
-    if (headingPos !== undefined) {
-      const parsed = Number(headingPos);
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-  }
-
-  return null;
-}
-
-function sourcePositionFromElement(element: HTMLElement | null): number | null {
-  const markedDescendant = element?.querySelector<HTMLElement>(
-    "[data-coflat-source-from], .cf-lexical-heading[data-coflat-heading-pos]",
-  ) ?? null;
-  const descendantPosition = sourcePositionFromMarkedElement(markedDescendant);
-  if (descendantPosition !== null) {
-    return descendantPosition;
-  }
-
-  let current: HTMLElement | null = element;
-  while (current) {
-    const currentPosition = sourcePositionFromMarkedElement(current);
-    if (currentPosition !== null) {
-      return currentPosition;
-    }
-    current = current.parentElement;
-  }
-  return null;
-}
-
-export function readSourcePositionFromElement(
-  element: HTMLElement | null,
-): number | null {
-  return sourcePositionFromElement(element);
 }
 
 /**
@@ -175,20 +133,16 @@ export function scrollSourcePositionIntoView(
   }
 
   const rawBlocks = [...root.querySelectorAll<HTMLElement>("[data-coflat-source-from]")];
-  if (rawBlocks.length === 0) {
-    return false;
-  }
-
-  let target = rawBlocks[0] ?? null;
-  let bestStart = Number.NEGATIVE_INFINITY;
+  let target: HTMLElement | null = null;
   for (const block of rawBlocks) {
     const start = Number(block.dataset.coflatSourceFrom ?? "");
-    if (!Number.isFinite(start)) {
+    const end = Number(block.dataset.coflatSourceTo ?? "");
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
       continue;
     }
-    if (start <= pos && start >= bestStart) {
-      bestStart = start;
+    if (start <= pos && pos <= end) {
       target = block;
+      break;
     }
   }
 

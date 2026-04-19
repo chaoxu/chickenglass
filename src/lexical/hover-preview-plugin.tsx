@@ -1,9 +1,8 @@
 import { useMemo, type JSX, type PointerEventHandler, type ReactNode } from "react";
-import DOMPurify from "dompurify";
 
 import { SurfaceFloatingPortal } from "../lexical-next";
 import { useLexicalRenderContext, type LexicalRenderContextValue } from "./render-context";
-import { FigureMedia } from "./figure-media";
+import { FigurePreviewBlock } from "./figure-preview-block";
 import {
   buildPreviewFencedDivRaw,
 } from "./markdown/block-syntax";
@@ -15,17 +14,9 @@ import {
   renderFencedDivHtml,
   renderMarkdownRichHtml,
 } from "./markdown/rich-html-preview";
+import { PreviewHtml } from "./preview-html";
 
-export function PreviewHtml({
-  className,
-  html,
-}: {
-  readonly className: string;
-  readonly html: string;
-}) {
-  const sanitized = useMemo(() => DOMPurify.sanitize(html), [html]);
-  return <div className={className} dangerouslySetInnerHTML={{ __html: sanitized }} />;
-}
+export { PreviewHtml } from "./preview-html";
 
 export function FloatingPreviewPortal({
   anchor,
@@ -111,20 +102,12 @@ function buildReferencePreview(
           : null;
         return (
           <div className="cf-hover-preview">
-            <section className="cf-lexical-block cf-lexical-block--figure cf-lexical-block--captioned">
-              <div className="cf-lexical-block-body">
-                <FigureMedia alt={image.alt} src={image.src} />
-              </div>
-              {titleHtml ? (
-                <footer className="cf-lexical-block-caption">
-                  <span className="cf-lexical-block-caption-label">{figureLabel}</span>
-                  <PreviewHtml
-                    className="cf-lexical-block-caption-text"
-                    html={titleHtml}
-                  />
-                </footer>
-              ) : null}
-            </section>
+            <FigurePreviewBlock
+              alt={image.alt}
+              label={figureLabel}
+              src={image.src}
+              titleHtml={titleHtml ?? undefined}
+            />
           </div>
         );
       }

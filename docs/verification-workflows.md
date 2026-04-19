@@ -49,6 +49,17 @@ node scripts/browser-repro.mjs diff \
   --right /tmp/coflat-debug/session-b.jsonl
 ```
 
+For manual browser or compiled-app bug reports, export the local session from
+DevTools:
+
+```
+await __cfDebug.ready
+JSON.stringify(__cfDebug.exportSession({ includeDocument: true }), null, 2)
+```
+
+Use `includeDocument: false` when you only want hashes, selection, excerpts,
+and interaction events.
+
 Run `node scripts/browser-repro.mjs --help` for the full step JSON format
 reference.
 

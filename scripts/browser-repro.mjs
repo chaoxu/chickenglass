@@ -23,6 +23,7 @@ import {
 
 const COMPARABLE_CAPTURE_FIELDS = [
   "document",
+  "editor",
   "mode",
   "selection",
 ];
@@ -140,6 +141,7 @@ function mergedContextValue(next, key, fallback) {
 function mergeContext(base, next) {
   return {
     document: mergedContextValue(next, "document", base.document ?? null),
+    editor: mergedContextValue(next, "editor", base.editor ?? null),
     mode: mergedContextValue(next, "mode", base.mode ?? null),
     selection: mergedContextValue(next, "selection", base.selection ?? null),
     location: mergedContextValue(next, "location", base.location ?? ""),
@@ -297,6 +299,32 @@ function keyActionFromEvent(event) {
   };
 }
 
+function inputActionFromEvent(event) {
+  const detail = event?.detail;
+  if (!isRecord(detail) || typeof detail.inputType !== "string") {
+    return null;
+  }
+
+  if (detail.inputType.startsWith("insert") && typeof detail.data === "string" && detail.data.length > 0) {
+    return {
+      type: "insertText",
+      text: detail.data,
+    };
+  }
+
+  switch (detail.inputType) {
+    case "deleteContentBackward":
+      return { type: "press", key: "Backspace", modifiers: [] };
+    case "deleteContentForward":
+      return { type: "press", key: "Delete", modifiers: [] };
+    case "insertParagraph":
+    case "insertLineBreak":
+      return { type: "press", key: "Enter", modifiers: [] };
+    default:
+      return null;
+  }
+}
+
 export function parseSessionEvents(text) {
   return text
     .split(/\r?\n/u)
@@ -318,13 +346,21 @@ export function extractReplayActions(events) {
     let action = null;
     if (event.type === "key") {
       action = keyActionFromEvent(event);
-    } else if (event.type === "pointer") {
+    } else if (event.type === "pointer" || event.type === "click" || event.type === "scroll-jump") {
       action = pointerActionFromEvent(event);
+    } else if (event.type === "input") {
+      action = inputActionFromEvent(event);
     }
 
     if (action) {
       actions.push(action);
-    } else if (event.type === "key" || event.type === "pointer") {
+    } else if (
+      event.type === "key"
+      || event.type === "pointer"
+      || event.type === "click"
+      || event.type === "scroll-jump"
+      || event.type === "input"
+    ) {
       skipped += 1;
     }
   }
@@ -346,6 +382,7 @@ export function summarizeSessionEvents(events) {
   const eventCounts = {};
   let lastContext = {
     document: null,
+    editor: null,
     mode: null,
     selection: null,
     location: "",

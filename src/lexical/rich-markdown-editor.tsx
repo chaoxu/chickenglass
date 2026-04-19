@@ -61,7 +61,10 @@ import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
-import { SourcePositionPlugin } from "./source-position-plugin";
+import {
+  readSourceSelectionFromLexicalSelection,
+  SourcePositionPlugin,
+} from "./source-position-plugin";
 import {
   COFLAT_DOCUMENT_SYNC_TAG,
   COFLAT_REVEAL_COMMIT_TAG,
@@ -217,11 +220,19 @@ export function LexicalRichMarkdownEditor({
     }
 
     userEditPendingRef.current = false;
+    const nextSelection = readSourceSelectionFromLexicalSelection(editor, {
+      fallback: sourceSelectionRef.current,
+      markdown: nextDoc,
+    });
+    if (nextSelection) {
+      sourceSelectionRef.current = nextSelection;
+      onSelectionChange?.(nextSelection);
+    }
     pendingLocalEchoDocRef.current = nextDoc;
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
-  }, [onDocChange, onTextChange]);
+  }, [onDocChange, onSelectionChange, onTextChange]);
 
   const shellClassName = layoutMode === "inline"
     ? "cf-lexical-surface cf-lexical-surface--inline"

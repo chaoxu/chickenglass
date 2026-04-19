@@ -56,6 +56,24 @@ function lexicalNodeForTarget(
   return { nodeKey, nodeType };
 }
 
+function pointerPosition(
+  event: MouseEvent,
+  root: HTMLElement,
+): {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly editorX: number;
+  readonly editorY: number;
+} {
+  const rect = root.getBoundingClientRect();
+  return {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    editorX: event.clientX - rect.left,
+    editorY: event.clientY - rect.top,
+  };
+}
+
 // ---- Shared state box written by the React component, read by handlers. ----
 
 interface TraceState {
@@ -100,6 +118,7 @@ function handleClick(event: MouseEvent) {
 
   const { nodeKey, nodeType } = lexicalNodeForTarget(currentEditor, event.target);
   const targetSummary = domTargetSummary(event.target);
+  const position = pointerPosition(event, root);
 
   // Monitor scroll for 500ms after click to catch delayed jumps.
   let scrollAfter = scrollBefore;
@@ -123,6 +142,7 @@ function handleClick(event: MouseEvent) {
     const entry: InteractionTraceEntry = {
       ts: Date.now(),
       type: scrollAfter !== scrollBefore ? "scroll-jump" : "click",
+      ...position,
       nodeType,
       nodeKey,
       target: targetSummary,
