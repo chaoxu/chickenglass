@@ -8,6 +8,7 @@ use same_file::Handle as FileHandle;
 use serde::Serialize;
 
 use crate::commands::state::ProjectRootEntry;
+use crate::services::project_visibility::is_ignored_entry_name;
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -172,7 +173,7 @@ fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEn
         let entry = entry.map_err(|e| e.to_string())?;
         let file_name = entry.file_name().to_string_lossy().to_string();
 
-        if is_hidden_entry(&file_name) {
+        if is_ignored_entry_name(&file_name) {
             continue;
         }
 
@@ -193,10 +194,6 @@ fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEn
 
     sort_entries(&mut children);
     Ok(children)
-}
-
-fn is_hidden_entry(name: &str) -> bool {
-    name.starts_with('.') || name == "node_modules" || name == "target"
 }
 
 fn sort_entries(entries: &mut [FileEntry]) {
@@ -222,7 +219,7 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
         let entry = entry.map_err(|e| e.to_string())?;
         let file_name = entry.file_name().to_string_lossy().to_string();
 
-        if is_hidden_entry(&file_name) {
+        if is_ignored_entry_name(&file_name) {
             continue;
         }
 
@@ -258,7 +255,7 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 #[cfg(test)]
 mod tests {
     use super::{
-        FileEntry, install_project_root, list_children, write_existing_file,
+        FileEntry, install_project_root, list_children, list_tree, write_existing_file,
         write_existing_file_with_handle,
     };
     use crate::commands::state::ProjectRootEntry;
@@ -343,24 +340,42 @@ mod tests {
         fs::create_dir_all(tmp.join("alpha")).unwrap();
         fs::create_dir_all(tmp.join("beta")).unwrap();
         fs::create_dir_all(tmp.join(".hidden")).unwrap();
+        fs::create_dir_all(tmp.join(".cache")).unwrap();
         fs::create_dir_all(tmp.join("node_modules")).unwrap();
+        fs::create_dir_all(tmp.join("node_modules-old")).unwrap();
+        fs::create_dir_all(tmp.join("target")).unwrap();
         fs::write(tmp.join("readme.md"), "hi").unwrap();
         fs::write(tmp.join("alpha/nested.md"), "nested").unwrap();
+        fs::write(tmp.join("targeted.md"), "visible").unwrap();
 
         let result = list_children(&tmp, "").unwrap();
 
         let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names, vec!["alpha", "beta", "readme.md"]);
+        assert_eq!(
+            names,
+            vec![
+                "alpha",
+                "beta",
+                "node_modules-old",
+                "readme.md",
+                "targeted.md"
+            ]
+        );
 
         assert!(result[0].is_directory);
         assert!(result[1].is_directory);
-        assert!(!result[2].is_directory);
+        assert!(result[2].is_directory);
+        assert!(!result[3].is_directory);
+        assert!(!result[4].is_directory);
 
         assert!(result[0].children.is_none());
         assert!(result[1].children.is_none());
+        assert!(result[2].children.is_none());
 
         assert_eq!(result[0].path, "alpha");
-        assert_eq!(result[2].path, "readme.md");
+        assert_eq!(result[2].path, "node_modules-old");
+        assert_eq!(result[3].path, "readme.md");
+        assert_eq!(result[4].path, "targeted.md");
 
         let _ = fs::remove_dir_all(&tmp);
     }
@@ -378,6 +393,39 @@ mod tests {
         assert_eq!(result[0].path, "docs/deep");
         assert_eq!(result[1].name, "note.md");
         assert_eq!(result[1].path, "docs/note.md");
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn list_tree_uses_shared_visibility_policy_recursively() {
+        let tmp = std::env::temp_dir().join("coflat-test-list-tree-visibility");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(tmp.join("docs/.cache")).unwrap();
+        fs::create_dir_all(tmp.join("docs/node_modules")).unwrap();
+        fs::create_dir_all(tmp.join("docs/node_modules-old")).unwrap();
+        fs::create_dir_all(tmp.join("docs/target")).unwrap();
+        fs::write(tmp.join("docs/note.md"), "n").unwrap();
+        fs::write(tmp.join("docs/targeted.md"), "t").unwrap();
+        fs::write(tmp.join("docs/node_modules-old/visible.md"), "v").unwrap();
+
+        let result = list_tree(&tmp).unwrap();
+        let docs = result
+            .children
+            .as_ref()
+            .expect("root children")
+            .iter()
+            .find(|entry| entry.name == "docs")
+            .expect("docs entry");
+        let names: Vec<&str> = docs
+            .children
+            .as_ref()
+            .expect("docs children")
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect();
+
+        assert_eq!(names, vec!["node_modules-old", "note.md", "targeted.md"]);
 
         let _ = fs::remove_dir_all(&tmp);
     }

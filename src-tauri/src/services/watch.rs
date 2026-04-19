@@ -4,12 +4,13 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{
-    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::commands::state::FileWatcherEntry;
+use crate::services::project_visibility::is_ignored_relative_path;
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -260,15 +261,6 @@ pub fn remove_watcher_generation(
     true
 }
 
-fn should_ignore_relative_path(relative: &str) -> bool {
-    relative.starts_with('.')
-        || relative.contains("/.")
-        || relative.starts_with("node_modules")
-        || relative.contains("/node_modules")
-        || relative.starts_with("target")
-        || relative.contains("/target")
-}
-
 fn event_changes_tree(kind: &EventKind) -> bool {
     matches!(
         kind,
@@ -287,7 +279,7 @@ fn normalize_relative_event_path(root: &Path, path: &Path, tree_changed: bool) -
         .to_string_lossy()
         .replace('\\', "/");
 
-    if should_ignore_relative_path(&relative) {
+    if is_ignored_relative_path(&relative) {
         return None;
     }
 
@@ -297,14 +289,14 @@ fn normalize_relative_event_path(root: &Path, path: &Path, tree_changed: bool) -
 #[cfg(test)]
 mod tests {
     use super::{
+        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
         event_changes_tree, normalize_relative_event_path, remove_watcher_generation,
-        reserve_watcher_slot, should_ignore_relative_path, DebouncedEventDispatcher,
-        FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
+        reserve_watcher_slot,
     };
     use crate::commands::state::FileWatcherEntry;
     use notify::{
-        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
         EventKind,
+        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
     };
     use std::collections::HashMap;
     use std::fs;
@@ -328,12 +320,37 @@ mod tests {
     }
 
     #[test]
-    fn ignores_hidden_and_generated_relative_paths() {
-        assert!(should_ignore_relative_path(".git/config"));
-        assert!(should_ignore_relative_path("nested/.cache/file.txt"));
-        assert!(should_ignore_relative_path("node_modules/pkg/index.js"));
-        assert!(should_ignore_relative_path("target/debug/app"));
-        assert!(!should_ignore_relative_path("notes/index.md"));
+    fn ignores_hidden_and_generated_relative_paths_by_segment() {
+        let root = PathBuf::from("/tmp/project");
+
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join(".git/config"), true),
+            None,
+        );
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join("nested/.cache/file.txt"), true),
+            None,
+        );
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join("node_modules/pkg/index.js"), true),
+            None,
+        );
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join("target/debug/app"), true),
+            None,
+        );
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join("node_modules-old/pkg/index.js"), true),
+            Some("node_modules-old/pkg/index.js".to_string()),
+        );
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join("targeted.md"), true),
+            Some("targeted.md".to_string()),
+        );
+        assert_eq!(
+            normalize_relative_event_path(&root, &root.join("notes/index.md"), true),
+            Some("notes/index.md".to_string()),
+        );
     }
 
     #[test]
