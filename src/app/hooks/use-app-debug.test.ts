@@ -8,12 +8,12 @@ import { SourceMap } from "../source-map";
 const nativeDebugMockState = vi.hoisted(() => ({
   debugListWindows: vi.fn(async () => [{ label: "main", focused: true }]),
   debugGetNativeState: vi.fn(async () => ({
-    project_root: "/tmp/backend-project",
-    project_generation: 4,
-    watcher_root: "/tmp/backend-project",
-    watcher_generation: 7,
-    watcher_active: true,
-    last_focused_window: "main",
+    projectRoot: "/tmp/backend-project",
+    projectGeneration: 4,
+    watcherRoot: "/tmp/backend-project",
+    watcherGeneration: 7,
+    watcherActive: true,
+    lastFocusedWindow: "main",
   })),
   debugEmitFileChanged: vi.fn(async (_relativePath: string, _treeChanged?: boolean) => {}),
   reset() {

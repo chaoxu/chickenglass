@@ -7,12 +7,12 @@ export interface NativeWindowDebugInfo {
 }
 
 export interface NativeDebugState {
-  project_root: string | null;
-  project_generation: number | null;
-  watcher_root: string | null;
-  watcher_generation: number | null;
-  watcher_active: boolean;
-  last_focused_window: string | null;
+  projectRoot: string | null;
+  projectGeneration: number | null;
+  watcherRoot: string | null;
+  watcherGeneration: number | null;
+  watcherActive: boolean;
+  lastFocusedWindow: string | null;
 }
 
 export const debugListWindowsCommand = tauriCommand<NativeWindowDebugInfo[]>(TAURI_COMMANDS.debugListWindows);

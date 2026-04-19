@@ -288,12 +288,12 @@ export function useAppDebug({
             startupComplete,
             restoredProjectRoot,
             mode: getMode(),
-            backendProjectRoot: nativeState.project_root,
-            backendProjectGeneration: nativeState.project_generation,
-            watcherRoot: nativeState.watcher_root,
-            watcherGeneration: nativeState.watcher_generation,
-            watcherActive: nativeState.watcher_active,
-            lastFocusedWindow: nativeState.last_focused_window,
+            backendProjectRoot: nativeState.projectRoot,
+            backendProjectGeneration: nativeState.projectGeneration,
+            watcherRoot: nativeState.watcherRoot,
+            watcherGeneration: nativeState.watcherGeneration,
+            watcherActive: nativeState.watcherActive,
+            lastFocusedWindow: nativeState.lastFocusedWindow,
           };
         },
         simulateExternalChange: (relativePath: string, treeChanged?: boolean) =>

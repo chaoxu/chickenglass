@@ -19,6 +19,7 @@ pub struct NativeWindowDebugInfo {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NativeDebugState {
     pub project_root: Option<String>,
     pub project_generation: Option<u64>,
@@ -104,4 +105,31 @@ pub fn debug_emit_file_changed(
         }),
     )
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NativeDebugState;
+
+    #[test]
+    fn native_debug_state_serializes_as_frontend_camel_case() {
+        let state = NativeDebugState {
+            project_root: Some("/tmp/project".to_string()),
+            project_generation: Some(1),
+            watcher_root: Some("/tmp/project".to_string()),
+            watcher_generation: Some(2),
+            watcher_active: true,
+            last_focused_window: Some("main".to_string()),
+        };
+        let json = serde_json::to_value(&state).expect("serialize NativeDebugState");
+
+        assert_eq!(json["projectRoot"], "/tmp/project");
+        assert_eq!(json["projectGeneration"], 1);
+        assert_eq!(json["watcherRoot"], "/tmp/project");
+        assert_eq!(json["watcherGeneration"], 2);
+        assert_eq!(json["watcherActive"], true);
+        assert_eq!(json["lastFocusedWindow"], "main");
+        assert!(json.get("project_root").is_none());
+        assert!(json.get("watcher_active").is_none());
+    }
 }

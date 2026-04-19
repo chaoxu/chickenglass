@@ -359,6 +359,21 @@ mod tests {
     }
 
     #[test]
+    fn file_changed_event_serializes_as_frontend_camel_case() {
+        let event = FileChangedEvent {
+            path: "notes.md".to_string(),
+            tree_changed: true,
+            generation: 3,
+        };
+        let json = serde_json::to_value(&event).expect("serialize FileChangedEvent");
+
+        assert_eq!(json["path"], "notes.md");
+        assert_eq!(json["treeChanged"], true);
+        assert_eq!(json["generation"], 3);
+        assert!(json.get("tree_changed").is_none());
+    }
+
+    #[test]
     fn coalesces_same_path_events_until_the_quiet_deadline() {
         let debounce_window = Duration::from_millis(500);
         let now = Instant::now();
