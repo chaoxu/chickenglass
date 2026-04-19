@@ -12,27 +12,30 @@ import {
 import { getFootnoteReferenceRenderer } from "./renderer-registry";
 
 export type SerializedFootnoteReferenceNode = Spread<{
+  format: number;
   raw: string;
 }, SerializedLexicalNode>;
 
 export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
   __raw: string;
+  __format: number;
 
   static getType(): string {
     return "coflat-footnote-reference";
   }
 
   static clone(node: FootnoteReferenceNode): FootnoteReferenceNode {
-    return new FootnoteReferenceNode(node.__raw, node.__key);
+    return new FootnoteReferenceNode(node.__raw, node.__format, node.__key);
   }
 
   static importJSON(serializedNode: SerializedFootnoteReferenceNode): FootnoteReferenceNode {
     return $createFootnoteReferenceNode(serializedNode.raw).updateFromJSON(serializedNode);
   }
 
-  constructor(raw: string, key?: NodeKey) {
+  constructor(raw: string, format = 0, key?: NodeKey) {
     super(key);
     this.__raw = raw;
+    this.__format = format;
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
@@ -57,6 +60,7 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
 
   exportJSON(): SerializedFootnoteReferenceNode {
     return {
+      format: this.getFormat(),
       raw: this.getRaw(),
       type: this.getType(),
       version: 1,
@@ -64,7 +68,9 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
   }
 
   updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedFootnoteReferenceNode>): this {
-    return super.updateFromJSON(serializedNode).setRaw(serializedNode.raw);
+    return super.updateFromJSON(serializedNode)
+      .setFormat(serializedNode.format ?? 0)
+      .setRaw(serializedNode.raw);
   }
 
   getTextContent(): string {
@@ -73,6 +79,16 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
 
   getRaw(): string {
     return this.getLatest().__raw;
+  }
+
+  getFormat(): number {
+    return this.getLatest().__format;
+  }
+
+  setFormat(format: number): this {
+    const node = this.getWritable();
+    node.__format = format;
+    return node;
   }
 
   setRaw(raw: string): this {
@@ -90,8 +106,8 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-export function $createFootnoteReferenceNode(raw: string): FootnoteReferenceNode {
-  return new FootnoteReferenceNode(raw);
+export function $createFootnoteReferenceNode(raw: string, format = 0): FootnoteReferenceNode {
+  return new FootnoteReferenceNode(raw, format);
 }
 
 export function $isFootnoteReferenceNode(

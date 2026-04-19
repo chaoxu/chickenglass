@@ -1,4 +1,5 @@
 import type { DebugDocumentState } from "../app/hooks/use-app-debug-types";
+import { useDevSettings } from "../state/dev-settings";
 import { getConnectedApp } from "./debug-bridge";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
@@ -15,7 +16,10 @@ export interface DebugSessionEvent {
   readonly context?: {
     readonly document: DebugDocumentState | null;
     readonly mode: string | null;
-    readonly selection: unknown;
+    readonly selection: EditorSelectionSnapshot | null;
+    readonly editor: EditorTextSnapshot | null;
+    readonly activeElement: ElementSnapshot | null;
+    readonly settings: SettingsSnapshot;
     readonly location: string;
   };
 }
@@ -25,6 +29,37 @@ type DebugSessionKind = "human" | "webdriver";
 interface PendingEvent extends DebugSessionEvent {
   readonly sessionId: string;
   readonly seq: number;
+}
+
+interface EditorSelectionSnapshot {
+  readonly anchorOffset: number | null;
+  readonly anchorText: string | null;
+  readonly focusOffset: number | null;
+  readonly focusText: string | null;
+  readonly selectedText: string;
+}
+
+interface EditorTextSnapshot {
+  readonly docLength: number;
+  readonly docHash: string;
+  readonly excerpt: {
+    readonly from: number;
+    readonly to: number;
+    readonly text: string;
+  };
+}
+
+interface ElementSnapshot {
+  readonly tag: string;
+  readonly className: string | null;
+  readonly id: string | null;
+  readonly role: string | null;
+  readonly text: string | null;
+}
+
+interface SettingsSnapshot {
+  readonly revealPresentation: string | null;
+  readonly commandLogging: boolean;
 }
 
 let sessionId: string | null = null;
@@ -53,20 +88,78 @@ function ensureSessionId(): string | null {
   return sessionId;
 }
 
+function activeElementSnapshot(): ElementSnapshot | null {
+  if (!isBrowser()) return null;
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return null;
+  const text = active.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  return {
+    className: typeof active.className === "string" && active.className.length > 0
+      ? active.className
+      : null,
+    id: active.id || null,
+    role: active.getAttribute("role"),
+    tag: active.tagName.toLowerCase(),
+    text: text.length > 0 ? text.slice(0, 160) : null,
+  };
+}
+
+function readSettingsSnapshot(): SettingsSnapshot {
+  let revealPresentation: string | null = null;
+  if (isBrowser()) {
+    try {
+      const raw = window.localStorage.getItem("cf-settings");
+      const parsed = raw ? JSON.parse(raw) as { revealPresentation?: unknown } : null;
+      revealPresentation = typeof parsed?.revealPresentation === "string"
+        ? parsed.revealPresentation
+        : null;
+    } catch {
+      revealPresentation = null;
+    }
+  }
+  return {
+    commandLogging: useDevSettings.getState().commandLogging,
+    revealPresentation,
+  };
+}
+
+function currentSelection(): EditorSelectionSnapshot | null {
+  if (!isBrowser()) return null;
+  const selection = window.getSelection();
+  if (!selection) return null;
+  return {
+    anchorOffset: selection.anchorOffset,
+    anchorText: selection.anchorNode?.textContent?.slice(0, 160) ?? null,
+    focusOffset: selection.focusOffset,
+    focusText: selection.focusNode?.textContent?.slice(0, 160) ?? null,
+    selectedText: selection.toString().slice(0, 160),
+  };
+}
+
 function currentContext(): DebugSessionEvent["context"] {
   if (!isBrowser()) {
     return {
+      activeElement: null,
       document: null,
+      editor: null,
       mode: null,
       selection: null,
+      settings: {
+        commandLogging: false,
+        revealPresentation: null,
+      },
       location: "",
     };
   }
   const app = getConnectedApp();
+  const selection = currentSelection();
   return {
+    activeElement: activeElementSnapshot(),
     document: app ? app.getCurrentDocument() : null,
+    editor: null,
     mode: app ? app.getMode() : null,
-    selection: null,
+    selection,
+    settings: readSettingsSnapshot(),
     location: window.location.href,
   };
 }

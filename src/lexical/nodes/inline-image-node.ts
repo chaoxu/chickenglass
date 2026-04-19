@@ -12,27 +12,30 @@ import {
 import { InlineImageRenderer } from "../renderers/inline-image-renderer";
 
 export type SerializedInlineImageNode = Spread<{
+  format: number;
   raw: string;
 }, SerializedLexicalNode>;
 
 export class InlineImageNode extends DecoratorNode<JSX.Element> {
   __raw: string;
+  __format: number;
 
   static getType(): string {
     return "coflat-inline-image";
   }
 
   static clone(node: InlineImageNode): InlineImageNode {
-    return new InlineImageNode(node.__raw, node.__key);
+    return new InlineImageNode(node.__raw, node.__format, node.__key);
   }
 
   static importJSON(serializedNode: SerializedInlineImageNode): InlineImageNode {
     return $createInlineImageNode(serializedNode.raw).updateFromJSON(serializedNode);
   }
 
-  constructor(raw: string, key?: NodeKey) {
+  constructor(raw: string, format = 0, key?: NodeKey) {
     super(key);
     this.__raw = raw;
+    this.__format = format;
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
@@ -57,6 +60,7 @@ export class InlineImageNode extends DecoratorNode<JSX.Element> {
 
   exportJSON(): SerializedInlineImageNode {
     return {
+      format: this.getFormat(),
       raw: this.getRaw(),
       type: this.getType(),
       version: 1,
@@ -64,11 +68,23 @@ export class InlineImageNode extends DecoratorNode<JSX.Element> {
   }
 
   updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedInlineImageNode>): this {
-    return super.updateFromJSON(serializedNode).setRaw(serializedNode.raw);
+    return super.updateFromJSON(serializedNode)
+      .setFormat(serializedNode.format ?? 0)
+      .setRaw(serializedNode.raw);
   }
 
   getRaw(): string {
     return this.getLatest().__raw;
+  }
+
+  getFormat(): number {
+    return this.getLatest().__format;
+  }
+
+  setFormat(format: number): this {
+    const node = this.getWritable();
+    node.__format = format;
+    return node;
   }
 
   setRaw(raw: string): this {
@@ -89,8 +105,8 @@ export class InlineImageNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-export function $createInlineImageNode(raw: string): InlineImageNode {
-  return new InlineImageNode(raw);
+export function $createInlineImageNode(raw: string, format = 0): InlineImageNode {
+  return new InlineImageNode(raw, format);
 }
 
 export function $isInlineImageNode(node: LexicalNode | null | undefined): node is InlineImageNode {

@@ -107,7 +107,12 @@ import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { getActiveEditor } from "./active-editor-tracker";
 import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
 import { TreeViewPlugin } from "./tree-view-plugin";
-import { COFLAT_DOCUMENT_SYNC_TAG } from "./update-tags";
+import {
+  COFLAT_DOCUMENT_SYNC_TAG,
+  COFLAT_REVEAL_COMMIT_TAG,
+  COFLAT_REVEAL_UI_TAG,
+} from "./update-tags";
+import { hasCursorRevealActive } from "./cursor-reveal-state";
 import { useDevSettings } from "../state/dev-settings";
 
 function sameSelection(left: MarkdownEditorSelection, right: MarkdownEditorSelection): boolean {
@@ -669,6 +674,12 @@ export function LexicalMarkdownEditor({
     tags: Set<string>,
   ) => {
     if (tags.has(COFLAT_DOCUMENT_SYNC_TAG)) {
+      return;
+    }
+    if (tags.has(COFLAT_REVEAL_UI_TAG) && !tags.has(COFLAT_REVEAL_COMMIT_TAG)) {
+      return;
+    }
+    if (!tags.has(COFLAT_REVEAL_COMMIT_TAG) && hasCursorRevealActive(editor)) {
       return;
     }
 

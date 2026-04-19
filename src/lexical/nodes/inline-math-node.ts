@@ -13,6 +13,7 @@ export type InlineMathDelimiter = "dollar" | "paren";
 
 export type SerializedInlineMathNode = Spread<{
   delimiter: InlineMathDelimiter;
+  format: number;
   raw: string;
 }, SerializedLexicalNode>;
 
@@ -21,13 +22,14 @@ import { InlineMathRenderer } from "../renderers/inline-math-renderer";
 export class InlineMathNode extends DecoratorNode<JSX.Element> {
   __raw: string;
   __delimiter: InlineMathDelimiter;
+  __format: number;
 
   static getType(): string {
     return "coflat-inline-math";
   }
 
   static clone(node: InlineMathNode): InlineMathNode {
-    return new InlineMathNode(node.__raw, node.__delimiter, node.__key);
+    return new InlineMathNode(node.__raw, node.__delimiter, node.__format, node.__key);
   }
 
   static importJSON(serializedNode: SerializedInlineMathNode): InlineMathNode {
@@ -36,10 +38,11 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
     );
   }
 
-  constructor(raw: string, delimiter: InlineMathDelimiter, key?: NodeKey) {
+  constructor(raw: string, delimiter: InlineMathDelimiter, format = 0, key?: NodeKey) {
     super(key);
     this.__raw = raw;
     this.__delimiter = delimiter;
+    this.__format = format;
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
@@ -65,6 +68,7 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
   exportJSON(): SerializedInlineMathNode {
     return {
       delimiter: this.getDelimiter(),
+      format: this.getFormat(),
       raw: this.getRaw(),
       type: this.getType(),
       version: 1,
@@ -76,7 +80,18 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
   ): this {
     return super.updateFromJSON(serializedNode)
       .setDelimiter(serializedNode.delimiter)
+      .setFormat(serializedNode.format ?? 0)
       .setRaw(serializedNode.raw);
+  }
+
+  getFormat(): number {
+    return this.getLatest().__format;
+  }
+
+  setFormat(format: number): this {
+    const node = this.getWritable();
+    node.__format = format;
+    return node;
   }
 
   getDelimiter(): InlineMathDelimiter {
@@ -111,8 +126,12 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-export function $createInlineMathNode(raw: string, delimiter: InlineMathDelimiter): InlineMathNode {
-  return new InlineMathNode(raw, delimiter);
+export function $createInlineMathNode(
+  raw: string,
+  delimiter: InlineMathDelimiter,
+  format = 0,
+): InlineMathNode {
+  return new InlineMathNode(raw, delimiter, format);
 }
 
 export function $isInlineMathNode(node: LexicalNode | null | undefined): node is InlineMathNode {

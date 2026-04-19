@@ -338,7 +338,7 @@ const inlineMathAdapter: RevealAdapter = {
     if (delimiter == null) {
       return live;
     }
-    const math = $createInlineMathNode(trimmed, delimiter);
+    const math = $createInlineMathNode(trimmed, delimiter, live.getFormat());
     live.replace(math);
     return math;
   },
@@ -391,7 +391,7 @@ const referenceAdapter: RevealAdapter = {
     if (!BRACKETED_REFERENCE.test(trimmed) && !NARRATIVE_REFERENCE.test(trimmed)) {
       return live;
     }
-    const ref = $createReferenceNode(trimmed);
+    const ref = $createReferenceNode(trimmed, live.getFormat());
     live.replace(ref);
     return ref;
   },
@@ -419,7 +419,7 @@ const footnoteReferenceAdapter: RevealAdapter = {
     if (!FOOTNOTE_REFERENCE.test(trimmed)) {
       return live;
     }
-    const ref = $createFootnoteReferenceNode(trimmed);
+    const ref = $createFootnoteReferenceNode(trimmed, live.getFormat());
     live.replace(ref);
     return ref;
   },

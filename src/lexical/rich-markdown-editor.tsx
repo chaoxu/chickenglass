@@ -62,7 +62,11 @@ import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
 import { SourcePositionPlugin } from "./source-position-plugin";
-import { COFLAT_DOCUMENT_SYNC_TAG } from "./update-tags";
+import {
+  COFLAT_DOCUMENT_SYNC_TAG,
+  COFLAT_REVEAL_COMMIT_TAG,
+  COFLAT_REVEAL_UI_TAG,
+} from "./update-tags";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,
@@ -72,6 +76,7 @@ import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TabKeyPlugin } from "./tab-key-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { InteractionTracePlugin } from "./interaction-trace-plugin";
+import { hasCursorRevealActive } from "./cursor-reveal-state";
 
 import {
   CoflatClipboardPlugin,
@@ -191,6 +196,12 @@ export function LexicalRichMarkdownEditor({
     tags: Set<string>,
   ) => {
     if (tags.has(COFLAT_DOCUMENT_SYNC_TAG)) {
+      return;
+    }
+    if (tags.has(COFLAT_REVEAL_UI_TAG) && !tags.has(COFLAT_REVEAL_COMMIT_TAG)) {
+      return;
+    }
+    if (!tags.has(COFLAT_REVEAL_COMMIT_TAG) && hasCursorRevealActive(editor)) {
       return;
     }
 

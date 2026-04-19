@@ -24,11 +24,16 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getSelection,
+  $nodesOfType,
   $isDecoratorNode,
   $isElementNode,
+  $isRangeSelection,
   $isTextNode,
   $setSelection,
+  COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_LOW,
+  KEY_ARROW_LEFT_COMMAND,
+  KEY_ARROW_RIGHT_COMMAND,
   SELECTION_CHANGE_COMMAND,
   type LexicalEditor,
   type LexicalNode,
@@ -49,8 +54,15 @@ import {
   type RevealAdapter,
 } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
+import { $isInlineMathNode, InlineMathNode } from "./nodes/inline-math-node";
+import { $isFootnoteReferenceNode, FootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { $isReferenceNode, ReferenceNode } from "./nodes/reference-node";
+import {
+  COFLAT_NESTED_EDIT_TAG,
+  COFLAT_REVEAL_COMMIT_TAG,
+  COFLAT_REVEAL_UI_TAG,
+} from "./update-tags";
 import {
   createRevealOpenRequest,
   findRevealAdapter,
@@ -60,6 +72,10 @@ import {
   type CursorRevealOpenRequest,
 } from "./cursor-reveal-controller";
 import { renderRevealChromePreview } from "./reveal-chrome";
+import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
+import { useLexicalRenderContext } from "./render-context";
+import { setLexicalMarkdown } from "./markdown";
+import { setCursorRevealActive } from "./cursor-reveal-state";
 
 // Re-exports kept so existing unit tests can continue importing the
 // pure markdown helpers from this module.
@@ -249,10 +265,22 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
 
 // ─── Inline (Typora-style) presentation ─────────────────────────────────
 
+const REVEAL_TEXT_STYLE = "--cf-reveal:1";
+
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
   readonly adapter: RevealAdapter;
+  readonly source: string;
+  readonly sourceBacked: SourceBackedReveal | null;
+  readonly sourceFormat: number;
   readonly selectionState: "opening" | "active";
+}
+
+type SourceBackedRevealKind = "footnote-reference" | "inline-math" | "reference";
+
+interface SourceBackedReveal {
+  readonly kind: SourceBackedRevealKind;
+  readonly occurrence: number;
 }
 
 interface InlineRevealChromeState {
@@ -263,18 +291,64 @@ interface InlineRevealChromeState {
 
 function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
+  const renderContext = useLexicalRenderContext();
   const [chromeState, setChromeState] = useState<InlineRevealChromeState | null>(null);
   // Key of the in-flight plain-text reveal node. When the caret moves off
   // this key, we reparse it via the same adapter that opened it.
   const activeRef = useRef<InlineRevealHandle | null>(null);
+  const canonicalDocRef = useRef(renderContext.doc);
+  const lastArrowDirectionRef = useRef<"left" | "right" | null>(null);
+  const skipOpeningArrowUntilRef = useRef(0);
+
+  useEffect(() => {
+    canonicalDocRef.current = renderContext.doc;
+  }, [renderContext.doc]);
+
+  const restoreCanonicalDocumentAfterUiCommit = useCallback((handle: InlineRevealHandle | null = null) => {
+    const direction = lastArrowDirectionRef.current;
+    queueMicrotask(() => {
+      setLexicalMarkdown(editor, canonicalDocRef.current, {
+        tag: COFLAT_REVEAL_UI_TAG,
+      });
+      const sourceBacked = handle?.sourceBacked ?? null;
+      if (handle && sourceBacked && direction) {
+        editor.update(() => {
+          const token = findSourceBackedNode(
+            sourceBacked.kind,
+            handle.source,
+            sourceBacked.occurrence,
+          );
+          const sibling = direction === "right"
+            ? token?.getNextSibling()
+            : token?.getPreviousSibling();
+          if ($isTextNode(sibling)) {
+            if (direction === "right") {
+              sibling.select(0, 0);
+            } else {
+              const size = sibling.getTextContentSize();
+              sibling.select(size, size);
+            }
+          }
+        }, {
+          discrete: true,
+          tag: COFLAT_REVEAL_UI_TAG,
+        });
+      }
+      setCursorRevealActive(editor, false);
+    });
+  }, [editor]);
 
   const openInlineRequest = useCallback((request: CursorRevealOpenRequest) => {
     const adapter = findRevealAdapter(adapters, request.adapterId);
     if (!adapter) {
       return;
     }
+    skipOpeningArrowUntilRef.current = request.entry === "keyboard-boundary"
+      ? Date.now() + 100
+      : 0;
     openInlineReveal(request, adapter, activeRef, setChromeState);
-  }, [adapters]);
+    setCursorRevealActive(editor, activeRef.current !== null);
+  }, [adapters, editor]);
 
   useEffect(
     () => registerDecoratorClickRevealEntry(editor, adapters, openInlineRequest),
@@ -315,12 +389,18 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
             activeRef.current = { ...active, selectionState: "active" };
             return false;
           }
+          const live = $getNodeByKey(active.plainKey);
+          if ($isTextNode(live) && domSelectionInsideText(live.getTextContent())) {
+            activeRef.current = { ...active, selectionState: "active" };
+            return false;
+          }
           // Opening a decorator reveal is a two-step transition: replace the
           // decorator with a TextNode, then let Lexical publish the selection
           // inside that TextNode. Selection-change events from the pre-swap
           // state are not exits; only commit after the reveal has reached
           // the active state at least once.
           if (active.selectionState === "opening") {
+            activeRef.current = { ...active, selectionState: "active" };
             return false;
           }
           // Caret moved off the reveal. Commit the previous source, then
@@ -328,9 +408,14 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           // directly from one formatted token to another does not require a
           // second selection event.
           $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
-          $commitInlineReveal(active);
+          const sourceUnchanged = $commitInlineReveal(active);
           activeRef.current = null;
           setChromeState(null);
+          if (sourceUnchanged) {
+            restoreCanonicalDocumentAfterUiCommit(active);
+            return false;
+          }
+          setCursorRevealActive(editor, false);
           const nextSelection = $getSelection();
           if (!nextSelection) {
             return false;
@@ -362,7 +447,231 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, adapters]);
+  }, [editor, adapters, restoreCanonicalDocumentAfterUiCommit]);
+
+  useEffect(() => {
+    const handleArrow = (
+      event: KeyboardEvent | null,
+      direction: "left" | "right",
+    ): boolean => {
+      const active = activeRef.current;
+      if (!active) {
+        return false;
+      }
+      if (shouldSkipOpeningArrow(active, skipOpeningArrowUntilRef)) {
+        return false;
+      }
+      lastArrowDirectionRef.current = direction;
+
+      let handled = false;
+      let sourceUnchanged = false;
+      const live = $getNodeByKey(active.plainKey);
+      const selection = $getSelection();
+      if (!$isTextNode(live) || !$isRangeSelection(selection) || !selection.isCollapsed()) {
+        return false;
+      }
+      if (selection.anchor.getNode().getKey() !== active.plainKey) {
+        return false;
+      }
+
+      const offset = selection.anchor.offset;
+      const size = live.getTextContentSize();
+      const nextOffset = direction === "right" ? offset + 1 : offset - 1;
+      if (nextOffset >= 0 && nextOffset <= size) {
+        $addUpdateTag(COFLAT_REVEAL_UI_TAG);
+        selectRevealText(live, nextOffset);
+        activeRef.current = { ...active, selectionState: "active" };
+        handled = true;
+      } else {
+        sourceUnchanged = $commitInlineReveal(active);
+        activeRef.current = null;
+        setChromeState(null);
+        if (!sourceUnchanged) {
+          setCursorRevealActive(editor, false);
+        }
+        handled = true;
+      }
+
+      if (!handled) {
+        return false;
+      }
+      event?.preventDefault();
+      event?.stopPropagation();
+      if (sourceUnchanged) {
+        restoreCanonicalDocumentAfterUiCommit(active);
+      }
+      return true;
+    };
+
+    const unregisterLeft = editor.registerCommand(
+      KEY_ARROW_LEFT_COMMAND,
+      (event) => handleArrow(event, "left"),
+      COMMAND_PRIORITY_CRITICAL,
+    );
+    const unregisterRight = editor.registerCommand(
+      KEY_ARROW_RIGHT_COMMAND,
+      (event) => handleArrow(event, "right"),
+      COMMAND_PRIORITY_CRITICAL,
+    );
+    return () => {
+      unregisterLeft();
+      unregisterRight();
+    };
+  }, [editor, restoreCanonicalDocumentAfterUiCommit]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const active = activeRef.current;
+      if (
+        !active
+        || shouldSkipOpeningArrow(active, skipOpeningArrowUntilRef)
+        || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+        || event.altKey
+        || event.ctrlKey
+        || event.metaKey
+        || event.shiftKey
+      ) {
+        return;
+      }
+
+      const direction = event.key === "ArrowRight" ? "right" : "left";
+      lastArrowDirectionRef.current = direction;
+      const domSelection = document.getSelection();
+      const domAnchorText = domSelection?.anchorNode?.textContent ?? null;
+      const domAnchorOffset = domSelection?.anchorOffset ?? null;
+      let handled = false;
+      let sourceUnchanged = false;
+
+      editor.update(() => {
+        const live = $getNodeByKey(active.plainKey);
+        const selection = $getSelection();
+        if (!$isTextNode(live)) {
+          return;
+        }
+        const lexicalOffset = $isRangeSelection(selection)
+          && selection.isCollapsed()
+          && selection.anchor.getNode().getKey() === active.plainKey
+          ? selection.anchor.offset
+          : null;
+        const offset = lexicalOffset ?? (
+          domAnchorText === live.getTextContent() ? domAnchorOffset : null
+        );
+        if (offset === null) {
+          return;
+        }
+
+        const size = live.getTextContentSize();
+        const nextOffset = direction === "right" ? offset + 1 : offset - 1;
+        if (nextOffset >= 0 && nextOffset <= size) {
+          $addUpdateTag(COFLAT_REVEAL_UI_TAG);
+          selectRevealText(live, nextOffset);
+          activeRef.current = { ...active, selectionState: "active" };
+          handled = true;
+          return;
+        }
+
+        sourceUnchanged = $commitInlineReveal(active);
+        activeRef.current = null;
+        setChromeState(null);
+        if (!sourceUnchanged) {
+          setCursorRevealActive(editor, false);
+        }
+        handled = true;
+      }, { discrete: true });
+
+      if (!handled) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (sourceUnchanged) {
+        restoreCanonicalDocumentAfterUiCommit(active);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [editor, restoreCanonicalDocumentAfterUiCommit]);
+
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const active = activeRef.current;
+      if (!active) {
+        return;
+      }
+
+      queueMicrotask(() => {
+        const current = activeRef.current;
+        if (!current || current.plainKey !== active.plainKey) {
+          return;
+        }
+
+        let sourceUnchanged = false;
+        let committed = false;
+        editor.update(() => {
+          const latest = activeRef.current;
+          if (!latest || latest.plainKey !== active.plainKey) {
+            return;
+          }
+          const live = $getNodeByKey(latest.plainKey);
+          const selection = $getSelection();
+          if (anchorTextKey(selection) === latest.plainKey) {
+            activeRef.current = { ...latest, selectionState: "active" };
+            return;
+          }
+          if ($isTextNode(live) && domSelectionInsideText(live.getTextContent())) {
+            activeRef.current = { ...latest, selectionState: "active" };
+            return;
+          }
+          if (latest.selectionState === "opening") {
+            activeRef.current = { ...latest, selectionState: "active" };
+            return;
+          }
+
+          sourceUnchanged = $commitInlineReveal(latest);
+          activeRef.current = null;
+          setChromeState(null);
+          if (!sourceUnchanged) {
+            setCursorRevealActive(editor, false);
+          }
+          committed = true;
+        }, { discrete: true });
+
+        if (committed && sourceUnchanged) {
+          restoreCanonicalDocumentAfterUiCommit(active);
+        }
+      });
+    };
+
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+    };
+  }, [editor, restoreCanonicalDocumentAfterUiCommit]);
+
+  useRegisterEmbeddedFieldFlush(() => {
+    const active = activeRef.current;
+    if (!active) {
+      return;
+    }
+    let sourceUnchanged = false;
+    editor.update(() => {
+      sourceUnchanged = $commitInlineReveal(active);
+    }, { discrete: true });
+    activeRef.current = null;
+    setChromeState(null);
+    if (sourceUnchanged) {
+      restoreCanonicalDocumentAfterUiCommit(active);
+    } else {
+      setCursorRevealActive(editor, false);
+    }
+  }, true);
+
+  useEffect(() => () => {
+    setCursorRevealActive(editor, false);
+  }, [editor]);
 
   useEffect(() => {
     const plainKey = chromeState?.plainKey ?? null;
@@ -457,6 +766,34 @@ function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | n
     : null;
 }
 
+function domSelectionInsideText(text: string): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+  return document.getSelection()?.anchorNode?.textContent === text;
+}
+
+function shouldSkipOpeningArrow(
+  active: InlineRevealHandle,
+  skipOpeningArrowUntilRef: { current: number },
+): boolean {
+  if (active.selectionState !== "opening" || Date.now() > skipOpeningArrowUntilRef.current) {
+    skipOpeningArrowUntilRef.current = 0;
+    return false;
+  }
+  skipOpeningArrowUntilRef.current = 0;
+  return true;
+}
+
+function selectRevealText(node: ReturnType<typeof $createTextNode>, offset: number): void {
+  node.select(offset, offset);
+  const selection = $getSelection();
+  if ($isRangeSelection(selection)) {
+    selection.setFormat(0);
+    selection.setStyle(REVEAL_TEXT_STYLE);
+  }
+}
+
 function isBlockRevealSubject(node: LexicalNode): boolean {
   if ($isRawBlockNode(node)) {
     return true;
@@ -483,13 +820,16 @@ function openInlineReveal(
   const selectionState: InlineRevealHandle["selectionState"] = $isDecoratorNode(live)
     ? "opening"
     : "active";
+  const sourceBacked = getSourceBackedReveal(live);
+  const sourceFormat = getSourceBackedFormat(live);
   const plain = $createTextNode(request.source);
+  $addUpdateTag(COFLAT_REVEAL_UI_TAG);
   // A non-empty style prevents Lexical from merging this plain node
   // with its unstyled siblings during normalization — without it the
   // reveal text immediately fuses into the surrounding paragraph and
   // we lose the key we use to find the run on commit. The CSS
   // variable is a no-op visually.
-  plain.setStyle("--cf-reveal:1");
+  plain.setStyle(REVEAL_TEXT_STYLE);
   if (isBlockRevealSubject(live)) {
     // Block-scope reveal (paragraph adapter): the subject is a
     // top-level block, not an inline node. A bare TextNode at the
@@ -505,9 +845,16 @@ function openInlineReveal(
   } else {
     live.replace(plain);
   }
-  plain.select(request.caretOffset, request.caretOffset);
+  selectRevealText(plain, request.caretOffset);
   const plainKey = plain.getKey();
-  activeRef.current = { adapter, plainKey, selectionState };
+  activeRef.current = {
+    adapter,
+    plainKey,
+    selectionState,
+    source: request.source,
+    sourceBacked,
+    sourceFormat,
+  };
   setChromeState(
     adapter.getChromePreview?.(request.source)
       ? { adapter, plainKey, source: request.source }
@@ -515,10 +862,96 @@ function openInlineReveal(
   );
 }
 
-function $commitInlineReveal(handle: InlineRevealHandle): void {
+function getSourceBackedReveal(node: LexicalNode): SourceBackedReveal | null {
+  if ($isInlineMathNode(node)) {
+    return {
+      kind: "inline-math",
+      occurrence: countSourceBackedOccurrenceBefore("inline-math", node),
+    };
+  }
+  if ($isReferenceNode(node)) {
+    return {
+      kind: "reference",
+      occurrence: countSourceBackedOccurrenceBefore("reference", node),
+    };
+  }
+  if ($isFootnoteReferenceNode(node)) {
+    return {
+      kind: "footnote-reference",
+      occurrence: countSourceBackedOccurrenceBefore("footnote-reference", node),
+    };
+  }
+  return null;
+}
+
+function getSourceBackedFormat(node: LexicalNode): number {
+  if ($isInlineMathNode(node) || $isReferenceNode(node) || $isFootnoteReferenceNode(node)) {
+    return node.getFormat();
+  }
+  return 0;
+}
+
+function countSourceBackedOccurrenceBefore(
+  kind: SourceBackedRevealKind,
+  target: InlineMathNode | ReferenceNode | FootnoteReferenceNode,
+): number {
+  const source = target.getRaw();
+  let occurrence = 0;
+  for (const node of sourceBackedNodes(kind)) {
+    if (node.getKey() === target.getKey()) {
+      return occurrence;
+    }
+    if (node.getRaw() === source) {
+      occurrence += 1;
+    }
+  }
+  return occurrence;
+}
+
+function findSourceBackedNode(
+  kind: SourceBackedRevealKind,
+  source: string,
+  occurrence: number,
+): InlineMathNode | ReferenceNode | FootnoteReferenceNode | null {
+  let seen = 0;
+  for (const node of sourceBackedNodes(kind)) {
+    if (node.getRaw() !== source) {
+      continue;
+    }
+    if (seen === occurrence) {
+      return node;
+    }
+    seen += 1;
+  }
+  return null;
+}
+
+function sourceBackedNodes(
+  kind: SourceBackedRevealKind,
+): Array<InlineMathNode | ReferenceNode | FootnoteReferenceNode> {
+  switch (kind) {
+    case "footnote-reference":
+      return $nodesOfType(FootnoteReferenceNode);
+    case "inline-math":
+      return $nodesOfType(InlineMathNode);
+    case "reference":
+      return $nodesOfType(ReferenceNode);
+  }
+}
+
+function $commitInlineReveal(handle: InlineRevealHandle): boolean {
   const live = $getNodeByKey(handle.plainKey);
   if (!$isTextNode(live)) {
-    return;
+    return false;
   }
-  handle.adapter.reparse(live, live.getTextContent());
+  const nextSource = live.getTextContent();
+  const sourceUnchanged = nextSource === handle.source;
+  if (sourceUnchanged) {
+    $addUpdateTag(COFLAT_REVEAL_UI_TAG);
+    return true;
+  }
+  $addUpdateTag(COFLAT_REVEAL_COMMIT_TAG);
+  live.setFormat(handle.sourceFormat);
+  handle.adapter.reparse(live, nextSource);
+  return false;
 }

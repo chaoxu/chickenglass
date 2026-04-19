@@ -24,6 +24,7 @@ import {
 export interface CursorRevealOpenRequest {
   readonly adapterId: string;
   readonly caretOffset: number;
+  readonly entry: "keyboard-boundary" | "pointer" | "selection";
   readonly nodeKey: NodeKey;
   readonly source: string;
 }
@@ -36,10 +37,12 @@ export function createRevealOpenRequest(
   subject: RevealSubject,
   adapter: RevealAdapter,
   preferredOffset: number,
+  entry: CursorRevealOpenRequest["entry"] = "selection",
 ): CursorRevealOpenRequest {
   return {
     adapterId: adapter.id,
     caretOffset: computeCaretOffset(subject, preferredOffset),
+    entry,
     nodeKey: subject.node.getKey(),
     source: subject.source,
   };
@@ -83,6 +86,7 @@ export function registerDecoratorClickRevealEntry(
         pick.subject,
         pick.adapter,
         pick.subject.caretOffset ?? pick.subject.source.length,
+        "pointer",
       );
       event.preventDefault();
       event.stopPropagation();
@@ -159,6 +163,7 @@ function findRevealRequestFromDomBoundary(
       pick.subject,
       pick.adapter,
       pick.subject.caretOffset ?? pick.subject.source.length,
+      "keyboard-boundary",
     );
   });
   return request;

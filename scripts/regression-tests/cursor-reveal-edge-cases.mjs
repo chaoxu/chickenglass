@@ -146,6 +146,101 @@ export async function run(page) {
     };
   }
 
+  await openScratch(page, "scratch-formatted-inline-math-reveal.md", "A **$k$-hitting set** B\n");
+  await page.locator(".cf-lexical-inline-math").first().click({ force: true });
+  await waitForSelectionAnchorText(page, "$k$");
+  await waitForInlineMathRevealPreview(page);
+  await page.waitForTimeout(100);
+  const formattedMathOpen = await page.evaluate(() => ({
+    dirty: window.__app.isDirty(),
+    hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+    selection: {
+      anchorOffset: window.getSelection()?.anchorOffset ?? null,
+      anchorText: window.getSelection()?.anchorNode?.textContent ?? "",
+    },
+    text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+  }));
+  if (
+    formattedMathOpen.dirty
+    || !formattedMathOpen.hasPreview
+    || formattedMathOpen.selection.anchorText !== "$k$"
+  ) {
+    return {
+      pass: false,
+      message: `formatted inline math reveal did not stay open without dirtying: ${JSON.stringify(formattedMathOpen)}`,
+    };
+  }
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  const formattedMathInside = await page.evaluate(() => ({
+    dirty: window.__app.isDirty(),
+    hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+    selection: {
+      anchorOffset: window.getSelection()?.anchorOffset ?? null,
+      anchorText: window.getSelection()?.anchorNode?.textContent ?? "",
+    },
+  }));
+  if (
+    formattedMathInside.dirty
+    || !formattedMathInside.hasPreview
+    || formattedMathInside.selection.anchorText !== "$k$"
+    || formattedMathInside.selection.anchorOffset !== 3
+  ) {
+    return {
+      pass: false,
+      message: `formatted inline math arrow navigation left the reveal source: ${JSON.stringify(formattedMathInside)}`,
+    };
+  }
+  await page.keyboard.press("ArrowRight");
+  await waitForBrowserSettled(page);
+  const formattedMathClosed = await page.evaluate(() => ({
+    dirty: window.__app.isDirty(),
+    doc: window.__editor.getDoc(),
+    hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+    inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
+    selection: {
+      anchorOffset: window.getSelection()?.anchorOffset ?? null,
+      anchorText: window.getSelection()?.anchorNode?.textContent ?? "",
+    },
+  }));
+  if (
+    formattedMathClosed.dirty
+    || formattedMathClosed.doc !== "A **$k$-hitting set** B\n"
+    || formattedMathClosed.hasPreview
+    || !formattedMathClosed.inlineMathStillRendered
+    || formattedMathClosed.selection.anchorText !== "-hitting set"
+    || formattedMathClosed.selection.anchorOffset !== 0
+  ) {
+    return {
+      pass: false,
+      message: `formatted inline math reveal did not close cleanly: ${JSON.stringify(formattedMathClosed)}`,
+    };
+  }
+  await page.locator(".cf-lexical-inline-math").first().click({ force: true });
+  await waitForSelectionAnchorText(page, "$k$");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.type("2");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await waitForBrowserSettled(page);
+  const formattedMathEdited = await page.evaluate(() => ({
+    dirty: window.__app.isDirty(),
+    doc: window.__editor.getDoc(),
+    hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
+    inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
+  }));
+  if (
+    !formattedMathEdited.dirty
+    || formattedMathEdited.doc !== "A **$k2$-hitting set** B\n"
+    || formattedMathEdited.hasPreview
+    || !formattedMathEdited.inlineMathStillRendered
+  ) {
+    return {
+      pass: false,
+      message: `formatted inline math edit did not preserve surrounding markdown: ${JSON.stringify(formattedMathEdited)}`,
+    };
+  }
+
   await openScratch(page, "scratch-inline-math-keyboard-forward.md", "Before $x+1$ after\n");
   await placeCaretAtVisibleText(page, "Before ", "end");
   await page.keyboard.press("ArrowRight");

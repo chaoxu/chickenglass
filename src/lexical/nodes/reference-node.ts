@@ -12,27 +12,30 @@ import {
 import { ReferenceRenderer } from "../renderers/reference-renderer";
 
 export type SerializedReferenceNode = Spread<{
+  format: number;
   raw: string;
 }, SerializedLexicalNode>;
 
 export class ReferenceNode extends DecoratorNode<JSX.Element> {
   __raw: string;
+  __format: number;
 
   static getType(): string {
     return "coflat-reference";
   }
 
   static clone(node: ReferenceNode): ReferenceNode {
-    return new ReferenceNode(node.__raw, node.__key);
+    return new ReferenceNode(node.__raw, node.__format, node.__key);
   }
 
   static importJSON(serializedNode: SerializedReferenceNode): ReferenceNode {
     return $createReferenceNode(serializedNode.raw).updateFromJSON(serializedNode);
   }
 
-  constructor(raw: string, key?: NodeKey) {
+  constructor(raw: string, format = 0, key?: NodeKey) {
     super(key);
     this.__raw = raw;
+    this.__format = format;
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
@@ -57,6 +60,7 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
 
   exportJSON(): SerializedReferenceNode {
     return {
+      format: this.getFormat(),
       raw: this.getRaw(),
       type: this.getType(),
       version: 1,
@@ -64,7 +68,9 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
   }
 
   updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedReferenceNode>): this {
-    return super.updateFromJSON(serializedNode).setRaw(serializedNode.raw);
+    return super.updateFromJSON(serializedNode)
+      .setFormat(serializedNode.format ?? 0)
+      .setRaw(serializedNode.raw);
   }
 
   getTextContent(): string {
@@ -73,6 +79,16 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
 
   getRaw(): string {
     return this.getLatest().__raw;
+  }
+
+  getFormat(): number {
+    return this.getLatest().__format;
+  }
+
+  setFormat(format: number): this {
+    const node = this.getWritable();
+    node.__format = format;
+    return node;
   }
 
   setRaw(raw: string): this {
@@ -89,8 +105,8 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-export function $createReferenceNode(raw: string): ReferenceNode {
-  return new ReferenceNode(raw);
+export function $createReferenceNode(raw: string, format = 0): ReferenceNode {
+  return new ReferenceNode(raw, format);
 }
 
 export function $isReferenceNode(node: LexicalNode | null | undefined): node is ReferenceNode {

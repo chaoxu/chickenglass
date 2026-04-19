@@ -22,6 +22,7 @@ import {
   type Klass,
   type LexicalEditor,
   type LexicalNode,
+  type SerializedEditorState,
   type TextNode,
 } from "lexical";
 
@@ -216,7 +217,11 @@ function createInlineMathTransformer(
     importRegExp,
     regExp,
     replace(node) {
-      const mathNode = $createInlineMathNode(node.getTextContent(), delimiter);
+      const mathNode = $createInlineMathNode(
+        node.getTextContent(),
+        delimiter,
+        node.getFormat(),
+      );
       node.replace(mathNode);
       return;
     },
@@ -243,7 +248,7 @@ const inlineImageTransformer = createInlineTokenTransformer(
   [InlineImageNode],
   (node) => ($isInlineImageNode(node) ? node.getRaw() : null),
   (node, match) => {
-    node.replace($createInlineImageNode(match[0]));
+    node.replace($createInlineImageNode(match[0], node.getFormat()));
   },
   INLINE_IMAGE_IMPORT,
   INLINE_IMAGE_SHORTCUT,
@@ -277,7 +282,7 @@ const bracketedReferenceTransformer = createInlineTokenTransformer(
   [ReferenceNode],
   (node) => ($isReferenceNode(node) ? node.getRaw() : null),
   (node, match) => {
-    node.replace($createReferenceNode(match[0]));
+    node.replace($createReferenceNode(match[0], node.getFormat()));
   },
   BRACKETED_REFERENCE_IMPORT,
   BRACKETED_REFERENCE_SHORTCUT,
@@ -288,7 +293,7 @@ const narrativeReferenceTransformer = createInlineTokenTransformer(
   [ReferenceNode],
   (node) => ($isReferenceNode(node) ? node.getRaw() : null),
   (node, match) => {
-    node.replace($createReferenceNode(match[0]));
+    node.replace($createReferenceNode(match[0], node.getFormat()));
   },
   NARRATIVE_REFERENCE_IMPORT,
   NARRATIVE_REFERENCE_SHORTCUT,
@@ -298,7 +303,7 @@ const footnoteReferenceTransformer = createInlineTokenTransformer(
   [FootnoteReferenceNode],
   (node) => ($isFootnoteReferenceNode(node) ? node.getRaw() : null),
   (node, match) => {
-    node.replace($createFootnoteReferenceNode(match[0]));
+    node.replace($createFootnoteReferenceNode(match[0], node.getFormat()));
   },
   FOOTNOTE_REFERENCE_IMPORT,
   FOOTNOTE_REFERENCE_SHORTCUT,
@@ -483,11 +488,117 @@ export function setLexicalMarkdown(
   }, { category: "lexical", detail: `${markdown.length} chars` });
 }
 
+const FORMATTED_INLINE_SOURCE_NODE_TYPES = new Set([
+  "coflat-footnote-reference",
+  "coflat-inline-image",
+  "coflat-inline-math",
+  "coflat-reference",
+]);
+
+interface SerializedNodeRecord {
+  readonly children?: unknown;
+  readonly format?: unknown;
+  readonly raw?: unknown;
+  readonly type?: unknown;
+  readonly [key: string]: unknown;
+}
+
+function isSerializedNodeRecord(value: unknown): value is SerializedNodeRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function transformFormattedInlineSourceNodes(
+  node: unknown,
+  replacements: string[] = [],
+): {
+  readonly changed: boolean;
+  readonly node: unknown;
+} {
+  if (!isSerializedNodeRecord(node)) {
+    return { changed: false, node };
+  }
+
+  if (
+    typeof node.type === "string"
+    && FORMATTED_INLINE_SOURCE_NODE_TYPES.has(node.type)
+    && typeof node.raw === "string"
+    && typeof node.format === "number"
+    && node.format !== 0
+  ) {
+    const placeholder = `\uE000coflat-source-${replacements.length}\uE001`;
+    replacements.push(node.raw);
+    return {
+      changed: true,
+      node: {
+        detail: 0,
+        format: node.format,
+        mode: "normal",
+        style: "",
+        text: placeholder,
+        type: "text",
+        version: 1,
+      },
+    };
+  }
+
+  if (!Array.isArray(node.children)) {
+    return { changed: false, node };
+  }
+
+  let changed = false;
+  const children = node.children.map((child) => {
+    const result = transformFormattedInlineSourceNodes(child, replacements);
+    changed ||= result.changed;
+    return result.node;
+  });
+
+  if (!changed) {
+    return { changed: false, node };
+  }
+
+  return {
+    changed: true,
+    node: {
+      ...node,
+      children,
+    },
+  };
+}
+
+function exportMarkdownFromSerializedState(
+  state: SerializedEditorState,
+  sourceReplacements: readonly string[],
+): string {
+  const exportEditor = createHeadlessCoflatEditor();
+  exportEditor.setEditorState(exportEditor.parseEditorState(JSON.stringify(state)));
+  const markdown = exportEditor.getEditorState().read(() =>
+    $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
+  );
+  return sourceReplacements.reduce(
+    (current, source, index) =>
+      current.replaceAll(`\uE000coflat-source-${index}\uE001`, source),
+    markdown,
+  );
+}
+
 export function getLexicalMarkdown(editor: LexicalEditor): string {
-  return measureSync("lexical.getLexicalMarkdown", () =>
-    editor.getEditorState().read(() =>
+  return measureSync("lexical.getLexicalMarkdown", () => {
+    const editorState = editor.getEditorState();
+    const serialized = editorState.toJSON();
+    const sourceReplacements: string[] = [];
+    const transformedRoot = transformFormattedInlineSourceNodes(
+      serialized.root,
+      sourceReplacements,
+    );
+    if (transformedRoot.changed) {
+      return exportMarkdownFromSerializedState({
+        root: transformedRoot.node as SerializedEditorState["root"],
+      }, sourceReplacements);
+    }
+    return editorState.read(() =>
       $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
-    ), { category: "lexical" });
+    );
+  }, { category: "lexical" });
 }
 
 export function createHeadlessCoflatEditor(): LexicalEditor {

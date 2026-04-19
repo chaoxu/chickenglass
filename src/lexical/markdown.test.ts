@@ -37,6 +37,16 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
+  it("round-trips inline math inside formatted text spans", () => {
+    const markdown = "A **$k$-hitting set** and *\\(x\\)-axis*.";
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("round-trips citations and footnote refs inside formatted text spans", () => {
+    const markdown = "**[@cormen2009] reference** and *[^note] footnote*.";
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
   it("round-trips display math blocks with equation labels", () => {
     const markdown = [
       "$$",
