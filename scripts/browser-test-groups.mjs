@@ -52,6 +52,7 @@ export const BROWSER_TEST_GROUPS = {
   surfaces: [
     "authoring-surfaces",
     "code-blocks",
+    "embedded-field-dirty-state",
     "include-composition",
     "nested-rich-editing",
     "rich-surface-overlays",

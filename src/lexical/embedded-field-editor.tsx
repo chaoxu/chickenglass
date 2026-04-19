@@ -190,10 +190,7 @@ export function EmbeddedFieldEditor({
     pendingDraftRef.current = normalizedDoc;
     setDraftDoc(normalizedDoc);
     clearPublishTimer();
-    publishTimerRef.current = setTimeout(() => {
-      publishTimerRef.current = null;
-      publishDraft({ preserveFocus: true });
-    }, 150);
+    publishDraft({ preserveFocus: true });
   }, [clearPublishTimer, publishDraft, spec]);
 
   const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
@@ -305,7 +302,11 @@ export function EmbeddedFieldEditor({
           }
         : undefined}
       onMouseDownCapture={canActivate && !active
-        ? () => {
+        ? (event) => {
+            // Activation remounts the nested editor; do not let the same
+            // pointer sequence finish as a parent-editor click on stale DOM.
+            event.preventDefault();
+            event.stopPropagation();
             activate("pointer");
           }
         : undefined}
