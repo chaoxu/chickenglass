@@ -17,6 +17,7 @@ import {
   fencedDivTitleMarkdownOffset,
   fencedDivTrimmedBodyMarkdownOffset,
   footnoteDefinitionBodyOffset,
+  useEmbeddedMarkdownSourceSelectionBridge,
   useStructureSourceSelectionBridge,
 } from "../structure-source-selection";
 import {
@@ -185,10 +186,11 @@ function FootnoteDefinitionBlockRenderer({
   const parsed = useMemo(() => parseFootnoteDefinition(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const pendingFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "footnote-body");
-  const onBodySelectionChange = useStructureSourceSelectionBridge(
+  const bodyOffset = footnoteDefinitionBodyOffset(raw);
+  const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
     nodeKey,
-    footnoteDefinitionBodyOffset(raw),
+    bodyOffset,
   );
 
   if (!parsed) {
@@ -299,13 +301,14 @@ function CaptionedBlockRenderer({
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
-  const onBodySelectionChange = useStructureSourceSelectionBridge(
+  const bodyOffset = fencedDivBodyMarkdownOffset(raw);
+  const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
     nodeKey,
-    fencedDivBodyMarkdownOffset(raw),
+    bodyOffset,
   );
   const titleOffset = fencedDivTitleMarkdownOffset(raw, parsed);
-  const onTitleSelectionChange = useStructureSourceSelectionBridge(
+  const onTitleSelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
     nodeKey,
     titleOffset ?? 0,
@@ -466,13 +469,14 @@ function FencedDivBlockRenderer({
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
-  const onBodySelectionChange = useStructureSourceSelectionBridge(
+  const bodyOffset = fencedDivBodyMarkdownOffset(raw);
+  const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
     nodeKey,
-    fencedDivBodyMarkdownOffset(raw),
+    bodyOffset,
   );
   const titleOffset = fencedDivTitleMarkdownOffset(raw, parsed);
-  const onTitleSelectionChange = useStructureSourceSelectionBridge(
+  const onTitleSelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
     nodeKey,
     titleOffset ?? 0,

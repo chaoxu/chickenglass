@@ -103,32 +103,42 @@ export function matchFencedDivEndLine(
     return -1;
   }
 
-  const closingFence = options.allowLongerClosingFence
-    ? new RegExp(`^\\s*:{${colonCount},}\\s*$`)
-    : new RegExp(`^\\s*:{${colonCount}}\\s*$`);
-  let depth = 0;
+  const closingFenceFor = (count: number) =>
+    options.allowLongerClosingFence
+      ? new RegExp(`^\\s*:{${count},}\\s*$`)
+      : new RegExp(`^\\s*:{${count}}\\s*$`);
+
+  if (options.nested) {
+    const stack = [colonCount];
+    for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
+      const line = lines[lineIndex] ?? "";
+      const innerMatch = line.match(FENCED_DIV_START_RE);
+      if (
+        innerMatch
+        && (innerMatch[2] ?? "").trim().length > 0
+        && (innerMatch[1]?.length ?? 0) >= 3
+      ) {
+        stack.push(innerMatch[1]?.length ?? 0);
+        continue;
+      }
+
+      const currentFenceLength = stack[stack.length - 1];
+      if (currentFenceLength !== undefined && closingFenceFor(currentFenceLength).test(line)) {
+        stack.pop();
+        if (stack.length === 0) {
+          return lineIndex;
+        }
+      }
+    }
+    return -1;
+  }
+
+  const closingFence = closingFenceFor(colonCount);
 
   for (let lineIndex = startLineIndex; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex] ?? "";
-    const innerMatch = line.match(FENCED_DIV_START_RE);
-    if (
-      options.nested
-      && innerMatch
-      && (innerMatch[2] ?? "").trim().length > 0
-      && (innerMatch[1]?.length ?? 0) >= 3
-    ) {
-      depth += 1;
-      continue;
-    }
-
     if (lineIndex > startLineIndex && closingFence.test(line)) {
-      if (!options.nested) {
-        return lineIndex;
-      }
-      depth -= 1;
-      if (depth <= 0) {
-        return lineIndex;
-      }
+      return lineIndex;
     }
   }
 

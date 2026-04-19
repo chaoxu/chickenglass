@@ -44,7 +44,7 @@ export interface EmbeddedFieldEditorProps {
   readonly family: EmbeddedFieldFamily;
   readonly keyboardEntryPriority?: BlockKeyboardEntryPriority;
   readonly namespace: string;
-  readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
+  readonly onSelectionChange?: (selection: MarkdownEditorSelection, markdown: string) => void;
   readonly onTextChange?: (text: string) => void;
   readonly pendingFocusId?: string;
 }
@@ -196,6 +196,10 @@ export function EmbeddedFieldEditor({
     }, 150);
   }, [clearPublishTimer, publishDraft, spec]);
 
+  const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
+    onSelectionChange?.(selection, pendingDraftRef.current ?? draftDoc);
+  }, [draftDoc, onSelectionChange]);
+
   const handleNestedEditorReady = useCallback((handle: MarkdownEditorHandle) => {
     nestedEditorHandleRef.current = handle;
   }, []);
@@ -317,7 +321,7 @@ export function EmbeddedFieldEditor({
         namespace={namespace}
         onEditorReady={handleNestedEditorReady}
         onRootElementChange={setNestedRoot}
-        onSelectionChange={onSelectionChange}
+        onSelectionChange={handleSelectionChange}
         onTextChange={handleTextChange}
         preserveLocalHistory
         repairBlankClickSelection={spec.fieldKind !== "inline"}

@@ -150,7 +150,93 @@ function readExactTextOffsetWithMarker(
 
   const markedMarkdown = exportMarkdownFromSerializedState(serialized);
   const markerIndex = markedMarkdown.indexOf(SOURCE_SELECTION_MARKER);
-  return markerIndex >= 0 ? markerIndex : null;
+  if (markerIndex < 0) {
+    return null;
+  }
+
+  const formattedText = getFormattedTextSource(node);
+  if (formattedText) {
+    const unmarkedMarkdown = markedMarkdown.replace(SOURCE_SELECTION_MARKER, "");
+    const sourceStart = unmarkedMarkdown.indexOf(formattedText.source);
+    if (sourceStart >= 0) {
+      return sourceStart + formattedText.openLength + safeOffset;
+    }
+  }
+  return markerIndex;
+}
+
+export function mapVisibleTextOffsetToMarkdown(
+  markdown: string,
+  visibleOffset: number,
+  affinity: "backward" | "forward" = "forward",
+): number | null {
+  const probeEditor = createHeadlessCoflatEditor();
+  setLexicalMarkdown(probeEditor, markdown);
+  const editorState = probeEditor.getEditorState();
+
+  return editorState.read(() => {
+    let remaining = Math.max(0, visibleOffset);
+    let lastTextNode: TextNode | null = null;
+
+    const visit = (node: LexicalNode): { readonly node: TextNode; readonly offset: number } | null => {
+      if ($isTextNode(node)) {
+        lastTextNode = node;
+        const length = node.getTextContentSize();
+        if (remaining < length || (remaining === length && affinity === "backward")) {
+          return { node, offset: remaining };
+        }
+        remaining -= length;
+        return null;
+      }
+
+      if (!$isElementNode(node)) {
+        remaining -= node.getTextContent().length;
+        return null;
+      }
+
+      for (const child of node.getChildren()) {
+        const found = visit(child);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    };
+
+    const location = visit($getRoot());
+    if (location) {
+      return readExactTextOffsetWithMarker(editorState, location.node, location.offset);
+    }
+    if (lastTextNode === null) {
+      return null;
+    }
+    const fallbackNode = lastTextNode as TextNode;
+    return readExactTextOffsetWithMarker(
+      editorState,
+      fallbackNode,
+      fallbackNode.getTextContentSize(),
+    );
+  });
+}
+
+export function getMarkdownVisibleTextLength(markdown: string): number {
+  const probeEditor = createHeadlessCoflatEditor();
+  setLexicalMarkdown(probeEditor, markdown);
+  return probeEditor.getEditorState().read(() => $getRoot().getTextContent().length);
+}
+
+export function mapVisibleTextSelectionToMarkdown(
+  markdown: string,
+  selection: MarkdownEditorSelection,
+): MarkdownEditorSelection | null {
+  const anchorAffinity = selection.anchor <= selection.focus ? "forward" : "backward";
+  const focusAffinity = selection.anchor <= selection.focus ? "backward" : "forward";
+  const anchor = mapVisibleTextOffsetToMarkdown(markdown, selection.anchor, anchorAffinity);
+  const focus = mapVisibleTextOffsetToMarkdown(markdown, selection.focus, focusAffinity);
+  if (anchor === null || focus === null) {
+    return null;
+  }
+  return createSourceSelection(anchor, focus, markdown.length);
 }
 
 function getBoundarySource(node: LexicalNode): string | null {

@@ -10,7 +10,7 @@ export type SearchIndexDialogs = Pick<UseDialogsReturn, "searchOpen">;
 
 export type SearchIndexEditor = Pick<
   AppEditorShellController,
-  "currentPath" | "activeDocumentSignal" | "getCurrentDocText"
+  "currentPath" | "activeDocumentSignal" | "peekCurrentDocText"
 >;
 
 export interface SearchIndexController {
@@ -31,10 +31,10 @@ export function useAppSearchIndex(
   const activeSearchDoc = useMemo(
     () => (
       dialogs.searchOpen && editor.currentPath
-        ? editor.getCurrentDocText()
+        ? editor.peekCurrentDocText()
         : ""
     ),
-    [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.getCurrentDocText],
+    [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.peekCurrentDocText],
   );
 
   useEffect(() => {

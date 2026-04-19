@@ -226,11 +226,13 @@ export function LexicalRichMarkdownEditor({
     });
     if (nextSelection) {
       sourceSelectionRef.current = nextSelection;
-      onSelectionChange?.(nextSelection);
     }
     pendingLocalEchoDocRef.current = nextDoc;
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
+    if (nextSelection) {
+      onSelectionChange?.(nextSelection);
+    }
     onDocChange?.(changes);
   }, [onDocChange, onSelectionChange, onTextChange]);
 

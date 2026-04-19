@@ -290,11 +290,18 @@ function ExplicitSourceSelectionPlugin({
     return editor.registerCommand(
       SET_SOURCE_SELECTION_COMMAND,
       (sourcePosition) => {
+        const anchor = typeof sourcePosition === "number"
+          ? sourcePosition
+          : sourcePosition.anchor;
+        const focus = typeof sourcePosition === "number"
+          ? sourcePosition
+          : sourcePosition.focus;
         storeSelection(
           selectionRef,
           readEditorDocument(editor, editorMode).length,
           onSelectionChange,
-          sourcePosition,
+          anchor,
+          focus,
         );
         return false;
       },

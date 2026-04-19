@@ -75,6 +75,7 @@ export async function run(page) {
         const selection = window.getSelection();
         selection?.removeAllRanges();
         selection?.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
         return true;
       }
       node = walker.nextNode();
@@ -94,6 +95,26 @@ export async function run(page) {
     TITLE_MARKER,
     { timeout: 5000 },
   );
+  const titleSourceSelection = await page.evaluate((marker) => {
+    const doc = window.__editor?.getDoc?.() ?? "";
+    const selection = window.__editor?.getSelection?.() ?? null;
+    const markerStart = doc.indexOf(marker);
+    return {
+      markerStart,
+      markerEnd: markerStart >= 0 ? markerStart + marker.length : -1,
+      selection,
+    };
+  }, TITLE_MARKER);
+  if (
+    titleSourceSelection.markerStart < 0
+    || titleSourceSelection.selection?.from !== titleSourceSelection.markerStart
+    || titleSourceSelection.selection?.to !== titleSourceSelection.markerEnd
+  ) {
+    return {
+      pass: false,
+      message: `nested theorem-title selection did not bridge the full parent-source range: ${JSON.stringify(titleSourceSelection)}`,
+    };
+  }
 
   await page.waitForFunction(() => window.__app?.isDirty?.() ?? false);
   const text = await readEditorText(page);

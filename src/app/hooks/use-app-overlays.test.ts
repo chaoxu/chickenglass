@@ -147,6 +147,7 @@ function createEditorHarness(
       currentPath: options.currentPath ?? null,
       activeDocumentSignal,
       getCurrentDocText: vi.fn(() => currentDocText),
+      peekCurrentDocText: vi.fn(() => currentDocText),
       editorHandle: {
         applyChanges,
         focus: vi.fn(),
@@ -356,7 +357,7 @@ describe("useAppOverlays", () => {
     expect(onOpenFile).toHaveBeenCalledTimes(1);
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(1, true);
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(2, true);
-    expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(3, expect.any(Function));
+    expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(3, true);
   });
 
   it("toggles selectionAlwaysOn via the palette command", async () => {

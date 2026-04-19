@@ -252,10 +252,14 @@ function editorOwnsActiveSelection(root: HTMLElement | null): boolean {
     return false;
   }
   const activeElement = document.activeElement;
+  const activeEditorRoot = activeElement instanceof HTMLElement
+    ? activeElement.closest<HTMLElement>("[data-lexical-editor='true']")
+    : null;
   return root.contains(selection.anchorNode)
     && root.contains(selection.focusNode)
     && !!activeElement
-    && (activeElement === root || root.contains(activeElement));
+    && (activeElement === root || root.contains(activeElement))
+    && activeEditorRoot === root;
 }
 
 function isSourceEditorRoot(root: HTMLElement | null): boolean {

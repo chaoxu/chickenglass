@@ -169,9 +169,8 @@ export function SearchPanel({
   const handleResultClick = useCallback(
     (entry: IndexEntry) => {
       onResultSelect(entry);
-      onOpenChange(false);
     },
-    [onResultSelect, onOpenChange],
+    [onResultSelect],
   );
 
   if (!open) return null;

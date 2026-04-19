@@ -53,7 +53,7 @@ export function AppMainShell({
         onOpenPalette={onOpenPalette}
         onOpenSettings={onOpenSettings}
         activeDocumentSignal={editor.activeDocumentSignal}
-        getDocText={editor.getCurrentDocText}
+        getDocText={editor.peekCurrentDocText}
         isMarkdown={editor.isMarkdownFile}
       />
     </SidebarInset>

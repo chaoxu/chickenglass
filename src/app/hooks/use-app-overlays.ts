@@ -41,7 +41,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorHandle" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "peekCurrentDocText" | "editorHandle" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -113,6 +113,18 @@ export function useAppOverlays({
     });
   }, [editor]);
 
+  const openSearch = useCallback(() => {
+    editor.getCurrentDocText();
+    dialogs.setSearchOpen(true);
+  }, [dialogs, editor]);
+
+  const toggleSearch = useCallback(() => {
+    if (!dialogs.searchOpen) {
+      editor.getCurrentDocText();
+    }
+    dialogs.setSearchOpen(!dialogs.searchOpen);
+  }, [dialogs, editor]);
+
   // ── Single command registry ──────────────────────────────────────────────
   // Each command is defined once. Palette entries, hotkey bindings, and
   // Tauri menu handlers are all derived from this array.
@@ -141,7 +153,7 @@ export function useAppOverlays({
     { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("files"); } },
     { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("outline"); } },
     { id: "nav.show-diagnostics", label: "Show Diagnostics Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("diagnostics"); } },
-    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: TAURI_MENU_IDS.editFind, action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
+    { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: TAURI_MENU_IDS.editFind, action: openSearch, hotkeyAction: toggleSearch },
     { id: "nav.show-label-references", label: "Show References to Label", category: "Navigation", action: labelCommands.handleShowLabelBacklinks },
     { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, hotkey: "mod+,", action: () => dialogs.setSettingsOpen(true), hotkeyAction: () => dialogs.setSettingsOpen((value) => !value) },
 
@@ -168,7 +180,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit]);
+  ], [dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit, openSearch, toggleSearch]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);

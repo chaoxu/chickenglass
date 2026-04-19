@@ -25,14 +25,6 @@ function sourcePositionFromMarkedElement(element: HTMLElement | null): number | 
 }
 
 export function sourcePositionFromElement(element: HTMLElement | null): number | null {
-  const markedDescendant = element?.querySelector<HTMLElement>(
-    "[data-coflat-source-from], .cf-lexical-heading[data-coflat-heading-pos]",
-  ) ?? null;
-  const descendantPosition = sourcePositionFromMarkedElement(markedDescendant);
-  if (descendantPosition !== null) {
-    return descendantPosition;
-  }
-
   let current: HTMLElement | null = element;
   while (current) {
     const currentPosition = sourcePositionFromMarkedElement(current);
@@ -41,6 +33,15 @@ export function sourcePositionFromElement(element: HTMLElement | null): number |
     }
     current = current.parentElement;
   }
+
+  const markedDescendant = element?.querySelector<HTMLElement>(
+    "[data-coflat-source-from], .cf-lexical-heading[data-coflat-heading-pos]",
+  ) ?? null;
+  const descendantPosition = sourcePositionFromMarkedElement(markedDescendant);
+  if (descendantPosition !== null) {
+    return descendantPosition;
+  }
+
   return null;
 }
 

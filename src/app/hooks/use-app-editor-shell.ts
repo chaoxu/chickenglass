@@ -87,6 +87,7 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   readonly handleSearchResult: (target: SearchNavigationTarget, onComplete?: () => void) => void;
   readonly handleInsertImage: () => void;
   readonly editorMode: EditorMode;
+  readonly peekCurrentDocText: () => string;
   readonly handleModeChange: (mode: EditorMode) => void;
   readonly isMarkdownFile: boolean;
   readonly hasDirtyDocument: boolean;
@@ -115,7 +116,7 @@ export function useAppEditorShell({
     currentPath,
     editorDoc,
     activeDocumentSignal,
-    getCurrentDocText,
+    getCurrentDocText: getSessionCurrentDocText,
     openFile,
     isPathOpen,
     openFileWithContent,
@@ -145,7 +146,7 @@ export function useAppEditorShell({
     const selection = handle.getSelection();
     handle.flushPendingEdits();
     const freshDoc = handle.peekDoc();
-    const currentDoc = getCurrentDocText();
+    const currentDoc = getSessionCurrentDocText();
     const changes = createMinimalEditorDocumentChanges(currentDoc, freshDoc);
     if (changes.length > 0) {
       session.handleDocChange(changes);
@@ -158,12 +159,14 @@ export function useAppEditorShell({
       selection,
       shouldDeferModeSwitch: freshDoc !== editorDoc,
     };
-  }, [currentPath, editorDoc, getCurrentDocText, session]);
+  }, [currentPath, editorDoc, getSessionCurrentDocText, session]);
 
   const getFreshCurrentDocText = useCallback(() => {
     flushPendingEditorEdits();
-    return getCurrentDocText();
-  }, [flushPendingEditorEdits, getCurrentDocText]);
+    return getSessionCurrentDocText();
+  }, [flushPendingEditorEdits, getSessionCurrentDocText]);
+
+  const peekCurrentDocText = useCallback(() => getSessionCurrentDocText(), [getSessionCurrentDocText]);
 
   const saveFile = useCallback(async () => {
     flushPendingEditorEdits();
@@ -343,6 +346,7 @@ export function useAppEditorShell({
     handleSearchResult,
     handleInsertImage,
     editorMode,
+    peekCurrentDocText,
     handleModeChange,
     isMarkdownFile,
     activeDocumentSignal,

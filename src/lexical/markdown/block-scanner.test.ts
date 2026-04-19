@@ -50,4 +50,27 @@ describe("block-scanner", () => {
       },
     ]);
   });
+
+  it("keeps longer fenced divs whole when they contain shorter nested fences", () => {
+    const markdown = [
+      ":::: {.theorem} Outer",
+      "Before",
+      "",
+      "::: {.blockquote}",
+      "Inner",
+      ":::",
+      "",
+      "After",
+      "::::",
+    ].join("\n");
+
+    expect(collectSourceBlockRanges(markdown)).toMatchObject([
+      {
+        from: 0,
+        raw: markdown,
+        to: markdown.length,
+        variant: "fenced-div",
+      },
+    ]);
+  });
 });
