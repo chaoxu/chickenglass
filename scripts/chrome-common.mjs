@@ -7,26 +7,24 @@ import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "playwright";
+import { createArgParser } from "./cli-args.mjs";
 
 export function parseChromeArgs(
   argv = process.argv.slice(2),
   defaults = {},
 ) {
-  const getValue = (flag, fallback) => {
-    const index = argv.indexOf(flag);
-    return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
-  };
+  const parser = createArgParser(argv);
 
-  const port = parseInt(getValue("--port", "9322"), 10);
-  const url = getValue("--url", defaults.url ?? "http://localhost:5173");
-  const profileName = getValue("--profile", defaults.profileName ?? "app");
-  const browser = getValue("--browser", defaults.browser ?? "cdp");
-  const activate = argv.includes("--no-activate")
+  const port = parser.getIntFlag("--port", 9322);
+  const url = parser.getFlag("--url", defaults.url ?? "http://localhost:5173");
+  const profileName = parser.getFlag("--profile", defaults.profileName ?? "app");
+  const browser = parser.getFlag("--browser", defaults.browser ?? "cdp");
+  const activate = parser.hasFlag("--no-activate")
     ? false
-    : argv.includes("--activate");
-  const headless = argv.includes("--headed")
+    : parser.hasFlag("--activate");
+  const headless = parser.hasFlag("--headed")
     ? false
-    : argv.includes("--headless")
+    : parser.hasFlag("--headless")
       ? true
       : defaults.headless ?? browser === "managed";
 

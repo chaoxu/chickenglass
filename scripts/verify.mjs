@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 
+import { createArgParser } from "./cli-args.mjs";
 import { ensureNodeModulesLink } from "./dev-worktree/deps.mjs";
 import { startOrReuseDevServer } from "./dev-server.mjs";
 
@@ -27,15 +28,6 @@ Options:
   --headed                 Show the managed browser
   -h, --help               Show this help
 `;
-}
-
-function getFlag(argv, flag, fallback) {
-  const index = argv.indexOf(flag);
-  return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
-}
-
-function hasFlag(argv, flag) {
-  return argv.includes(flag);
 }
 
 function runStep(name, command, args, options = {}) {
@@ -70,9 +62,10 @@ function writeLastVerify(result) {
 }
 
 async function runBrowserStep(argv, steps) {
-  const url = getFlag(argv, "--url");
-  const fullBrowser = hasFlag(argv, "--full-browser");
-  const browserGroup = getFlag(argv, "--browser-group", DEFAULT_BROWSER_GROUP);
+  const parser = createArgParser(argv);
+  const url = parser.getFlag("--url");
+  const fullBrowser = parser.hasFlag("--full-browser");
+  const browserGroup = parser.getFlag("--browser-group", DEFAULT_BROWSER_GROUP);
   const server = await startOrReuseDevServer({ url });
 
   try {
@@ -80,7 +73,7 @@ async function runBrowserStep(argv, steps) {
     if (!fullBrowser) {
       args.push("--group", browserGroup);
     }
-    if (hasFlag(argv, "--headed")) {
+    if (parser.hasFlag("--headed")) {
       args.push("--headed");
     }
     steps.push(runStep(
@@ -94,16 +87,17 @@ async function runBrowserStep(argv, steps) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  if (hasFlag(argv, "--help") || hasFlag(argv, "-h")) {
+  const parser = createArgParser(argv);
+  if (parser.hasFlag("--help") || parser.hasFlag("-h")) {
     console.log(usage());
     return;
   }
 
   const startedAt = new Date();
   const steps = [];
-  const onlyBrowser = hasFlag(argv, "--only-browser");
-  const skipBrowser = hasFlag(argv, "--no-browser");
-  const skipBuild = hasFlag(argv, "--no-build");
+  const onlyBrowser = parser.hasFlag("--only-browser");
+  const skipBrowser = parser.hasFlag("--no-browser");
+  const skipBuild = parser.hasFlag("--no-build");
 
   try {
     const deps = ensureNodeModulesLink();

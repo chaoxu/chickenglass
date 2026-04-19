@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
+import { createArgParser } from "./cli-args.mjs";
 
 const TEMPLATE_LOADERS = {
   basic: () => import("./regression-tests/templates/basic.mjs"),
@@ -29,11 +30,6 @@ function sanitizeName(value) {
     throw new Error("Regression test name must contain at least one alphanumeric character.");
   }
   return sanitized;
-}
-
-function getFlag(argv, flag, fallback) {
-  const index = argv.indexOf(flag);
-  return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
 }
 
 export async function createBrowserRegression({
@@ -68,16 +64,17 @@ export async function createBrowserRegression({
 }
 
 function parseCreateOptions(argv) {
-  const positionals = argv.filter((arg, index) =>
-    !arg.startsWith("--") && argv[index - 1] !== "--template");
+  const parser = createArgParser(argv);
+  const positionals = parser.positionals({ valueFlags: ["--template"] });
   return {
     name: positionals[0],
-    template: getFlag(argv, "--template", "basic"),
+    template: parser.getFlag("--template", "basic"),
   };
 }
 
 async function main(argv = process.argv.slice(2)) {
-  if (argv.includes("--help") || argv.includes("-h")) {
+  const parser = createArgParser(argv);
+  if (parser.hasFlag("--help") || parser.hasFlag("-h")) {
     console.log(usage());
     return;
   }

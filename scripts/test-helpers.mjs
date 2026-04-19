@@ -1,6 +1,4 @@
 /* global window */
-
-import process from "node:process";
 import {
   DEBUG_EDITOR_SELECTOR,
   EDITOR_MODE,
@@ -493,18 +491,7 @@ export async function assertEditorHealth(page, label, options = {}) {
   return health;
 }
 
-export function createArgParser(argv = process.argv.slice(2)) {
-  const getFlag = (flag, fallback = undefined) => {
-    const index = argv.indexOf(flag);
-    return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
-  };
-  const getIntFlag = (flag, fallback) => {
-    const value = getFlag(flag);
-    return value !== undefined ? parseInt(value, 10) : fallback;
-  };
-  const hasFlag = (flag) => argv.includes(flag);
-  return { getFlag, getIntFlag, hasFlag };
-}
+export { createArgParser } from "./cli-args.mjs";
 
 export async function resetEditorState(page) {
   await page.mouse.move(2, 2).catch(() => {});

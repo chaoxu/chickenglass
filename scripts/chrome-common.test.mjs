@@ -38,4 +38,12 @@ describe("chrome common page scoring", () => {
     expect(parseChromeArgs(["--headed"], { browser: "managed" }).headless).toBe(false);
     expect(parseChromeArgs(["--headless"], { browser: "cdp" }).headless).toBe(true);
   });
+
+  it("accepts equals-form browser flags through the shared parser", () => {
+    const args = parseChromeArgs(["--browser=managed", "--port=9333", "--url=http://localhost:5178"]);
+
+    expect(args.browser).toBe("managed");
+    expect(args.port).toBe(9333);
+    expect(args.url).toBe("http://localhost:5178");
+  });
 });
