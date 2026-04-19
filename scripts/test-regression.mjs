@@ -24,6 +24,7 @@ import {
   expandBrowserTestSelection,
   formatBrowserTestList,
 } from "./browser-test-groups.mjs";
+import { externalEmbedStubRoutes } from "../src/lexical/embed-providers.js";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import {
   connectEditor,
@@ -38,9 +39,7 @@ import { isMissingFixtureError } from "./test-helpers/fixtures.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
-const EXTERNAL_EMBED_ROUTE_PATTERNS = [
-  /^https:\/\/www\.youtube\.com\/embed\//,
-];
+const EXTERNAL_EMBED_STUB_ROUTES = externalEmbedStubRoutes();
 
 /** Dynamically import all test modules from the regression-tests directory. */
 export async function loadTests() {
@@ -67,11 +66,11 @@ export async function loadTests() {
 }
 
 async function installExternalEmbedStubs(page) {
-  for (const pattern of EXTERNAL_EMBED_ROUTE_PATTERNS) {
-    await page.route(pattern, (route) =>
+  for (const { providerId, routePattern } of EXTERNAL_EMBED_STUB_ROUTES) {
+    await page.route(routePattern, (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body data-coflat-embed-stub=\"youtube\"></body></html>",
+        body: `<!doctype html><html><body data-coflat-embed-stub="${providerId}"></body></html>`,
       })
     ).catch(() => {});
   }
