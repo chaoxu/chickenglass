@@ -1,5 +1,5 @@
 /**
- * interaction-trace — Circular buffer for click and scroll-jump events.
+ * interaction-trace — Circular buffer for user interaction events.
  *
  * Consumed by InteractionTracePlugin (writes), the debug sidebar (reads),
  * and window.__cfDebug.interactionLog (reads).
@@ -8,17 +8,19 @@
 export interface InteractionTraceEntry {
   /** Unix timestamp (ms). */
   ts: number;
-  type: "click" | "scroll-jump";
+  type: "click" | "input" | "scroll-jump";
   /** Lexical node `__type` (e.g. "inline-math", "paragraph"). */
   nodeType: string | null;
   /** Lexical node key. */
   nodeKey: string | null;
-  /** Short DOM selector summary of click target. */
+  /** Short DOM selector summary of the event target. */
   target: string;
   scrollBefore: number;
   scrollAfter: number;
-  /** Whether a CLICK_COMMAND handler returned true. */
+  /** Whether a click handler returned true/default-prevented. */
   handled: boolean;
+  inputType?: string;
+  data?: string | null;
 }
 
 const MAX_ENTRIES = 50;

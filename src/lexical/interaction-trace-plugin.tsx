@@ -1,5 +1,5 @@
 /**
- * interaction-trace-plugin — Traces click targets and scroll jumps.
+ * interaction-trace-plugin — Traces editor clicks, text input, and scroll jumps.
  *
  * Activated by the `commandLogging` dev setting. Uses document-level capture
  * listeners to catch ALL clicks on the editor, including those consumed
@@ -32,6 +32,28 @@ function domTargetSummary(el: EventTarget | null): string {
     ? `.${el.className.split(/\s+/).slice(0, 2).join(".")}`
     : "";
   return `${tag}${cls}`;
+}
+
+function lexicalNodeForTarget(
+  editor: LexicalEditor | null,
+  target: EventTarget | null,
+): { readonly nodeKey: string | null; readonly nodeType: string | null } {
+  let nodeType: string | null = null;
+  let nodeKey: string | null = null;
+  try {
+    if (editor && target instanceof Node) {
+      editor.getEditorState().read(() => {
+        const node = $getNearestNodeFromDOMNode(target);
+        if (node) {
+          nodeType = node.getType();
+          nodeKey = node.getKey();
+        }
+      });
+    }
+  } catch {
+    // Node resolution can fail for detached DOM — that's fine.
+  }
+  return { nodeKey, nodeType };
 }
 
 // ---- Shared state box written by the React component, read by handlers. ----
@@ -76,23 +98,7 @@ function handleClick(event: MouseEvent) {
   const scrollBefore = state.scrollBefore;
   const handled = event.defaultPrevented;
 
-  // Resolve Lexical node from click target.
-  let nodeType: string | null = null;
-  let nodeKey: string | null = null;
-  try {
-    if (currentEditor && event.target instanceof Node) {
-      currentEditor.getEditorState().read(() => {
-        const node = $getNearestNodeFromDOMNode(event.target as Node);
-        if (node) {
-          nodeType = node.getType();
-          nodeKey = node.getKey();
-        }
-      });
-    }
-  } catch {
-    // Node resolution can fail for detached DOM — that's fine.
-  }
-
+  const { nodeKey, nodeType } = lexicalNodeForTarget(currentEditor, event.target);
   const targetSummary = domTargetSummary(event.target);
 
   // Monitor scroll for 500ms after click to catch delayed jumps.
@@ -152,10 +158,38 @@ function handleClick(event: MouseEvent) {
   }, 500);
 }
 
+function handleBeforeInput(event: InputEvent) {
+  if (!state.enabled) return;
+  if (!(event.target instanceof Node) || !findMainRoot(event.target)) return;
+
+  const { nodeKey, nodeType } = lexicalNodeForTarget(state.editor, event.target);
+  const entry: InteractionTraceEntry = {
+    ts: Date.now(),
+    type: "input",
+    nodeType,
+    nodeKey,
+    target: domTargetSummary(event.target),
+    scrollBefore: state.surface?.scrollTop ?? 0,
+    scrollAfter: state.surface?.scrollTop ?? 0,
+    handled: event.defaultPrevented,
+    inputType: event.inputType,
+    data: event.data,
+  };
+
+  pushTraceEntry(entry);
+  recordDebugSessionEvent({
+    timestamp: entry.ts,
+    type: entry.type,
+    summary: `input ${entry.inputType} ${nodeType ?? entry.target}`,
+    detail: entry,
+  });
+}
+
 function ensureListeners() {
   if (listenersAttached) return;
   listenersAttached = true;
   document.addEventListener("mousedown", handleMouseDown, true);
+  document.addEventListener("beforeinput", handleBeforeInput, true);
   document.addEventListener("click", handleClick, true);
 }
 

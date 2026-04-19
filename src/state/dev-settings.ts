@@ -37,11 +37,13 @@ export interface DevSettingsStore extends DevSettings {
 export const selectAnyDebugActive = (s: DevSettings) =>
   s.treeView || s.perfPanel || s.fpsCounter || s.commandLogging || s.focusTracing;
 
+const recordHumanSessionsByDefault = import.meta.env.DEV && import.meta.env.MODE === "show";
+
 export const useDevSettings = create<DevSettingsStore>((setState, getState) => ({
   treeView: false,
   perfPanel: false,
   fpsCounter: false,
-  commandLogging: false,
+  commandLogging: recordHumanSessionsByDefault,
   focusTracing: false,
   selectionAlwaysOn: false,
 

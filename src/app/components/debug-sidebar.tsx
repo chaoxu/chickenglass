@@ -45,7 +45,7 @@ function InteractionTracePanel() {
     <div className="space-y-1 p-3 text-xs">
       <div className="font-medium text-[var(--cf-fg)]">Interactions</div>
       {entries.length === 0 ? (
-        <div className="text-[var(--cf-muted)]">No clicks recorded yet.</div>
+        <div className="text-[var(--cf-muted)]">No interactions recorded yet.</div>
       ) : entries.map((e, i) => {
         const delta = e.scrollAfter - e.scrollBefore;
         return (
@@ -54,6 +54,11 @@ function InteractionTracePanel() {
               {new Date(e.ts).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
             <span className="truncate text-[var(--cf-fg)]">{e.nodeType ?? e.target}</span>
+            {e.type === "input" && (
+              <span className="truncate text-[var(--cf-muted)]">
+                {e.inputType}{e.data ? ` ${JSON.stringify(e.data)}` : ""}
+              </span>
+            )}
             {delta !== 0 && (
               <span className="tabular-nums font-medium text-red-500">
                 {delta > 0 ? "+" : ""}{delta}px
