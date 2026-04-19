@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 
+import { formatLastVerifyStatus, readLastVerifyStatus } from "./devx-cache.mjs";
 import { waitForAppUrl } from "./dev-server.mjs";
 
-const LAST_VERIFY_PATH = resolve(".cache/devx/last-verify.json");
 const OPTIONAL_FIXTURES = [
   {
     fallback: "demo/index.md",
@@ -72,17 +72,7 @@ async function cdpStatus(port = 9322) {
 }
 
 function lastVerifyStatus() {
-  if (!existsSync(LAST_VERIFY_PATH)) {
-    return "none";
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(LAST_VERIFY_PATH, "utf8"));
-    return parsed.ok
-      ? `passed at ${parsed.completedAt}`
-      : `failed at ${parsed.completedAt}: ${parsed.error ?? "unknown error"}`;
-  } catch {
-    return `unreadable (${LAST_VERIFY_PATH})`;
-  }
+  return formatLastVerifyStatus(readLastVerifyStatus());
 }
 
 function fixtureStatus() {

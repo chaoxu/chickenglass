@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import process from "node:process";
 
 import { createArgParser } from "./cli-args.mjs";
+import { writeLastVerifyStatus } from "./devx-cache.mjs";
 import { ensureNodeModulesLink } from "./dev-worktree/deps.mjs";
 import { startOrReuseDevServer } from "./dev-server.mjs";
 
-const LAST_VERIFY_PATH = resolve(".cache/devx/last-verify.json");
 const DEFAULT_BROWSER_GROUP = "core";
 
 function usage() {
@@ -54,11 +52,6 @@ function runStep(name, command, args, options = {}) {
     name,
     status: "passed",
   };
-}
-
-function writeLastVerify(result) {
-  mkdirSync(dirname(LAST_VERIFY_PATH), { recursive: true });
-  writeFileSync(LAST_VERIFY_PATH, JSON.stringify(result, null, 2) + "\n");
 }
 
 async function runBrowserStep(argv, steps) {
@@ -125,7 +118,7 @@ export async function main(argv = process.argv.slice(2)) {
       ok: true,
       steps,
     };
-    writeLastVerify(result);
+    writeLastVerifyStatus(result);
     console.log("\n[verify] passed");
   } catch (error) {
     const result = {
@@ -135,7 +128,7 @@ export async function main(argv = process.argv.slice(2)) {
       ok: false,
       steps,
     };
-    writeLastVerify(result);
+    writeLastVerifyStatus(result);
     throw error;
   }
 }

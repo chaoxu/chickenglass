@@ -6,10 +6,11 @@ import { dirname, resolve } from "node:path";
 import process from "node:process";
 
 import { createArgParser, splitCommand } from "./cli-args.mjs";
+import { DEFAULT_PERF_BASELINE_PATH } from "./devx-cache.mjs";
 import { ensureNodeModulesLink } from "./dev-worktree/deps.mjs";
 import { startOrReuseDevServer } from "./dev-server.mjs";
 
-const DEFAULT_BASELINE = ".cache/devx/perf-baseline.json";
+const DEFAULT_BASELINE = DEFAULT_PERF_BASELINE_PATH;
 const DEFAULT_SCENARIO = "typing-lexical-burst";
 
 function usage() {
