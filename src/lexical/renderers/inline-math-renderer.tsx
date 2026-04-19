@@ -3,6 +3,7 @@ import katex from "katex";
 import type { NodeKey } from "lexical";
 
 import { useLexicalRenderContext } from "../render-context";
+import { INLINE_TOKEN_KEY_ATTR } from "../inline-token-boundary";
 import { stripInlineMathDelimiters } from "../inline-math-source";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { preventKatexMouseDown, useLazyVisibility } from "./shared";
@@ -37,6 +38,7 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
     return (
       <span
         className={LEXICAL_NODE_CLASS.INLINE_MATH}
+        {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
         data-coflat-inline-math-key={nodeKey}
         data-coflat-inline-math-pending=""
         ref={ref}
@@ -50,6 +52,7 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
   return (
     <span
       className={LEXICAL_NODE_CLASS.INLINE_MATH}
+      {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
       data-coflat-inline-math-key={nodeKey}
       dangerouslySetInnerHTML={{ __html: html }}
       onMouseDown={preventKatexMouseDown}

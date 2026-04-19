@@ -43,6 +43,14 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
     return true;
   }
 
+  canInsertTextAfter(): false {
+    return false;
+  }
+
+  canInsertTextBefore(): false {
+    return false;
+  }
+
   updateDOM(): false {
     return false;
   }
@@ -76,6 +84,7 @@ export class FootnoteReferenceNode extends DecoratorNode<JSX.Element> {
   decorate(): JSX.Element {
     const Renderer = getFootnoteReferenceRenderer();
     return createElement(Renderer, {
+      nodeKey: this.getKey(),
       raw: this.getRaw(),
     });
   }

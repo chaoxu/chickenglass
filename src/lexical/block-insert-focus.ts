@@ -28,30 +28,34 @@ export function ensureTrailingParagraph(insertedNode: LexicalNode, afterNode?: L
   insertedNode.insertAfter($createParagraphNode());
 }
 
+export function $selectFirstTableCell(node: LexicalNode | null | undefined): boolean {
+  if (!$isTableNode(node)) {
+    return false;
+  }
+
+  const rowNodes = node.getChildren().filter($isTableRowNode);
+  const targetRow = rowNodes[1] ?? rowNodes[0] ?? null;
+  const targetCell = targetRow
+    ?.getChildren()
+    .find($isTableCellNode);
+
+  if (!targetCell) {
+    return false;
+  }
+
+  const firstChild = targetCell.getFirstChild();
+  if ($isElementNode(firstChild)) {
+    firstChild.selectStart();
+    return true;
+  }
+
+  targetCell.selectStart();
+  return true;
+}
+
 export function focusFirstTableCell(editor: LexicalEditor, key: NodeKey): void {
   editor.update(() => {
-    const node = $getNodeByKey(key);
-    if (!$isTableNode(node)) {
-      return;
-    }
-
-    const rowNodes = node.getChildren().filter($isTableRowNode);
-    const targetRow = rowNodes[1] ?? rowNodes[0] ?? null;
-    const targetCell = targetRow
-      ?.getChildren()
-      .find($isTableCellNode);
-
-    if (!targetCell) {
-      return;
-    }
-
-    const firstChild = targetCell.getFirstChild();
-    if ($isElementNode(firstChild)) {
-      firstChild.selectStart();
-      return;
-    }
-
-    targetCell.selectStart();
+    $selectFirstTableCell($getNodeByKey(key));
   }, {
     discrete: true,
     tag: COFLAT_NESTED_EDIT_TAG,

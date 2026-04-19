@@ -57,6 +57,7 @@ import {
   createMarkdownSelection,
   storeSelection,
 } from "./editor-surface-shared";
+import { COFLAT_DOCUMENT_SYNC_TAG } from "./update-tags";
 
 export function SelectionAlwaysOnPlugin() {
   const open = useDevSettings((s) => s.selectionAlwaysOn);
@@ -210,9 +211,11 @@ export function MarkdownSyncPlugin({
     setLexicalMarkdown(
       editor,
       doc,
-      preservePendingLocalHistory
-        ? { tag: HISTORY_MERGE_TAG }
-        : undefined,
+      {
+        tag: preservePendingLocalHistory
+          ? [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG]
+          : COFLAT_DOCUMENT_SYNC_TAG,
+      },
     );
     if (!preservePendingLocalHistory) {
       editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);

@@ -13,6 +13,7 @@ import {
 } from "lexical";
 
 import {
+  $selectFirstTableCell,
   activateInsertedBlock,
   ensureTrailingParagraph,
 } from "./block-insert-focus";
@@ -143,6 +144,9 @@ function insertExpandedBlock(
       node.remove();
     }
     ensureTrailingParagraph(insertedNode, afterNode);
+    if (candidate.focusTarget === "table-cell") {
+      $selectFirstTableCell(insertedNode);
+    }
 
     activateInsertedBlock(editor, insertedNodeKey, candidate.focusTarget);
   }, {

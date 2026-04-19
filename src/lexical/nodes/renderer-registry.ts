@@ -21,6 +21,7 @@ import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 import type { RawBlockVariant } from "./raw-block-types";
 
 export interface FootnoteReferenceRendererProps {
+  readonly nodeKey: string;
   readonly raw: string;
 }
 

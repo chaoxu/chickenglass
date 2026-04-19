@@ -50,6 +50,14 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
     return true;
   }
 
+  canInsertTextAfter(): false {
+    return false;
+  }
+
+  canInsertTextBefore(): false {
+    return false;
+  }
+
   updateDOM(): false {
     return false;
   }

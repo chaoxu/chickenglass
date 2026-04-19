@@ -503,8 +503,10 @@ function FencedDivBlockRenderer({
 }
 
 export const FootnoteReferenceRenderer = memo(function FootnoteReferenceRenderer({
+  nodeKey,
   raw,
 }: {
+  readonly nodeKey: string;
   readonly raw: string;
 }) {
   const context = useLexicalRenderContext();
@@ -529,6 +531,7 @@ export const FootnoteReferenceRenderer = memo(function FootnoteReferenceRenderer
     <>
       <sup
         className={LEXICAL_NODE_CLASS.FOOTNOTE_REFERENCE}
+        data-coflat-inline-token-key={nodeKey}
         data-footnote-id={id}
         onMouseEnter={(event) => {
           if (body) {

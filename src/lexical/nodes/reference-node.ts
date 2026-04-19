@@ -43,6 +43,14 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
     return true;
   }
 
+  canInsertTextAfter(): false {
+    return false;
+  }
+
+  canInsertTextBefore(): false {
+    return false;
+  }
+
   updateDOM(): false {
     return false;
   }
@@ -75,6 +83,7 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
 
   decorate(): JSX.Element {
     return createElement(ReferenceRenderer, {
+      nodeKey: this.getKey(),
       raw: this.getRaw(),
     });
   }

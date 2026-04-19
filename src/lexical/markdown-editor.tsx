@@ -24,7 +24,6 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import {
   COMMAND_PRIORITY_LOW,
-  HISTORIC_TAG,
   HISTORY_MERGE_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
   SELECTION_CHANGE_COMMAND,
@@ -69,6 +68,7 @@ import {
 } from "./editor-surface-shared";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
+import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { RevealPresentationProvider } from "./reveal-presentation-context";
 import { StructureEditProvider } from "./structure-edit-plugin";
@@ -85,6 +85,7 @@ import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
+import { TabKeyPlugin } from "./tab-key-plugin";
 import {
   LexicalRenderContextProvider,
   type LexicalRenderContextValue,
@@ -106,7 +107,7 @@ import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { getActiveEditor } from "./active-editor-tracker";
 import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
 import { TreeViewPlugin } from "./tree-view-plugin";
-import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { COFLAT_DOCUMENT_SYNC_TAG } from "./update-tags";
 import { useDevSettings } from "../state/dev-settings";
 
 function sameSelection(left: MarkdownEditorSelection, right: MarkdownEditorSelection): boolean {
@@ -342,9 +343,11 @@ function MarkdownModeSyncPlugin({
       nextDoc.length,
     );
     const mergeHistory = pendingLocalEchoDoc !== null || (modeChanged && !docChanged);
-    const syncOptions = mergeHistory
-      ? { tag: HISTORY_MERGE_TAG }
-      : undefined;
+    const syncOptions = {
+      tag: mergeHistory
+        ? [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG]
+        : COFLAT_DOCUMENT_SYNC_TAG,
+    };
 
     selectionRef.current = nextSelection;
     lastCommittedDocRef.current = nextDoc;
@@ -665,6 +668,10 @@ export function LexicalMarkdownEditor({
     editor: LexicalEditor,
     tags: Set<string>,
   ) => {
+    if (tags.has(COFLAT_DOCUMENT_SYNC_TAG)) {
+      return;
+    }
+
     if (editorModeRef.current === "source") {
       const nextDoc = getSourceText(editor);
       const changes = createMinimalEditorDocumentChanges(
@@ -683,14 +690,6 @@ export function LexicalMarkdownEditor({
     }
 
     const nextDoc = getLexicalMarkdown(editor);
-    if (
-      !userEditPendingRef.current
-      && !tags.has(COFLAT_FORMAT_EVENT_TAG)
-      && !tags.has(COFLAT_NESTED_EDIT_TAG)
-      && !tags.has(HISTORIC_TAG)
-    ) {
-      return;
-    }
 
     const changes = createMinimalEditorDocumentChanges(
       lastCommittedDocRef.current,
@@ -780,6 +779,7 @@ export function LexicalMarkdownEditor({
                   selectionRef={sourceSelectionRef}
                 />
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
+                {editable ? <InlineTokenBoundaryPlugin /> : null}
                 <MarkdownModeSyncPlugin
                   doc={doc}
                   editorMode={editorMode}
@@ -866,6 +866,7 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode ? <CheckListPlugin /> : null}
                 {!isSourceMode && editable ? <ListMarkerStripPlugin /> : null}
                 {!isSourceMode ? <LinkPlugin /> : null}
+                {!isSourceMode && editable ? <TabKeyPlugin /> : null}
                 {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
                 {!isSourceMode && editable ? <FormatEventPlugin /> : null}
                 {!isSourceMode && editable ? <MarkdownExpansionPlugin /> : null}

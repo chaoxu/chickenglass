@@ -39,6 +39,7 @@ import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { IncludeRegionAffordancePlugin } from "./include-region-affordance-plugin";
+import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
 import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { EDITOR_MODE, type RevealPresentation } from "../app/editor-mode";
@@ -61,7 +62,7 @@ import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
 import { SourcePositionPlugin } from "./source-position-plugin";
-import { COFLAT_FORMAT_EVENT_TAG, COFLAT_NESTED_EDIT_TAG } from "./update-tags";
+import { COFLAT_DOCUMENT_SYNC_TAG } from "./update-tags";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,
@@ -141,7 +142,6 @@ export function LexicalRichMarkdownEditor({
   onViewportFromChange,
   preserveLocalHistory = false,
   repairBlankClickSelection: shouldRepairBlankClickSelection = false,
-  requireUserEditFlag = true,
   renderContextValue,
   revealPresentation,
   showBibliography = false,
@@ -190,16 +190,11 @@ export function LexicalRichMarkdownEditor({
     editor: LexicalEditor,
     tags: Set<string>,
   ) => {
-    const nextDoc = getLexicalMarkdown(editor);
-
-    if (
-      requireUserEditFlag
-      && !userEditPendingRef.current
-      && !tags.has(COFLAT_FORMAT_EVENT_TAG)
-      && !tags.has(COFLAT_NESTED_EDIT_TAG)
-    ) {
+    if (tags.has(COFLAT_DOCUMENT_SYNC_TAG)) {
       return;
     }
+
+    const nextDoc = getLexicalMarkdown(editor);
 
     const changes = createMinimalEditorDocumentChanges(
       lastCommittedDocRef.current,
@@ -215,7 +210,7 @@ export function LexicalRichMarkdownEditor({
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
-  }, [onDocChange, onTextChange, requireUserEditFlag]);
+  }, [onDocChange, onTextChange]);
 
   const shellClassName = layoutMode === "inline"
     ? "cf-lexical-surface cf-lexical-surface--inline"
@@ -262,6 +257,7 @@ export function LexicalRichMarkdownEditor({
                   userEditPendingRef={userEditPendingRef}
                 />
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
+                {editable ? <InlineTokenBoundaryPlugin /> : null}
                 <MarkdownSyncPlugin
                   doc={doc}
                   lastCommittedDocRef={lastCommittedDocRef}

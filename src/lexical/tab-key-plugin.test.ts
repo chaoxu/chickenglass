@@ -1,18 +1,47 @@
 import { describe, expect, it } from "vitest";
 import { createHeadlessEditor } from "@lexical/headless";
 import { $createListItemNode, $createListNode, ListItemNode, ListNode } from "@lexical/list";
-import { $getNodeByKey, $getRoot, ParagraphNode, TextNode, type LexicalEditor } from "lexical";
+import { $getNodeByKey, $getRoot, $getSelection, ParagraphNode, TextNode, type LexicalEditor } from "lexical";
 
+import { $createTableCellNode, $isTableCellNode, TableCellNode } from "./nodes/table-cell-node";
+import { $createTableNode, TableNode } from "./nodes/table-node";
+import { $createTableRowNode, TableRowNode } from "./nodes/table-row-node";
 import { $handleTabKeyCommand } from "./tab-key-plugin";
 
 function createTabTestEditor(): LexicalEditor {
   return createHeadlessEditor({
     namespace: "coflat-tab-key-plugin-test",
-    nodes: [ParagraphNode, TextNode, ListNode, ListItemNode],
+    nodes: [ParagraphNode, TextNode, ListNode, ListItemNode, TableNode, TableRowNode, TableCellNode],
     onError(error) {
       throw error;
     },
   });
+}
+
+function appendCell(row: TableRowNode, text: string, header = false): ParagraphNode {
+  const cell = $createTableCellNode(header);
+  const paragraph = new ParagraphNode();
+  paragraph.append(new TextNode(text));
+  cell.append(paragraph);
+  row.append(cell);
+  return paragraph;
+}
+
+function readSelectedTableCellText(editor: LexicalEditor): string {
+  let text = "";
+  editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    const anchorNode = selection?.getNodes()[0] ?? null;
+    let current = anchorNode;
+    while (current && !$isTableCellNode(current)) {
+      current = current.getParent();
+    }
+    if (!$isTableCellNode(current)) {
+      throw new Error("expected selection inside table cell");
+    }
+    text = current.getTextContent();
+  });
+  return text;
 }
 
 function readIndentByKey(editor: LexicalEditor, key: string): number {
@@ -106,5 +135,35 @@ describe("tab key plugin", () => {
 
     expect(handled).toBe(true);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("moves between table cells on Tab and Shift+Tab", () => {
+    const editor = createTabTestEditor();
+    const tab = new KeyboardEvent("keydown", { cancelable: true, key: "Tab" });
+    const shiftTab = new KeyboardEvent("keydown", { cancelable: true, key: "Tab", shiftKey: true });
+
+    editor.update(() => {
+      const table = $createTableNode([null, null]);
+      const header = $createTableRowNode();
+      appendCell(header, "A", true);
+      appendCell(header, "B", true);
+      const row = $createTableRowNode();
+      const first = appendCell(row, "left");
+      appendCell(row, "right");
+      table.append(header, row);
+      $getRoot().append(table);
+      first.selectEnd();
+      $handleTabKeyCommand(tab);
+    }, { discrete: true });
+
+    expect(readSelectedTableCellText(editor)).toBe("right");
+    expect(tab.defaultPrevented).toBe(true);
+
+    editor.update(() => {
+      $handleTabKeyCommand(shiftTab);
+    }, { discrete: true });
+
+    expect(readSelectedTableCellText(editor)).toBe("left");
+    expect(shiftTab.defaultPrevented).toBe(true);
   });
 });

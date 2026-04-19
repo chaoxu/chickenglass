@@ -15,6 +15,7 @@ import {
   renderReferenceDisplay,
 } from "../markdown/reference-display";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
+import { INLINE_TOKEN_KEY_ATTR } from "../inline-token-boundary";
 
 function renderReferenceCluster(
   parsed: ParsedReferenceToken,
@@ -37,8 +38,10 @@ function renderReferenceCluster(
  * display and hover previews.
  */
 export const ReferenceRenderer = memo(function ReferenceRenderer({
+  nodeKey,
   raw,
 }: {
+  readonly nodeKey: string;
   readonly raw: string;
 }) {
   const { citations, renderIndex } = useLexicalRenderContext();
@@ -80,7 +83,7 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
     : null;
 
   if (!parsed) {
-    return <span className={LEXICAL_NODE_CLASS.REFERENCE}>{text}</span>;
+    return <span className={LEXICAL_NODE_CLASS.REFERENCE} {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}>{text}</span>;
   }
 
   const wrapperClass = parsed.ids.some((id) => citations.store.has(id))
@@ -94,6 +97,7 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
       <>
         <span
           className={wrapperClass}
+          {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
           data-coflat-citation={citation ? "true" : undefined}
           data-coflat-reference="true"
           data-coflat-single-ref-id={id}
@@ -114,6 +118,7 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
       <>
         <span
           className={wrapperClass}
+          {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
           data-coflat-citation="true"
           data-coflat-reference="true"
           data-coflat-single-ref-id={singleId}
@@ -133,6 +138,7 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
       <>
         <span
           className={wrapperClass}
+          {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
           data-coflat-reference="true"
         >
           {text}
@@ -146,6 +152,7 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
     <>
       <span
         className={wrapperClass}
+        {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
         data-coflat-reference="true"
       >
         {renderReferenceCluster(parsed, renderSingleItem)}

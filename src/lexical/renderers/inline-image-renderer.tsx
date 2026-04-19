@@ -7,6 +7,7 @@ import { AssetPreviewView } from "../asset-preview-view";
 import { EditorChromeInput } from "../editor-chrome";
 import { useAssetPreview } from "../media-preview";
 import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
+import { INLINE_TOKEN_KEY_ATTR } from "../inline-token-boundary";
 import { parseMarkdownImage } from "../markdown/image-markdown";
 import { structureToggleProps } from "./shared";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
@@ -104,15 +105,17 @@ export const InlineImageRenderer = memo(function InlineImageRenderer({
   }
 
   return (
-    <AssetPreviewView
-      activationProps={structureToggleProps(surfaceEditable, () => setEditing(true), {
-        stopPropagation: true,
-      })}
-      alt={parsed.alt}
-      imageClassName={LEXICAL_NODE_CLASS.INLINE_IMAGE}
-      layout="inline"
-      preview={preview}
-      src={parsed.src}
-    />
+    <span {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}>
+      <AssetPreviewView
+        activationProps={structureToggleProps(surfaceEditable, () => setEditing(true), {
+          stopPropagation: true,
+        })}
+        alt={parsed.alt}
+        imageClassName={LEXICAL_NODE_CLASS.INLINE_IMAGE}
+        layout="inline"
+        preview={preview}
+        src={parsed.src}
+      />
+    </span>
   );
 });
