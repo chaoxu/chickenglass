@@ -40,6 +40,13 @@ function replaceFirstLine(raw: string, nextFirstLine: string): string {
   return lines.join("\n");
 }
 
+function updateFencedDivField(
+  currentRaw: string,
+  overrides: NonNullable<Parameters<typeof serializeFencedDivRaw>[1]>,
+): string {
+  return serializeFencedDivRaw(parseStructuredFencedDivRaw(currentRaw), overrides);
+}
+
 function richHtmlOptions(context: ReturnType<typeof useLexicalRenderContext>) {
   return {
     citations: context.citations,
@@ -78,7 +85,7 @@ function FencedDivStructureSourceEditor({
         className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--opener"
         doc={getFirstLine(raw)}
         namespace={`coflat-block-opener-${nodeKey}`}
-        onChange={(nextOpener) => updateRaw(replaceFirstLine(raw, nextOpener))}
+        onChange={(nextOpener) => updateRaw((currentRaw) => replaceFirstLine(currentRaw, nextOpener))}
         onClose={onClose}
       />
     </div>
@@ -224,7 +231,7 @@ function IncludeBlockRenderer({
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--include"
           doc={parsed.bodyMarkdown.trim()}
           namespace={`coflat-include-path-${nodeKey}`}
-          onChange={(nextPath) => updateRaw(serializeFencedDivRaw(parsed, {
+          onChange={(nextPath) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextPath,
           }))}
           onClose={pathEdit.deactivate}
@@ -280,7 +287,7 @@ function CaptionedBlockRenderer({
           doc={parsed.bodyMarkdown}
           family="block-body"
           namespace={`coflat-captioned-block-${nodeKey}`}
-          onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
+          onTextChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextBody,
           }))}
           pendingFocusId={pendingBodyFocusId}
@@ -301,8 +308,7 @@ function CaptionedBlockRenderer({
               doc={parsed.titleMarkdown}
               family="caption"
               namespace={`coflat-block-caption-${nodeKey}`}
-              onTextChange={(nextTitle) => updateRaw(serializeFencedDivRaw(parsed, {
-                bodyMarkdown: parsed.bodyMarkdown,
+              onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
                 titleMarkdown: nextTitle,
               }))}
             />
@@ -356,7 +362,7 @@ function EmbedBlockRenderer({
             className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--embed"
             doc={parsed.bodyMarkdown.trim()}
             namespace={`coflat-embed-${nodeKey}`}
-            onChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
+            onChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
               bodyMarkdown: nextBody,
             }))}
             onClose={bodyEdit.deactivate}
@@ -436,7 +442,7 @@ function FencedDivBlockRenderer({
           doc={parsed.bodyMarkdown}
           family="block-body"
           namespace={`coflat-blockquote-${nodeKey}`}
-          onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
+          onTextChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextBody,
           }))}
           pendingFocusId={pendingBodyFocusId}
@@ -473,8 +479,7 @@ function FencedDivBlockRenderer({
               doc={parsed.titleMarkdown}
               family="title"
               namespace={`coflat-block-title-${nodeKey}`}
-              onTextChange={(nextTitle) => updateRaw(serializeFencedDivRaw(parsed, {
-                bodyMarkdown: parsed.bodyMarkdown,
+              onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
                 titleMarkdown: nextTitle,
               }))}
             />
@@ -487,7 +492,7 @@ function FencedDivBlockRenderer({
           doc={parsed.bodyMarkdown}
           family="block-body"
           namespace={`coflat-block-body-${nodeKey}`}
-          onTextChange={(nextBody) => updateRaw(serializeFencedDivRaw(parsed, {
+          onTextChange={(nextBody) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
             bodyMarkdown: nextBody,
           }))}
           pendingFocusId={pendingBodyFocusId}

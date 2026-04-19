@@ -19,6 +19,8 @@ type RawUpdatableNode = {
   setRaw?: (value: string) => unknown;
 };
 
+type RawUpdate = string | ((currentRaw: string) => string);
+
 /** Prevent browser from placing a stray caret in non-editable KaTeX content. */
 export function preventKatexMouseDown(event: MouseEvent) {
   event.preventDefault();
@@ -32,13 +34,18 @@ export function structureToggleProps(
   return surfaceActivationProps(active, onActivate, options);
 }
 
-export function useRawBlockUpdater(nodeKey: NodeKey): (raw: string) => void {
+export function useRawBlockUpdater(nodeKey: NodeKey): (raw: RawUpdate) => void {
   const [editor] = useLexicalComposerContext();
 
-  return useCallback((nextRaw: string) => {
+  return useCallback((next: RawUpdate) => {
     editor.update(() => {
       const node = $getNodeByKey(nodeKey) as RawUpdatableNode | null;
-      if (!node?.setRaw || node.getRaw?.() === nextRaw) {
+      if (!node?.setRaw) {
+        return;
+      }
+      const currentRaw = node.getRaw?.() ?? "";
+      const nextRaw = typeof next === "function" ? next(currentRaw) : next;
+      if (currentRaw === nextRaw) {
         return;
       }
       node.setRaw(nextRaw);

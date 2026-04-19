@@ -247,6 +247,7 @@ const inlineImageTransformer = createInlineTokenTransformer(
   },
   INLINE_IMAGE_IMPORT,
   INLINE_IMAGE_SHORTCUT,
+  ")",
 );
 
 function createInlineTokenTransformer(
@@ -255,6 +256,7 @@ function createInlineTokenTransformer(
   replaceMatch: (node: TextNode, match: RegExpMatchArray) => void,
   importRegExp: RegExp,
   regExp: RegExp,
+  trigger?: string,
 ): TextMatchTransformer {
   return {
     dependencies: [...dependencies],
@@ -266,6 +268,7 @@ function createInlineTokenTransformer(
     replace(node, match) {
       replaceMatch(node, match);
     },
+    trigger,
     type: "text-match",
   };
 }
@@ -278,6 +281,7 @@ const bracketedReferenceTransformer = createInlineTokenTransformer(
   },
   BRACKETED_REFERENCE_IMPORT,
   BRACKETED_REFERENCE_SHORTCUT,
+  "]",
 );
 
 const narrativeReferenceTransformer = createInlineTokenTransformer(
@@ -298,6 +302,7 @@ const footnoteReferenceTransformer = createInlineTokenTransformer(
   },
   FOOTNOTE_REFERENCE_IMPORT,
   FOOTNOTE_REFERENCE_SHORTCUT,
+  "]",
 );
 
 function isTrailingHeadingTextNode(node: TextNode): boolean {

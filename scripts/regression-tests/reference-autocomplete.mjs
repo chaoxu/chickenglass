@@ -112,8 +112,32 @@ export async function run(page) {
     };
   }
 
+  const citationCountBeforeManual = await page.evaluate(() =>
+    document.querySelectorAll("[data-coflat-citation='true']").length
+  );
+  await page.keyboard.type(" and manual [@cormen2009]");
+  await page.waitForFunction(
+    (previousCount) =>
+      document.querySelectorAll("[data-coflat-citation='true']").length > previousCount,
+    citationCountBeforeManual,
+    { timeout: 5000 },
+  ).catch(() => {});
+  const afterManual = await readEditorText(page);
+  const citationCountAfterManual = await page.evaluate(() =>
+    document.querySelectorAll("[data-coflat-citation='true']").length
+  );
+  if (
+    !afterManual.includes("manual [@cormen2009]")
+    || citationCountAfterManual <= citationCountBeforeManual
+  ) {
+    return {
+      pass: false,
+      message: "manually typed bracketed citation did not become a rendered citation token",
+    };
+  }
+
   return {
     pass: true,
-    message: "visible Lexical typing opens @ completion for bracketed and narrative references",
+    message: "visible Lexical typing opens @ completion and manual bracketed citations render",
   };
 }
