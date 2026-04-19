@@ -20,6 +20,7 @@ async function openScratch(page, doc, label) {
     { expectedPath: path, text: doc },
     { timeout: 10_000 },
   );
+  await switchToMode(page, "lexical");
 }
 
 async function typeFromSourceOffset(page, doc, needle, offsetInNeedle, marker) {
@@ -69,8 +70,30 @@ export async function run(page) {
     return { pass: false, message: `inline image src offset edited the wrong location: ${JSON.stringify(srcDoc)}` };
   }
 
+  const linkDoc = await typeFromSourceOffset(
+    page,
+    "Alpha [link](https://example.com/path) omega.",
+    "example.com",
+    4,
+    "U",
+  );
+  if (!linkDoc.includes("[link](https://examUple.com/path)")) {
+    return { pass: false, message: `link URL offset edited the wrong location: ${JSON.stringify(linkDoc)}` };
+  }
+
+  const headingDoc = await typeFromSourceOffset(
+    page,
+    "# Intro {#sec:intro}\n\nBody\n",
+    "sec:intro",
+    4,
+    "H",
+  );
+  if (!headingDoc.includes("# Intro {#sec:Hintro}")) {
+    return { pass: false, message: `heading ID offset edited the wrong location: ${JSON.stringify(headingDoc)}` };
+  }
+
   return {
     pass: true,
-    message: "inline math and image source offsets preserve token-local editing",
+    message: "inline math, image, link, and heading metadata offsets preserve token-local editing",
   };
 }

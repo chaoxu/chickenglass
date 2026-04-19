@@ -12,6 +12,7 @@ import {
 } from "../pending-surface-focus";
 import { parseStructuredDisplayMathRaw } from "../markdown/block-syntax";
 import { useStructureSourcePositionEntry } from "../structure-source-position-entry";
+import { useStructureSourceSelectionBridge } from "../structure-source-selection";
 import { displayMathSourceOffsetFromTarget } from "../math-source-position";
 import { EditorChromeBody, EditorChromePanel } from "../editor-chrome";
 import { buildKatexOptions } from "../../lib/katex-options";
@@ -85,6 +86,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
   }, [updateRawInner, sourceEdit, editor, nodeKey]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const sourceFocusId = getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source");
+  const onSourceSelectionChange = useStructureSourceSelectionBridge(editor, nodeKey, 0);
   // Display math always renders eagerly. The KaTeX string is memoized on
   // parsed.body, and there are rarely enough display-math blocks per doc for
   // lazy gating to matter. Lazy gating also interacts badly with Lexical's
@@ -160,6 +162,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
               namespace={`coflat-display-math-${nodeKey}`}
               onChange={updateRaw}
               onClose={sourceEdit.deactivate}
+              onSelectionChange={onSourceSelectionChange}
               pendingFocusId={sourceFocusId}
             />
           </div>

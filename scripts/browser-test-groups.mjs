@@ -53,6 +53,7 @@ export const BROWSER_TEST_GROUPS = {
     "lexical-smoke",
   ],
   surfaces: [
+    "active-nested-source-switch",
     "authoring-surfaces",
     "code-blocks",
     "embedded-field-dirty-state",
