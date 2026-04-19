@@ -48,6 +48,7 @@ const getMode = vi.fn(() => "lexical" as const);
 const getCurrentSourceMap = vi.fn(() => new SourceMap([]));
 const editorHandle = {
   focus: vi.fn(),
+  flushPendingEdits: vi.fn(),
   getDoc: vi.fn(() => "# Notes"),
   getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
   insertText: vi.fn(),
@@ -105,6 +106,7 @@ describe("useAppDebug", () => {
     getCurrentSourceMap.mockClear();
     getCurrentSourceMap.mockReturnValue(new SourceMap([]));
     editorHandle.focus.mockClear();
+    editorHandle.flushPendingEdits.mockClear();
     editorHandle.getDoc.mockClear();
     editorHandle.getSelection.mockClear();
     editorHandle.insertText.mockClear();

@@ -85,6 +85,7 @@ describe("LexicalEditorSurface", () => {
     const handle = {
       applyChanges: vi.fn(),
       focus: vi.fn(),
+      flushPendingEdits: vi.fn(),
       getDoc: vi.fn(() => "abcde"),
       getSelection: vi.fn(() => ({
         anchor: 1,

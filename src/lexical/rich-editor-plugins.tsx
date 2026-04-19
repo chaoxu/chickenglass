@@ -43,6 +43,7 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { useEmbeddedFieldFlushRegistry } from "./embedded-field-flush-registry";
 import {
   readSourcePositionFromLexicalSelection,
   scrollSourcePositionIntoView,
@@ -239,11 +240,21 @@ export function EditorHandlePlugin({
   userEditPendingRef,
 }: EditorHandlePluginProps) {
   const [editor] = useLexicalComposerContext();
+  const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
 
   useEffect(() => {
     if (!onEditorReady) {
       return;
     }
+
+    const flushPendingEdits = () => {
+      embeddedFieldFlushRegistry?.flush();
+    };
+
+    const readFreshDocument = () => {
+      flushPendingEdits();
+      return getLexicalMarkdown(editor);
+    };
 
     onEditorReady({
       applyChanges: (changes) => {
@@ -251,7 +262,7 @@ export function EditorHandlePlugin({
           return;
         }
 
-        const currentDoc = getLexicalMarkdown(editor);
+        const currentDoc = readFreshDocument();
         const nextDoc = applyEditorDocumentChanges(currentDoc, changes);
         if (nextDoc === currentDoc) {
           storeSelection(
@@ -277,8 +288,10 @@ export function EditorHandlePlugin({
         scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },
-      getDoc: () => getLexicalMarkdown(editor),
+      flushPendingEdits,
+      getDoc: readFreshDocument,
       getSelection: () => {
+        flushPendingEdits();
         const livePosition = readSourcePositionFromLexicalSelection(editor);
         if (livePosition === null) {
           return selectionRef.current;
@@ -287,7 +300,7 @@ export function EditorHandlePlugin({
         return createMarkdownSelection(livePosition, livePosition, docLength);
       },
       insertText: (text) => {
-        const currentDoc = getLexicalMarkdown(editor);
+        const currentDoc = readFreshDocument();
         const selection = createMarkdownSelection(
           selectionRef.current.anchor,
           selectionRef.current.focus,
@@ -309,7 +322,7 @@ export function EditorHandlePlugin({
         setLexicalMarkdown(editor, nextDoc);
       },
       setDoc: (doc) => {
-        const currentDoc = getLexicalMarkdown(editor);
+        const currentDoc = readFreshDocument();
         if (doc === currentDoc) {
           storeSelection(
             selectionRef,
@@ -331,6 +344,7 @@ export function EditorHandlePlugin({
         setLexicalMarkdown(editor, doc);
       },
       setSelection: (anchor, focus = anchor) => {
+        flushPendingEdits();
         const nextSelection = storeSelection(
           selectionRef,
           getLexicalMarkdown(editor).length,
@@ -355,7 +369,15 @@ export function EditorHandlePlugin({
         dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
       },
     }, editor);
-  }, [editor, focusOwner, onEditorReady, onSelectionChange, selectionRef, userEditPendingRef]);
+  }, [
+    editor,
+    embeddedFieldFlushRegistry,
+    focusOwner,
+    onEditorReady,
+    onSelectionChange,
+    selectionRef,
+    userEditPendingRef,
+  ]);
 
   return null;
 }

@@ -51,6 +51,11 @@ import { BibliographySection } from "./bibliography-section";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { CodeFenceExitPlugin, CodeHighlightPlugin } from "./rich-editor-plugins";
+import {
+  createEmbeddedFieldFlushRegistry,
+  EmbeddedFieldFlushProvider,
+  useEmbeddedFieldFlushRegistry,
+} from "./embedded-field-flush-registry";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { dispatchSurfaceFocusRequest, EditorFocusPlugin } from "./editor-focus-plugin";
 import {
@@ -389,11 +394,21 @@ function EditorHandlePlugin({
   userEditPendingRef,
 }: EditorHandlePluginProps) {
   const [editor] = useLexicalComposerContext();
+  const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
 
   useEffect(() => {
     if (!onEditorReady) {
       return;
     }
+
+    const flushPendingEdits = () => {
+      embeddedFieldFlushRegistry?.flush();
+    };
+
+    const readFreshDocument = () => {
+      flushPendingEdits();
+      return readEditorDocument(editor, editorModeRef.current);
+    };
 
     onEditorReady({
       applyChanges: (changes) => {
@@ -401,7 +416,7 @@ function EditorHandlePlugin({
           return;
         }
 
-        const currentDoc = readEditorDocument(editor, editorModeRef.current);
+        const currentDoc = readFreshDocument();
         const nextDoc = applyEditorDocumentChanges(currentDoc, changes);
         if (nextDoc === currentDoc) {
           return;
@@ -435,8 +450,10 @@ function EditorHandlePlugin({
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
-      getDoc: () => readEditorDocument(editor, editorModeRef.current),
+      flushPendingEdits,
+      getDoc: readFreshDocument,
       getSelection: () => {
+        flushPendingEdits();
         if (editorModeRef.current === "source") {
           return selectionRef.current;
         }
@@ -459,7 +476,7 @@ function EditorHandlePlugin({
         return liveSelection;
       },
       insertText: (text) => {
-        const currentDoc = readEditorDocument(editor, editorModeRef.current);
+        const currentDoc = readFreshDocument();
         const selection = createMarkdownSelection(
           selectionRef.current.anchor,
           selectionRef.current.focus,
@@ -492,7 +509,7 @@ function EditorHandlePlugin({
         setLexicalMarkdown(editor, nextDoc);
       },
       setDoc: (doc) => {
-        const currentDoc = readEditorDocument(editor, editorModeRef.current);
+        const currentDoc = readFreshDocument();
         const nextSelection = storeSelection(
           selectionRef,
           doc.length,
@@ -513,6 +530,7 @@ function EditorHandlePlugin({
         setLexicalMarkdown(editor, doc);
       },
       setSelection: (anchor, focus = anchor, options) => {
+        flushPendingEdits();
         const nextSelection = storeSelection(
           selectionRef,
           readEditorDocument(editor, editorModeRef.current).length,
@@ -534,7 +552,16 @@ function EditorHandlePlugin({
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
     }, editor);
-  }, [editor, editorModeRef, focusOwnerRef, onEditorReady, onSelectionChange, selectionRef, userEditPendingRef]);
+  }, [
+    editor,
+    editorModeRef,
+    embeddedFieldFlushRegistry,
+    focusOwnerRef,
+    onEditorReady,
+    onSelectionChange,
+    selectionRef,
+    userEditPendingRef,
+  ]);
 
   return null;
 }
@@ -596,6 +623,7 @@ export function LexicalMarkdownEditor({
   const pendingLocalEchoDocRef = useRef<string | null>(null);
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
+  const embeddedFieldFlushRegistry = useMemo(createEmbeddedFieldFlushRegistry, []);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
   const selectionAlwaysOn = useDevSettings((s) => s.selectionAlwaysOn);
   const isSourceMode = editorMode === "source";
@@ -712,9 +740,10 @@ export function LexicalMarkdownEditor({
   }, [onSelectionChange]);
 
   return (
-    <RevealPresentationProvider value={revealPresentation}>
-      <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
-        <LexicalSurfaceEditableProvider editable={editable}>
+    <EmbeddedFieldFlushProvider registry={embeddedFieldFlushRegistry}>
+      <RevealPresentationProvider value={revealPresentation}>
+        <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
+          <LexicalSurfaceEditableProvider editable={editable}>
         <div
           className={shellClassName}
           onScroll={!isSourceMode
@@ -863,8 +892,9 @@ export function LexicalMarkdownEditor({
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
         </div>
-        </LexicalSurfaceEditableProvider>
-      </LexicalRenderContextProvider>
-    </RevealPresentationProvider>
+          </LexicalSurfaceEditableProvider>
+        </LexicalRenderContextProvider>
+      </RevealPresentationProvider>
+    </EmbeddedFieldFlushProvider>
   );
 }

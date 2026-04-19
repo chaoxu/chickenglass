@@ -111,20 +111,33 @@ export function useAppEditorShell({
     openFileWithContent,
     saveFile: sessionSaveFile,
   } = session;
-  const saveFile = useCallback(async () => {
-    await sessionSaveFile();
-  }, [sessionSaveFile]);
 
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
+  const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const diagnostics = useDiagnostics((s) => s.diagnostics);
+
+  const flushPendingEditorEdits = useCallback(() => {
+    editorHandleRef.current?.flushPendingEdits();
+  }, []);
+
+  const getFreshCurrentDocText = useCallback(() => {
+    flushPendingEditorEdits();
+    return getCurrentDocText();
+  }, [flushPendingEditorEdits, getCurrentDocText]);
+
+  const saveFile = useCallback(async () => {
+    flushPendingEditorEdits();
+    await Promise.resolve();
+    await sessionSaveFile();
+  }, [flushPendingEditorEdits, sessionSaveFile]);
 
   const navigation = useEditorNavigation({
     openFile,
     isPathOpen,
     currentPath,
-    getCurrentDocText,
+    getCurrentDocText: getFreshCurrentDocText,
   });
   const {
     handleOutlineSelect,
@@ -136,6 +149,7 @@ export function useAppEditorShell({
 
   const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle, editor: LexicalEditor) => {
     setEditorHandle(handle);
+    editorHandleRef.current = handle;
     lexicalEditorRef.current = editor;
     syncHandle(handle);
   }, [syncHandle]);
@@ -264,7 +278,7 @@ export function useAppEditorShell({
     handleModeChange,
     isMarkdownFile,
     activeDocumentSignal,
-    getCurrentDocText,
+    getCurrentDocText: getFreshCurrentDocText,
     hasDirtyDocument,
     handleDragOver,
     handleDrop,

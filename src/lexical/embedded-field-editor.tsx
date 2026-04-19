@@ -21,10 +21,12 @@ import {
   type EmbeddedFieldFamily,
   getEmbeddedFieldFamilySpec,
 } from "../lexical-next";
+import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import {
   blockKeyboardEntryProps,
   type BlockKeyboardEntryPriority,
 } from "./block-keyboard-entry";
+import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
 import { useLexicalSurfaceEditable } from "./editability-context";
 import { scheduleRegisteredSurfaceFocus, type FocusRequestEdge } from "./editor-focus-plugin";
 import { consumePendingSurfaceFocus } from "./pending-surface-focus";
@@ -66,6 +68,7 @@ export function EmbeddedFieldEditor({
   const [draftDoc, setDraftDoc] = useState(doc);
   const publishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const nestedEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const pendingDraftRef = useRef<string | null>(null);
   const requestedFocusRef = useRef<FocusRequest | null>(null);
   const spec = getEmbeddedFieldFamilySpec(family);
@@ -110,9 +113,12 @@ export function EmbeddedFieldEditor({
   }, [doc, onTextChange]);
 
   const commitDraft = useCallback(() => {
+    nestedEditorHandleRef.current?.flushPendingEdits();
     clearPublishTimer();
     publishDraft({ clearPending: true });
   }, [clearPublishTimer, publishDraft]);
+
+  useRegisterEmbeddedFieldFlush(commitDraft, Boolean(onTextChange));
 
   useEffect(() => () => {
     clearPublishTimer();
@@ -146,6 +152,10 @@ export function EmbeddedFieldEditor({
       publishDraft();
     }, 150);
   }, [activation, clearPublishTimer, publishDraft]);
+
+  const handleNestedEditorReady = useCallback((handle: MarkdownEditorHandle) => {
+    nestedEditorHandleRef.current = handle;
+  }, []);
 
   const handleFocusExit = useCallback((nextFocused: EventTarget | null) => {
     if (requestedFocusRef.current) {
@@ -255,6 +265,7 @@ export function EmbeddedFieldEditor({
         focusOwnerRole="embedded-field"
         layoutMode={spec.fieldKind === "inline" ? "inline" : "block"}
         namespace={namespace}
+        onEditorReady={handleNestedEditorReady}
         onRootElementChange={setNestedRoot}
         onTextChange={handleTextChange}
         preserveLocalHistory

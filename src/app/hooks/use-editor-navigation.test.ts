@@ -8,6 +8,7 @@ function createHandle() {
   return {
     applyChanges: vi.fn(),
     focus: vi.fn(),
+    flushPendingEdits: vi.fn(),
     getDoc: vi.fn(() => ""),
     getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
     insertText: vi.fn(),

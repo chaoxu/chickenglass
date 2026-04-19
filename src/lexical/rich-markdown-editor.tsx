@@ -31,6 +31,10 @@ import {
 } from "./render-context";
 import { BibliographySection } from "./bibliography-section";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
+import {
+  createEmbeddedFieldFlushRegistry,
+  EmbeddedFieldFlushProvider,
+} from "./embedded-field-flush-registry";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
@@ -159,6 +163,7 @@ export function LexicalRichMarkdownEditor({
   const pendingLocalEchoDocRef = useRef<string | null>(null);
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
+  const embeddedFieldFlushRegistry = useMemo(createEmbeddedFieldFlushRegistry, []);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
   const focusOwner = useMemo(
     () => focusSurface(focusOwnerRole, namespace),
@@ -233,9 +238,10 @@ export function LexicalRichMarkdownEditor({
   }, [doc]);
 
   return (
-    <RevealPresentationProvider value={resolvedRevealPresentation}>
-      <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
-        <LexicalSurfaceEditableProvider editable={editable}>
+    <EmbeddedFieldFlushProvider registry={embeddedFieldFlushRegistry}>
+      <RevealPresentationProvider value={resolvedRevealPresentation}>
+        <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
+          <LexicalSurfaceEditableProvider editable={editable}>
         <div
           className={shellClassName}
           onScroll={layoutMode === "block" && showBibliography
@@ -349,8 +355,9 @@ export function LexicalRichMarkdownEditor({
             </LexicalComposer>
           </EditorScrollSurfaceProvider>
         </div>
-        </LexicalSurfaceEditableProvider>
-      </LexicalRenderContextProvider>
-    </RevealPresentationProvider>
+          </LexicalSurfaceEditableProvider>
+        </LexicalRenderContextProvider>
+      </RevealPresentationProvider>
+    </EmbeddedFieldFlushProvider>
   );
 }
