@@ -139,6 +139,13 @@ pub fn list_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, 
     read_directory_children(dir, relative_path)
 }
 
+struct DirectoryChild {
+    name: String,
+    relative_path: String,
+    absolute_path: PathBuf,
+    is_directory: bool,
+}
+
 fn write_existing_file(path: &Path, content: &str) -> std::io::Result<()> {
     let expected = FileHandle::from_path(path)?;
     write_existing_file_with_handle(path, &expected, content)
@@ -164,7 +171,10 @@ fn write_existing_file_with_handle(
     file.write_all(content.as_bytes())
 }
 
-fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
+fn enumerate_directory_children(
+    dir: &Path,
+    relative_path: &str,
+) -> Result<Vec<DirectoryChild>, String> {
     let entries = fs::read_dir(dir)
         .map_err(|e| format!("Failed to read directory '{}': {}", dir.display(), e))?;
 
@@ -184,19 +194,31 @@ fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEn
         };
 
         let file_type = entry.file_type().map_err(|e| e.to_string())?;
-        children.push(FileEntry {
+        children.push(DirectoryChild {
             name: file_name,
-            path: child_path,
+            relative_path: child_path,
+            absolute_path: entry.path(),
             is_directory: file_type.is_dir(),
-            children: None,
         });
     }
 
-    sort_entries(&mut children);
+    sort_child_records(&mut children);
     Ok(children)
 }
 
-fn sort_entries(entries: &mut [FileEntry]) {
+fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
+    Ok(enumerate_directory_children(dir, relative_path)?
+        .into_iter()
+        .map(|child| FileEntry {
+            name: child.name,
+            path: child.relative_path,
+            is_directory: child.is_directory,
+            children: None,
+        })
+        .collect())
+}
+
+fn sort_child_records(entries: &mut [DirectoryChild]) {
     entries.sort_by(|a, b| {
         if a.is_directory != b.is_directory {
             if a.is_directory {
@@ -212,37 +234,22 @@ fn sort_entries(entries: &mut [FileEntry]) {
 
 fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, String> {
     let mut children = Vec::new();
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("Failed to read directory '{}': {}", dir.display(), e))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let file_name = entry.file_name().to_string_lossy().to_string();
-
-        if is_ignored_entry_name(&file_name) {
-            continue;
-        }
-
-        let child_path = if relative_path.is_empty() {
-            file_name.clone()
-        } else {
-            format!("{}/{}", relative_path, file_name)
-        };
-
-        let file_type = entry.file_type().map_err(|e| e.to_string())?;
-        if file_type.is_dir() {
-            children.push(build_tree(&entry.path(), &file_name, &child_path)?);
+    for child in enumerate_directory_children(dir, relative_path)? {
+        if child.is_directory {
+            children.push(build_tree(
+                &child.absolute_path,
+                &child.name,
+                &child.relative_path,
+            )?);
         } else {
             children.push(FileEntry {
-                name: file_name,
-                path: child_path,
+                name: child.name,
+                path: child.relative_path,
                 is_directory: false,
                 children: None,
             });
         }
     }
-
-    sort_entries(&mut children);
 
     Ok(FileEntry {
         name: name.to_string(),
