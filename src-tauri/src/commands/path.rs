@@ -1,6 +1,7 @@
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext};
+use super::error::AppResult;
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path as path_service;
 
@@ -16,7 +17,7 @@ pub fn to_project_relative_path(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<String, String> {
+) -> AppResult<String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         TO_PROJECT_RELATIVE_PATH,
         Some(&path),

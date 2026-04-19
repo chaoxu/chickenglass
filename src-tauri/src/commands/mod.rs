@@ -1,5 +1,6 @@
 pub mod context;
 pub mod debug;
+pub mod error;
 pub mod export;
 pub mod fs;
 pub mod path;

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::error::AppResult;
 use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{filesystem, path as path_service};
@@ -46,7 +47,7 @@ pub fn open_folder(
     perf: State<'_, PerfState>,
     path: String,
     generation: u64,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     run_command(&perf, OPEN_FOLDER, Some(&path), || {
         let path = PathBuf::from(&path);
         if !path.is_dir() {
@@ -71,7 +72,7 @@ pub fn read_file(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<String, String> {
+) -> AppResult<String> {
     WindowCommandContext::new(&window, &root, &perf).run(READ_FILE, Some(&path), |project_root| {
         let resolved = path_service::resolve_existing_path(project_root, &path)?;
         filesystem::read_text_file(&resolved, &path)
@@ -85,7 +86,7 @@ pub fn write_file(
     perf: State<'_, PerfState>,
     path: String,
     content: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(WRITE_FILE, Some(&path), |project_root| {
         let resolved = path_service::resolve_existing_path(project_root, &path)?;
         filesystem::write_text_file(&resolved, &path, &content)
@@ -99,7 +100,7 @@ pub fn create_file(
     perf: State<'_, PerfState>,
     path: String,
     content: Option<String>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(CREATE_FILE, Some(&path), |project_root| {
         let full = path_service::resolve_project_path(project_root, &path)?;
         filesystem::create_text_file(&full, &path, content.as_deref())
@@ -112,7 +113,7 @@ pub fn create_directory(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(
         CREATE_DIRECTORY,
         Some(&path),
@@ -129,7 +130,7 @@ pub fn file_exists(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     WindowCommandContext::new(&window, &root, &perf).run(FILE_EXISTS, Some(&path), |project_root| {
         let full = path_service::resolve_project_path(project_root, &path)?;
         Ok(full.exists())
@@ -143,7 +144,7 @@ pub fn rename_file(
     perf: State<'_, PerfState>,
     old_path: String,
     new_path: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(
         RENAME_FILE,
         Some(&old_path),
@@ -160,7 +161,7 @@ pub fn list_tree(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
-) -> Result<FileEntry, String> {
+) -> AppResult<FileEntry> {
     WindowCommandContext::new(&window, &root, &perf).run(LIST_TREE, None, filesystem::list_tree)
 }
 
@@ -170,7 +171,7 @@ pub fn delete_file(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(DELETE_FILE, Some(&path), |project_root| {
         let resolved = path_service::resolve_existing_path(project_root, &path)?;
         filesystem::delete_path(&resolved, &path)
@@ -184,7 +185,7 @@ pub fn write_file_binary(
     perf: State<'_, PerfState>,
     path: String,
     data_base64: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(
         WRITE_FILE_BINARY,
         Some(&path),
@@ -201,7 +202,7 @@ pub fn read_file_binary(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<String, String> {
+) -> AppResult<String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         READ_FILE_BINARY,
         Some(&path),
@@ -218,7 +219,7 @@ pub fn list_children(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<Vec<FileEntry>, String> {
+) -> AppResult<Vec<FileEntry>> {
     WindowCommandContext::new(&window, &root, &perf).run(
         LIST_CHILDREN,
         Some(&path),

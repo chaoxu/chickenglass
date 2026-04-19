@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use tauri::{State, command};
 
+use super::error::AppResult;
 use super::state::{PerfSnapshot, PerfState};
 
 pub fn measure_command<T, F>(
@@ -33,11 +34,11 @@ where
 }
 
 #[command]
-pub fn get_perf_snapshot(perf: State<'_, PerfState>) -> Result<PerfSnapshot, String> {
-    perf.inner().snapshot()
+pub fn get_perf_snapshot(perf: State<'_, PerfState>) -> AppResult<PerfSnapshot> {
+    Ok(perf.inner().snapshot()?)
 }
 
 #[command]
-pub fn clear_perf_snapshot(perf: State<'_, PerfState>) -> Result<(), String> {
-    perf.inner().clear()
+pub fn clear_perf_snapshot(perf: State<'_, PerfState>) -> AppResult<()> {
+    Ok(perf.inner().clear()?)
 }

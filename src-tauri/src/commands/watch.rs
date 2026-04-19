@@ -4,6 +4,7 @@ use std::time::Duration;
 use tauri::{AppHandle, State, WebviewWindow, command};
 
 use super::context::{CommandSpec, run_command};
+use super::error::AppResult;
 use super::state::{FileWatcherState, PerfState};
 use crate::services::watch::{
     WatchEventMessage, attach_watcher, create_directory_watcher, remove_watcher_generation,
@@ -29,7 +30,7 @@ pub fn watch_directory(
     perf: State<'_, PerfState>,
     path: String,
     generation: u64,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     run_command(&perf, WATCH_DIRECTORY, Some(&path), || {
         let watch_path = PathBuf::from(&path)
             .canonicalize()
@@ -70,7 +71,7 @@ pub fn unwatch_directory(
     watcher_state: State<'_, FileWatcherState>,
     perf: State<'_, PerfState>,
     generation: u64,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     run_command(&perf, UNWATCH_DIRECTORY, None, || {
         let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
         Ok(remove_watcher_generation(

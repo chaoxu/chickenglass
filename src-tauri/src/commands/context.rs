@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::{State, WebviewWindow};
 
+use super::error::{AppError, AppResult};
 use super::perf::measure_command;
 use super::state::{PerfState, ProjectRoot};
 
@@ -31,7 +32,7 @@ pub fn run_command<T, F>(
     spec: CommandSpec,
     detail: Option<&str>,
     task: F,
-) -> Result<T, String>
+) -> AppResult<T>
 where
     F: FnOnce() -> Result<T, String>,
 {
@@ -43,6 +44,7 @@ where
         detail,
         task,
     )
+    .map_err(AppError::from)
 }
 
 pub struct WindowCommandContext<'a> {
@@ -60,7 +62,7 @@ impl<'a> WindowCommandContext<'a> {
         Self { window, root, perf }
     }
 
-    pub fn run<T, F>(&self, spec: CommandSpec, detail: Option<&str>, task: F) -> Result<T, String>
+    pub fn run<T, F>(&self, spec: CommandSpec, detail: Option<&str>, task: F) -> AppResult<T>
     where
         F: FnOnce(&Path) -> Result<T, String>,
     {

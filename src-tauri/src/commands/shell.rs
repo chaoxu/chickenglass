@@ -3,6 +3,7 @@ use std::process::Command;
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::error::AppResult;
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::resolve_existing_path;
 
@@ -17,7 +18,7 @@ const REVEAL_IN_FINDER: CommandSpec = CommandSpec::new(
 ///
 /// Only `http:` and `https:` URLs are allowed — all other schemes are rejected.
 #[command]
-pub fn open_url(perf: State<'_, PerfState>, url: String) -> Result<(), String> {
+pub fn open_url(perf: State<'_, PerfState>, url: String) -> AppResult<()> {
     run_command(&perf, OPEN_URL, Some(&url), || {
         let lower = url.to_ascii_lowercase();
         if !lower.starts_with("http://") && !lower.starts_with("https://") {
@@ -59,7 +60,7 @@ pub fn reveal_in_finder(
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
     path: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     WindowCommandContext::new(&window, &root, &perf).run(
         REVEAL_IN_FINDER,
         Some(&path),

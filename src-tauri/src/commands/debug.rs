@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, command};
 
+use super::error::AppResult;
 use super::state::{FileWatcherState, LastFocusedWindow, ProjectRoot};
 
 fn ensure_debug_build() -> Result<(), String> {
@@ -30,7 +31,7 @@ pub struct NativeDebugState {
 }
 
 #[command]
-pub fn debug_list_windows(app: AppHandle) -> Result<Vec<NativeWindowDebugInfo>, String> {
+pub fn debug_list_windows(app: AppHandle) -> AppResult<Vec<NativeWindowDebugInfo>> {
     ensure_debug_build()?;
 
     let mut windows = app
@@ -51,7 +52,7 @@ pub fn debug_get_native_state(
     project_root: State<'_, ProjectRoot>,
     watcher_state: State<'_, FileWatcherState>,
     last_focused_window: State<'_, LastFocusedWindow>,
-) -> Result<NativeDebugState, String> {
+) -> AppResult<NativeDebugState> {
     ensure_debug_build()?;
 
     let label = window.label();
@@ -94,7 +95,7 @@ pub fn debug_emit_file_changed(
     window: WebviewWindow,
     relative_path: String,
     tree_changed: Option<bool>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     ensure_debug_build()?;
     app.emit_to(
         window.label(),
@@ -104,7 +105,9 @@ pub fn debug_emit_file_changed(
             "treeChanged": tree_changed.unwrap_or(false),
         }),
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[cfg(test)]

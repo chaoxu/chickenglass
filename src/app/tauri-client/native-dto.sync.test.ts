@@ -74,4 +74,14 @@ describe("native DTO contracts", () => {
 
     expect(tsFields).toEqual(rustFields);
   });
+
+  it("NativeCommandError fields match Rust AppError serde output", () => {
+    const rustFields = extractRustStructFields(
+      readRepoFile("src-tauri/src/commands/error.rs"),
+      "AppError",
+    );
+    const tsFields = extractTsInterfaceFields(readRepoFile("src/app/tauri-client/core.ts"), "NativeCommandError");
+
+    expect(tsFields).toEqual(rustFields);
+  });
 });

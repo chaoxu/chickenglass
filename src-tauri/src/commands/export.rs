@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::error::AppResult;
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::{project_relative_path, resolve_project_path};
 
@@ -19,7 +20,7 @@ const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
 
 /// Check whether Pandoc is installed and return its version string.
 #[command]
-pub fn check_pandoc(perf: State<'_, PerfState>) -> Result<String, String> {
+pub fn check_pandoc(perf: State<'_, PerfState>) -> AppResult<String> {
     run_command(&perf, CHECK_PANDOC, None, || {
         let output = Command::new("pandoc")
             .arg("--version")
@@ -82,7 +83,7 @@ pub fn export_document(
     format: String,
     output_path: String,
     source_path: String,
-) -> Result<String, String> {
+) -> AppResult<String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         EXPORT_DOCUMENT,
         Some(&output_path),
