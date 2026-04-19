@@ -79,6 +79,15 @@ describe("block-scanner", () => {
     ]);
   });
 
+  it("recognizes documented single-line fenced divs", () => {
+    expect(collectSourceBlockRanges("::: {.theorem} Short statement. :::")).toMatchObject([
+      {
+        raw: "::: {.theorem} Short statement. :::",
+        variant: "fenced-div",
+      },
+    ]);
+  });
+
   it("exposes shared markdown-expansion start-line matchers", () => {
     expect(matchFencedDivStartLine("::: {.theorem}", { requireHeader: true })?.[1]).toBe(":::");
     expect(matchFencedDivStartLine(":::", { requireHeader: true })).toBeNull();

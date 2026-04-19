@@ -1,15 +1,13 @@
 import type { HeadingDefinition } from "./headings";
 import { extractHeadingDefinitions } from "./headings";
 import { maskMarkdownCodeSpansAndBlocks } from "./masking";
-import { getTextLines } from "./text-lines";
 import { measureSync } from "../perf";
 import { collectSourceBlockRanges } from "../../lexical/markdown/block-scanner";
-import { parseStructuredDisplayMathRaw } from "../../lexical/markdown/block-syntax";
-
-const LABEL_ID_RE = /#([A-Za-z0-9_][\w.:-]*)/;
-const CLASS_RE = /\.([A-Za-z][\w-]*)/;
-const BRACKETED_REFERENCE_RE = /\[(?:[^\]\n]|\\.)*?@[^\]\n]*\]/g;
-const REFERENCE_ID_RE = /(?<![\w@])@([A-Za-z0-9_](?:[\w.:-]*\w)?)(?![\w@])/g;
+import {
+  parseStructuredDisplayMathRaw,
+  parseStructuredFencedDivRaw,
+} from "../../lexical/markdown/block-syntax";
+import { scanReferenceTokens } from "../../lib/reference-tokens";
 
 export interface DocumentLabelReference {
   readonly id: string;
@@ -53,127 +51,44 @@ export interface DocumentLabelParseSnapshot {
   readonly references: readonly DocumentLabelReference[];
 }
 
-interface OpenBlock {
-  readonly fenceLength: number;
-  readonly from: number;
-  readonly id?: string;
-  readonly labelFrom?: number;
-  readonly labelTo?: number;
-  readonly blockType?: string;
-  readonly title?: string;
-  readonly bodyFrom: number;
-}
-
-function normalizeText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function trimTrailingReferencePunctuation(id: string): string {
-  return id.replace(/\.+$/, "");
-}
-
-function parseBlockHeader(rest: string): {
-  readonly id?: string;
-  readonly labelFromInHeader?: number;
-  readonly blockType?: string;
-  readonly title?: string;
-} {
-  const trimmed = rest.trimStart();
-  if (!trimmed.startsWith("{")) {
-    return {
-      title: trimmed.trim() || undefined,
-    };
-  }
-
-  const closingIndex = trimmed.indexOf("}");
-  if (closingIndex < 0) {
-    return {};
-  }
-
-  const attrs = trimmed.slice(0, closingIndex + 1);
-  const title = trimmed.slice(closingIndex + 1).trim() || undefined;
-  const idMatch = attrs.match(LABEL_ID_RE);
-  const classMatch = attrs.match(CLASS_RE);
-  return {
-    id: idMatch?.[1],
-    labelFromInHeader: idMatch ? trimmed.indexOf(`#${idMatch[1]}`) + 1 : undefined,
-    blockType: classMatch?.[1],
-    title,
-  };
-}
-
 export function extractMarkdownBlocks(doc: string, scanDoc = doc): MarkdownBlock[] {
-  const lines = getTextLines(doc);
-  const scanLines = getTextLines(scanDoc);
-  const stack: OpenBlock[] = [];
   const blocks: MarkdownBlock[] = [];
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    const scanLine = scanLines[lineIndex];
-    const match = scanLine.text.match(/^\s*(:{3,})(.*)$/);
-    if (!match) {
-      continue;
-    }
-
-    const fenceLength = match[1].length;
-    const rest = match[2];
-    if (/^\s*$/.test(rest)) {
-      for (let index = stack.length - 1; index >= 0; index -= 1) {
-        const open = stack[index];
-        if (fenceLength < open.fenceLength) {
-          continue;
-        }
-        stack.splice(index, 1);
-        const contentEnd = line.start > 0 && doc[line.start - 1] === "\n"
-          ? line.start - 1
-          : line.start;
-        blocks.push({
-          from: open.from,
-          to: line.end,
-          id: open.id,
-          labelFrom: open.labelFrom,
-          labelTo: open.labelTo,
-          blockType: open.blockType,
-          title: open.title,
-          content: doc.slice(open.bodyFrom, contentEnd),
-        });
-        break;
+  function collect(markdown: string, scanMarkdown: string, offset: number): void {
+    for (const range of collectSourceBlockRanges(scanMarkdown)) {
+      if (range.variant !== "fenced-div") {
+        continue;
       }
-      continue;
+      const raw = markdown.slice(range.from, range.to);
+      const parsed = parseStructuredFencedDivRaw(raw);
+      const labelToken = parsed.id ? `#${parsed.id}` : undefined;
+      const labelTokenIndex = labelToken ? raw.indexOf(labelToken) : -1;
+      const from = offset + range.from;
+      const to = offset + range.to;
+      blocks.push({
+        from,
+        to,
+        id: parsed.id,
+        labelFrom: parsed.id && labelTokenIndex >= 0
+          ? from + labelTokenIndex + 1
+          : undefined,
+        labelTo: parsed.id && labelTokenIndex >= 0
+          ? from + labelTokenIndex + 1 + parsed.id.length
+          : undefined,
+        blockType: parsed.blockType,
+        title: parsed.title,
+        content: parsed.bodyMarkdown,
+      });
+
+      const bodyOffset = raw.indexOf(parsed.bodyMarkdown);
+      if (bodyOffset >= 0 && parsed.bodyMarkdown.includes(":::")) {
+        collect(parsed.bodyMarkdown, scanMarkdown.slice(range.from + bodyOffset, range.from + bodyOffset + parsed.bodyMarkdown.length), from + bodyOffset);
+      }
     }
-
-    const header = parseBlockHeader(rest);
-    stack.push({
-      fenceLength,
-      from: line.start,
-      id: header.id,
-      labelFrom: header.id && header.labelFromInHeader !== undefined
-        ? line.start + line.text.indexOf(rest) + header.labelFromInHeader
-        : undefined,
-      labelTo: header.id && header.labelFromInHeader !== undefined
-        ? line.start + line.text.indexOf(rest) + header.labelFromInHeader + header.id.length
-        : undefined,
-      blockType: header.blockType,
-      title: header.title,
-      bodyFrom: line.end < doc.length ? line.end + 1 : line.end,
-    });
   }
 
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const open = stack[index];
-    blocks.push({
-      from: open.from,
-      to: doc.length,
-      id: open.id,
-      labelFrom: open.labelFrom,
-      labelTo: open.labelTo,
-      blockType: open.blockType,
-      title: open.title,
-      content: doc.slice(open.bodyFrom),
-    });
-  }
-
+  collect(doc, scanDoc, 0);
+  blocks.sort((left, right) => left.from - right.from || right.to - left.to);
   return blocks;
 }
 
@@ -205,79 +120,8 @@ export function extractMarkdownEquations(doc: string, scanDoc = doc): MarkdownEq
   return equations;
 }
 
-export function extractDocumentLabelReferences(doc: string, scanDoc = doc): DocumentLabelReference[] {
-  const references: DocumentLabelReference[] = [];
-  const coveredRanges: Array<{ from: number; to: number }> = [];
-
-  for (const match of scanDoc.matchAll(BRACKETED_REFERENCE_RE)) {
-    const raw = match[0];
-    const clusterFrom = match.index ?? 0;
-    const clusterTo = clusterFrom + raw.length;
-    const body = raw.slice(1, -1);
-    let clusterIndex = 0;
-
-    for (const refMatch of body.matchAll(REFERENCE_ID_RE)) {
-      const id = trimTrailingReferencePunctuation(refMatch[1]);
-      if (!id) {
-        continue;
-      }
-      const relativeFrom = refMatch.index ?? 0;
-      const tokenFrom = clusterFrom + 1 + relativeFrom;
-      const tokenTo = tokenFrom + 1 + id.length;
-      const nextRelativeFrom = (refMatch.index ?? 0) + refMatch[0].length;
-      const nextReference = body
-        .slice(nextRelativeFrom)
-        .search(REFERENCE_ID_RE);
-      const locatorSlice = nextReference >= 0
-        ? body.slice(nextRelativeFrom, nextRelativeFrom + nextReference)
-        : body.slice(nextRelativeFrom);
-
-      references.push({
-        id,
-        from: tokenFrom,
-        to: tokenTo,
-        labelFrom: tokenFrom + 1,
-        labelTo: tokenTo,
-        clusterFrom,
-        clusterTo,
-        clusterIndex,
-        bracketed: true,
-        locator: normalizeText(locatorSlice.replace(/^[\s;,:-]+|[\s;,:-]+$/g, "")) || undefined,
-      });
-      clusterIndex += 1;
-    }
-
-    coveredRanges.push({ from: clusterFrom, to: clusterTo });
-  }
-
-  outer: for (const match of scanDoc.matchAll(REFERENCE_ID_RE)) {
-    const tokenFrom = match.index ?? 0;
-    for (const covered of coveredRanges) {
-      if (tokenFrom >= covered.from && tokenFrom < covered.to) {
-        continue outer;
-      }
-    }
-
-    const id = trimTrailingReferencePunctuation(match[1]);
-    if (!id) {
-      continue;
-    }
-    const tokenTo = tokenFrom + 1 + id.length;
-    references.push({
-      id,
-      from: tokenFrom,
-      to: tokenTo,
-      labelFrom: tokenFrom + 1,
-      labelTo: tokenTo,
-      clusterFrom: tokenFrom,
-      clusterTo: tokenTo,
-      clusterIndex: 0,
-      bracketed: false,
-    });
-  }
-
-  references.sort((left, right) => left.from - right.from);
-  return references;
+export function extractDocumentLabelReferences(_doc: string, scanDoc = _doc): DocumentLabelReference[] {
+  return scanReferenceTokens(scanDoc);
 }
 
 // Single-entry cache keyed by `doc` identity — subsequent calls with the

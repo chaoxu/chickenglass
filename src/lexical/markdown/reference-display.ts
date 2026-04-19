@@ -1,20 +1,22 @@
 import { formatBibEntry } from "../../citations/bibliography";
 import type { BibStore } from "../../citations/bibtex-parser";
 import type { CslProcessor } from "../../citations/csl-processor";
+import {
+  BRACKETED_REFERENCE_GLOBAL_RE,
+  NARRATIVE_REFERENCE_GLOBAL_RE,
+  parseReferenceToken,
+  type ParsedReferenceToken,
+} from "../../lib/reference-tokens";
 import type { RenderIndex } from "./reference-index";
 
-export const BRACKETED_REFERENCE_RE = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/g;
-export const NARRATIVE_REFERENCE_RE = /(^|[^\w])@([A-Za-z0-9_](?:[\w.:-]*\w)?)/g;
+export { parseReferenceToken };
+export type { ParsedReferenceToken };
+export const BRACKETED_REFERENCE_RE = BRACKETED_REFERENCE_GLOBAL_RE;
+export const NARRATIVE_REFERENCE_RE = NARRATIVE_REFERENCE_GLOBAL_RE;
 
 export interface RenderCitations {
   readonly cslProcessor?: CslProcessor;
   readonly store: BibStore;
-}
-
-export interface ParsedReferenceToken {
-  readonly bracketed: boolean;
-  readonly ids: readonly string[];
-  readonly locators: readonly (string | undefined)[];
 }
 
 function formatReferenceItem(id: string, renderIndex: RenderIndex, bracketed: boolean): string {
@@ -68,39 +70,6 @@ function formatCitationPart(
 
   const rendered = citations.cslProcessor.cite([id], locator ? [locator] : undefined);
   return stripCitationWrapper(rendered);
-}
-
-export function parseReferenceToken(raw: string): ParsedReferenceToken | null {
-  if (raw.startsWith("[") && raw.endsWith("]")) {
-    const body = raw.slice(1, -1);
-    const ids: string[] = [];
-    const locators: Array<string | undefined> = [];
-
-    for (const match of body.matchAll(/@([A-Za-z0-9_](?:[\w.:-]*\w)?)/g)) {
-      const id = match[1];
-      ids.push(id);
-      const nextFrom = (match.index ?? 0) + match[0].length;
-      const remainder = body.slice(nextFrom);
-      const nextMatch = remainder.search(/@([A-Za-z0-9_](?:[\w.:-]*\w)?)/);
-      const locatorRaw = nextMatch >= 0 ? remainder.slice(0, nextMatch) : remainder;
-      const locator = locatorRaw.replace(/^[\s;,:-]+|[\s;,:-]+$/g, "").trim() || undefined;
-      locators.push(locator);
-    }
-
-    return ids.length > 0
-      ? { bracketed: true, ids, locators }
-      : null;
-  }
-
-  const match = raw.match(/@([A-Za-z0-9_](?:[\w.:-]*\w)?)/);
-  if (!match) {
-    return null;
-  }
-  return {
-    bracketed: false,
-    ids: [match[1]],
-    locators: [undefined],
-  };
 }
 
 function renderBracketedReferenceDisplay(

@@ -67,6 +67,7 @@ import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $createReferenceNode, $isReferenceNode, type ReferenceNode } from "./nodes/reference-node";
 import type { RevealChromePreview } from "./reveal-chrome-types";
 import { isMarkdownImageLine } from "../lib/markdown-image";
+import { isReferenceTokenSource } from "../lib/reference-tokens";
 
 export type RevealBoundaryDirection = "backward" | "forward";
 
@@ -427,9 +428,6 @@ function inlineMathSubject(
   return { caretOffset, node: math, source };
 }
 
-const BRACKETED_REFERENCE = /^\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]$/;
-const NARRATIVE_REFERENCE = /^@[A-Za-z0-9_](?:[\w.:-]*\w)?$/;
-
 const referenceAdapter: RevealAdapter = {
   id: "reference",
   findSubject(selection) {
@@ -447,7 +445,7 @@ const referenceAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    if (!BRACKETED_REFERENCE.test(trimmed) && !NARRATIVE_REFERENCE.test(trimmed)) {
+    if (!isReferenceTokenSource(trimmed)) {
       return live;
     }
     const ref = $createReferenceNode(trimmed, live.getFormat());

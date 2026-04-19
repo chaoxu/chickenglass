@@ -172,8 +172,8 @@ function injectReferenceMarkup(
     return placeholder;
   });
 
-  next = next.replace(NARRATIVE_REFERENCE_RE, (_raw, prefix: string, id: string) =>
-    `${prefix}<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(`@${id}`, renderIndex, citations))}</span>`);
+  next = next.replace(NARRATIVE_REFERENCE_RE, (raw: string) =>
+    `<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(raw, renderIndex, citations))}</span>`);
 
   return next.replace(/__COFLAT_REF_(\d+)__/g, (_raw, indexText: string) =>
     placeholders[Number(indexText)] ?? "");

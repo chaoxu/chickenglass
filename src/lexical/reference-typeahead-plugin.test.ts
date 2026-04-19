@@ -81,6 +81,11 @@ describe("findReferenceCompletionMatch", () => {
 });
 
 describe("applyBracketedReferenceCompletion", () => {
+  it("closes a single active bracketed reference", () => {
+    expect(applyBracketedReferenceCompletion("[@cor", "cormen2009"))
+      .toBe("[@cormen2009]");
+  });
+
   it("replaces the active slot inside a clustered reference", () => {
     expect(applyBracketedReferenceCompletion("[@eq:one; @thm", "thm:autocomplete"))
       .toBe("[@eq:one; @thm:autocomplete]");

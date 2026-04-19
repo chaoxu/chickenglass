@@ -57,7 +57,7 @@ describe("reference-display", () => {
       NARRATIVE_REFERENCE_RE.lastIndex = 0;
       const ids: string[] = [];
       for (const m of text.matchAll(NARRATIVE_REFERENCE_RE)) {
-        ids.push(m[2]);
+        ids.push(m[1]);
       }
       return ids;
     }

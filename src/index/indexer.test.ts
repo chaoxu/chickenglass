@@ -65,11 +65,23 @@ Inner proof.
 ::::`;
       const result = extractFileIndex(content, "test.md");
 
-      // Regex-based extraction captures both opening fences
-      expect(result.entries.length).toBeGreaterThanOrEqual(2);
-      const types = result.entries.map((e) => e.type);
-      expect(types).toContain("theorem");
-      expect(types).toContain("proof");
+      expect(result.entries).toHaveLength(2);
+      expect(result.entries[0]).toMatchObject({ label: "outer", type: "theorem" });
+      expect(result.entries[1]).toMatchObject({ type: "proof" });
+    });
+
+    it("indexes documented single-line fenced divs as body content", () => {
+      const content = "::: {.remark #rem:short} Short note. :::";
+      const result = extractFileIndex(content, "test.md");
+
+      expect(result.entries).toMatchObject([
+        {
+          content: "Short note.",
+          label: "rem:short",
+          title: undefined,
+          type: "remark",
+        },
+      ]);
     });
 
     it("extracts block with title only (no label)", () => {
@@ -357,17 +369,12 @@ See [@eq:class] for the class equation.`;
 
 describe("edge cases", () => {
   it("does NOT produce false labels for incomplete/unclosed fenced divs at EOF", () => {
-    // The markdown extractor keeps the opening fenced-div metadata even when
-    // the closing fence is missing at EOF. This documents the behavior: the
-    // label is present and the content is the partial body up to EOF.
     const content = `::: {.theorem #thm-unclosed}
 This theorem has no closing fence.`;
     const result = extractFileIndex(content, "test.md");
 
     const labelled = result.entries.filter((e) => e.label === "thm-unclosed");
-    expect(labelled).toHaveLength(1);
-    expect(labelled[0].type).toBe("theorem");
-    expect(labelled[0].content).toContain("This theorem has no closing fence.");
+    expect(labelled).toHaveLength(0);
   });
 
   it("handles empty document", () => {

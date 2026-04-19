@@ -43,6 +43,12 @@ import {
   MARKDOWN_IMAGE_IMPORT_RE,
   MARKDOWN_IMAGE_SHORTCUT_RE,
 } from "../lib/markdown-image";
+import {
+  BRACKETED_REFERENCE_IMPORT_RE,
+  BRACKETED_REFERENCE_SHORTCUT_RE,
+  NARRATIVE_REFERENCE_IMPORT_RE,
+  NARRATIVE_REFERENCE_SHORTCUT_RE,
+} from "../lib/reference-tokens";
 import { getInlineTextFormatSpecs } from "../lexical-next";
 import {
   $createInlineImageNode,
@@ -82,10 +88,6 @@ import {
 } from "./markdown/block-scanner";
 import { isRevealSourceStyle } from "./reveal-source-style";
 
-const BRACKETED_REFERENCE_IMPORT = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/;
-const BRACKETED_REFERENCE_SHORTCUT = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]$/;
-const NARRATIVE_REFERENCE_IMPORT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)/;
-const NARRATIVE_REFERENCE_SHORTCUT = /@([A-Za-z0-9_](?:[\w.:-]*\w)?)$/;
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
 
@@ -300,8 +302,8 @@ const bracketedReferenceTransformer = createInlineTokenTransformer(
   (node, match) => {
     node.replace($createReferenceNode(match[0], node.getFormat()));
   },
-  BRACKETED_REFERENCE_IMPORT,
-  BRACKETED_REFERENCE_SHORTCUT,
+  BRACKETED_REFERENCE_IMPORT_RE,
+  BRACKETED_REFERENCE_SHORTCUT_RE,
   "]",
 );
 
@@ -311,8 +313,8 @@ const narrativeReferenceTransformer = createInlineTokenTransformer(
   (node, match) => {
     node.replace($createReferenceNode(match[0], node.getFormat()));
   },
-  NARRATIVE_REFERENCE_IMPORT,
-  NARRATIVE_REFERENCE_SHORTCUT,
+  NARRATIVE_REFERENCE_IMPORT_RE,
+  NARRATIVE_REFERENCE_SHORTCUT_RE,
 );
 
 const footnoteReferenceTransformer = createInlineTokenTransformer(

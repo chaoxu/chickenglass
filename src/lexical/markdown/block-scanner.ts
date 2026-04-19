@@ -127,6 +127,19 @@ export function matchFencedDivEndLine(
     return -1;
   }
 
+  const sameLineClosingFence = new RegExp(
+    options.allowLongerClosingFence
+      ? `\\s:{${colonCount},}\\s*$`
+      : `\\s:{${colonCount}}\\s*$`,
+  );
+  if (
+    header.trim().length > 0
+    && sameLineClosingFence.test(header)
+    && header.replace(sameLineClosingFence, "").trim().length > 0
+  ) {
+    return startLineIndex;
+  }
+
   const closingFenceFor = (count: number) =>
     options.allowLongerClosingFence
       ? new RegExp(`^\\s*:{${count},}\\s*$`)

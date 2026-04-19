@@ -54,6 +54,37 @@ function splitTrailingTitleLabel(title: string): {
   };
 }
 
+function splitSingleLineFencedDivHeader(opener: string, fence: string): string | null {
+  const header = opener.replace(/^\s*:{3,}/, "");
+  const closingFence = new RegExp(`\\s:{${fence.length},}\\s*$`);
+  if (!closingFence.test(header)) {
+    return null;
+  }
+  const withoutClosingFence = header.replace(closingFence, "").trim();
+  return withoutClosingFence || null;
+}
+
+function parseFencedDivAttrs(attrs: string, trailingTitleRaw: string) {
+  const trailing = splitTrailingTitleLabel(trailingTitleRaw);
+  const trailingTitle = trailing.title;
+  const titleAttrMatch = attrs.match(/\btitle=(?:"([^"]*)"|'([^']*)')/);
+  const classes = [...attrs.matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]);
+  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1] ?? trailing.id;
+
+  return {
+    blockType: normalizeBlockType(classes[0], trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2]),
+    id,
+    title: titleAttrMatch?.[1] || titleAttrMatch?.[2] || trailingTitle || undefined,
+    titleKind: trailingTitle || trailing.labelSuffix
+      ? "trailing"
+      : titleAttrMatch
+        ? "attribute"
+        : "none",
+    titleLabelSuffix: trailing.labelSuffix,
+    titleMarkdown: trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined,
+  } as const;
+}
+
 export function parseDisplayMathRaw(raw: string): DisplayMathInfo {
   const lines = raw.split("\n");
   if (lines[0]?.trimStart().startsWith("$$")) {
@@ -87,9 +118,10 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
   const opener = lines[0] ?? "";
   const fenceMatch = opener.match(/^\s*(:{3,})/);
   const fence = fenceMatch?.[1] ?? ":::";
-  const header = opener.replace(/^\s*:{3,}/, "").trim();
-  const closingFence = lines[lines.length - 1]?.trim() || fence;
-  const bodyMarkdown = lines.slice(1, -1).join("\n");
+  const singleLineHeader = lines.length === 1 ? splitSingleLineFencedDivHeader(opener, fence) : null;
+  const header = (singleLineHeader ?? opener.replace(/^\s*:{3,}/, "")).trim();
+  const closingFence = singleLineHeader === null ? lines[lines.length - 1]?.trim() || fence : fence;
+  const bodyMarkdown = singleLineHeader === null ? lines.slice(1, -1).join("\n") : "";
   const body = bodyMarkdown.trim();
 
   if (!header.startsWith("{")) {
@@ -114,28 +146,26 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
   const attrsEnd = header.indexOf("}");
   const attrs = attrsEnd >= 0 ? header.slice(0, attrsEnd + 1) : header;
   const trailingTitleRaw = attrsEnd >= 0 ? header.slice(attrsEnd + 1).trim() : "";
-  const trailing = splitTrailingTitleLabel(trailingTitleRaw);
-  const trailingTitle = trailing.title;
-  const titleAttrMatch = attrs.match(/\btitle=(?:"([^"]*)"|'([^']*)')/);
-  const classes = [...attrs.matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]);
-  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1] ?? trailing.id;
+  const parsedAttrs = parseFencedDivAttrs(
+    attrs,
+    singleLineHeader === null ? trailingTitleRaw : "",
+  );
+  const resolvedBodyMarkdown = singleLineHeader === null
+    ? bodyMarkdown
+    : trailingTitleRaw;
 
   return {
     attrsRaw: attrs,
-    blockType: normalizeBlockType(classes[0], trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2]),
-    body,
-    bodyMarkdown,
+    blockType: parsedAttrs.blockType,
+    body: resolvedBodyMarkdown.trim(),
+    bodyMarkdown: resolvedBodyMarkdown,
     closingFence,
     fence,
-    id,
-    title: titleAttrMatch?.[1] || titleAttrMatch?.[2] || trailingTitle || undefined,
-    titleLabelSuffix: trailing.labelSuffix,
-    titleMarkdown: trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined,
-    titleKind: trailingTitle || trailing.labelSuffix
-      ? "trailing"
-      : titleAttrMatch
-        ? "attribute"
-        : "none",
+    id: parsedAttrs.id,
+    title: parsedAttrs.title,
+    titleLabelSuffix: parsedAttrs.titleLabelSuffix,
+    titleMarkdown: parsedAttrs.titleMarkdown,
+    titleKind: parsedAttrs.titleKind,
   };
 }
 

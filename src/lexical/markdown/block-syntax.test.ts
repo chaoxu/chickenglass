@@ -75,6 +75,19 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
+  it("parses documented single-line fenced divs as body content", () => {
+    const parsed = parseStructuredFencedDivRaw("::: {.theorem #thm:short} Short statement. :::");
+
+    expect(parsed).toMatchObject({
+      blockType: "theorem",
+      body: "Short statement.",
+      bodyMarkdown: "Short statement.",
+      id: "thm:short",
+      title: undefined,
+      titleKind: "none",
+    });
+  });
+
   it("parses and serializes structured display math", () => {
     const parsed = parseStructuredDisplayMathRaw([
       "$$",
