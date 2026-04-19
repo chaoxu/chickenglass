@@ -116,8 +116,6 @@ export async function run(page) {
       rawHeadingLineHasMarker: headingLine.includes(HEADING_MARKER),
       renderedCodeText: codeText ?? "",
     };
-  }, {
-    ignoreConsole: ["[vite] connecting...", "[vite] connected."],
   });
 
   if (issues.length > 0) {

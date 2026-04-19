@@ -10,21 +10,27 @@
  * String values are kept stable for settings migration. UI copy uses the
  * reveal vocabulary; internal code keeps the existing keys.
  */
-export const EDITOR_MODE = {
-  LEXICAL: "lexical",
-  PARAGRAPH: "paragraph",
-  SOURCE: "source",
-} as const;
+import {
+  EDITOR_MODE,
+  markdownEditorModes,
+} from "./editor-mode-contract.js";
+import type { EditorMode } from "./editor-mode-contract.js";
 
-export type EditorMode = (typeof EDITOR_MODE)[keyof typeof EDITOR_MODE];
-
-export const LEGACY_EDITOR_MODE_READ = "read";
-
-export const markdownEditorModes = [
-  EDITOR_MODE.LEXICAL,
-  EDITOR_MODE.PARAGRAPH,
-  EDITOR_MODE.SOURCE,
-] as const satisfies readonly EditorMode[];
+export {
+  EDITOR_MODE,
+  EDITOR_MODE_LABELS,
+  LEGACY_EDITOR_MODE_ALIASES,
+  LEGACY_EDITOR_MODE_READ,
+  markdownEditorModes,
+  normalizeEditorModeInput,
+  REVEAL_PRESENTATION,
+  REVEAL_PRESENTATION_LABELS,
+  revealPresentations,
+} from "./editor-mode-contract.js";
+export type {
+  EditorMode,
+  RevealPresentation,
+} from "./editor-mode-contract.js";
 
 const MARKDOWN_EDITOR_MODE_SET = new Set<string>(markdownEditorModes);
 
@@ -46,28 +52,3 @@ export function normalizeEditorMode(mode: EditorMode, isMarkdown: boolean): Edit
 export function isRichEditorMode(mode: EditorMode): boolean {
   return mode === EDITOR_MODE.LEXICAL || mode === EDITOR_MODE.PARAGRAPH;
 }
-
-/** Human-friendly UI labels keyed by mode. */
-export const EDITOR_MODE_LABELS: Readonly<Record<EditorMode, string>> = {
-  [EDITOR_MODE.LEXICAL]: "Cursor reveal",
-  [EDITOR_MODE.PARAGRAPH]: "Paragraph reveal",
-  [EDITOR_MODE.SOURCE]: "Complete reveal",
-};
-
-export const REVEAL_PRESENTATION = {
-  INLINE: "inline",
-  FLOATING: "floating",
-} as const;
-
-export type RevealPresentation =
-  (typeof REVEAL_PRESENTATION)[keyof typeof REVEAL_PRESENTATION];
-
-export const revealPresentations = [
-  REVEAL_PRESENTATION.INLINE,
-  REVEAL_PRESENTATION.FLOATING,
-] as const satisfies readonly RevealPresentation[];
-
-export const REVEAL_PRESENTATION_LABELS: Readonly<Record<RevealPresentation, string>> = {
-  [REVEAL_PRESENTATION.INLINE]: "Inline",
-  [REVEAL_PRESENTATION.FLOATING]: "Floating",
-};

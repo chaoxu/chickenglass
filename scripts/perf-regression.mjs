@@ -27,6 +27,7 @@ import {
   waitForDebugBridge,
   withRuntimeIssueCapture,
 } from "./test-helpers.mjs";
+import { DEBUG_EDITOR_SELECTOR } from "./test-helpers/shared.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import { resolveFixtureDocument } from "./test-helpers/fixtures.mjs";
 
@@ -95,8 +96,8 @@ export const TYPING_BURST_REQUIRED_METRICS = [
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
 
 async function runSteppedScroll(page) {
-  return page.evaluate(async () => {
-    const editor = document.querySelector('[data-testid="lexical-editor"]');
+  return page.evaluate(async (editorSelector) => {
+    const editor = document.querySelector(editorSelector);
     if (!(editor instanceof HTMLElement)) {
       throw new Error("Missing lexical editor element.");
     }
@@ -121,7 +122,7 @@ async function runSteppedScroll(page) {
       maxStepMs: Math.max(...steps, 0),
       totalMs: total,
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
 }
 
 function steppedScrollMetrics(result) {
@@ -361,11 +362,11 @@ function validatePerfFixtureCoverage(scenarioName) {
 
 async function waitForScrollableEditor(page) {
   await page.waitForFunction(
-    () => {
-      const editor = document.querySelector('[data-testid="lexical-editor"]');
+    (editorSelector) => {
+      const editor = document.querySelector(editorSelector);
       return editor instanceof HTMLElement && editor.scrollHeight > editor.clientHeight;
     },
-    {},
+    DEBUG_EDITOR_SELECTOR,
     { timeout: 10000 },
   );
 }

@@ -25,6 +25,7 @@ import {
   type FocusOwner,
   type FocusOwnerRole,
 } from "../state/editor-focus";
+import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
 import {
   LexicalRenderContextProvider,
   type LexicalRenderContextValue,
@@ -160,7 +161,7 @@ export function LexicalRichMarkdownEditor({
   singleLine = false,
   enableSourceNavigation = false,
   spellCheck = false,
-  testId = "lexical-editor",
+  testId = DEBUG_EDITOR_TEST_ID,
 }: LexicalRichMarkdownEditorProps) {
   const inheritedRevealPresentation = useRevealPresentation();
   const resolvedRevealPresentation = revealPresentation ?? inheritedRevealPresentation;

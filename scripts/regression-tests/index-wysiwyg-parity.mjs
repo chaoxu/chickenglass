@@ -99,8 +99,6 @@ export async function run(page) {
       initialState,
       markdown,
     };
-  }, {
-    ignoreConsole: ["[vite] connecting...", "[vite] connected."],
   });
 
   if (issues.length > 0) {

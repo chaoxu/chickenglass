@@ -5,6 +5,27 @@ import {
   waitForAppUrl,
 } from "./test-helpers.mjs";
 import { openFixtureDocument, resolveFixtureDocument } from "./test-helpers/fixtures.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  DEBUG_EDITOR_TEST_ID,
+  EDITOR_MODE,
+  MODE_BUTTON_SELECTOR,
+  MODE_BUTTON_TEST_ID,
+  MODE_LABELS,
+  REVEAL_PRESENTATION,
+  SETTINGS_KEY,
+  WINDOW_STATE_KEY,
+  WINDOW_STATE_SCOPED_PREFIX,
+  isWindowStateStorageKey,
+  markdownEditorModes,
+  normalizeAutomationMode,
+  revealPresentations,
+} from "./test-helpers/shared.mjs";
+import {
+  DEV_SERVER_RUNTIME_ISSUE_IGNORES,
+  issueMatches,
+  mergeRuntimeIssueOptions,
+} from "./test-helpers/runtime-issues.mjs";
 
 describe("test helpers browser harness", () => {
   afterEach(() => {
@@ -42,6 +63,56 @@ describe("test helpers browser harness", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("browser automation contracts", () => {
+  it("shares current editor modes and normalizes the legacy read alias explicitly", () => {
+    expect(markdownEditorModes).toEqual([
+      EDITOR_MODE.LEXICAL,
+      EDITOR_MODE.PARAGRAPH,
+      EDITOR_MODE.SOURCE,
+    ]);
+    expect(Object.keys(MODE_LABELS).sort()).toEqual([...markdownEditorModes].sort());
+    expect(normalizeAutomationMode("paragraph")).toBe(EDITOR_MODE.PARAGRAPH);
+    expect(normalizeAutomationMode("read")).toBe(EDITOR_MODE.LEXICAL);
+    expect(() => normalizeAutomationMode("unknown")).toThrow(/Unsupported mode/);
+  });
+
+  it("shares app-owned test ids with browser selectors", () => {
+    expect(DEBUG_EDITOR_TEST_ID).toBe("lexical-editor");
+    expect(DEBUG_EDITOR_SELECTOR).toBe('[data-testid="lexical-editor"]');
+    expect(MODE_BUTTON_TEST_ID).toBe("mode-button");
+    expect(MODE_BUTTON_SELECTOR).toBe('[data-testid="mode-button"]');
+  });
+
+  it("shares settings and window-state storage keys with reset helpers", () => {
+    expect(SETTINGS_KEY).toBe("cf-settings");
+    expect(WINDOW_STATE_KEY).toBe("cf-window-state");
+    expect(WINDOW_STATE_SCOPED_PREFIX).toBe("cf-window-state:");
+    expect(isWindowStateStorageKey("cf-window-state")).toBe(true);
+    expect(isWindowStateStorageKey("cf-window-state:/tmp/project")).toBe(true);
+    expect(isWindowStateStorageKey("cf-settings")).toBe(false);
+  });
+
+  it("shares reveal presentation values with automation", () => {
+    expect(revealPresentations).toEqual([
+      REVEAL_PRESENTATION.INLINE,
+      REVEAL_PRESENTATION.FLOATING,
+    ]);
+  });
+
+  it("matches runtime issue ignores by substring or regular expression", () => {
+    expect(issueMatches("[vite] connected.", DEV_SERVER_RUNTIME_ISSUE_IGNORES.ignoreConsole)).toBe(true);
+    expect(issueMatches("Failed to load resource: 403", [/403/])).toBe(true);
+    expect(issueMatches("real regression", DEV_SERVER_RUNTIME_ISSUE_IGNORES.ignoreConsole)).toBe(false);
+
+    const merged = mergeRuntimeIssueOptions(
+      DEV_SERVER_RUNTIME_ISSUE_IGNORES,
+      { ignoreConsole: [/403/] },
+    );
+    expect(merged.ignoreConsole).toHaveLength(3);
+    expect(issueMatches("Failed to load resource: 403", merged.ignoreConsole)).toBe(true);
   });
 });
 

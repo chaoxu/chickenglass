@@ -20,6 +20,7 @@ import type {
 } from "../app/hooks/use-app-debug-types";
 import { getActiveEditor } from "../lexical/active-editor-tracker";
 import { readLexicalTree } from "../lexical/tree-print";
+import { DEBUG_EDITOR_SELECTOR } from "./debug-bridge-contract.js";
 
 export interface AppBridgeMethods {
   openFile: (path: string) => Promise<void>;
@@ -232,7 +233,7 @@ function installWindowBridge(): void {
   window.__cmView = {
     dispatch: () => {},
     get dom(): Element | null {
-      return document.querySelector('[data-testid="lexical-editor"]');
+      return document.querySelector(DEBUG_EDITOR_SELECTOR);
     },
     focus: () => requireEditor().focus(),
     state: {

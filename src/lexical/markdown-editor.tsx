@@ -34,6 +34,7 @@ import {
 
 import type { EditorMode, RevealPresentation } from "../app/editor-mode";
 import { REVEAL_PRESENTATION } from "../app/editor-mode";
+import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
 import {
   applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
@@ -663,7 +664,7 @@ export function LexicalMarkdownEditor({
   renderContextValue,
   revealPresentation = REVEAL_PRESENTATION.FLOATING,
   spellCheck = false,
-  testId = "lexical-editor",
+  testId = DEBUG_EDITOR_TEST_ID,
 }: LexicalMarkdownEditorProps) {
   const inheritedSurface = useEditorScrollSurface();
   const initialDocRef = useRef(doc);

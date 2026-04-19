@@ -1,4 +1,5 @@
 import type { DebugDocumentState } from "../app/hooks/use-app-debug-types";
+import { SETTINGS_KEY } from "../constants/storage-keys";
 import { useDevSettings } from "../state/dev-settings";
 import { getConnectedApp, getConnectedEditor } from "./debug-bridge";
 
@@ -171,7 +172,7 @@ function readSettingsSnapshot(): SettingsSnapshot {
   let revealPresentation: string | null = null;
   if (isBrowser()) {
     try {
-      const raw = window.localStorage.getItem("cf-settings");
+      const raw = window.localStorage.getItem(SETTINGS_KEY);
       const parsed = raw ? JSON.parse(raw) as { revealPresentation?: unknown } : null;
       revealPresentation = typeof parsed?.revealPresentation === "string"
         ? parsed.revealPresentation

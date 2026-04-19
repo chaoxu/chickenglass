@@ -5,6 +5,7 @@ import { computeDocStats, type DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../../state/editor-telemetry-store";
 import { buildInfo } from "../build-info";
+import { MODE_BUTTON_TEST_ID } from "../../debug/debug-bridge-contract.js";
 import {
   EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
   unsubscribeNoop,
@@ -146,7 +147,7 @@ export function StatusBar({
           )}
           <button
             type="button"
-            data-testid="mode-button"
+            data-testid={MODE_BUTTON_TEST_ID}
             aria-label={isMarkdown ? `Editor mode: ${MODE_LABELS[editorMode]}. Click to cycle mode` : "Source mode only for non-markdown files"}
             onClick={cycleMode}
             disabled={!isMarkdown}

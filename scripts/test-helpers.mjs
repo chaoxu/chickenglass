@@ -1,9 +1,28 @@
 /* global window */
 
 import process from "node:process";
-import { MODE_LABELS, waitForEditorSurface } from "./test-helpers/shared.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  EDITOR_MODE,
+  MODE_BUTTON_SELECTOR,
+  MODE_BUTTON_TEST_ID,
+  MODE_LABELS,
+  REVEAL_PRESENTATION,
+  SETTINGS_KEY,
+  WINDOW_STATE_KEY,
+  WINDOW_STATE_SCOPED_PREFIX,
+  markdownEditorModes,
+  normalizeAutomationMode,
+  revealPresentations,
+  waitForEditorSurface,
+} from "./test-helpers/shared.mjs";
 import { waitForDebugBridge as waitForDebugBridgeImpl } from "./test-helpers/browser.mjs";
 import { openRegressionDocument } from "./test-helpers/fixtures.mjs";
+import {
+  DEV_SERVER_RUNTIME_ISSUE_IGNORES,
+  issueMatches,
+  mergeRuntimeIssueOptions,
+} from "./test-helpers/runtime-issues.mjs";
 export { PUBLIC_SHOWCASE_FIXTURE, sleep } from "./test-helpers/shared.mjs";
 export {
   connectEditor,
@@ -27,8 +46,8 @@ export async function focusEditor(page) {
     window.__editor.focus();
   });
   await page.waitForFunction(
-    () => Boolean(document.activeElement?.closest('[data-testid="lexical-editor"]')),
-    undefined,
+    (editorSelector) => Boolean(document.activeElement?.closest(editorSelector)),
+    DEBUG_EDITOR_SELECTOR,
     { timeout: 5000 },
   );
 }
@@ -116,14 +135,15 @@ export async function findLine(page, needle) {
  * after openRegressionDocument so the live editor mounts the floating variant.
  */
 export async function setRevealPresentation(page, presentation) {
-  if (presentation !== "inline" && presentation !== "floating") {
-    throw new Error(`Unsupported reveal presentation "${presentation}". Use inline or floating.`);
+  if (!revealPresentations.includes(presentation)) {
+    throw new Error(
+      `Unsupported reveal presentation "${presentation}". Use ${revealPresentations.join(" or ")}.`,
+    );
   }
-  await page.evaluate((next) => {
-    const SETTINGS_KEY = "cf-settings";
+  await page.evaluate(({ next, settingsKey }) => {
     let parsed = {};
     try {
-      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      const raw = window.localStorage.getItem(settingsKey);
       if (raw) {
         parsed = JSON.parse(raw);
       }
@@ -131,17 +151,14 @@ export async function setRevealPresentation(page, presentation) {
       parsed = {};
     }
     parsed.revealPresentation = next;
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
-  }, presentation);
+    window.localStorage.setItem(settingsKey, JSON.stringify(parsed));
+  }, { next: presentation, settingsKey: SETTINGS_KEY });
   await page.reload({ waitUntil: "load" });
   await waitForDebugBridgeImpl(page);
 }
 
 export async function switchToMode(page, mode) {
-  const normalizedMode = mode.toLowerCase();
-  if (!(normalizedMode in MODE_LABELS)) {
-    throw new Error(`Unsupported mode "${mode}". Use lexical or source.`);
-  }
+  const normalizedMode = normalizeAutomationMode(mode);
 
   const changedViaApp = await page.evaluate(async (nextMode) => {
     if (!window.__app?.setMode || !window.__app?.getMode) {
@@ -164,7 +181,7 @@ export async function switchToMode(page, mode) {
     return;
   }
 
-  const modeButton = page.getByTestId("mode-button");
+  const modeButton = page.getByTestId(MODE_BUTTON_TEST_ID);
   const targetLabel = MODE_LABELS[normalizedMode];
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -172,8 +189,8 @@ export async function switchToMode(page, mode) {
     if (currentLabel === targetLabel) return;
     await modeButton.click();
     await page.waitForFunction(
-      ({ label }) => document.querySelector('[data-testid="mode-button"]')?.textContent?.trim() === label,
-      { label: targetLabel },
+      ({ label, selector }) => document.querySelector(selector)?.textContent?.trim() === label,
+      { label: targetLabel, selector: MODE_BUTTON_SELECTOR },
       { timeout: 5000 },
     ).catch(() => {});
   }
@@ -276,11 +293,6 @@ export async function withRestoredFixture(page, fixture, run) {
   return result;
 }
 
-function issueMatches(text, patterns) {
-  return patterns.some((pattern) =>
-    typeof pattern === "string" ? text.includes(pattern) : pattern.test(text));
-}
-
 const runtimeIssueIgnoreStackByPage = new WeakMap();
 
 function activeRuntimeIssueIgnores(page) {
@@ -311,6 +323,10 @@ function runtimeIssueIsIgnored(page, source, text) {
 
 export async function withRuntimeIssueCapture(page, run, options = {}) {
   const issues = [];
+  const mergedOptions = mergeRuntimeIssueOptions(
+    DEV_SERVER_RUNTIME_ISSUE_IGNORES,
+    options,
+  );
 
   const onConsole = (msg) => {
     if (msg.type() !== "error") return;
@@ -327,7 +343,7 @@ export async function withRuntimeIssueCapture(page, run, options = {}) {
     issues.push({ source: "pageerror", text });
   };
 
-  pushRuntimeIssueIgnores(page, options);
+  pushRuntimeIssueIgnores(page, mergedOptions);
   page.on("console", onConsole);
   page.on("pageerror", onPageError);
 
@@ -395,7 +411,7 @@ async function collectEditorHealth(page, options = {}) {
 
   return page.evaluate((limits) => {
     const issues = [];
-    const modeLabels = new Set(["lexical", "source"]);
+    const modeLabels = new Set(limits.validModes);
 
     const isVisible = (el) => {
       if (!(el instanceof HTMLElement)) return false;
@@ -449,7 +465,7 @@ async function collectEditorHealth(page, options = {}) {
       );
     }
 
-    const editorElement = document.querySelector('[data-testid="lexical-editor"]');
+    const editorElement = document.querySelector(limits.editorSelector);
 
     return {
       currentDocument,
@@ -462,8 +478,10 @@ async function collectEditorHealth(page, options = {}) {
       issues,
     };
   }, {
+    editorSelector: DEBUG_EDITOR_SELECTOR,
     maxVisibleDialogs,
     maxVisibleHoverPreviews,
+    validModes: markdownEditorModes,
   });
 }
 
@@ -498,9 +516,9 @@ export async function resetEditorState(page) {
   await page.evaluate(() => {
     window.__app?.setSearchOpen?.(false);
   }).catch(() => {});
-  await page.evaluate(() => {
+  await page.evaluate(({ windowStateKey, windowStateScopedPrefix }) => {
     for (const key of Object.keys(window.localStorage)) {
-      if (key !== "cf-window-state" && !key.startsWith("cf-window-state:")) {
+      if (key !== windowStateKey && !key.startsWith(windowStateScopedPrefix)) {
         continue;
       }
       try {
@@ -513,25 +531,30 @@ export async function resetEditorState(page) {
         window.localStorage.removeItem(key);
       }
     }
+  }, {
+    windowStateKey: WINDOW_STATE_KEY,
+    windowStateScopedPrefix: WINDOW_STATE_SCOPED_PREFIX,
   }).catch(() => {});
   // Reset reveal presentation to the default ("inline") so a previous test
   // that switched to "floating" doesn't leak its setting into the next test.
   // Done before discard/open so the next document mounts the right plugin.
-  const presentationDrifted = await page.evaluate(() => {
-    const SETTINGS_KEY = "cf-settings";
+  const presentationDrifted = await page.evaluate(({ defaultPresentation, settingsKey }) => {
     let parsed = {};
     try {
-      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      const raw = window.localStorage.getItem(settingsKey);
       if (raw) parsed = JSON.parse(raw);
     } catch {
       parsed = {};
     }
-    if (parsed.revealPresentation && parsed.revealPresentation !== "inline") {
-      parsed.revealPresentation = "inline";
-      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+    if (parsed.revealPresentation && parsed.revealPresentation !== defaultPresentation) {
+      parsed.revealPresentation = defaultPresentation;
+      window.localStorage.setItem(settingsKey, JSON.stringify(parsed));
       return true;
     }
     return false;
+  }, {
+    defaultPresentation: REVEAL_PRESENTATION.INLINE,
+    settingsKey: SETTINGS_KEY,
   });
   if (presentationDrifted) {
     await page.reload({ waitUntil: "load" });
@@ -541,9 +564,9 @@ export async function resetEditorState(page) {
   if (!discarded) {
     throw new Error("Failed to discard the current document during reset");
   }
-  await page.evaluate(() => {
-    window.__app.setMode("lexical");
-  });
+  await page.evaluate((defaultMode) => {
+    window.__app.setMode(defaultMode);
+  }, EDITOR_MODE.LEXICAL);
   await openRegressionDocument(page);
   await page.waitForFunction(
     () => {

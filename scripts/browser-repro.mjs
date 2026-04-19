@@ -20,6 +20,11 @@ import {
   switchToMode,
   waitForDebugBridge,
 } from "./test-helpers.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  formatEditorModeUsage,
+  normalizeAutomationMode,
+} from "./test-helpers/shared.mjs";
 
 const COMPARABLE_CAPTURE_FIELDS = [
   "document",
@@ -57,7 +62,7 @@ Shared browser options:
 Capture / replay options:
   --fixture index.md      Open a deterministic fixture via the shared harness
   --file notes.md         Open a file through window.__app.openFile()
-  --mode lexical|source|read  Switch mode after opening
+  --mode lexical|paragraph|source  Switch mode after opening (legacy alias: read)
   --line 42               Place the cursor at a specific line
   --col 0                 Column offset for --line (0-based)
   --anchor-text "needle"  Jump to the first matching text anchor
@@ -210,12 +215,12 @@ function normalizeStep(step, index) {
         offset: Number.isInteger(step.offset) ? step.offset : 0,
       };
     case "switchMode":
-      if (!["lexical", "source", "read"].includes(step.mode)) {
-        throw new Error(`Invalid switchMode step at index ${index}: expected lexical/source/read.`);
+      if (typeof step.mode !== "string") {
+        throw new Error(`Invalid switchMode step at index ${index}: expected ${formatEditorModeUsage()}.`);
       }
       return {
         type: "switchMode",
-        mode: step.mode,
+        mode: normalizeAutomationMode(step.mode),
       };
     case "sleep":
       if (!Number.isInteger(step.ms) || step.ms < 0) {
@@ -524,8 +529,8 @@ async function focusEditor(page) {
 }
 
 async function clickAtRecordedPosition(page, action) {
-  const point = await page.evaluate(({ editorX, editorY, clientX, clientY }) => {
-    const editorEl = document.querySelector("[data-testid='lexical-editor']");
+  const point = await page.evaluate(({ editorSelector, editorX, editorY, clientX, clientY }) => {
+    const editorEl = document.querySelector(editorSelector);
     const rect = editorEl?.getBoundingClientRect?.();
     if (rect && editorX !== null && editorY !== null) {
       return {
@@ -540,7 +545,7 @@ async function clickAtRecordedPosition(page, action) {
       };
     }
     return null;
-  }, action);
+  }, { ...action, editorSelector: DEBUG_EDITOR_SELECTOR });
 
   if (!point) {
     throw new Error("Pointer replay step is missing usable coordinates.");

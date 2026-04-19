@@ -3,7 +3,28 @@
 import { dirname, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { CORE_DEBUG_GLOBAL_NAMES, DEBUG_EDITOR_TEST_ID } from "../../src/debug/debug-bridge-contract.js";
+import {
+  EDITOR_MODE,
+  EDITOR_MODE_LABELS,
+  LEGACY_EDITOR_MODE_READ,
+  markdownEditorModes,
+  normalizeEditorModeInput,
+  REVEAL_PRESENTATION,
+  revealPresentations,
+} from "../../src/app/editor-mode-contract.js";
+import {
+  isWindowStateStorageKey,
+  SETTINGS_KEY,
+  WINDOW_STATE_KEY,
+  WINDOW_STATE_SCOPED_PREFIX,
+} from "../../src/constants/storage-keys-contract.js";
+import {
+  CORE_DEBUG_GLOBAL_NAMES,
+  DEBUG_EDITOR_SELECTOR,
+  DEBUG_EDITOR_TEST_ID,
+  MODE_BUTTON_SELECTOR,
+  MODE_BUTTON_TEST_ID,
+} from "../../src/debug/debug-bridge-contract.js";
 
 export const DEFAULT_PORT = 9322;
 export const DEFAULT_APP_URL = "http://localhost:5173";
@@ -20,10 +41,22 @@ export const PUBLIC_SHOWCASE_FIXTURE = {
     resolve(REPO_ROOT, "demo/index.md"),
   ],
 };
-export const MODE_LABELS = {
-  lexical: "Lexical",
-  read: "Read",
-  source: "Source",
+export {
+  DEBUG_EDITOR_SELECTOR,
+  DEBUG_EDITOR_TEST_ID,
+  EDITOR_MODE,
+  EDITOR_MODE_LABELS as MODE_LABELS,
+  LEGACY_EDITOR_MODE_READ,
+  MODE_BUTTON_SELECTOR,
+  MODE_BUTTON_TEST_ID,
+  REVEAL_PRESENTATION,
+  SETTINGS_KEY,
+  WINDOW_STATE_KEY,
+  WINDOW_STATE_SCOPED_PREFIX,
+  isWindowStateStorageKey,
+  markdownEditorModes,
+  normalizeEditorModeInput,
+  revealPresentations,
 };
 export const TEXT_FIXTURE_EXTENSIONS = new Set([
   ".bib",
@@ -39,6 +72,18 @@ export const TEXT_FIXTURE_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
 ]);
+
+export function formatEditorModeUsage() {
+  return `${markdownEditorModes.join(", ")} (legacy alias: ${LEGACY_EDITOR_MODE_READ})`;
+}
+
+export function normalizeAutomationMode(mode) {
+  const normalized = normalizeEditorModeInput(mode);
+  if (!normalized) {
+    throw new Error(`Unsupported mode "${mode}". Use ${formatEditorModeUsage()}.`);
+  }
+  return normalized;
+}
 
 export function formatInspectablePages(pages) {
   if (pages.length === 0) return "<none>";
@@ -56,8 +101,8 @@ export async function pageHasDebugBridge(page) {
 
 export async function waitForEditorSurface(page, timeout = 10000) {
   await page.waitForFunction(
-    ({ editorTestId }) => Boolean(window.__editor && document.querySelector(`[data-testid="${editorTestId}"]`)),
-    { editorTestId: DEBUG_EDITOR_TEST_ID },
+    ({ editorSelector }) => Boolean(window.__editor && document.querySelector(editorSelector)),
+    { editorSelector: DEBUG_EDITOR_SELECTOR },
     { timeout },
   );
 }

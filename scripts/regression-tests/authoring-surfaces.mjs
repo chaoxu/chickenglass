@@ -92,8 +92,6 @@ export async function run(page) {
       mathAfterBlur,
       mathBeforeBlur,
     };
-  }, {
-    ignoreConsole: ["[vite] connecting...", "[vite] connected."],
   });
 
   if (issues.length > 0) {

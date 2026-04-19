@@ -96,8 +96,6 @@ export async function run(page) {
 
     const markdown = await readEditorText(page);
     return { markdown, revealChecks };
-  }, {
-    ignoreConsole: ["[vite] connecting...", "[vite] connected."],
   });
 
   if (issues.length > 0) {
