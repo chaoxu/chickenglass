@@ -1,3 +1,7 @@
+import {
+  BLOCK_MANIFEST,
+  type BlockName,
+} from "../constants/block-manifest";
 import type { InsertFocusTarget } from "./block-insert-focus";
 import type { InsertBlockVariant } from "./block-insert-node";
 
@@ -29,6 +33,18 @@ export interface SlashInsertSpec extends InsertCatalogSpec {
 export interface BlockInsertSpec extends InsertCatalogSpec {
   readonly variant: InsertBlockVariant;
 }
+
+const DEFAULT_FENCED_DIV_CLASS: BlockName = "theorem";
+const MANIFEST_BLOCK_KEYWORDS = BLOCK_MANIFEST.map((entry) => entry.name);
+export const FENCED_DIV_INSERT_KEYWORDS = [
+  ...MANIFEST_BLOCK_KEYWORDS,
+  // UI category aliases: the inserted default remains a theorem block, but
+  // these terms help users find the generic fenced-div affordance.
+  "block",
+  "div",
+] as const;
+
+const DEFAULT_FENCED_DIV_RAW = `::: {.${DEFAULT_FENCED_DIV_CLASS}}\n\n:::`;
 
 export const SLASH_INSERT_SPECS: readonly SlashInsertSpec[] = [
   {
@@ -74,8 +90,8 @@ export const SLASH_INSERT_SPECS: readonly SlashInsertSpec[] = [
   {
     focusTarget: "block-body",
     id: "fenced-div",
-    keywords: ["theorem", "definition", "proof", "lemma", "block", "div"],
-    raw: "::: {.theorem}\n\n:::",
+    keywords: FENCED_DIV_INSERT_KEYWORDS,
+    raw: DEFAULT_FENCED_DIV_RAW,
     title: "Theorem / Definition",
     variant: "fenced-div",
   },

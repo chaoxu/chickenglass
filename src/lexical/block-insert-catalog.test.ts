@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { BLOCK_MANIFEST } from "../constants/block-manifest";
 import {
   createFencedDivInsertSpec,
   createTableInsertSpec,
   DISPLAY_MATH_DOLLAR_INSERT_SPEC,
+  FENCED_DIV_INSERT_KEYWORDS,
   SLASH_INSERT_SPECS,
 } from "./block-insert-catalog";
 
@@ -28,6 +30,23 @@ describe("block-insert-catalog", () => {
       raw: "::: {.theorem} Title\n\n:::",
       variant: "fenced-div",
     });
+  });
+
+  it("derives manifest-backed fenced-div insertion keywords from the block manifest", () => {
+    const manifestBlockNames = BLOCK_MANIFEST.map((entry) => entry.name);
+    expect(FENCED_DIV_INSERT_KEYWORDS).toEqual(expect.arrayContaining(manifestBlockNames));
+
+    const fencedDivSpec = SLASH_INSERT_SPECS.find((spec) => spec.id === "fenced-div");
+    expect(fencedDivSpec?.keywords).toBe(FENCED_DIV_INSERT_KEYWORDS);
+    expect(fencedDivSpec?.raw).toBe("::: {.theorem}\n\n:::");
+  });
+
+  it("keeps non-manifest raw insertion entries explicit", () => {
+    expect(SLASH_INSERT_SPECS.map((spec) => spec.id)).toEqual(expect.arrayContaining([
+      "table",
+      "display-math",
+      "footnote-definition",
+    ]));
   });
 
   it("preserves table placeholder behavior for sparse header lines", () => {
