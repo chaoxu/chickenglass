@@ -2,7 +2,11 @@ import katex from "katex";
 import { describe, expect, it } from "vitest";
 
 import { buildKatexOptions } from "../../lib/katex-options";
-import { renderFrontmatterHtml, renderMarkdownRichHtml } from "./rich-html-preview";
+import {
+  renderFrontmatterHtml,
+  renderMarkdownInlineHtml,
+  renderMarkdownRichHtml,
+} from "./rich-html-preview";
 import { buildRenderIndex, type RenderIndex } from "./reference-index";
 
 const renderIndex: RenderIndex = {
@@ -108,4 +112,15 @@ describe("rich-html-preview", () => {
     expect(withMacros).toContain(configuredMath);
     expect(withMacros).not.toContain(bareMath);
   });
+
+  it("renders inline math in inline markdown fragments", () => {
+    const html = renderMarkdownInlineHtml("[1] A $k$-hitting set.", {
+      renderIndex: buildRenderIndex(""),
+      resolveAssetUrl: () => null,
+    });
+
+    expect(html).toContain("katex");
+    expect(html).not.toContain("<p>");
+  });
+
 });

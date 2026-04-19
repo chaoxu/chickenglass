@@ -12,7 +12,7 @@ export function EditorChromePanel({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-sm border border-[color:var(--cf-border-overlay,var(--cf-border))] bg-[var(--cf-bg)] text-[var(--cf-fg)]",
+        "pointer-events-auto overflow-hidden rounded-sm border border-[color:var(--cf-border-overlay,var(--cf-border))] bg-[var(--cf-bg)] text-[var(--cf-fg)]",
         className,
       )}
     >

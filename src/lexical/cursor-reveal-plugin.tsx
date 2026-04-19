@@ -262,7 +262,11 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
 
 // ─── Inline (Typora-style) presentation ─────────────────────────────────
 
-const REVEAL_TEXT_STYLE = "--cf-reveal:1";
+const REVEAL_SOURCE_TEXT_STYLE = [
+  "--cf-reveal:1",
+  "font-family:var(--cf-code-font)",
+  "font-size:14px",
+].join(";");
 
 interface InlineRevealHandle {
   readonly plainKey: NodeKey;
@@ -738,7 +742,7 @@ function selectRevealText(node: ReturnType<typeof $createTextNode>, offset: numb
   const selection = $getSelection();
   if ($isRangeSelection(selection)) {
     selection.setFormat(0);
-    selection.setStyle(REVEAL_TEXT_STYLE);
+    selection.setStyle(REVEAL_SOURCE_TEXT_STYLE);
   }
 }
 
@@ -771,12 +775,9 @@ function openInlineReveal(
   const sourceFormat = getSourceBackedFormat(live);
   const plain = $createTextNode(request.source);
   $addUpdateTag(COFLAT_REVEAL_UI_TAG);
-  // A non-empty style prevents Lexical from merging this plain node
-  // with its unstyled siblings during normalization — without it the
-  // reveal text immediately fuses into the surrounding paragraph and
-  // we lose the key we use to find the run on commit. The CSS
-  // variable is a no-op visually.
-  plain.setStyle(REVEAL_TEXT_STYLE);
+  // Source reveals must stay visually distinct and must not merge with
+  // neighboring prose TextNodes, otherwise we lose the key used to commit.
+  plain.setStyle(REVEAL_SOURCE_TEXT_STYLE);
   if (isBlockRevealSubject(live)) {
     // Block-scope reveal (paragraph adapter): the subject is a
     // top-level block, not an inline node. A bare TextNode at the

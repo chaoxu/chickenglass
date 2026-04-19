@@ -596,12 +596,11 @@
 }
 
 .cf-lexical-inline-reveal-preview-portal {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .cf-lexical-inline-reveal-preview-shell {
   max-width: min(32rem, calc(100vw - 10px));
-  box-shadow: 0 8px 24px color-mix(in srgb, black 14%, transparent);
 }
 
 .cf-lexical-inline-reveal-preview-surface {
@@ -620,22 +619,22 @@
 
 .cf-lexical-reference {
   color: var(--cf-fg);
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
+  border-radius: 0.15em;
+  text-decoration: none;
 }
 
 .cf-crossref {
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--cf-muted);
-  text-underline-offset: 2px;
   cursor: pointer;
+  text-decoration: none;
+}
+
+.cf-lexical-reference:hover,
+.cf-lexical-reference:focus-visible {
+  background: color-mix(in srgb, var(--cf-bg) 82%, var(--cf-hover));
 }
 
 .cf-crossref-unresolved {
   color: var(--cf-muted);
-  text-decoration-style: dashed;
-  text-decoration-color: var(--cf-muted);
 }
 
 .cf-lexical-footnote-ref {
@@ -780,37 +779,48 @@
   font-weight: var(--cf-h2-weight, 400);
 }
 
+.cf-bibliography-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
 .cf-bibliography-entry + .cf-bibliography-entry {
   margin-top: 0.25rem;
 }
 
-.cf-bibliography-entry > .csl-entry {
+.cf-bibliography-entry-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cf-bibliography-entry-content > .csl-entry {
   margin: 0;
 }
 
-.cf-bibliography-entry > .csl-entry:has(> .csl-left-margin):has(> .csl-right-inline) {
+.cf-bibliography-entry-content > .csl-entry:has(> .csl-left-margin):has(> .csl-right-inline) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: 0.5em;
   align-items: start;
 }
 
-.cf-bibliography-entry > .csl-entry > .csl-left-margin,
-.cf-bibliography-entry > .csl-entry > .csl-right-inline {
+.cf-bibliography-entry-content > .csl-entry > .csl-left-margin,
+.cf-bibliography-entry-content > .csl-entry > .csl-right-inline {
   margin: 0;
 }
 
-.cf-bibliography-entry > .csl-entry > .csl-left-margin {
+.cf-bibliography-entry-content > .csl-entry > .csl-left-margin {
   white-space: nowrap;
 }
 
-.cf-bibliography-entry > .csl-entry > .csl-right-inline {
+.cf-bibliography-entry-content > .csl-entry > .csl-right-inline {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .cf-bibliography-backlinks {
-  margin-left: 0.5em;
+  flex: 0 0 auto;
   font-size: 0.9em;
   white-space: nowrap;
 }
@@ -1091,6 +1101,7 @@
 }
 
 .cf-lexical-media-fallback {
+  box-sizing: border-box;
   padding: 0.85rem 1rem;
   border: 1px dashed var(--cf-border);
   border-radius: 0.5rem;
@@ -1098,6 +1109,13 @@
   font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   font-size: 0.9rem;
   background: color-mix(in srgb, var(--cf-bg) 96%, var(--cf-hover));
+}
+
+.cf-lexical-media-fallback--loading {
+  display: grid;
+  min-height: 15rem;
+  place-items: center;
+  text-align: center;
 }
 
 .cf-lexical-media-object {
@@ -1271,7 +1289,6 @@ div.cf-lexical-table-block > table {
   max-width: min(52rem, calc(100vw - 1rem));
   max-height: min(32rem, calc(100vh - 1rem));
   overflow: hidden;
-  box-shadow: 0 12px 24px -18px rgb(0 0 0 / 0.22), 0 10px 18px -18px rgb(0 0 0 / 0.18);
 }
 
 .cf-reference-completion-list {
@@ -1387,7 +1404,6 @@ div.cf-lexical-table-block > table {
   max-width: min(24rem, calc(100vw - 1rem));
   max-height: min(20rem, calc(100vh - 1rem));
   overflow: hidden;
-  box-shadow: 0 12px 24px -18px rgb(0 0 0 / 0.22), 0 10px 18px -18px rgb(0 0 0 / 0.18);
 }
 
 .cf-slash-picker-list {
@@ -1421,7 +1437,7 @@ div.cf-lexical-table-block > table {
 }
 
 .cf-hover-preview-tooltip {
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 50;
   max-width: min(var(--cf-preview-surface-max-width), calc(100vw - 10px));
   max-height: min(var(--cf-preview-surface-max-height), calc(100vh - 10px));
@@ -1430,7 +1446,6 @@ div.cf-lexical-table-block > table {
   background: var(--cf-bg);
   border: 1px solid var(--cf-border);
   border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   opacity: 0;
   transform: translateY(2px);
   transition: opacity var(--cf-transition), transform var(--cf-transition);

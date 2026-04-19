@@ -1,6 +1,8 @@
 import { Cite } from "@citation-js/core";
 import "@citation-js/plugin-bibtex";
 
+import { containsMarkdownMath } from "../lib/markdown-math";
+
 export interface CslJsonItem {
   id: string;
   type: string;
@@ -65,6 +67,30 @@ function consumeBibBracedValue(text: string, start: number): number {
     if (char === "{") {
       depth += 1;
     } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index + 1;
+      }
+    }
+    index += 1;
+  }
+
+  return text.length;
+}
+
+function consumeBibParenthesizedValue(text: string, start: number): number {
+  let depth = 0;
+  let index = start;
+
+  while (index < text.length) {
+    const char = text[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
       depth -= 1;
       if (depth === 0) {
         return index + 1;
@@ -170,6 +196,138 @@ function normalizeCslItem(item: CslJsonItem): CslJsonItem {
   return item;
 }
 
+function extractBibFieldValues(content: string, fieldName: string): Map<string, string> {
+  const values = new Map<string, string>();
+  let index = 0;
+
+  while (index < content.length) {
+    const atIndex = content.indexOf("@", index);
+    if (atIndex < 0) {
+      break;
+    }
+    const braceIndex = content.indexOf("{", atIndex);
+    const parenIndex = content.indexOf("(", atIndex);
+    const openIndex = braceIndex < 0
+      ? parenIndex
+      : parenIndex < 0
+        ? braceIndex
+        : Math.min(braceIndex, parenIndex);
+    if (openIndex < 0) {
+      break;
+    }
+    const closeIndex = content[openIndex] === "{"
+      ? consumeBibBracedValue(content, openIndex)
+      : consumeBibParenthesizedValue(content, openIndex);
+    const entry = content.slice(openIndex + 1, Math.max(openIndex + 1, closeIndex - 1));
+    const commaIndex = entry.indexOf(",");
+    if (commaIndex < 0) {
+      index = closeIndex;
+      continue;
+    }
+
+    const key = entry.slice(0, commaIndex).trim();
+    const body = entry.slice(commaIndex + 1);
+    const value = extractBibFieldValue(body, fieldName);
+    if (key && value) {
+      values.set(key, value);
+    }
+    index = closeIndex;
+  }
+
+  return values;
+}
+
+function extractBibFieldValue(content: string, fieldName: string): string | null {
+  let index = 0;
+
+  while (index < content.length) {
+    index = skipWhitespace(content, index);
+    const nameStart = index;
+    while (index < content.length && isBibFieldChar(content[index])) {
+      index += 1;
+    }
+    const name = content.slice(nameStart, index).toLowerCase();
+    index = skipWhitespace(content, index);
+    if (!name || content[index] !== "=") {
+      index += 1;
+      continue;
+    }
+    index = skipWhitespace(content, index + 1);
+    const valueStart = index;
+    let valueEnd = index;
+    let value: string;
+    if (content[index] === "{") {
+      valueEnd = consumeBibBracedValue(content, index);
+      value = content.slice(valueStart + 1, Math.max(valueStart + 1, valueEnd - 1));
+    } else if (content[index] === "\"") {
+      valueEnd = consumeBibQuotedValue(content, index);
+      value = content.slice(valueStart + 1, Math.max(valueStart + 1, valueEnd - 1));
+    } else {
+      while (valueEnd < content.length && content[valueEnd] !== "," && content[valueEnd] !== "\n") {
+        valueEnd += 1;
+      }
+      value = content.slice(valueStart, valueEnd).trim();
+    }
+    if (name === fieldName.toLowerCase()) {
+      return cleanBibtex(value).trim();
+    }
+    index = valueEnd + 1;
+  }
+
+  return null;
+}
+
+function preserveMarkdownMathFields(
+  items: readonly CslJsonItem[],
+  content: string,
+): CslJsonItem[] {
+  const rawTitles = extractBibFieldValues(content, "title");
+  if (rawTitles.size === 0) {
+    return [...items];
+  }
+  return items.map((item) => {
+    const key = typeof item["citation-key"] === "string" ? item["citation-key"] : item.id;
+    const rawTitle = rawTitles.get(key);
+    return rawTitle && containsMarkdownMath(rawTitle)
+      ? { ...item, title: rawTitle }
+      : item;
+  });
+}
+
+function normalizeParenthesizedBibEntries(content: string): string {
+  const chunks: string[] = [];
+  let index = 0;
+
+  while (index < content.length) {
+    const atIndex = content.indexOf("@", index);
+    if (atIndex < 0) {
+      chunks.push(content.slice(index));
+      break;
+    }
+    chunks.push(content.slice(index, atIndex));
+
+    let cursor = atIndex + 1;
+    while (cursor < content.length && isBibFieldChar(content[cursor])) {
+      cursor += 1;
+    }
+    cursor = skipWhitespace(content, cursor);
+    if (content[cursor] !== "(") {
+      chunks.push(content.slice(atIndex, cursor + 1));
+      index = cursor + 1;
+      continue;
+    }
+
+    const closeIndex = consumeBibParenthesizedValue(content, cursor);
+    chunks.push(content.slice(atIndex, cursor));
+    chunks.push("{");
+    chunks.push(content.slice(cursor + 1, Math.max(cursor + 1, closeIndex - 1)));
+    chunks.push("}");
+    index = closeIndex;
+  }
+
+  return chunks.join("");
+}
+
 function cacheBibParseResult(content: string, result: CslJsonItem[]): void {
   while (bibParseCache.size >= BIB_PARSE_CACHE_MAX) {
     const oldest = bibParseCache.keys().next();
@@ -213,16 +371,24 @@ export function parseBibTeX(content: string): CslJsonItem[] {
   }
 
   try {
-    const cite = new Cite(content);
-    const result = (cite.data as CslJsonItem[]).map(normalizeCslItem);
+    const parseContent = normalizeParenthesizedBibEntries(content);
+    const cite = new Cite(parseContent);
+    const result = preserveMarkdownMathFields(
+      (cite.data as CslJsonItem[]).map(normalizeCslItem),
+      content,
+    );
     cacheBibParseResult(content, result);
     return result;
   } catch (error) {
     const sanitized = stripIrrelevantBibFields(content);
     if (sanitized !== content) {
       try {
-        const cite = new Cite(sanitized);
-        const result = (cite.data as CslJsonItem[]).map(normalizeCslItem);
+        const parseContent = normalizeParenthesizedBibEntries(sanitized);
+        const cite = new Cite(parseContent);
+        const result = preserveMarkdownMathFields(
+          (cite.data as CslJsonItem[]).map(normalizeCslItem),
+          sanitized,
+        );
         cacheBibParseResult(content, result);
         return result;
       } catch (retryError) {

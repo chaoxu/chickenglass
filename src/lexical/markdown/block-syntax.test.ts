@@ -55,6 +55,26 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
+  it("treats bare known block labels as type-only fenced div openers", () => {
+    const parsed = parseStructuredFencedDivRaw([
+      "::: Proof",
+      "Body",
+      ":::",
+    ].join("\n"));
+
+    expect(parsed).toMatchObject({
+      blockType: "proof",
+      title: undefined,
+      titleKind: "none",
+      titleMarkdown: undefined,
+    });
+    expect(serializeFencedDivRaw(parsed)).toBe([
+      "::: Proof",
+      "Body",
+      ":::",
+    ].join("\n"));
+  });
+
   it("parses and serializes structured display math", () => {
     const parsed = parseStructuredDisplayMathRaw([
       "$$",

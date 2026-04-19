@@ -1,10 +1,13 @@
+import DOMPurify from "dompurify";
 import { useEffect, useMemo } from "react";
 
 import { buildBibliographyEntries } from "../citations/bibliography";
 import { useLexicalRenderContext } from "./render-context";
+import { renderCitationTextHtml, renderCitationTextInHtml } from "./markdown/citation-text-html";
 
 export function BibliographySection() {
-  const { citations } = useLexicalRenderContext();
+  const context = useLexicalRenderContext();
+  const { citations } = context;
 
   const entries = useMemo(() => {
     if (citations.store.size === 0 || citations.citedIds.length === 0) {
@@ -13,6 +16,24 @@ export function BibliographySection() {
     const cslHtml = citations.cslProcessor?.bibliography([...citations.citedIds]) ?? [];
     return buildBibliographyEntries(citations.store, citations.citedIds, cslHtml);
   }, [citations]);
+
+  const renderOptions = useMemo(() => ({
+    citations: context.citations,
+    config: context.config,
+    docPath: context.docPath,
+    renderIndex: context.renderIndex,
+    resolveAssetUrl: context.resolveAssetUrl,
+  }), [context]);
+
+  const renderedEntries = useMemo(() => entries.map((entry, index) => {
+    const html = entry.renderedHtml
+      ? renderCitationTextInHtml(entry.renderedHtml, renderOptions)
+      : renderCitationTextHtml(`[${index + 1}] ${entry.plainText}`, renderOptions);
+    return {
+      ...entry,
+      renderedHtml: DOMPurify.sanitize(html),
+    };
+  }), [entries, renderOptions]);
 
   useEffect(() => {
     const assignAnchors = () => {
@@ -30,25 +51,22 @@ export function BibliographySection() {
       cancelAnimationFrame(raf);
       window.clearTimeout(timeout);
     };
-  }, [entries]);
+  }, [renderedEntries]);
 
-  if (entries.length === 0) {
+  if (renderedEntries.length === 0) {
     return null;
   }
-
-  const hasRenderedHtml = entries.some((entry) => typeof entry.renderedHtml === "string");
 
   return (
     <section className="cf-bibliography cf-lexical-bibliography">
       <h2 className="cf-bibliography-heading">References</h2>
       <div className="cf-bibliography-list">
-        {entries.map((entry, index) => (
+        {renderedEntries.map((entry) => (
           <div className="cf-bibliography-entry" id={`bib-${entry.id}`} key={entry.id}>
-            {entry.renderedHtml ? (
-              <span dangerouslySetInnerHTML={{ __html: entry.renderedHtml }} />
-            ) : (
-              <span>{`[${index + 1}] ${entry.plainText}`}</span>
-            )}
+            <div
+              className="cf-bibliography-entry-content"
+              dangerouslySetInnerHTML={{ __html: entry.renderedHtml }}
+            />
             {citations.backlinks.get(entry.id)?.length ? (
               <span className="cf-bibliography-backlinks">
                 {citations.backlinks.get(entry.id)?.map((backlink) => (
@@ -58,7 +76,7 @@ export function BibliographySection() {
                     href={`#cite-ref-${backlink.occurrence}`}
                     key={`${entry.id}-${backlink.occurrence}`}
                   >
-                    {hasRenderedHtml ? "\u21a9" : "\u21a9"}
+                    {"\u21a9"}
                   </a>
                 ))}
               </span>

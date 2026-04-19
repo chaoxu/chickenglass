@@ -191,7 +191,7 @@ function renderMarkdownChunk(markdown: string, options: RichHtmlOptions): string
     ));
 }
 
-function renderInlineMarkdownHtml(markdown: string, options: RichHtmlOptions): string {
+export function renderMarkdownInlineHtml(markdown: string, options: RichHtmlOptions): string {
   return withMarkdownRenderOptions(options, (env) =>
     sharedMarkdownRenderer.renderInline(
       injectReferenceMarkup(markdown, options.renderIndex, options.citations),
@@ -222,7 +222,7 @@ export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): stri
     referenceLabel,
   });
   const titleHtml = parsed.titleMarkdown
-    ? renderInlineMarkdownHtml(parsed.titleMarkdown, options)
+    ? renderMarkdownInlineHtml(parsed.titleMarkdown, options)
     : "";
   const bodyHtml = viewModel.kind === "include"
     ? `<p class="cf-lexical-include-path">${encodeHtml(parsed.bodyMarkdown.trim())}</p>`

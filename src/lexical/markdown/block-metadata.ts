@@ -20,6 +20,10 @@ export function humanizeBlockType(blockType: string | undefined): string {
   return BLOCK_LABELS.get(blockType) ?? `${blockType.slice(0, 1).toUpperCase()}${blockType.slice(1)}`;
 }
 
+export function isKnownBlockType(blockType: string): boolean {
+  return blockType === "include" || BLOCK_MANIFEST_BY_NAME.has(blockType);
+}
+
 export function normalizeBlockType(blockType: string | undefined, title: string | undefined): string {
   if (blockType) {
     return blockType;

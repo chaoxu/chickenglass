@@ -1,4 +1,4 @@
-import { humanizeBlockType, normalizeBlockType } from "./block-metadata";
+import { humanizeBlockType, isKnownBlockType, normalizeBlockType } from "./block-metadata";
 import {
   collectSourceBlockRanges,
   FENCED_DIV_START_RE,
@@ -93,15 +93,21 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
   const body = bodyMarkdown.trim();
 
   if (!header.startsWith("{")) {
+    const implicitBlockType = normalizeBlockType(undefined, header || "block");
+    const headerIsKnownBlockType = header
+      ? isKnownBlockType(implicitBlockType)
+        && humanizeBlockType(implicitBlockType).toLowerCase() === header.toLowerCase()
+      : false;
+    const title = header && !headerIsKnownBlockType ? header : undefined;
     return {
-      blockType: normalizeBlockType(undefined, header || "block"),
+      blockType: implicitBlockType,
       body,
       bodyMarkdown,
       closingFence,
       fence,
-      title: header || undefined,
-      titleMarkdown: header || undefined,
-      titleKind: header ? "implicit" : "none",
+      title,
+      titleMarkdown: title,
+      titleKind: title ? "implicit" : "none",
     };
   }
 

@@ -79,7 +79,13 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
   ), [citations, handleHoverEnd, handleHoverStart, renderIndex]);
 
   const hoverPortal = hoveredPreview
-    ? <ReferenceHoverPreviewPortal anchor={hoveredPreview.anchor} id={hoveredPreview.id} />
+    ? (
+        <ReferenceHoverPreviewPortal
+          anchor={hoveredPreview.anchor}
+          id={hoveredPreview.id}
+          onPointerEnter={handleHoverEnd}
+        />
+      )
     : null;
 
   if (!parsed) {

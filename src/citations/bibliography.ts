@@ -9,6 +9,7 @@ import {
 } from "./bibtex-parser";
 import type { CitationBacklink } from "./csl-processor";
 import { isSafeUrl } from "../lib/url-utils";
+import { containsMarkdownMath } from "../lib/markdown-math";
 
 const SAFE_CSL_ELEMENTS = [
   "a", "abbr", "b", "br", "cite", "code", "div", "em", "i", "mark",
@@ -109,11 +110,16 @@ export function buildBibliographyEntries(
     .filter((entry): entry is CslJsonItem => entry !== undefined);
 
   if (cslHtml.length > 0) {
-    return entries.map((entry, index) => ({
-      id: entry.id,
-      plainText: formatBibEntry(entry),
-      renderedHtml: sanitizeCslHtml(cslHtml[index] ?? ""),
-    }));
+    return entries.map((entry, index) => {
+      const plainText = formatBibEntry(entry);
+      return {
+        id: entry.id,
+        plainText,
+        renderedHtml: containsMarkdownMath(plainText)
+          ? undefined
+          : sanitizeCslHtml(cslHtml[index] ?? ""),
+      };
+    });
   }
 
   return sortBibEntries(entries).map((entry) => ({

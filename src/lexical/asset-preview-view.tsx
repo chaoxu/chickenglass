@@ -26,22 +26,26 @@ export function AssetPreviewView({
   if (layout === "block") {
     if (preview.kind === "loading") {
       return (
-        <div
-          className="cf-lexical-media-fallback cf-lexical-media-fallback--loading"
-          data-preview-state="loading"
-        >
-          {`Loading preview: ${src}`}
+        <div className="cf-lexical-media">
+          <div
+            className="cf-lexical-media-fallback cf-lexical-media-fallback--loading"
+            data-preview-state="loading"
+          >
+            {`Loading preview: ${src}`}
+          </div>
         </div>
       );
     }
 
     if (preview.kind === "error" || !preview.previewUrl) {
       return (
-        <div
-          className="cf-lexical-media-fallback cf-lexical-media-fallback--error"
-          data-preview-state="error"
-        >
-          {`Preview unavailable: ${src}`}
+        <div className="cf-lexical-media">
+          <div
+            className="cf-lexical-media-fallback cf-lexical-media-fallback--error"
+            data-preview-state="error"
+          >
+            {`Preview unavailable: ${src}`}
+          </div>
         </div>
       );
     }

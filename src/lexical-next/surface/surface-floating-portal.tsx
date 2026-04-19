@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type PointerEventHandler, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, hide, offset, shift, type Placement } from "@floating-ui/dom";
 
@@ -10,6 +10,7 @@ export interface SurfaceFloatingPortalProps {
   readonly className?: string;
   readonly offsetPx?: number;
   readonly onAnchorLost?: () => void;
+  readonly onPointerEnter?: PointerEventHandler<HTMLDivElement>;
   readonly placement?: Placement;
   readonly shiftPaddingPx?: number;
   readonly style?: CSSProperties;
@@ -23,6 +24,7 @@ export function SurfaceFloatingPortal({
   className,
   offsetPx = 6,
   onAnchorLost,
+  onPointerEnter,
   placement = "bottom-start",
   shiftPaddingPx = 5,
   style,
@@ -68,6 +70,7 @@ export function SurfaceFloatingPortal({
     <div
       className={className}
       data-visible={visible ? "true" : "false"}
+      onPointerEnter={onPointerEnter}
       ref={tooltipRef}
       style={{
         ...style,

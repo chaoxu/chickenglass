@@ -543,7 +543,10 @@ export const FootnoteReferenceRenderer = memo(function FootnoteReferenceRenderer
         {number ?? "?"}
       </sup>
       {hoverAnchor && previewHtml ? (
-        <FloatingPreviewPortal anchor={hoverAnchor}>
+        <FloatingPreviewPortal
+          anchor={hoverAnchor}
+          onPointerEnter={() => setHoverAnchor(null)}
+        >
           <div className="cf-hover-preview">
             <div className="cf-hover-preview-header">{`Footnote ${number ?? "?"}`}</div>
             <PreviewHtml className="cf-hover-preview-body" html={previewHtml} />

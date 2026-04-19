@@ -1,4 +1,4 @@
-import { useMemo, type JSX, type ReactNode } from "react";
+import { useMemo, type JSX, type PointerEventHandler, type ReactNode } from "react";
 import DOMPurify from "dompurify";
 
 import { SurfaceFloatingPortal } from "../lexical-next";
@@ -8,6 +8,7 @@ import {
   buildPreviewFencedDivRaw,
 } from "./markdown/block-syntax";
 import { parseMarkdownImage } from "./markdown/image-markdown";
+import { renderCitationTextHtml } from "./markdown/citation-text-html";
 import { formatCitationPreview } from "./markdown/reference-display";
 import {
   renderDisplayMathHtml,
@@ -29,14 +30,17 @@ export function PreviewHtml({
 export function FloatingPreviewPortal({
   anchor,
   children,
+  onPointerEnter,
 }: {
   readonly anchor: HTMLElement;
   readonly children: ReactNode;
+  readonly onPointerEnter?: PointerEventHandler<HTMLDivElement>;
 }) {
   return (
     <SurfaceFloatingPortal
       anchor={anchor}
       className="cf-hover-preview-tooltip"
+      onPointerEnter={onPointerEnter}
       placement="top"
       visible
       zIndex={50}
@@ -54,7 +58,12 @@ function buildReferencePreview(
   if (citationPreview) {
     return (
       <div className="cf-hover-preview">
-        <div className="cf-hover-preview-body cf-hover-preview-citation">{citationPreview}</div>
+        <PreviewHtml
+          className="cf-hover-preview-body cf-hover-preview-citation"
+          html={renderCitationTextHtml(citationPreview, {
+            config: context.config,
+          })}
+        />
       </div>
     );
   }
@@ -184,13 +193,15 @@ function usePreviewBuilder() {
 export function ReferenceHoverPreviewPortal({
   anchor,
   id,
+  onPointerEnter,
 }: {
   readonly anchor: HTMLElement;
   readonly id: string;
+  readonly onPointerEnter?: PointerEventHandler<HTMLDivElement>;
 }) {
   const buildPreview = usePreviewBuilder();
   return (
-    <FloatingPreviewPortal anchor={anchor}>
+    <FloatingPreviewPortal anchor={anchor} onPointerEnter={onPointerEnter}>
       {buildPreview(id)}
     </FloatingPreviewPortal>
   );

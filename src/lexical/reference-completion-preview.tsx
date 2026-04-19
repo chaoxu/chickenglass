@@ -5,6 +5,7 @@ import type { ReferenceCompletionCandidate } from "../state/reference-completion
 import {
   buildPreviewFencedDivRaw,
 } from "./markdown/block-syntax";
+import { renderCitationTextHtml } from "./markdown/citation-text-html";
 import type { RenderCitations } from "./markdown/reference-display";
 import type { RenderIndex } from "./markdown/reference-index";
 import { renderDisplayMathHtml, renderFencedDivHtml } from "./markdown/rich-html-preview";
@@ -18,10 +19,6 @@ export interface ReferenceCompletionPreviewRenderOptions {
 }
 
 export type ReferenceCompletionPreviewModel =
-  | {
-    readonly kind: "citation";
-    readonly text: string;
-  }
   | {
     readonly kind: "heading";
     readonly text: string;
@@ -38,7 +35,10 @@ export function buildReferenceCompletionPreviewModel(
   switch (candidate.previewSource.kind) {
     case "citation":
       return candidate.previewSource.text
-        ? { kind: "citation", text: candidate.previewSource.text }
+        ? {
+            html: renderCitationTextHtml(candidate.previewSource.text, options),
+            kind: "rich-html",
+          }
         : null;
     case "heading":
       return candidate.previewSource.text
@@ -83,10 +83,6 @@ export function ReferenceCompletionPreview({
 }) {
   if (!preview) {
     return null;
-  }
-
-  if (preview.kind === "citation") {
-    return <div className="cf-citation-preview">{preview.text}</div>;
   }
 
   if (preview.kind === "heading") {
