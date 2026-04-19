@@ -1,4 +1,7 @@
 /* global window */
+import { spawn } from "node:child_process";
+import { writeFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   DEBUG_EDITOR_SELECTOR,
   EDITOR_MODE,
@@ -14,7 +17,10 @@ import {
   revealPresentations,
   waitForEditorSurface,
 } from "./test-helpers/shared.mjs";
-import { waitForDebugBridge as waitForDebugBridgeImpl } from "./test-helpers/browser.mjs";
+import {
+  getBrowserHarnessMode,
+  waitForDebugBridge as waitForDebugBridgeImpl,
+} from "./test-helpers/browser.mjs";
 import { openRegressionDocument } from "./test-helpers/fixtures.mjs";
 import {
   DEV_SERVER_RUNTIME_ISSUE_IGNORES,
@@ -25,7 +31,10 @@ export { PUBLIC_SHOWCASE_FIXTURE, sleep } from "./test-helpers/shared.mjs";
 export {
   connectEditor,
   disconnectBrowser,
+  getBrowserHarnessMode,
+  installExternalEmbedStubs,
   normalizeConnectEditorOptions,
+  openBrowserHarness,
   waitForAppUrl,
   waitForDebugBridge,
 } from "./test-helpers/browser.mjs";
@@ -565,8 +574,102 @@ export async function resetEditorState(page) {
   );
 }
 
+function screenshotFormatForPath(path) {
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "jpeg";
+  if (path.endsWith(".webp")) return "webp";
+  return "png";
+}
+
+async function withTimeout(promise, timeoutMs, label) {
+  return Promise.race([
+    promise,
+    delay(timeoutMs).then(() => {
+      throw new Error(`${label} timed out after ${timeoutMs}ms`);
+    }),
+  ]);
+}
+
+async function screenshotViaCdp(page, path, options, timeoutMs) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const captureOptions = {
+      captureBeyondViewport: Boolean(options.fullPage),
+      format: screenshotFormatForPath(path),
+      fromSurface: true,
+    };
+    if (typeof options.quality === "number") {
+      captureOptions.quality = options.quality;
+    }
+    const { data } = await withTimeout(
+      session.send("Page.captureScreenshot", captureOptions),
+      timeoutMs,
+      "CDP screenshot",
+    );
+    await writeFile(path, Buffer.from(data, "base64"));
+  } finally {
+    void session.detach().catch(() => {});
+  }
+}
+
+async function screenshotViaMacOs(path) {
+  if (process.platform !== "darwin") {
+    return false;
+  }
+  await new Promise((resolve, reject) => {
+    const child = spawn("screencapture", ["-x", path], {
+      stdio: "ignore",
+    });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`screencapture exited with code=${code ?? "null"} signal=${signal ?? "null"}`));
+    });
+  });
+  return true;
+}
+
+async function screenshotViaPlaywright(page, path, options, timeoutMs) {
+  await withTimeout(
+    page.screenshot({ ...options, timeout: timeoutMs, path }),
+    timeoutMs + 500,
+    "Playwright screenshot",
+  );
+}
+
 export async function screenshot(page, path, options = {}) {
-  await page.screenshot({ path, ...options });
+  const timeoutMs = options.timeout ?? 10000;
+  const mode = getBrowserHarnessMode(page);
+
+  if (mode === "cdp" && await screenshotViaMacOs(path).catch(() => false)) {
+    return;
+  }
+
+  if (mode === "managed") {
+    try {
+      await screenshotViaPlaywright(page, path, options, timeoutMs);
+      return;
+    } catch {
+      // Fall through to CDP capture below. Managed Chromium usually succeeds
+      // through Playwright and preserves full-page options.
+    }
+  }
+
+  try {
+    await screenshotViaCdp(page, path, options, timeoutMs);
+    return;
+  } catch (cdpError) {
+    try {
+      await screenshotViaPlaywright(page, path, options, timeoutMs);
+      return;
+    } catch (playwrightError) {
+      const cdp = cdpError instanceof Error ? cdpError.message : String(cdpError);
+      const playwright = playwrightError instanceof Error ? playwrightError.message : String(playwrightError);
+      throw new Error(`Screenshot failed: CDP capture failed: ${cdp}; Playwright capture failed: ${playwright}`);
+    }
+  }
 }
 
 export async function captureDebugState(page, label = "capture") {

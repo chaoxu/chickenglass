@@ -11,33 +11,36 @@
 
 import console from "node:console";
 import process from "node:process";
-import { connectToChrome, findAppPage, inspectBrowserPages, parseChromeArgs } from "./chrome-common.mjs";
-import { screenshot } from "./test-helpers.mjs";
+import { parseChromeArgs } from "./chrome-common.mjs";
+import {
+  disconnectBrowser,
+  openBrowserHarness,
+  screenshot,
+} from "./test-helpers.mjs";
 
-const { port, url } = parseChromeArgs();
+const { browser: browserMode, headless, port, url } = parseChromeArgs();
 
-const browser = await connectToChrome(port);
-if (!browser) {
-  console.error(`Failed to connect to CDP on port ${port}.`);
-  console.error("Make sure Chrome is running: npm run chrome:app");
-  process.exit(1);
-}
-
-const page = await findAppPage(browser, { targetUrl: url });
-if (!page) {
-  const pages = await inspectBrowserPages(browser, { targetUrl: url });
-  const summary = pages.length > 0
-    ? pages.map((entry) => `[${entry.contextIndex}:${entry.pageIndex}] ${entry.url || "<blank>"}`).join(" | ")
-    : "<none>";
-  console.error(`No app page found for ${url}. Open pages: ${summary}`);
-  await browser.close();
+let page;
+try {
+  page = await openBrowserHarness({
+    browser: browserMode,
+    headless,
+    port,
+    url,
+  });
+} catch (error) {
+  console.error(`Failed to open browser harness for ${url}.`);
+  if (browserMode === "cdp") {
+    console.error(`Make sure Chrome is running on CDP port ${port}: npm run chrome:app`);
+  }
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
 
 console.log(`Connected to ${await page.title()} — ${page.url()}`);
 
-const path = `test-cdp-${Date.now()}.png`;
-await screenshot(page, path);
+const path = `/tmp/coflat-test-cdp-${Date.now()}.png`;
+await screenshot(page, path, { timeout: 1500 });
 console.log(`Screenshot saved: ${path}`);
 
-await browser.close();
+await disconnectBrowser(page);

@@ -13,11 +13,11 @@ import {
 } from "./perf-regression-lib.mjs";
 import {
   assertEditorHealth,
-  connectEditor,
   createArgParser,
   disconnectBrowser,
   formatRuntimeIssues,
   hasFixtureDocument,
+  openBrowserHarness,
   openFixtureDocument,
   resolveFixtureDocumentWithFallback,
   sleep,
@@ -457,21 +457,21 @@ export const scenarios = {
     description: "Reload the app and open demo/index.md in Lexical mode.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "lexical" });
+      await openFixtureDocument(page, "index.md", { mode: "lexical", project: "full-project" });
     },
   },
   "open-scroll-fixture": {
     description: "Reload the app and open the preferred heavy markdown fixture in Lexical mode.",
     defaultSettleMs: 700,
     run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical" });
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical", project: "full-project" });
     },
   },
   "mode-cycle-index": {
     description: "Reload the app, open demo/index.md, then cycle Source/Lexical.",
     defaultSettleMs: 500,
     run: async (page) => {
-      await openFixtureDocument(page, "index.md", { mode: "lexical" });
+      await openFixtureDocument(page, "index.md", { mode: "lexical", project: "full-project" });
       await switchToMode(page, "source");
       await switchToMode(page, "lexical");
     },
@@ -505,7 +505,7 @@ export const scenarios = {
     description: "Open the preferred heavy Lexical-mode scroll fixture, falling back to demo/index.md when private fixtures are unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical" });
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical", project: "full-project" });
       await waitForScrollableEditor(page);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
@@ -515,7 +515,7 @@ export const scenarios = {
     description: "Open the preferred heavy Source-mode scroll fixture, falling back to demo/index.md when private fixtures are unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
-      await openFixtureDocument(page, resolveScrollFixture(), { mode: "source" });
+      await openFixtureDocument(page, resolveScrollFixture(), { mode: "source", project: "full-project" });
       await waitForScrollableEditor(page);
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
@@ -727,7 +727,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.warn(`Perf fixture coverage: ${warning}`);
   }
 
-  const page = await connectEditor({
+  const page = await openBrowserHarness({
     browser: chromeArgs.browser,
     headless: chromeArgs.headless,
     port: chromeArgs.port,

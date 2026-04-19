@@ -19,10 +19,10 @@ export async function run(page) {
 
   const hiddenByDefault = await page.evaluate(() => ({
     displayEditor: Boolean(document.querySelector(".cf-lexical-display-math-editor")),
-    inlineEditor: Boolean(document.querySelector(".cf-lexical-inline-token-panel-editor")),
-    panelShell: Boolean(document.querySelector(".cf-lexical-inline-token-panel-shell")),
+    inlineMathEditor: [...document.querySelectorAll(".cf-lexical-inline-token-panel-editor")]
+      .some((editor) => editor instanceof HTMLInputElement && editor.value.startsWith("$")),
   }));
-  if (hiddenByDefault.displayEditor || hiddenByDefault.inlineEditor || hiddenByDefault.panelShell) {
+  if (hiddenByDefault.displayEditor || hiddenByDefault.inlineMathEditor) {
     return { pass: false, message: "math source editors should stay hidden until the formula is activated" };
   }
 

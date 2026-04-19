@@ -9,16 +9,15 @@ import { parseChromeArgs } from "./chrome-common.mjs";
 import {
   assertEditorHealth,
   captureDebugState,
-  connectEditor,
   createArgParser,
   disconnectBrowser,
   jumpToTextAnchor,
+  openBrowserHarness,
   openFixtureDocument,
   openFile,
   setCursor,
   sleep,
   switchToMode,
-  waitForDebugBridge,
 } from "./test-helpers.mjs";
 import {
   DEBUG_EDITOR_SELECTOR,
@@ -654,20 +653,13 @@ async function openBrowserPage(argv) {
   const { getIntFlag } = createArgParser(argv);
   const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
   const timeout = getIntFlag("--timeout", 15000);
-  const page = await connectEditor({
+  return openBrowserHarness({
     browser: chromeArgs.browser,
     headless: chromeArgs.headless,
     port: chromeArgs.port,
     timeout,
     url: chromeArgs.url,
   });
-
-  if (chromeArgs.browser === "cdp") {
-    await page.reload({ waitUntil: "load" });
-  }
-
-  await waitForDebugBridge(page);
-  return page;
 }
 
 async function runCaptureCommand(argv) {

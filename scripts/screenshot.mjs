@@ -9,24 +9,41 @@
  */
 
 import process from "node:process";
-import { connectEditor, openFile, screenshot, createArgParser, disconnectBrowser } from "./test-helpers.mjs";
+import { parseChromeArgs } from "./chrome-common.mjs";
+import {
+  createArgParser,
+  disconnectBrowser,
+  openBrowserHarness,
+  openFile,
+  screenshot,
+} from "./test-helpers.mjs";
 
 const args = process.argv.slice(2);
 const { getFlag } = createArgParser(args);
+const chromeArgs = parseChromeArgs(args);
 const output = getFlag("--output", `/tmp/coflat-screenshot-${Date.now()}.png`);
-const url = getFlag("--url");
 
 // Get positional arguments (first non-flag arg that isn't a flag value)
-const outputIdx = args.indexOf("--output");
+const flagValueIndexes = new Set(
+  ["--output", "--url", "--port", "--browser", "--profile"]
+    .map((flag) => args.indexOf(flag))
+    .filter((index) => index >= 0)
+    .map((index) => index + 1),
+);
 const file =
-  args.find((a, i) => !a.startsWith("-") && (outputIdx < 0 || i !== outputIdx + 1)) ??
+  args.find((arg, index) => !arg.startsWith("-") && !flagValueIndexes.has(index)) ??
   "index.md";
 
 let page;
 try {
-  page = await connectEditor(undefined, { url });
+  page = await openBrowserHarness({
+    browser: chromeArgs.browser,
+    headless: chromeArgs.headless,
+    port: chromeArgs.port,
+    url: chromeArgs.url,
+  });
 } catch {
-  console.error("Cannot connect to CDP.\nMake sure Chrome is running: npm run chrome");
+  console.error("Cannot open browser harness.\nFor CDP, make sure Chrome is running: npm run chrome");
   process.exit(1);
 }
 

@@ -12,9 +12,11 @@ import {
   sleep,
 } from "./shared.mjs";
 import { CORE_DEBUG_GLOBAL_NAMES } from "../../src/debug/debug-bridge-contract.js";
+import { externalEmbedStubRoutes } from "../../src/lexical/embed-providers.js";
 import { assertAppUrl } from "../tooling/http.mjs";
 
 const browserCleanupByPage = new WeakMap();
+const browserModeByPage = new WeakMap();
 
 export function normalizeConnectEditorOptions(portOrOptions = DEFAULT_PORT, options = {}) {
   const rawOptions = typeof portOrOptions === "object" && portOrOptions !== null
@@ -47,6 +49,17 @@ export async function waitForAppUrl(
   await assertAppUrl(url, options);
 }
 
+export async function installExternalEmbedStubs(page) {
+  for (const { providerId, routePattern } of externalEmbedStubRoutes()) {
+    await page.route(routePattern, (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: `<!doctype html><html><body data-coflat-embed-stub="${providerId}"></body></html>`,
+      })
+    ).catch(() => {});
+  }
+}
+
 export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) {
   const resolved = normalizeConnectEditorOptions(portOrOptions, options);
 
@@ -61,6 +74,7 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
     const page = await context.newPage();
     page.setDefaultTimeout(resolved.timeout);
     await page.goto(resolved.url, { waitUntil: "domcontentloaded" });
+    browserModeByPage.set(page, resolved.browser);
     browserCleanupByPage.set(page, async () => {
       await browser.close();
     });
@@ -90,10 +104,15 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
   }
   await page.bringToFront().catch(() => {});
   page.setDefaultTimeout(Math.min(resolved.timeout, 10000));
+  browserModeByPage.set(page, resolved.browser);
   browserCleanupByPage.set(page, async () => {
     await browser.close();
   });
   return page;
+}
+
+export function getBrowserHarnessMode(page) {
+  return browserModeByPage.get(page) ?? null;
 }
 
 export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
@@ -152,15 +171,41 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
   }
 }
 
+export async function openBrowserHarness(options = {}) {
+  const {
+    installEmbedStubs = true,
+    reload,
+    waitForBridge = true,
+    ...connectOptions
+  } = options;
+  const resolved = normalizeConnectEditorOptions(connectOptions);
+  const page = await connectEditor(resolved);
+  const shouldReload = reload ?? resolved.browser === "cdp";
+
+  if (shouldReload) {
+    await page.reload({ waitUntil: "load" });
+  }
+  if (waitForBridge) {
+    await waitForDebugBridge(page, { timeout: resolved.timeout });
+  }
+  if (installEmbedStubs) {
+    await installExternalEmbedStubs(page);
+  }
+
+  return page;
+}
+
 export async function disconnectBrowser(page) {
   try {
     const cleanup = browserCleanupByPage.get(page);
     if (cleanup) {
       browserCleanupByPage.delete(page);
+      browserModeByPage.delete(page);
       await cleanup();
       return;
     }
 
+    browserModeByPage.delete(page);
     await page.context().browser()?.close();
   } catch {
     // Ignore disconnect errors — the browser may already be closed.

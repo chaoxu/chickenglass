@@ -24,22 +24,19 @@ import {
   expandBrowserTestSelection,
   formatBrowserTestList,
 } from "./browser-test-groups.mjs";
-import { externalEmbedStubRoutes } from "../src/lexical/embed-providers.js";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import {
-  connectEditor,
   createArgParser,
   disconnectBrowser,
   formatRuntimeIssues,
+  openBrowserHarness,
   resetEditorState,
-  waitForDebugBridge,
   withRuntimeIssueCapture,
 } from "./test-helpers.mjs";
 import { isMissingFixtureError } from "./test-helpers/fixtures.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
-const EXTERNAL_EMBED_STUB_ROUTES = externalEmbedStubRoutes();
 
 /** Dynamically import all test modules from the regression-tests directory. */
 export async function loadTests() {
@@ -63,17 +60,6 @@ export async function loadTests() {
   }
 
   return tests;
-}
-
-async function installExternalEmbedStubs(page) {
-  for (const { providerId, routePattern } of EXTERNAL_EMBED_STUB_ROUTES) {
-    await page.route(routePattern, (route) =>
-      route.fulfill({
-        contentType: "text/html; charset=utf-8",
-        body: `<!doctype html><html><body data-coflat-embed-stub="${providerId}"></body></html>`,
-      })
-    ).catch(() => {});
-  }
 }
 
 export async function main() {
@@ -114,7 +100,7 @@ export async function main() {
   // Connect to the browser harness
   let page;
   try {
-    page = await connectEditor({
+    page = await openBrowserHarness({
       browser: chromeArgs.browser,
       headless: chromeArgs.headless,
       port: chromeArgs.port,
@@ -127,19 +113,6 @@ export async function main() {
     console.error("Optional manual browser lane:");
     console.error("  2. pnpm chrome");
     console.error(`\nError: ${err.message}`);
-    process.exit(1);
-  }
-
-  // Wait for the app to be ready
-  try {
-    if (chromeArgs.browser === "cdp") {
-      await page.reload({ waitUntil: "load" });
-    }
-    await waitForDebugBridge(page);
-    await installExternalEmbedStubs(page);
-  } catch {
-    console.error("Timed out waiting for debug bridge (__app, __cfDebug).");
-    console.error("The dev server may not have finished loading.");
     process.exit(1);
   }
 
