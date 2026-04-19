@@ -381,7 +381,16 @@ export function formatRuntimeIssues(issues, limit = 3) {
 export async function waitForBrowserSettled(page, frames = 2) {
   await page.evaluate(async (frameCount) => {
     for (let index = 0; index < frameCount; index += 1) {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        requestAnimationFrame(finish);
+        setTimeout(finish, 50);
+      });
     }
   }, frames);
 }

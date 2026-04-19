@@ -27,6 +27,7 @@ import {
 } from "./test-helpers.mjs";
 import { DEBUG_EDITOR_SELECTOR } from "./test-helpers/shared.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
+import { startOrReuseDevServer } from "./dev-server.mjs";
 import {
   TOOLING_FIXTURES,
   fixtureCoverageWarning,
@@ -545,6 +546,7 @@ Options:
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
+  --no-server              Do not start/reuse Vite; connect to --url/default URL directly
   --heavy-doc              Use long timeouts/settles for heavy-doc automation
   -h, --help               Show this help text
 
@@ -579,6 +581,19 @@ function parseCliArgs(argv = process.argv.slice(2)) {
     heavyDoc,
     chromeArgs: parseChromeArgs(options, { browser: "managed" }),
     ...parser,
+  };
+}
+
+export function resolvePerfServerPlan({ chromeUrl, explicitUrl, noServer }) {
+  if (noServer) {
+    return {
+      ownServer: false,
+      url: explicitUrl ?? chromeUrl,
+    };
+  }
+  return {
+    ownServer: true,
+    url: explicitUrl,
   };
 }
 
@@ -705,7 +720,7 @@ function printComparison(result) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const { command, options, heavyDoc, chromeArgs, getFlag, getIntFlag } = parseCliArgs(argv);
+  const { command, options, heavyDoc, chromeArgs, getFlag, getIntFlag, hasFlag } = parseCliArgs(argv);
   if (options.includes("--help") || options.includes("-h")) {
     printUsage();
     return;
@@ -727,14 +742,23 @@ export async function main(argv = process.argv.slice(2)) {
     console.warn(`Perf fixture coverage: ${warning}`);
   }
 
-  const page = await openBrowserHarness({
-    browser: chromeArgs.browser,
-    headless: chromeArgs.headless,
-    port: chromeArgs.port,
-    url: chromeArgs.url,
+  const serverPlan = resolvePerfServerPlan({
+    chromeUrl: chromeArgs.url,
+    explicitUrl: getFlag("--url"),
+    noServer: hasFlag("--no-server"),
   });
+  const server = serverPlan.ownServer
+    ? await startOrReuseDevServer({ url: serverPlan.url })
+    : { url: serverPlan.url, stop: async () => {} };
+  let page = null;
   try {
-    const appUrl = getFlag("--url") ?? page.url();
+    page = await openBrowserHarness({
+      browser: chromeArgs.browser,
+      headless: chromeArgs.headless,
+      port: chromeArgs.port,
+      url: server.url,
+    });
+    const appUrl = server.url;
     const snapshots = await runScenarioSamples(page, scenarioName, iterations, warmup, settleMs, appUrl);
     const report = buildPerfRegressionReport({
       scenario: scenarioName,
@@ -793,8 +817,11 @@ export async function main(argv = process.argv.slice(2)) {
 
     throw new Error(`Unknown command "${command}"`);
   } finally {
-    await discardDirtyPerfState(page);
-    await disconnectBrowser(page);
+    if (page) {
+      await discardDirtyPerfState(page);
+      await disconnectBrowser(page);
+    }
+    await server.stop();
   }
 }
 

@@ -4,12 +4,40 @@ import {
   TYPING_BURST_CASES,
   TYPING_BURST_REQUIRED_METRICS,
   findTypingBurstPositions,
+  resolvePerfServerPlan,
   scenarios,
   typingBurstMetrics,
   unavailableTypingBurstCases,
 } from "./perf-regression.mjs";
 
 describe("perf regression scenarios", () => {
+  it("owns the dev-server by default and preserves explicit opt-out lanes", () => {
+    expect(resolvePerfServerPlan({
+      chromeUrl: "http://localhost:5173",
+      explicitUrl: undefined,
+      noServer: false,
+    })).toEqual({
+      ownServer: true,
+      url: undefined,
+    });
+    expect(resolvePerfServerPlan({
+      chromeUrl: "http://localhost:5173",
+      explicitUrl: "http://localhost:5178",
+      noServer: false,
+    })).toEqual({
+      ownServer: true,
+      url: "http://localhost:5178",
+    });
+    expect(resolvePerfServerPlan({
+      chromeUrl: "http://localhost:5173",
+      explicitUrl: undefined,
+      noServer: true,
+    })).toEqual({
+      ownServer: false,
+      url: "http://localhost:5173",
+    });
+  });
+
   it("registers typing-lexical-burst with the expected benchmark docs and required metrics", () => {
     const availableCases = availableTypingBurstCases().map(({ key, displayPath }) => ({ key, displayPath }));
     expect(scenarios["typing-lexical-burst"]).toMatchObject({
