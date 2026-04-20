@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { $getNodeByKey, type LexicalEditor, type NodeKey } from "lexical";
 
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
-import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { getLexicalMarkdown } from "./markdown";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import {
@@ -17,6 +16,7 @@ import {
   mapVisibleTextSelectionToMarkdown,
 } from "./source-selection";
 import { readSourcePositionFromElement } from "./source-position-plugin";
+import { createSourceSpanIndex } from "./source-spans";
 import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
 
 export type StructureSourceSelectionMapper = (
@@ -106,26 +106,18 @@ export function footnoteDefinitionBodySelectionMapper(raw: string): StructureSou
   };
 }
 
-function readRawBlockSourcePosition(
+export function readRawBlockSourcePosition(
   editor: LexicalEditor,
   nodeKey: NodeKey,
 ): number | null {
-  const raw = editor.getEditorState().read(() => {
-    const node = $getNodeByKey(nodeKey);
-    return $isRawBlockNode(node) ? node.getRaw() : null;
-  });
-  if (!raw) {
-    return null;
-  }
-
   const markdown = getLexicalMarkdown(editor);
-  const matchingRanges = collectSourceBlockRanges(markdown).filter((range) => range.raw === raw);
-  if (matchingRanges.length === 1) {
-    return matchingRanges[0].from;
-  }
-
-  const directIndex = markdown.indexOf(raw);
-  return directIndex >= 0 ? directIndex : null;
+  return editor.getEditorState().read(() => {
+    const node = $getNodeByKey(nodeKey);
+    if (!$isRawBlockNode(node)) {
+      return null;
+    }
+    return createSourceSpanIndex(markdown).getNodeStart(node);
+  });
 }
 
 function readStructureBlockPosition(editor: LexicalEditor, nodeKey: NodeKey): number | null {
