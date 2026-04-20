@@ -95,7 +95,8 @@ function debugSessionSinkPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
-  const disableHmr = mode === "show" || process.env.COFLAT_DISABLE_HMR === "1";
+  const forceHmr = process.env.COFLAT_ENABLE_HMR === "1";
+  const disableHmr = !forceHmr && (mode === "show" || process.env.COFLAT_DISABLE_HMR === "1");
   return {
     plugins: [react(), tailwindcss(), debugSessionSinkPlugin()],
     define: {

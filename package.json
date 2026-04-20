@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "vite",
     "dev:show": "vite --mode show --host localhost --port 5173 --strictPort",
+    "dev:show:hmr": "COFLAT_ENABLE_HMR=1 vite --mode show --host localhost --port 5173 --strictPort",
     "preview": "vite preview --host 0.0.0.0",
     "dev:worktree": "node scripts/dev-worktree.mjs",
     "dev:worktree:list": "node scripts/dev-worktree.mjs list",

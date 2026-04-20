@@ -22,10 +22,14 @@ Use the managed browser harness for runtime/editor flows:
 
 ```
 pnpm dev:show
+pnpm dev:show:hmr
 pnpm test:browser -- --filter <name>
 ```
 
 `pnpm dev:show` is a stable no-HMR review lane on `http://localhost:5173`.
+Use `pnpm dev:show:hmr` for show-mode behavior with Vite HMR during fast
+iteration. `pnpm preview` still requires rebuild/restart because it serves the
+compiled bundle.
 
 ### Browser Repro Harness
 
