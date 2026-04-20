@@ -415,12 +415,12 @@ export function DestructiveKeySelectionSyncPlugin(): null {
           }
           cleanupKeyUp();
           let unregister: (() => void) | null = null;
-          let fallback = 0;
+          let fallback: ReturnType<typeof setTimeout> | null = null;
           const restoreAfterUpdate = () => {
             unregister?.();
-            if (fallback !== 0) {
+            if (fallback !== null) {
               clearTimeout(fallback);
-              fallback = 0;
+              fallback = null;
             }
             runPendingRestore();
           };
