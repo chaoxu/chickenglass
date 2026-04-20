@@ -31,6 +31,8 @@ import {
   type StructureEditState,
   type StructureEditSurface,
 } from "../state/structure-edit";
+import { RawBlockNode } from "./nodes/raw-block-node";
+import { TableNode } from "./nodes/table-node";
 
 export interface ActivateStructureEditRequest {
   readonly blockKey: NodeKey;
@@ -196,27 +198,6 @@ export function StructureEditProvider({
         },
         COMMAND_PRIORITY_LOW,
       ),
-      editor.registerUpdateListener(({ editorState }) => {
-        const current = stateRef.current;
-        if (!isStructureEditActive(current)) {
-          return;
-        }
-
-        let nodeMissing = false;
-        editorState.read(() => {
-          nodeMissing = $getNodeByKey(current.blockKey) === null;
-        });
-
-        if (!nodeMissing) {
-          return;
-        }
-
-        setState((value) => deactivateStructureEditIfMatch(
-          value,
-          current.blockKey,
-          current.surface,
-        ));
-      }),
       editor.registerRootListener((rootElement, previousRootElement) => {
         previousRootElement?.removeEventListener("focusout", handleRootFocusOut, true);
 
@@ -232,6 +213,36 @@ export function StructureEditProvider({
       clearFocusOutTimer,
     );
   }, [editor]);
+
+  useEffect(() => {
+    if (!isStructureEditActive(state)) {
+      return undefined;
+    }
+
+    const { blockKey, surface } = state;
+    const deactivateIfNodeMissing = (editorState = editor.getEditorState()) => {
+      let nodeMissing = false;
+      editorState.read(() => {
+        nodeMissing = $getNodeByKey(blockKey) === null;
+      });
+
+      if (!nodeMissing) {
+        return;
+      }
+
+      setState((value) => deactivateStructureEditIfMatch(value, blockKey, surface));
+    };
+
+    deactivateIfNodeMissing();
+    const handleMutations = (mutations: ReadonlyMap<NodeKey, unknown>) => {
+      if (mutations.has(blockKey)) {
+        deactivateIfNodeMissing();
+      }
+    };
+    return state.variant === "table"
+      ? editor.registerMutationListener(TableNode, handleMutations)
+      : editor.registerMutationListener(RawBlockNode, handleMutations);
+  }, [editor, state]);
 
   const value = useMemo<StructureEditContextValue>(() => ({
     activate: (request) => editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, request),

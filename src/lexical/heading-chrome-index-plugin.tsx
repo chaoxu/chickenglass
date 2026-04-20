@@ -1,12 +1,72 @@
 import { useEffect, useMemo } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { $isHeadingNode, HeadingNode } from "@lexical/rich-text";
+import {
+  $getNodeByKey,
+  $isRootNode,
+  mergeRegister,
+  type EditorState,
+  type LexicalNode,
+  type NodeMutation,
+  type NodeKey,
+  TextNode,
+} from "lexical";
 
 import { headingEntriesEqual, type HeadingEntry } from "../app/markdown/headings";
 import { useHeadingIndexStore } from "../state/heading-index-store";
 import { syncHeadingChrome } from "./heading-chrome-plugin";
 import { $collectHeadingEntries, mergeHeadingDomPositions } from "./heading-index-plugin";
 
-// Single update-driven sync for both heading DOM chrome
+function $nodeOrAncestorIsHeading(node: LexicalNode | null): boolean {
+  let current: LexicalNode | null = node;
+  while (current) {
+    if ($isHeadingNode(current)) {
+      return true;
+    }
+    if ($isRootNode(current)) {
+      return false;
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
+function textMutationsMayAffectHeadings(
+  editorState: EditorState,
+  previousEditorState: EditorState,
+  mutations: ReadonlyMap<NodeKey, NodeMutation>,
+): boolean {
+  if (mutations.size === 0) {
+    return false;
+  }
+
+  let affectsHeadings = false;
+  editorState.read(() => {
+    for (const key of mutations.keys()) {
+      if ($nodeOrAncestorIsHeading($getNodeByKey(key))) {
+        affectsHeadings = true;
+        return;
+      }
+    }
+  });
+
+  if (affectsHeadings) {
+    return true;
+  }
+
+  previousEditorState.read(() => {
+    for (const [key, mutation] of mutations) {
+      if (mutation === "destroyed" && $nodeOrAncestorIsHeading($getNodeByKey(key))) {
+        affectsHeadings = true;
+        return;
+      }
+    }
+  });
+
+  return affectsHeadings;
+}
+
+// Single mutation-aware sync for both heading DOM chrome
 // (`data-coflat-heading-*` attributes) and the Zustand heading index store.
 // Collapsing what used to be two separate plugins into one avoids walking the
 // heading list twice per keystroke and keeps DOM attributes and store entries
@@ -40,15 +100,33 @@ export function HeadingChromeAndIndexPlugin({
 
     sync();
 
-    const unregister = editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-      // Cursor-only updates can't add/remove/renumber a heading, so skipping
-      // them avoids a per-keystroke DOM write and heading walk.
-      if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
-      sync();
-    });
+    const unregisterMutationListener = mergeRegister(
+      editor.registerMutationListener(
+        HeadingNode,
+        (mutations) => {
+          if (mutations.size > 0) {
+            sync();
+          }
+        },
+      ),
+      editor.registerMutationListener(
+        TextNode,
+        (mutations, { prevEditorState }) => {
+          if (
+            textMutationsMayAffectHeadings(
+              editor.getEditorState(),
+              prevEditorState,
+              mutations,
+            )
+          ) {
+            sync();
+          }
+        },
+      ),
+    );
 
     return () => {
-      unregister();
+      unregisterMutationListener();
       store.getState().reset();
     };
   }, [editor, syncToken]);

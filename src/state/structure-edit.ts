@@ -17,6 +17,7 @@ export type StructureEditSurface =
   | "block-opener"
   | "display-math-source"
   | "embed-url"
+  | "footnote-source"
   | "frontmatter-source"
   | "include-path"
   | "table-cell";

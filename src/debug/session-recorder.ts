@@ -67,6 +67,10 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+function isRecordingEnabled(): boolean {
+  return isBrowser() && useDevSettings.getState().commandLogging;
+}
+
 function parseLocalEvents(): PendingEvent[] {
   if (!isBrowser()) return [];
   try {
@@ -130,7 +134,9 @@ function activeElementSnapshot(): ElementSnapshot | null {
   if (!isBrowser()) return null;
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) return null;
-  const text = active.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  const text = active.isContentEditable
+    ? ""
+    : active.textContent?.replace(/\s+/g, " ").trim() ?? "";
   return {
     className: typeof active.className === "string" && active.className.length > 0
       ? active.className
@@ -140,6 +146,14 @@ function activeElementSnapshot(): ElementSnapshot | null {
     tag: active.tagName.toLowerCase(),
     text: text.length > 0 ? text.slice(0, 160) : null,
   };
+}
+
+function nodeTextSnapshot(node: Node | null): string | null {
+  if (!node || node.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
+  const text = node.textContent ?? "";
+  return text.length > 0 ? text.slice(0, 160) : null;
 }
 
 function readSettingsSnapshot(): SettingsSnapshot {
@@ -167,9 +181,9 @@ function currentSelection(): EditorSelectionSnapshot | null {
   if (!selection) return null;
   return {
     anchorOffset: selection.anchorOffset,
-    anchorText: selection.anchorNode?.textContent?.slice(0, 160) ?? null,
+    anchorText: nodeTextSnapshot(selection.anchorNode),
     focusOffset: selection.focusOffset,
-    focusText: selection.focusNode?.textContent?.slice(0, 160) ?? null,
+    focusText: nodeTextSnapshot(selection.focusNode),
     selectedText: selection.toString().slice(0, 160),
   };
 }
@@ -231,6 +245,7 @@ function scheduleFlush(): void {
 export function recordDebugSessionEvent(
   event: Omit<DebugSessionEvent, "context"> & { context?: DebugSessionEvent["context"] },
 ): void {
+  if (!isRecordingEnabled()) return;
   const nextSessionId = ensureSessionId();
   if (!nextSessionId) return;
   ensureLifecycleHooks();

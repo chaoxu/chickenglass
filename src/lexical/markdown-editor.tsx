@@ -48,6 +48,7 @@ import { EmbeddedFieldFlushProvider } from "./embedded-field-flush-registry";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import {
+  DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
   FormatEventPlugin,
   repairBlankClickSelection,
@@ -417,6 +418,7 @@ export function LexicalMarkdownEditor({
                 />
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
                 {editable ? <InlineTokenBoundaryPlugin /> : null}
+                {!isSourceMode && editable ? <DestructiveKeySelectionSyncPlugin /> : null}
                 {isSourceMode ? (
                   <PlainTextPlugin
                     contentEditable={(

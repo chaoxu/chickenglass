@@ -76,6 +76,7 @@ import {
   SelectionAlwaysOnPlugin,
 } from "./rich-editor-plugins";
 import {
+  DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
   FormatEventPlugin,
   repairBlankClickSelection,
@@ -258,6 +259,7 @@ export function LexicalRichMarkdownEditor({
                 />
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
                 {editable ? <InlineTokenBoundaryPlugin /> : null}
+                {editable ? <DestructiveKeySelectionSyncPlugin /> : null}
                 <MarkdownSyncPlugin
                   doc={doc}
                   lastCommittedDocRef={lastCommittedDocRef}

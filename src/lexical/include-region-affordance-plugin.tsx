@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { mergeRegister } from "lexical";
 
 import {
   SurfacePortal,
@@ -65,19 +64,14 @@ export function IncludeRegionAffordancePlugin({
     });
   }, []);
   const subscribeAffordanceUpdates = useCallback((sync: SurfaceOverlaySync) =>
-    mergeRegister(
-      editor.registerUpdateListener(() => {
+    useEditorTelemetryStore.subscribe((state, previous) => {
+      if (
+        state.cursorPos !== previous.cursorPos
+        || state.viewportFrom !== previous.viewportFrom
+      ) {
         sync();
-      }),
-      useEditorTelemetryStore.subscribe((state, previous) => {
-        if (
-          state.cursorPos !== previous.cursorPos
-          || state.viewportFrom !== previous.viewportFrom
-        ) {
-          sync();
-        }
-      }),
-    ), [editor]);
+      }
+    }), []);
 
   useSurfaceOverlaySync({
     onClear: clearAffordance,

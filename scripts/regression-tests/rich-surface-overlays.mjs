@@ -40,7 +40,7 @@ export async function run(page) {
         }
       : null;
 
-    const codeBlock = document.querySelector(".cf-codeblock-body")?.parentElement;
+    const codeBlock = document.querySelector(".cf-codeblock-body");
     const codeLabel = document.querySelector(".cf-codeblock-language");
     const codeCopy = document.querySelector(".cf-codeblock-copy");
     if (

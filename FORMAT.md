@@ -496,7 +496,7 @@ These standard markdown features are **not canonical**, even if Pandoc's markdow
 
 | Feature | Reason | Alternative |
 |---------|--------|-------------|
-| Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks (```) |
+| Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks |
 | `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: {.blockquote}` fenced divs |
 
 The read/export pipeline still parses standard `>` blockquotes for compatibility with imported markdown, but the editor authoring format does not use them.

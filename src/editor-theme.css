@@ -191,6 +191,22 @@
   white-space: normal;
 }
 
+.cf-lexical-editor--rich > :is(
+  .cf-lexical-paragraph,
+  .cf-lexical-heading,
+  .cf-lexical-quote,
+  .cf-lexical-list,
+  .cf-lexical-code-block
+) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2.4em;
+}
+
+.cf-lexical-editor--rich > [data-lexical-decorator] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 8rem;
+}
+
 .cf-lexical-editor--inline-surface {
   display: inline;
   min-height: auto;

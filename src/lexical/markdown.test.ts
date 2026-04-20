@@ -32,6 +32,31 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
+  it("imports frontmatter as a structured raw block", () => {
+    const editor = createHeadlessCoflatEditor();
+    const markdown = [
+      "---",
+      "title: Test Document",
+      "---",
+      "",
+      "# Intro",
+    ].join("\n");
+
+    setLexicalMarkdown(editor, markdown);
+
+    editor.getEditorState().read(() => {
+      const firstChild = $getRoot().getFirstChild();
+      expect($isRawBlockNode(firstChild)).toBe(true);
+      if (!$isRawBlockNode(firstChild)) {
+        return;
+      }
+      expect(firstChild.getVariant()).toBe("frontmatter");
+      expect(firstChild.getRaw()).toBe(["---", "title: Test Document", "---"].join("\n"));
+    });
+
+    expect(getLexicalMarkdown(editor)).toBe(markdown);
+  });
+
   it("round-trips inline math in both supported delimiter styles", () => {
     const markdown = "Inline $e^{i\\pi}+1=0$ and \\(x^2 + y^2\\).";
     expect(roundTripMarkdown(markdown)).toBe(markdown);

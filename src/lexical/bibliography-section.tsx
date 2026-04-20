@@ -1,11 +1,13 @@
 import DOMPurify from "dompurify";
 import { useEffect, useMemo } from "react";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
 import { buildBibliographyEntries } from "../citations/bibliography";
 import { useLexicalRenderContext } from "./render-context";
 import { renderCitationTextHtml, renderCitationTextInHtml } from "./markdown/citation-text-html";
 
 export function BibliographySection() {
+  const [editor] = useLexicalComposerContext();
   const context = useLexicalRenderContext();
   const { citations } = context;
 
@@ -37,7 +39,11 @@ export function BibliographySection() {
 
   useEffect(() => {
     const assignAnchors = () => {
-      const citationNodes = [...document.querySelectorAll<HTMLElement>("[data-coflat-citation='true']")];
+      const root = editor.getRootElement();
+      if (!root) {
+        return;
+      }
+      const citationNodes = [...root.querySelectorAll<HTMLElement>("[data-coflat-citation='true']")];
       citationNodes.forEach((node, index) => {
         node.id = `cite-ref-${index + 1}`;
       });
@@ -51,7 +57,7 @@ export function BibliographySection() {
       cancelAnimationFrame(raf);
       window.clearTimeout(timeout);
     };
-  }, [renderedEntries]);
+  }, [editor, renderedEntries]);
 
   if (renderedEntries.length === 0) {
     return null;

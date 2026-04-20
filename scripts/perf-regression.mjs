@@ -89,10 +89,12 @@ export const TYPING_BURST_REQUIRED_METRICS = [
 ];
 
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
+const DEBUG_SCROLL_SURFACE_SELECTOR = ".cf-lexical-surface--scroll";
 
 async function runSteppedScroll(page) {
-  return page.evaluate(async (editorSelector) => {
-    const editor = document.querySelector(editorSelector);
+  return page.evaluate(async ({ editorSelector, scrollSurfaceSelector }) => {
+    const editor = document.querySelector(scrollSurfaceSelector)
+      ?? document.querySelector(editorSelector);
     if (!(editor instanceof HTMLElement)) {
       throw new Error("Missing lexical editor element.");
     }
@@ -117,7 +119,10 @@ async function runSteppedScroll(page) {
       maxStepMs: Math.max(...steps, 0),
       totalMs: total,
     };
-  }, DEBUG_EDITOR_SELECTOR);
+  }, {
+    editorSelector: DEBUG_EDITOR_SELECTOR,
+    scrollSurfaceSelector: DEBUG_SCROLL_SURFACE_SELECTOR,
+  });
 }
 
 function steppedScrollMetrics(result) {
@@ -343,11 +348,15 @@ function validatePerfFixtureCoverage(scenarioName) {
 
 async function waitForScrollableEditor(page) {
   await page.waitForFunction(
-    (editorSelector) => {
-      const editor = document.querySelector(editorSelector);
+    ({ editorSelector, scrollSurfaceSelector }) => {
+      const editor = document.querySelector(scrollSurfaceSelector)
+        ?? document.querySelector(editorSelector);
       return editor instanceof HTMLElement && editor.scrollHeight > editor.clientHeight;
     },
-    DEBUG_EDITOR_SELECTOR,
+    {
+      editorSelector: DEBUG_EDITOR_SELECTOR,
+      scrollSurfaceSelector: DEBUG_SCROLL_SURFACE_SELECTOR,
+    },
     { timeout: 10000 },
   );
 }

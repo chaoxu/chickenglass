@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { LexicalEditor, NodeKey } from "lexical";
+import { TextNode, type LexicalEditor, type NodeKey } from "lexical";
 
 import type { RevealAdapter } from "./cursor-reveal-adapters";
 import { renderRevealChromePreview } from "./reveal-chrome";
@@ -46,11 +46,20 @@ function useLexicalElementByKey(
   ));
 
   useEffect(() => {
+    if (!key) {
+      setElement(null);
+      return undefined;
+    }
+
     const resolve = () => {
-      setElement(key ? editor.getElementByKey(key) : null);
+      setElement(editor.getElementByKey(key));
     };
     resolve();
-    return editor.registerUpdateListener(resolve);
+    return editor.registerMutationListener(TextNode, (mutations) => {
+      if (mutations.has(key)) {
+        resolve();
+      }
+    });
   }, [editor, key]);
 
   return element;

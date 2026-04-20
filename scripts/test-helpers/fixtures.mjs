@@ -226,10 +226,9 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   await waitForEditorSurface(page);
   await page.waitForFunction(
     ({ method, path, expectedLength, expectedPrefix, expectedSuffix, verifyContent }) => {
-      const text = window.__editor?.getDoc();
       const editorText = window.__editor?.peekDoc?.() ?? null;
       const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
-      if (typeof text !== "string" || typeof editorText !== "string" || currentPath !== path) {
+      if (typeof editorText !== "string" || currentPath !== path) {
         return false;
       }
 
@@ -238,16 +237,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
       }
 
       if (method === "openFile" || method === "loadFixtureProject") {
-        return text.startsWith(expectedPrefix) &&
-          text.endsWith(expectedSuffix) &&
-          editorText.startsWith(expectedPrefix) &&
+        return editorText.startsWith(expectedPrefix) &&
           editorText.endsWith(expectedSuffix);
       }
 
-      return text.length === expectedLength &&
-        text.startsWith(expectedPrefix) &&
-        text.endsWith(expectedSuffix) &&
-        editorText.length === expectedLength &&
+      return editorText.length === expectedLength &&
         editorText.startsWith(expectedPrefix) &&
         editorText.endsWith(expectedSuffix);
     },

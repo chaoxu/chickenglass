@@ -41,12 +41,19 @@ export function useUserDrivenSelectionReveal(
       onIntent();
     };
 
-    document.addEventListener("pointerdown", markUserSelectionIntent, true);
-    document.addEventListener("keydown", markUserSelectionIntent, true);
-    return () => {
-      document.removeEventListener("pointerdown", markUserSelectionIntent, true);
-      document.removeEventListener("keydown", markUserSelectionIntent, true);
-    };
+    return editor.registerRootListener((rootElement, previousRootElement) => {
+      previousRootElement?.removeEventListener("pointerdown", markUserSelectionIntent, true);
+      previousRootElement?.removeEventListener("keydown", markUserSelectionIntent, true);
+      if (!rootElement) {
+        return;
+      }
+      rootElement.addEventListener("pointerdown", markUserSelectionIntent, true);
+      rootElement.addEventListener("keydown", markUserSelectionIntent, true);
+      return () => {
+        rootElement.removeEventListener("pointerdown", markUserSelectionIntent, true);
+        rootElement.removeEventListener("keydown", markUserSelectionIntent, true);
+      };
+    });
   }, [editor, onIntent]);
 }
 
@@ -95,10 +102,16 @@ export function usePointerSelectionReveal(
       }, 0);
     };
 
-    document.addEventListener("pointerup", handlePointerUp, true);
-    return () => {
-      document.removeEventListener("pointerup", handlePointerUp, true);
-    };
+    return editor.registerRootListener((rootElement, previousRootElement) => {
+      previousRootElement?.removeEventListener("pointerup", handlePointerUp, true);
+      if (!rootElement) {
+        return;
+      }
+      rootElement.addEventListener("pointerup", handlePointerUp, true);
+      return () => {
+        rootElement.removeEventListener("pointerup", handlePointerUp, true);
+      };
+    });
   }, [adapters, canOpenReveal, editor, onNoRevealCandidate]);
 }
 
@@ -173,10 +186,16 @@ export function registerDecoratorKeyboardBoundaryRevealEntry(
     editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, request);
   };
 
-  document.addEventListener("keydown", onKeyDown, true);
-  return () => {
-    document.removeEventListener("keydown", onKeyDown, true);
-  };
+  return editor.registerRootListener((rootElement, previousRootElement) => {
+    previousRootElement?.removeEventListener("keydown", onKeyDown, true);
+    if (!rootElement) {
+      return;
+    }
+    rootElement.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      rootElement.removeEventListener("keydown", onKeyDown, true);
+    };
+  });
 }
 
 function findRevealRequestFromDomBoundary(
@@ -217,25 +236,33 @@ function findRevealRequestFromDomBoundary(
 }
 
 export function useDocumentKeyDownCapture(
+  enabled: boolean,
   onKeyDown: (event: KeyboardEvent) => void,
 ): void {
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [onKeyDown]);
+  }, [enabled, onKeyDown]);
 }
 
 export function useDocumentSelectionChange(
+  enabled: boolean,
   onSelectionChange: () => void,
 ): void {
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
     document.addEventListener("selectionchange", onSelectionChange);
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
     };
-  }, [onSelectionChange]);
+  }, [enabled, onSelectionChange]);
 }
 
 export function domSelectionInsideRevealText(text: string): boolean {
