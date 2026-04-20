@@ -4,9 +4,7 @@ import {
   $isTextNode,
   CLICK_COMMAND,
   COMMAND_PRIORITY_HIGH,
-  createCommand,
   type LexicalEditor,
-  type NodeKey,
 } from "lexical";
 
 import {
@@ -20,18 +18,13 @@ import {
   type RevealAdapter,
   type RevealSubject,
 } from "./cursor-reveal-adapters";
+import {
+  OPEN_CURSOR_REVEAL_COMMAND,
+  type CursorRevealOpenRequest,
+} from "./cursor-reveal-command";
 
-export interface CursorRevealOpenRequest {
-  readonly adapterId: string;
-  readonly caretOffset: number;
-  readonly entry: "keyboard-boundary" | "pointer" | "selection";
-  readonly nodeKey: NodeKey;
-  readonly source: string;
-}
-
-export const OPEN_CURSOR_REVEAL_COMMAND = createCommand<CursorRevealOpenRequest>(
-  "OPEN_CURSOR_REVEAL_COMMAND",
-);
+export { OPEN_CURSOR_REVEAL_COMMAND };
+export type { CursorRevealOpenRequest };
 
 export function createRevealOpenRequest(
   subject: RevealSubject,

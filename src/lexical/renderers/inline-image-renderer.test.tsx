@@ -1,5 +1,6 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
+import { $getRoot, $isElementNode, $isTextNode } from "lexical";
 import { createElement, type ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
@@ -69,10 +70,29 @@ async function mountEditor(overrides: Partial<RichMarkdownEditorProps> = {}) {
   };
 }
 
-function queryInlineImageSource(editor: LexicalEditor): HTMLInputElement | null {
-  return editor.getRootElement()?.querySelector<HTMLInputElement>(
-    ".cf-lexical-inline-token-source",
-  ) ?? null;
+function hasInlineImageSourceText(editor: LexicalEditor, source = "![Inline alt](image.png)"): boolean {
+  return editor.getRootElement()?.textContent?.includes(source) ?? false;
+}
+
+function replaceRevealedInlineImageSource(editor: LexicalEditor, nextSource: string): void {
+  editor.update(() => {
+    const visit = (node: ReturnType<typeof $getRoot>): boolean => {
+      for (const child of node.getChildren()) {
+        if ($isTextNode(child) && child.getTextContent() === "![Inline alt](image.png)") {
+          child.setTextContent(nextSource);
+          return true;
+        }
+        if ($isElementNode(child) && visit(child)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (!visit($getRoot())) {
+      throw new Error("expected revealed inline image source text");
+    }
+  }, { discrete: true });
 }
 
 async function waitForInlineImage(editor: LexicalEditor): Promise<HTMLElement> {
@@ -98,7 +118,7 @@ describe("InlineImageRenderer editability", () => {
         fireEvent.click(image);
       });
 
-      expect(queryInlineImageSource(editor.editor)).toBeNull();
+      expect(hasInlineImageSourceText(editor.editor)).toBe(false);
       expect(image.closest(".cf-lexical-inline-image-shell")?.getAttribute("role")).toBeNull();
       expect(editor.handle.getDoc()).toBe(INLINE_IMAGE_DOC);
     } finally {
@@ -106,7 +126,7 @@ describe("InlineImageRenderer editability", () => {
     }
   });
 
-  it("closes an active source edit without committing when the surface becomes read-only", async () => {
+  it("edits inline image source through the shared cursor reveal lifecycle", async () => {
     const editor = await mountEditor({ editable: true });
 
     try {
@@ -116,28 +136,20 @@ describe("InlineImageRenderer editability", () => {
       });
 
       await waitFor(() => {
-        expect(queryInlineImageSource(editor.editor)).not.toBeNull();
-      });
-
-      const source = queryInlineImageSource(editor.editor);
-      if (!source) {
-        throw new Error("expected inline image source input");
-      }
-
-      act(() => {
-        fireEvent.change(source, {
-          target: { value: "![Changed alt](changed.png)" },
-        });
+        expect(hasInlineImageSourceText(editor.editor)).toBe(true);
       });
 
       act(() => {
-        editor.rerender({ editable: false });
+        replaceRevealedInlineImageSource(editor.editor, "![Changed alt](changed.png)");
+        editor.handle.flushPendingEdits();
       });
 
       await waitFor(() => {
-        expect(queryInlineImageSource(editor.editor)).toBeNull();
+        expect(editor.handle.getDoc()).toBe("Before ![Changed alt](changed.png) after");
       });
-      expect(editor.handle.getDoc()).toBe(INLINE_IMAGE_DOC);
+      await waitFor(() => {
+        expect(editor.editor.getRootElement()?.querySelector("img[alt='Changed alt']")).not.toBeNull();
+      });
     } finally {
       editor.unmount();
     }

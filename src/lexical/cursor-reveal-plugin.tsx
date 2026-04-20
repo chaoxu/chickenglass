@@ -746,6 +746,13 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   }, true);
 
   useEffect(() => () => {
+    const active = activeRef.current;
+    if (active) {
+      editor.update(() => {
+        $commitInlineReveal(active);
+      }, { discrete: true });
+      activeRef.current = null;
+    }
     setCursorRevealActive(editor, false);
   }, [editor]);
 
