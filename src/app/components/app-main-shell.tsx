@@ -1,3 +1,4 @@
+import { DebugSidebarProvider } from "./debug-sidebar";
 import { EditorPane } from "./editor-pane";
 import { LexicalEditorPane } from "./lexical-editor-pane";
 import { StatusBar } from "./status-bar";
@@ -30,55 +31,57 @@ export function AppMainShell({
 
   return (
     <SidebarInset>
-      {currentPath && useLexicalEditor ? (
-        <LexicalEditorPane
-          doc={editor.editorDoc}
-          docPath={currentPath}
-          projectConfig={workspace.projectConfig}
-          theme={workspace.resolvedTheme}
-          fs={fs}
-          pluginManager={editor.pluginManager}
-          sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
-          onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
-          onDocChange={editor.handleDocChange}
-          onDirtyChange={editor.handleDirtyChange}
-          onProgrammaticDocChange={(doc) => {
-            editor.handleProgrammaticDocChange(currentPath, doc);
-          }}
-          onStateChange={editor.handleEditorStateChange}
-          onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-          onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-          onDocumentReady={editor.handleEditorDocumentReady}
-          onLexicalEditorReady={editor.handleLexicalEditorReady}
-          editorMode={editor.editorMode}
-          activeDocumentSignal={editor.activeDocumentSignal}
-        />
-      ) : currentPath ? (
-        <EditorPane
-          doc={editor.editorDoc}
-          docPath={currentPath}
-          projectConfig={workspace.projectConfig}
-          theme={workspace.resolvedTheme}
-          fs={fs}
-          pluginManager={editor.pluginManager}
-          sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
-          onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
-          onDocChange={editor.handleDocChange}
-          onProgrammaticDocChange={(doc) => {
-            editor.handleProgrammaticDocChange(currentPath, doc);
-          }}
-          onStateChange={editor.handleEditorStateChange}
-          onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-          onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-          onDocumentReady={editor.handleEditorDocumentReady}
-          editorMode={editor.editorMode}
-          activeDocumentSignal={editor.activeDocumentSignal}
-        />
-      ) : (
-        <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
-          Open a file to start editing
-        </div>
-      )}
+      <DebugSidebarProvider>
+        {currentPath && useLexicalEditor ? (
+          <LexicalEditorPane
+            doc={editor.editorDoc}
+            docPath={currentPath}
+            projectConfig={workspace.projectConfig}
+            theme={workspace.resolvedTheme}
+            fs={fs}
+            pluginManager={editor.pluginManager}
+            sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+            onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
+            onDocChange={editor.handleDocChange}
+            onDirtyChange={editor.handleDirtyChange}
+            onProgrammaticDocChange={(doc) => {
+              editor.handleProgrammaticDocChange(currentPath, doc);
+            }}
+            onStateChange={editor.handleEditorStateChange}
+            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+            onDocumentReady={editor.handleEditorDocumentReady}
+            onLexicalEditorReady={editor.handleLexicalEditorReady}
+            editorMode={editor.editorMode}
+            activeDocumentSignal={editor.activeDocumentSignal}
+          />
+        ) : currentPath ? (
+          <EditorPane
+            doc={editor.editorDoc}
+            docPath={currentPath}
+            projectConfig={workspace.projectConfig}
+            theme={workspace.resolvedTheme}
+            fs={fs}
+            pluginManager={editor.pluginManager}
+            sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+            onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
+            onDocChange={editor.handleDocChange}
+            onProgrammaticDocChange={(doc) => {
+              editor.handleProgrammaticDocChange(currentPath, doc);
+            }}
+            onStateChange={editor.handleEditorStateChange}
+            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+            onDocumentReady={editor.handleEditorDocumentReady}
+            editorMode={editor.editorMode}
+            activeDocumentSignal={editor.activeDocumentSignal}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
+            Open a file to start editing
+          </div>
+        )}
+      </DebugSidebarProvider>
 
       <StatusBar
         editorMode={editor.editorMode}

@@ -6,9 +6,11 @@ import type {
 import type { StructureEditTarget } from "../editor/structure-edit-state";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
+const DEBUG_SESSION_EVENTS_STORAGE_KEY = "coflat-debug-session-events";
 const DEBUG_RECORDER_ENDPOINT = "/__coflat/debug-event";
 const FLUSH_DELAY_MS = 400;
 const MAX_BATCH_SIZE = 100;
+const MAX_LOCAL_EVENTS = 500;
 const MAX_TEXT_PREVIEW_CHARS = 120;
 
 export interface DebugSessionEvent {
@@ -35,6 +37,7 @@ export interface DebugSessionRecorderStatus {
   readonly sessionKind: DebugSessionKind;
   readonly connected: boolean;
   readonly queued: number;
+  readonly localEventCount: number;
   readonly captureMode: "smart";
 }
 
@@ -49,6 +52,12 @@ type DebugContextCaptureMode = "none" | "compact" | "full";
 interface PendingEvent extends DebugSessionEvent {
   readonly sessionId: string;
   readonly seq: number;
+}
+
+export interface DebugSessionExport {
+  readonly currentDocument: string | null;
+  readonly events: readonly DebugSessionEvent[];
+  readonly status: DebugSessionRecorderStatus;
 }
 
 let sessionId: string | null = null;
@@ -219,6 +228,33 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+function parseLocalEvents(): PendingEvent[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(DEBUG_SESSION_EVENTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((event): event is PendingEvent => (
+          typeof event === "object"
+          && event !== null
+          && typeof (event as PendingEvent).sessionId === "string"
+          && typeof (event as PendingEvent).seq === "number"
+          && typeof (event as PendingEvent).timestamp === "number"
+          && typeof (event as PendingEvent).type === "string"
+          && typeof (event as PendingEvent).summary === "string"
+        ))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistLocalEvents(events: readonly PendingEvent[]): void {
+  if (!isBrowser() || events.length === 0) return;
+  const nextEvents = [...parseLocalEvents(), ...events].slice(-MAX_LOCAL_EVENTS);
+  window.localStorage.setItem(DEBUG_SESSION_EVENTS_STORAGE_KEY, JSON.stringify(nextEvents));
+}
+
 function ensureSessionId(): string | null {
   if (!isBrowser()) return null;
   if (sessionId) return sessionId;
@@ -266,13 +302,15 @@ export function recordDebugSessionEvent(
   if (!nextSessionId) return;
   ensureLifecycleHooks();
 
-  pendingEvents.push({
+  const pendingEvent = {
     ...event,
     detail: sanitizeDebugEventDetail(event.type, event.detail),
     context: contextForEvent(event.type, event.context),
     sessionId: nextSessionId,
     seq: ++nextSequence,
-  });
+  };
+
+  pendingEvents.push(pendingEvent);
 
   if (pendingEvents.length >= MAX_BATCH_SIZE) {
     void flushDebugSessionEvents();
@@ -293,6 +331,7 @@ export async function flushDebugSessionEvents(): Promise<void> {
   if (!isBrowser() || flushInFlight || pendingEvents.length === 0) return;
   flushInFlight = true;
   const batch = pendingEvents.splice(0, pendingEvents.length);
+  persistLocalEvents(batch);
   try {
     const response = await fetch(DEBUG_RECORDER_ENDPOINT, {
       method: "POST",
@@ -327,8 +366,28 @@ export function getDebugSessionRecorderStatus(): DebugSessionRecorderStatus {
     sessionKind: sessionKind(),
     connected,
     queued: pendingEvents.length,
+    localEventCount: parseLocalEvents().length,
     captureMode: "smart",
   };
+}
+
+export function exportDebugSessionEvents({
+  currentDocument = null,
+}: {
+  readonly currentDocument?: string | null;
+} = {}): DebugSessionExport {
+  persistLocalEvents(pendingEvents);
+  return {
+    currentDocument,
+    events: parseLocalEvents(),
+    status: getDebugSessionRecorderStatus(),
+  };
+}
+
+export function clearDebugSessionEvents(): void {
+  if (!isBrowser()) return;
+  pendingEvents.length = 0;
+  window.localStorage.removeItem(DEBUG_SESSION_EVENTS_STORAGE_KEY);
 }
 
 export function captureDebugSessionState(

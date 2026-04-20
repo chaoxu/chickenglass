@@ -80,6 +80,16 @@ export function toggleFpsMeter(): boolean {
   return enabled;
 }
 
+/** Explicitly set the FPS meter to enabled or disabled. */
+export function setFpsMeterEnabled(next: boolean): void {
+  if (next === enabled) return;
+  if (next) {
+    start();
+  } else {
+    stop();
+  }
+}
+
 /** Stop the FPS meter if running (for cleanup on unmount/HMR). */
 export function stopFpsMeter(): void {
   if (enabled) stop();

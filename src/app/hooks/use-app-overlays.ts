@@ -3,6 +3,7 @@ import { dispatchFormatEvent } from "../../constants/events";
 import { BackgroundIndexer } from "../../index";
 import { activeCoflatProduct } from "../../product";
 import { documentAnalysisField } from "../../state/document-analysis";
+import { useDevSettings } from "../../state/dev-settings";
 import {
   type DocumentLabelBacklinksResult,
   resolveDocumentLabelBacklinks,
@@ -15,7 +16,6 @@ import {
 import type { PaletteCommand } from "../components/command-palette";
 import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
-import { toggleFpsMeter } from "../fps-meter";
 import { basename, modKey } from "../lib/utils";
 import { dispatchIfConnected } from "../lib/view-dispatch";
 import { collectSearchableMarkdownPaths } from "../search";
@@ -411,7 +411,12 @@ export function useAppOverlays({
     { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: "view_toggle_sidebar", action: () => sidebarLayout.setSidebarCollapsed((value) => !value) },
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => sidebarLayout.setSidenotesCollapsed((value) => !value) },
     { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
-    { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => toggleFpsMeter() },
+    { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => useDevSettings.getState().toggle("fpsCounter") },
+    { id: "view.toggle-selection-always-on", label: "Toggle Selection Always On", category: "View", action: () => useDevSettings.getState().toggle("selectionAlwaysOn") },
+    { id: "view.toggle-tree-view", label: "Toggle Tree View", category: "View", action: () => useDevSettings.getState().toggle("treeView") },
+    { id: "view.toggle-perf-panel", label: "Toggle Perf Panel", category: "View", action: () => useDevSettings.getState().toggle("perfPanel") },
+    { id: "view.toggle-command-log", label: "Toggle Command Log", category: "View", action: () => useDevSettings.getState().toggle("commandLogging") },
+    { id: "view.toggle-focus-tracing", label: "Toggle Focus Tracing", category: "View", action: () => useDevSettings.getState().toggle("focusTracing") },
 
     // ── Insert ────────────────────────────────────────────────────────────
     { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },

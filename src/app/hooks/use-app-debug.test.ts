@@ -38,6 +38,7 @@ const hasFile = vi.fn(async (_path: string) => true);
 const openFileWithContent = vi.fn(async (_name: string, _content: string) => {});
 const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
+const getCurrentDocText = vi.fn(() => "# Notes");
 const setSearchOpen = vi.fn((_open: boolean) => {});
 const requestNativeClose = vi.fn(async () => {});
 const setMode = vi.fn((_mode: "rich" | "source" | "read") => {});
@@ -51,6 +52,7 @@ const Harness: FC = () => {
     openFileWithContent,
     saveFile,
     closeFile,
+    getCurrentDocText,
     setSearchOpen,
     requestNativeClose,
     setMode,
@@ -80,6 +82,8 @@ describe("useAppDebug", () => {
     openFileWithContent.mockClear();
     saveFile.mockClear();
     closeFile.mockClear();
+    getCurrentDocText.mockClear();
+    getCurrentDocText.mockReturnValue("# Notes");
     setSearchOpen.mockClear();
     requestNativeClose.mockClear();
     setMode.mockClear();
@@ -101,6 +105,10 @@ describe("useAppDebug", () => {
     });
 
     expect(window.__app?.openFileWithContent).toBeDefined();
+    expect(window.__cfDebug?.interactionLog).toBeDefined();
+    expect(window.__cfDebug?.exportSession()).toMatchObject({
+      currentDocument: "# Notes",
+    });
     expect(window.__tauriSmoke).toBeDefined();
 
     const snapshot = await window.__tauriSmoke?.getWindowState();

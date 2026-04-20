@@ -17,6 +17,7 @@ import {
   unsubscribeNoop,
   type ActiveDocumentSignal,
 } from "../active-document-signal";
+import { DebugButton } from "./status-bar-debug";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -251,6 +252,7 @@ export function StatusBar({
               {buildInfo.label}
             </span>
           )}
+          {showDebugControls && <DebugButton />}
           {onOpenPalette && (
             <button
               type="button"

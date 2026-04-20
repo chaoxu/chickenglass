@@ -160,6 +160,7 @@ function AppInner() {
     loadFixtureProject,
     saveFile: editor.saveFile,
     closeFile: (options) => editor.closeCurrentFile(options),
+    getCurrentDocText: editor.getCurrentDocText,
     setSearchOpen: dialogs.setSearchOpen,
     requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,

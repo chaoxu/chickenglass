@@ -79,6 +79,10 @@ declare global {
       renderState: () => DebugRenderState | null;
       recorderStatus: () => DebugSessionRecorderStatus;
       captureState: (label?: string | null) => DebugSessionCapture;
+      interactionLog: () => readonly import("../lexical/interaction-trace").InteractionTraceEntry[];
+      clearInteractionLog: () => void;
+      exportSession: (options?: { includeDocument?: boolean }) => unknown;
+      clearSession: () => void;
     };
 
     /**

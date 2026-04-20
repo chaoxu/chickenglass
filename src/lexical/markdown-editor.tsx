@@ -58,6 +58,7 @@ import {
 } from "./editor-surface-shared";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
+import { InteractionTracePlugin } from "./interaction-trace-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { RevealPresentationProvider } from "./reveal-presentation-context";
 import { StructureEditProvider } from "./structure-edit-plugin";
@@ -514,6 +515,7 @@ export function LexicalMarkdownEditor({
                 ) : null}
                 {editable ? <OnChangePlugin onChange={handleChange} /> : null}
                 {selectionAlwaysOn ? <SelectionAlwaysOnDisplay /> : null}
+                {!isSourceMode && editable ? <InteractionTracePlugin /> : null}
                 {!isSourceMode ? <BibliographySection /> : null}
                 <ActiveEditorPlugin />
                 <TreeViewPlugin />

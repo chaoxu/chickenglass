@@ -150,9 +150,15 @@ __app.saveFile()             — save current file
 __app.getProjectRoot()       — current project root path (or null)
 __app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
 __app.isDirty()              — whether any open document has unsaved changes
+__cfDebug.toggleFps()        — toggle the status-bar FPS meter
+__cfDebug.togglePerfPanel()  — toggle the floating perf debug panel
 __cfDebug.renderState()      — proxy to the current visible rich-render snapshot
 __cfDebug.recorderStatus()   — debug recorder queue/connectivity/capture-mode snapshot
 __cfDebug.captureState("label") — combined selection/render/raw-fence/structure snapshot + recorder event
+__cfDebug.interactionLog()   — recent Lexical interaction trace entries
+__cfDebug.clearInteractionLog() — clear Lexical interaction trace entries
+__cfDebug.exportSession()    — export locally recorded debug session events
+__cfDebug.clearSession()     — clear locally recorded debug session events
 __tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
 __tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
 __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event

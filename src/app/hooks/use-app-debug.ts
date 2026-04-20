@@ -3,6 +3,8 @@ import type { EditorMode } from "../../editor";
 import { isTauri } from "../../lib/tauri";
 import {
   captureDebugSessionState,
+  clearDebugSessionEvents,
+  exportDebugSessionEvents,
   getDebugSessionRecorderStatus,
   recordDebugSessionEvent,
 } from "../../debug/session-recorder";
@@ -16,7 +18,9 @@ import {
   printPerfSummary,
   togglePerfPanel,
 } from "../perf";
-import { toggleFpsMeter, stopFpsMeter } from "../fps-meter";
+import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
+import { useDevSettings } from "../../state/dev-settings";
+import { clearInteractionLog, getInteractionLog } from "../../lexical/interaction-trace";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -59,6 +63,7 @@ interface AppDebugDeps {
   ) => Promise<void>;
   saveFile: () => Promise<void>;
   closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
+  getCurrentDocText: () => string;
   setSearchOpen: (open: boolean) => void;
   requestNativeClose: () => Promise<void>;
   setMode: (mode: EditorMode) => void;
@@ -78,6 +83,7 @@ export function useAppDebug({
   loadFixtureProject,
   saveFile,
   closeFile,
+  getCurrentDocText,
   setSearchOpen,
   requestNativeClose,
   setMode,
@@ -107,6 +113,18 @@ export function useAppDebug({
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).
   useEffect(() => () => stopFpsMeter(), []);
+
+  useEffect(() => {
+    let previous = useDevSettings.getState().fpsCounter;
+    setFpsMeterEnabled(previous);
+    return useDevSettings.subscribe((state) => {
+      if (state.fpsCounter === previous) {
+        return;
+      }
+      previous = state.fpsCounter;
+      setFpsMeterEnabled(state.fpsCounter);
+    });
+  }, []);
 
   useEffect(() => {
     const snapshot = JSON.stringify({
@@ -219,12 +237,19 @@ export function useAppDebug({
       printPerfSummary,
       clearPerf: clearCombinedPerf,
       togglePerfPanel,
-      toggleFps: toggleFpsMeter,
+      toggleFps: () => useDevSettings.getState().toggle("fpsCounter"),
       scrollGuards: () => getScrollGuardEvents(),
       clearScrollGuards: () => clearScrollGuardEvents(),
       renderState: () => window.__cmDebug?.renderState?.() ?? null,
       recorderStatus: () => getDebugSessionRecorderStatus(),
       captureState: (label?: string | null) => captureDebugSessionState(label),
+      interactionLog: getInteractionLog,
+      clearInteractionLog,
+      exportSession: (options?: { includeDocument?: boolean }) =>
+        exportDebugSessionEvents({
+          currentDocument: options?.includeDocument === false ? null : getCurrentDocText(),
+        }),
+      clearSession: clearDebugSessionEvents,
     };
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {
@@ -270,6 +295,7 @@ export function useAppDebug({
     loadFixtureProject,
     saveFile,
     closeFile,
+    getCurrentDocText,
     setSearchOpen,
     requestNativeClose,
     setMode,
