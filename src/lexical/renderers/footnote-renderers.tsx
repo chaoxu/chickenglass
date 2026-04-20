@@ -11,11 +11,16 @@ import {
 } from "../markdown/footnotes";
 import { renderMarkdownRichHtml } from "../markdown/rich-html-preview";
 import { useLexicalRenderContext } from "../render-context";
+import { StructureSourceEditor } from "../structure-source-editor";
+import { useStructureEditToggle } from "../structure-edit-plugin";
 import {
   footnoteDefinitionBodySelectionMapper,
   useEmbeddedMarkdownSourceSelectionBridge,
+  useStructureSourceSelectionBridge,
 } from "../structure-source-selection";
+import { useLexicalSurfaceEditable } from "../editability-context";
 import {
+  structureToggleProps,
   usePendingEmbeddedSurfaceFocusId,
   useRawBlockUpdater,
 } from "./shared";
@@ -28,10 +33,18 @@ export function FootnoteDefinitionBlockRenderer({
   readonly raw: string;
 }) {
   const [editor] = useLexicalComposerContext();
+  const surfaceEditable = useLexicalSurfaceEditable();
   const { renderIndex } = useLexicalRenderContext();
   const parsed = useMemo(() => parseFootnoteDefinition(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const pendingFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "footnote-body");
+  const pendingSourceFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "structure-source");
+  const sourceEdit = useStructureEditToggle(
+    nodeKey,
+    "footnote-definition",
+    "footnote-source",
+  );
+  const onSourceSelectionChange = useStructureSourceSelectionBridge(editor, nodeKey);
   const bodySelectionMapper = useMemo(() => footnoteDefinitionBodySelectionMapper(raw), [raw]);
   const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
@@ -47,18 +60,40 @@ export function FootnoteDefinitionBlockRenderer({
 
   return (
     <section className="cf-lexical-footnote-definition">
-      <div className="cf-lexical-footnote-definition-label">{number}.</div>
-      <div className="cf-lexical-footnote-definition-body">
-        <EmbeddedFieldEditor
-          className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--footnote"
-          doc={parsed.body}
-          family="footnote-body"
-          namespace={`coflat-footnote-${nodeKey}`}
-          onSelectionChange={onBodySelectionChange}
-          onTextChange={(nextBody) => updateRaw(serializeFootnoteDefinition(parsed.id, nextBody))}
-          pendingFocusId={pendingFocusId}
+      {sourceEdit.active ? (
+        <StructureSourceEditor
+          className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--footnote"
+          doc={raw}
+          multiline
+          namespace={`coflat-footnote-source-${nodeKey}`}
+          onChange={updateRaw}
+          onClose={sourceEdit.deactivate}
+          onSelectionChange={onSourceSelectionChange}
+          pendingFocusId={pendingSourceFocusId}
         />
-      </div>
+      ) : (
+        <>
+          <div
+            className="cf-lexical-footnote-definition-label cf-lexical-structure-toggle"
+            {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
+              keyboardActivation: true,
+            })}
+          >
+            {number}.
+          </div>
+          <div className="cf-lexical-footnote-definition-body">
+            <EmbeddedFieldEditor
+              className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--footnote"
+              doc={parsed.body}
+              family="footnote-body"
+              namespace={`coflat-footnote-${nodeKey}`}
+              onSelectionChange={onBodySelectionChange}
+              onTextChange={(nextBody) => updateRaw(serializeFootnoteDefinition(parsed.id, nextBody))}
+              pendingFocusId={pendingFocusId}
+            />
+          </div>
+        </>
+      )}
     </section>
   );
 }

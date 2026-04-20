@@ -15,6 +15,7 @@ import type {
 } from "./unsaved-changes";
 import {
   applyEditorDocumentChanges,
+  createMinimalEditorDocumentChanges,
   createEditorDocumentText,
   editorDocumentToString,
   emptyEditorDocument,
@@ -34,6 +35,8 @@ export interface EditorSessionService {
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
   handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
+  handleDocumentSnapshot: (doc: string) => void;
+  markCurrentDocumentDirty: () => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
@@ -165,6 +168,40 @@ export function createEditorSessionService({
       !doc.eq(runtime.buffers.get(currentPath) ?? emptyEditorDocument),
     );
     runtime.commit(nextState);
+  };
+
+  const handleDocumentSnapshot = (doc: string) => {
+    const currentPath = runtime.getCurrentPath();
+    if (!currentPath) return;
+
+    const currentDoc = getCurrentDocText();
+    const changes = createMinimalEditorDocumentChanges(currentDoc, doc);
+    let dirty = runtime.getCurrentDocument()?.dirty ?? false;
+    if (changes.length > 0) {
+      const previousDoc = documentTextForPath(currentPath, runtime.liveDocs, runtime.buffers);
+      const nextDoc = applyEditorDocumentChanges(previousDoc, changes);
+      runtime.liveDocs.set(currentPath, nextDoc);
+      runtime.pipeline.bumpRevision(currentPath);
+      runtime.activeDocumentSignal.publish(currentPath);
+      dirty = !nextDoc.eq(runtime.buffers.get(currentPath) ?? emptyEditorDocument);
+    }
+
+    runtime.commit(
+      markSessionDocumentDirty(runtime.getState(), currentPath, dirty),
+      { editorDoc: doc },
+    );
+  };
+
+  const markCurrentDocumentDirty = () => {
+    const currentPath = runtime.getCurrentPath();
+    if (!currentPath || runtime.isPathDirty(currentPath)) {
+      return;
+    }
+
+    runtime.activeDocumentSignal.publish(currentPath);
+    runtime.commit(
+      markSessionDocumentDirty(runtime.getState(), currentPath, true),
+    );
   };
 
   const handleProgrammaticDocChange = (path: string, doc: string) => {
@@ -369,6 +406,8 @@ export function createEditorSessionService({
     isPathDirty,
     cancelPendingOpenFile,
     handleDocChange,
+    handleDocumentSnapshot,
+    markCurrentDocumentDirty,
     handleProgrammaticDocChange,
     openFile,
     openFileWithContent,

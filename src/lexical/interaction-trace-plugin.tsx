@@ -1,19 +1,16 @@
 /**
  * interaction-trace-plugin — Traces editor clicks, text input, and scroll jumps.
  *
- * Activated by the `commandLogging` dev setting. Uses document-level capture
- * listeners to catch ALL clicks on the editor, including those consumed
- * by high-priority Lexical handlers (e.g. inline math).
- *
- * The listeners attach to `document` exactly once (module-level guard)
- * and read current state via a shared ref box. This avoids churn from
- * React strict-mode double-mount or HMR cycles.
+ * Activated by the `commandLogging` dev setting. Uses root-level capture
+ * listeners to catch clicks on the editor, including those consumed by
+ * high-priority Lexical handlers (e.g. inline math), without keeping debug
+ * listeners on global input paths while logging is disabled.
  *
  * Results are logged to the console and persisted via session-recorder
  * to /tmp/coflat-debug/ for post-mortem analysis.
  */
 
-import { useRef } from "react";
+import { useEffect } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNearestNodeFromDOMNode, type LexicalEditor } from "lexical";
 
@@ -74,163 +71,143 @@ function pointerPosition(
   };
 }
 
-// ---- Shared state box written by the React component, read by handlers. ----
-
-interface TraceState {
-  enabled: boolean;
-  editor: LexicalEditor | null;
-  surface: HTMLElement | null;
-  scrollBefore: number;
-}
-
-const state: TraceState = {
-  enabled: false,
-  editor: null,
-  surface: null,
-  scrollBefore: 0,
-};
-
-// ---- Module-level listeners (attached once, never removed). ----
-
-let listenersAttached = false;
-
-function findMainRoot(node: Node): HTMLElement | null {
-  const el = node instanceof Element ? node : node.parentElement;
-  return el?.closest<HTMLElement>(MAIN_ROOT_SELECTOR) ?? null;
-}
-
-function handleMouseDown(event: MouseEvent) {
-  if (!state.enabled) return;
-  if (!(event.target instanceof Node) || !findMainRoot(event.target)) return;
-  state.scrollBefore = state.surface?.scrollTop ?? 0;
-}
-
-function handleClick(event: MouseEvent) {
-  if (!state.enabled) return;
-  if (!(event.target instanceof Node)) return;
-  const root = findMainRoot(event.target);
-  if (!root) return;
-
-  const currentEditor = state.editor;
-  const scrollSurface = state.surface;
-  const scrollBefore = state.scrollBefore;
-  const handled = event.defaultPrevented;
-
-  const { nodeKey, nodeType } = lexicalNodeForTarget(currentEditor, event.target);
-  const targetSummary = domTargetSummary(event.target);
-  const position = pointerPosition(event, root);
-
-  // Monitor scroll for 500ms after click to catch delayed jumps.
-  let scrollAfter = scrollBefore;
-  let jumpDetected = false;
-  const onScroll = () => {
-    const current = scrollSurface?.scrollTop ?? 0;
-    if (current !== scrollBefore && !jumpDetected) {
-      jumpDetected = true;
-      scrollAfter = current;
-    }
-  };
-
-  scrollSurface?.addEventListener("scroll", onScroll, { passive: true });
-
-  setTimeout(() => {
-    scrollSurface?.removeEventListener("scroll", onScroll);
-    if (!jumpDetected) {
-      scrollAfter = scrollSurface?.scrollTop ?? 0;
-    }
-
-    const entry: InteractionTraceEntry = {
-      ts: Date.now(),
-      type: scrollAfter !== scrollBefore ? "scroll-jump" : "click",
-      ...position,
-      nodeType,
-      nodeKey,
-      target: targetSummary,
-      scrollBefore,
-      scrollAfter,
-      handled,
-    };
-
-    pushTraceEntry(entry);
-
-    recordDebugSessionEvent({
-      timestamp: entry.ts,
-      type: entry.type,
-      summary: `${entry.type} ${nodeType ?? targetSummary} delta=${scrollAfter - scrollBefore}`,
-      detail: entry,
-    });
-
-    if (entry.type === "scroll-jump") {
-      console.warn(
-        "[scroll-jump]",
-        `node=${nodeType ?? "?"}`,
-        `delta=${scrollAfter - scrollBefore}`,
-        entry,
-      );
-    } else {
-      console.debug(
-        "[click-trace]",
-        `node=${nodeType ?? "?"}`,
-        `target=${targetSummary}`,
-        entry,
-      );
-    }
-  }, 500);
-}
-
-function handleBeforeInput(event: InputEvent) {
-  if (!state.enabled) return;
-  if (!(event.target instanceof Node) || !findMainRoot(event.target)) return;
-
-  const { nodeKey, nodeType } = lexicalNodeForTarget(state.editor, event.target);
-  const entry: InteractionTraceEntry = {
-    ts: Date.now(),
-    type: "input",
-    nodeType,
-    nodeKey,
-    target: domTargetSummary(event.target),
-    scrollBefore: state.surface?.scrollTop ?? 0,
-    scrollAfter: state.surface?.scrollTop ?? 0,
-    handled: event.defaultPrevented,
-    inputType: event.inputType,
-    data: event.data,
-  };
-
-  pushTraceEntry(entry);
-  recordDebugSessionEvent({
-    timestamp: entry.ts,
-    type: entry.type,
-    summary: `input ${entry.inputType} ${nodeType ?? entry.target}`,
-    detail: entry,
-  });
-}
-
-function ensureListeners() {
-  if (listenersAttached) return;
-  listenersAttached = true;
-  document.addEventListener("mousedown", handleMouseDown, true);
-  document.addEventListener("beforeinput", handleBeforeInput, true);
-  document.addEventListener("click", handleClick, true);
-}
-
-// ---- React component — syncs state box, attaches listeners once. ----
-
 export function InteractionTracePlugin() {
   const enabled = useDevSettings((s) => s.commandLogging);
   const [editor] = useLexicalComposerContext();
   const surface = useEditorScrollSurface();
 
-  // Sync mutable state on every render.
-  state.enabled = enabled;
-  state.editor = editor;
-  state.surface = surface;
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
 
-  // Ensure document listeners exist (idempotent).
-  const didAttach = useRef(false);
-  if (!didAttach.current) {
-    didAttach.current = true;
-    ensureListeners();
-  }
+    let attachedRoot: HTMLElement | null = null;
+    let scrollBefore = 0;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Node)) return;
+      scrollBefore = surface?.scrollTop ?? 0;
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      if (!(event.target instanceof Node) || !attachedRoot) return;
+
+      const scrollSurface = surface;
+      const handled = event.defaultPrevented;
+
+      const { nodeKey, nodeType } = lexicalNodeForTarget(editor, event.target);
+      const targetSummary = domTargetSummary(event.target);
+      const position = pointerPosition(event, attachedRoot);
+
+      let scrollAfter = scrollBefore;
+      let jumpDetected = false;
+      const onScroll = () => {
+        const current = scrollSurface?.scrollTop ?? 0;
+        if (current !== scrollBefore && !jumpDetected) {
+          jumpDetected = true;
+          scrollAfter = current;
+        }
+      };
+
+      scrollSurface?.addEventListener("scroll", onScroll, { passive: true });
+
+      setTimeout(() => {
+        scrollSurface?.removeEventListener("scroll", onScroll);
+        if (!jumpDetected) {
+          scrollAfter = scrollSurface?.scrollTop ?? 0;
+        }
+
+        const entry: InteractionTraceEntry = {
+          ts: Date.now(),
+          type: scrollAfter !== scrollBefore ? "scroll-jump" : "click",
+          ...position,
+          nodeType,
+          nodeKey,
+          target: targetSummary,
+          scrollBefore,
+          scrollAfter,
+          handled,
+        };
+
+        pushTraceEntry(entry);
+
+        recordDebugSessionEvent({
+          timestamp: entry.ts,
+          type: entry.type,
+          summary: `${entry.type} ${nodeType ?? targetSummary} delta=${scrollAfter - scrollBefore}`,
+          detail: entry,
+        });
+
+        if (entry.type === "scroll-jump") {
+          console.warn(
+            "[scroll-jump]",
+            `node=${nodeType ?? "?"}`,
+            `delta=${scrollAfter - scrollBefore}`,
+            entry,
+          );
+        } else {
+          console.debug(
+            "[click-trace]",
+            `node=${nodeType ?? "?"}`,
+            `target=${targetSummary}`,
+            entry,
+          );
+        }
+      }, 500);
+    };
+
+    const handleBeforeInput = (event: InputEvent) => {
+      if (!(event.target instanceof Node)) return;
+
+      const { nodeKey, nodeType } = lexicalNodeForTarget(editor, event.target);
+      const entry: InteractionTraceEntry = {
+        ts: Date.now(),
+        type: "input",
+        nodeType,
+        nodeKey,
+        target: domTargetSummary(event.target),
+        scrollBefore: surface?.scrollTop ?? 0,
+        scrollAfter: surface?.scrollTop ?? 0,
+        handled: event.defaultPrevented,
+        inputType: event.inputType,
+        data: event.data,
+      };
+
+      pushTraceEntry(entry);
+      recordDebugSessionEvent({
+        timestamp: entry.ts,
+        type: entry.type,
+        summary: `input ${entry.inputType} ${nodeType ?? entry.target}`,
+        detail: entry,
+      });
+    };
+
+    const detach = () => {
+      if (!attachedRoot) {
+        return;
+      }
+      attachedRoot.removeEventListener("mousedown", handleMouseDown, true);
+      attachedRoot.removeEventListener("beforeinput", handleBeforeInput, true);
+      attachedRoot.removeEventListener("click", handleClick, true);
+      attachedRoot = null;
+    };
+
+    const unregisterRoot = editor.registerRootListener((rootElement) => {
+      detach();
+      if (!rootElement?.matches(MAIN_ROOT_SELECTOR)) {
+        return;
+      }
+      attachedRoot = rootElement;
+      rootElement.addEventListener("mousedown", handleMouseDown, true);
+      rootElement.addEventListener("beforeinput", handleBeforeInput, true);
+      rootElement.addEventListener("click", handleClick, true);
+    });
+
+    return () => {
+      detach();
+      unregisterRoot();
+    };
+  }, [editor, enabled, surface]);
 
   return null;
 }

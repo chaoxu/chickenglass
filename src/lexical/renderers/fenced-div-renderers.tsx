@@ -71,6 +71,7 @@ function CaptionedBlockRenderer({
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
   const pendingCaptionFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-caption");
+  const captionShellRef = useRef<HTMLDivElement | null>(null);
   const bodyOffset = fencedDivBodyMarkdownOffset(raw);
   const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
@@ -83,6 +84,13 @@ function CaptionedBlockRenderer({
     nodeKey,
     titleOffset ?? 0,
   );
+  const publishCaptionSelection = useCallback((nextTitle: string) => {
+    const root = captionShellRef.current?.querySelector<HTMLElement>("[contenteditable='true']") ?? null;
+    const visibleSelection = readVisibleTextDomSelection(root);
+    if (visibleSelection) {
+      onTitleSelectionChange(visibleSelection, nextTitle);
+    }
+  }, [onTitleSelectionChange]);
 
   return (
     <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`}>
@@ -114,7 +122,7 @@ function CaptionedBlockRenderer({
           >
             {label}
           </span>
-          <div className="cf-lexical-block-caption-text">
+          <div className="cf-lexical-block-caption-text" ref={captionShellRef}>
             <EmbeddedFieldEditor
               activation="focus"
               className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--caption"
@@ -122,9 +130,16 @@ function CaptionedBlockRenderer({
               family="caption"
               namespace={`coflat-block-caption-${nodeKey}`}
               onSelectionChange={titleOffset === null ? undefined : onTitleSelectionChange}
-              onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
-                titleMarkdown: nextTitle,
-              }))}
+              onTextChange={(nextTitle) => {
+                publishCaptionSelection(nextTitle);
+                updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
+                  titleMarkdown: nextTitle,
+                }));
+                queueMicrotask(() => publishCaptionSelection(nextTitle));
+                requestAnimationFrame(() => publishCaptionSelection(nextTitle));
+                setTimeout(() => publishCaptionSelection(nextTitle), 0);
+                setTimeout(() => publishCaptionSelection(nextTitle), 100);
+              }}
               pendingFocusId={pendingCaptionFocusId}
             />
           </div>

@@ -30,6 +30,7 @@ import { consumeIncrementalSourcePositionSync } from "./source-position-incremen
 
 export { readSourcePositionFromElement } from "./source-position-dom";
 export {
+  mapVisibleTextOffsetToMarkdown,
   readSourceSelectionFromLexicalSelection,
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-selection";

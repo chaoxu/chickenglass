@@ -25,6 +25,7 @@ import {
 } from "./embedded-field-flush-registry";
 import { dispatchSurfaceFocusRequest } from "./editor-focus-plugin";
 import {
+  consumePendingDestructiveVisibleOffset,
   createMarkdownSelection,
   storeSelection,
 } from "./editor-surface-shared";
@@ -36,13 +37,16 @@ import {
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import {
+  mapVisibleTextOffsetToMarkdown,
   readSourceSelectionFromLexicalSelection,
   selectSourceOffsetsInRichLexicalRoot,
   scrollSourcePositionIntoView,
 } from "./source-position-plugin";
 import { parseStructuredFencedDivRaw } from "./markdown/block-syntax";
 import { readSourceFrom, readSourceTo } from "./source-position-contract";
-import { mapVisibleTextSelectionToMarkdown } from "./source-selection";
+import {
+  mapVisibleTextSelectionToMarkdown,
+} from "./source-selection";
 import {
   getSourceText,
   selectSourceOffsetsInLexicalRoot,
@@ -178,7 +182,7 @@ export interface MarkdownEditorSessionController {
   readonly syncSelectionToDocLength: (docLength: number) => void;
 }
 
-export type RichChangePolicy = "markdown" | "dirty";
+type RichChangePolicy = "markdown" | "dirty";
 
 function isUserCommittedRichChange(
   requireUserEditFlag: boolean,
@@ -453,6 +457,7 @@ export function MarkdownEditorHandlePlugin({
 }: MarkdownEditorHandlePluginProps) {
   const [editor] = useLexicalComposerContext();
   const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
+  const selectionSnapshotFreshRef = useRef(false);
 
   useEffect(() => {
     if (!onEditorReady) {
@@ -488,6 +493,27 @@ export function MarkdownEditorHandlePlugin({
         return selectionRef.current;
       }
 
+      const pendingDestructiveVisibleOffset = consumePendingDestructiveVisibleOffset(editor);
+      if (pendingDestructiveVisibleOffset !== null) {
+        const sourceOffset = mapVisibleTextOffsetToMarkdown(
+          currentDoc,
+          pendingDestructiveVisibleOffset,
+        ) ?? pendingDestructiveVisibleOffset;
+        const nextSelection = createMarkdownSelection(sourceOffset, sourceOffset, currentDoc.length);
+        selectionRef.current = nextSelection;
+        selectSourceOffsetsInRichLexicalRoot(
+          editor,
+          currentDoc,
+          nextSelection.anchor,
+          nextSelection.focus,
+          {
+            revealRawBlockAtBoundary: false,
+            revealRawBlocks: false,
+          },
+        );
+        return nextSelection;
+      }
+
       const embeddedSelection = readEmbeddedInlineDomSelection(currentDoc);
       if (embeddedSelection) {
         selectionRef.current = embeddedSelection;
@@ -507,7 +533,26 @@ export function MarkdownEditorHandlePlugin({
       }
 
       selectionRef.current = liveSelection;
+      selectionSnapshotFreshRef.current = true;
       return liveSelection;
+    };
+
+    const refreshRichSelectionSnapshot = (currentDoc: string) => {
+      if (editorModeRef.current === "source") {
+        return;
+      }
+      if (!readInactiveRichSelection && !canReadLiveSelectionFromEditor(editor)) {
+        return;
+      }
+      const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
+        fallback: selectionRef.current,
+        markdown: currentDoc,
+      });
+      if (!liveSelection) {
+        return;
+      }
+      selectionRef.current = liveSelection;
+      onSelectionChange?.(liveSelection);
     };
 
     const flushPendingEdits = () => {
@@ -515,9 +560,32 @@ export function MarkdownEditorHandlePlugin({
     };
 
     const readFreshDocument = () => {
+      const preFlushRevealDoc = editorModeRef.current === "source" || !hasCursorRevealActive(editor)
+        ? null
+        : readDocumentSnapshot();
+      const preFlushRevealSelection = preFlushRevealDoc === null
+        ? null
+        : readSourceSelectionFromLexicalSelection(editor, {
+            fallback: selectionRef.current,
+            markdown: preFlushRevealDoc,
+          });
       flushPendingEdits();
       const nextDoc = readDocumentSnapshot();
       stageDocumentSnapshot(nextDoc);
+      if (preFlushRevealSelection) {
+        const nextSelection = createMarkdownSelection(
+          preFlushRevealSelection.anchor,
+          preFlushRevealSelection.focus,
+          nextDoc.length,
+        );
+        selectionRef.current = nextSelection;
+        onSelectionChange?.(nextSelection);
+        selectionSnapshotFreshRef.current = true;
+      } else if (selectionSnapshotFreshRef.current) {
+        selectionSnapshotFreshRef.current = false;
+      } else {
+        refreshRichSelectionSnapshot(nextDoc);
+      }
       return nextDoc;
     };
 

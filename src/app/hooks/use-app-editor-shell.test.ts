@@ -6,6 +6,7 @@ import { MemoryFileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
@@ -86,6 +87,27 @@ function replaceCurrentDoc(
 ): readonly EditorDocumentChange[] {
   const currentDoc = ref.result.getCurrentDocText();
   return [{ from: 0, to: currentDoc.length, insert: nextDoc }];
+}
+
+function createEditorHandle(doc: string): MarkdownEditorHandle {
+  const selection = {
+    anchor: 0,
+    focus: 0,
+    from: 0,
+    to: 0,
+  };
+  return {
+    applyChanges: vi.fn(),
+    flushPendingEdits: vi.fn(),
+    focus: vi.fn(),
+    getDoc: vi.fn(() => doc),
+    getSelection: vi.fn(() => selection),
+    insertText: vi.fn(),
+    peekDoc: vi.fn(() => doc),
+    peekSelection: vi.fn(() => selection),
+    setDoc: vi.fn(),
+    setSelection: vi.fn(),
+  };
 }
 
 describe("useAppEditorShell", () => {
@@ -177,6 +199,35 @@ describe("useAppEditorShell", () => {
     await vi.waitFor(() => {
       expect(ref.result.currentPath).toBe("b.md");
       expect(ref.result.editorMode).toBe("source");
+    });
+  });
+
+  it("does not flush the Lexical markdown snapshot when reopening the current file", async () => {
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    const handle = createEditorHandle("# A normalized\n");
+    act(() => {
+      ref.result.handleLexicalEditorReady(handle);
+    });
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    expect(handle.getDoc).not.toHaveBeenCalled();
+    expect(ref.result.currentDocument).toMatchObject({
+      dirty: false,
+      path: "a.md",
     });
   });
 

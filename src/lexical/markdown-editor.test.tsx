@@ -1,4 +1,5 @@
 import { act, render, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import type { LexicalEditor } from "lexical";
 import {
   $createNodeSelection,
@@ -12,7 +13,7 @@ import {
   UNDO_COMMAND,
 } from "lexical";
 import { createElement, type ComponentProps } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
@@ -22,6 +23,7 @@ import { LexicalMarkdownEditor } from "./markdown-editor";
 import { RAW_BLOCK_SOURCE_SELECTOR } from "./source-position-contract";
 
 type MarkdownEditorProps = ComponentProps<typeof LexicalMarkdownEditor>;
+const DEMO_INDEX_MD = readFileSync("demo/index.md", "utf8");
 
 async function mountEditor(overrides: Partial<MarkdownEditorProps> = {}) {
   let editor: LexicalEditor | null = null;
@@ -81,6 +83,28 @@ async function mountEditor(overrides: Partial<MarkdownEditorProps> = {}) {
 }
 
 describe("LexicalMarkdownEditor history", () => {
+  it("does not report mount-only nested field echoes as dirty", async () => {
+    const onDirtyChange = vi.fn();
+    const onDocChange = vi.fn();
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: DEMO_INDEX_MD,
+      editorMode: "lexical",
+      onDirtyChange,
+      onDocChange,
+      onTextChange,
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(onDirtyChange).not.toHaveBeenCalled();
+      expect(onDocChange).not.toHaveBeenCalled();
+      expect(onTextChange).not.toHaveBeenCalled();
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("preserves undo history across lexical/source mode switches", async () => {
     const editor = await mountEditor();
 

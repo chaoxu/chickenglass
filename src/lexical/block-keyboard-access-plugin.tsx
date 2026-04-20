@@ -144,10 +144,16 @@ function registerDomHorizontalArrowNavigation(editor: LexicalEditor): () => void
     });
   };
 
-  document.addEventListener("keydown", onKeyDown, true);
-  return () => {
-    document.removeEventListener("keydown", onKeyDown, true);
-  };
+  return editor.registerRootListener((rootElement, previousRootElement) => {
+    previousRootElement?.removeEventListener("keydown", onKeyDown, true);
+    if (!rootElement) {
+      return;
+    }
+    rootElement.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      rootElement.removeEventListener("keydown", onKeyDown, true);
+    };
+  });
 }
 
 function registerDecoratorDeletionCommand(

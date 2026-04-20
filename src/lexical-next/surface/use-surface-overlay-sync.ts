@@ -81,6 +81,14 @@ export function useSurfaceOverlaySync({
       rootElement.addEventListener("scroll", sync, { passive: true });
     }
     window.addEventListener("resize", sync);
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(sync);
+    resizeObserver?.observe(rootElement);
+    if (surfaceElement !== rootElement) {
+      resizeObserver?.observe(surfaceElement);
+    }
+    void document.fonts?.ready.then(sync).catch(() => {});
     const unsubscribe = subscribe?.(sync);
 
     return () => {
@@ -91,6 +99,7 @@ export function useSurfaceOverlaySync({
         rootElement.removeEventListener("scroll", sync);
       }
       window.removeEventListener("resize", sync);
+      resizeObserver?.disconnect();
       unsubscribe?.();
     };
   }, [

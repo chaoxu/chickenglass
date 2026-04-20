@@ -41,6 +41,7 @@ export function AppMainShell({
           sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
           onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
           onDocChange={editor.handleDocChange}
+          onDirtyChange={editor.handleDirtyChange}
           onProgrammaticDocChange={(doc) => {
             editor.handleProgrammaticDocChange(currentPath, doc);
           }}

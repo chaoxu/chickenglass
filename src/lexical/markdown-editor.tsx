@@ -48,6 +48,7 @@ import { EmbeddedFieldFlushProvider } from "./embedded-field-flush-registry";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import {
+  DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
   FormatEventPlugin,
   repairBlankClickSelection,
@@ -93,7 +94,6 @@ import {
   MarkdownEditorHandlePlugin,
   MarkdownModeSyncPlugin,
   readEditorDocument,
-  type RichChangePolicy,
   sameSelection,
   shouldIgnoreMarkdownEditorChange,
   useMarkdownEditorSessionController,
@@ -219,7 +219,6 @@ export interface LexicalMarkdownEditorProps {
   readonly onViewportFromChange?: (from: number) => void;
   readonly renderContextValue?: LexicalRenderContextValue;
   readonly revealPresentation?: RevealPresentation;
-  readonly richChangePolicy?: RichChangePolicy;
   readonly spellCheck?: boolean;
   readonly testId?: string | null;
 }
@@ -246,7 +245,6 @@ export function LexicalMarkdownEditor({
   onViewportFromChange,
   renderContextValue,
   revealPresentation = REVEAL_PRESENTATION.FLOATING,
-  richChangePolicy = "dirty",
   spellCheck = false,
   testId = DEBUG_EDITOR_TEST_ID,
 }: LexicalMarkdownEditorProps) {
@@ -280,7 +278,7 @@ export function LexicalMarkdownEditor({
     onDirtyChange,
     onSelectionChange,
     onTextChange,
-    richChangePolicy,
+    richChangePolicy: "dirty",
   });
 
   const initialConfig = useMemo(() => ({
@@ -419,6 +417,7 @@ export function LexicalMarkdownEditor({
                 />
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
                 {editable ? <InlineTokenBoundaryPlugin /> : null}
+                {!isSourceMode && editable ? <DestructiveKeySelectionSyncPlugin /> : null}
                 {isSourceMode ? (
                   <PlainTextPlugin
                     contentEditable={(

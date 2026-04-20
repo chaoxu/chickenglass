@@ -34,6 +34,7 @@ import {
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
   SELECTION_CHANGE_COMMAND,
+  TextNode,
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
@@ -346,6 +347,7 @@ interface InlineRevealCommitResult {
 function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
   const [chromeState, setChromeState] = useState<InlineRevealChromeState | null>(null);
+  const [activePlainKey, setActivePlainKey] = useState<NodeKey | null>(null);
   const activeRef = useRef<CursorRevealMachineState<InlineRevealSession>>(
     createCursorRevealIdle(),
   );
@@ -394,7 +396,9 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     }
     openInlineReveal(request, adapter, activeRef, setChromeState);
     scheduleOpeningRevealSelectionSync(editor, activeRef);
-    setCursorRevealActive(editor, getCursorRevealSession(activeRef.current) !== null);
+    const active = getCursorRevealSession(activeRef.current);
+    setActivePlainKey(active?.plainKey ?? null);
+    setCursorRevealActive(editor, active !== null);
   }, [adapters, editor]);
 
   useEffect(
@@ -460,6 +464,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
           const commit = commitAndCloseInlineReveal(activeRef, active);
           setChromeState(null);
+          setActivePlainKey(null);
           setCursorRevealActive(editor, false);
           if (!commit.sourceChanged) {
             return false;
@@ -485,6 +490,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         const pick = pickRevealSubject(sel, adapters);
         if (!pick) {
           activeRef.current = clearCursorRevealUserIntent(activeRef.current);
+          setActivePlainKey(null);
           return false;
         }
         if (!canOpenSelectionReveal(pick.adapter)) {
@@ -537,6 +543,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         const commit = commitAndCloseInlineReveal(activeRef, active);
         selectAfterRevealCommit(commit.replacement);
         setChromeState(null);
+        setActivePlainKey(null);
         setCursorRevealActive(editor, false);
         handled = true;
       }
@@ -615,6 +622,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       const commit = commitAndCloseInlineReveal(activeRef, active);
       selectAfterRevealCommit(commit.replacement);
       setChromeState(null);
+      setActivePlainKey(null);
       setCursorRevealActive(editor, false);
       handled = true;
     }, { discrete: true });
@@ -626,7 +634,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     event.stopPropagation();
   }, [editor, selectAfterRevealCommit]);
 
-  useDocumentKeyDownCapture(handleDocumentKeyDown);
+  useDocumentKeyDownCapture(activePlainKey !== null, handleDocumentKeyDown);
 
   const handleDocumentSelectionChange = useCallback(() => {
     const active = getCursorRevealSession(activeRef.current);
@@ -665,12 +673,13 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
 
         commitAndCloseInlineReveal(activeRef, latest);
         setChromeState(null);
+        setActivePlainKey(null);
         setCursorRevealActive(editor, false);
       }, { discrete: true });
     });
   }, [editor]);
 
-  useDocumentSelectionChange(handleDocumentSelectionChange);
+  useDocumentSelectionChange(activePlainKey !== null, handleDocumentSelectionChange);
 
   useRegisterEmbeddedFieldFlush(() => {
     const active = getCursorRevealSession(activeRef.current);
@@ -682,10 +691,12 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       setCursorRevealActive(editor, false);
     }, { discrete: true });
     setChromeState(null);
+    setActivePlainKey(null);
   }, true);
 
   useEffect(() => () => {
     activeRef.current = createCursorRevealIdle();
+    setActivePlainKey(null);
     setCursorRevealActive(editor, false);
   }, [editor]);
 
@@ -695,9 +706,12 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       return;
     }
 
-    return editor.registerUpdateListener(({ editorState }) => {
+    return editor.registerMutationListener(TextNode, (mutations) => {
+      if (!mutations.has(plainKey)) {
+        return;
+      }
       let nextSource: string | null = null;
-      editorState.read(() => {
+      editor.getEditorState().read(() => {
         const live = $getNodeByKey(plainKey);
         nextSource = $isTextNode(live) ? live.getTextContent() : null;
       });
@@ -718,7 +732,12 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   return (
     <InlineRevealChrome
       editor={editor}
-      onClose={() => setChromeState(null)}
+      onClose={() => {
+        activeRef.current = createCursorRevealIdle();
+        setChromeState(null);
+        setActivePlainKey(null);
+        setCursorRevealActive(editor, false);
+      }}
       state={chromeState}
     />
   );

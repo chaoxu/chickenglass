@@ -10,6 +10,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
   $addUpdateTag,
   $getNodeByKey,
+  $setSelection,
   type LexicalNode,
   type NodeKey,
 } from "lexical";
@@ -93,6 +94,7 @@ export function useRawBlockUpdater(nodeKey: NodeKey): (raw: RawUpdate) => void {
       if (pendingIncremental.change) {
         $addUpdateTag(COFLAT_INCREMENTAL_DOC_CHANGE_TAG);
       }
+      $setSelection(null);
       node.setRaw(nextRaw);
     }, {
       discrete: true,

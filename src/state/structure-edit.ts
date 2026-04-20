@@ -16,6 +16,7 @@ export type StructureBlockVariant =
 export type StructureEditSurface =
   | "block-opener"
   | "display-math-source"
+  | "footnote-source"
   | "frontmatter-source"
   | "table-cell";
 

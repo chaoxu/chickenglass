@@ -15,6 +15,7 @@ import { EditorView, lineNumbers } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
 import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";
 import { useEditorNavigation } from "./use-editor-navigation";
+import { useEditorTransactions } from "./use-editor-transactions";
 import type { FileSystem } from "../file-manager";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
@@ -94,6 +95,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   handleHeadingsChange: (headings: HeadingEntry[]) => void;
   /** Called when the diagnostics slice needs updating from a CM6 extension. */
   handleDiagnosticsChange: (diagnostics: DiagnosticEntry[]) => void;
+  /** Mark the current document dirty without immediately replacing the markdown snapshot. */
+  handleDirtyChange: UseEditorSessionReturn["markCurrentDocumentDirty"];
   /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
   /** Called by the Lexical editor surface when its imperative handle is available. */
@@ -192,16 +195,12 @@ export function useAppEditorShell({
     currentPath,
     editorDoc,
     activeDocumentSignal,
-    getCurrentDocText,
-    openFile,
+    getCurrentDocText: getSessionCurrentDocText,
+    openFile: sessionOpenFile,
     isPathOpen,
-    openFileWithContent,
+    openFileWithContent: sessionOpenFileWithContent,
     saveFile: sessionSaveFile,
   } = session;
-
-  const saveFile = useCallback(async () => {
-    await sessionSaveFile();
-  }, [sessionSaveFile]);
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
@@ -213,6 +212,50 @@ export function useAppEditorShell({
     readonly path: string;
     readonly pos: number;
   } | null>(null);
+
+  const { runEditorTransaction } = useEditorTransactions({
+    currentPath,
+    editorDoc,
+    editorHandleRef: lexicalEditorHandleRef,
+    getSessionCurrentDocText,
+    handleDocumentSnapshot: session.handleDocumentSnapshot,
+  });
+
+  const getCurrentDocText = useCallback(() => {
+    return runEditorTransaction("debug-read", getSessionCurrentDocText).value;
+  }, [getSessionCurrentDocText, runEditorTransaction]);
+
+  const saveFile = useCallback(async () => {
+    runEditorTransaction("save", () => undefined);
+    await sessionSaveFile();
+  }, [runEditorTransaction, sessionSaveFile]);
+
+  const openFile = useCallback(async (path: string) => {
+    if (path !== currentPath) {
+      runEditorTransaction("search-navigation", () => undefined);
+    }
+    await sessionOpenFile(path);
+  }, [currentPath, runEditorTransaction, sessionOpenFile]);
+
+  const openFileWithContent = useCallback(async (name: string, content: string) => {
+    runEditorTransaction("search-navigation", () => undefined);
+    await sessionOpenFileWithContent(name, content);
+  }, [runEditorTransaction, sessionOpenFileWithContent]);
+
+  const closeCurrentFile = useCallback(async (options?: { discard?: boolean }) => {
+    runEditorTransaction("save", () => undefined);
+    return session.closeCurrentFile(options);
+  }, [runEditorTransaction, session]);
+
+  const saveAs = useCallback(async () => {
+    runEditorTransaction("save", () => undefined);
+    await session.saveAs();
+  }, [runEditorTransaction, session]);
+
+  const handleWindowCloseRequest = useCallback(async () => {
+    runEditorTransaction("save", () => undefined);
+    return session.handleWindowCloseRequest();
+  }, [runEditorTransaction, session]);
 
   const navigation = useEditorNavigation({ openFile, isPathOpen, currentPath });
   const {
@@ -317,20 +360,28 @@ export function useAppEditorShell({
   }, [editorState?.view, editorMode]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
+    const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
-    if (currentPath) {
-      setModeOverrides((previous) => ({
-        ...previous,
-        [currentPath]: normalizedMode,
-      }));
+    const applyModeOverride = () => {
+      if (currentPath) {
+        setModeOverrides((previous) => ({
+          ...previous,
+          [currentPath]: normalizedMode,
+        }));
+      }
+      setPendingModeOverride((previous) =>
+        previous?.path === currentPath ? null : previous,
+      );
+      const view = editorState?.view;
+      if (!view) return;
+      setEditorMode(view, normalizedMode);
+    };
+    if (flushResult.shouldDeferModeSwitch) {
+      window.setTimeout(applyModeOverride, 0);
+    } else {
+      applyModeOverride();
     }
-    setPendingModeOverride((previous) =>
-      previous?.path === currentPath ? null : previous,
-    );
-    const view = editorState?.view;
-    if (!view) return;
-    setEditorMode(view, normalizedMode);
-  }, [currentPath, editorState?.view, isMarkdownFile]);
+  }, [currentPath, editorState?.view, isMarkdownFile, runEditorTransaction]);
 
   const handleOutlineSelect = useCallback((from: number) => {
     const lexicalHandle = lexicalEditorHandleRef.current;
@@ -437,13 +488,19 @@ export function useAppEditorShell({
   return {
     ...session,
     pluginManager,
+    openFile,
+    openFileWithContent,
     saveFile,
+    closeCurrentFile,
+    saveAs,
+    handleWindowCloseRequest,
     editorState,
     headings,
     diagnostics,
     handleEditorStateChange,
     handleHeadingsChange,
     handleDiagnosticsChange,
+    handleDirtyChange: session.markCurrentDocumentDirty,
     handleEditorDocumentReady,
     handleLexicalEditorReady,
     handleOutlineSelect,

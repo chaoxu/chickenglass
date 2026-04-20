@@ -264,6 +264,14 @@ function queueEmbeddedRawBlockFocus(
         0,
         Math.min(footnoteDefinitionRawOffsetToBodyOffset(raw, offset), footnote.body.length),
       );
+    } else {
+      target = "structure-source";
+      fieldOffset = offset;
+      activateStructureEdit = {
+        blockKey: location.node.getKey(),
+        surface: "footnote-source",
+        variant: "footnote-definition",
+      };
     }
   } else if (/^\s*:{3,}/.test(raw)) {
     const parsed = parseStructuredFencedDivRaw(raw);
@@ -352,14 +360,14 @@ export function selectSourceOffsetsInRichLexicalRoot(
       if (location.adapterId !== "raw-block") {
         return queueReveal(createRevealRequestFromSourceLocation(location, options));
       }
+      if (
+        location.offset === 0
+        && options.revealRawBlockAtBoundary === false
+      ) {
+        return false;
+      }
       if (options.revealRawBlocks === false) {
-        return (
-          queueEmbeddedFocus(location)
-          || queueReveal(createRevealRequestFromSourceLocation(location, {
-            ...options,
-            revealRawBlocks: true,
-          }))
-        );
+        return queueEmbeddedFocus(location);
       }
       return (
         queueReveal(createRevealRequestFromSourceLocation(location, options))

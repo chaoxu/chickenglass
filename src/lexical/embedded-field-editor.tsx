@@ -4,7 +4,7 @@
  *
  * Uses LexicalRichMarkdownEditor with activation lifecycle (always-on or
  * focus-activated). For source-text editing of structure metadata fields
- * (block openers, math source), see StructureSourceEditor instead — it wraps
+ * (openers and structure source fields), see StructureSourceEditor instead — it wraps
  * the plain LexicalMarkdownEditor with draft/commit/revert semantics.
  */
 import {
@@ -79,6 +79,8 @@ export function EmbeddedFieldEditor({
   // idle edits, so app-level dirty state tracks focused titles/captions too.
   const preserveFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const preserveFocusAfterPublishRef = useRef(false);
+  const pendingPublishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPublishDocRef = useRef<string | null>(null);
   const lastPointerDownOutsideRef = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const nestedEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
@@ -89,10 +91,9 @@ export function EmbeddedFieldEditor({
     [spec],
   );
   const draft = useEmbeddedFieldDraftController({
-    keepPendingAfterImmediatePublish: true,
     normalize: normalizeDraft,
     onPublish: onTextChange,
-    publishPolicy: "immediate",
+    publishPolicy: "on-commit",
     value: doc,
   });
   const canActivate = activation === "focus" && (editable ?? surfaceEditable);
@@ -119,6 +120,32 @@ export function EmbeddedFieldEditor({
     preserveFocusTimerRef.current = null;
   }, []);
 
+  const cancelScheduledPublish = useCallback(() => {
+    if (pendingPublishTimerRef.current !== null) {
+      clearTimeout(pendingPublishTimerRef.current);
+      pendingPublishTimerRef.current = null;
+    }
+    pendingPublishDocRef.current = null;
+  }, []);
+
+  const scheduleParentPublish = useCallback((nextDoc: string) => {
+    if (!onTextChange) {
+      return;
+    }
+    pendingPublishDocRef.current = nextDoc;
+    if (pendingPublishTimerRef.current !== null) {
+      clearTimeout(pendingPublishTimerRef.current);
+    }
+    pendingPublishTimerRef.current = setTimeout(() => {
+      pendingPublishTimerRef.current = null;
+      const pendingDoc = pendingPublishDocRef.current;
+      pendingPublishDocRef.current = null;
+      if (pendingDoc !== null) {
+        onTextChange(pendingDoc);
+      }
+    }, 120);
+  }, [onTextChange]);
+
   const commitDraft = useCallback(() => {
     const focusedElement = document.activeElement;
     const shouldFlushNestedEditor =
@@ -130,14 +157,29 @@ export function EmbeddedFieldEditor({
     if (shouldFlushNestedEditor) {
       nestedEditorHandleRef.current?.flushPendingEdits();
     }
+    cancelScheduledPublish();
+    clearPreserveFocusTimer();
+    preserveFocusAfterPublishRef.current = false;
+    if (shouldFlushNestedEditor && onSelectionChange) {
+      const nestedSelection = nestedEditorHandleRef.current?.getSelection();
+      if (nestedSelection) {
+        onSelectionChange(
+          nestedSelection,
+          nestedEditorHandleRef.current?.peekDoc()
+            ?? draft.pendingDraftRef.current
+            ?? draft.draft,
+        );
+      }
+    }
     draft.commitDraft();
-  }, [draft]);
+  }, [cancelScheduledPublish, clearPreserveFocusTimer, draft, onSelectionChange]);
 
   useRegisterEmbeddedFieldFlush(commitDraft, Boolean(onTextChange));
 
   useEffect(() => () => {
     clearPreserveFocusTimer();
-  }, [clearPreserveFocusTimer]);
+    cancelScheduledPublish();
+  }, [cancelScheduledPublish, clearPreserveFocusTimer]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -192,14 +234,19 @@ export function EmbeddedFieldEditor({
       preserveFocusAfterPublishRef.current = false;
       preserveFocusTimerRef.current = null;
     }, 250);
-    draft.updateDraft(nextDoc);
+    const nextDraft = draft.updateDraft(nextDoc);
+    if (nextDraft === normalizeDraft(doc)) {
+      cancelScheduledPublish();
+    } else {
+      scheduleParentPublish(nextDraft);
+    }
     const publishNextVisibleSelection = () => {
       if (spec.fieldKind !== "inline") {
         return;
       }
       const visibleSelection = readVisibleTextDomSelection(nestedRoot);
       if (visibleSelection) {
-        onSelectionChange?.(visibleSelection, nextDoc);
+        onSelectionChange?.(visibleSelection, nextDraft);
       }
     };
     queueMicrotask(publishNextVisibleSelection);
@@ -208,7 +255,17 @@ export function EmbeddedFieldEditor({
       setTimeout(publishNextVisibleSelection, 0);
       setTimeout(publishNextVisibleSelection, 100);
     }
-  }, [clearPreserveFocusTimer, draft, nestedRoot, onSelectionChange, spec.fieldKind]);
+  }, [
+    cancelScheduledPublish,
+    clearPreserveFocusTimer,
+    doc,
+    draft,
+    nestedRoot,
+    normalizeDraft,
+    onSelectionChange,
+    scheduleParentPublish,
+    spec.fieldKind,
+  ]);
 
   const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
     const visibleSelection = spec.fieldKind === "inline"

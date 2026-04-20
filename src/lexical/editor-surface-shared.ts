@@ -2,11 +2,18 @@ import { useEffect } from "react";
 import type { MouseEvent as ReactMouseEvent, MutableRefObject } from "react";
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { HeadingNode } from "@lexical/rich-text";
 import {
   $addUpdateTag,
+  $createRangeSelection,
+  $getNearestNodeFromDOMNode,
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
+  $setSelection,
   COMMAND_PRIORITY_LOW,
+  type LexicalEditor,
+  type TextNode,
 } from "lexical";
 
 import { getInlineTextFormatSpec, useEditorScrollSurface } from "../lexical-next";
@@ -24,6 +31,7 @@ import {
 } from "./source-text";
 import { FORMAT_MARKDOWN_COMMAND } from "./editor-format-command";
 import { COFLAT_FORMAT_COMMIT_TAG } from "./update-tags";
+import { domTextOffsetWithin } from "./dom-selection";
 
 /**
  * Pure helpers and shared plugins for the rich/source markdown editor
@@ -31,6 +39,16 @@ import { COFLAT_FORMAT_COMMIT_TAG } from "./update-tags";
  * carried byte-identical copies of each definition below; consolidating here
  * removes the drift hazard (issue #107).
  */
+
+const pendingDestructiveVisibleOffsetByEditor = new WeakMap<LexicalEditor, number>();
+
+export function consumePendingDestructiveVisibleOffset(
+  editor: LexicalEditor,
+): number | null {
+  const offset = pendingDestructiveVisibleOffsetByEditor.get(editor);
+  pendingDestructiveVisibleOffsetByEditor.delete(editor);
+  return offset ?? null;
+}
 
 export function getViewportFromRichSurface(root: HTMLElement, viewportOwner: HTMLElement = root): number {
   const headings = [...root.querySelectorAll<HTMLElement>(HEADING_SOURCE_SELECTOR)];
@@ -200,8 +218,10 @@ export function ViewportTrackingPlugin({
       });
     };
 
-    const unregisterUpdate = editor.registerUpdateListener(() => {
-      sync();
+    const unregisterHeadingMutations = editor.registerMutationListener(HeadingNode, (mutations) => {
+      if (mutations.size > 0) {
+        sync();
+      }
     });
 
     surface.addEventListener("scroll", sync, { passive: true });
@@ -214,7 +234,7 @@ export function ViewportTrackingPlugin({
       }
       surface.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);
-      unregisterUpdate();
+      unregisterHeadingMutations();
     };
   }, [editor, onViewportFromChange, surface]);
 
@@ -238,6 +258,198 @@ export function RootElementPlugin({
       onRootElementChange(rootElement);
     });
   }, [editor, onRootElementChange]);
+
+  return null;
+}
+
+function destructiveKeyNeedsDomSelectionSync(event: KeyboardEvent): boolean {
+  return event.key === "Backspace" || event.key === "Delete";
+}
+
+function domPointToTextNodePoint(
+  domNode: Node,
+  offset: number,
+): { readonly node: TextNode; readonly offset: number } | null {
+  const lexicalNode = $getNearestNodeFromDOMNode(domNode);
+  if (!$isTextNode(lexicalNode)) {
+    return null;
+  }
+  const size = lexicalNode.getTextContentSize();
+  return {
+    node: lexicalNode,
+    offset: Math.max(0, Math.min(offset, size)),
+  };
+}
+
+function rootChildContaining(root: HTMLElement, node: Node): HTMLElement {
+  let current = node instanceof HTMLElement ? node : node.parentElement;
+  while (current?.parentElement && current.parentElement !== root) {
+    current = current.parentElement;
+  }
+  return current ?? root;
+}
+
+function textPointAtVisibleOffset(
+  root: HTMLElement,
+  offset: number,
+): { readonly node: Text; readonly offset: number } | null {
+  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let remaining = Math.max(0, offset);
+  let lastText: Text | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!(node instanceof Text)) {
+      continue;
+    }
+    lastText = node;
+    const length = node.textContent?.length ?? 0;
+    if (remaining <= length) {
+      return { node, offset: remaining };
+    }
+    remaining -= length;
+  }
+  return lastText
+    ? { node: lastText, offset: lastText.textContent?.length ?? 0 }
+    : null;
+}
+
+function restoreCollapsedSelectionAt(
+  editor: LexicalEditor,
+  block: HTMLElement,
+  offset: number,
+): void {
+  const target = textPointAtVisibleOffset(block, offset);
+  if (!target) {
+    return;
+  }
+
+  const range = block.ownerDocument.createRange();
+  range.setStart(target.node, target.offset);
+  range.collapse(true);
+  const domSelection = block.ownerDocument.getSelection();
+  domSelection?.removeAllRanges();
+  domSelection?.addRange(range);
+
+  editor.update(() => {
+    const point = domPointToTextNodePoint(target.node, target.offset);
+    if (!point) {
+      return;
+    }
+    point.node.select(point.offset, point.offset);
+  }, { discrete: true });
+}
+
+export function DestructiveKeySelectionSyncPlugin(): null {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    let pendingRestore: (() => void) | null = null;
+    const runPendingRestore = () => {
+      const restore = pendingRestore;
+      pendingRestore = null;
+      restore?.();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!destructiveKeyNeedsDomSelectionSync(event)) {
+        return;
+      }
+
+      const root = editor.getRootElement();
+      const selection = root?.ownerDocument.getSelection();
+      const { anchorNode, focusNode } = selection ?? {};
+      if (
+        !root
+        || !selection
+        || selection.isCollapsed
+        || selection.rangeCount === 0
+        || !anchorNode
+        || !focusNode
+        || !root.contains(anchorNode)
+        || !root.contains(focusNode)
+      ) {
+        return;
+      }
+
+      const selectedRange = selection.getRangeAt(0);
+      const collapseBlock = rootChildContaining(root, selectedRange.startContainer);
+      const rootCollapseOffset = domTextOffsetWithin(
+        root,
+        selectedRange.startContainer,
+        selectedRange.startOffset,
+      );
+      const collapseOffset = domTextOffsetWithin(
+        collapseBlock,
+        selectedRange.startContainer,
+        selectedRange.startOffset,
+      );
+
+      editor.update(() => {
+        const anchor = domPointToTextNodePoint(anchorNode, selection.anchorOffset);
+        const focus = domPointToTextNodePoint(focusNode, selection.focusOffset);
+        if (!anchor || !focus) {
+          return;
+        }
+        const nextSelection = $createRangeSelection();
+        nextSelection.anchor.set(anchor.node.getKey(), anchor.offset, "text");
+        nextSelection.focus.set(focus.node.getKey(), focus.offset, "text");
+        $setSelection(nextSelection);
+      }, { discrete: true });
+
+      if (rootCollapseOffset !== null) {
+        pendingDestructiveVisibleOffsetByEditor.set(editor, rootCollapseOffset);
+      }
+      if (collapseOffset !== null) {
+        pendingRestore = () => {
+          restoreCollapsedSelectionAt(
+            editor,
+            collapseBlock.isConnected ? collapseBlock : root,
+            collapseOffset,
+          );
+        };
+        const cleanupKeyUp = () => {
+          root.ownerDocument.removeEventListener("keyup", restoreOnKeyUp, true);
+        };
+        const restoreOnKeyUp = (keyUpEvent: KeyboardEvent) => {
+          if (keyUpEvent.key !== event.key) {
+            return;
+          }
+          cleanupKeyUp();
+          let unregister: (() => void) | null = null;
+          let fallback: ReturnType<typeof setTimeout> | null = null;
+          const restoreAfterUpdate = () => {
+            unregister?.();
+            if (fallback !== null) {
+              clearTimeout(fallback);
+              fallback = null;
+            }
+            runPendingRestore();
+          };
+          unregister = editor.registerUpdateListener(restoreAfterUpdate);
+          fallback = setTimeout(restoreAfterUpdate, 100);
+        };
+        root.ownerDocument.addEventListener("keyup", restoreOnKeyUp, true);
+        setTimeout(runPendingRestore, 100);
+      }
+    };
+
+    const handleInput = () => {
+      runPendingRestore();
+    };
+
+    return editor.registerRootListener((rootElement, previousRootElement) => {
+      previousRootElement?.removeEventListener("keydown", handleKeyDown, true);
+      previousRootElement?.removeEventListener("input", handleInput, true);
+      if (!rootElement) {
+        return;
+      }
+      rootElement.addEventListener("keydown", handleKeyDown, true);
+      rootElement.addEventListener("input", handleInput, true);
+      return () => {
+        rootElement.removeEventListener("keydown", handleKeyDown, true);
+        rootElement.removeEventListener("input", handleInput, true);
+      };
+    });
+  }, [editor]);
 
   return null;
 }

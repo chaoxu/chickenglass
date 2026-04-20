@@ -11,6 +11,7 @@ import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexica
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 
 interface LexicalEditorPaneProps extends EditorPaneProps {
+  readonly onDirtyChange?: () => void;
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle | null) => void;
 }
 
@@ -22,6 +23,7 @@ export function LexicalEditorPane({
   activeDocumentSignal: _activeDocumentSignal,
   editorMode,
   onDiagnosticsChange,
+  onDirtyChange,
   onDocumentReady: _onDocumentReady,
   onHeadingsChange,
   onLexicalEditorReady,
@@ -119,8 +121,8 @@ export function LexicalEditorPane({
         editable={editable}
         editorMode={lexicalMode}
         onDocChange={editorOptions.onDocChange}
+        onDirtyChange={onDirtyChange}
         onEditorReady={handleEditorReady}
-        richChangePolicy="markdown"
         onSelectionChange={handleSelectionChange}
         onTextChange={handleTextChange}
         onScrollChange={(scrollTop) => {

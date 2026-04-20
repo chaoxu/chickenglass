@@ -37,13 +37,13 @@ export interface DevSettingsStore extends DevSettings {
 export const selectAnyDebugActive = (s: DevSettings) =>
   s.treeView || s.perfPanel || s.fpsCounter || s.commandLogging || s.focusTracing;
 
-const recordHumanSessionsByDefault = import.meta.env.MODE === "show" || !import.meta.env.DEV;
-
 export const useDevSettings = create<DevSettingsStore>()((setState, getState) => ({
   treeView: false,
   perfPanel: false,
   fpsCounter: false,
-  commandLogging: recordHumanSessionsByDefault,
+  // Session recording hooks run on input/click paths. Keep them explicitly
+  // opt-in so normal browser, preview, and Tauri editing stays on the fast path.
+  commandLogging: false,
   focusTracing: false,
   selectionAlwaysOn: false,
 

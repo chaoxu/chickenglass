@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { $isCodeNode, CodeHighlightNode, CodeNode } from "@lexical/code";
+import {
+  $getNodeByKey,
+  $isRootNode,
+  mergeRegister,
+  type EditorState,
+  type LexicalNode,
+  type NodeKey,
+  type NodeMutation,
+  TextNode,
+} from "lexical";
 
 import {
   useEditorScrollSurface,
@@ -39,6 +50,74 @@ function ensureCodeBlockId(codeElement: HTMLElement): string {
 function formatLanguage(codeElement: HTMLElement): string {
   const language = codeElement.dataset.language?.trim();
   return language ? language.toUpperCase() : "TEXT";
+}
+
+function $nodeOrAncestorIsCode(node: LexicalNode | null): boolean {
+  let current: LexicalNode | null = node;
+  while (current) {
+    if ($isCodeNode(current)) {
+      return true;
+    }
+    if ($isRootNode(current)) {
+      return false;
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
+function textMutationsMayAffectCodeBlocks(
+  editorState: EditorState,
+  previousEditorState: EditorState,
+  mutations: ReadonlyMap<NodeKey, NodeMutation>,
+): boolean {
+  if (mutations.size === 0) {
+    return false;
+  }
+
+  let affectsCode = false;
+  editorState.read(() => {
+    for (const key of mutations.keys()) {
+      if ($nodeOrAncestorIsCode($getNodeByKey(key))) {
+        affectsCode = true;
+        return;
+      }
+    }
+  });
+
+  if (affectsCode) {
+    return true;
+  }
+
+  previousEditorState.read(() => {
+    for (const [key, mutation] of mutations) {
+      if (mutation === "destroyed" && $nodeOrAncestorIsCode($getNodeByKey(key))) {
+        affectsCode = true;
+        return;
+      }
+    }
+  });
+
+  return affectsCode;
+}
+
+function sameOverlayGeometry(
+  left: readonly CodeBlockOverlay[],
+  right: readonly CodeBlockOverlay[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((overlay, index) => {
+    const other = right[index];
+    return other
+      && overlay.id === other.id
+      && overlay.language === other.language
+      && overlay.text === other.text
+      && Math.abs(overlay.rect.left - other.rect.left) < 0.5
+      && Math.abs(overlay.rect.top - other.rect.top) < 0.5
+      && Math.abs(overlay.rect.width - other.rect.width) < 0.5;
+  });
 }
 
 export function collectCodeBlockOverlays(
@@ -87,9 +166,35 @@ export function CodeBlockChromePlugin() {
     ));
   }, []);
   const subscribeOverlayUpdates = useCallback((sync: SurfaceOverlaySync) =>
-    editor.registerUpdateListener(() => {
-      sync();
-    }), [editor]);
+    mergeRegister(
+      editor.registerMutationListener(CodeNode, (mutations) => {
+        if (mutations.size > 0) {
+          sync();
+        }
+      }),
+      editor.registerMutationListener(TextNode, (mutations, { prevEditorState }) => {
+        if (
+          textMutationsMayAffectCodeBlocks(
+            editor.getEditorState(),
+            prevEditorState,
+            mutations,
+          )
+        ) {
+          sync();
+        }
+      }),
+      editor.registerMutationListener(CodeHighlightNode, (mutations, { prevEditorState }) => {
+        if (
+          textMutationsMayAffectCodeBlocks(
+            editor.getEditorState(),
+            prevEditorState,
+            mutations,
+          )
+        ) {
+          sync();
+        }
+      }),
+    ), [editor]);
 
   useSurfaceOverlaySync({
     observeRootScroll: true,
@@ -103,6 +208,19 @@ export function CodeBlockChromePlugin() {
   useEffect(() => editor.registerRootListener((nextRootElement) => {
     setRootElement(nextRootElement);
   }), [editor]);
+
+  useLayoutEffect(() => {
+    if (!rootElement || !surfaceElement || overlays.length === 0) {
+      return;
+    }
+    const nextOverlays = collectCodeBlockOverlays(rootElement, surfaceElement, {
+      left: surfaceElement.scrollLeft,
+      top: surfaceElement.scrollTop,
+    });
+    if (!sameOverlayGeometry(overlays, nextOverlays)) {
+      setOverlays(nextOverlays);
+    }
+  }, [overlays, rootElement, surfaceElement]);
 
   const portal = useMemo(() => {
     if (!surfaceElement || typeof document === "undefined") {

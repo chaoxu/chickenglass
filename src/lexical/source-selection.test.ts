@@ -7,6 +7,10 @@ import {
 } from "./cursor-reveal-controller";
 import { createHeadlessCoflatEditor, setLexicalMarkdown } from "./markdown";
 import {
+  ACTIVATE_STRUCTURE_EDIT_COMMAND,
+  type ActivateStructureEditRequest,
+} from "./structure-edit-plugin";
+import {
   mapVisibleTextSelectionToMarkdown,
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-selection";
@@ -90,6 +94,81 @@ describe("source selection mapping", () => {
       });
     } finally {
       unregister();
+    }
+  });
+
+  it("does not reveal raw blocks when raw source reveals are disabled", () => {
+    const doc = ["---", "title: Test", "---", "", "# Intro"].join("\n");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+    let request: CursorRevealOpenRequest | null = null;
+    let structureRequest: ActivateStructureEditRequest | null = null;
+    const unregister = editor.registerCommand(
+      OPEN_CURSOR_REVEAL_COMMAND,
+      (nextRequest) => {
+        request = nextRequest;
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+    const unregisterStructure = editor.registerCommand(
+      ACTIVATE_STRUCTURE_EDIT_COMMAND,
+      (nextRequest) => {
+        structureRequest = nextRequest;
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+
+    try {
+      expect(selectSourceOffsetsInRichLexicalRoot(editor, doc, 0, 0, {
+        revealRawBlockAtBoundary: false,
+        revealRawBlocks: false,
+      })).toBe(false);
+      expect(request).toBeNull();
+      expect(structureRequest).toBeNull();
+    } finally {
+      unregister();
+      unregisterStructure();
+    }
+  });
+
+  it("routes footnote-definition label offsets to the structure source editor", () => {
+    const doc = "[^note]: Footnote body.";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+    let revealRequest: CursorRevealOpenRequest | null = null;
+    let structureRequest: ActivateStructureEditRequest | null = null;
+    const unregisterReveal = editor.registerCommand(
+      OPEN_CURSOR_REVEAL_COMMAND,
+      (nextRequest) => {
+        revealRequest = nextRequest;
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+    const unregisterStructure = editor.registerCommand(
+      ACTIVATE_STRUCTURE_EDIT_COMMAND,
+      (nextRequest) => {
+        structureRequest = nextRequest;
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+
+    try {
+      expect(selectSourceOffsetsInRichLexicalRoot(editor, doc, doc.indexOf("note") + 1, undefined, {
+        revealRawBlockAtBoundary: false,
+        revealRawBlocks: false,
+      })).toBe(true);
+      expect(revealRequest).toBeNull();
+      expect(structureRequest).toMatchObject({
+        surface: "footnote-source",
+        variant: "footnote-definition",
+      });
+    } finally {
+      unregisterReveal();
+      unregisterStructure();
     }
   });
 
