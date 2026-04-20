@@ -74,6 +74,23 @@ export function branchExists(repoRoot, branch) {
   return result.status === 0;
 }
 
+const MANAGED_WORKTREE_BRANCH_KEY = "coflat-managed-worktree";
+
+export function markManagedWorktreeBranch(repoRoot, branch) {
+  git(repoRoot, "config", "--bool", `branch.${branch}.${MANAGED_WORKTREE_BRANCH_KEY}`, "true");
+}
+
+export function isManagedWorktreeBranch(repoRoot, branch) {
+  const result = gitMaybe(
+    repoRoot,
+    "config",
+    "--bool",
+    "--get",
+    `branch.${branch}.${MANAGED_WORKTREE_BRANCH_KEY}`,
+  );
+  return result.status === 0 && result.stdout.trim() === "true";
+}
+
 // Returns true if origin/main is a known ref in this repo.
 export function hasOriginMain(repoRoot) {
   const result = gitMaybe(

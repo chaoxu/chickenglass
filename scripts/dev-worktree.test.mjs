@@ -122,6 +122,21 @@ describe("dev-worktree", () => {
     expect(readFileSync(join(result.worktreePath, "tracked.txt"), "utf8")).toBe("base\n");
   });
 
+  it("marks branches created by the helper as managed", () => {
+    const repoRoot = initRepo();
+    cleanup.push(repoRoot);
+
+    createDevWorktree({
+      repoRoot,
+      name: "managed-marker",
+      linkNodeModules: false,
+    });
+
+    expect(
+      run(repoRoot, "git", "config", "--bool", "--get", "branch.managed-marker.coflat-managed-worktree"),
+    ).toBe("true");
+  });
+
   it("repairs placeholder node_modules directories in managed worktrees", () => {
     const repoRoot = initRepo();
     cleanup.push(repoRoot);
@@ -282,5 +297,32 @@ describe("dev-worktree subcommands", () => {
     });
     // Should not throw and should mention pruning/branches.
     expect(output.length).toBeGreaterThan(0);
+  });
+
+  it("prune deletes only explicitly managed branches", () => {
+    const repoRoot = initRepo();
+    const originRoot = initBareOrigin();
+    cleanup.push(repoRoot, originRoot);
+
+    run(repoRoot, "git", "remote", "add", "origin", originRoot);
+    run(repoRoot, "git", "push", "-u", "origin", "main");
+    run(repoRoot, "git", "branch", "fix-ui");
+    const managed = createDevWorktree({
+      repoRoot,
+      name: "managed-prune",
+      linkNodeModules: false,
+    });
+    run(repoRoot, "git", "worktree", "remove", "--force", managed.worktreePath);
+
+    const output = execFileSync("node", [cliPath, "prune"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: testExecEnv,
+    });
+
+    expect(output).toMatch(/managed-prune/);
+    expect(output).not.toMatch(/fix-ui/);
+    expect(run(repoRoot, "git", "branch", "--list", "managed-prune")).toBe("");
+    expect(run(repoRoot, "git", "branch", "--list", "fix-ui")).toContain("fix-ui");
   });
 });

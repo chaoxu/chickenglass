@@ -7,6 +7,7 @@ import {
   branchExists,
   git,
   gitMaybe,
+  markManagedWorktreeBranch,
   resolveRepoRoot,
   runCommand,
   sanitizeDevWorktreeName,
@@ -88,6 +89,7 @@ export function createDevWorktree({
     resolvedRepoRoot,
     true,
   );
+  markManagedWorktreeBranch(resolvedRepoRoot, resolvedBranch);
 
   const nodeModulesResult = shouldLinkNodeModules
     ? ensureNodeModulesLink({

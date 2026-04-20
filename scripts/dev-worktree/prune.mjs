@@ -5,29 +5,15 @@ import { listCoflatWorktrees } from "./list.mjs";
 import {
   git,
   gitMaybe,
+  isManagedWorktreeBranch,
   isBranchMerged,
   resolveRepoRoot,
-  sanitizeDevWorktreeName,
 } from "./shared.mjs";
 
 // List local branch names.
 function localBranches(repoRoot) {
   const out = git(repoRoot, "for-each-ref", "--format=%(refname:short)", "refs/heads/");
   return out.split("\n").map((s) => s.trim()).filter(Boolean);
-}
-
-// A branch name "looks managed" if it equals its own sanitized form AND is
-// not the main/master branch. We deliberately avoid deleting branches the
-// user might have hand-named (e.g. "feature/x") even if they happen to be
-// merged.
-function looksManaged(branch) {
-  if (!branch) return false;
-  if (branch === "main" || branch === "master") return false;
-  try {
-    return sanitizeDevWorktreeName(branch) === branch;
-  } catch {
-    return false;
-  }
 }
 
 export function runPrune({
@@ -65,7 +51,7 @@ export function runPrune({
 
   const candidates = localBranches(resolvedRoot)
     .filter((b) => !liveBranches.has(b))
-    .filter(looksManaged);
+    .filter((b) => isManagedWorktreeBranch(resolvedRoot, b));
 
   const deletable = [];
   const skipped = [];
