@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BackgroundIndexer } from "../../index";
 import type { FileSystem } from "../file-manager";
-import { collectSearchableMarkdownPaths } from "../search";
+import { listAllMarkdownFiles, readProjectTextFiles } from "../project-file-enumerator";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { UseDialogsReturn } from "./use-dialogs";
 
@@ -52,35 +52,39 @@ export function useAppSearchIndex(
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     void (async () => {
       try {
-        const tree = await fs.listTree();
-        const markdownPaths = collectSearchableMarkdownPaths(tree);
-        const files = await Promise.all(
-          markdownPaths.map(async (path) => ({
-            file: path,
-            content:
-              path === editor.currentPath
-                ? activeSearchDoc
-                : await fs.readFile(path),
-          })),
+        const markdownPaths = await listAllMarkdownFiles({
+          fs,
+          signal: controller.signal,
+        });
+        const overrides = editor.currentPath
+          ? new Map([[editor.currentPath, activeSearchDoc]])
+          : undefined;
+        const files = await readProjectTextFiles(
+          fs,
+          markdownPaths,
+          {
+            contentOverrides: overrides,
+            signal: controller.signal,
+          },
         );
 
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           await indexer.bulkUpdate(files);
           setSearchVersion((version) => version + 1);
         }
       } catch (error: unknown) {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           console.error("[search] failed to build app search index", error);
         }
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [
     dialogs.searchOpen,

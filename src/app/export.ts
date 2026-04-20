@@ -14,6 +14,7 @@ import type { ExportFormat } from "./lib/types";
 import { basename } from "./lib/utils";
 import { exportThemeTokenDefaults } from "../theme-contract";
 import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
+import { collectMarkdownPathsFromTree, listAllMarkdownFiles } from "./project-file-enumerator";
 
 export type { ExportFormat };
 
@@ -270,7 +271,10 @@ export async function batchExport(
   fs: FileSystem,
   onProgress?: BatchExportProgress,
 ): Promise<Array<{ path: string; outputPath?: string; error?: string }>> {
-  const mdPaths = collectMdPaths(tree);
+  const mdPaths = await listAllMarkdownFiles({
+    root: tree,
+    listChildren: fs.listChildren?.bind(fs),
+  });
   const results: Array<{ path: string; outputPath?: string; error?: string }> = [];
 
   for (let i = 0; i < mdPaths.length; i++) {
@@ -296,15 +300,5 @@ export async function batchExport(
 
 /** Recursively collect all .md file paths from a FileEntry tree. */
 export function collectMdPaths(entry: FileEntry): string[] {
-  const paths: string[] = [];
-  if (entry.isDirectory) {
-    if (entry.children) {
-      for (const child of entry.children) {
-        paths.push(...collectMdPaths(child));
-      }
-    }
-  } else if (entry.name.endsWith(".md")) {
-    paths.push(entry.path);
-  }
-  return paths;
+  return collectMarkdownPathsFromTree(entry);
 }

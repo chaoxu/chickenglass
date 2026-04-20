@@ -1,6 +1,7 @@
 import { EDITOR_MODE, type EditorMode } from "./editor-mode";
 import type { IndexQuery } from "../index/query-api";
 import type { FileEntry } from "../lib/types";
+import { collectMarkdownPathsFromTree } from "./project-file-enumerator";
 
 export type AppSearchMode = "semantic" | "source";
 
@@ -30,21 +31,5 @@ export function buildSemanticSearchQuery(
 
 /** Collect all markdown file paths reachable from a file tree. */
 export function collectSearchableMarkdownPaths(entry: FileEntry): string[] {
-  const results: string[] = [];
-
-  const visit = (node: FileEntry) => {
-    if (node.isDirectory) {
-      for (const child of node.children ?? []) {
-        visit(child);
-      }
-      return;
-    }
-
-    if (node.path.endsWith(".md")) {
-      results.push(node.path);
-    }
-  };
-
-  visit(entry);
-  return results;
+  return collectMarkdownPathsFromTree(entry);
 }

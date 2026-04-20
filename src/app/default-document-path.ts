@@ -1,4 +1,5 @@
 import type { FileEntry } from "./file-manager";
+import { listAllMarkdownFiles } from "./project-file-enumerator";
 
 /**
  * Find the default document to open for a project.
@@ -22,19 +23,17 @@ export async function findDefaultDocumentPath(
     ?? rootFiles.find((entry) => entry.path.endsWith(".md"));
   if (preferred) return preferred.path;
 
-  const findFirst = async (entry: FileEntry): Promise<string | null> => {
-    if (signal?.aborted) return null;
-    if (!entry.isDirectory) return entry.path;
-    const children = listChildren
-      ? (entry.children ?? await listChildren(entry.path))
-      : (entry.children ?? []);
-    if (signal?.aborted) return null;
-    for (const child of children) {
-      const found = await findFirst(child);
-      if (found) return found;
+  try {
+    const [first] = await listAllMarkdownFiles({
+      root: fileTree,
+      listChildren,
+      signal,
+    });
+    return first ?? null;
+  } catch (error: unknown) {
+    if (signal?.aborted && error instanceof DOMException && error.name === "AbortError") {
+      return null;
     }
-    return null;
-  };
-
-  return findFirst(fileTree);
+    throw error;
+  }
 }

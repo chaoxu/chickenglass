@@ -1,11 +1,18 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   _buildHtmlDocumentForTest,
   _buildHtmlDocumentAsyncForTest,
   _resolveExportThemeTokensForTest,
+  batchExport,
   sanitizeCssValue,
 } from "./export";
+import type { FileEntry } from "./file-system";
+import { MemoryFileSystem } from "./memory-file-system";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("resolveExportThemeTokens", () => {
   const root = document.documentElement;
@@ -85,6 +92,55 @@ describe("buildHtmlDocument", () => {
     // The token should appear in the style block with its resolved value
     expect(html).toContain("--cf-bg: red;");
     expect(html).toContain("<style>");
+  });
+});
+
+describe("batchExport", () => {
+  it("enumerates nested unloaded markdown directories through the project file service", async () => {
+    const fs = new MemoryFileSystem({
+      "root.md": "# Root",
+      "nested/deep.md": "# Deep",
+      "nested/asset.png": "png",
+    });
+    const tree: FileEntry = {
+      name: "project",
+      path: "",
+      isDirectory: true,
+      children: [
+        { name: "nested", path: "nested", isDirectory: true },
+        { name: "root.md", path: "root.md", isDirectory: false },
+      ],
+    };
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:coflat-test"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      const results = await batchExport(tree, "html", fs);
+
+      expect(results.map((result) => result.path)).toEqual([
+        "nested/deep.md",
+        "root.md",
+      ]);
+      expect(results.every((result) => result.outputPath && !result.error)).toBe(true);
+    } finally {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectUrl,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectUrl,
+      });
+    }
   });
 });
 
