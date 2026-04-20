@@ -26,6 +26,11 @@ import {
 import { getInlineTextFormatSpecs } from "../lexical-next";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import { parseStructuredFencedDivRaw } from "./markdown/block-syntax";
+import {
+  findMatchingFormattedTextSource,
+  findMatchingMarkdownLinkSource,
+  serializeMarkdownLinkSource,
+} from "./markdown/inline-source";
 import { parseFootnoteDefinition } from "./markdown/footnotes";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isHeadingAttributeNode } from "./nodes/heading-attribute-node";
@@ -44,6 +49,7 @@ import {
   fencedDivBodyMarkdownOffset,
   fencedDivTitleMarkdownOffset,
   footnoteDefinitionBodyOffset,
+  footnoteDefinitionRawOffsetToBodyOffset,
 } from "./structure-source-offsets";
 import {
   ACTIVATE_STRUCTURE_EDIT_COMMAND,
@@ -535,7 +541,7 @@ function getRevealSource(
 }
 
 function getLinkSource(node: LinkNode): string {
-  return `[${node.getTextContent()}](${node.getURL()})`;
+  return serializeMarkdownLinkSource(node);
 }
 
 function getFormattedTextSource(node: TextNode): {
@@ -615,12 +621,14 @@ function findNearestLiveSourceLocation(
 
   const visit = (node: LexicalNode): boolean => {
     if ($isLinkNode(node)) {
-      const source = getLinkSource(node);
-      const markdownIndex = markdown.indexOf(source, searchFrom);
+      const sourceMatch = findMatchingMarkdownLinkSource(markdown, node, searchFrom);
+      const source = sourceMatch?.raw ?? getLinkSource(node);
+      const markdownIndex = sourceMatch?.from ?? markdown.indexOf(source, searchFrom);
       if (source.length > 0 && markdownIndex >= 0) {
         const sourceEnd = markdownIndex + source.length;
         const labelStart = markdownIndex + 1;
-        const labelEnd = labelStart + node.getTextContent().length;
+        const labelMarkdownLength = sourceMatch?.labelMarkdown.length ?? node.getTextContent().length;
+        const labelEnd = labelStart + labelMarkdownLength;
         if (targetOffset <= markdownIndex) {
           nearest = {
             adapterId: "link",
@@ -631,7 +639,11 @@ function findNearestLiveSourceLocation(
           };
           return true;
         }
-        if (targetOffset >= labelStart && targetOffset <= labelEnd) {
+        if (
+          targetOffset >= labelStart
+          && targetOffset <= labelEnd
+          && labelMarkdownLength === node.getTextContent().length
+        ) {
           const textLocation = findTextLocationInElement(node, targetOffset - labelStart);
           if (textLocation) {
             nearest = textLocation;
@@ -662,13 +674,18 @@ function findNearestLiveSourceLocation(
 
     const reveal = getRevealSource(node);
     const formattedText = $isTextNode(node) ? getFormattedTextSource(node) : null;
-    const source = formattedText?.source ?? ($isTextNode(node) ? node.getTextContent() : reveal?.source ?? null);
+    const formattedTextMatch = $isTextNode(node) && formattedText
+      ? findMatchingFormattedTextSource(markdown, node, searchFrom)
+      : null;
+    const source = formattedTextMatch?.source
+      ?? formattedText?.source
+      ?? ($isTextNode(node) ? node.getTextContent() : reveal?.source ?? null);
     if (source !== null) {
       if (source.length === 0) {
         return false;
       }
 
-      const markdownIndex = markdown.indexOf(source, searchFrom);
+      const markdownIndex = formattedTextMatch?.from ?? markdown.indexOf(source, searchFrom);
       if (markdownIndex < 0) {
         return false;
       }
@@ -676,8 +693,9 @@ function findNearestLiveSourceLocation(
       const sourceEnd = markdownIndex + source.length;
       const location = (sourceOffset: number): LiveSourceLocation => {
         if ($isTextNode(node) && formattedText) {
-          const visibleStart = formattedText.openLength;
-          const visibleEnd = source.length - formattedText.closeLength;
+          const visibleStart = formattedTextMatch?.openLength ?? formattedText.openLength;
+          const closeLength = formattedTextMatch?.closeLength ?? formattedText.closeLength;
+          const visibleEnd = source.length - closeLength;
           if (sourceOffset < visibleStart || sourceOffset > visibleEnd) {
             return {
               adapterId: "text-format",
@@ -716,7 +734,8 @@ function findNearestLiveSourceLocation(
         return true;
       }
 
-      if (targetOffset <= sourceEnd) {
+      const plainTextEndBoundary = targetOffset === sourceEnd && $isTextNode(node) && !formattedText;
+      if (targetOffset <= sourceEnd && !plainTextEndBoundary) {
         nearest = location(targetOffset - markdownIndex);
         return true;
       }
@@ -835,7 +854,10 @@ function queueEmbeddedRawBlockFocus(
     const bodyStart = footnoteDefinitionBodyOffset(raw);
     if (offset >= bodyStart) {
       target = "footnote-body";
-      fieldOffset = clampedFieldOffset(offset, bodyStart, footnote.body.length);
+      fieldOffset = Math.max(
+        0,
+        Math.min(footnoteDefinitionRawOffsetToBodyOffset(raw, offset), footnote.body.length),
+      );
     }
   } else if (/^\s*:{3,}/.test(raw)) {
     const parsed = parseStructuredFencedDivRaw(raw);

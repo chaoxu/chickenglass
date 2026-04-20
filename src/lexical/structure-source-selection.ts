@@ -9,6 +9,7 @@ import {
   fencedDivBodyMarkdownOffset,
   fencedDivTitleMarkdownOffset,
   fencedDivTrimmedBodyMarkdownOffset,
+  footnoteDefinitionBodyOffsetToRawOffset,
   footnoteDefinitionBodyOffset,
 } from "./structure-source-offsets";
 import {
@@ -27,6 +28,7 @@ export {
   fencedDivTitleMarkdownOffset,
   fencedDivTrimmedBodyMarkdownOffset,
   footnoteDefinitionBodyOffset,
+  footnoteDefinitionBodyOffsetToRawOffset,
 };
 
 function mapSelectionIntoRaw(
@@ -61,9 +63,12 @@ function mapSelectionIntoRaw(
 
 function embeddedMarkdownFieldSelectionMapper(
   markdown: string,
-  offsetInRaw: number,
+  offsetInRaw: number | StructureSourceSelectionMapper,
 ): StructureSourceSelectionMapper {
   return (selection) => {
+    if (typeof offsetInRaw === "function") {
+      return offsetInRaw(selection);
+    }
     const visibleLength = getMarkdownVisibleTextLength(markdown);
     const mapped = selection.to <= visibleLength
       ? mapVisibleTextSelectionToMarkdown(markdown, selection)
@@ -83,9 +88,22 @@ function embeddedMarkdownFieldSelectionMapper(
 function mapEmbeddedMarkdownFieldSelection(
   selection: MarkdownEditorSelection,
   markdown: string,
-  offsetInRaw: number,
+  offsetInRaw: number | StructureSourceSelectionMapper,
 ): MarkdownEditorSelection {
   return embeddedMarkdownFieldSelectionMapper(markdown, offsetInRaw)(selection) as MarkdownEditorSelection;
+}
+
+export function footnoteDefinitionBodySelectionMapper(raw: string): StructureSourceSelectionMapper {
+  return (selection) => {
+    const anchor = footnoteDefinitionBodyOffsetToRawOffset(raw, selection.anchor);
+    const focus = footnoteDefinitionBodyOffsetToRawOffset(raw, selection.focus);
+    return {
+      anchor,
+      focus,
+      from: Math.min(anchor, focus),
+      to: Math.max(anchor, focus),
+    };
+  };
 }
 
 function readRawBlockSourcePosition(
@@ -118,7 +136,7 @@ function readStructureBlockPosition(editor: LexicalEditor, nodeKey: NodeKey): nu
 export function useEmbeddedMarkdownSourceSelectionBridge(
   editor: LexicalEditor,
   nodeKey: NodeKey,
-  offsetInRaw: number,
+  offsetInRaw: number | StructureSourceSelectionMapper,
 ): (selection: MarkdownEditorSelection, markdown: string) => void {
   return useCallback((selection: MarkdownEditorSelection, markdown: string) => {
     const blockPosition = readStructureBlockPosition(editor, nodeKey);

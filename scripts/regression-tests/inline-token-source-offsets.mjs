@@ -20,7 +20,14 @@ async function openScratch(page, doc, label) {
       window.__editor?.getDoc?.() === text,
     { expectedPath: path, text: doc },
     { timeout: 10_000 },
-  );
+  ).catch(async (error) => {
+    const state = await page.evaluate(() => ({
+      currentPath: window.__app?.getCurrentDocument?.()?.path ?? null,
+      doc: window.__editor?.getDoc?.() ?? null,
+      mode: window.__app?.getMode?.() ?? null,
+    }));
+    throw new Error(`openScratch timed out for ${label}: ${error.message}; state=${JSON.stringify(state)}`);
+  });
   await switchToMode(page, "lexical");
 }
 
@@ -43,7 +50,41 @@ async function typeFromSourceOffset(page, doc, needle, offsetInNeedle, marker) {
     },
     offset,
     { timeout: 5000 },
-  );
+  ).catch(async (error) => {
+    const state = await page.evaluate(() => ({
+      doc: window.__editor?.getDoc?.() ?? "",
+      mode: window.__app?.getMode?.() ?? null,
+      selection: window.__editor?.getSelection?.() ?? null,
+      links: [...document.querySelectorAll("a.cf-lexical-link")]
+        .map((element) => ({
+          href: element.getAttribute("href"),
+          text: element.textContent,
+          title: element.getAttribute("title"),
+        })),
+      revealText: [...document.querySelectorAll("[data-lexical-text='true']")]
+        .map((element) => element.textContent ?? "")
+        .find((text) => text.includes("http") || text.includes("[^") || text.includes("!["))
+        ?? null,
+    }));
+    throw new Error(`selection did not round-trip for ${marker} at ${offset}: ${error.message}; state=${JSON.stringify(state)}`);
+  });
+  await page.keyboard.type(marker);
+  await waitForBrowserSettled(page);
+  return readEditorText(page);
+}
+
+async function typeFromLexicalSourceOffset(page, doc, needle, offsetInNeedle, marker) {
+  await openScratch(page, doc, marker);
+  const source = await readEditorText(page);
+  const needleStart = source.indexOf(needle);
+  if (needleStart < 0) {
+    throw new Error(`source needle not found: ${needle}`);
+  }
+  const offset = needleStart + offsetInNeedle;
+  await page.evaluate((nextOffset) => {
+    window.__editor.setSelection(nextOffset, nextOffset);
+  }, offset);
+  await waitForBrowserSettled(page);
   await page.keyboard.type(marker);
   await waitForBrowserSettled(page);
   return readEditorText(page);
@@ -100,6 +141,17 @@ export async function run(page) {
     return { pass: false, message: `link URL offset edited the wrong location: ${JSON.stringify(linkDoc)}` };
   }
 
+  const titledLinkDoc = await typeFromLexicalSourceOffset(
+    page,
+    'Alpha [**rich** link](https://example.com/path "A title") omega.',
+    "title",
+    2,
+    "T",
+  );
+  if (!titledLinkDoc.includes('[**rich** link](https://example.com/path "A tiTtle")')) {
+    return { pass: false, message: `link title/formatted-label source offset edited the wrong location: ${JSON.stringify(titledLinkDoc)}` };
+  }
+
   const headingDoc = await typeFromSourceOffset(
     page,
     "# Intro {#sec:intro}\n\nBody\n",
@@ -131,6 +183,17 @@ export async function run(page) {
   );
   if (!footnoteDoc.includes("[^nFote] omega.")) {
     return { pass: false, message: `footnote reference offset edited the wrong location: ${JSON.stringify(footnoteDoc)}` };
+  }
+
+  const footnoteContinuationDoc = await typeFromSourceOffset(
+    page,
+    "Alpha footnote.[^note]\n\n[^note]: First line\n  second line.",
+    "second",
+    3,
+    "N",
+  );
+  if (!footnoteContinuationDoc.includes("[^note]: First line\n  secNond line.")) {
+    return { pass: false, message: `footnote continuation offset edited the wrong location: ${JSON.stringify(footnoteContinuationDoc)}` };
   }
 
   return {

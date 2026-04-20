@@ -12,7 +12,7 @@ import {
 import { renderMarkdownRichHtml } from "../markdown/rich-html-preview";
 import { useLexicalRenderContext } from "../render-context";
 import {
-  footnoteDefinitionBodyOffset,
+  footnoteDefinitionBodySelectionMapper,
   useEmbeddedMarkdownSourceSelectionBridge,
 } from "../structure-source-selection";
 import {
@@ -32,11 +32,11 @@ export function FootnoteDefinitionBlockRenderer({
   const parsed = useMemo(() => parseFootnoteDefinition(raw), [raw]);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const pendingFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "footnote-body");
-  const bodyOffset = footnoteDefinitionBodyOffset(raw);
+  const bodySelectionMapper = useMemo(() => footnoteDefinitionBodySelectionMapper(raw), [raw]);
   const onBodySelectionChange = useEmbeddedMarkdownSourceSelectionBridge(
     editor,
     nodeKey,
-    bodyOffset,
+    bodySelectionMapper,
   );
 
   if (!parsed) {

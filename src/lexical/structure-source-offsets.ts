@@ -63,3 +63,74 @@ export function footnoteDefinitionBodyOffset(raw: string): number {
   const opener = raw.slice(0, firstLineLength(raw));
   return opener.match(/^\[\^[^\]]+\]:\s*/)?.[0].length ?? 0;
 }
+
+function lineStartOffsets(lines: readonly string[]): number[] {
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    offsets.push(offset);
+    offset += line.length + 1;
+  }
+  return offsets;
+}
+
+export function footnoteDefinitionRawOffsetToBodyOffset(raw: string, rawOffset: number): number {
+  const lines = raw.split("\n");
+  const offsets = lineStartOffsets(lines);
+  const openerLength = footnoteDefinitionBodyOffset(raw);
+  const target = Math.max(0, Math.min(rawOffset, raw.length));
+  let bodyOffset = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const lineStart = offsets[index] ?? 0;
+    const lineEnd = lineStart + line.length;
+    const contentStartInLine = index === 0
+      ? openerLength
+      : line.match(/^\s{2,4}/)?.[0].length ?? 0;
+    const content = line.slice(contentStartInLine);
+    const contentStart = lineStart + contentStartInLine;
+    const contentEnd = contentStart + content.length;
+
+    if (target <= lineEnd || index === lines.length - 1) {
+      return bodyOffset + Math.max(0, Math.min(target - contentStart, content.length));
+    }
+
+    bodyOffset += content.length;
+    if (index < lines.length - 1) {
+      bodyOffset += 1;
+    }
+
+    if (target <= contentEnd) {
+      return bodyOffset;
+    }
+  }
+
+  return bodyOffset;
+}
+
+export function footnoteDefinitionBodyOffsetToRawOffset(raw: string, bodyOffset: number): number {
+  const lines = raw.split("\n");
+  const offsets = lineStartOffsets(lines);
+  const openerLength = footnoteDefinitionBodyOffset(raw);
+  let remaining = Math.max(0, bodyOffset);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const contentStartInLine = index === 0
+      ? openerLength
+      : line.match(/^\s{2,4}/)?.[0].length ?? 0;
+    const content = line.slice(contentStartInLine);
+    if (remaining <= content.length || index === lines.length - 1) {
+      return (offsets[index] ?? 0) + contentStartInLine + Math.min(remaining, content.length);
+    }
+    remaining -= content.length;
+    if (remaining > 0) {
+      remaining -= 1;
+    } else if (index < lines.length - 1) {
+      return (offsets[index + 1] ?? raw.length);
+    }
+  }
+
+  return raw.length;
+}

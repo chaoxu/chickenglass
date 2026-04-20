@@ -38,6 +38,10 @@ import {
   serializeBlockToMarkdown,
 } from "./headless-markdown-parse";
 import {
+  parseMarkdownLinkSource,
+  serializeMarkdownLinkSource,
+} from "./markdown/inline-source";
+import {
   $createFootnoteReferenceNode,
   $isFootnoteReferenceNode,
   type FootnoteReferenceNode,
@@ -198,8 +202,6 @@ const textFormatAdapter: RevealAdapter = {
 
 // ─── Link adapter ───────────────────────────────────────────────────────
 
-const LINK_PATTERN = /^\[([\s\S]*)\]\(([^)\n]+)\)$/;
-
 function findAncestor<T extends LexicalNode>(
   start: LexicalNode,
   predicate: (node: LexicalNode) => node is T,
@@ -270,18 +272,29 @@ const linkAdapter: RevealAdapter = {
     return {
       caretOffset: 1 + Math.max(0, Math.min(visibleOffset, linkTextLength)),
       node: link,
-      source: `[${link.getTextContent()}](${link.getURL()})`,
+      source: serializeMarkdownLinkSource(link),
     };
   },
   reparse(live, raw) {
-    const match = raw.trim().match(LINK_PATTERN);
-    if (!match) {
+    const parsed = parseMarkdownLinkSource(raw.trim());
+    if (!parsed) {
       // Invalid syntax — leave whatever the user typed as plain text.
       return live;
     }
-    const [, text, url] = match;
-    const link = $createLinkNode(url.trim());
-    link.append($createTextNode(text));
+    const link = $createLinkNode(parsed.url, {
+      title: parsed.title ?? undefined,
+    });
+    const parsedBlocks = parseMarkdownFragmentToJSON(parsed.labelMarkdown);
+    const nodes = $generateNodesFromSerializedNodes([...parsedBlocks]);
+    const first = nodes[0];
+    if ($isElementNode(first)) {
+      for (const child of first.getChildren()) {
+        link.append(child);
+      }
+    }
+    if (link.getChildrenSize() === 0) {
+      link.append($createTextNode(parsed.labelMarkdown));
+    }
     live.replace(link);
     return link;
   },
