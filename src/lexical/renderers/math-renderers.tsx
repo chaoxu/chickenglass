@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import { $createParagraphNode, $getNodeByKey, type NodeKey } from "lexical";
@@ -15,6 +15,7 @@ import { useStructureSourcePositionEntry } from "../structure-source-position-en
 import { useStructureSourceSelectionBridge } from "../structure-source-selection";
 import { displayMathSourceOffsetFromTarget } from "../math-source-position";
 import { EditorChromeBody, EditorChromePanel } from "../editor-chrome";
+import { useEmbeddedFieldDraftController } from "../embedded-field-draft-controller";
 import { useRegisterEmbeddedFieldFlush } from "../embedded-field-flush-registry";
 import { buildKatexOptions } from "../../lib/katex-options";
 import {
@@ -62,22 +63,20 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
     "display-math",
     "display-math-source",
   );
-  const [draftRaw, setDraftRaw] = useState(raw);
-  const activeRaw = sourceEdit.active ? draftRaw : raw;
+  const draftRaw = useEmbeddedFieldDraftController({
+    onPublish: updateRawInner,
+    publishPolicy: "on-commit",
+    syncExternalValue: !sourceEdit.active,
+    value: raw,
+  });
+  const activeRaw = sourceEdit.active ? draftRaw.draft : raw;
   const parsed = useMemo(() => parseStructuredDisplayMathRaw(activeRaw), [activeRaw]);
-
-  useEffect(() => {
-    if (sourceEdit.active) {
-      return;
-    }
-    setDraftRaw(raw);
-  }, [raw, sourceEdit.active]);
 
   const handleSourceChange = useCallback((nextRaw: string) => {
     const trimmed = tryTrimOnDoubleClose(nextRaw);
     if (trimmed !== null) {
-      setDraftRaw(trimmed);
-      updateRawInner(trimmed);
+      draftRaw.updateDraft(trimmed);
+      draftRaw.commitDraft();
       sourceEdit.deactivate();
       editor.update(() => {
         const node = $getNodeByKey(nodeKey);
@@ -94,14 +93,12 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
       editor.focus();
       return;
     }
-    setDraftRaw(nextRaw);
-  }, [updateRawInner, sourceEdit, editor, nodeKey]);
+    draftRaw.updateDraft(nextRaw);
+  }, [draftRaw, sourceEdit, editor, nodeKey]);
 
   const commitDraft = useCallback(() => {
-    if (draftRaw !== raw) {
-      updateRawInner(draftRaw);
-    }
-  }, [draftRaw, raw, updateRawInner]);
+    draftRaw.commitDraft();
+  }, [draftRaw]);
 
   useRegisterEmbeddedFieldFlush(commitDraft, sourceEdit.active);
 
@@ -182,7 +179,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
           <div className="cf-lexical-display-math-editor">
             <StructureSourceEditor
               className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--math"
-              doc={draftRaw}
+              doc={draftRaw.draft}
               multiline
               namespace={`coflat-display-math-${nodeKey}`}
               onChange={handleSourceChange}

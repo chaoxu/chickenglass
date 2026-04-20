@@ -11,10 +11,10 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type KeyboardEvent,
 } from "react";
 
+import { useEmbeddedFieldDraftController } from "./embedded-field-draft-controller";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
@@ -67,10 +67,14 @@ export function StructureSourceEditor({
   onSelectionChange,
   pendingFocusId,
 }: StructureSourceEditorProps) {
-  const [draft, setDraft] = useState(() => doc);
   const originalDocRef = useRef(doc);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
+  const draft = useEmbeddedFieldDraftController({
+    onPublish: onChange,
+    publishPolicy: "immediate",
+    value: doc,
+  });
   // Resolve the requested initial caret position exactly once, at mount,
   // before any onEditorReady/onFocus callback fires. Subsequent focus events
   // fall back to the default end-of-draft snap.
@@ -96,7 +100,7 @@ export function StructureSourceEditor({
     if (!initialCaretAppliedRef.current) {
       const offset = computeInitialCaretOffset(
         initialCaretRequestRef.current,
-        draft,
+        draft.draft,
         multiline,
       );
       handle.setSelection(offset, offset, { skipScrollIntoView: true });
@@ -104,7 +108,7 @@ export function StructureSourceEditor({
     }
     handle.focus();
     rootRef.current?.focus({ preventScroll: true });
-  }, [draft, multiline]);
+  }, [draft.draft, multiline]);
 
   useEffect(() => {
     if (doc === originalDocRef.current) {
@@ -112,16 +116,15 @@ export function StructureSourceEditor({
     }
 
     originalDocRef.current = doc;
-    setDraft(doc);
-  }, [doc]);
+    draft.resetDraft(doc, { clearPending: true });
+  }, [doc, draft]);
 
   const closeWithRevert = useCallback(() => {
-    if (draft !== originalDocRef.current) {
-      onChange(originalDocRef.current);
-      setDraft(originalDocRef.current);
+    if (draft.draft !== originalDocRef.current) {
+      draft.revertDraft(originalDocRef.current, { publish: true });
     }
     onClose();
-  }, [draft, onChange, onClose]);
+  }, [draft, onClose]);
 
   const handleKeyDown = useCallback((
     event: KeyboardEvent<HTMLDivElement>,
@@ -140,7 +143,7 @@ export function StructureSourceEditor({
 
   return (
     <LexicalMarkdownEditor
-      doc={draft}
+      doc={draft.draft}
       editorClassName={className}
       editorMode="source"
       focusOwnerRole="embedded-field"
@@ -163,8 +166,7 @@ export function StructureSourceEditor({
       }}
       onSelectionChange={onSelectionChange}
       onTextChange={(nextValue) => {
-        setDraft(nextValue);
-        onChange(nextValue);
+        draft.updateDraft(nextValue);
         queueMicrotask(focusEditor);
         window.setTimeout(focusEditor, 0);
       }}
