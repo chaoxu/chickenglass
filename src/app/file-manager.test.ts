@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  MemoryFileSystem,
   createBlogDemoFileSystem,
   createDemoFileSystem,
-} from "./file-manager";
+} from "./demo-file-system";
 import { getDemoFiles } from "./demo-files";
+import { MemoryFileSystem } from "./memory-file-system";
 
 describe("MemoryFileSystem", () => {
   it("reads files that exist", async () => {
@@ -228,6 +228,13 @@ describe("MemoryFileSystem.readFileBinary", () => {
     const result = await fs.readFileBinary("assets/figure.svg");
 
     expect(new TextDecoder().decode(result)).toBe(svg);
+  });
+
+  it("returns base64 text when reading a binary entry as text", async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFileBinary("assets/data.bin", new Uint8Array([1, 2, 3]));
+
+    await expect(fs.readFile("assets/data.bin")).resolves.toBe("AQID");
   });
 
   it("throws on reading a non-existent file", async () => {
