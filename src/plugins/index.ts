@@ -37,20 +37,4 @@ export { QED_SYMBOL } from "./proof-plugin";
 export {
   defaultPlugins,
   theoremFamilyPlugins,
-  embedFamilyPlugins,
 } from "./default-plugins";
-export {
-  type ResolvedInclude,
-  type FlattenRegion,
-  type IncludeExpansionResult,
-  IncludeCycleError,
-  IncludeNotFoundError,
-  IncludeExpansionCache,
-  extractIncludePaths,
-  resolveIncludePath,
-  resolveIncludes,
-  resolveIncludesFromContent,
-  flattenIncludes,
-  flattenIncludesWithSourceMap,
-  collectIncludedPaths,
-} from "./include-resolver";

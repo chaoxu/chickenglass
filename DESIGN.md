@@ -97,21 +97,6 @@ blocks:
 ---
 ```
 
-### File inclusion
-
-```markdown
-::: {.include}
-chapter1.md
-:::
-```
-
-Or inline: `!include chapter1.md` (TBD: choose syntax)
-
-- Included files are parsed and their ASTs are merged into the parent.
-- Numbering continues across includes (theorem 1 in chapter1, theorem 2 in chapter2).
-- Cyclic includes are detected and rejected.
-- When viewing `main.md`, you see the full document with all includes expanded and numbered.
-
 ## Architecture
 
 ```

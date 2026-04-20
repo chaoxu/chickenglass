@@ -21,21 +21,12 @@ export function fnv1aHash(str: string): string {
 
 export interface SaveSnapshot {
   content: string;
-  sourceMap: unknown;
 }
 
-/**
- * The write function called by the pipeline.
- *
- * For projected/source-mapped saves the bytes actually written to disk
- * may differ from `content` (e.g. include directives are reconstructed).
- * The function MUST return the main-file disk content so the pipeline
- * can hash what was actually written.
- */
+/** The write function called by the pipeline. */
 export type WriteFn = (
   path: string,
   content: string,
-  sourceMap: unknown,
 ) => Promise<string>;
 
 export interface SaveResult {
@@ -191,7 +182,7 @@ export class SavePipeline {
         const snapshot = currentGetSnapshot();
 
         try {
-          const diskContent = await this.writeFn(path, snapshot.content, snapshot.sourceMap);
+          const diskContent = await this.writeFn(path, snapshot.content);
 
           if (isInvalidated()) break;
 

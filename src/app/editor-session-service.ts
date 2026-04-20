@@ -9,7 +9,6 @@ import {
 } from "./editor-session-model";
 import type { FileSystem } from "./file-manager";
 import { measureAsync, withPerfOperation } from "./perf";
-import type { SourceMap } from "./source-map";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -36,7 +35,6 @@ export interface EditorSessionService {
   cancelPendingOpenFile: () => void;
   handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
-  setDocumentSourceMap: (path: string, sourceMap: SourceMap | null) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
@@ -85,7 +83,6 @@ export function createEditorSessionService({
     runtime.pipeline.clear(path);
     runtime.buffers.delete(path);
     runtime.liveDocs.delete(path);
-    runtime.sourceMaps.delete(path);
   };
 
   const applyReloadedDocument = (path: string, content: string) => {
@@ -187,14 +184,6 @@ export function createEditorSessionService({
     );
   };
 
-  const setDocumentSourceMap = (path: string, sourceMap: SourceMap | null) => {
-    if (sourceMap) {
-      runtime.sourceMaps.set(path, sourceMap);
-      return;
-    }
-    runtime.sourceMaps.delete(path);
-  };
-
   const openFile = async (path: string) => {
     const currentDocument = runtime.getCurrentDocument();
     if (currentDocument?.path === path) {
@@ -230,7 +219,6 @@ export function createEditorSessionService({
         }
 
         const documentText = createEditorDocumentText(content);
-        runtime.sourceMaps.delete(path);
         runtime.buffers.set(path, documentText);
         runtime.liveDocs.set(path, documentText);
         runtime.pipeline.initPath(path, content);
@@ -269,7 +257,6 @@ export function createEditorSessionService({
       clearPathBuffers(previousPath);
     }
 
-    runtime.sourceMaps.delete(path);
     runtime.buffers.set(path, emptyEditorDocument);
     runtime.liveDocs.set(path, createEditorDocumentText(content));
     runtime.commit(
@@ -383,7 +370,6 @@ export function createEditorSessionService({
     cancelPendingOpenFile,
     handleDocChange,
     handleProgrammaticDocChange,
-    setDocumentSourceMap,
     openFile,
     openFileWithContent,
     reloadFile,

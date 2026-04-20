@@ -25,6 +25,7 @@ import {
   unsubscribeNoop,
   type ActiveDocumentSignal,
 } from "../active-document-signal";
+import type { EditorSurfaceCommonProps } from "../editor-engines/types";
 
 /** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
 const ReadModeView = lazy(() =>
@@ -39,7 +40,9 @@ const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   globalLayoutChanged: false,
   layoutChangeFrom: -1,
 };
-export interface EditorPaneProps extends UseEditorOptions {
+export interface EditorPaneProps
+  extends UseEditorOptions,
+    Pick<EditorSurfaceCommonProps<EditorMode>, "activeDocumentSignal" | "editorMode"> {
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;

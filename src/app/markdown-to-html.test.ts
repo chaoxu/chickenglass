@@ -279,10 +279,10 @@ describe("markdownToHtml", () => {
     expect(html).toContain("<h1>Hello</h1>");
   });
 
-  it("skips include directives", () => {
-    const html = markdownToHtml("::: {.include}\nchapters/intro.md\n:::");
-    expect(html).not.toContain("chapters/intro.md");
-    expect(html).not.toContain("include");
+  it("renders unknown custom blocks as ordinary fenced divs", () => {
+    const html = markdownToHtml("::: {.custom-note}\nBody\n:::");
+    expect(html).toContain('class="cf-block cf-block-custom-note"');
+    expect(html).toContain("Body");
   });
 
   it("renders inline formatting inside blocks", () => {

@@ -1,10 +1,9 @@
 import { Text } from "@codemirror/state";
-
-export interface EditorDocumentChange {
-  from: number;
-  to: number;
-  insert: string;
-}
+import type { EditorDocumentChange } from "../lib/editor-doc-change";
+export {
+  createMinimalEditorDocumentChanges,
+  type EditorDocumentChange,
+} from "../lib/editor-doc-change";
 
 export type EditorDocumentText = Text;
 

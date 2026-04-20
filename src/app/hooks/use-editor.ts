@@ -27,7 +27,6 @@ import {
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import { bibDataEffect, bibDataField } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
-import { setIncludeRegionsEffect } from "../../state/include-regions";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeLiveStats } from "../writing-stats";
@@ -38,7 +37,6 @@ import { useEditorThemeSync } from "./use-editor-theme-sync";
 import { useLatest } from "./use-latest";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import type { SourceMap } from "../source-map";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { ResolvedTheme } from "../theme-dom";
 
@@ -54,15 +52,9 @@ export interface UseEditorOptions {
   theme?: ResolvedTheme;
   /** Additional CM6 extensions to include (e.g., change listeners from the parent). */
   extensions?: Extension[];
-  /**
-   * Filesystem used for bibliography and include loading.
-   * When omitted, bibliography loading and include expansion are skipped.
-   */
+  /** Filesystem used for bibliography loading and image insertion. */
   fs?: FileSystem;
-  /**
-   * Path of the document being edited.
-   * Used to resolve relative bibliography and include paths.
-   */
+  /** Path of the document being edited. Used to resolve relative bibliography and image paths. */
   docPath?: string;
   /** Called with the user edit spans whenever the document changes. */
   onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
@@ -72,8 +64,6 @@ export interface UseEditorOptions {
   onCursorChange?: (pos: number) => void;
   /** Called with the parsed frontmatter state whenever it changes. */
   onFrontmatterChange?: (fm: FrontmatterState | undefined) => void;
-  /** Called when include expansion installs or clears a source map for the active document. */
-  onSourceMapChange?: (sourceMap: SourceMap | null) => void;
   /** Called after the current `doc`/`docPath` has been applied to the live EditorView. */
   onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
   /**
@@ -143,7 +133,6 @@ export function useEditor(
     onProgrammaticDocChange,
     onCursorChange,
     onFrontmatterChange,
-    onSourceMapChange,
     onDocumentReady,
     pluginManager: externalPluginManager,
   } = options;
@@ -158,10 +147,8 @@ export function useEditor(
 
   const [view, setView] = useState<EditorView | null>(null);
   const documentServices = useEditorDocumentServices({
-    doc,
     fs,
     docPath,
-    onSourceMapChange,
   });
   const debugBridge = useEditorDebugBridge();
   const documentContextCompartmentRef = useRef(new Compartment());
@@ -200,7 +187,7 @@ export function useEditor(
     telemetry.setCursorPos(targetView.state.selection.main.head, targetView);
     const fm = targetView.state.field(frontmatterField, false);
     onFrontmatterChangeRef.current?.(fm);
-    initializeViewRef.current(targetView, fm, newDoc);
+    initializeViewRef.current(targetView, fm);
     lastLoadedDocRef.current = newDoc;
     lastLoadedPathRef.current = newPath;
     onDocumentReadyRef.current?.(targetView, newPath);
@@ -230,7 +217,6 @@ export function useEditor(
 
       if (update.docChanged) {
         if (!programmaticDocChange) {
-          window.__cfSourceMap?.mapThrough(update.changes);
           onDocChangeRef.current?.(collectDocumentChanges(update));
         } else {
           const docStr = update.state.doc.toString();
@@ -338,7 +324,7 @@ export function useEditor(
         selection: destructiveActivation
           ? { anchor: 0 }
           : preserveSelection(view.state.selection, doc.length),
-        effects: [setIncludeRegionsEffect.of([]), clearBib],
+        effects: clearBib,
         annotations: programmaticDocumentChangeAnnotation.of(true),
       });
     } else if (pathChanged) {

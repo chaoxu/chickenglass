@@ -18,6 +18,7 @@ import {
 } from "./ui/dialog";
 import { openExternalUrl } from "../../lib/open-link";
 import { isTauri } from "../../lib/tauri";
+import { activeCoflatProduct } from "../../product";
 import coflatLogoUrl from "../../assets/coflat-logo.svg";
 import { getDesktopLogDirectory } from "../runtime-logger";
 
@@ -50,6 +51,10 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
   const [logDirectory, setLogDirectory] = useState<string | null>(null);
   const [logDirectoryLoading, setLogDirectoryLoading] = useState(false);
   const desktopRuntime = isTauri();
+  const product = activeCoflatProduct;
+  const credits = product.editorEngine === "lexical-wysiwyg"
+    ? [...CREDITS, { name: "Lexical", url: "https://lexical.dev" }]
+    : CREDITS;
 
   useEffect(() => {
     if (!open || !desktopRuntime) return;
@@ -87,18 +92,18 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           <div className="flex min-w-0 items-center gap-4">
             <img
               src={coflatLogoUrl}
-              alt="Coflat logo"
+              alt={`${product.displayName} logo`}
               className="h-14 w-14 shrink-0"
               draggable={false}
               style={{ filter: "var(--cf-logo-display-filter, none)" }}
             />
             <div className="min-w-0 space-y-1">
               <div className="flex items-baseline gap-2">
-                <DialogTitle className="text-base">Coflat</DialogTitle>
+                <DialogTitle className="text-base">{product.displayName}</DialogTitle>
                 <span className="text-sm text-[var(--cf-muted)]">v0.1.0</span>
               </div>
               <DialogDescription>
-                Semantic document editor for mathematical writing.
+                {product.description}
               </DialogDescription>
             </div>
           </div>
@@ -111,7 +116,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
               Built with
             </p>
             <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0">
-              {CREDITS.map((c) => (
+              {credits.map((c) => (
                 <li key={c.name}>
                   <a
                     href={c.url}

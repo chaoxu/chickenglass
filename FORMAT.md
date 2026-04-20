@@ -1,6 +1,14 @@
 # Coflat Document Format
 
-Pandoc-flavored markdown with custom extensions for mathematical writing. This document specifies the exact input format the editor expects.
+Pandoc Markdown with a fixed set of Pandoc extensions for mathematical writing. This document specifies the canonical input format the editor expects.
+
+Canonical documents must be parseable by Pandoc. Coflat semantics are encoded with Pandoc-native constructs such as YAML metadata, fenced divs, attributes, citations, raw LaTeX, and tables. Non-Pandoc authoring sugar is not part of the canonical format.
+
+The canonical reader profile is:
+
+```text
+markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark
+```
 
 ## Frontmatter
 
@@ -16,6 +24,9 @@ imageFolder: images
 math:
   \R: "\\mathbb{R}"
   \N: "\\mathbb{N}"
+latex:
+  template: article
+  bibliography: reference.bib
 blocks:
   claim:
     title: Claim
@@ -30,10 +41,55 @@ blocks:
 | `csl` | string | Path to CSL style file |
 | `numbering` | `"global"` \| `"grouped"` | Block numbering scheme. `global`: all numbered blocks share one counter. `grouped`: each type has its own. |
 | `math` | map | KaTeX macro definitions (`\command: "expansion"`) |
+| `latex` | map | LaTeX export options. Supported keys: `template`, `bibliography`. |
 | `blocks` | map | Custom block definitions and overrides (`title`, `numbered`, `counter`, enable/disable) |
 | `imageFolder` | string | Default folder for pasted/dropped images. Also accepts `image-folder`. |
 
 Project-level config in `coflat.yaml` uses the same keys. File frontmatter overrides project config. Math macros merge additively (file adds to project).
+
+### Publisher metadata
+
+Fields consumed by the LaTeX export pipeline (e.g. LIPIcs, LNCS). The editor ignores unknown keys; exporters preserve supported metadata in frontmatter and pass it through the pre-pandoc pipeline.
+
+```yaml
+---
+title: Main Title
+titlerunning: Short title for running head
+authorrunning: Short author line
+copyright: Firstname Lastname and coauthors
+category: Track A
+relatedversion: "A full version at https://arxiv.org/abs/..."
+acknowledgements: "We thank ..."
+funding: "NSF grant ..."
+keywords:
+  - keyword one
+  - keyword two
+ccsdesc:
+  - weight: 500
+    text: "Theory of computation → Graph algorithms"
+authors:
+  - name: First Author
+    affiliation: University A, Country
+    email: first@example.org
+    orcid: 0000-0000-0000-0000
+    funding: "Supported by grant X"
+---
+```
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `titlerunning` | string | Short title for running head |
+| `authorrunning` | string | Short author line for running head |
+| `copyright` | string | Rendered into publisher copyright block |
+| `category` | string | Track / session label |
+| `relatedversion` | string | Preprint or extended-version pointer |
+| `acknowledgements` | string | Plain text, before bibliography |
+| `funding` | string | Document-level funding statement |
+| `keywords` | list of string | Keyword list |
+| `ccsdesc` | list of `{weight, text}` | ACM CCS subject descriptors (higher weight → more prominent) |
+| `authors` | list of author objects | Per-author `name`, `affiliation`, `email`, `orcid`, `funding` |
+
+These fields are not rendered in the live editor surface. They flow only through the LaTeX export.
 
 ## Text Formatting
 
@@ -43,7 +99,7 @@ Project-level config in `coflat.yaml` uses the same keys. File frontmatter overr
 | `*italic*` | *italic* |
 | `` `code` `` | `code` (monospace) |
 | `~~strikethrough~~` | ~~strikethrough~~ |
-| `==highlight==` | highlighted text |
+| `==highlight==` | highlighted text (Pandoc `mark` extension) |
 | `[text](url)` | hyperlink |
 | `![alt](src)` | image |
 
@@ -90,17 +146,17 @@ $$
 
 Display math can interrupt a paragraph (no blank line required before `$$` or `\[`).
 
-### Equation labels
+### Labeled equations
 
-Append `{#eq:label}` after the closing `$$` or `\]`:
+Unlabeled display math uses `$$...$$` or `\[...\]`. Labeled equations use Pandoc raw LaTeX:
 
-```
-$$
+```latex
+\begin{equation}\label{eq:einstein}
 E = mc^2
-$$ {#eq:einstein}
+\end{equation}
 ```
 
-Equations are numbered sequentially across the document. Reference with `[@eq:einstein]`.
+Pandoc does not attach attributes to math blocks, so `$$ ... $$ {#eq:einstein}` and `\[ ... \] {#eq:einstein}` are not canonical Coflat syntax. Equations are numbered by LaTeX/export output and can be referenced with `[@eq:einstein]`.
 
 ### Custom macros
 
@@ -129,12 +185,12 @@ Content here.
 ### With ID, class, and title
 
 ```markdown
-::: {#thm:main .theorem} Main Result
+::: {.theorem #thm:main title="Main Result"}
 Statement of the theorem with $math$.
 :::
 ```
 
-The title text after `}` supports full inline markdown (bold, italic, math, code). For standard above-header blocks, the title appears parenthesized after the block label: **Theorem 1** (Main Result). For `figure` and `table` blocks, the title/caption is rendered below the content.
+The title is a Pandoc attribute. It is plain text, not inline markdown. For standard above-header blocks, the title appears parenthesized after the block label: **Theorem 1** (Main Result). For `figure`, `table`, and `algorithm` blocks, the title becomes the caption.
 
 Attributes inside `{...}`:
 - `.classname` -- block type (required, first class is the primary type)
@@ -142,40 +198,44 @@ Attributes inside `{...}`:
 - `key="value"` -- key-value attributes (e.g., `title="Alternative Title"`)
 - Multiple classes: `{.theorem .important}` (first is the block type)
 
-If no inline title text is present after `}`, `title="..."` acts as an attribute-only title fallback. If both are present, the inline title wins.
+Trailing title text after the attribute block, such as `::: {.theorem} Main Result`, is not canonical because Pandoc does not parse it as part of the div.
 
-### Short form
+### Class shorthand
 
-First word is the class, rest is the title:
+Pandoc supports a class-only shorthand when no ID or title is needed:
 
 ```markdown
-::: Theorem Main Result
+::: theorem
 Content.
 :::
 ```
 
-Equivalent to `::: {.theorem} Main Result`.
+This is equivalent to `::: {.theorem}`. It cannot carry a title.
 
-### Self-closing
+### No self-closing blocks
 
-Single-line fenced divs:
+Fenced divs must use explicit opener and closer lines:
 
 ```markdown
-::: {.theorem} Short statement. :::
+::: {.theorem}
+Short statement.
+:::
 ```
+
+Single-line self-closing divs such as `::: {.theorem} Short statement. :::` are not canonical because Pandoc treats them as unclosed divs or literal paragraph text.
 
 ### Nesting
 
 Use more colons for outer divs:
 
 ```markdown
-::::: {.theorem}
+:::: {.theorem title="Outer result"}
 Statement.
 
-:::: {.proof}
+::: {.proof}
 Proof content.
+:::
 ::::
-:::::
 ```
 
 The inner block must use fewer colons than the outer.
@@ -212,27 +272,49 @@ The parser uses a generation counter to prevent incremental fragment reuse acros
 | `figure` | figure | normal | caption rendered below content |
 | `table` | table | normal | caption rendered below content |
 | `blockquote` | -- (unnumbered) | normal | header label hidden |
-| `embed` | -- | -- | renders iframe |
-| `iframe` | -- | -- | renders iframe |
-| `youtube` | -- | -- | YouTube embed |
-| `gist` | -- | -- | GitHub Gist embed |
-| `include` | -- | -- | file inclusion (special, not a plugin) |
 
 Counter groups: blocks sharing a counter group are numbered together. E.g., Theorem 1, Lemma 2, Corollary 3 all share the "theorem" counter.
 
 Typical numbered figure/table usage:
 
 ```markdown
-::: {.figure #fig:architecture} System overview
+::: {.figure #fig:architecture title="System overview"}
 ![System overview](architecture.png)
 :::
 
-::: {.table #tbl:runtime} Running times
+::: {.table #tbl:runtime title="Running times"}
 | Algorithm | Time |
 |-----------|------|
 | Quicksort | $O(n \log n)$ |
 :::
 ```
+
+#### Multi-image figures (subfigures)
+
+A figure div may contain more than one image. Each image becomes a subfigure in LaTeX (`\subfigure` / `\subcaptionbox`). Alt text per image is used as the subcaption:
+
+```markdown
+::: {.figure #fig:compare title="Before and after"}
+![Before](before.png)
+![After](after.png)
+:::
+```
+
+#### Algorithm body
+
+Algorithm blocks use a fenced code block (language `text` or none) for the pseudocode body. The exporter lifts the body verbatim into a LaTeX `algorithm` environment; the div's `title` attribute becomes the `\caption`:
+
+````markdown
+::: {.algorithm #alg:dijkstra title="Shortest paths"}
+```text
+Input: graph G, source s
+Output: distances d[v]
+  for each v in V: d[v] <- infinity
+  d[s] <- 0
+  ...
+```
+:::
+````
 
 ### Custom block types
 
@@ -259,7 +341,26 @@ blocks:
 
 ## Cross-References
 
-Reference any fenced block, heading, or equation by its `#id` attribute.
+Reference fenced blocks and headings by their `#id` attribute. Reference raw LaTeX equations by their `\label{eq:...}` command.
+
+### ID prefixes
+
+IDs are conventionally prefixed by target kind. The LaTeX exporter uses these prefixes to route `[@id]` to `\cref{id}` vs `\cite{id}`:
+
+| Prefix | Target |
+|--------|--------|
+| `sec:` | heading |
+| `thm:` | theorem |
+| `lem:` | lemma |
+| `cor:` | corollary |
+| `prop:` | proposition |
+| `def:` | definition |
+| `eq:` | equation |
+| `fig:` | figure |
+| `tbl:` | table |
+| `alg:` | algorithm |
+
+Any other bare key (e.g. `karger2000`) is treated as a citation key. IDs with unrecognized prefixes still resolve if they match a fenced block `#id`.
 
 ### Bracketed (rendered inline)
 
@@ -284,7 +385,7 @@ Multiple references can be clustered with `;`. Each item is resolved independent
 [@eq:einstein; @karger2000]
 ```
 
-Resolution order: fenced blocks (by fenced div `#id`) -> equations (by `{#eq:id}`) -> headings (by heading `#id`) -> citations (by bib key). If an ID matches a fenced block, it takes priority over a citation with the same key.
+Resolution order: fenced blocks (by fenced div `#id`) -> equations (by `\label{eq:id}`) -> headings (by heading `#id`) -> citations (by bib key). If an ID matches a fenced block, it takes priority over a citation with the same key.
 
 ## Citations
 
@@ -349,6 +450,30 @@ Pipe-delimited tables with optional alignment:
 
 Alignment: `|:---|` left, `|:---:|` center, `|---:|` right. Math works inside table cells.
 
+### Line breaks inside cells
+
+Inline `<br>` forces a visible line break inside a cell. The LaTeX exporter maps `<br>` in a cell to `\newline` (within a `tabularx` column).
+
+```markdown
+| Case | Notes |
+|------|-------|
+| A    | first line<br>second line |
+```
+
+### Grid tables
+
+Grid tables (pandoc `grid_tables`) are accepted for cells that need multiple paragraphs or block content. Coflat's live renderer may present these as a simpler table; the LaTeX exporter preserves the block structure:
+
+```markdown
++-------+------------------+
+| Input | Output           |
++=======+==================+
+| graph | first paragraph  |
+|       |                  |
+|       | second paragraph |
++-------+------------------+
+```
+
 ## Lists
 
 Ordered, unordered, and task lists. Math works inside list items:
@@ -365,52 +490,14 @@ Ordered, unordered, and task lists. Math works inside list items:
 - [x] Checked task
 ```
 
-## Embeds
-
-### GitHub Gist
-
-```markdown
-::: {.gist}
-https://gist.github.com/user/hash
-:::
-```
-
-### Generic iframe
-
-```markdown
-::: {.embed}
-https://example.com/widget
-:::
-```
-
-### YouTube
-
-```markdown
-::: {.youtube}
-https://www.youtube.com/watch?v=dQw4w9WgXcQ
-:::
-```
-
-## Include Blocks
-
-Include content from another file:
-
-```markdown
-::: {.include}
-chapters/introduction.md
-:::
-```
-
-The included file's content replaces the block seamlessly. Paths are relative to the current document. Included files are re-read on change.
-
 ## Removed Features
 
-These standard markdown features are **intentionally disabled**:
+These standard markdown features are **not canonical**, even if Pandoc's markdown reader can parse some of them:
 
 | Feature | Reason | Alternative |
 |---------|--------|-------------|
-| Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks (```) |
-| `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: Blockquote` fenced divs |
+| Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks |
+| `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: {.blockquote}` fenced divs |
 
 The read/export pipeline still parses standard `>` blockquotes for compatibility with imported markdown, but the editor authoring format does not use them.
 
@@ -421,3 +508,86 @@ The read/export pipeline still parses standard `>` blockquotes for compatibility
 ```
 
 Three or more hyphens on a line. Must not be at the start of the document (where `---` is frontmatter). A blank line before `---` distinguishes it from frontmatter.
+
+## LaTeX Export
+
+The LaTeX export pipeline (`scripts/export-latex.mjs`, desktop PDF/LaTeX export, `src/latex/`) emits a compilable `.tex` or `.pdf` file from a canonical Coflat Markdown document. The stages are:
+
+1. **Prepare metadata** — preserve root frontmatter as Pandoc metadata and hoist supported export-only fields such as `math:` into Pandoc-compatible metadata.
+2. **Pandoc** — invoked as:
+
+   ```text
+   pandoc --from markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark \
+          --to latex --wrap=preserve --syntax-highlighting=none \
+          --lua-filter=src/latex/filter.lua \
+          --template=src/latex/template/<variant>.tex \
+          --metadata=bibliography=<bib-name-without-.bib> \
+          --output=out/<doc>.tex
+   ```
+
+3. **Compile** — `latexmk -pdf out/<doc>.tex` (optional; separate target).
+
+### Block vocabulary mapping
+
+Each built-in block maps to a LaTeX environment. Unknown classes are passed through as raw text.
+
+| Fenced div class | LaTeX environment | Notes |
+|------------------|-------------------|-------|
+| `.theorem` | `theorem` | |
+| `.lemma` | `lemma` | |
+| `.corollary` | `corollary` | |
+| `.proposition` | `proposition` | |
+| `.conjecture` | `conjecture` | Requires `\newtheorem{conjecture}` |
+| `.definition` | `definition` | |
+| `.problem` | `problem` | |
+| `.example` | `example` | |
+| `.remark` | `remark` | |
+| `.proof` | `proof` | |
+| `.algorithm` | `algorithm` | Body becomes pseudocode; title → `\caption`, `#id` → `\label` |
+| `.figure` | `figure` | Multi-image → subfigures |
+| `.table` | `table` + `tabularx` | Supports `<br>` → `\newline`, grid tables → multi-paragraph cells |
+| `.blockquote` | `quote` | |
+
+### Inline mapping
+
+| Coflat markdown | LaTeX |
+|-----------------|-------|
+| `$...$` | `\(...\)` |
+| `\(...\)` | `\(...\)` (passthrough) |
+| `$$...$$` (unlabeled) | `\[...\]` |
+| raw `\begin{equation}\label{eq:id}...\end{equation}` | labeled equation |
+| `==highlight==` | `\hl{highlight}` (requires `\usepackage{soul}`) |
+| `[@id]` where `id` begins with an xref prefix | `\cref{id}` |
+| `[@id]` otherwise | `\cite{id}` |
+| `[- @thm:foo]` (unbracketed) | `\cref{thm:foo}` (no surrounding brackets) |
+| `- [ ] task` / `- [x] done` | `\item[$\square$]` / `\item[$\boxtimes$]` inside `itemize` |
+| `<br>` inside a table cell | `\newline` |
+| `<br>` outside a table | `\\` |
+
+### Math macro injection
+
+Frontmatter `math:` entries become `\newcommand` declarations in the preamble. The exporter detects argument arity by scanning the RHS for `#1`, `#2`, ...:
+
+```yaml
+math:
+  R: "\\mathbb{R}"
+  floor: "\\lfloor #1 \\rfloor"
+```
+
+→
+
+```latex
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\floor}[1]{\lfloor #1 \rfloor}
+```
+
+The LaTeX importer recognizes the same exported `\newcommand` shape, plus
+`\renewcommand`, `\def`, `\let`, and `\DeclareMathOperator`, and maps used
+macros back into frontmatter `math:`.
+
+### Template variants
+
+- `template/article.tex` — plain `\documentclass{article}` fallback with `amsthm`, `cleveref`, `soul`, `tabularx`, `booktabs`, `algorithm`, `hyperref`.
+- `template/lipics.tex` — LIPIcs submissions; consumes the Publisher metadata frontmatter (authors, ccsdesc, keywords, copyright, titlerunning, authorrunning, funding, acknowledgements, category, relatedversion).
+
+Select a variant with `scripts/export-latex.mjs --template lipics` or by setting `latex.template: lipics` in frontmatter. `latex.bibliography` overrides the top-level `bibliography` value for LaTeX export; command-line `--template` and `--bibliography` flags override frontmatter in the CLI.

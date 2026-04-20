@@ -19,7 +19,6 @@
 
 - **Knuth-Plass must apply to ALL paragraphs**: Never skip math-containing paragraphs. The proper fix is a custom implementation using the Lezer syntax tree, not a DOM-walking library.
 - **Markdown structure uses Lezer everywhere**: Treat the Lezer markdown parser as the single source of truth for markdown structure, even outside CM6. Do not add new regex/text parsers for markdown blocks when the syntax tree can answer the question.
-- **Includes are markdown, not regex**: Include detection/resolution should be tree-based (Lezer), not regex-based with fence-exclusion side logic.
 - **Config/data syntax should use standard parsers**: Frontmatter and `coflat.yaml` should be parsed with a standard YAML library, not a handwritten YAML subset parser and not Lezer. Keep only the minimal frontmatter-boundary extraction logic if needed. See issue `#411`.
 - **Keep markdown semantics custom**: Lezer should provide structure, but Coflat's semantics layer (crossrefs, equation labels/numbering, theorem/block semantics, citation behavior) stays custom on top of the tree.
 

@@ -40,29 +40,6 @@ function collectSpecs(items: Range<Decoration>[]) {
 }
 
 describe("DecorationBuilder", () => {
-  it("accumulates include fence hiding and line classes", () => {
-    const state = EditorState.create({
-      doc: "::: {.include} Title\nBody\n:::",
-    });
-    const div = makeDiv(state, "include", {
-      attrFrom: 4,
-      attrTo: 14,
-      titleFrom: 15,
-      titleTo: 20,
-    });
-    const items: Range<Decoration>[] = [];
-
-    new DecorationBuilder(items).addIncludeDecorations(div);
-    const specs = collectSpecs(items);
-
-    expect(specs.some((spec) => spec.from === div.openFenceFrom && spec.to === div.openFenceTo)).toBe(true);
-    expect(specs.some((spec) => spec.from === div.attrFrom && spec.to === div.attrTo)).toBe(true);
-    expect(specs.some((spec) => spec.from === div.titleFrom && spec.to === div.titleTo)).toBe(true);
-    expect(specs.some((spec) => spec.from === div.closeFenceFrom && spec.to === div.closeFenceTo)).toBe(true);
-    expect(hasLineClassAt(specs, div.openFenceFrom, CSS.includeFence)).toBe(true);
-    expect(hasLineClassAt(specs, div.closeFenceFrom, CSS.includeFence)).toBe(true);
-  });
-
   it("adds a qed marker to the last content line", () => {
     const state = EditorState.create({
       doc: "::: {.proof}\nText\n:::",

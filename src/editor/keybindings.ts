@@ -8,7 +8,7 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, type EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
-import { MODE_CHANGE_EVENT, OPEN_FILE_EVENT } from "../constants/events";
+import { MODE_CHANGE_EVENT } from "../constants/events";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
@@ -29,24 +29,6 @@ function cycleEditorMode(view: EditorView): boolean {
   // Dispatch a DOM event so the app can update the UI indicator
   view.dom.dispatchEvent(
     new CustomEvent(MODE_CHANGE_EVENT, { detail: nextMode, bubbles: true }),
-  );
-  return true;
-}
-
-/**
- * Jump to the source file when cursor is in an include region.
- * Dispatches a custom DOM event that the App listens for.
- */
-function jumpToSourceFile(view: EditorView): boolean {
-  const sourceMap = window.__cfSourceMap;
-  if (!sourceMap) return false;
-
-  const pos = view.state.selection.main.head;
-  const region = sourceMap.regionAt(pos);
-  if (!region) return false;
-
-  view.dom.dispatchEvent(
-    new CustomEvent(OPEN_FILE_EVENT, { detail: region.file, bubbles: true }),
   );
   return true;
 }
@@ -368,7 +350,6 @@ export const editorKeybindings: Extension = [
     indentWithTab,
     { key: "Mod-Shift-d", run: toggleDebugInspector },
     { key: "Mod-Shift-f", run: toggleFocusMode },
-    { key: "Mod-Shift-o", run: jumpToSourceFile },
     { key: "Mod-Shift-m", run: cycleEditorMode },
   ]),
   // Formatting shortcuts at high precedence so they override defaults

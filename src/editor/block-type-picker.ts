@@ -93,9 +93,7 @@ interface AncestorFence {
  * Build the list of block types to show in the picker.
  *
  * Uses the plugin registry for registered types and supplements with
- * the block manifest for ordering. Excludes embed-family types (embed,
- * iframe, youtube, gist) and include since those are not user-authored
- * blocks.
+ * the block manifest for ordering.
  */
 function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
   const entries: PickerEntry[] = [];
@@ -103,7 +101,6 @@ function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
 
   // Add entries in manifest order for consistency
   for (const entry of BLOCK_MANIFEST_ENTRIES) {
-    if (entry.specialBehavior === "embed") continue;
     const plugin = registry.plugins.get(entry.name);
     if (plugin) {
       entries.push({ name: plugin.name, title: plugin.title });
@@ -114,8 +111,6 @@ function getPickerEntries(registry: PluginRegistryState): PickerEntry[] {
   // Add any custom (frontmatter-defined) plugins not in the manifest
   for (const [name, plugin] of registry.plugins) {
     if (seen.has(name)) continue;
-    if (name === "include") continue;
-    if (plugin.specialBehavior === "embed") continue;
     entries.push({ name: plugin.name, title: plugin.title });
   }
 

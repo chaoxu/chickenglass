@@ -1,7 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { FileSystem } from "../file-manager";
 import { type SessionDocument } from "../editor-session-model";
-import type { SourceMap } from "../source-map";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -37,7 +36,6 @@ export interface UseEditorSessionReturn {
   cancelPendingOpenFile: () => void;
   handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
-  setDocumentSourceMap: (path: string, sourceMap: SourceMap | null) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
@@ -79,8 +77,8 @@ export function useEditorSession({
     runtime,
   ]);
 
-  runtime.setWriteDocumentSnapshot((path, content, sourceMap) =>
-    sessionPersistence.writeDocumentSnapshot(path, content, sourceMap as SourceMap | null),
+  runtime.setWriteDocumentSnapshot((path, content) =>
+    sessionPersistence.writeDocumentSnapshot(path, content),
   );
   const sessionService = useMemo(() => createEditorSessionService({
     fs,
@@ -109,7 +107,6 @@ export function useEditorSession({
     cancelPendingOpenFile: sessionService.cancelPendingOpenFile,
     handleDocChange: sessionService.handleDocChange,
     handleProgrammaticDocChange: sessionService.handleProgrammaticDocChange,
-    setDocumentSourceMap: sessionService.setDocumentSourceMap,
     openFile: sessionService.openFile,
     openFileWithContent: sessionService.openFileWithContent,
     reloadFile: sessionService.reloadFile,

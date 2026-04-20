@@ -1,0 +1,15 @@
+{
+  "productName": "Coflat 2",
+  "identifier": "com.coflat2.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev:coflat2",
+    "beforeBuildCommand": "pnpm build:coflat2"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Coflat 2"
+      }
+    ]
+  }
+}

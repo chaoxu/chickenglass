@@ -165,91 +165,14 @@ describe("document semantics analyzers", () => {
     });
   });
 
-  it("extracts includes from multi-line include blocks", () => {
-    const doc = "::: {.include}\nchapter1.md\n:::\n";
+  it("preserves unknown custom fenced div classes", () => {
+    const doc = "::: {.custom-note}\nBody\n:::\n";
     const tree = parser.parse(doc);
 
     const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
 
-    expect(semantics.includes).toHaveLength(1);
-    expect(semantics.includes[0]).toMatchObject({
-      path: "chapter1.md",
-    });
-    expect(semantics.includes[0].from).toBe(0);
-    expect(semantics.includeByFrom.get(0)?.path).toBe("chapter1.md");
-  });
-
-  it("extracts includes from single-line include blocks", () => {
-    const doc = "::: {.include} chapter1.md :::\n";
-    const tree = parser.parse(doc);
-
-    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
-
-    expect(semantics.includes).toHaveLength(1);
-    expect(semantics.includes[0]).toMatchObject({
-      path: "chapter1.md",
-    });
-  });
-
-  it("extracts include paths from the block body instead of attribute title fallbacks", () => {
-    const doc = '::: {.include title="attr.md"}\nbody.md\n:::\n';
-    const tree = parser.parse(doc);
-
-    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
-
-    expect(semantics.includes).toHaveLength(1);
-    expect(semantics.includes[0]?.path).toBe("body.md");
-  });
-
-  it("extracts includes from unclosed multi-line include blocks", () => {
-    const doc = "::: {.include}\nchapter1.md";
-    const tree = parser.parse(doc);
-
-    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
-
-    expect(semantics.includes).toHaveLength(1);
-    expect(semantics.includes[0]?.path).toBe("chapter1.md");
-  });
-
-  it("extracts multiple includes", () => {
-    const doc = [
-      "::: {.include}",
-      "chapter1.md",
-      ":::",
-      "",
-      "Some text.",
-      "",
-      "::: {.include}",
-      "chapter2.md",
-      ":::",
-    ].join("\n");
-    const tree = parser.parse(doc);
-
-    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
-
-    expect(semantics.includes).toHaveLength(2);
-    expect(semantics.includes[0].path).toBe("chapter1.md");
-    expect(semantics.includes[1].path).toBe("chapter2.md");
-  });
-
-  it("does not extract includes from non-include fenced divs", () => {
-    const doc = "::: {.theorem} Main Theorem\nBody.\n:::\n";
-    const tree = parser.parse(doc);
-
-    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
-
-    expect(semantics.includes).toHaveLength(0);
     expect(semantics.fencedDivs).toHaveLength(1);
-  });
-
-  it("extracts includes with directory paths", () => {
-    const doc = "::: {.include}\nchapters/intro.md\n:::\n";
-    const tree = parser.parse(doc);
-
-    const semantics = analyzeDocumentSemantics(stringTextSource(doc), tree);
-
-    expect(semantics.includes).toHaveLength(1);
-    expect(semantics.includes[0].path).toBe("chapters/intro.md");
+    expect(semantics.fencedDivs[0]?.primaryClass).toBe("custom-note");
   });
 
   // --- Regression: #353 — literal braces must not be treated as Pandoc attributes ---

@@ -11,7 +11,6 @@
 
 import type { EditorView } from "@codemirror/view";
 import type { DebugHelpers, DebugRenderState } from "../editor";
-import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../editor";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
 import type { ScrollGuardEvent } from "../app/hooks/use-editor-scroll";
@@ -36,12 +35,6 @@ declare global {
      * Set by useEditorDebugBridge; cleared on unmount.
      */
     __cmDebug?: DebugHelpers;
-
-    /**
-     * Source map for include expansion.
-     * Set by useEditorDocumentServices when includes are expanded.
-     */
-    __cfSourceMap?: SourceMap | null;
 
     /**
      * Toggle flag for fenced-div parser tracing.

@@ -41,7 +41,6 @@ export {
   MemoryFileSystem,
   createDemoFileSystem,
 } from "./file-manager";
-export { SourceMap, type IncludeRegion } from "./source-map";
 export { FileWatcher, type FileWatcherConfig } from "./file-watcher";
 export {
   type ProjectConfig,

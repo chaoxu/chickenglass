@@ -12,6 +12,7 @@
 
 import { create } from "zustand";
 import type { EditorView } from "@codemirror/view";
+import { getTextPosition } from "../markdown/text-lines";
 
 // ── State shape ─────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ export interface EditorTelemetryState {
 interface EditorTelemetryActions {
   /** Update cursor position and derive line/col from the view. */
   setCursorPos: (pos: number, view: EditorView) => void;
+  /** Apply string-document telemetry from non-CM6 editor engines. */
+  setTelemetry: (update: EditorTelemetryUpdate) => void;
   /** Update scroll metrics. */
   setScroll: (top: number, from: number) => void;
   /** Update word and character counts together. */
@@ -44,6 +47,13 @@ interface EditorTelemetryActions {
 }
 
 type EditorTelemetryStore = EditorTelemetryState & EditorTelemetryActions;
+
+export interface EditorTelemetryUpdate {
+  readonly cursorPos?: number;
+  readonly doc?: string;
+  readonly scrollTop?: number;
+  readonly viewportFrom?: number;
+}
 
 // ── Initial state ───────────────────────────────────────────────────────────
 
@@ -74,6 +84,32 @@ export const useEditorTelemetryStore = create<EditorTelemetryStore>()(
       } catch {
         // Stale offset after doc change — use defaults.
         set({ cursorPos: pos, cursorLine: 1, cursorCol: 1 });
+      }
+    },
+
+    setTelemetry: ({ cursorPos, doc, scrollTop, viewportFrom }) => {
+      const next: Partial<EditorTelemetryState> = {};
+      if (cursorPos !== undefined) {
+        next.cursorPos = cursorPos;
+        if (doc !== undefined) {
+          try {
+            const position = getTextPosition(doc, cursorPos);
+            next.cursorLine = position.line;
+            next.cursorCol = position.col;
+          } catch {
+            next.cursorLine = 1;
+            next.cursorCol = 1;
+          }
+        }
+      }
+      if (scrollTop !== undefined) {
+        next.scrollTop = scrollTop;
+      }
+      if (viewportFrom !== undefined) {
+        next.viewportFrom = viewportFrom;
+      }
+      if (Object.keys(next).length > 0) {
+        set(next);
       }
     },
 

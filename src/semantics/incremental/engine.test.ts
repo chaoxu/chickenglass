@@ -112,9 +112,6 @@ describe("incremental document analysis engine", () => {
     expect(getDocumentAnalysisSliceRevision(after, "references")).toBe(
       getDocumentAnalysisSliceRevision(before, "references"),
     );
-    expect(getDocumentAnalysisSliceRevision(after, "includes")).toBe(
-      getDocumentAnalysisSliceRevision(before, "includes"),
-    );
     expect(after.headings).toBe(before.headings);
     expect(after.mathRegions[0]).not.toBe(before.mathRegions[0]);
   });
@@ -151,7 +148,6 @@ describe("incremental document analysis engine", () => {
     expect(after.equations).toEqual(rebuilt.equations);
     expect(after.mathRegions).toEqual(rebuilt.mathRegions);
     expect(after.references).toEqual(rebuilt.references);
-    expect(after.includes).toEqual(rebuilt.includes);
   });
 
   it("matches a full rebuild for plain prose inserts inside a fenced block body", () => {
@@ -183,7 +179,6 @@ describe("incremental document analysis engine", () => {
     expect(after.equations).toEqual(rebuilt.equations);
     expect(after.mathRegions).toEqual(rebuilt.mathRegions);
     expect(after.references).toEqual(rebuilt.references);
-    expect(after.includes).toEqual(rebuilt.includes);
   });
 
   it("matches a full rebuild for plain prose inserts before later inline refs in the same paragraph", () => {
@@ -210,7 +205,6 @@ describe("incremental document analysis engine", () => {
     expect(after.equations).toEqual(rebuilt.equations);
     expect(after.mathRegions).toEqual(rebuilt.mathRegions);
     expect(after.references).toEqual(rebuilt.references);
-    expect(after.includes).toEqual(rebuilt.includes);
   });
 
   it("refreshes IR section ranges when a tail edit reuses the prior analysis", () => {
@@ -515,8 +509,6 @@ describe("incremental document analysis engine", () => {
       "footnotes",
       "headingByFrom",
       "headings",
-      "includeByFrom",
-      "includes",
       "mathRegions",
       "referenceByFrom",
       "referenceIndex",

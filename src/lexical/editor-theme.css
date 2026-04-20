@@ -1,0 +1,1364 @@
+/* Lexical editor styles mechanically extracted from ../coflat2/src/editor-theme.css. */
+
+.cf-lexical-root {
+  height: 100%;
+  color: var(--cf-fg);
+}
+
+.cf-lexical-surface {
+  position: relative;
+}
+
+.cf-lexical-surface--block {
+  height: 100%;
+  overflow: hidden;
+}
+
+.cf-lexical-surface--scroll {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+}
+
+.cf-lexical-surface--scroll > .cf-lexical-editor {
+  flex: 0 0 auto;
+  height: max-content;
+  overflow: visible;
+}
+
+.cf-lexical-surface--inline {
+  display: inline;
+  overflow: visible;
+}
+
+.cf-lexical-editor {
+  box-sizing: border-box;
+  min-height: 100%;
+  overflow: auto;
+  outline: none;
+  color: var(--cf-fg);
+  background: var(--cf-bg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  font-size: var(--cf-base-font-size, 16px);
+  line-height: var(--cf-line-height, 1.5);
+  caret-color: var(--cf-fg);
+  text-align: left;
+  padding: 24px 48px 64px;
+}
+
+.cf-lexical-editor--source {
+  font-family: var(--cf-code-font);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-editor.cf-lexical-editor--rich > * {
+  width: 100%;
+  max-width: var(--cf-content-max-width);
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.cf-lexical-editor--hidden {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 0;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-editor--rich {
+  white-space: normal;
+}
+
+.cf-lexical-editor--inline-surface {
+  display: inline;
+  min-height: auto;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  white-space: normal;
+}
+
+.cf-lexical-editor--inline-surface > * {
+  display: inline;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+.cf-lexical-editor--inline-surface :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  display: inline;
+  margin: 0;
+  min-height: auto;
+}
+
+.cf-lexical-paragraph {
+  margin: 0.8em 0;
+  min-height: 1.5em;
+}
+
+.cf-lexical-editor:focus {
+  outline: none;
+}
+
+.cf-lexical-editor::selection,
+.cf-lexical-editor *::selection {
+  background: color-mix(in srgb, var(--cf-accent) 20%, transparent);
+}
+
+.cf-lexical-inline-math {
+  display: inline-flex;
+  align-items: baseline;
+  cursor: text;
+}
+
+.cf-lexical-inline-math .katex {
+  font-size: inherit;
+}
+
+.cf-lexical-link {
+  color: var(--cf-link, var(--cf-fg));
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.12em;
+  cursor: pointer;
+}
+
+.cf-lexical-code-block {
+  display: block;
+  margin: 1em 0;
+  padding: 1.9rem 1rem 0.7rem;
+  border: 1px solid var(--cf-border);
+  border-radius: 0;
+  background: transparent;
+  overflow-x: auto;
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: var(--cf-code-font-size, 0.85em);
+}
+
+.cf-lexical-code-token--comment,
+.cf-lexical-code-token--cdata,
+.cf-lexical-code-token--doctype,
+.cf-lexical-code-token--prolog {
+  color: var(--cf-muted);
+  font-style: italic;
+}
+
+.cf-lexical-code-token--atrule,
+.cf-lexical-code-token--important,
+.cf-lexical-code-token--keyword {
+  color: var(--cf-code-keyword);
+}
+
+.cf-lexical-code-token--attr,
+.cf-lexical-code-token--char,
+.cf-lexical-code-token--inserted,
+.cf-lexical-code-token--regex,
+.cf-lexical-code-token--selector,
+.cf-lexical-code-token--string,
+.cf-lexical-code-token--url {
+  color: var(--cf-code-string);
+}
+
+.cf-lexical-code-token--boolean,
+.cf-lexical-code-token--constant,
+.cf-lexical-code-token--deleted,
+.cf-lexical-code-token--number,
+.cf-lexical-code-token--symbol {
+  color: var(--cf-code-number);
+}
+
+.cf-lexical-code-token--builtin,
+.cf-lexical-code-token--class-name,
+.cf-lexical-code-token--function,
+.cf-lexical-code-token--property,
+.cf-lexical-code-token--variable {
+  color: var(--cf-code-symbol);
+}
+
+.cf-lexical-code-token--entity,
+.cf-lexical-code-token--namespace,
+.cf-lexical-code-token--tag {
+  color: var(--cf-code-tag);
+}
+
+.cf-lexical-code-token--operator,
+.cf-lexical-code-token--punctuation {
+  color: color-mix(in srgb, var(--cf-fg) 82%, transparent);
+}
+
+.cf-lexical-code-token--important {
+  font-weight: 700;
+}
+
+.cf-codeblock-language {
+  z-index: 65;
+  color: var(--cf-muted);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: 0.76em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.cf-codeblock-copy {
+  z-index: 65;
+  height: 1.35rem;
+  border: 0;
+  padding: 0 0.35rem;
+  background: color-mix(in srgb, var(--cf-bg) 88%, transparent);
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: 0.82rem;
+  cursor: pointer;
+  opacity: 0.88;
+  transition: opacity var(--cf-transition), color var(--cf-transition), background var(--cf-transition);
+}
+
+.cf-codeblock-copy:hover {
+  color: var(--cf-fg);
+  background: color-mix(in srgb, var(--cf-bg) 96%, var(--cf-hover));
+}
+
+.cf-codeblock-copy[data-copied="true"] {
+  opacity: 1;
+}
+
+.cf-lexical-quote {
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--cf-blockquote-border);
+  color: var(--cf-blockquote-color);
+}
+
+.cf-lexical-list {
+  margin: 0.8em 0;
+}
+
+.cf-lexical-list--unordered,
+.cf-lexical-list--ordered {
+  padding-left: 1.5em;
+}
+
+.cf-lexical-list--unordered {
+  padding-left: 0;
+  list-style: none;
+}
+
+.cf-lexical-list--ordered {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.cf-lexical-list-item {
+  display: list-item;
+  margin: 0.2em 0;
+}
+
+.cf-lexical-list--unordered > .cf-lexical-list-item {
+  display: block;
+  margin-left: 0;
+  padding-left: 1.35em;
+  position: relative;
+}
+
+.cf-lexical-list--unordered > .cf-lexical-list-item::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--cf-fg);
+  font-weight: 400;
+}
+
+.cf-lexical-list-item--nested {
+  margin-top: 0.2em;
+}
+
+.cf-lexical-heading {
+  text-align: left;
+  color: var(--cf-fg);
+  line-height: 1.3;
+}
+
+.cf-heading-attribute-token {
+  display: none;
+}
+
+.cf-lexical-heading--h1 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h1-size, 1.15em);
+  font-style: var(--cf-h1-style, normal);
+  font-weight: var(--cf-h1-weight, 700);
+}
+
+.cf-lexical-heading--h2 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h2-size, 1.15em);
+  font-style: var(--cf-h2-style, italic);
+  font-weight: var(--cf-h2-weight, 400);
+}
+
+.cf-lexical-heading--h3 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h3-size, 1.1em);
+  font-style: var(--cf-h3-style, italic);
+  font-weight: var(--cf-h3-weight, 600);
+}
+
+.cf-lexical-heading--h4 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h4-size, 1.05em);
+  font-style: var(--cf-h4-style, normal);
+  font-weight: var(--cf-h4-weight, 600);
+}
+
+.cf-lexical-heading--h5 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h5-size, 1em);
+  font-style: var(--cf-h5-style, normal);
+  font-weight: var(--cf-h5-weight, 600);
+}
+
+.cf-lexical-heading--h6 {
+  margin: 1.5em 0 0.5em;
+  font-size: var(--cf-h6-size, 0.95em);
+  font-style: var(--cf-h6-style, normal);
+  font-weight: var(--cf-h6-weight, 600);
+}
+
+.cf-lexical-inline-math-panel {
+  z-index: 60;
+  width: max-content;
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-math-panel-shell {
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-math-panel-surface {
+  padding: 1px 2px;
+}
+
+.cf-lexical-inline-math-source {
+  min-width: 0;
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font);
+  font-size: 0.92em;
+}
+
+.cf-lexical-inline-math-panel-editor {
+  display: block;
+  max-width: calc(100vw - 4px);
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 1px;
+  box-shadow: none;
+}
+
+.cf-lexical-inline-math-panel-editor:focus {
+  border: 0;
+  background: transparent;
+}
+
+.cf-lexical-inline-image-shell {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.2rem;
+  vertical-align: text-bottom;
+  cursor: pointer;
+}
+
+.cf-lexical-inline-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(16rem, 100%);
+  max-height: 2.6rem;
+  border-radius: calc(var(--cf-border-radius) + 1px);
+}
+
+.cf-lexical-inline-image-fallback {
+  display: inline-block;
+  padding: 0 0.3rem;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: color-mix(in srgb, var(--cf-bg) 94%, var(--cf-hover));
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font);
+  font-size: 0.88em;
+}
+
+.cf-lexical-inline-token-source {
+  min-width: 0;
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font);
+  font-size: 0.92em;
+}
+
+.cf-lexical-floating-source-shell {
+  max-width: min(var(--cf-preview-surface-max-width), calc(100vw - 10px));
+}
+
+.cf-lexical-floating-source-shell.cf-lexical-inline-math-panel {
+  max-width: calc(100vw - 10px);
+}
+
+.cf-lexical-floating-source-surface {
+  padding: 10px 14px;
+  box-sizing: border-box;
+  background: var(--cf-bg);
+}
+
+.cf-lexical-floating-source-editor {
+  min-width: 0;
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-token-panel-shell {
+  max-width: calc(100vw - 4px);
+}
+
+.cf-lexical-inline-token-panel-surface {
+  padding: 1px 2px;
+}
+
+.cf-lexical-inline-token-panel-editor {
+  max-width: calc(100vw - 4px);
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 1px;
+  box-shadow: none;
+}
+
+.cf-lexical-inline-token-panel-editor:focus {
+  border: 0;
+  background: transparent;
+}
+
+.cf-lexical-inline-reveal-preview-portal {
+  pointer-events: auto;
+}
+
+.cf-lexical-inline-reveal-preview-shell {
+  max-width: min(32rem, calc(100vw - 10px));
+}
+
+.cf-lexical-inline-reveal-preview-surface {
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  white-space: nowrap;
+}
+
+.cf-lexical-inline-math-preview {
+  overflow: hidden;
+  max-width: min(24rem, calc(100vw - 2rem));
+  color: var(--cf-fg);
+  text-overflow: ellipsis;
+}
+
+.cf-lexical-reference {
+  color: var(--cf-fg);
+  border-radius: 0.15em;
+  text-decoration: none;
+}
+
+.cf-lexical-reference:hover,
+.cf-lexical-reference:focus-visible {
+  background: color-mix(in srgb, var(--cf-bg) 82%, var(--cf-hover));
+}
+
+.cf-lexical-footnote-ref {
+  color: var(--cf-fg);
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+.cf-lexical-raw-block {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.cf-lexical-raw-fallback {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: color-mix(in srgb, var(--cf-bg) 90%, var(--cf-hover));
+  font-family: var(--cf-code-font);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-nested-editor {
+  min-height: auto;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.cf-lexical-nested-editor .cf-lexical-paragraph {
+  min-height: auto;
+}
+
+.cf-lexical-nested-editor--frontmatter-title {
+  font-size: 1.6em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cf-lexical-nested-editor--title {
+  font-size: inherit;
+}
+
+.cf-lexical-nested-editor--title :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  display: inline;
+  margin: 0;
+}
+
+.cf-lexical-nested-editor--block-body,
+.cf-lexical-nested-editor--footnote,
+.cf-lexical-nested-editor--blockquote {
+  white-space: normal;
+}
+
+.cf-lexical-nested-editor--caption :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  display: inline;
+  margin: 0;
+}
+
+.cf-lexical-structure-source-editor--math {
+  font-family: var(--cf-code-font);
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-title-shell {
+  margin: 0 0 1em;
+  padding-bottom: 0.15em;
+  border-bottom: var(--cf-border-width) solid var(--cf-border);
+}
+
+.cf-lexical-title-shell.is-editing-source {
+  border-bottom: 0;
+}
+
+.cf-lexical-raw-block-shell {
+  position: relative;
+}
+
+.cf-lexical-structure-toggle {
+  cursor: pointer;
+}
+
+.cf-lexical-frontmatter-title {
+  margin: 0;
+  font-size: 1.6em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cf-lexical-frontmatter-title--empty {
+  color: var(--cf-muted);
+  font-weight: 400;
+}
+
+.cf-lexical-structure-source-editor {
+  color: var(--cf-fg);
+  font-family: var(--cf-code-font);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.cf-lexical-structure-source-editor .cf-lexical-paragraph {
+  margin: 0;
+  min-height: 1.2em;
+}
+
+.cf-lexical-structure-source-editor--opener {
+  white-space: pre;
+}
+
+.cf-lexical-block-source-line {
+  margin: 0 0 0.15em;
+}
+
+.cf-lexical-bibliography {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 48px 2rem;
+  max-width: var(--cf-content-max-width);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-align: left;
+  hyphens: manual;
+  -webkit-hyphens: manual;
+}
+
+.cf-lexical-heading[data-coflat-heading-number]::before {
+  content: attr(data-coflat-heading-number) ".\2002";
+  margin-right: 0.25rem;
+  color: var(--cf-fg);
+  font-weight: 400;
+}
+
+.cf-lexical-display-math {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  margin: 0.5em 0;
+  text-align: initial;
+}
+
+.cf-lexical-display-math-body {
+  grid-column: 2;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.cf-lexical-display-math .katex-display {
+  font-size: inherit;
+  margin: 0;
+}
+
+.cf-lexical-display-math .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-lexical-display-math-label {
+  grid-column: 3;
+  justify-self: end;
+  padding-left: 1rem;
+  color: var(--cf-muted);
+  font-family: inherit;
+  font-size: 1em;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.cf-lexical-display-math-editor {
+  grid-column: 1 / -1;
+}
+
+.cf-lexical-display-math-preview-shell {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  margin-top: -0.25rem;
+}
+
+.cf-lexical-display-math-preview-surface {
+  padding: 0.55rem 0.75rem;
+}
+
+.cf-lexical-display-math-preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.cf-lexical-display-math-preview-equation {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.cf-lexical-display-math-preview-equation .katex-display {
+  margin: 0;
+}
+
+.cf-lexical-display-math-preview-equation .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-lexical-display-math-preview-number {
+  color: var(--cf-muted);
+  white-space: nowrap;
+}
+
+.cf-lexical-block {
+  margin: var(--cf-block-margin);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Lexical inserts paragraph nodes between decorator wrappers for cursor
+   placement.  When both neighbors are block environments or display math the
+   intervening paragraph should not contribute visual space.
+   Note: nested :has() is not supported, so the trailing-neighbor check only
+   verifies the next sibling is *some* decorator, not that it contains a block. */
+[data-lexical-decorator]:has(.cf-lexical-block, .cf-lexical-display-math)
+  + .cf-lexical-paragraph:has(+ [data-lexical-decorator]) {
+  margin: 0;
+  min-height: 0;
+  line-height: 0;
+  font-size: 0;
+}
+
+.cf-lexical-block--proof {
+  position: relative;
+}
+
+.cf-lexical-block--theorem,
+.cf-lexical-block--lemma,
+.cf-lexical-block--corollary,
+.cf-lexical-block--proposition,
+.cf-lexical-block--conjecture {
+  font-style: italic;
+}
+
+.cf-lexical-block--definition,
+.cf-lexical-block--problem,
+.cf-lexical-block--example,
+.cf-lexical-block--remark,
+.cf-lexical-block--note,
+.cf-lexical-block--proof,
+.cf-lexical-block--algorithm,
+.cf-lexical-block--figure,
+.cf-lexical-block--table {
+  font-style: normal;
+}
+
+.cf-lexical-block--proof::after {
+  content: var(--cf-proof-marker);
+  float: right;
+  color: var(--cf-proof-marker-color);
+  font-size: var(--cf-proof-marker-size);
+}
+
+.cf-lexical-block-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  align-items: baseline;
+  margin-bottom: 0.2em;
+}
+
+.cf-lexical-block-label {
+  color: var(--cf-block-title-color);
+  font-family: inherit;
+  font-size: 1em;
+  font-style: normal;
+  font-weight: var(--cf-block-title-weight);
+}
+
+.cf-lexical-block-title :is(p, h1, h2, h3, h4, h5, h6) {
+  display: inline;
+  margin: 0;
+}
+
+.cf-lexical-block-title {
+  display: inline;
+  min-width: 0;
+}
+
+.cf-lexical-block--proof .cf-lexical-block-label {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.cf-lexical-block-body > :first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-block-body > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-lexical-block-body .cf-lexical-paragraph:first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-block-body .cf-lexical-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.cf-lexical-block--captioned {
+  padding-bottom: 0;
+}
+
+.cf-lexical-block-caption {
+  display: block;
+  margin-top: var(--cf-spacing-xs, 4px);
+  padding-top: 0;
+  border-top: 0;
+  text-align: center;
+}
+
+.cf-lexical-block-caption-label {
+  display: inline;
+  font-family: inherit;
+  font-size: 1em;
+  font-weight: var(--cf-block-title-weight);
+  white-space: normal;
+}
+
+.cf-lexical-block-caption-label::after {
+  content: var(--cf-block-title-separator);
+}
+
+.cf-lexical-block-caption-text {
+  display: inline;
+  min-width: 0;
+}
+
+.cf-lexical-block-caption-text > .cf-embedded-field-shell,
+.cf-lexical-block-title > .cf-embedded-field-shell {
+  display: inline;
+}
+
+.cf-lexical-blockquote-shell {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--cf-blockquote-border);
+  color: var(--cf-blockquote-color);
+}
+
+.cf-lexical-image-block {
+  margin: 1rem 0;
+}
+
+.cf-lexical-image {
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  border-radius: calc(var(--cf-border-radius) + 2px);
+}
+
+.cf-lexical-image-caption {
+  margin-top: 0.5rem;
+  color: var(--cf-muted);
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.cf-lexical-media {
+  margin: 0.75rem 0;
+}
+
+.cf-lexical-media-fallback {
+  box-sizing: border-box;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--cf-border);
+  border-radius: 0.5rem;
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--cf-bg) 96%, var(--cf-hover));
+}
+
+.cf-lexical-media-fallback--loading {
+  display: grid;
+  min-height: 15rem;
+  place-items: center;
+  text-align: center;
+}
+
+.cf-lexical-media-object {
+  width: 100%;
+  min-height: 28rem;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-border-radius);
+  background: #fff;
+}
+
+table.cf-lexical-table-block {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  margin-inline: auto;
+  font-size: var(--cf-table-font-size, 0.9em);
+  overflow-x: auto;
+}
+
+table.cf-lexical-table-block > tbody {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+div.cf-lexical-table-block {
+  overflow-x: auto;
+}
+
+div.cf-lexical-table-block > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cf-lexical-table-block[data-scroll-edge="left"] {
+  box-shadow: inset 12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+.cf-lexical-table-block[data-scroll-edge="right"] {
+  box-shadow: inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+.cf-lexical-table-block[data-scroll-edge="both"] {
+  box-shadow:
+    inset 12px 0 8px -8px rgba(0, 0, 0, 0.08),
+    inset -12px 0 8px -8px rgba(0, 0, 0, 0.08);
+}
+
+.cf-lexical-table-block :is(th, td) {
+  padding: var(--cf-table-cell-padding);
+  border: 1px solid var(--cf-table-border);
+  vertical-align: top;
+  min-width: 10rem;
+  text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
+}
+
+.cf-lexical-table-block th {
+  background: var(--cf-subtle);
+  font-family: inherit;
+  font-weight: 600;
+  border-bottom: 2px solid var(--cf-table-header-border);
+}
+
+.cf-lexical-table-block :is(th, td) > :is(.cf-lexical-paragraph, .cf-lexical-heading) {
+  margin: 0;
+}
+
+.cf-lexical-footnote-definition {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  color: var(--cf-muted);
+  font-size: 0.85em;
+}
+
+.cf-lexical-footnote-definition-body > :first-child {
+  margin-top: 0;
+}
+
+.cf-lexical-footnote-definition-body > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-lexical-editor--rich table {
+  width: 100%;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: var(--cf-table-font-size, 0.9em);
+}
+
+.cf-lexical-editor--rich :is(th, td) {
+  border: 1px solid var(--cf-table-border);
+  padding: var(--cf-table-cell-padding);
+  text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
+}
+
+.cf-lexical-editor--rich th {
+  background: var(--cf-subtle);
+  font-weight: 600;
+  border-bottom: 2px solid var(--cf-table-header-border);
+}
+
+.cf-lexical-editor--rich pre {
+  overflow-x: auto;
+}
+
+.cf-lexical-editor--rich code {
+  font-family: var(--cf-code-font);
+}
+
+.cf-reference-completion-anchor {
+  z-index: 70;
+}
+
+.cf-reference-completion-tooltip {
+  min-width: min(24rem, calc(100vw - 1rem));
+  max-width: min(52rem, calc(100vw - 1rem));
+  max-height: min(32rem, calc(100vh - 1rem));
+  overflow: hidden;
+}
+
+.cf-reference-completion-list {
+  max-height: min(32rem, calc(100vh - 1rem));
+  margin: 0;
+  padding: 0.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.cf-reference-completion-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  row-gap: 0.2rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.4rem 0.55rem 0.5rem;
+  border-radius: 0.35rem;
+  color: var(--cf-fg);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cf-reference-completion-preview[aria-selected="true"] {
+  background: color-mix(in srgb, var(--cf-bg) 88%, var(--cf-hover));
+}
+
+.cf-reference-completion-preview .cm-completionLabel {
+  min-width: 0;
+  color: inherit;
+  font-family: var(--cf-ui-font);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.cf-reference-completion-preview .cm-completionDetail {
+  color: var(--cf-muted);
+  font-family: var(--cf-ui-font);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.cf-reference-completion-content,
+.cf-reference-completion-preview .cf-citation-preview {
+  grid-column: 1 / span 2;
+  min-width: 0;
+  padding-top: 0.15rem;
+}
+
+.cf-reference-completion-rich-preview {
+  min-width: 0;
+  color: var(--cf-fg);
+}
+
+.cf-reference-completion-rich-preview .katex {
+  font-size: inherit;
+}
+
+.cf-reference-completion-rich-preview .katex-display {
+  margin: 0;
+}
+
+.cf-reference-completion-rich-preview .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-reference-completion-rich-preview > :first-child {
+  margin-top: 0;
+}
+
+.cf-reference-completion-rich-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-block,
+.cf-reference-completion-rich-preview .cf-lexical-display-math,
+.cf-reference-completion-rich-preview .cf-lexical-blockquote-shell,
+.cf-reference-completion-rich-preview table,
+.cf-reference-completion-rich-preview p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-block + .cf-lexical-block,
+.cf-reference-completion-rich-preview p + p {
+  margin-top: 0.45rem;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-block-caption {
+  margin-top: 0.25rem;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-display-math {
+  margin: 0.2rem 0;
+}
+
+.cf-reference-completion-rich-preview .cf-lexical-display-math-body {
+  overflow-y: hidden;
+}
+
+.cf-slash-picker-anchor {
+  z-index: 70;
+}
+
+.cf-slash-picker-tooltip {
+  min-width: min(16rem, calc(100vw - 1rem));
+  max-width: min(24rem, calc(100vw - 1rem));
+  max-height: min(20rem, calc(100vh - 1rem));
+  overflow: hidden;
+}
+
+.cf-slash-picker-list {
+  max-height: min(20rem, calc(100vh - 1rem));
+  margin: 0;
+  padding: 0.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.cf-slash-picker-item {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.35rem;
+  color: var(--cf-fg);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cf-slash-picker-item[aria-selected="true"] {
+  background: color-mix(in srgb, var(--cf-bg) 88%, var(--cf-hover));
+}
+
+.cf-slash-picker-label {
+  font-family: var(--cf-ui-font);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.cf-hover-preview-tooltip {
+  pointer-events: auto;
+  z-index: 50;
+  max-width: min(var(--cf-preview-surface-max-width), calc(100vw - 10px));
+  max-height: min(var(--cf-preview-surface-max-height), calc(100vh - 10px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--cf-transition), transform var(--cf-transition);
+}
+
+.cf-hover-preview-tooltip[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cf-hover-preview {
+  display: block;
+  padding: var(--cf-preview-surface-padding-block) var(--cf-preview-surface-padding-inline);
+  font-size: var(--cf-preview-surface-font-size);
+  line-height: 1.5;
+  color: var(--cf-fg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  box-sizing: border-box;
+}
+
+.cf-hover-preview-header {
+  font-weight: 700;
+  margin-bottom: var(--cf-spacing-xs, 4px);
+  color: var(--cf-fg);
+}
+
+.cf-hover-preview-body {
+  color: var(--cf-fg);
+  overflow-wrap: break-word;
+}
+
+.cf-hover-preview .katex {
+  font-size: inherit;
+}
+
+.cf-hover-preview .katex-display {
+  margin: 0;
+}
+
+.cf-hover-preview .katex-display > .katex {
+  font-size: inherit;
+}
+
+.cf-hover-preview-body p {
+  margin: 0.25em 0;
+}
+
+.cf-hover-preview-body p:first-child {
+  margin-top: 0;
+}
+
+.cf-hover-preview-body p:last-child {
+  margin-bottom: 0;
+}
+
+.cf-hover-preview-body blockquote {
+  border-left: 3px solid var(--cf-blockquote-border);
+  padding-left: 1em;
+  margin-left: 0;
+  color: var(--cf-blockquote-color);
+}
+
+.cf-hover-preview-body ul,
+.cf-hover-preview-body ol {
+  padding-left: 1.5em;
+  margin: 0.8em 0;
+}
+
+.cf-hover-preview-body ul {
+  padding-left: 0;
+  list-style: none;
+}
+
+.cf-hover-preview-body ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+
+.cf-hover-preview-body li {
+  display: list-item;
+  margin: 0.2em 0;
+}
+
+.cf-hover-preview-body ul > li {
+  display: block;
+  margin-left: 0;
+  padding-left: 1.35em;
+  position: relative;
+}
+
+.cf-hover-preview-body ul > li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--cf-fg);
+}
+
+.cf-hover-preview-unresolved {
+  color: var(--cf-muted);
+  font-style: italic;
+}
+
+.cf-citation-preview {
+  white-space: normal;
+}
+
+.cf-hover-preview-citation {
+  color: var(--cf-fg);
+  margin-bottom: var(--cf-spacing-xs, 4px);
+}
+
+.cf-hover-preview-citation:last-child {
+  margin-bottom: 0;
+}
+
+.cf-hover-preview-code-block {
+  overflow-x: auto;
+  margin: 0.75em 0;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--cf-border);
+  border-radius: 0;
+  background: var(--cf-hover);
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  box-sizing: border-box;
+}
+
+.cf-hover-preview-body code {
+  font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+  font-size: var(--cf-code-font-size, 0.85em);
+  background: var(--cf-hover);
+  padding: 0.15em 0.35em;
+  border-radius: var(--cf-border-radius);
+}
+
+.cf-hover-preview-code-block code {
+  background: none;
+  padding: 0;
+  font-size: 1em;
+}
+
+.cf-hover-preview-table-scroll {
+  margin: 0.75em 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.cf-hover-preview-table-scroll table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  border-collapse: collapse;
+  font-size: var(--cf-table-font-size, 0.9em);
+}
+
+.cf-hover-preview-table-scroll th,
+.cf-hover-preview-table-scroll td {
+  border: 1px solid var(--cf-table-border);
+  padding: var(--cf-table-cell-padding);
+  text-align: left;
+  line-height: var(--cf-table-line-height, 1.5);
+}
+
+.cf-hover-preview-table-scroll th {
+  background: var(--cf-subtle);
+  font-weight: 600;
+  border-bottom: 2px solid var(--cf-table-header-border);
+}
+
+/* ── Table action menu ────────────────────────────────────────────── */
+
+.cf-table-action-menu {
+  min-width: 10rem;
+  padding: 0.25rem;
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
+  border-radius: 0.45rem;
+  box-shadow: 0 12px 24px -18px rgb(0 0 0 / 0.22), 0 10px 18px -18px rgb(0 0 0 / 0.18);
+  font-family: var(--cf-ui-font);
+  font-size: 0.85rem;
+}
+
+.cf-table-action-menu-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--cf-fg);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cf-table-action-menu-item:hover {
+  background: color-mix(in srgb, var(--cf-bg) 88%, var(--cf-hover));
+}
+
+.cf-table-action-menu-item--destructive {
+  color: var(--cf-danger);
+}
+
+.cf-table-action-menu-separator {
+  height: 1px;
+  margin: 0.2rem 0.4rem;
+  background: var(--cf-border);
+}

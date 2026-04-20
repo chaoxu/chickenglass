@@ -308,12 +308,12 @@ git add src/semantics/incremental/merge-utils.ts src/semantics/incremental/merge
 git commit -m "feat: add incremental merge utilities"
 ```
 
-### Task 7: Implement Local Slice Merge for Math, Fenced Divs, and Includes
+### Task 7: Implement Local Slice Merge for Math, Fenced Divs, and References
 
 **Files:**
 - Create: `src/semantics/incremental/slices/math-slice.ts`
 - Create: `src/semantics/incremental/slices/fenced-div-slice.ts`
-- Create: `src/semantics/incremental/slices/include-slice.ts`
+- Create: `src/semantics/incremental/slices/reference-slice.ts`
 - Create: `src/semantics/incremental/slices/local-slices.test.ts`
 - Modify: `src/semantics/document.ts`
 - Test: `src/semantics/incremental/slices/local-slices.test.ts`
@@ -324,7 +324,7 @@ Cover:
 
 - edit inside one math block only replaces that `MathSemantics`
 - edit in one theorem body keeps unrelated `FencedDivSemantics` identity
-- edit in one include block only changes the derived `IncludeSemantics` for that block
+- edit near one reference only changes the derived `ReferenceSemantics` for that range
 
 **Step 2: Run the test file**
 
@@ -352,7 +352,7 @@ Expected: PASS.
 **Step 5: Commit**
 
 ```bash
-git add src/semantics/incremental/slices/math-slice.ts src/semantics/incremental/slices/fenced-div-slice.ts src/semantics/incremental/slices/include-slice.ts src/semantics/incremental/slices/local-slices.test.ts src/semantics/document.ts
+git add src/semantics/incremental/slices/math-slice.ts src/semantics/incremental/slices/fenced-div-slice.ts src/semantics/incremental/slices/reference-slice.ts src/semantics/incremental/slices/local-slices.test.ts src/semantics/document.ts
 git commit -m "feat: merge local semantic slices incrementally"
 ```
 
@@ -674,10 +674,9 @@ git add src/render/math-render.ts src/render/reference-render.ts src/render/math
 git commit -m "perf: narrow math and reference invalidation to semantic slices"
 ```
 
-### Task 15: Migrate Include Labels, Sidenotes, and Block Counters
+### Task 15: Migrate Sidenotes and Block Counters
 
 **Files:**
-- Modify: `src/render/include-label.ts`
 - Modify: `src/render/sidenote-render.ts`
 - Modify: `src/plugins/block-counter.ts`
 - Modify: `src/render/section-counter.ts`
@@ -690,7 +689,6 @@ git commit -m "perf: narrow math and reference invalidation to semantic slices"
 
 Cover:
 
-- include labels only update when include slice changes or selection changes
 - sidenotes only rebuild when footnote slice or local toggle state changes
 - block counters recompute from fenced-div or registry changes, not whole-analysis identity
 - section counters continue to behave with the new incremental heading data
@@ -714,7 +712,7 @@ Expected: PASS.
 **Step 5: Commit**
 
 ```bash
-git add src/render/include-label.ts src/render/sidenote-render.ts src/plugins/block-counter.ts src/render/section-counter.ts src/render/section-counter.test.ts src/render/sidenote-render.test.ts src/plugins/block-counter.test.ts
+git add src/render/sidenote-render.ts src/plugins/block-counter.ts src/render/section-counter.ts src/render/section-counter.test.ts src/render/sidenote-render.test.ts src/plugins/block-counter.test.ts
 git commit -m "perf: migrate dependent renderers to incremental slice invalidation"
 ```
 

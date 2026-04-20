@@ -7,6 +7,7 @@ import type { EditorMode } from "../../editor";
 import type { Theme } from "../theme-manager";
 
 export type ExportFormat = "pdf" | "latex" | "html";
+export type NativeExportFormat = Exclude<ExportFormat, "html">;
 
 /** UI-layer settings shape for the React shell. */
 export interface Settings {

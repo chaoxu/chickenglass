@@ -188,9 +188,6 @@ describe("documentAnalysisField incremental contract", () => {
     expect(getDocumentAnalysisSliceRevision(after, "references")).toBe(
       getDocumentAnalysisSliceRevision(before, "references"),
     );
-    expect(getDocumentAnalysisSliceRevision(after, "includes")).toBe(
-      getDocumentAnalysisSliceRevision(before, "includes"),
-    );
   });
 
   it("drops a display-math region when its opening delimiter is deleted", () => {
@@ -459,56 +456,55 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.fencedDivs[1]).toBe(stableSecondDiv);
   });
 
-  it("updates only the affected include entry", () => {
+  it("treats unknown custom blocks as ordinary fenced divs during updates", () => {
     const doc = [
-      "::: {.include}",
-      "chapter1.md",
+      "::: {.custom-note}",
+      "first.md",
       ":::",
       "",
-      "::: {.include}",
-      "chapter2.md",
+      "::: {.custom-note}",
+      "second.md",
       ":::",
       "",
     ].join("\n");
 
     const beforeState = createSemanticsState(doc);
     const before = beforeState.field(documentAnalysisField);
-    const stableSecondInclude = before.includes[1];
+    const stableSecondDiv = before.fencedDivs[1];
 
-    const afterState = replaceOnce(beforeState, "chapter1.md", "chapterA.md");
+    const afterState = replaceOnce(beforeState, "first.md", "other.md");
     const after = afterState.field(documentAnalysisField);
 
-    expect(after.includes).toHaveLength(2);
-    expect(after.includes[0]?.path).toBe("chapterA.md");
-    expect(after.includes[1]?.path).toBe("chapter2.md");
-    expect(after.includes[1]).toBe(stableSecondInclude);
+    expect(after.fencedDivs).toHaveLength(2);
+    expect(after.fencedDivs[0]?.primaryClass).toBe("custom-note");
+    expect(after.fencedDivs[1]).toBe(stableSecondDiv);
   });
 
-  it("does not duplicate trailing includes when inserting at another include boundary", () => {
+  it("does not duplicate trailing custom divs when inserting at another boundary", () => {
     const doc = [
-      "::: {.include}",
-      "chapter1.md",
+      "::: {.custom-note}",
+      "first.md",
       ":::",
       "",
-      "::: {.include}",
-      "chapter2.md",
+      "::: {.custom-note}",
+      "second.md",
       ":::",
       "",
     ].join("\n");
 
     const beforeState = createSemanticsState(doc);
-    const secondStart = doc.indexOf("::: {.include}", 1);
+    const secondStart = doc.indexOf("::: {.custom-note}", 1);
     const afterState = beforeState.update({
-      changes: { from: secondStart, insert: "::: {.include}\nchapter0.md\n:::\n\n" },
+      changes: { from: secondStart, insert: "::: {.custom-note}\ninserted.md\n:::\n\n" },
     }).state;
     const after = afterState.field(documentAnalysisField);
 
-    expect(after.includes.map((include) => include.path)).toEqual([
-      "chapter1.md",
-      "chapter0.md",
-      "chapter2.md",
-    ]);
     expect(after.fencedDivs).toHaveLength(3);
+    expect(after.fencedDivs.map((div) => div.primaryClass)).toEqual([
+      "custom-note",
+      "custom-note",
+      "custom-note",
+    ]);
   });
 
   it("updates adjacent div positions when a boundary edit changes the next block", () => {
@@ -537,11 +533,11 @@ describe("documentAnalysisField incremental contract", () => {
     expect(after.fencedDivs[1]?.closeFenceFrom).toBe(54);
   });
 
-  it("drops disappearing div/include state after a touching-start boundary edit", () => {
+  it("drops disappearing custom div state after a touching-start boundary edit", () => {
     const doc = [
       "para1",
       "",
-      "::: {.include}",
+      "::: {.custom-note}",
       "chapter1.md",
       ":::",
       "",
@@ -550,19 +546,18 @@ describe("documentAnalysisField incremental contract", () => {
     const beforeState = createSemanticsState(doc);
     const from = doc.indexOf("1\n\n:::");
     const afterState = beforeState.update({
-      changes: { from, to: from + 3, insert: ".include" },
+      changes: { from, to: from + 3, insert: ".custom-note" },
     }).state;
     const after = afterState.field(documentAnalysisField);
 
     expect(after.fencedDivs).toEqual([]);
-    expect(after.includes).toEqual([]);
   });
 
   it("keeps nested outer divs in sync when deleting the outer closing fence", () => {
     const doc = [
       ":::: {.proof}",
       "alpha",
-      "::: {.include}",
+      "::: {.custom-note}",
       "new.md",
       ":::",
       "omega",

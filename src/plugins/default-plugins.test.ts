@@ -255,8 +255,8 @@ describe("defaultPlugins", () => {
 });
 
 describe("EXCLUDED_FROM_FALLBACK", () => {
-  it("contains 'include'", () => {
-    expect(EXCLUDED_FROM_FALLBACK.has("include")).toBe(true);
+  it("does not special-case any block names", () => {
+    expect(EXCLUDED_FROM_FALLBACK.size).toBe(0);
   });
 
   it("does not contain any manifest block names", () => {

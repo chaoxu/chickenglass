@@ -27,6 +27,8 @@ export interface CslJsonItem {
   [key: string]: unknown;
 }
 
+export type BibStore = ReadonlyMap<string, CslJsonItem>;
+
 /** Placeholder tokens for escaped braces during brace stripping. */
 const ESCAPED_LB = "\uFFFDLB";
 const ESCAPED_RB = "\uFFFDRB";

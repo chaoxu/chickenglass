@@ -529,7 +529,6 @@ export const scenarios = {
             "equations",
             "mathRegions",
             "references",
-            "includes",
           ].map((sliceName) => ({
             name: `semantic.slice.${sliceName}`,
             unit: "count",

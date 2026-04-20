@@ -184,7 +184,7 @@ describe("mergeFencedDivSlice", () => {
     const doc = [
       ":::: {.proof}",
       "alpha",
-      "::: {.include}",
+      "::: {.custom-note}",
       "new.md",
       ":::",
       "omega",

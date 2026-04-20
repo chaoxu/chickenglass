@@ -148,36 +148,18 @@ describe("getPickerEntries", () => {
     expect(names.indexOf("definition")).toBeLessThan(names.indexOf("proof"));
   });
 
-  it("excludes embed-family types", () => {
+  it("treats registered non-manifest names as ordinary custom blocks", () => {
     const registry = registerPlugins(createRegistryState(), [
       makeBlockPlugin({ name: "theorem" }),
-      makeBlockPlugin({ name: "embed", specialBehavior: "embed" }),
-      makeBlockPlugin({ name: "iframe", specialBehavior: "embed" }),
-      makeBlockPlugin({ name: "youtube", specialBehavior: "embed" }),
-      makeBlockPlugin({ name: "gist", specialBehavior: "embed" }),
+      makeBlockPlugin({ name: "custom-widget" }),
+      makeBlockPlugin({ name: "custom-panel" }),
     ]);
 
     const entries = getPickerEntries(registry);
     const names = entries.map((e) => e.name);
 
     expect(names).toContain("theorem");
-    expect(names).not.toContain("embed");
-    expect(names).not.toContain("iframe");
-    expect(names).not.toContain("youtube");
-    expect(names).not.toContain("gist");
-  });
-
-  it("excludes include", () => {
-    const registry = registerPlugins(createRegistryState(), [
-      makeBlockPlugin({ name: "theorem" }),
-      makeBlockPlugin({ name: "include" }),
-    ]);
-
-    const entries = getPickerEntries(registry);
-    const names = entries.map((e) => e.name);
-
-    expect(names).toContain("theorem");
-    expect(names).not.toContain("include");
+    expect(names).toEqual(expect.arrayContaining(["custom-widget", "custom-panel"]));
   });
 
   it("includes custom frontmatter-defined plugins not in the manifest", () => {

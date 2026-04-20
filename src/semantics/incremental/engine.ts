@@ -9,7 +9,6 @@ import type { ReferenceIndexModel } from "../../references/model";
 import type {
   DocumentAnalysis,
   FencedDivSemantics,
-  IncludeSemantics,
   TextSource,
 } from "../document";
 import {
@@ -33,7 +32,6 @@ import {
   mergeHeadingSlice,
   type HeadingSlice,
 } from "./slices/heading-slice";
-import { deriveIncludeSlice } from "./slices/include-slice";
 import {
   buildMathSlice,
   computeMathOverhangRanges,
@@ -71,7 +69,6 @@ export interface DocumentAnalysisSliceRevisions {
   readonly equations: number;
   readonly mathRegions: number;
   readonly references: number;
-  readonly includes: number;
 }
 
 export type DocumentAnalysisSliceName = keyof DocumentAnalysisSliceRevisions;
@@ -94,11 +91,6 @@ interface FencedDivSlice {
   readonly structureRanges: readonly { readonly from: number; readonly to: number }[];
 }
 
-interface IncludeSlice {
-  readonly includes: readonly IncludeSemantics[];
-  readonly includeByFrom: ReadonlyMap<number, IncludeSemantics>;
-}
-
 interface DocumentAnalysisSlices {
   readonly headingSlice: HeadingSlice;
   readonly footnoteSlice: FootnoteSlice;
@@ -106,7 +98,6 @@ interface DocumentAnalysisSlices {
   readonly equationSlice: EquationSlice;
   readonly mathSlice: MathSlice;
   readonly referenceSlice: ReferenceSlice;
-  readonly includeSlice: IncludeSlice;
 }
 
 interface SliceRegistryEntry {
@@ -151,10 +142,6 @@ const SLICE_REGISTRY: readonly SliceRegistryEntry[] = [
   sliceEntry("references", "referenceSlice", (s) => ({
     references: s.references,
     referenceByFrom: s.referenceByFrom,
-  })),
-  sliceEntry("includes", "includeSlice", (s) => ({
-    includes: s.includes,
-    includeByFrom: s.includeByFrom,
   })),
 ];
 
@@ -215,15 +202,6 @@ function createFencedDivSlice(
   };
 }
 
-function createIncludeSlice(
-  includes: readonly IncludeSemantics[],
-): IncludeSlice {
-  return {
-    includes,
-    includeByFrom: new Map(includes.map((include) => [include.from, include])),
-  };
-}
-
 interface FullBuildResult {
   readonly slices: DocumentAnalysisSlices;
   readonly excludedRanges: readonly ExcludedRange[];
@@ -241,9 +219,6 @@ function buildSlicesAndExcludedRanges(doc: TextSource, tree: Tree): FullBuildRes
       equationSlice: buildEquationSlice(structural),
       mathSlice: buildMathSlice(structural),
       referenceSlice: buildReferenceSlice(structural),
-      includeSlice: createIncludeSlice(
-        deriveIncludeSlice(doc, fencedDivSlice.fencedDivs),
-      ),
     },
     excludedRanges: structural.excludedRanges,
   };
@@ -647,7 +622,6 @@ function classifyStructuralExtraction(
     || windowsTouchSortedRanges(dirtyWindows, previousState.footnoteSlice.definitions)
     || windowsTouchSortedRanges(dirtyWindows, previousState.fencedDivSlice.structureRanges)
     || windowsTouchSortedRanges(dirtyWindows, previousState.equationSlice.equations)
-    || windowsTouchSortedRanges(dirtyWindows, previousState.includeSlice.includes)
   );
   if (touchesStructuralOwners) {
     return "full";
@@ -780,19 +754,6 @@ export function updateDocumentAnalysis(
   const fencedDivSlice = mergedFencedDivs === previousState.fencedDivSlice.fencedDivs
     ? previousState.fencedDivSlice
     : createFencedDivSlice(mergedFencedDivs);
-  const includes = reuseEquivalentArray(
-    previousState.includeSlice.includes,
-    deriveIncludeSlice(
-      doc,
-      fencedDivSlice.fencedDivs,
-      previousState.includeSlice.includes,
-      changes,
-      delta.rawChangedRanges,
-    ),
-  );
-  const includeSlice = includes === previousState.includeSlice.includes
-    ? previousState.includeSlice
-    : createIncludeSlice(includes);
   const mathDirtyExtractions = expandDirtyMathExtractions(
     previousState.mathSlice,
     delta,
@@ -879,7 +840,6 @@ export function updateDocumentAnalysis(
     equationSlice,
     mathSlice,
     referenceSlice,
-    includeSlice,
   })
     ? mapReferenceIndex(previousState.referenceIndex, changes)
     : undefined;
@@ -891,7 +851,6 @@ export function updateDocumentAnalysis(
     equationSlice,
     mathSlice,
     referenceSlice,
-    includeSlice,
   }, excludedRanges, doc, referenceIndex);
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { dispatchFormatEvent } from "../../constants/events";
 import { BackgroundIndexer } from "../../index";
+import { activeCoflatProduct } from "../../product";
 import { documentAnalysisField } from "../../state/document-analysis";
 import {
   type DocumentLabelBacklinksResult,
@@ -421,7 +422,7 @@ export function useAppOverlays({
 
     // ── Help ──────────────────────────────────────────────────────────────
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: "help_shortcuts", action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
-    { id: "help.about", label: "About Coflat", category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
+    { id: "help.about", label: `About ${activeCoflatProduct.displayName}`, category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
 
     // ── Recent files (palette only) ──────────────────────────────────────
     ...(workspace.recentFiles ?? []).map((path, i) => ({

@@ -1,6 +1,5 @@
 import type { EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { IFRAME_MAX_ATTEMPTS, IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import { renderDocumentFragmentToDom } from "../document-surfaces";
 import type {
   PluginRenderAdapter,
@@ -8,9 +7,7 @@ import type {
 } from "../plugins/plugin-render-adapter";
 import {
   ShellMacroAwareWidget,
-  ShellWidget,
 } from "./render-core";
-import { mutateWithScrollStabilizedMeasure } from "./scroll-anchor";
 
 function captionClassName(active: boolean): string {
   return active
@@ -170,176 +167,6 @@ class AttributeTitleWidget extends ShellMacroAwareWidget implements PluginRender
   }
 }
 
-function tryResizeIframe(
-  iframe: HTMLIFrameElement,
-  view?: EditorView,
-): "resized" | "unavailable" | "blocked" {
-  try {
-    const doc = iframe.contentDocument;
-    if (doc?.body) {
-      const height = doc.body.scrollHeight;
-      if (height > 0) {
-        const nextHeight = `${height}px`;
-        if (iframe.style.height !== nextHeight) {
-          mutateWithScrollStabilizedMeasure(view, () => {
-            iframe.style.height = nextHeight;
-          });
-        }
-        return "resized";
-      }
-    }
-    return "unavailable";
-  } catch (_error) {
-    return "blocked";
-  }
-}
-
-function autoResizeGistIframe(
-  iframe: HTMLIFrameElement,
-  view?: EditorView,
-): () => void {
-  const result = tryResizeIframe(iframe, view);
-  if (result !== "unavailable") {
-    return () => {};
-  }
-
-  let attempts = 0;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let cancelled = false;
-
-  const poll = (): void => {
-    if (cancelled) return;
-    attempts++;
-    const result = tryResizeIframe(iframe, view);
-    if (result === "unavailable" && attempts < IFRAME_MAX_ATTEMPTS) {
-      timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
-    } else {
-      timer = null;
-    }
-  };
-
-  timer = setTimeout(poll, IFRAME_POLL_INTERVAL_MS);
-  return () => {
-    cancelled = true;
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
-}
-
-export function embedSandboxPermissions(embedType: string): string {
-  if (embedType === "youtube") {
-    return "allow-scripts allow-presentation";
-  }
-  return "allow-scripts";
-}
-
-class EmbedWidget extends ShellWidget implements PluginRenderWidget {
-  private readonly gistCleanup = new WeakMap<
-    HTMLElement,
-    {
-      readonly iframe: HTMLIFrameElement;
-      readonly handleLoad: () => void;
-      readonly cancelResize: () => void;
-    }
-  >();
-
-  constructor(
-    private readonly src: string,
-    private readonly embedType: string,
-    private readonly active: boolean = false,
-  ) {
-    super();
-    this.useLiveSourceRange = false;
-  }
-
-  private attachGistResize(
-    wrapper: HTMLElement,
-    iframe: HTMLIFrameElement,
-    view?: EditorView,
-  ): void {
-    let cancelResize = () => {};
-    const handleLoad = (): void => {
-      cancelResize();
-      cancelResize = autoResizeGistIframe(iframe, view);
-    };
-    iframe.addEventListener("load", handleLoad, { once: true });
-    this.gistCleanup.set(wrapper, {
-      iframe,
-      handleLoad,
-      cancelResize: () => {
-        cancelResize();
-      },
-    });
-  }
-
-  createDOM(): HTMLElement {
-    const wrapper = document.createElement("div");
-    wrapper.className = this.active
-      ? `${CSS.embed(this.embedType)} ${CSS.activeShellWidget}`
-      : CSS.embed(this.embedType);
-
-    const iframe = document.createElement("iframe");
-    iframe.src = this.src;
-    iframe.setAttribute("sandbox", embedSandboxPermissions(this.embedType));
-    iframe.setAttribute("loading", "lazy");
-    iframe.setAttribute("referrerpolicy", "no-referrer");
-    iframe.setAttribute("frameborder", "0");
-
-    if (this.embedType === "youtube") {
-      iframe.setAttribute("allowfullscreen", "");
-      iframe.className = CSS.embedYoutubeIframe;
-    } else {
-      iframe.className = CSS.embedIframe;
-    }
-
-    wrapper.appendChild(iframe);
-    return wrapper;
-  }
-
-  override toDOM(view?: EditorView): HTMLElement {
-    const wrapper = this.createDOM();
-    this.syncWidgetAttrs(wrapper);
-    this.syncFenceGuideOptIn(wrapper, true, view);
-    if (this.sourceFrom >= 0 && view) {
-      this.bindSourceReveal(wrapper, view);
-    }
-
-    if (this.embedType === "gist") {
-      const iframe = wrapper.querySelector("iframe");
-      if (iframe instanceof HTMLIFrameElement) {
-        this.attachGistResize(wrapper, iframe, view);
-      }
-    }
-
-    return wrapper;
-  }
-
-  override destroy(dom: HTMLElement): void {
-    const cleanup = this.gistCleanup.get(dom);
-    if (!cleanup) return;
-    cleanup.iframe.removeEventListener("load", cleanup.handleLoad);
-    cleanup.cancelResize();
-    this.gistCleanup.delete(dom);
-  }
-
-  protected override bindSourceReveal(
-    _el: HTMLElement,
-    _view: EditorView,
-  ): void {
-    // Embed previews remain interactive in stable-shell mode.
-  }
-
-  eq(other: EmbedWidget): boolean {
-    return (
-      this.src === other.src &&
-      this.embedType === other.embedType &&
-      this.active === other.active
-    );
-  }
-}
-
 export const codeMirrorPluginRenderAdapter: PluginRenderAdapter = {
   createHeaderWidget(header, macros) {
     return new BlockHeaderWidget(header, macros);
@@ -349,8 +176,5 @@ export const codeMirrorPluginRenderAdapter: PluginRenderAdapter = {
   },
   createAttributeTitleWidget(title, macros) {
     return new AttributeTitleWidget(title, macros);
-  },
-  createEmbedWidget(src, embedType, active) {
-    return new EmbedWidget(src, embedType, active);
   },
 };

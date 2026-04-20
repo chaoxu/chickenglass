@@ -63,14 +63,14 @@ describe("createStandardPlugin", () => {
   });
 
   it("accepts manifest entries directly", () => {
-    const youtube = BLOCK_MANIFEST_ENTRIES.find((entry) => entry.name === "youtube");
-    expect(youtube).toBeDefined();
-    if (!youtube) throw new Error("expected youtube manifest entry");
+    const proof = BLOCK_MANIFEST_ENTRIES.find((entry) => entry.name === "proof");
+    expect(proof).toBeDefined();
+    if (!proof) throw new Error("expected proof manifest entry");
 
-    const plugin = createStandardPlugin(youtube);
-    expect(plugin.title).toBe("YouTube");
+    const plugin = createStandardPlugin(proof);
+    expect(plugin.title).toBe("Proof");
     expect(plugin.numbered).toBe(false);
-    expect(plugin.specialBehavior).toBe("embed");
+    expect(plugin.specialBehavior).toBe("qed");
   });
 
   it("maps manifest counter and metadata through pluginFromManifest", () => {
@@ -88,9 +88,8 @@ describe("createStandardPlugin", () => {
   it("keeps plugin-only render decoration hooks on option-based plugins", () => {
     const addBodyDecorations = () => {};
     const plugin = createStandardPlugin({
-      name: "embed",
+      name: "custom",
       numbered: false,
-      specialBehavior: "embed",
       renderDecorations: { addBodyDecorations },
     });
     expect(plugin.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);

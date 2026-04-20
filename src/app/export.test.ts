@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FileSystem } from "./file-manager";
+import { MemoryFileSystem, type FileSystem } from "./file-manager";
 
 const { resolveLocalImageOverridesMock } = vi.hoisted(() => ({
   resolveLocalImageOverridesMock: vi.fn(),
@@ -13,6 +13,7 @@ import {
   _buildHtmlDocumentForTest,
   _buildHtmlDocumentAsyncForTest,
   _resolveExportThemeTokensForTest,
+  _preprocessLatexExportForTest,
   sanitizeCssValue,
 } from "./export";
 
@@ -111,6 +112,30 @@ describe("buildHtmlDocument", () => {
     // The token should appear in the style block with its resolved value
     expect(html).toContain("--cf-bg: red;");
     expect(html).toContain("<style>");
+  });
+});
+
+describe("preprocessLatexExport", () => {
+  it("uses the canonical LaTeX preprocessing pipeline for desktop export", async () => {
+    const fs = new MemoryFileSystem({});
+    const source = [
+      "---",
+      "math:",
+      "  R: \"\\\\mathbb{R}\"",
+      "---",
+      "",
+      "Intro.",
+      "",
+      "\\begin{equation}\\label{eq:x}",
+      "x \\in \\R",
+      "\\end{equation}",
+    ].join("\n");
+
+    const processed = await _preprocessLatexExportForTest(source, "main.md", fs);
+
+    expect(processed).toContain("\\newcommand{\\R}{\\mathbb{R}}");
+    expect(processed).toContain("\\begin{equation}\\label{eq:x}");
+    expect(processed).toContain("\\end{equation}");
   });
 });
 

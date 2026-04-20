@@ -8,14 +8,11 @@
 
 import type { BlockPlugin } from "./plugin-types";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
-import { embedPlugins } from "./embed-plugin";
 import { pluginFromManifest } from "./plugin-factory";
-
-const embedPluginByName = new Map(embedPlugins.map((plugin) => [plugin.name, plugin] as const));
 
 /** All default block plugins, generated from BLOCK_MANIFEST. */
 export const defaultPlugins: readonly BlockPlugin[] = BLOCK_MANIFEST_ENTRIES.map(
-  (entry) => embedPluginByName.get(entry.name) ?? pluginFromManifest(entry),
+  (entry) => pluginFromManifest(entry),
 );
 
 const theoremFamilyNames = new Set(
@@ -27,9 +24,4 @@ const theoremFamilyNames = new Set(
 /** Theorem-family plugins (italic body style in manifest). */
 export const theoremFamilyPlugins: readonly BlockPlugin[] = defaultPlugins.filter(
   (plugin) => theoremFamilyNames.has(plugin.name),
-);
-
-/** Embed-family plugins (embed special behavior in manifest). */
-export const embedFamilyPlugins: readonly BlockPlugin[] = defaultPlugins.filter(
-  (plugin) => plugin.specialBehavior === "embed",
 );

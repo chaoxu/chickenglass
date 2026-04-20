@@ -75,9 +75,6 @@ export const themeBlockTokens = [
   "--cf-proof-marker",
   "--cf-proof-marker-color",
   "--cf-proof-marker-size",
-  "--cf-include-accent",
-  "--cf-include-label-color",
-  "--cf-include-label-active-color",
 ] as const;
 
 export const themeTableTokens = [
@@ -89,7 +86,6 @@ export const themeTableTokens = [
   "--cf-table-font-size",
   "--cf-table-line-height",
   "--cf-table-edit-outline",
-  "--cf-embed-border",
   "--cf-mark-bg",
   "--cf-math-error-fg",
   "--cf-math-error-bg",
@@ -223,9 +219,6 @@ export const themeSurfaceTokenMap = {
     "--cf-proof-marker-color",
     "--cf-proof-marker-size",
     "--cf-layer-inline-chrome",
-    "--cf-include-accent",
-    "--cf-include-label-color",
-    "--cf-include-label-active-color",
   ],
   tables: [
     "--cf-border",
@@ -235,7 +228,6 @@ export const themeSurfaceTokenMap = {
     "--cf-table-font-size",
     "--cf-table-line-height",
     "--cf-table-edit-outline",
-    "--cf-embed-border",
     "--cf-code-font",
   ],
   tooltipAndHover: [
@@ -321,9 +313,6 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-proof-marker": '"\\220E"',
   "--cf-proof-marker-color": "var(--cf-fg)",
   "--cf-proof-marker-size": "1.2em",
-  "--cf-include-accent": "var(--cf-border)",
-  "--cf-include-label-color": "var(--cf-border)",
-  "--cf-include-label-active-color": "var(--cf-muted)",
   // Table & content surfaces
   "--cf-blockquote-border": "var(--cf-border)",
   "--cf-blockquote-color": "var(--cf-fg)",
@@ -333,7 +322,6 @@ export const exportThemeTokenDefaults: Record<ThemeTokenName, string> = {
   "--cf-table-font-size": "0.9em",
   "--cf-table-line-height": "1.5",
   "--cf-table-edit-outline": "var(--cf-active)",
-  "--cf-embed-border": "var(--cf-border)",
   "--cf-mark-bg": "rgba(255, 255, 0, 0.2)",
   "--cf-math-error-fg": "#c00",
   "--cf-math-error-bg": "rgba(255, 0, 0, 0.05)",

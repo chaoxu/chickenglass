@@ -12,7 +12,6 @@ import {
   containerAttributesPlugin,
   fenceGuidePlugin,
   imageRenderPlugin,
-  includeLabelPlugin,
   mathPreviewPlugin,
   sectionNumberPlugin,
   sidenoteRenderPlugin,
@@ -122,7 +121,6 @@ const renderingExtensions: Extension[] = [
   mathPreviewPlugin,
   sectionNumberPlugin,
   fenceGuidePlugin,
-  includeLabelPlugin,
   sidenoteRenderPlugin,
   searchHighlightPlugin,
 ];

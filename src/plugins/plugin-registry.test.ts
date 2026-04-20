@@ -123,9 +123,12 @@ describe("getPluginOrFallback", () => {
     expect(a).toBe(b);
   });
 
-  it("returns undefined for 'include' class", () => {
+  it("creates a generic fallback for unknown custom classes", () => {
     const state = createRegistryState();
-    expect(getPluginOrFallback(state, "include")).toBeUndefined();
+    expect(getPluginOrFallback(state, "custom-note")).toMatchObject({
+      name: "custom-note",
+      title: "Custom-note",
+    });
   });
 
   it("fallback plugin renders correct header and class", () => {
@@ -277,13 +280,12 @@ describe("pluginFromConfig", () => {
   it("inherits render decoration hooks from existing plugin when partially overridden", () => {
     const addBodyDecorations = () => {};
     const existing = makeBlockPlugin({
-      name: "embed",
+      name: "custom",
       numbered: false,
-      title: "Embed",
-      specialBehavior: "embed",
+      title: "Custom",
       renderDecorations: { addBodyDecorations },
     });
-    const plugin = pluginFromConfig("embed", { title: "Widget" }, existing);
+    const plugin = pluginFromConfig("custom", { title: "Widget" }, existing);
     expect(plugin.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
   });
 

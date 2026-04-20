@@ -23,6 +23,8 @@ import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import type { ActiveDocumentSignal } from "../active-document-signal";
+import { activeCoflatProduct } from "../../product";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 interface PendingModeOverride {
   path: string;
@@ -94,6 +96,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   handleDiagnosticsChange: (diagnostics: DiagnosticEntry[]) => void;
   /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
+  /** Called by the Lexical editor surface when its imperative handle is available. */
+  handleLexicalEditorReady: (handle: MarkdownEditorHandle | null) => void;
 
   // --- Navigation ---
 
@@ -186,6 +190,7 @@ export function useAppEditorShell({
   const {
     currentDocument,
     currentPath,
+    editorDoc,
     activeDocumentSignal,
     getCurrentDocText,
     openFile,
@@ -202,11 +207,17 @@ export function useAppEditorShell({
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
   const editorViewRef = useRef<EditorView | null>(null);
+  const lexicalEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
+  const pendingLexicalNavigationRef = useRef<{
+    readonly onComplete?: () => void;
+    readonly path: string;
+    readonly pos: number;
+  } | null>(null);
 
   const navigation = useEditorNavigation({ openFile, isPathOpen, currentPath });
   const {
-    handleOutlineSelect,
-    handleGotoLine,
+    handleOutlineSelect: handleCmOutlineSelect,
+    handleGotoLine: handleCmGotoLine,
     handleSearchResult: handleSearchResultNavigation,
     handleEditorDocumentReady,
     syncView,
@@ -225,6 +236,10 @@ export function useAppEditorShell({
       setDiagnostics([]);
     }
   }, [syncView]);
+
+  const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
+    lexicalEditorHandleRef.current = handle;
+  }, []);
 
   const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
     setHeadings(h);
@@ -317,6 +332,46 @@ export function useAppEditorShell({
     setEditorMode(view, normalizedMode);
   }, [currentPath, editorState?.view, isMarkdownFile]);
 
+  const handleOutlineSelect = useCallback((from: number) => {
+    const lexicalHandle = lexicalEditorHandleRef.current;
+    if (lexicalHandle) {
+      lexicalHandle.setSelection(from, from);
+      lexicalHandle.focus();
+      return;
+    }
+    handleCmOutlineSelect(from);
+  }, [handleCmOutlineSelect]);
+
+  const handleGotoLine = useCallback((line: number, col?: number) => {
+    const lexicalHandle = lexicalEditorHandleRef.current;
+    if (lexicalHandle) {
+      const doc = lexicalHandle.peekDoc();
+      const lines = doc.split(/\r\n|\n|\r/);
+      const clampedLine = Math.max(1, Math.min(line, lines.length));
+      const lineStart = lines
+        .slice(0, clampedLine - 1)
+        .reduce((offset, currentLine) => offset + currentLine.length + 1, 0);
+      const lineText = lines[clampedLine - 1] ?? "";
+      const offset = lineStart + Math.max(0, Math.min((col ?? 1) - 1, lineText.length));
+      lexicalHandle.setSelection(offset, offset);
+      lexicalHandle.focus();
+      return;
+    }
+    handleCmGotoLine(line, col);
+  }, [handleCmGotoLine]);
+
+  useEffect(() => {
+    const pending = pendingLexicalNavigationRef.current;
+    const lexicalHandle = lexicalEditorHandleRef.current;
+    if (!pending || !lexicalHandle || pending.path !== currentPath) {
+      return;
+    }
+    pendingLexicalNavigationRef.current = null;
+    lexicalHandle.setSelection(pending.pos, pending.pos);
+    lexicalHandle.focus();
+    pending.onComplete?.();
+  }, [currentPath, editorDoc]);
+
   const handleSearchResult = useCallback((
     target: SearchNavigationTarget,
     onComplete?: () => void,
@@ -329,6 +384,20 @@ export function useAppEditorShell({
       mode: normalizedMode,
       requestId,
     });
+    if (activeCoflatProduct.editorEngine === "lexical-wysiwyg") {
+      pendingLexicalNavigationRef.current = {
+        onComplete,
+        path: target.file,
+        pos: target.pos,
+      };
+      void openFile(target.file).catch((error: unknown) => {
+        pendingLexicalNavigationRef.current = null;
+        console.error("[editor] handleSearchResult: failed to open file", target.file, error);
+        onComplete?.();
+      });
+      return;
+    }
+
     void handleSearchResultNavigation(target.file, target.pos, onComplete).then((opened) => {
       setPendingModeOverride((previous) => {
         if (!previous || previous.requestId !== requestId) {
@@ -344,7 +413,7 @@ export function useAppEditorShell({
         [target.file]: normalizedMode,
       }));
     });
-  }, [handleSearchResultNavigation]);
+  }, [currentPath, handleSearchResultNavigation, isMarkdownFile, openFile]);
 
   const hasDirtyDocument = currentDocument?.dirty ?? false;
 
@@ -376,6 +445,7 @@ export function useAppEditorShell({
     handleHeadingsChange,
     handleDiagnosticsChange,
     handleEditorDocumentReady,
+    handleLexicalEditorReady,
     handleOutlineSelect,
     handleGotoLine,
     handleSearchResult,

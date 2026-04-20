@@ -18,7 +18,6 @@ import { EditorState, type Extension, type Transaction } from "@codemirror/state
 import {
   type DecorationSet,
 } from "@codemirror/view";
-import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
 import { activeFencedOpenFenceStarts } from "../editor/shell-ownership";
 import {
@@ -101,12 +100,6 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
   }, items) => {
     const builder = new DecorationBuilder(items);
     const plugin = getPluginOrFallback(registry, div.className);
-
-    // Include blocks are always invisible — content flows seamlessly
-    if (EXCLUDED_FROM_FALLBACK.has(div.className)) {
-      builder.addIncludeDecorations(div);
-      return;
-    }
 
     if (!plugin) return;
 

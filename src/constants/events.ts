@@ -34,9 +34,16 @@ export type FormatEventType = keyof FormatEventDetailMap;
 export type FormatEventDetail = FormatEventDetailMap[FormatEventType];
 export type SimpleFormatEventType = Exclude<FormatEventType, "heading">;
 
+export const NAVIGATE_SOURCE_POSITION_EVENT = "cf:navigate-source-position";
+
+export interface NavigateSourcePositionEventDetail {
+  pos: number;
+}
+
 declare global {
   interface DocumentEventMap {
     "cf:format": CustomEvent<FormatEventDetail>;
+    "cf:navigate-source-position": CustomEvent<NavigateSourcePositionEventDetail>;
   }
 }
 
@@ -61,15 +68,17 @@ export function dispatchFormatEvent(
   document.dispatchEvent(new CustomEvent<FormatEventDetail>(FORMAT_EVENT, { detail: eventDetail }));
 }
 
+export function dispatchNavigateSourcePositionEvent(pos: number): void {
+  document.dispatchEvent(new CustomEvent<NavigateSourcePositionEventDetail>(
+    NAVIGATE_SOURCE_POSITION_EVENT,
+    {
+      detail: { pos },
+    },
+  ));
+}
+
 /**
  * Dispatched on `view.dom` (bubbles) when the editor mode cycles.
  * Detail: the new `EditorMode` string ("rich" | "source" | "read").
  */
 export const MODE_CHANGE_EVENT = "cf:mode-change";
-
-/**
- * Dispatched on `view.dom` (bubbles) when the user navigates into an include
- * region and triggers a jump to the source file.
- * Detail: the file path string.
- */
-export const OPEN_FILE_EVENT = "cf:open-file";

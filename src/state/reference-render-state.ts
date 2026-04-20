@@ -1,10 +1,13 @@
 import type { EditorState } from "@codemirror/state";
 
+import type { DocumentLabelGraph } from "../app/markdown/labels";
 import {
   collectCitationMatches,
   getCitationRegistrationKey,
   type CslProcessor,
 } from "../citations/csl-processor";
+import type { CitationRenderData } from "../lexical-next/controller/citation-runtime";
+import type { RenderIndex } from "../lexical/markdown/reference-index";
 import type { BibStore } from "./bib-data";
 import { bibDataField } from "./bib-data";
 import type { BlockCounterState } from "./block-counter";
@@ -42,6 +45,13 @@ export interface ReferenceRenderBibliographyState {
   readonly store: BibStore;
   readonly cslProcessor: CslProcessor;
   readonly processorRevision: number;
+}
+
+export interface ReferenceRenderDependencies {
+  readonly renderIndex: RenderIndex;
+  readonly footnoteDefinitions: ReadonlyMap<string, string>;
+  readonly citations: CitationRenderData;
+  readonly labelGraph: DocumentLabelGraph;
 }
 
 interface OptionalReferenceRenderState {

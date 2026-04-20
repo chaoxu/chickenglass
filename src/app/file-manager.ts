@@ -374,9 +374,7 @@ title: Coflat Demo
 
 A semantic document editor for **mathematical writing**. It supports *Typora-style* inline rendering, ~~strikethrough~~, ==highlights==, and \`inline code\`.
 
-::: {.include}
-chapters/introduction.md
-:::
+This document demonstrates theorem environments, cross-references, citations, images, math, sidenotes, and blockquotes in a single Pandoc-flavored markdown file.
 
 # Math
 
@@ -499,9 +497,11 @@ The Extreme Value Theorem[^evt] is fundamental to real analysis. Compactness[^co
 
 ---
 
-::: {.include}
-chapters/background.md
-:::
+# Background
+
+## Compactness
+
+The notion of compactness is central to analysis. In $\\R^n$, the Heine-Borel theorem states that a set is compact if and only if it is closed and bounded.
 `,
     "refs.bib": `@article{karger2000,
   author = {David R. Karger},
@@ -559,7 +559,6 @@ This document demonstrates the features of Coflat, a semantic editor for mathema
 - **Theorem environments**: fenced divs with automatic numbering
 - **Cross-references**: click-to-navigate between theorems, equations, and citations
 - **CSL citations**: formatted bibliography from BibTeX files
-- **File includes**: compose documents from multiple files seamlessly
 `,
     "chapters/diagram.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0ioAAAAASUVORK5CYII=",
     "chapters/background.md": `# Background

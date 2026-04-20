@@ -11,7 +11,6 @@ import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../state/document-analysis";
 import { documentLabelGraphField } from "../state/document-label-graph";
 import { imageUrlField } from "../state/image-url";
-import { includeRegionsField } from "../state/include-regions";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import {
@@ -29,7 +28,6 @@ export function coreDocumentStateExtensions(): Extension[] {
   return [
     frontmatterField,
     activeStructureEditField,
-    includeRegionsField,
     documentSemanticsField,
     createPluginRegistryField(defaultPlugins),
     blockCounterField,

@@ -6,7 +6,7 @@
  * to check which decorations are applied for a given document + cursor position.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Compartment, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
@@ -17,7 +17,6 @@ import {
 import {
   BlockCaptionWidget,
   BlockHeaderWidget,
-  embedSandboxPermissions,
 } from "./plugin-render-adapter";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
@@ -31,8 +30,6 @@ import {
   createFencedStructureEditTarget,
   setStructureEditTargetEffect,
 } from "../editor/structure-edit-state";
-import { defaultPlugins } from "../plugins/default-plugins";
-import { IFRAME_POLL_INTERVAL_MS } from "../constants/timing";
 import {
   applyStateEffects,
   createEditorState,
@@ -109,10 +106,6 @@ function getWidgetFromDecorations<T>(state: EditorState, widgetClass: string): T
   }
   throw new Error(`expected widget ${widgetClass}`);
 }
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 const TWO_BLOCKS = [
   "::: {.theorem} Title",
@@ -578,49 +571,6 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     expect(widgets[0]?.from).toBe(state.doc.line(2).from);
   });
 
-  it("keeps embed previews mounted when the cursor enters the block body", () => {
-    const doc = `::: {.embed}\nhttps://example.com/widget\n:::`;
-    const embedPlugin = defaultPlugins.find((plugin) => plugin.name === "embed");
-    expect(embedPlugin).toBeDefined();
-    if (!embedPlugin) throw new Error("expected default embed plugin");
-    const state = createTestStateWithPlugins(
-      doc,
-      [embedPlugin],
-      doc.indexOf("https://example.com/widget"),
-      true,
-    );
-    const specs = getDecoSpecs(state);
-
-    const widgets = specs.filter((s) => s.widgetClass === "EmbedWidget");
-    expect(widgets).toHaveLength(1);
-    expect(hasMarkClassInRange(specs, state.doc.line(1).from, state.doc.line(1).to, CSS.blockSource)).toBe(false);
-  });
-
-  it("shows embed source only during explicit structure edit", () => {
-    const doc = `::: {.embed}\nhttps://example.com/widget\n:::`;
-    const embedPlugin = defaultPlugins.find((plugin) => plugin.name === "embed");
-    expect(embedPlugin).toBeDefined();
-    if (!embedPlugin) throw new Error("expected default embed plugin");
-    const base = createTestStateWithPlugins(
-      doc,
-      [embedPlugin],
-      doc.indexOf("https://example.com/widget"),
-      true,
-    );
-    const state = applyStateEffects(
-      base,
-      setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
-    );
-    const specs = getDecoSpecs(state);
-
-    const widgets = specs.filter((s) => s.widgetClass === "EmbedWidget");
-    expect(widgets).toHaveLength(0);
-    expect(specs.some((spec) =>
-      spec.widgetClass === "BlockHeaderWidget" &&
-      spec.from === state.doc.line(1).from
-    )).toBe(false);
-  });
-
   it("routes inline proof labels back to the hidden opener source", () => {
     const doc = `::: {.proof}\nProof text\n:::`;
     const state = createTestStateWithPlugins(
@@ -749,98 +699,5 @@ describe("BlockCaptionWidget.updateDOM", () => {
     expect(mappedWidget?.sourceTo).toBe(41);
     expect(dom.dataset.sourceFrom).toBe("30");
     expect(dom.dataset.sourceTo).toBe("41");
-  });
-});
-
-describe("EmbedWidget cleanup", () => {
-  function createEmbedState(doc: string): EditorState {
-    return createEditorState(doc, {
-      extensions: [
-        markdown({ extensions: markdownExtensions }),
-        frontmatterField,
-        documentSemanticsField,
-        mathMacrosField,
-        createPluginRegistryField(defaultPlugins),
-        blockCounterField,
-        editorFocusField,
-        blockDecorationField,
-      ],
-    });
-  }
-
-  it("removes the gist load handler when the widget is destroyed before load", () => {
-    vi.useFakeTimers();
-
-    const state = createEmbedState("::: {.gist}\nhttps://gist.github.com/user/abc123\n:::");
-    const widget = getWidgetFromDecorations<{
-      toDOM(): HTMLElement;
-      destroy(dom: HTMLElement): void;
-    }>(state, "EmbedWidget");
-    const dom = widget.toDOM();
-    const iframe = dom.querySelector<HTMLIFrameElement>("iframe");
-    expect(iframe).not.toBeNull();
-    if (!iframe) {
-      throw new Error("expected gist iframe");
-    }
-
-    let contentDocumentReads = 0;
-    Object.defineProperty(iframe, "contentDocument", {
-      configurable: true,
-      get() {
-        contentDocumentReads++;
-        return { body: null } as unknown as Document;
-      },
-    });
-
-    widget.destroy(dom);
-    iframe.dispatchEvent(new Event("load"));
-    vi.runOnlyPendingTimers();
-
-    expect(contentDocumentReads).toBe(0);
-  });
-
-  it("cancels gist resize polling when the widget is destroyed", () => {
-    vi.useFakeTimers();
-
-    const state = createEmbedState("::: {.gist}\nhttps://gist.github.com/user/abc123\n:::");
-    const widget = getWidgetFromDecorations<{
-      toDOM(): HTMLElement;
-      destroy(dom: HTMLElement): void;
-    }>(state, "EmbedWidget");
-    const dom = widget.toDOM();
-    const iframe = dom.querySelector<HTMLIFrameElement>("iframe");
-    expect(iframe).not.toBeNull();
-    if (!iframe) {
-      throw new Error("expected gist iframe");
-    }
-
-    let contentDocumentReads = 0;
-    Object.defineProperty(iframe, "contentDocument", {
-      configurable: true,
-      get() {
-        contentDocumentReads++;
-        return { body: null } as unknown as Document;
-      },
-    });
-
-    iframe.dispatchEvent(new Event("load"));
-    expect(contentDocumentReads).toBe(1);
-
-    vi.advanceTimersByTime(IFRAME_POLL_INTERVAL_MS);
-    expect(contentDocumentReads).toBe(2);
-
-    widget.destroy(dom);
-    vi.advanceTimersByTime(IFRAME_POLL_INTERVAL_MS * 4);
-
-    expect(contentDocumentReads).toBe(2);
-  });
-});
-
-describe("embedSandboxPermissions", () => {
-  it("never grants allow-same-origin to embed iframes", () => {
-    expect(embedSandboxPermissions("embed")).toBe("allow-scripts");
-    expect(embedSandboxPermissions("iframe")).toBe("allow-scripts");
-    expect(embedSandboxPermissions("gist")).toBe("allow-scripts");
-    expect(embedSandboxPermissions("youtube")).toBe("allow-scripts allow-presentation");
   });
 });

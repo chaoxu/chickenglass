@@ -140,12 +140,6 @@ export interface ReferenceSemantics {
   readonly locators: readonly (string | undefined)[];
 }
 
-export interface IncludeSemantics {
-  readonly from: number;
-  readonly to: number;
-  readonly path: string;
-}
-
 export interface DocumentAnalysis {
   readonly headings: readonly HeadingSemantics[];
   readonly headingByFrom: ReadonlyMap<number, HeadingSemantics>;
@@ -158,8 +152,6 @@ export interface DocumentAnalysis {
   readonly references: readonly ReferenceSemantics[];
   readonly referenceByFrom: ReadonlyMap<number, ReferenceSemantics>;
   readonly referenceIndex: ReferenceIndexModel;
-  readonly includes: readonly IncludeSemantics[];
-  readonly includeByFrom: ReadonlyMap<number, IncludeSemantics>;
   readonly equationNumbersCacheKey?: string;
 }
 

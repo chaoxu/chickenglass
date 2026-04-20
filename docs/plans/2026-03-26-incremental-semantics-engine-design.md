@@ -257,7 +257,6 @@ Hot consumers to revisit after engine landing:
 - [math-render.ts](/Users/chaoxu/playground/coflat/src/render/math-render.ts)
 - [reference-render.ts](/Users/chaoxu/playground/coflat/src/render/reference-render.ts)
 - [sidenote-render.ts](/Users/chaoxu/playground/coflat/src/render/sidenote-render.ts)
-- [include-label.ts](/Users/chaoxu/playground/coflat/src/render/include-label.ts)
 - [bibliography.ts](/Users/chaoxu/playground/coflat/src/citations/bibliography.ts)
 - [block-counter.ts](/Users/chaoxu/playground/coflat/src/plugins/block-counter.ts)
 

@@ -45,6 +45,12 @@
   --cf-mark-bg: rgba(255, 255, 0, 0.2);
   --cf-math-error-fg: #c00;
   --cf-math-error-bg: rgba(255, 0, 0, 0.05);
+  --cf-danger: #dc2626;
+  --cf-code-keyword: #9a3412;
+  --cf-code-string: #166534;
+  --cf-code-number: #1d4ed8;
+  --cf-code-symbol: #0f766e;
+  --cf-code-tag: #be123c;
 
   /* Accent — black, one color */
   --cf-accent: #18181b;
@@ -112,16 +118,12 @@
   --cf-block-margin: 0.6em 0;
   --cf-block-title-display: inline;
   --cf-block-title-separator: ".\2002\2002";
-  --cf-include-accent: var(--cf-border);
-  --cf-include-label-color: var(--cf-border);
-  --cf-include-label-active-color: var(--cf-muted);
   --cf-table-border: var(--cf-border);
   --cf-table-header-border: var(--cf-border);
   --cf-table-edit-outline: var(--cf-active);
   --cf-table-cell-padding: 0.5em 0.75em;
   --cf-table-font-size: 0.9em;
   --cf-table-line-height: 1.5;
-  --cf-embed-border: var(--cf-border);
 
   /* Border radius */
   --cf-border-radius: 2px;
@@ -169,6 +171,12 @@
   --cf-mark-bg: rgba(255, 255, 0, 0.15);
   --cf-math-error-fg: #fca5a5;
   --cf-math-error-bg: rgba(239, 68, 68, 0.18);
+  --cf-danger: #f87171;
+  --cf-code-keyword: #fdba74;
+  --cf-code-string: #86efac;
+  --cf-code-number: #93c5fd;
+  --cf-code-symbol: #5eead4;
+  --cf-code-tag: #fda4af;
   --cf-accent: #fafafa;
   --cf-accent-fg: #09090b;
   --cf-active-shell-border: #ef4444;

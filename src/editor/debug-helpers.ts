@@ -103,7 +103,6 @@ interface SemanticDebugInfo {
     readonly equations: number;
     readonly mathRegions: number;
     readonly references: number;
-    readonly includes: number;
   };
 }
 

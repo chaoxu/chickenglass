@@ -136,7 +136,7 @@ export function addCollapsedClosingFence(
 
   items.push(decorationHidden.range(closeFenceFrom, closeFenceTo));
   items.push(
-    Decoration.line({ class: CSS.includeFence }).range(closeFenceFrom),
+    Decoration.line({ class: CSS.blockClosingFence }).range(closeFenceFrom),
   );
 }
 

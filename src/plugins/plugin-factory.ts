@@ -95,8 +95,7 @@ export function pluginFromManifest(entry: BlockManifestEntry): BlockPlugin {
   return createStandardPlugin(entry);
 }
 
-export function createStandardPlugin(options: StandardPluginOptions): BlockPlugin;
-export function createStandardPlugin(options: BlockManifestEntry): BlockPlugin;
+export function createStandardPlugin(options: StandardPluginSource): BlockPlugin;
 export function createStandardPlugin(options: StandardPluginSource): BlockPlugin {
   const title = options.title ?? capitalize(options.name);
   const numbered = options.numbered ?? true;

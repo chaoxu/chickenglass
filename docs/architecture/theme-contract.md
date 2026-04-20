@@ -23,7 +23,7 @@ Canonical token names live in `src/theme-contract.ts`. All tokens are CSS custom
 
 `--cf-layer-inline-chrome`, `--cf-layer-preview-surface`, `--cf-layer-block-picker`
 
-### Block (40 tokens)
+### Block (37 tokens)
 
 Header/title: `--cf-block-header-accent`, `--cf-block-header-border-width`, `--cf-block-title-color`, `--cf-block-title-weight`, `--cf-block-title-display`, `--cf-block-title-separator`, `--cf-block-margin`
 
@@ -33,11 +33,9 @@ Nesting: `--cf-block-nest-1` through `--cf-block-nest-4`
 
 Proof: `--cf-proof-marker`, `--cf-proof-marker-color`, `--cf-proof-marker-size`
 
-Include: `--cf-include-accent`, `--cf-include-label-color`, `--cf-include-label-active-color`
+### Table and misc (11 tokens)
 
-### Table and misc (12 tokens)
-
-`--cf-blockquote-border`, `--cf-blockquote-color`, `--cf-table-border`, `--cf-table-header-border`, `--cf-table-cell-padding`, `--cf-table-font-size`, `--cf-table-line-height`, `--cf-table-edit-outline`, `--cf-embed-border`, `--cf-mark-bg`, `--cf-math-error-fg`, `--cf-math-error-bg`
+`--cf-blockquote-border`, `--cf-blockquote-color`, `--cf-table-border`, `--cf-table-header-border`, `--cf-table-cell-padding`, `--cf-table-font-size`, `--cf-table-line-height`, `--cf-table-edit-outline`, `--cf-mark-bg`, `--cf-math-error-fg`, `--cf-math-error-bg`
 
 ### Typography (27 tokens)
 
@@ -58,8 +56,8 @@ Headings h1–h6: each has `-size`, `-weight`, `-style` (18 tokens total)
 | `appChrome` | Sidebar, toolbar, file tree | Foundation colors, UI font/size, spacing, layer tokens |
 | `editorBody` | Rich/source editing area | `--cf-bg/fg`, content+code fonts, font-size, line-height, content-max-width, sidenote-width, fence-guide-width |
 | `readMode` | Read-only view | Same as editorBody minus sidenote-width and fence-guide-width |
-| `blockSurfaces` | Theorem/proof/definition blocks | `--cf-fg`, all block/title tokens, per-type accents, nest 1-4, proof marker, include tokens |
-| `tables` | Tables and embeds | `--cf-border`, all table tokens, embed-border, code-font |
+| `blockSurfaces` | Theorem/proof/definition blocks | `--cf-fg`, all block/title tokens, per-type accents, nest 1-4, proof marker |
+| `tables` | Tables | `--cf-border`, all table tokens, code-font |
 | `tooltipAndHover` | Hover previews, crossref tooltips | `--cf-bg-overlay`, border-overlay, fg/muted/border, all preview tokens |
 | `export` | HTML/PDF export | All tokens (full `themeTokenNames` spread) |
 

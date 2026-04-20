@@ -1,6 +1,6 @@
 /**
  * Block and structural styles: fenced div headers/nesting, QED tombstone,
- * blockquotes, images, tables, table toolbar, embeds, and include regions.
+ * blockquotes, images, tables, and table toolbar.
  *
  * Per-block-type accent and body-style rules are auto-generated from
  * STYLED_BLOCK_NAMES (derived from BLOCK_MANIFEST in src/constants/).
@@ -8,14 +8,7 @@
 
 import { STYLED_BLOCK_NAMES } from "../constants/block-manifest";
 import {
-  ASPECT_RATIO_16_9,
-  EMBED_IFRAME_HEIGHT,
-  GIST_MIN_HEIGHT,
   IMAGE_MAX_HEIGHT,
-  INCLUDE_LABEL_FONT_SIZE,
-  INCLUDE_LABEL_LETTER_SPACING,
-  INCLUDE_LABEL_RIGHT,
-  INCLUDE_LABEL_TOP,
 } from "../constants/layout";
 
 /** Auto-generate per-block-type accent override rules from the manifest. */
@@ -111,22 +104,6 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     lineHeight: "1",
   },
 
-  /* Include fence lines — collapsed to zero height for seamless flow */
-  ".cf-include-fence": {
-    height: "0",
-    lineHeight: "0",
-    overflow: "hidden",
-    padding: "0 !important",
-    margin: "0",
-  },
-
-  /* Include block styling */
-  ".cf-block-include": {
-    borderLeft: "var(--cf-border-width-accent) solid var(--cf-include-accent)",
-    paddingLeft: "1em",
-    marginBottom: "0.5em",
-  },
-
   /* Blockquote plugin styling: fenced div blockquote blocks */
   ".cf-block-blockquote": {
     borderLeft: "var(--cf-border-width-accent) solid var(--cf-blockquote-border)",
@@ -145,9 +122,7 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     lineHeight: "0",
   },
 
-  /* Closing fence line — always hidden in rich mode (zero height).
-   * Uses the same collapse technique as cf-include-fence, but with a
-   * bottom margin to provide visual separation between adjacent blocks. */
+  /* Closing fence line — always hidden in rich mode (zero height). */
   ".cf-block-closing-fence": {
     height: "0",
     lineHeight: "0",
@@ -242,67 +217,4 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     backgroundColor: "transparent",
   },
 
-  /* Embed block: iframe container */
-  ".cf-embed": {
-    display: "block",
-    width: "100%",
-    margin: "var(--cf-spacing-xs) 0",
-  },
-  ".cf-embed-iframe": {
-    display: "block",
-    width: "100%",
-    height: EMBED_IFRAME_HEIGHT,
-    border: "var(--cf-border-width) solid var(--cf-embed-border)",
-    borderRadius: "var(--cf-border-radius)",
-    backgroundColor: "transparent",
-  },
-  /* YouTube: responsive 16:9 aspect ratio */
-  ".cf-embed-youtube": {
-    position: "relative",
-    width: "100%",
-    paddingBottom: ASPECT_RATIO_16_9,
-    height: "0",
-    margin: "var(--cf-spacing-xs) 0",
-  },
-  ".cf-embed-youtube-iframe": {
-    position: "absolute",
-    top: "0",
-    left: "0",
-    width: "100%",
-    height: "100%",
-    border: "var(--cf-border-width) solid var(--cf-embed-border)",
-    borderRadius: "var(--cf-border-radius)",
-  },
-  /* Gist embed: auto-size to content instead of fixed height */
-  ".cf-embed-gist .cf-embed-iframe": {
-    height: "auto",
-    minHeight: GIST_MIN_HEIGHT,
-  },
-
-  /* Include region: right border spans the full height, label anchors to it */
-  ".cf-include-region": {
-    position: "relative",
-    borderRight: "var(--cf-border-width) solid var(--cf-include-accent)",
-  },
-
-  /* Include label: rotated filename inside the right padding of .cm-content */
-  ".cf-include-label": {
-    position: "absolute",
-    right: INCLUDE_LABEL_RIGHT,
-    top: INCLUDE_LABEL_TOP,
-    writingMode: "vertical-rl",
-    transform: "rotate(180deg)",
-    userSelect: "none",
-    pointerEvents: "none",
-    fontSize: INCLUDE_LABEL_FONT_SIZE,
-    color: "var(--cf-include-label-color)",
-    whiteSpace: "nowrap",
-    letterSpacing: INCLUDE_LABEL_LETTER_SPACING,
-    lineHeight: "1",
-    zIndex: "var(--cf-layer-inline-chrome)",
-  },
-
-  ".cf-include-label-active": {
-    color: "var(--cf-include-label-active-color)",
-  },
 };

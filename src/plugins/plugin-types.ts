@@ -76,7 +76,6 @@ export interface BlockPlugin {
    * Special rendering behavior for this block type, mirroring BlockManifestEntry.
    *
    * - `"qed"`: appends a QED tombstone to the last content line (e.g. proof)
-   * - `"embed"`: replaces block body with an iframe widget
    * - `"blockquote"`: renders as a blockquote-style block
    * - `undefined`: standard numbered/unnumbered block
    */

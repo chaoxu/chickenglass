@@ -18,7 +18,7 @@ export interface PluginRenderWidget extends WidgetType {
 }
 
 /**
- * Plugin-owned factory seam for block chrome/embed widgets.
+ * Plugin-owned factory seam for block chrome widgets.
  *
  * Render-side adapters implement these factories; plugin helpers own the
  * decoration placement policy and source-range semantics.
@@ -37,11 +37,6 @@ export interface PluginRenderAdapter {
   createAttributeTitleWidget(
     title: string,
     macros: Record<string, string>,
-  ): PluginRenderWidget;
-  createEmbedWidget(
-    src: string,
-    embedType: string,
-    active: boolean,
   ): PluginRenderWidget;
 }
 

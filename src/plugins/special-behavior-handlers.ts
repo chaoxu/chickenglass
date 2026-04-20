@@ -18,7 +18,6 @@ const noopSpecialBehavior: SpecialBehaviorHandler = () => {};
 
 const specialBehaviorHandlers: Readonly<Record<SpecialBehavior, SpecialBehaviorHandler>> = {
   blockquote: noopSpecialBehavior,
-  embed: noopSpecialBehavior,
   qed: ({ state, div, builder }) => {
     builder.addQedDecoration(state, div);
   },

@@ -10,7 +10,6 @@ import type { FileSystem } from "./file-manager";
 import { MemoryFileSystem } from "./file-manager";
 import { createEditorSessionState, type SessionDocument } from "./editor-session-model";
 import { createEditorSessionRuntime, type EditorSessionRuntime } from "./editor-session-runtime";
-import { SourceMap } from "./source-map";
 import {
   createEditorSessionPersistence,
   type EditorSessionPersistence,
@@ -63,7 +62,6 @@ interface HarnessOptions {
   editorDoc: string;
   buffers: Map<string, EditorDocumentText>;
   liveDocs: Map<string, EditorDocumentText>;
-  sourceMaps?: Map<string, SourceMap>;
   refreshTree?: () => Promise<void>;
   addRecentFile?: (path: string) => void;
 }
@@ -74,7 +72,6 @@ function createHarness({
   editorDoc,
   buffers: initialBuffers,
   liveDocs: initialLiveDocs,
-  sourceMaps: initialSourceMaps = new Map<string, SourceMap>(),
   refreshTree = async () => {},
   addRecentFile = () => {},
 }: HarnessOptions): HarnessRef {
@@ -86,13 +83,10 @@ function createHarness({
   for (const [path, doc] of initialLiveDocs) {
     runtime.liveDocs.set(path, doc);
   }
-  for (const [path, sourceMap] of initialSourceMaps) {
-    runtime.sourceMaps.set(path, sourceMap);
-  }
 
   let result!: EditorSessionPersistence;
-  runtime.setWriteDocumentSnapshot((path, content, sourceMap) =>
-    result.writeDocumentSnapshot(path, content, sourceMap as SourceMap | null),
+  runtime.setWriteDocumentSnapshot((path, content) =>
+    result.writeDocumentSnapshot(path, content),
   );
 
   result = createEditorSessionPersistence({
@@ -119,26 +113,11 @@ describe("createEditorSessionPersistence", () => {
     sessionMockState.reset();
   });
 
-  it("saves projected include edits and clears dirty state", async () => {
-    const includeRef = [
-      "::: {.include}",
-      "chapter.md",
-      ":::",
-    ].join("\n");
+  it("saves the active document only and clears dirty state", async () => {
     const header = "# Main\n\n";
     const footer = "\n\n# End";
-    const rawMain = `${header}${includeRef}${footer}`;
-    const expanded = `${header}Old chapter\n${footer}`;
+    const rawMain = `${header}Old chapter\n${footer}`;
     const edited = `${header}New chapter\n${footer}`;
-    const sourceMap = new SourceMap([{
-      from: header.length,
-      to: header.length + "Old chapter\n".length,
-      file: "chapter.md",
-      originalRef: includeRef,
-      rawFrom: header.length,
-      rawTo: header.length + includeRef.length,
-      children: [],
-    }]);
     const fs = new MemoryFileSystem({
       "main.md": rawMain,
       "chapter.md": "Old chapter\n",
@@ -151,24 +130,22 @@ describe("createEditorSessionPersistence", () => {
         dirty: true,
       },
       editorDoc: edited,
-      buffers: createDocumentMap({ "main.md": expanded }),
+      buffers: createDocumentMap({ "main.md": rawMain }),
       liveDocs: createDocumentMap({ "main.md": edited }),
-      sourceMaps: new Map([["main.md", sourceMap]]),
     });
 
     await ref.result.saveCurrentDocument();
 
-    await expect(fs.readFile("main.md")).resolves.toBe(rawMain);
-    await expect(fs.readFile("chapter.md")).resolves.toBe("New chapter\n");
+    await expect(fs.readFile("main.md")).resolves.toBe(edited);
+    await expect(fs.readFile("chapter.md")).resolves.toBe("Old chapter\n");
     expect(ref.runtime.getCurrentDocument()?.dirty).toBe(false);
     expect(ref.runtime.getEditorDoc()).toBe(edited);
     expect(editorDocumentToString(ref.runtime.buffers.get("main.md") ?? emptyEditorDocument)).toBe(edited);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("main.md") ?? emptyEditorDocument)).toBe(edited);
   });
 
-  it("renames the active document buffers and source map after a successful rename", async () => {
+  it("renames the active document buffers after a successful rename", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
-    const sourceMap = new SourceMap([]);
     const refreshTree = vi.fn(async () => {});
     const addRecentFile = vi.fn();
     const ref = createHarness({
@@ -181,7 +158,6 @@ describe("createEditorSessionPersistence", () => {
       editorDoc: "hello",
       buffers: createDocumentMap({ "draft.md": "hello" }),
       liveDocs: createDocumentMap({ "draft.md": "hello" }),
-      sourceMaps: new Map([["draft.md", sourceMap]]),
       refreshTree,
       addRecentFile,
     });
@@ -202,8 +178,6 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.buffers.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
     expect(ref.runtime.liveDocs.has("draft.md")).toBe(false);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
-    expect(ref.runtime.sourceMaps.has("draft.md")).toBe(false);
-    expect(ref.runtime.sourceMaps.get("notes/final.md")).toBe(sourceMap);
   });
 
   it("clears the current session when deleting a parent directory", async () => {
@@ -236,29 +210,15 @@ describe("createEditorSessionPersistence", () => {
     expect(ref.runtime.liveDocs.has("notes/draft.md")).toBe(false);
   });
 
-  it("saveAs creates a missing target and moves the source map to the new path", async () => {
+  it("saveAs creates a missing target from the active document", async () => {
     sessionMockState.isTauri = true;
     sessionMockState.saveDialog.mockResolvedValue("/tmp/project/copy.md");
     sessionMockState.toProjectRelativePath.mockResolvedValue("copy.md");
 
-    const includeRef = [
-      "::: {.include}",
-      "chapter.md",
-      ":::",
-    ].join("\n");
     const header = "# Main\n\n";
     const footer = "\n\n# End";
-    const rawMain = `${header}${includeRef}${footer}`;
+    const rawMain = `${header}Old chapter\n${footer}`;
     const edited = `${header}New chapter\n${footer}`;
-    const sourceMap = new SourceMap([{
-      from: header.length,
-      to: header.length + "New chapter\n".length,
-      file: "chapter.md",
-      originalRef: includeRef,
-      rawFrom: header.length,
-      rawTo: header.length + includeRef.length,
-      children: [],
-    }]);
     const fs = new MemoryFileSystem({
       "main.md": rawMain,
       "chapter.md": "Old chapter\n",
@@ -275,7 +235,6 @@ describe("createEditorSessionPersistence", () => {
       editorDoc: edited,
       buffers: createDocumentMap({ "main.md": edited }),
       liveDocs: createDocumentMap({ "main.md": edited }),
-      sourceMaps: new Map([["main.md", sourceMap]]),
       refreshTree,
       addRecentFile,
     });
@@ -283,8 +242,8 @@ describe("createEditorSessionPersistence", () => {
     await ref.result.saveAs();
 
     await expect(fs.readFile("main.md")).resolves.toBe(rawMain);
-    await expect(fs.readFile("chapter.md")).resolves.toBe("New chapter\n");
-    await expect(fs.readFile("copy.md")).resolves.toBe(rawMain);
+    await expect(fs.readFile("chapter.md")).resolves.toBe("Old chapter\n");
+    await expect(fs.readFile("copy.md")).resolves.toBe(edited);
     expect(addRecentFile).toHaveBeenCalledWith("copy.md");
     expect(refreshTree).toHaveBeenCalledTimes(1);
     expect(ref.runtime.getCurrentDocument()).toEqual({
@@ -296,7 +255,5 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.buffers.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
     expect(ref.runtime.liveDocs.has("main.md")).toBe(false);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
-    expect(ref.runtime.sourceMaps.has("main.md")).toBe(false);
-    expect(ref.runtime.sourceMaps.get("copy.md")).toBe(sourceMap);
   });
 });

@@ -10,14 +10,12 @@ import {
   emptyEditorDocument,
 } from "./editor-doc-change";
 import { applySaveAsResult } from "./editor-session-save";
-import { buildProjectedWritePlan } from "./editor-session-write-plan";
 import {
   type EditorSessionRuntime,
 } from "./editor-session-runtime";
 import type { FileSystem } from "./file-manager";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
-import type { SourceMap } from "./source-map";
 import { confirmAction } from "./confirm-action";
 
 export interface EditorSessionPersistenceOptions {
@@ -35,7 +33,6 @@ export interface EditorSessionPersistence {
   writeDocumentSnapshot: (
     targetPath: string,
     doc: string,
-    sourceMap: SourceMap | null,
     options?: { createTargetIfMissing?: boolean },
   ) => Promise<string>;
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
@@ -65,34 +62,23 @@ export function createEditorSessionPersistence({
   const writeDocumentSnapshot = async (
     targetPath: string,
     doc: string,
-    sourceMap: SourceMap | null,
     options?: { createTargetIfMissing?: boolean },
   ): Promise<string> => {
-    const writes = buildProjectedWritePlan(targetPath, doc, sourceMap);
     const targetExists =
       options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
-
-    let mainDiskContent = doc;
-    for (const write of writes) {
-      const shouldCreateTarget =
-        options?.createTargetIfMissing === true
-        && write.path === targetPath
-        && !targetExists;
-      await measureAsync(
-        "save_file.write",
-        () => (shouldCreateTarget
-          ? fs.createFile(write.path, write.content)
-          : fs.writeFile(write.path, write.content)),
-        {
-          category: "save_file",
-          detail: write.path,
-        },
-      );
-      if (write.path === targetPath) {
-        mainDiskContent = write.content;
-      }
-    }
-    return mainDiskContent;
+    const shouldCreateTarget =
+      options?.createTargetIfMissing === true && !targetExists;
+    await measureAsync(
+      "save_file.write",
+      () => (shouldCreateTarget
+        ? fs.createFile(targetPath, doc)
+        : fs.writeFile(targetPath, doc)),
+      {
+        category: "save_file",
+        detail: targetPath,
+      },
+    );
+    return doc;
   };
 
   const saveCurrentDocument = async (): Promise<boolean> => {
@@ -101,8 +87,7 @@ export function createEditorSessionPersistence({
 
     const result = await runtime.pipeline.save(currentPath, () => {
       const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
-      const sourceMap = runtime.sourceMaps.get(currentPath) ?? null;
-      return { content: editorDocumentToString(doc), sourceMap };
+      return { content: editorDocumentToString(doc) };
     });
 
     if (result.saved) {
@@ -133,12 +118,6 @@ export function createEditorSessionPersistence({
     if (liveDoc !== undefined) {
       runtime.liveDocs.delete(oldPath);
       runtime.liveDocs.set(newPath, liveDoc);
-    }
-
-    const sourceMap = runtime.sourceMaps.get(oldPath);
-    if (sourceMap) {
-      runtime.sourceMaps.delete(oldPath);
-      runtime.sourceMaps.set(newPath, sourceMap);
     }
 
     runtime.pipeline.clear(oldPath);
@@ -192,7 +171,6 @@ export function createEditorSessionPersistence({
     )) {
       runtime.buffers.delete(currentDocument.path);
       runtime.liveDocs.delete(currentDocument.path);
-      runtime.sourceMaps.delete(currentDocument.path);
       runtime.commit(
         clearSessionDocument(runtime.getState(), currentDocument.path),
         { editorDoc: "" },
@@ -207,7 +185,6 @@ export function createEditorSessionPersistence({
     if (!currentPath) return;
     const liveDoc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
     const doc = editorDocumentToString(liveDoc);
-    const sourceMap = runtime.sourceMaps.get(currentPath) ?? null;
 
     if (isTauri()) {
       try {
@@ -220,14 +197,9 @@ export function createEditorSessionPersistence({
 
         const { toProjectRelativePathCommand } = await import("./tauri-client/fs");
         const relativePath = await toProjectRelativePathCommand(savePath);
-        await writeDocumentSnapshot(relativePath, doc, sourceMap, {
+        await writeDocumentSnapshot(relativePath, doc, {
           createTargetIfMissing: true,
         });
-
-        if (sourceMap && currentPath !== relativePath) {
-          runtime.sourceMaps.delete(currentPath);
-          runtime.sourceMaps.set(relativePath, sourceMap);
-        }
 
         runtime.pipeline.clear(currentPath);
         runtime.pipeline.initPath(relativePath, doc);

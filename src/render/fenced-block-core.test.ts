@@ -319,10 +319,10 @@ describe("addCollapsedClosingFence", () => {
     expect(items[0].from).toBe(10);
     expect(items[0].to).toBe(13);
 
-    // Second item: line decoration with include-fence class
+    // Second item: line decoration with collapsed closing-fence class
     expect(items[1].from).toBe(10);
     expect(items[1].to).toBe(10);
-    expect(items[1].value.spec.class).toBe(CSS.includeFence);
+    expect(items[1].value.spec.class).toBe(CSS.blockClosingFence);
   });
 
   it("does nothing when closeFenceFrom is -1", () => {

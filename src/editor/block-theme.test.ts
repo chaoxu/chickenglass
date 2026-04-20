@@ -14,7 +14,9 @@ describe("blockThemeStyles", () => {
     });
 
     expect(
-      blockThemeStyles[".cf-block-embed .cf-block-header, .cf-block-embed.cf-block-header"],
+      blockThemeStyles[
+        ".cf-block-custom-widget .cf-block-header, .cf-block-custom-widget.cf-block-header"
+      ],
     ).toBeUndefined();
     expect(
       blockThemeStyles[
@@ -51,15 +53,7 @@ describe("blockThemeStyles", () => {
     });
   });
 
-  it("collapses include fences and preserves the table widget layout contract", () => {
-    expect(blockThemeStyles[".cf-include-fence"]).toEqual({
-      height: "0",
-      lineHeight: "0",
-      overflow: "hidden",
-      padding: "0 !important",
-      margin: "0",
-    });
-
+  it("preserves the table widget layout contract", () => {
     expect(blockThemeStyles[".cf-table-widget"]).toEqual({
       margin: "var(--cf-spacing-sm) 0",
     });

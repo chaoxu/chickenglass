@@ -25,24 +25,6 @@ export class DecorationBuilder {
     return this;
   }
 
-  addIncludeDecorations(div: FencedDivInfo): this {
-    this
-      .addHidden(div.openFenceFrom, div.openFenceTo)
-      .addHidden(div.attrFrom, div.attrTo)
-      .addHidden(div.titleFrom, div.titleTo);
-
-    if (div.closeFenceFrom >= 0 && div.closeFenceTo > div.closeFenceFrom) {
-      this.addHidden(div.closeFenceFrom, div.closeFenceTo);
-    }
-
-    this.addLine(div.openFenceFrom, CSS.includeFence);
-    if (div.closeFenceFrom >= 0) {
-      this.addLine(div.closeFenceFrom, CSS.includeFence);
-    }
-
-    return this;
-  }
-
   addQedDecoration(state: EditorState, div: FencedDivInfo): this {
     if (div.closeFenceFrom < 0) return this;
 

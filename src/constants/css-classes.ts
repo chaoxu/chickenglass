@@ -42,9 +42,6 @@ export const CSS = {
   /** QED tombstone marker on last content line of proof blocks. */
   blockQed: "cf-block-qed",
 
-  /** Include fence lines — collapsed to zero height. */
-  includeFence: "cf-include-fence",
-
   /** Fenced div nesting guide by depth (1-based). */
   fenceDepth: (depth: number) => `cf-fence-d${depth}`,
 
@@ -53,15 +50,6 @@ export const CSS = {
 
   /** Read mode editor attribute. */
   readMode: "cf-read-mode",
-
-  /** Embed container: "cf-embed cf-embed-{type}". */
-  embed: (type: string) => `cf-embed cf-embed-${type}`,
-
-  /** Embed iframe element. */
-  embedIframe: "cf-embed-iframe",
-
-  /** YouTube-specific iframe class. */
-  embedYoutubeIframe: "cf-embed-iframe cf-embed-youtube-iframe",
 
   /** Image wrapper, image element, loading, and error state. */
   imageWrapper: "cf-image-wrapper",
@@ -98,11 +86,6 @@ export const CSS = {
   tableWidget: "cf-table-widget",
   tableCellEditing: "cf-table-cell-editing",
   tableCellActive: "cf-table-cell-active",
-
-  /** Include region and label. */
-  includeRegion: "cf-include-region",
-  includeLabel: "cf-include-label",
-  includeLabelActive: "cf-include-label-active",
 
   /** Sidenote margin. */
   sidenoteRef: "cf-sidenote-ref",
@@ -159,9 +142,6 @@ export const CSS = {
 
   /** Block blockquote. */
   blockBlockquote: "cf-block-blockquote",
-
-  /** Block include. */
-  blockInclude: "cf-block-include",
 
   /** Hidden elements (markers, URLs, etc. collapsed when cursor is away). */
   hidden: "cf-hidden",

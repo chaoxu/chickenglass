@@ -3,7 +3,7 @@ title: "Coflat Feature Showcase"
 bibliography: reference.bib
 ---
 
-This is the canonical single-page Coflat showcase. It is meant to exercise the editor's main document surfaces in one place: frontmatter, inline rendering, display math, semantic blocks, figures, tables, embeds, code, references, citations, footnotes, includes, and structure-edit behavior.
+This is the canonical single-page Coflat showcase. It is meant to exercise the editor's main document surfaces in one place: frontmatter, inline rendering, display math, semantic blocks, figures, tables, code, references, citations, footnotes, and structure-edit behavior.
 
 # Frontmatter and Structure Editing
 
@@ -221,18 +221,6 @@ for (const line of clickMappingLines) {
 }
 ```
 
-# Gist Embed
-
-::: {.gist}
-https://gist.github.com/chaoxu/6094392
-:::
-
-# YouTube Embed
-
-::: {.youtube}
-https://www.youtube.com/watch?v=dQw4w9WgXcQ
-:::
-
 # Blockquote with Math
 
 ::: Blockquote
@@ -280,14 +268,6 @@ By [@thm:fundamental], the sum formula holds. See also [@prop:tu].
 Narrative block reference: @thm:fundamental.
 
 Reference cluster: [@thm:fundamental; @prop:tu; @eq:gaussian].
-
-# Includes
-
-The included block below should splice content in without exposing raw include fences during ordinary navigation.
-
-::: {.include}
-showcase/include-section.md
-:::
 
 # Search Rich-Mode Coverage
 

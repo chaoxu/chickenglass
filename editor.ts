@@ -7,7 +7,6 @@ import {
   setEditorMode,
 } from "./src/editor";
 import { programmaticDocumentChangeAnnotation } from "./src/editor/programmatic-document-change";
-import { setIncludeRegionsEffect } from "./src/lib/include-regions";
 
 export type StandaloneEditorMode = "rich" | "source";
 
@@ -101,7 +100,6 @@ export function mountEditor(options: MountEditorOptions): MountedEditor {
           insert: doc,
         },
         selection: { anchor: 0 },
-        effects: setIncludeRegionsEffect.of([]),
         annotations: programmaticDocumentChangeAnnotation.of(true),
       });
       view.scrollDOM.scrollTop = 0;

@@ -29,11 +29,11 @@ function insertBlock(view: EditorView, className: string): void {
 /**
  * Block types available for insertion via the command palette.
  *
- * Derived from BLOCK_MANIFEST — excludes embed types (iframe-based) and
- * blockquote (special rendering) since those are not standard insertable blocks.
+ * Derived from BLOCK_MANIFEST — excludes blockquote since it is not a standard
+ * insertable block.
  */
 const BLOCK_TYPES: readonly string[] = BLOCK_MANIFEST_ENTRIES
-  .filter((e) => e.specialBehavior !== "embed" && e.specialBehavior !== "blockquote")
+  .filter((e) => e.specialBehavior !== "blockquote")
   .map((e) => e.name);
 
 /** Create commands for inserting each block type. */

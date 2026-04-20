@@ -710,45 +710,13 @@ describe("FORMAT.md coverage: Removed Features", () => {
   });
 });
 
-describe("FORMAT.md coverage: Embeds (fenced div types)", () => {
-  it("embed fenced div is recognized as a div with .embed class", () => {
-    const doc = "::: {.embed}\nhttps://example.com/widget\n:::";
+describe("FORMAT.md coverage: Unknown Fenced Div Classes", () => {
+  it("unknown fenced div classes are parsed as ordinary fenced divs", () => {
+    const doc = "::: {.custom-widget}\nBody\n:::";
     const state = createTestState(doc);
     const semantics = state.field(documentSemanticsField);
     expect(semantics.fencedDivs).toHaveLength(1);
-    expect(semantics.fencedDivs[0].primaryClass).toBe("embed");
-  });
-
-  it("youtube fenced div is recognized with .youtube class", () => {
-    const doc = "::: {.youtube}\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\n:::";
-    const state = createTestState(doc);
-    const semantics = state.field(documentSemanticsField);
-    expect(semantics.fencedDivs[0].primaryClass).toBe("youtube");
-  });
-
-  it("gist fenced div is recognized with .gist class", () => {
-    const doc = "::: {.gist}\nhttps://gist.github.com/user/hash\n:::";
-    const state = createTestState(doc);
-    const semantics = state.field(documentSemanticsField);
-    expect(semantics.fencedDivs[0].primaryClass).toBe("gist");
-  });
-});
-
-describe("FORMAT.md coverage: Include Blocks", () => {
-  it("include fenced div is parsed with .include class", () => {
-    const doc = "::: {.include}\nchapters/introduction.md\n:::";
-    const state = createTestState(doc);
-    const semantics = state.field(documentSemanticsField);
-    expect(semantics.fencedDivs).toHaveLength(1);
-    expect(semantics.fencedDivs[0].primaryClass).toBe("include");
-  });
-
-  it("extracts include path from semantics", () => {
-    const doc = "::: {.include}\nchapters/introduction.md\n:::";
-    const state = createTestState(doc);
-    const semantics = state.field(documentSemanticsField);
-    expect(semantics.includes).toHaveLength(1);
-    expect(semantics.includes[0].path).toBe("chapters/introduction.md");
+    expect(semantics.fencedDivs[0].primaryClass).toBe("custom-widget");
   });
 });
 

@@ -12,7 +12,6 @@ import {
 } from "./editor-session-model";
 import { createActiveDocumentSignal, type ActiveDocumentSignal } from "./active-document-signal";
 import { SavePipeline } from "./save-pipeline";
-import type { SourceMap } from "./source-map";
 
 export interface EditorSessionSnapshot {
   currentDocument: SessionDocument | null;
@@ -29,13 +28,11 @@ type SessionListener = () => void;
 type WriteDocumentSnapshot = (
   path: string,
   content: string,
-  sourceMap: SourceMap | null,
 ) => Promise<string>;
 
 export interface EditorSessionRuntime {
   readonly buffers: Map<string, EditorDocumentText>;
   readonly liveDocs: Map<string, EditorDocumentText>;
-  readonly sourceMaps: Map<string, SourceMap>;
   readonly pipeline: SavePipeline;
   readonly activeDocumentSignal: ActiveDocumentSignal;
   subscribe: (listener: SessionListener) => () => void;
@@ -89,11 +86,10 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
 
   const buffers = new Map<string, EditorDocumentText>();
   const liveDocs = new Map<string, EditorDocumentText>();
-  const sourceMaps = new Map<string, SourceMap>();
   const listeners = new Set<SessionListener>();
   const activeDocumentSignal = createActiveDocumentSignal();
-  const pipeline = new SavePipeline((path, content, sourceMap) =>
-    writeDocumentSnapshot(path, content, sourceMap as SourceMap | null),
+  const pipeline = new SavePipeline((path, content) =>
+    writeDocumentSnapshot(path, content),
   );
 
   const refreshSnapshot = () => {
@@ -122,7 +118,6 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
   return {
     buffers,
     liveDocs,
-    sourceMaps,
     pipeline,
     activeDocumentSignal,
     subscribe: (listener) => {

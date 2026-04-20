@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { AppShell } from "./app.tsx";
+import { activeCoflatProduct } from "../product";
 import { isTauri } from "../lib/tauri";
 import { configureExternalUrlOpener } from "../lib/open-link";
 import {
@@ -21,6 +22,9 @@ async function bootstrap(): Promise<void> {
   if (!rootEl) {
     throw new Error("Missing #app element");
   }
+
+  document.title = activeCoflatProduct.displayName;
+  document.documentElement.dataset.coflatProduct = activeCoflatProduct.id;
 
   if (isTauri()) {
     configureExternalUrlOpener(async (url) => {

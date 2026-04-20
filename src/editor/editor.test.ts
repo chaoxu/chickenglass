@@ -13,7 +13,6 @@ import { blockCounterField } from "../state/block-counter";
 import { bibDataField } from "../citations/citation-render";
 import { documentLabelGraphField } from "../state/document-label-graph";
 import { imageUrlField } from "../state/image-url";
-import { includeRegionsField } from "../state/include-regions";
 import { pdfPreviewField } from "../state/pdf-preview";
 
 describe("createEditor", () => {
@@ -90,7 +89,6 @@ describe("extension bundle composition", () => {
 
     // Each field is queryable — proves the bundle installed them in order
     expect(view.state.field(frontmatterField)).toBeDefined();
-    expect(view.state.field(includeRegionsField)).toBeDefined();
     expect(view.state.field(documentSemanticsField)).toBeDefined();
     expect(view.state.field(blockCounterField)).toBeDefined();
     expect(view.state.field(documentReferenceCatalogField)).toBeDefined();

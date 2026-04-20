@@ -8,6 +8,9 @@
  */
 
 import { isTauri } from "../lib/tauri";
+import { parseFrontmatter } from "../parser/frontmatter";
+import { resolveLatexExportOptions } from "../latex/export-options.mjs";
+import { preprocessWithReadFile } from "../latex/preprocess-core.mjs";
 import { measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
 import {
@@ -330,6 +333,7 @@ function serializeExportThemeTokens(tokens: Record<string, string>): string {
 export const _buildHtmlDocumentForTest = buildHtmlDocument;
 export const _buildHtmlDocumentAsyncForTest = buildHtmlDocumentWithResolvedImages;
 export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
+export const _preprocessLatexExportForTest = preprocessLatexExport;
 
 /**
  * Export a document to PDF, LaTeX, or HTML.
@@ -338,7 +342,7 @@ export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
  * - HTML: works in both browser and Tauri modes; produces a self-contained
  *   file that can be opened directly in a browser.
  *
- * @param content - The full markdown content to export (with includes expanded).
+ * @param content - The full markdown content to export.
  * @param format - Target format: "pdf", "latex", or "html".
  * @param sourcePath - Path of the source .md file (used to derive output path).
  * @param fs - FileSystem to write the HTML output (only needed for "html" format).
@@ -375,8 +379,20 @@ export async function exportDocument(
   }
 
   const outputPath = deriveOutputPath(sourcePath, format);
+  const latexOptions = resolveLatexExportOptions({
+    config: parseFrontmatter(content).config,
+  });
+  const latexContent = await preprocessLatexExport(content, sourcePath, fs);
 
-  return exportDocumentCommand(content, format, outputPath);
+  return exportDocumentCommand(latexContent, format, outputPath, sourcePath, latexOptions);
+}
+
+async function preprocessLatexExport(
+  content: string,
+  _sourcePath: string,
+  _fs?: FileSystem,
+): Promise<string> {
+  return preprocessWithReadFile(content);
 }
 
 /**

@@ -7,7 +7,6 @@ import { MemoryFileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { UseEditorReturn } from "./use-editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
-import type { SourceMap } from "../source-map";
 
 const { useEditor } = await import("./use-editor");
 
@@ -21,7 +20,6 @@ interface HarnessProps {
   fs?: FileSystem;
   onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   onProgrammaticDocChange?: (doc: string) => void;
-  onSourceMapChange?: (sourceMap: SourceMap | null) => void;
 }
 
 function createHarness(ref: HarnessRef): FC<HarnessProps> {
@@ -345,7 +343,7 @@ describe("useEditor", () => {
     expect(ref.state.view?.scrollDOM.scrollTop).toBe(0);
   });
 
-  it("remaps include source regions through user edits", async () => {
+  it("leaves custom fenced div blocks as ordinary document content", async () => {
     const ref: HarnessRef = {
       state: null as unknown as UseEditorReturn,
     };
@@ -354,13 +352,13 @@ describe("useEditor", () => {
       "main.md": [
         "# Main",
         "",
-        "::: {.include}",
-        "chapter.md",
+        "::: {.custom-note}",
+        "note.md",
         ":::",
         "",
         "# End",
       ].join("\n"),
-      "chapter.md": "Included section\n",
+      "note.md": "Note section\n",
     });
 
     await act(async () => {
@@ -373,11 +371,7 @@ describe("useEditor", () => {
       await Promise.resolve();
     });
 
-    const sourceMap = window.__cfSourceMap;
-    expect(sourceMap).not.toBeNull();
-    const initialRegion = sourceMap?.regions[0];
-    expect(initialRegion).toBeDefined();
-    const initialFrom = initialRegion?.from ?? -1;
+    expect(ref.state.view?.state.doc.toString()).toBe(await fs.readFile("main.md"));
 
     act(() => {
       ref.state.view?.dispatch({
@@ -385,8 +379,8 @@ describe("useEditor", () => {
       });
     });
 
-    expect(window.__cfSourceMap?.regions[0].from).toBe(initialFrom + "Intro\n".length);
-    expect(window.__cfSourceMap?.regionAt(initialFrom)).toBeNull();
-    expect(window.__cfSourceMap?.regionAt(initialFrom + "Intro\n".length)?.file).toBe("chapter.md");
+    expect(ref.state.view?.state.doc.toString()).toContain("::: {.custom-note}");
+    expect(ref.state.view?.state.doc.toString()).toContain("note.md");
+    expect(ref.state.view?.state.doc.toString()).toContain("Intro\n# Main");
   });
 });

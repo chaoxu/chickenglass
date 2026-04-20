@@ -26,7 +26,7 @@ The defining product qualities are:
 - Typora-style editing. Rich rendering is the default; source is revealed only
   where the user is actively editing.
 - Semantics-first authoring. The editor understands equations, theorem-like
-  blocks, citations, cross-references, figures, tables, includes, and
+  blocks, citations, cross-references, figures, tables, and
   frontmatter as structured document concepts.
 - Mathematical writing as the primary target. The feature mix is optimized for
   papers, notes, books, and lecture-style documents rather than generic note
@@ -142,17 +142,6 @@ Footnotes are supported as semantic markdown features, including:
 - footnote definitions
 - footnote-aware rendering and navigation
 
-### 3.8 Includes
-
-Includes are first-class document features.
-
-Expected behavior:
-
-- include blocks via `::: {.include}`
-- merged semantic view when a parent document is opened
-- numbering and references continue across included files
-- include-aware indexing/search behavior
-
 ## 4. Semantic Block System
 
 This is one of Coflat's defining features.
@@ -187,11 +176,6 @@ The shipped block types are:
 - figure
 - table
 - blockquote
-- embed
-- iframe
-- youtube
-- gist
-- include
 
 ### 4.3 Block semantics
 
@@ -203,7 +187,6 @@ Blocks are not just styled containers. They carry behavior:
 - special proof behavior including QED handling
 - special figure/table caption placement below content
 - special blockquote rendering without a visible label
-- special embed rendering for iframe-like content
 
 ### 4.4 Custom block definitions
 
@@ -297,10 +280,9 @@ Features include:
 - theorem-family shared counters
 - separate definition/algorithm/figure/table counters
 - equation numbering
-- numbering continuity across includes
 - grouped vs global numbering control from frontmatter
 
-## 7. Media, Embeds, and Figures
+## 7. Media and Figures
 
 ### 7.1 Images and figures
 
@@ -313,22 +295,6 @@ The editor supports:
 - image-folder defaults from config
 
 The local PDF preview path is a real product feature, not just a test hook.
-
-### 7.2 Embeds
-
-The embed family includes:
-
-- generic embed iframe blocks
-- explicit iframe blocks
-- YouTube blocks
-- GitHub Gist blocks
-
-Expected behavior:
-
-- embed URL normalization/safety checks
-- rendered iframe-like rich previews
-- stable rich-mode behavior without falling back to raw block syntax unless
-  explicitly editing
 
 ## 8. Code Blocks
 
@@ -489,7 +455,7 @@ A serious rebuild should be able to answer "yes" to all of these:
 - Are semantic blocks plugin-driven rather than hardcoded one-offs?
 - Do equations, figures, tables, citations, and cross-references behave like
   semantic objects?
-- Do numbering and includes work at the document level?
+- Does numbering work at the document level?
 - Does the app shell include project/file/navigation/search surfaces?
 - Does the dev build expose enough runtime/debug tooling to trace regressions?
 - Can the public showcase and browser regressions be used as acceptance tests?

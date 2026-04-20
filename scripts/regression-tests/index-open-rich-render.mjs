@@ -1,6 +1,6 @@
 /**
  * Regression test: opening index.md from another document must keep rich math
- * rendering alive after the async include-expansion rewrite lands.
+ * rendering alive after the document switch completes.
  */
 
 import {

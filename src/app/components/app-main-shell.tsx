@@ -1,10 +1,12 @@
 import { EditorPane } from "./editor-pane";
+import { LexicalEditorPane } from "./lexical-editor-pane";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
 import { useFileSystem } from "../contexts/file-system-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
+import { activeCoflatProduct } from "../../product";
 
 interface AppMainShellProps {
   sidebarLayout: Pick<
@@ -24,11 +26,12 @@ export function AppMainShell({
   const currentPath = editor.currentPath;
   const trackOutline = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "outline";
   const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
+  const useLexicalEditor = activeCoflatProduct.editorEngine === "lexical-wysiwyg";
 
   return (
     <SidebarInset>
-      {currentPath ? (
-        <EditorPane
+      {currentPath && useLexicalEditor ? (
+        <LexicalEditorPane
           doc={editor.editorDoc}
           docPath={currentPath}
           projectConfig={workspace.projectConfig}
@@ -41,8 +44,27 @@ export function AppMainShell({
           onProgrammaticDocChange={(doc) => {
             editor.handleProgrammaticDocChange(currentPath, doc);
           }}
-          onSourceMapChange={(sourceMap) => {
-            editor.setDocumentSourceMap(currentPath, sourceMap);
+          onStateChange={editor.handleEditorStateChange}
+          onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+          onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+          onDocumentReady={editor.handleEditorDocumentReady}
+          onLexicalEditorReady={editor.handleLexicalEditorReady}
+          editorMode={editor.editorMode}
+          activeDocumentSignal={editor.activeDocumentSignal}
+        />
+      ) : currentPath ? (
+        <EditorPane
+          doc={editor.editorDoc}
+          docPath={currentPath}
+          projectConfig={workspace.projectConfig}
+          theme={workspace.resolvedTheme}
+          fs={fs}
+          pluginManager={editor.pluginManager}
+          sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+          onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
+          onDocChange={editor.handleDocChange}
+          onProgrammaticDocChange={(doc) => {
+            editor.handleProgrammaticDocChange(currentPath, doc);
           }}
           onStateChange={editor.handleEditorStateChange}
           onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}

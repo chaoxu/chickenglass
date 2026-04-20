@@ -717,7 +717,6 @@ describe("#277 — first-class theme surface tokens", () => {
     expect(css).toContain("--cf-proof-marker");
     expect(css).toContain("--cf-blockquote-border");
     expect(css).toContain("--cf-table-border");
-    expect(css).toContain("--cf-embed-border");
   });
 
   it("globals.css imports editor-theme.css", () => {
@@ -757,7 +756,7 @@ describe("#910 — centralized layer tokens", () => {
     expect(css).toContain("z-index: var(--cf-layer-inline-chrome);");
     expect(css).toContain("z-index: var(--cf-layer-preview-surface);");
     expect(css).toContain("z-index: var(--cf-layer-block-picker);");
-    expect(blockTheme).toContain('zIndex: "var(--cf-layer-inline-chrome)"');
+    expect(blockTheme).not.toContain("--cf-layer-inline-chrome");
   });
 });
 
@@ -908,7 +907,6 @@ describe("#299 — centralized block manifest and CSS registry", () => {
 
   it("uses the shared registries in block rendering paths", () => {
     const blockTheme = fileText("src/editor/block-theme.ts");
-    const embedPlugin = fileText("src/plugins/embed-plugin.ts");
     const pluginRender = fileText("src/render/plugin-render.ts");
     const pluginRenderChrome = fileText("src/render/plugin-adapters/chrome.ts");
     const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
@@ -927,15 +925,9 @@ describe("#299 — centralized block manifest and CSS registry", () => {
     expect(pluginRenderChrome).toContain("PluginRenderAdapter");
     expect(pluginRenderChrome).toContain("addPluginMarkerReplacement");
     expect(decorationBuilder).not.toMatch(/from ["']\.\.\/render\//);
-    expect(embedPlugin).not.toMatch(/from ["']\.\.\/render\//);
-    expect(embedPlugin).toContain("renderDecorations");
     expect(pluginRender).toContain("renderDecorations?.addBodyDecorations");
-    // #374 and #1094: special-behavior dispatch remains centralized for shared
-    // cases, but embed rendering is plugin-owned instead of hardcoded in the
-    // core render pipeline or handler registry.
-    expect(specialBehaviorHandlers).not.toContain("addEmbedWidget");
-    expect(pluginRender).not.toContain('specialBehavior === "embed"');
-    expect(pluginRender).not.toContain("EMBED_CLASSES");
+    // #374 and #1094: special-behavior dispatch remains centralized for shared cases.
+    expect(specialBehaviorHandlers).toContain("applySpecialBehavior");
   });
 });
 
@@ -952,10 +944,9 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(contractFile).not.toMatch(/from "\.\.\/render\//);
   });
 
-  it("routes block chrome and embed helpers through the render adapter", () => {
+  it("routes block chrome through the render adapter", () => {
     const pluginRender = fileText("src/render/plugin-render.ts");
     const chrome = fileText("src/render/plugin-adapters/chrome.ts");
-    const embedPlugin = fileText("src/plugins/embed-plugin.ts");
     const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
     const bridge = fileText("src/lib/plugin-render-adapter.ts");
     const renderAdapter = fileText("src/render/plugin-render-adapter.ts");
@@ -965,12 +956,9 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(fileExists("src/render/plugin-render.ts")).toBe(true);
     expect(fileExists("src/plugins/plugin-render.ts")).toBe(false);
     expect(fileExists("src/render/plugin-adapters/chrome.ts")).toBe(true);
-    expect(fileExists("src/render/plugin-adapters/embed.ts")).toBe(false);
     expect(fileExists("src/plugins/plugin-render-chrome.ts")).toBe(false);
-    expect(fileExists("src/plugins/plugin-render-embed.ts")).toBe(false);
     expect(renderAdapter).toContain("const codeMirrorPluginRenderAdapter: PluginRenderAdapter");
     expect(renderAdapter).toContain("createHeaderWidget");
-    expect(renderAdapter).toContain("createEmbedWidget");
     expect(bridge).toContain('import type { PluginRenderAdapter }');
     expect(bridge).toContain("codeMirrorPluginRenderAdapter");
     expect(renderIndex).toContain("blockRenderPlugin");
@@ -979,16 +967,13 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(pluginRender).toContain("./plugin-adapters/chrome");
     expect(decorationBuilder).toContain("pushPluginHiddenDecoration");
     expect(decorationBuilder).not.toMatch(/from ["']\.\.\/render\//);
-    expect(embedPlugin).toContain("pushPluginWidgetDecoration");
-    expect(embedPlugin).toContain("adapter.createEmbedWidget");
-    expect(embedPlugin).not.toMatch(/from ["']\.\.\/render\//);
+    expect(fileExists("src/plugins/embed-plugin.ts")).toBe(false);
     expect(chrome).toContain("PluginRenderAdapter");
     expect(chrome).toContain("adapter.createHeaderWidget");
     expect(pluginRender).not.toContain("../render/plugin-render-adapter");
     expect(pluginRender).not.toContain("./plugin-render-chrome");
     expect(decorationBuilder).not.toContain("./plugin-render-chrome");
     expect(decorationBuilder).not.toContain("./plugin-render-embed");
-    expect(embedPlugin).not.toContain("./plugin-render-embed");
     expect(chrome).toContain("../../plugins/plugin-render-adapter");
     expect(chrome).not.toContain("../plugin-render-adapter");
   });
@@ -1021,7 +1006,7 @@ describe("#321 — standardized background dispatch handling", () => {
     const services = fileText("src/app/hooks/use-editor-document-services.ts");
 
     expect(bibliography).toContain("dispatchIfConnected");
-    expect(services).toContain("dispatchIfConnected");
+    expect(services).not.toContain("dispatchIfConnected");
   });
 });
 
@@ -1078,7 +1063,6 @@ describe("#376 — shared text widget primitives", () => {
     const citations = fileText("src/citations/citation-render.ts");
     const crossrefs = fileText("src/render/crossref-render.ts");
     const codeBlockDecorations = fileText("src/render/code-block-decorations.ts");
-    const includeLabels = fileText("src/render/include-label.ts");
     const sidenotes = fileText("src/render/sidenote-render.ts");
     const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
@@ -1086,7 +1070,6 @@ describe("#376 — shared text widget primitives", () => {
     expect(crossrefs).toContain("extends SimpleTextReferenceWidget");
     expect(codeBlockDecorations).toContain("extends ShellWidget");
     expect(codeBlockDecorations).toContain("makeTextElement");
-    expect(includeLabels).toContain("new SimpleTextRenderWidget");
     expect(sidenotes).toContain("extends SimpleTextRenderWidget");
     expect(frontmatterRender).toContain("ShellMacroAwareWidget");
   });
@@ -1107,7 +1090,7 @@ describe("#386 — async cleanup and parallelization", () => {
     expect(runtime).toContain("subscribe:");
     expect(sessionService).toContain("await refreshTree(path)");
     expect(sessionService).toContain("await openFile(path)");
-    expect(persistence).toContain("await writeDocumentSnapshot(relativePath, doc, sourceMap, {");
+    expect(persistence).toContain("await writeDocumentSnapshot(relativePath, doc, {");
     expect(persistence).toContain("createTargetIfMissing: true,");
   });
 });

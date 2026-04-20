@@ -1,4 +1,5 @@
 import { basename } from "../lib/utils";
+import { activeCoflatProduct } from "../product";
 import {
   buildWindowState,
   saveWindowStateForLabel,
@@ -36,7 +37,7 @@ export async function openDocumentInNewWindow(
     height: 800,
     minHeight: 600,
     minWidth: 800,
-    title: `Coflat — ${basename(path)}`,
+    title: `${activeCoflatProduct.displayName} — ${basename(path)}`,
     url: nextUrl.toString(),
     visible: true,
     width: 1200,

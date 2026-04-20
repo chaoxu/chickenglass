@@ -40,14 +40,13 @@ describe("SavePipeline", () => {
 
     const result = await pipeline.save("a.md", () => ({
       content: "hello",
-      sourceMap: null,
     }));
 
     expect(result.saved).toBe(true);
     expect(result.lastSavedRevision).toBe(1);
     expect(pipeline.getLastSavedRevision("a.md")).toBe(1);
     expect(pipeline.getLastSavedHash("a.md")).toBe(fnv1aHash("hello"));
-    expect(writeFn).toHaveBeenCalledWith("a.md", "hello", null);
+    expect(writeFn).toHaveBeenCalledWith("a.md", "hello");
   });
 
   it("returns saved: false when the write throws", async () => {
@@ -57,7 +56,6 @@ describe("SavePipeline", () => {
 
     const result = await pipeline.save("a.md", () => ({
       content: "hello",
-      sourceMap: null,
     }));
 
     expect(result.saved).toBe(false);
@@ -84,19 +82,16 @@ describe("SavePipeline", () => {
     // First save — held open by gate
     const firstPromise = pipeline.save("a.md", () => ({
       content: "v1",
-      sourceMap: null,
     }));
 
     // Queue two more saves while first is in flight
     pipeline.bumpRevision("a.md");
     pipeline.save("a.md", () => ({
       content: "v2",
-      sourceMap: null,
     }));
     pipeline.bumpRevision("a.md");
     pipeline.save("a.md", () => ({
       content: "v3",
-      sourceMap: null,
     }));
 
     // Release the first write
@@ -108,8 +103,8 @@ describe("SavePipeline", () => {
 
     // Only 2 writes: v1 (first) and v3 (coalesced)
     expect(writeFn).toHaveBeenCalledTimes(2);
-    expect(writeFn).toHaveBeenNthCalledWith(1, "a.md", "v1", null);
-    expect(writeFn).toHaveBeenNthCalledWith(2, "a.md", "v3", null);
+    expect(writeFn).toHaveBeenNthCalledWith(1, "a.md", "v1");
+    expect(writeFn).toHaveBeenNthCalledWith(2, "a.md", "v3");
     expect(pipeline.getLastSavedHash("a.md")).toBe(fnv1aHash("v3"));
   });
 
@@ -128,13 +123,11 @@ describe("SavePipeline", () => {
 
     const savePromise = pipeline.save("a.md", () => ({
       content: "hello",
-      sourceMap: null,
     }));
 
     // Queue a second save WITHOUT bumping revision
     pipeline.save("a.md", () => ({
       content: "hello",
-      sourceMap: null,
     }));
 
     gate.resolve("");
@@ -160,14 +153,12 @@ describe("SavePipeline", () => {
 
     const savePromise = pipeline.save("a.md", () => ({
       content: "dirty",
-      sourceMap: null,
     }));
 
     // User types more and queues another save
     pipeline.bumpRevision("a.md");
     pipeline.save("a.md", () => ({
       content: "dirty-then-clean",
-      sourceMap: null,
     }));
 
     gate.resolve("");
@@ -187,7 +178,7 @@ describe("SavePipeline", () => {
     const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
     pipeline.bumpRevision("a.md");
 
-    await pipeline.save("a.md", () => ({ content: "saved", sourceMap: null }));
+    await pipeline.save("a.md", () => ({ content: "saved" }));
 
     expect(pipeline.isSelfChange("a.md", "saved")).toBe(true);
   });
@@ -196,7 +187,7 @@ describe("SavePipeline", () => {
     const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
     pipeline.bumpRevision("a.md");
 
-    await pipeline.save("a.md", () => ({ content: "saved", sourceMap: null }));
+    await pipeline.save("a.md", () => ({ content: "saved" }));
 
     // Disk content is different — external tool rewrote the file
     expect(pipeline.isSelfChange("a.md", "external")).toBe(false);
@@ -205,16 +196,14 @@ describe("SavePipeline", () => {
   it("self-change flag expires after the window", async () => {
     const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
 
-    await pipeline.save("a.md", () => ({ content: "hello", sourceMap: null }));
+    await pipeline.save("a.md", () => ({ content: "hello" }));
 
     // With a 0ms window, the flag should have already expired
     expect(pipeline.isSelfChange("a.md", "hello", 0)).toBe(false);
   });
 
-  it("hashes disk content from writeFn, not editor content (projected saves)", async () => {
-    // Simulate a projected/source-mapped save where the disk content differs
-    // from the editor content (e.g. include directives are reconstructed).
-    const rawDisk = "# Main\n\n::: {.include}\nchapter.md\n:::\n\n# End";
+  it("hashes disk content returned from writeFn, not the requested editor content", async () => {
+    const rawDisk = "# Main\n\nNormalized on disk\n\n# End";
     const writeFn = vi.fn(async (_p: string, _c: string) => rawDisk);
     const pipeline = new SavePipeline(writeFn);
     pipeline.initPath("main.md", rawDisk);
@@ -223,7 +212,6 @@ describe("SavePipeline", () => {
     const editorContent = "# Main\n\nNew chapter\n\n# End";
     await pipeline.save("main.md", () => ({
       content: editorContent,
-      sourceMap: null,
     }));
 
     // The saved hash should match the raw disk content, not the editor content.
@@ -256,7 +244,7 @@ describe("SavePipeline", () => {
     const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
     pipeline.initPath("a.md", "hello");
     pipeline.bumpRevision("a.md");
-    await pipeline.save("a.md", () => ({ content: "saved", sourceMap: null }));
+    await pipeline.save("a.md", () => ({ content: "saved" }));
 
     pipeline.clear("a.md");
 
@@ -276,7 +264,6 @@ describe("SavePipeline", () => {
     // Start save — held open by the gate
     const savePromise = pipeline.save("a.md", () => ({
       content: "Y",
-      sourceMap: null,
     }));
 
     // User discards/switches while save is in flight
@@ -304,7 +291,6 @@ describe("SavePipeline", () => {
 
     const savePromise = pipeline.save("a.md", () => ({
       content: "Y",
-      sourceMap: null,
     }));
 
     // File is reloaded while save is in flight
@@ -331,7 +317,6 @@ describe("SavePipeline", () => {
 
     const savePromise = pipeline.save("a.md", () => ({
       content: "hello",
-      sourceMap: null,
     }));
 
     expect(pipeline.isSaving("a.md")).toBe(true);

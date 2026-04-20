@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import { MemoryFileSystem } from "../file-manager";
-import { SourceMap } from "../source-map";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { UseEditorSessionReturn } from "./use-editor-session";
 
@@ -360,29 +359,19 @@ describe("useEditorSession", () => {
     expect(ref.result.editorDoc).toBe("Slow");
   });
 
-  it("saves expanded include edits back to the owning files", async () => {
-    const includeRef = [
-      "::: {.include}",
-      "chapter.md",
+  it("saves custom fenced div blocks as ordinary active-document content", async () => {
+    const customBlock = [
+      "::: {.custom-note}",
+      "note.md",
       ":::",
     ].join("\n");
     const header = "# Main\n\n";
     const footer = "\n\n# End";
-    const rawMain = `${header}${includeRef}${footer}`;
-    const expanded = `${header}Old chapter\n${footer}`;
-    const edited = `${header}New chapter\n${footer}`;
-    const sourceMap = new SourceMap([{
-      from: header.length,
-      to: header.length + "Old chapter\n".length,
-      file: "chapter.md",
-      originalRef: includeRef,
-      rawFrom: header.length,
-      rawTo: header.length + includeRef.length,
-      children: [],
-    }]);
+    const rawMain = `${header}${customBlock}${footer}`;
+    const edited = `${header}${customBlock}\n\nLocal note${footer}`;
     const fs = new MemoryFileSystem({
       "main.md": rawMain,
-      "chapter.md": "Old chapter\n",
+      "note.md": "Old note\n",
     });
     const { Harness, ref } = createHarness(fs);
 
@@ -392,8 +381,6 @@ describe("useEditorSession", () => {
     });
 
     act(() => {
-      ref.result.setDocumentSourceMap("main.md", sourceMap);
-      ref.result.handleProgrammaticDocChange("main.md", expanded);
       ref.result.handleDocChange(replaceCurrentDoc(ref, edited));
     });
 
@@ -403,8 +390,8 @@ describe("useEditorSession", () => {
       await ref.result.saveFile();
     });
 
-    await expect(fs.readFile("main.md")).resolves.toBe(rawMain);
-    await expect(fs.readFile("chapter.md")).resolves.toBe("New chapter\n");
+    await expect(fs.readFile("main.md")).resolves.toBe(edited);
+    await expect(fs.readFile("note.md")).resolves.toBe("Old note\n");
     expect(ref.result.editorDoc).toBe(edited);
     expect(ref.result.currentDocument?.dirty).toBe(false);
   });

@@ -25,6 +25,7 @@ import {
   COMPACT_CITATION_BACKLINK_TEXT,
 } from "./bibliography-backlinks";
 import { CSS } from "../constants/css-classes";
+import { containsMarkdownMath } from "../lib/markdown-math";
 import { RenderWidget, buildDecorations, createDecorationsField, sanitizeCslHtml } from "../render/render-core";
 import {
   documentAnalysisField,
@@ -103,6 +104,44 @@ export function sortBibEntries(entries: CslJsonItem[]): CslJsonItem[] {
     const yearB = extractYear(b) ?? "";
     return yearA < yearB ? -1 : yearA > yearB ? 1 : 0;
   });
+}
+
+export function buildCitationBacklinkMap(
+  backlinks: ReadonlyMap<string, readonly CitationBacklink[]>,
+): Map<string, readonly CitationBacklink[]> {
+  return new Map(backlinks);
+}
+
+export function buildBibliographyEntries(
+  store: BibStore,
+  citedIds: readonly string[],
+  cslHtml: readonly string[],
+): Array<{
+  readonly id: string;
+  readonly plainText: string;
+  readonly renderedHtml?: string;
+}> {
+  const entries = citedIds
+    .map((id) => store.get(id))
+    .filter((entry): entry is CslJsonItem => entry !== undefined);
+
+  if (cslHtml.length > 0) {
+    return entries.map((entry, index) => {
+      const plainText = formatBibEntry(entry);
+      return {
+        id: entry.id,
+        plainText,
+        renderedHtml: containsMarkdownMath(plainText)
+          ? undefined
+          : sanitizeCslHtml(cslHtml[index] ?? ""),
+      };
+    });
+  }
+
+  return sortBibEntries(entries).map((entry) => ({
+    id: entry.id,
+    plainText: formatBibEntry(entry),
+  }));
 }
 
 /** Widget that renders the full bibliography section. */

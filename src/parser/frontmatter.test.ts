@@ -67,6 +67,22 @@ describe("parseFrontmatter", () => {
     expect(config.bibliography).toBe("ref.bib");
   });
 
+  it("parses LaTeX export options", () => {
+    const doc = [
+      "---",
+      "latex:",
+      "  template: lipics",
+      "  bibliography: refs/paper.bib",
+      "---",
+      "",
+    ].join("\n");
+    const { config } = parseFrontmatter(doc);
+    expect(config.latex).toEqual({
+      bibliography: "refs/paper.bib",
+      template: "lipics",
+    });
+  });
+
   it("parses quoted values", () => {
     const doc = '---\ntitle: "My Document"\n---\n';
     const { config } = parseFrontmatter(doc);
