@@ -68,6 +68,17 @@ import {
   type CursorRevealOpenRequest,
 } from "./cursor-reveal-controller";
 import {
+  activateCursorReveal,
+  clearClosedCursorReveal,
+  closeCursorReveal,
+  createCursorRevealIdle,
+  getCursorRevealSession,
+  isCursorRevealOpening,
+  openCursorReveal,
+  shouldSuppressCursorRevealOpen,
+  type CursorRevealMachineState,
+} from "./cursor-reveal-machine";
+import {
   canOpenUserDrivenReveal,
   domSelectionInsideRevealText,
   getDomSelectionOffsetInsideRevealText,
@@ -125,34 +136,34 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const userSelectionRevealRef = useUserDrivenSelectionReveal(editor);
-  // Key we last revealed (or committed to). Prevents the floating editor
-  // from reopening on the same node right after it closes, since Lexical's
-  // post-commit selection still points at the replacement node.
-  const lastRevealedKeyRef = useRef<NodeKey | null>(null);
+  const lifecycleRef = useRef<CursorRevealMachineState<FloatingRevealPresentationState>>(
+    createCursorRevealIdle(),
+  );
 
   useEffect(() => {
     setState(null);
     setDraft("");
-    lastRevealedKeyRef.current = null;
+    lifecycleRef.current = createCursorRevealIdle();
   }, [adapters]);
 
   const openFloatingRequest = useCallback((request: CursorRevealOpenRequest) => {
     const adapter = findRevealAdapter(adapters, request.adapterId);
-    if (!adapter || request.nodeKey === lastRevealedKeyRef.current) {
+    if (!adapter || shouldSuppressCursorRevealOpen(lifecycleRef.current, request.nodeKey)) {
       return;
     }
     const dom = editor.getElementByKey(request.nodeKey);
     if (!dom) {
       return;
     }
-    lastRevealedKeyRef.current = request.nodeKey;
-    setDraft(request.source);
-    setState({
+    const nextState = {
       adapter,
       anchor: dom,
       caretOffset: request.caretOffset,
       nodeKey: request.nodeKey,
-    });
+    };
+    lifecycleRef.current = openCursorReveal(nextState, "editing");
+    setDraft(request.source);
+    setState(nextState);
   }, [adapters, editor]);
 
   useEffect(
@@ -185,7 +196,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
         }
         const pick = pickRevealSubject(sel, adapters);
         if (!pick) {
-          lastRevealedKeyRef.current = null;
+          lifecycleRef.current = clearClosedCursorReveal(lifecycleRef.current);
           return false;
         }
         if (!canOpenUserDrivenReveal(pick.adapter, userSelectionRevealRef)) {
@@ -226,11 +237,12 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
           return;
         }
         node.setRaw(nextRaw);
-        lastRevealedKeyRef.current = node.getKey();
+        lifecycleRef.current = closeCursorReveal(lifecycleRef.current, node.getKey());
       }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
       return;
     }
     if (current.adapter.id === "paragraph") {
+      lifecycleRef.current = closeCursorReveal(lifecycleRef.current, current.nodeKey);
       setState(null);
       setDraft("");
       return;
@@ -252,7 +264,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       const placeholder = $createTextNode(nextRaw);
       node.replace(placeholder);
       const replacement = current.adapter.reparse(placeholder, nextRaw);
-      lastRevealedKeyRef.current = replacement.getKey();
+      lifecycleRef.current = closeCursorReveal(lifecycleRef.current, replacement.getKey());
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
   };
 
@@ -265,7 +277,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       draft={draft}
       inputRef={inputRef}
       onCancel={() => {
-        lastRevealedKeyRef.current = state.nodeKey;
+        lifecycleRef.current = closeCursorReveal(lifecycleRef.current, state.nodeKey);
         setState(null);
       }}
       onCommit={() => {
@@ -280,13 +292,12 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
 
 // ─── Inline (Typora-style) presentation ─────────────────────────────────
 
-interface InlineRevealHandle {
+interface InlineRevealSession {
   readonly plainKey: NodeKey;
   readonly adapter: RevealAdapter;
   readonly caretOffset: number;
   readonly source: string;
   readonly sourceFormat: number;
-  readonly selectionState: "opening" | "active";
 }
 
 interface InlineRevealCommitResult {
@@ -299,11 +310,10 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   const [chromeState, setChromeState] = useState<InlineRevealChromeState | null>(null);
   const userSelectionRevealRef = useUserDrivenSelectionReveal(editor);
   usePointerSelectionReveal(editor, adapters, userSelectionRevealRef);
-  // Key of the in-flight plain-text reveal node. When the caret moves off
-  // this key, we reparse it via the same adapter that opened it.
-  const activeRef = useRef<InlineRevealHandle | null>(null);
+  const activeRef = useRef<CursorRevealMachineState<InlineRevealSession>>(
+    createCursorRevealIdle(),
+  );
   const lastArrowDirectionRef = useRef<"left" | "right" | null>(null);
-  const skipOpeningArrowUntilRef = useRef(0);
 
   const selectAfterRevealCommit = useCallback((replacement: LexicalNode | null) => {
     const direction = lastArrowDirectionRef.current;
@@ -329,12 +339,9 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     if (!adapter) {
       return;
     }
-    skipOpeningArrowUntilRef.current = request.entry === "keyboard-boundary"
-      ? Date.now() + 100
-      : 0;
     openInlineReveal(request, adapter, activeRef, setChromeState);
     scheduleOpeningRevealSelectionSync(editor, activeRef);
-    setCursorRevealActive(editor, activeRef.current !== null);
+    setCursorRevealActive(editor, getCursorRevealSession(activeRef.current) !== null);
   }, [adapters, editor]);
 
   useEffect(
@@ -369,20 +376,20 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         // If a reveal is open and the selection is still inside that
         // node, do nothing. Selection-change while inside the reveal
         // (typing, arrow within) shouldn't disturb it.
-        if (activeRef.current) {
-          const active = activeRef.current;
+        const active = getCursorRevealSession(activeRef.current);
+        if (active) {
           const anchorKey = anchorTextKey(sel);
           const live = $getNodeByKey(active.plainKey);
           const domInsideReveal = $isTextNode(live)
             && domSelectionInsideRevealText(live.getTextContent());
           if (anchorKey && anchorKey === active.plainKey) {
-            activeRef.current = domInsideReveal
-              ? { ...active, selectionState: "active" }
-              : active;
+            if (domInsideReveal) {
+              activeRef.current = activateCursorReveal(activeRef.current);
+            }
             return false;
           }
           if (domInsideReveal) {
-            activeRef.current = { ...active, selectionState: "active" };
+            activeRef.current = activateCursorReveal(activeRef.current);
             return false;
           }
           // Opening a decorator reveal is a two-step transition: replace the
@@ -390,7 +397,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           // inside that TextNode. If a browser selectionchange races in from
           // the pre-swap state, restore the requested source caret instead of
           // treating an outside selection as a successful open.
-          if (restoreOpeningRevealSelection(active, live)) {
+          if (restoreOpeningRevealSelection(activeRef.current, live)) {
             return false;
           }
           // Caret moved off the reveal. Commit the previous source, then
@@ -399,7 +406,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
           // second selection event.
           $addUpdateTag(COFLAT_NESTED_EDIT_TAG);
           const commit = $commitInlineReveal(active);
-          activeRef.current = null;
+          activeRef.current = closeCursorReveal(activeRef.current);
           setChromeState(null);
           setCursorRevealActive(editor, false);
           if (!commit.sourceChanged) {
@@ -446,11 +453,11 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       event: KeyboardEvent | null,
       direction: "left" | "right",
     ): boolean => {
-      const active = activeRef.current;
+      const active = getCursorRevealSession(activeRef.current);
       if (!active) {
         return false;
       }
-      if (shouldSkipOpeningArrow(active, skipOpeningArrowUntilRef)) {
+      if (shouldSkipOpeningArrow(activeRef.current)) {
         return false;
       }
       lastArrowDirectionRef.current = direction;
@@ -471,12 +478,12 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       if (nextOffset >= 0 && nextOffset <= size) {
         $addUpdateTag(COFLAT_REVEAL_UI_TAG);
         selectRevealText(live, nextOffset);
-        activeRef.current = { ...active, selectionState: "active" };
+        activeRef.current = activateCursorReveal(activeRef.current);
         handled = true;
       } else {
         const commit = $commitInlineReveal(active);
         selectAfterRevealCommit(commit.replacement);
-        activeRef.current = null;
+        activeRef.current = closeCursorReveal(activeRef.current);
         setChromeState(null);
         setCursorRevealActive(editor, false);
         handled = true;
@@ -507,10 +514,10 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   }, [editor, selectAfterRevealCommit]);
 
   const handleDocumentKeyDown = useCallback((event: KeyboardEvent) => {
-    const active = activeRef.current;
+    const active = getCursorRevealSession(activeRef.current);
     if (
       !active
-      || shouldSkipOpeningArrow(active, skipOpeningArrowUntilRef)
+      || shouldSkipOpeningArrow(activeRef.current)
       || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
       || event.altKey
       || event.ctrlKey
@@ -548,14 +555,14 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       if (nextOffset >= 0 && nextOffset <= size) {
         $addUpdateTag(COFLAT_REVEAL_UI_TAG);
         selectRevealText(live, nextOffset);
-        activeRef.current = { ...active, selectionState: "active" };
+        activeRef.current = activateCursorReveal(activeRef.current);
         handled = true;
         return;
       }
 
       const commit = $commitInlineReveal(active);
       selectAfterRevealCommit(commit.replacement);
-      activeRef.current = null;
+      activeRef.current = closeCursorReveal(activeRef.current);
       setChromeState(null);
       setCursorRevealActive(editor, false);
       handled = true;
@@ -571,19 +578,19 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   useDocumentKeyDownCapture(handleDocumentKeyDown);
 
   const handleDocumentSelectionChange = useCallback(() => {
-    const active = activeRef.current;
+    const active = getCursorRevealSession(activeRef.current);
     if (!active) {
       return;
     }
 
     queueMicrotask(() => {
-      const current = activeRef.current;
+      const current = getCursorRevealSession(activeRef.current);
       if (!current || current.plainKey !== active.plainKey) {
         return;
       }
 
       editor.update(() => {
-        const latest = activeRef.current;
+        const latest = getCursorRevealSession(activeRef.current);
         if (!latest || latest.plainKey !== active.plainKey) {
           return;
         }
@@ -592,21 +599,21 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
         const domInsideReveal = $isTextNode(live)
           && domSelectionInsideRevealText(live.getTextContent());
         if (anchorTextKey(selection) === latest.plainKey) {
-          activeRef.current = domInsideReveal
-            ? { ...latest, selectionState: "active" }
-            : latest;
+          if (domInsideReveal) {
+            activeRef.current = activateCursorReveal(activeRef.current);
+          }
           return;
         }
         if (domInsideReveal) {
-          activeRef.current = { ...latest, selectionState: "active" };
+          activeRef.current = activateCursorReveal(activeRef.current);
           return;
         }
-        if (restoreOpeningRevealSelection(latest, live)) {
+        if (restoreOpeningRevealSelection(activeRef.current, live)) {
           return;
         }
 
         $commitInlineReveal(latest);
-        activeRef.current = null;
+        activeRef.current = closeCursorReveal(activeRef.current);
         setChromeState(null);
         setCursorRevealActive(editor, false);
       }, { discrete: true });
@@ -616,7 +623,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   useDocumentSelectionChange(handleDocumentSelectionChange);
 
   useRegisterEmbeddedFieldFlush(() => {
-    const active = activeRef.current;
+    const active = getCursorRevealSession(activeRef.current);
     if (!active) {
       return;
     }
@@ -624,17 +631,17 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
       $commitInlineReveal(active);
       setCursorRevealActive(editor, false);
     }, { discrete: true });
-    activeRef.current = null;
+    activeRef.current = closeCursorReveal(activeRef.current);
     setChromeState(null);
   }, true);
 
   useEffect(() => () => {
-    const active = activeRef.current;
+    const active = getCursorRevealSession(activeRef.current);
     if (active) {
       editor.update(() => {
         $commitInlineReveal(active);
       }, { discrete: true });
-      activeRef.current = null;
+      activeRef.current = closeCursorReveal(activeRef.current);
     }
     setCursorRevealActive(editor, false);
   }, [editor]);
@@ -687,42 +694,38 @@ function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | n
 }
 
 function shouldSkipOpeningArrow(
-  active: InlineRevealHandle,
-  skipOpeningArrowUntilRef: { current: number },
+  state: CursorRevealMachineState<InlineRevealSession>,
 ): boolean {
-  if (active.selectionState !== "opening" || Date.now() > skipOpeningArrowUntilRef.current) {
-    skipOpeningArrowUntilRef.current = 0;
-    return false;
-  }
-  skipOpeningArrowUntilRef.current = 0;
-  return true;
+  return isCursorRevealOpening(state)
+    && Date.now() <= state.suppressArrowUntil;
 }
 
 function scheduleOpeningRevealSelectionSync(
   editor: LexicalEditor,
-  activeRef: { current: InlineRevealHandle | null },
+  activeRef: { current: CursorRevealMachineState<InlineRevealSession> },
 ): void {
-  const active = activeRef.current;
-  if (!active || active.selectionState !== "opening") {
+  const active = getCursorRevealSession(activeRef.current);
+  if (!active || !isCursorRevealOpening(activeRef.current)) {
     return;
   }
   queueMicrotask(() => {
     editor.update(() => {
-      const latest = activeRef.current;
+      const latest = getCursorRevealSession(activeRef.current);
       if (!latest || latest.plainKey !== active.plainKey) {
         return;
       }
       const live = $getNodeByKey(latest.plainKey);
-      restoreOpeningRevealSelection(latest, live);
+      restoreOpeningRevealSelection(activeRef.current, live);
     }, { discrete: true });
   });
 }
 
 function restoreOpeningRevealSelection(
-  active: InlineRevealHandle,
+  state: CursorRevealMachineState<InlineRevealSession>,
   live: LexicalNode | null | undefined,
 ): boolean {
-  if (active.selectionState !== "opening" || !$isTextNode(live)) {
+  const active = getCursorRevealSession(state);
+  if (!active || !isCursorRevealOpening(state) || !$isTextNode(live)) {
     return false;
   }
   $addUpdateTag(COFLAT_REVEAL_UI_TAG);
@@ -757,16 +760,16 @@ function isBlockRevealSubject(node: LexicalNode): boolean {
 function openInlineReveal(
   request: CursorRevealOpenRequest,
   adapter: RevealAdapter,
-  activeRef: { current: InlineRevealHandle | null },
+  activeRef: { current: CursorRevealMachineState<InlineRevealSession> },
   setChromeState: (state: InlineRevealChromeState | null) => void,
 ): void {
   const live = $getNodeByKey(request.nodeKey);
   if (!live) {
     return;
   }
-  const selectionState: InlineRevealHandle["selectionState"] = $isDecoratorNode(live)
+  const phase = $isDecoratorNode(live)
     ? "opening"
-    : "active";
+    : "editing";
   const sourceFormat = getSourceBackedFormat(live);
   const plain = $createTextNode(request.source);
   $addUpdateTag(COFLAT_REVEAL_UI_TAG);
@@ -791,14 +794,15 @@ function openInlineReveal(
   const caretOffset = Math.max(0, Math.min(request.caretOffset, plain.getTextContentSize()));
   selectRevealText(plain, caretOffset);
   const plainKey = plain.getKey();
-  activeRef.current = {
+  activeRef.current = openCursorReveal({
     adapter,
     caretOffset,
     plainKey,
-    selectionState,
     source: request.source,
     sourceFormat,
-  };
+  }, phase, {
+    suppressArrowUntil: request.entry === "keyboard-boundary" ? Date.now() + 100 : 0,
+  });
   setChromeState(
     adapter.getChromePreview?.(request.source)
       ? { adapter, plainKey, source: request.source }
@@ -818,7 +822,7 @@ function getSourceBackedFormat(node: LexicalNode): number {
   return 0;
 }
 
-function $commitInlineReveal(handle: InlineRevealHandle): InlineRevealCommitResult {
+function $commitInlineReveal(handle: InlineRevealSession): InlineRevealCommitResult {
   const live = $getNodeByKey(handle.plainKey);
   if (!$isTextNode(live)) {
     return {
