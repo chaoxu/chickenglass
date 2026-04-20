@@ -26,7 +26,7 @@ export interface DocumentIRBuildInput {
   readonly tree: Tree;
 }
 
-interface FlatHeading {
+interface SectionHeadingInput {
   readonly heading: string;
   readonly level: number;
   readonly from: number;
@@ -60,7 +60,7 @@ function extractMetadata(docText: string): DocumentMetadata {
 }
 
 function buildSectionTree(
-  headings: readonly FlatHeading[],
+  headings: readonly SectionHeadingInput[],
   docLength: number,
 ): SectionNode[] {
   if (headings.length === 0) return [];

@@ -1,6 +1,9 @@
-# Coflat v2
+# Coflats
 
-Semantic document editor for mathematical writing. Runs as a native desktop app (Tauri) or in the browser for development.
+Semantic document editors for mathematical writing. The repo builds two products:
+Coflat with the CM6 markdown-native editor, and Coflat 2 with the Lexical
+WYSIWYG editor. Both products share the same app shell, document format, file
+IO, semantic services, and Tauri backend.
 
 ## Shared file
 
@@ -16,7 +19,7 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 ## Stack
 
 - **Language**: TypeScript (strict mode) + Rust (Tauri backend)
-- **Editor**: CodeMirror 6
+- **Editors**: CodeMirror 6 for Coflat; Lexical for Coflat 2
 - **Parser**: Lezer (`@lezer/markdown` with custom extensions)
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (smaller bundles, native webview)
@@ -29,6 +32,7 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 ```
 src/
   editor/        # CM6 setup, keybindings, theme, debug-helpers
+  lexical/       # Lexical WYSIWYG editor surface and markdown serialization
   parser/        # Lezer markdown extensions (fenced-div, math, footnotes, etc.)
   plugins/       # Block plugin system (theorem, proof, definition, embed, etc.)
   render/        # CM6 ViewPlugins for Typora-style rendering
@@ -45,20 +49,24 @@ scripts/         # browser harness, CDP helpers, blog import tools
 
 ```bash
 pnpm install         # install dependencies
-pnpm dev             # start dev server (Vite) — browser mode with blog demo content
+pnpm dev             # start Coflat dev server (Vite)
+pnpm dev:coflat2     # start Coflat 2 dev server (Lexical WYSIWYG product)
 pnpm dev:show        # start stable no-HMR dev server on localhost:5173 for demos / shared review
 pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
 pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
 pnpm build           # production build (frontend only)
+pnpm build:coflats   # build both Coflat and Coflat 2 frontend products
 pnpm lint            # Biome lint
 pnpm lint:fix        # Biome lint autofix
 pnpm test            # run tests (Vitest)
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
 pnpm typecheck       # typecheck only
-pnpm tauri:dev       # launch Tauri desktop app
-pnpm tauri:build     # build production desktop binary
+pnpm tauri:dev       # launch Coflat Tauri desktop app
+pnpm tauri:dev:coflat2 # launch Coflat 2 Tauri desktop app
+pnpm tauri:build     # build Coflat production desktop binary
+pnpm tauri:build:coflat2 # build Coflat 2 production desktop binary
 pnpm test:browser    # stable managed-browser regression harness
 pnpm perf:capture:heavy -- --scenario typing-rich-burst
                      # heavy-doc perf lane with longer open/debug budgets

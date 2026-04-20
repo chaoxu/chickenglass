@@ -5,14 +5,14 @@ export const EDITOR_ENGINE_READINESS: Readonly<Record<CoflatEditorEngine, Editor
   "cm6-markdown": {
     id: "cm6-markdown",
     integrated: true,
-    sourceOwner: "coflat",
+    productId: "coflat",
     notes: "Current Coflat CM6 markdown-native editor.",
   },
   "lexical-wysiwyg": {
     id: "lexical-wysiwyg",
     integrated: true,
-    sourceOwner: "coflat2",
-    notes: "Coflat 2 Lexical editor routed through the shared app shell by product selection.",
+    productId: "coflat2",
+    notes: "Coflat 2 Lexical WYSIWYG editor routed through the shared app shell by product selection.",
   },
 };
 

@@ -1,13 +1,17 @@
-# Coflat v2 — Design Document
+# Coflats — Design Document
 
 ## What is it
 
-A desktop editor for semantic documents, optimized for mathematical writing. Typora-style inline WYSIWYG: rendered by default, source revealed on cursor focus. Built with Tauri (Rust backend) + CodeMirror 6 (TypeScript frontend).
+A shared desktop/browser codebase for semantic document editors, optimized for
+mathematical writing. It builds Coflat with the CM6 markdown-native editor and
+Coflat 2 with the Lexical WYSIWYG editor. Both products share the same document
+format, app shell, file IO, semantic services, and Tauri backend.
 
 ## Core philosophy
 
 - Semantics first, presentation derived.
-- The AST is the real document. Markdown is a serialization format.
+- Coflat edits Pandoc-flavored markdown directly; Coflat 2 edits a rich document
+  model and uses markdown as the boundary serialization format.
 - Every block type is a plugin. The core knows nothing about "theorem" or "proof."
 - Pandoc-free editing loop. Pandoc is an export tool, not part of the core.
 - Git-friendly: plain text files, meaningful diffs.
@@ -15,7 +19,7 @@ A desktop editor for semantic documents, optimized for mathematical writing. Typ
 ## Stack
 
 - **Language**: TypeScript (frontend) + Rust (Tauri backend)
-- **Editor**: CodeMirror 6
+- **Editors**: CodeMirror 6 for Coflat; Lexical for Coflat 2
 - **Parser**: Lezer (extending `@lezer/markdown`)
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (~5MB binary, native OS webview)

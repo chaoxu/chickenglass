@@ -45,6 +45,6 @@ export interface EditorEngineDescriptor<
 export interface EditorEngineReadiness {
   readonly id: CoflatEditorEngine;
   readonly integrated: boolean;
-  readonly sourceOwner: "coflat" | "coflat2";
+  readonly productId: "coflat" | "coflat2";
   readonly notes: string;
 }

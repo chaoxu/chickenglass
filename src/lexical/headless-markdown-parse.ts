@@ -5,8 +5,8 @@
  *
  * Used by the paragraph-scope reveal adapter for its commit step (parse
  * the edited source, splice the resulting blocks back into the live
- * tree). The same primitive is the foundation for the deferred
- * incremental `applyChanges` work tracked by coflat2#218.
+ * tree). The same primitive is the foundation for deferred incremental
+ * `applyChanges` work in the shared Lexical editing backlog.
  *
  * Benchmarked at ~0.07 ms for a typical paragraph and ~5.5 ms for a
  * pathological 3.5 KB paragraph stuffed with inline tokens — three

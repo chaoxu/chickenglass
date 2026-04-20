@@ -8,7 +8,7 @@ describe("editor engine readiness registry", () => {
     expect(getEditorEngineReadiness(COFLAT_PRODUCTS.coflat.editorEngine)).toMatchObject({
       id: "cm6-markdown",
       integrated: true,
-      sourceOwner: "coflat",
+      productId: "coflat",
     });
   });
 
@@ -16,7 +16,7 @@ describe("editor engine readiness registry", () => {
     expect(getEditorEngineReadiness(COFLAT_PRODUCTS.coflat2.editorEngine)).toMatchObject({
       id: "lexical-wysiwyg",
       integrated: true,
-      sourceOwner: "coflat2",
+      productId: "coflat2",
     });
   });
 });
