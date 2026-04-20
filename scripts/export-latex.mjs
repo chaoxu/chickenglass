@@ -4,9 +4,8 @@
  *
  * Pipeline:
  *   1. Read the source .md.
- *   2. Resolve `::: {.include}` blocks.
- *   3. Lift inline fenced-div titles into `title="..."` attributes.
- *   4. Pipe into pandoc with our Lua filter and template of choice.
+ *   2. Hoist Coflat `math:` frontmatter into Pandoc `header-includes`.
+ *   3. Pipe into pandoc with our Lua filter and template of choice.
  *
  * Usage:
  *   node scripts/export-latex.mjs <input.md> [--output=out.tex]

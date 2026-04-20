@@ -5,23 +5,23 @@ import { buildRenderIndex } from "./reference-index";
 describe("buildRenderIndex", () => {
   it("shares theorem-family counters and keeps dedicated definition/algorithm counters", () => {
     const doc = [
-      "::: {.theorem #thm:a} A",
+      '::: {.theorem #thm:a title="A"}',
       "Body",
       ":::",
       "",
-      "::: {.lemma #lem:b} B",
+      '::: {.lemma #lem:b title="B"}',
       "Body",
       ":::",
       "",
-      "::: {.problem #prob:c} C",
+      '::: {.problem #prob:c title="C"}',
       "Body",
       ":::",
       "",
-      "::: {.definition #def:d} D",
+      '::: {.definition #def:d title="D"}',
       "Body",
       ":::",
       "",
-      "::: {.algorithm #alg:e} E",
+      '::: {.algorithm #alg:e title="E"}',
       "Body",
       ":::",
     ].join("\n");
@@ -37,11 +37,11 @@ describe("buildRenderIndex", () => {
 
   it("honors frontmatter block overrides and global numbering", () => {
     const doc = [
-      "::: {.problem #prob:a} A",
+      '::: {.problem #prob:a title="A"}',
       "Body",
       ":::",
       "",
-      "::: {.problem #prob:b} B",
+      '::: {.problem #prob:b title="B"}',
       "Body",
       ":::",
     ].join("\n");
@@ -56,7 +56,7 @@ describe("buildRenderIndex", () => {
       numbering: "global",
     });
 
-  expect(index.references.get("prob:a")?.label).toBe("Exercise 1");
-  expect(index.references.get("prob:b")?.label).toBe("Exercise 2");
+    expect(index.references.get("prob:a")?.label).toBe("Exercise 1");
+    expect(index.references.get("prob:b")?.label).toBe("Exercise 2");
   });
 });

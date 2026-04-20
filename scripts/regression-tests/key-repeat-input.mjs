@@ -13,7 +13,7 @@ const HEAVY_DOC = [
   "# Key Repeat Heavy Fixture",
   "",
   ...Array.from({ length: 48 }, (_, index) => [
-    `:::: {#lem:key-repeat-${index + 1} .lemma} Repeat lemma ${index + 1}`,
+    `:::: {#lem:key-repeat-${index + 1} .lemma title="Repeat lemma ${index + 1}"}`,
     `Body ${index + 1} with inline math $x_${index + 1}$ and a citation-like token [@ref${index + 1}].`,
     "::::",
   ].join("\n")),

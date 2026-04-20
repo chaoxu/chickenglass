@@ -59,9 +59,9 @@ describe("getMarkdownExpansionCandidate", () => {
   });
 
   it("creates theorem blocks from a fenced div opener", () => {
-    expect(getCandidateFromLines(["::: {.theorem} Main Result"], 0)).toMatchObject({
+    expect(getCandidateFromLines(['::: {.theorem title="Main Result"}'], 0)).toMatchObject({
       focusTarget: "block-body",
-      raw: "::: {.theorem} Main Result\n\n:::",
+      raw: '::: {.theorem title="Main Result"}\n\n:::',
       variant: "fenced-div",
     });
   });

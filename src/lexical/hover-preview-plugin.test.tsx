@@ -28,7 +28,7 @@ function createRenderContext(doc: string): LexicalRenderContextValue {
 describe("createReferencePreviewBuilder", () => {
   it("reuses the same preview element for repeated lookups of the same id", () => {
     const context = createRenderContext([
-      "::: {#thm:hover-preview .theorem} Cached Title",
+      '::: {#thm:hover-preview .theorem title="Cached Title"}',
       "Body with **bold** text.",
       ":::",
     ].join("\n"));
@@ -40,12 +40,12 @@ describe("createReferencePreviewBuilder", () => {
 
   it("does not reuse cached previews across render contexts", () => {
     const firstBuilder = createReferencePreviewBuilder(createRenderContext([
-      "::: {#thm:hover-preview .theorem} First Title",
+      '::: {#thm:hover-preview .theorem title="First Title"}',
       "First body.",
       ":::",
     ].join("\n")));
     const secondBuilder = createReferencePreviewBuilder(createRenderContext([
-      "::: {#thm:hover-preview .theorem} Second Title",
+      '::: {#thm:hover-preview .theorem title="Second Title"}',
       "Second body.",
       ":::",
     ].join("\n")));

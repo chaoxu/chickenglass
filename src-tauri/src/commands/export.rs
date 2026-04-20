@@ -17,7 +17,7 @@ const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
     "tauri.export.export_document",
     "tauri",
 );
-const LATEX_PANDOC_FROM: &str = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash";
+const LATEX_PANDOC_FROM: &str = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
 
 /// Check whether Pandoc is installed and return its version string.
 #[command]

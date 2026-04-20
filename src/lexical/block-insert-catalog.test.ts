@@ -28,9 +28,9 @@ describe("block-insert-catalog", () => {
       variant: "fenced-div",
     });
 
-    expect(createFencedDivInsertSpec("::: {.theorem} Title")).toMatchObject({
+    expect(createFencedDivInsertSpec('::: {.theorem title="Title"}')).toMatchObject({
       focusTarget: "block-body",
-      raw: "::: {.theorem} Title\n\n:::",
+      raw: '::: {.theorem title="Title"}\n\n:::',
       variant: "fenced-div",
     });
   });

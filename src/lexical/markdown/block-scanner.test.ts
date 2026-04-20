@@ -18,9 +18,9 @@ describe("block-scanner", () => {
       "Body",
       ":::",
       "",
-      "$$",
+      "\\begin{equation}\\label{eq:x}",
       "x",
-      "$$ {#eq:x}",
+      "\\end{equation}",
       "",
       "![Alt](figure.png)",
       "",
@@ -58,7 +58,7 @@ describe("block-scanner", () => {
 
   it("keeps longer fenced divs whole when they contain shorter nested fences", () => {
     const markdown = [
-      ":::: {.theorem} Outer",
+      ':::: {.theorem title="Outer"}',
       "Before",
       "",
       "::: {.blockquote}",
@@ -79,13 +79,8 @@ describe("block-scanner", () => {
     ]);
   });
 
-  it("recognizes documented single-line fenced divs", () => {
-    expect(collectSourceBlockRanges("::: {.theorem} Short statement. :::")).toMatchObject([
-      {
-        raw: "::: {.theorem} Short statement. :::",
-        variant: "fenced-div",
-      },
-    ]);
+  it("does not recognize non-canonical single-line fenced divs", () => {
+    expect(collectSourceBlockRanges("::: {.theorem} Short statement. :::")).toEqual([]);
   });
 
   it("exposes shared markdown-expansion start-line matchers", () => {

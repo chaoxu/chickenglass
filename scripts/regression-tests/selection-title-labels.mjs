@@ -4,7 +4,7 @@ export const groups = ["surfaces"];
 const DOC = [
   "# Heading Title {#sec:heading-title}",
   "",
-  "::: {.theorem} Visible Title {#thm:visible-title}",
+  '::: {.theorem #thm:visible-title title="Visible Title"}',
   "Selectable body text for dragging.",
   ":::",
   "",
@@ -94,7 +94,7 @@ export async function run(page) {
   if (
     titleState.titleText.includes("{#")
     || !titleState.titleText.includes("Visible Title")
-    || !titleState.doc.includes("{#thm:visible-title}")
+    || !titleState.doc.includes("#thm:visible-title")
   ) {
     return {
       pass: false,

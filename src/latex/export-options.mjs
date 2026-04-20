@@ -3,7 +3,7 @@ import { parse as parseYaml } from "yaml";
 import { isFrontmatterDelimiterLine } from "../lib/frontmatter-delimiter.js";
 
 export const LATEX_PANDOC_FROM =
-  "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash";
+  "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
 
 export const LATEX_TEMPLATE_NAMES = new Set(["article", "lipics"]);
 

@@ -73,7 +73,7 @@ export async function run(page) {
     };
   }
 
-  await openScratch(page, "theorem", "::: {.theorem} T\nBody text.\n:::\n");
+  await openScratch(page, "theorem", '::: {.theorem title="T"}\nBody text.\n:::\n');
   await page
     .locator("section.cf-lexical-block--theorem .cf-lexical-nested-editor--block-body")
     .first()

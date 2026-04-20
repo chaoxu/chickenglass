@@ -9,7 +9,7 @@ const DOC = [
   "# Embedded Flush Perf",
   "",
   ...Array.from({ length: BLOCK_COUNT }, (_, index) => [
-    `:::: {#lem:flush-${index + 1} .lemma} Flush lemma ${index + 1}`,
+    `:::: {#lem:flush-${index + 1} .lemma title="Flush lemma ${index + 1}"}`,
     `Body ${index + 1} with inline math $m${index + 1}$ and a short explanation.`,
     "::::",
   ].join("\n")),

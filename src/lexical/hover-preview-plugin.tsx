@@ -69,7 +69,7 @@ function buildReferencePreview(
   }
 
   if (definition.kind === "equation" && definition.text) {
-    const raw = `$$\n${definition.text}\n$$${definition.id ? ` {#${definition.id}}` : ""}`;
+    const raw = `$$\n${definition.text}\n$$`;
     return (
       <div className="cf-hover-preview">
         <PreviewHtml

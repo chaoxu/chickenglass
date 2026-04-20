@@ -36,17 +36,6 @@ export function fencedDivTitleMarkdownOffset(
   const headerOffset = fenceMatch[0].length + headerPadding;
   const header = opener.slice(headerOffset);
 
-  if (parsed.titleKind === "implicit") {
-    return headerOffset;
-  }
-
-  if (parsed.titleKind === "trailing") {
-    const attrsEnd = header.indexOf("}");
-    const trailingRawOffset = attrsEnd >= 0 ? attrsEnd + 1 : 0;
-    const leading = header.slice(trailingRawOffset).match(/^\s*/)?.[0].length ?? 0;
-    return headerOffset + trailingRawOffset + leading;
-  }
-
   if (parsed.titleKind === "attribute") {
     const match = header.match(/\btitle=(?:"([^"]*)"|'([^']*)')/);
     if (!match || match.index === undefined) {

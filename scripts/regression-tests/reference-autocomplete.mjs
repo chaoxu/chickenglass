@@ -1,4 +1,4 @@
-import { openRegressionDocument, readEditorText } from "../test-helpers.mjs";
+import { focusEditor, openRegressionDocument, readEditorText, setSelection } from "../test-helpers.mjs";
 
 export const name = "reference-autocomplete";
 export const groups = ["authoring"];
@@ -69,10 +69,15 @@ async function pickCompletionOption(page, needle) {
 
 export async function run(page) {
   await openRegressionDocument(page, "index.md", { mode: "lexical" });
-  await placeVisibleCaretAtEnd(page);
-
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
+  const insertionOffset = await page.evaluate(() => window.__editor?.getDoc?.().indexOf("Use this file") ?? -1);
+  if (insertionOffset < 0) {
+    await placeVisibleCaretAtEnd(page);
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+  } else {
+    await setSelection(page, insertionOffset, insertionOffset);
+    await focusEditor(page);
+  }
   await page.keyboard.type("Bracketed [@");
   await waitForReferenceCompletion(page);
 

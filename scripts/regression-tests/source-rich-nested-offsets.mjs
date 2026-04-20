@@ -15,7 +15,7 @@ const DOC = [
   "|---|---|",
   "| left | right |",
   "",
-  "::: {.figure #fig:nested-offset} A caption with math $x$",
+  '::: {.figure #fig:nested-offset title="A caption"}',
   "![Alt](missing.png)",
   ":::",
   "",
@@ -87,7 +87,7 @@ export async function run(page) {
   }
 
   const captionDoc = await typeAtSourceNeedle(page, "caption", 3, "C");
-  if (!captionDoc.includes("A capCtion with math $x$")) {
+  if (!captionDoc.includes('title="A capCtion"')) {
     return { pass: false, message: "source-to-rich caption offset did not edit the figure caption" };
   }
 

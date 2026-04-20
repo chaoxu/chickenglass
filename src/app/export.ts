@@ -9,10 +9,6 @@
 
 import { isTauri } from "../lib/tauri";
 import { parseFrontmatter } from "../lib/frontmatter";
-import {
-  normalizeProjectPath,
-  resolveProjectPathFromDocument,
-} from "../lib/project-paths";
 import { resolveLatexExportOptions } from "../latex/export-options.mjs";
 import { preprocessWithReadFile } from "../latex/preprocess-core.mjs";
 import { measureAsync } from "./perf";
@@ -169,7 +165,7 @@ function escapeHtml(value: string): string {
  * - HTML: internal/hidden source snapshot path retained for tests and future
  *   exporter work; it is not exposed as a supported product surface.
  *
- * @param content - The full markdown content to export (with includes expanded).
+ * @param content - The full canonical markdown content to export.
  * @param format - Target format: "pdf", "latex", or "html".
  * @param sourcePath - Path of the source .md file (used to derive output path).
  * @param fs - FileSystem to write the HTML output (only needed for "html" format).
@@ -217,20 +213,9 @@ export async function exportDocument(
 async function preprocessLatexExport(
   content: string,
   sourcePath: string,
-  fs?: FileSystem,
+  _fs?: FileSystem,
 ): Promise<string> {
-  return preprocessWithReadFile(content, sourcePath, {
-    pathKey: normalizeProjectPath,
-    readFile: async (path: string) => {
-      if (!fs) {
-        throw new Error(
-          `Cannot resolve LaTeX include "${path}" without a project filesystem.`,
-        );
-      }
-      return fs.readFile(path);
-    },
-    resolvePath: resolveProjectPathFromDocument,
-  });
+  return preprocessWithReadFile(content, sourcePath);
 }
 
 /**

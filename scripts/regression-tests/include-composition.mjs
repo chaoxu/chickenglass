@@ -19,7 +19,7 @@ const INCLUDED_CONTENT = [
   "",
   "This content comes from an included file.",
   "",
-  "::: {.definition #def:included} Included Definition",
+  '::: {.definition #def:included title="Included Definition"}',
   "Included Definition body.",
   ":::",
 ].join("\n");

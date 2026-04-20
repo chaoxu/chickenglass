@@ -272,10 +272,9 @@ local function transform_cite(el)
   return nil
 end
 
--- Coflat uses ==text== for highlight. pandoc doesn't parse it natively; we
--- catch any \hl{...} produced upstream (rare) and let Strikeout/Emph pass
--- through naturally. Highlight as a markdown construct is emitted by the
--- exporter as a raw \hl{...}; there's nothing to do here.
+-- The Pandoc reader profile enables the `mark` extension, so ==text== reaches
+-- the LaTeX writer as a mark span and becomes \hl{...}; no custom filter
+-- handling is needed here.
 
 function Pandoc(doc)
   -- Pass 1: collect every defined label.

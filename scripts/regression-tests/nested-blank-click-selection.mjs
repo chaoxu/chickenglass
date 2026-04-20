@@ -7,7 +7,7 @@ import {
 export const name = "nested-blank-click-selection";
 export const groups = ["navigation"];
 
-const DOC = `::: {.theorem} Test
+const DOC = `::: {.theorem title="Test"}
 Alpha
 
 Omega

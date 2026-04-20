@@ -85,7 +85,7 @@ export async function run(page) {
   await page.keyboard.type("\\rho(M)=\\lambda(M)/\\sigma(M)");
   await clickLastTopLevelParagraph(page);
 
-  await page.keyboard.type("::: {.theorem #thm:native-step} Native Step Theorem");
+  await page.keyboard.type('::: {.theorem #thm:native-step title="Native Step Theorem"}');
   await page.keyboard.press("Enter");
   await waitForAuthoringCondition(
     page,
@@ -136,7 +136,7 @@ export async function run(page) {
     "# Native step authoring",
     "[@cite0001]",
     "\\rho(M)=\\lambda(M)/\\sigma(M)",
-    "::: {.theorem #thm:native-step} Native Step Theorem",
+    '::: {.theorem #thm:native-step title="Native Step Theorem"}',
     "native theorem body remains editable",
     "::: {.proof}",
     "The proof edits $\\lambda_w$ and $\\sigma_w$ inside the block body.",

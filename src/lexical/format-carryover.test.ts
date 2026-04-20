@@ -30,19 +30,19 @@ $$
 \\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}
 $$
 
-$$
+\\begin{equation}\\label{eq:einstein}
 E = mc^2
-$$ {#eq:einstein}
+\\end{equation}
 
 \\[
 \\sum_{k=0}^n \\binom{n}{k} = 2^n
 \\]
 
-::: {#thm:main .theorem} Main Result
+::: {#thm:main .theorem title="Main Result"}
 Every element of $\\R$ satisfies the property.
 :::
 
-::::: {.theorem} Nested Example
+::::: {.theorem title="Nested Example"}
 Statement.
 
 :::: {.proof}
@@ -63,9 +63,7 @@ This has a footnote[^1].
 
 [^1]: Footnote content with $x^2$.
 
-::: {.include}
-chapters/introduction.md
-:::`;
+`;
 
 const FORMAT_SEMANTIC_FIXTURE = [
   "---",
@@ -80,19 +78,19 @@ const FORMAT_SEMANTIC_FIXTURE = [
   "",
   "Intro cites [@thm:format], [@claim:format], [@eq:format], [@tbl:format], and [@sec:format].",
   "",
-  "$$",
+  "\\begin{equation}\\label{eq:format}",
   "x + y",
-  "$$ {#eq:format}",
+  "\\end{equation}",
   "",
-  '::: {#thm:format .theorem title="Attribute Title"} Trailing **Title**',
+  '::: {#thm:format .theorem title="Attribute Title"}',
   "Statement with $x$ and a footnote[^fmt].",
   ":::",
   "",
-  "::: {.claim #claim:format} Custom Claim",
+  '::: {.claim #claim:format title="Custom Claim"}',
   "Claim body.",
   ":::",
   "",
-  "::: {.table #tbl:format} Running Times",
+  '::: {.table #tbl:format title="Running Times"}',
   "| Term | Value |",
   "|------|-------|",
   "| Math | $x$ and [@thm:format] |",
@@ -131,7 +129,7 @@ describe("FORMAT.md carryover", () => {
     expect(definitions.get("thm:format")).toMatchObject({
       blockType: "theorem",
       kind: "block",
-      title: "Trailing **Title**",
+      title: "Attribute Title",
     });
     expect(definitions.get("tbl:format")).toMatchObject({
       blockType: "table",
@@ -185,27 +183,23 @@ describe("FORMAT.md carryover", () => {
 
   it.each([
     {
-      name: "single-line fenced div",
-      markdown: "::: {.corollary} Every continuous function on a closed interval is bounded. :::",
-    },
-    {
-      name: "title attribute plus trailing title",
+      name: "title attribute",
       markdown: [
-        '::: {#thm:attr .theorem title="Attribute Title"} Trailing Title',
+        '::: {#thm:attr .theorem title="Attribute Title"}',
         "Statement.",
         ":::",
       ].join("\n"),
     },
     {
-      name: "compatibility theorem opener",
+      name: "class shorthand opener",
       markdown: [
-        "::: Theorem Bolzano-Weierstrass",
+        "::: theorem",
         "Every bounded sequence in $\\R$ has a convergent subsequence.",
         ":::",
       ].join("\n"),
     },
     {
-      name: "blockquote fenced div compatibility",
+      name: "blockquote fenced div",
       markdown: [
         "::: {.blockquote}",
         "Mathematics is the queen of the sciences.",

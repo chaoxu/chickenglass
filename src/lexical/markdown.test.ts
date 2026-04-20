@@ -47,11 +47,11 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
-  it("round-trips display math blocks with equation labels", () => {
+  it("round-trips raw LaTeX equation blocks with labels", () => {
     const markdown = [
-      "$$",
+      "\\begin{equation}\\label{eq:gaussian}",
       "\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}",
-      "$$ {#eq:gaussian}",
+      "\\end{equation}",
     ].join("\n");
 
     expect(roundTripMarkdown(markdown)).toBe(markdown);
@@ -59,7 +59,7 @@ describe("coflat lexical markdown", () => {
 
   it("round-trips fenced div blocks verbatim", () => {
     const markdown = [
-      "::::: {#thm:main .theorem} Main Result",
+      '::::: {#thm:main .theorem title="Main Result"}',
       "Statement.",
       "",
       ":::: {.proof}",

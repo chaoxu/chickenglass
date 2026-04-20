@@ -24,7 +24,7 @@ import {
   useRawBlockUpdater,
 } from "./shared";
 
-const DISPLAY_MATH_CLOSE_RE = /^\s*\$\$(?:\s+\{#[^}]+\})?\s*$/;
+const DISPLAY_MATH_CLOSE_RE = /^\s*\$\$\s*$/;
 
 /**
  * Detect the "user typed an extra `$$` to exit" gesture. The source editor

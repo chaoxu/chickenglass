@@ -82,9 +82,11 @@ import {
   FOOTNOTE_DEFINITION_START_RE,
   FRONTMATTER_DELIMITER_RE,
   IMAGE_BLOCK_START_RE,
+  RAW_EQUATION_START_RE,
   matchDisplayMathEndLine,
   matchFencedDivEndLine,
   matchFootnoteDefinitionEndLine,
+  matchRawEquationEndLine,
 } from "./markdown/block-scanner";
 import { isRevealSourceStyle } from "./reveal-source-style";
 
@@ -193,6 +195,12 @@ const displayMathBracketTransformer = createRawBlockTransformer(
   },
 );
 displayMathBracketTransformer.regExpStart = DISPLAY_MATH_BRACKET_START_RE;
+
+const rawEquationTransformer = createRawBlockTransformer(
+  "display-math",
+  (lines, startLineIndex) => matchRawEquationEndLine(lines, startLineIndex),
+);
+rawEquationTransformer.regExpStart = RAW_EQUATION_START_RE;
 
 const imageBlockTransformer = createRawBlockTransformer(
   "image",
@@ -466,6 +474,7 @@ const codeHighlightTokens = [
 export const coflatMarkdownTransformers = [
   frontmatterTransformer,
   fencedDivTransformer,
+  rawEquationTransformer,
   displayMathDollarTransformer,
   displayMathBracketTransformer,
   imageBlockTransformer,

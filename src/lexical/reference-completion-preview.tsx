@@ -55,7 +55,7 @@ export function buildReferenceCompletionPreviewModel(
     case "equation":
       return {
         html: renderDisplayMathHtml(
-          `$$\n${candidate.previewSource.text}\n$$${candidate.previewSource.id ? ` {#${candidate.previewSource.id}}` : ""}`,
+          `$$\n${candidate.previewSource.text}\n$$`,
           options,
         ),
         kind: "rich-html",

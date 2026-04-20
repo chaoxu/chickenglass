@@ -52,7 +52,7 @@ describe("resolveExportThemeTokens", () => {
 describe("buildHtmlDocument", () => {
   it("renders the markdown source inside a styled pre block", () => {
     const html = _buildHtmlDocumentForTest(
-      "::: {.theorem} Title\nBody\n:::\n\nA [link](https://example.com).\n\n`code`",
+      '::: {.theorem title="Title"}\nBody\n:::\n\nA [link](https://example.com).\n\n`code`',
       "sample",
     );
 
@@ -60,7 +60,7 @@ describe("buildHtmlDocument", () => {
     expect(html).toContain("color: var(--cf-fg);");
     expect(html).toContain("background: var(--cf-hover);");
     expect(html).toContain('<pre class="cf-markdown-source">');
-    expect(html).toContain("::: {.theorem} Title");
+    expect(html).toContain('::: {.theorem title=&quot;Title&quot;}');
     expect(html).toContain("A [link](https://example.com).");
     expect(html).not.toContain("color: #111;");
     expect(html).not.toContain("background: #fff;");
@@ -147,17 +147,7 @@ describe("batchExport", () => {
 
 describe("preprocessLatexExport", () => {
   it("uses the canonical LaTeX preprocessing pipeline for desktop export", async () => {
-    const fs = new MemoryFileSystem({
-      "chapters/one.md": [
-        "---",
-        "title: Included",
-        "---",
-        "",
-        "::: {.theorem} Included Title",
-        "Body.",
-        ":::",
-      ].join("\n"),
-    });
+    const fs = new MemoryFileSystem({});
     const source = [
       "---",
       "math:",
@@ -166,22 +156,16 @@ describe("preprocessLatexExport", () => {
       "",
       "Intro.",
       "",
-      "::: {.include}",
-      "chapters/one.md",
-      ":::",
-      "",
-      "$$",
+      "\\begin{equation}\\label{eq:x}",
       "x \\in \\R",
-      "$$ {#eq:x}",
+      "\\end{equation}",
     ].join("\n");
 
     const processed = await _preprocessLatexExportForTest(source, "main.md", fs);
 
-    expect(processed).not.toContain("::: {.include}");
-    expect(processed).not.toContain("title: Included");
-    expect(processed).toContain('::: {.theorem title="Included Title"}');
     expect(processed).toContain("\\newcommand{\\R}{\\mathbb{R}}");
     expect(processed).toContain("\\begin{equation}\\label{eq:x}");
+    expect(processed).toContain("\\end{equation}");
   });
 });
 

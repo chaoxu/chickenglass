@@ -17,7 +17,7 @@ math:
 
 # haha $a+b$
 
-::: {#lem:secret-slug .lemma} haha
+::: {#lem:secret-slug .lemma title="haha"}
 haha cites [@SecretKey] and [@lem:secret-slug].
 :::
 `;
@@ -35,7 +35,7 @@ haha cites [@SecretKey] and [@lem:secret-slug].
     expect(redactedMarkdown).toContain("bibliography: refs.bib");
     expect(redactedMarkdown).toContain("$a+b$");
     expect(redactedMarkdown).toContain("\\Foo: \"\\\\text{KeepMath}\"");
-    expect(redactedMarkdown).toContain("::: {#lem:public-0001 .lemma} xxxx");
+    expect(redactedMarkdown).toContain('::: {#lem:public-0001 .lemma title="xxxx"}');
     expect(redactedMarkdown).toContain("[@cite0001]");
     expect(redactedMarkdown).toContain("[@lem:public-0001]");
     expect(redactedMarkdown).not.toContain("haha");

@@ -10,7 +10,7 @@ const PUBLIC_SEARCH_FALLBACK = {
   content: [
     "# Search Mode Fixture",
     "",
-    "::: {.theorem #thm-search-785} Mode-aware theorem",
+    '::: {.theorem #thm-search-785 title="Mode-aware theorem"}',
     "Semantic theorem body.",
     ":::",
     "",

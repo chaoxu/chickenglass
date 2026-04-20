@@ -352,7 +352,7 @@ describe("useAppOverlays", () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
 
     const doc = [
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",

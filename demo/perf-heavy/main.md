@@ -66,13 +66,13 @@ xxxxxxxxx xxxxxxxx xxx xxxxxxx xxxxxxxx xxxx xxxxx $\Omega(n)$ xxx xxxxx xxxxxxx
 x xxx $H\subseteq E$ xx x **$k$-xxxxxxx xxx** xxx $\F\subseteq 2^E$ xx $|H\cap S|\ge k$ xxx xxx $S\in\F$.
 
 xxx xxxxxxxx xx xxxxxxxxxx xxx xxxxxxx $k$-xxxxxxx xxx xx
-$$
+\begin{equation}\label{eq:public-0001}
 \begin{array}{ll}
 \text{minimize}  & \displaystyle\sum_{e\in E} x_e \\
 \text{subject to}& \displaystyle\sum_{e\in S} x_e \ge k  \quad\forall S\in \F\\
                  & 0 \le x_e \le 1 \quad\forall e \in E.
 \end{array}
-$$ {#eq:public-0001}
+\end{equation}
 
 xx xxxxxx xxxx xx xx $\Hit_k(\F)$, xxx xxxxx $\HSGap_k(\F)$ xxx xxx xxxxxxxxxxx xxx.
 
@@ -109,7 +109,7 @@ $$
 $$
 xxxxx $w(S)=\sum_{e\in S}w(e)$. xx xxxxx $\cogirthratiowt_w(M):= \lambda_w(M)/\sigma_w(M)$ xxx xxx **xxxxxxxx xxxxxxx-xxxxxxxx xxxxx**. xxx x xxxxxx xxxxxxx, xx xxxxx $\cogirthratiowt(M):=\sup_{w|\sigma(M)>0} \cogirthratiowt_w(M)$. xxx x xxxxxx $\F$, $\cogirthratiowt(\F)=\sup_{M\in\F,w} \cogirthratiowt_w(M)$. xxx xxxxxxxxxx xxxx xxxxxxxxxxx xx $w\equiv 1$.
 
-::: {#lem:public-0001 .lemma} xxxxxxxx xxxxx xxxxxx xxxxxxxx-xxxxxxx xxxxx
+::: {#lem:public-0001 .lemma title="xxxxxxxx xxxxx xxxxxx xxxxxxxx-xxxxxxx xxxxx"}
 xxx $\F^{\parallel}$ xx xxx xxxxxxx xx $\F$ xxxxx xxxxxxxx xxxxxxxxxx. xxxx $\cogirthratiowt(\F)=\cogirthratio(\F^{\parallel})$. xx xxxxxxxxxx, xx $\F$ xx xxxxxx xxxxx xxxxxxxx xxxxxxxxx, xxxx $\cogirthratiowt(\F)=\cogirthratio(\F)$.
 :::
 
@@ -139,7 +139,7 @@ xxxxxx xxxxxxxx xx [@prop:public-0001]. xx xxxxx xxxxxx xxxxxxxx-xxxxxx xxxxxxx 
 
 xxx xxxxxxxx-xxxxxx xxxxxxx, xx xxxxxxxx xx xxxxx xxx xxxxx xx xxxxxxxxx xxxxxxxx.
 
-::: {#lem:public-0002 .lemma} xxxxxxxxx xx xxxxxxxxx xxxxxxxx
+::: {#lem:public-0002 .lemma title="xxxxxxxxx xx xxxxxxxxx xxxxxxxx"}
 xxx $\C$ xx x xxxxxxxx-xxxxxx xxxxx xx xxxxxxxx. xxxx $\cogirthratio(\C)=\sup\{\cogirthratio(M): M\in \C,\ M \text{ connected}\}$.
 :::
 
@@ -150,7 +150,7 @@ xxx xxx xxxxxxx xxxxxxxxxx, xxx $N\in \C$ xx xxxxxxxxx. xx $N$ xx xxxxxxxxx, xxx
 xx xxxx xxxxxxxxx xxxxxxxxx xx $N$ xxx xxxxxxx-xxxxxxxx xxxxx xx xxxxx xxxx xx $N$. xxxxxx xxx xxxxxxxx xxxx xxx $N\in \C$ xxxxxx xxx xxxxx.
 :::
 
-::: {#thm:public-0001 .theorem} xxxxxxxx xxxxx xxxxx xxx xxxxxxxxxx xxxx xxxxxxx xx xxxxxx
+::: {#thm:public-0001 .theorem title="xxxxxxxx xxxxx xxxxx xxx xxxxxxxxxx xxxx xxxxxxx xx xxxxxx"}
 xxx $M_1,\dots,M_k$ xx xxxxxxxx-xxxx xxxxxxxx xx xxx xxxx xxxxxx xxx $E$, xxx xxx $M = M_1 \cup \cdots \cup M_k$ xx xxxxx xxxxxxx xxxxx. xxxxxx $M$ xxxx xxx xxxxxxxx xxxx. xxxx
 $$
 \frac{1}{\sigma(M)}\ \le\ \sum_{i=1}^k \frac{1}{\sigma(M_i)} \qquad\text{equivalently}\qquad \sigma(M)\ \ge\ \frac{1}{\sum_{i=1}^k 1/\sigma(M_i)}.
@@ -173,7 +173,7 @@ xx xxxxx $a\ge b$. xxxxxx, $a-b = (|E|-r(E)) - \bigl(|X|-\sum_i r_i(X)\bigr)$. x
 xxxxx $a\ge b$ xxx $b-c>0$, xx xxxx xxx xxxxxxxxxx xxxxxxxxxx $\frac{a-c}{b-c} \ge \frac{a}{b}$. xxxxxxxxx $\sigma(M) \ge \frac{|E|-|X|}{r(E)-\sum_i r_i(X)}$. xxxx, xxxxx $r(E)\le \sum_i r_i(E)$ xxx x xxxxx, $r(E)-\sum_i r_i(X) \le \sum_{i=1}^k (r_i(E)-r_i(X))$, xx $\sigma(M) \ge \frac{|E|-|X|}{\sum_i (r_i(E)-r_i(X))}$. xxxxxxx, xx xxx xxxxxxxxxx xx $\sigma(M_i)$, xx xxxx $\sigma(M_i) \le \frac{|E|-|X|}{r_i(E)-r_i(X)}$, x.x. $r_i(E)-r_i(X) \le \frac{|E|-|X|}{\sigma(M_i)}$. xxxxxxx xxxx $i$ xxxxxx $\sum_i (r_i(E)-r_i(X)) \le (|E|-|X|)\sum_i \frac{1}{\sigma(M_i)}$. xxxxxxxx xx xxxxx $\sigma(M) \ge \frac{1}{\sum_i 1/\sigma(M_i)}$, xx xxxxxxxx.
 :::
 
-::: {#lem:public-0003 .lemma} xxxxxxx xx xxxxxxxx xxxxx xxxxx
+::: {#lem:public-0003 .lemma title="xxxxxxx xx xxxxxxxx xxxxx xxxxx"}
 xxx $\lambda(M)$ xxxxxx xxx xxxxxxx (xxxxxxx xxxxxxxxx xxxx) xx $M$. xxxx xxx $M = M_1\cup \cdots\cup M_k$,
 $$
 \lambda(M) \le \min_{1\le i\le k} \lambda(M_i).
@@ -190,7 +190,7 @@ xxx xxxx xxx $e\in C$. xxxxxxx $H$ xx x xxxx xx $M_i$ xxx $I_i\subseteq H$, xx x
 xxxx xxxxxxxx $C$ xxxxxx xxx xxxx xx $M$, xx $C$ xxxxxxxx x xxxxxxxxx xx $M$. xxxxx $\lambda(M)\le |C|$, xxx xxxxxxxxxx xxxx xxxxxxxxxx $C$ xx $M_i$ xxxxx $\lambda(M)\le \lambda(M_i)$. xxxxx $i$ xxx xxxxxxxxx, $\lambda(M)\le \min_i \lambda(M_i)$.
 :::
 
-::: {#prop:public-0001 .proposition} xxxxxxxxxxxxx xx xxxxx xxxxx xxxxx
+::: {#prop:public-0001 .proposition title="xxxxxxxxxxxxx xx xxxxx xxxxx xxxxx"}
 xxx xxxxxxxx-xxxx xxxxxxxx $M_1,\dots,M_k$ xx $E$,
 $$
 \cogirthratio(M_1\cup\cdots\cup M_k) \le \sum_{i=1}^k \cogirthratio(M_i).
@@ -224,13 +224,13 @@ xxxx $V[F]$ xxxxxxx xxx xxx xx xxxxxxxx xxxxxxxx xx $F$.
 
 xxx xxxxxxxx xxxx xx xxxx xxxxxxx xx xxx xxxxxxxxx xxxxxxx.
 
-::: {#thm:public-0002 .theorem} xxxxxxx-xxxxxxxx xxxxx xx xxxxxxxx xxxxxxxx
+::: {#thm:public-0002 .theorem title="xxxxxxx-xxxxxxxx xxxxx xx xxxxxxxx xxxxxxxx"}
 xxx xxxxx xx $(k,\ell)$-xxxxxxxx xxxxxxxx xxx xxxxxxx-xxxxxxxx xxxxx xx xxxx $2\max(k,\ell)$ xxx $0\leq \ell<2k$. xxxxxx, $\cogirthratio(M_{k,\ell})\leq 2\max(k,\ell)$. xxxxxxxx, xx $\ell\geq k$, xxxx xxx xxxxx xxxxxxx xx $(k,\ell)$-xxxxxxxx xxxxxxxx xxx xxxxxxx-xxxxxxxx xxxxx xx xxxx $2\ell$, xxxxxx $\cogirthratio(M_{k,\ell}^{\minor})\leq 2\ell$.
 :::
 
 xxx xxxxxxxx xxxxxx xxxx xxxxx xxxxx. xx xxx xxx xxxxx $0\le \ell\le k$, xxx xxxxxxx--xxxxxx xxxxxxxxxxxxx xxxxxxxxx $M_{k,\ell}$ xx x xxxxx xx $M_{1,0}$- xxx $M_{1,1}$-xxxxxxxx. xx xxx xxxxxxxx $\ell=k$, xxxxxxxxxxxx xxxxx xxxxx xxxxxxxxx xxxxxxxx xx xxxxx xx xxxxxx xxx xxxxxx. xx xxx xxxxx xxxxx $k<\ell<2k$, xx xxxxxxx x xxxxxxxxxxx xx $M_{k,\ell}$ xxxx x xxxxx xx xx $(\ell,\ell)$-xxxxxxxx xxxxxxx.
 
-::: {#cor:public-0001 .corollary} xxx-xxxxx xxxxxxxxxxxxx
+::: {#cor:public-0001 .corollary title="xxx-xxxxx xxxxxxxxxxxxx"}
 xxx $0\leq \ell\leq k$, xxx xxxx-xxx-xxxxx xxxxxxxxxxxxx xx xxxxxxx xxx xxxxxx [@cite0006] xxxxxxx xxxx $M_{k,\ell}(G)$ xx x xxxxxxx xxxxx xx $k-\ell$ xxxxxx xx $M_{1,0}(G)$ xxx $\ell$ xxxxxx xx $M_{1,1}(G)$.
 :::
 
@@ -238,7 +238,7 @@ xx xxxx xxx xxx xxxxxxxx xxxxx-xxxxx xxxxxxxxxxxx xxxx [@cite0006]: xx $G$ xx $(
 
 $(k,\ell)$-xxxxx xxxxxx xxx xxxxxxxxx xxx $\ell\ge k$. xxxxxxxx xxxxxxxx xx xxx xxxxxx xxx xxxxxxx, xxx xxx xxx-xxxxxx xxxx xxxxx x xxxx xxxxxxx xxxx xxxxx $1$, xx xxx xxxxxxxxxxx xxxxxxxxx xxxxx xxx xxxxxx xxxxxxxx xx xxxxxxxxx xxxxxxxxxx xxxxxx xxxx xx xxxxxxxx xxxxxxxx.
 
-::: {#lem:public-0004 .lemma} xxxx-xxxx xxxxxxx xxx xxxxxxxxx xxxxx xxxxxxxx
+::: {#lem:public-0004 .lemma title="xxxx-xxxx xxxxxxx xxx xxxxxxxxx xxxxx xxxxxxxx"}
 xx $M_{k,\ell}(G)$ xx xxxxxxxxx, xxxxxxxxxx, xxx $G$ xxx xx xxxxxxxx xxxxxxxx, xxxx
 $$
 r_{M_{k,\ell}(G)}(E)=k|V(G)|-\ell.
@@ -251,7 +251,7 @@ xx xxxxx xxx xxxxxxxx xxxxx xx xxxxxxxxxx xxxxx xx xxxxxxxxxx. xx xxxxx xxxx xxx
 
 xxx xxxxx xx $(1,0)$-xxxxxxxx xxxxxxxx (xxxxxxxxxxxx xxxxxxxx) xxx xxxxxxxx xxx xxxxxxxxxx xxxxxxx-xxxxxxxx xxxxx xx xxxx $2$. xxxx xxxx xxxx xxxxx xx **xxx** xxxxxx xxxxx xxxxxxxx xxxxxxxxx: xxx xxxxxxxx xxxxx xxxxx $\{e,e'\}$ xxxxxxx $|F'|=2\le 2=|V(F')|$, xx xxxx xxx xxxxxxxxxxx xxx xxxxx xxx xxx xxxxxxxx xxxxxxx xxxxxxxx. xxxxxxxxx xxx xxxxxxxx xxxxx xxx xx xx xxxxxx xxxxxxxx.
 
-::: {#thm:public-0003 .theorem} xxxx xxxxxxxxx xx $(1,0)$-xxxxxxxx xxxxxxxx
+::: {#thm:public-0003 .theorem title="xxxx xxxxxxxxx xx $(1,0)$-xxxxxxxx xxxxxxxx"}
 xxx $M$ xx xxx $(1,0)$-xxxxxxxx xxxxxxx xx x xxxxxxxxx xxxxx $G=(V,E)$ xxxx xxxxxxxx x xxxxx. xxx $F$ xx x xxxx xx $M$, xxx xxx $V_1,\ldots,V_k$ xx xxx xxxxxx xxxx xx xxx xxxxxxxxx xxxxxxxxxx xx xxx xxxxxxxx xxxxxxxx $(V,F)$. xxxx xxxx $F[V_i]$ xx xxxxxx x xxxx xx xxxxxxxx x xxxxx. xxxxxxxx, xx $F[V_i]$ xxxxxxxx x xxxxx, xxxx $E[V_i]=F[V_i]$. xx $t$ xx xxx xxxxxx xx xxxx xxxxxxxxxx xx $(V,F)$, xxxx $r(E)-r(F)=t$.
 :::
 
@@ -265,7 +265,7 @@ $$
 xxxxx $r(E)-r(F)=|V|-(|V|-t)=t$.
 :::
 
-::: {#thm:public-0004 .theorem} xxxxxxxx xxxxxxx-xxxxxxxx xxxxx xx $(1,0)$-xxxxxxxx xxxxxxxx
+::: {#thm:public-0004 .theorem title="xxxxxxxx xxxxxxx-xxxxxxxx xxxxx xx $(1,0)$-xxxxxxxx xxxxxxxx"}
 xx $M$ xx x $(1,0)$-xxxxxxxx xxxxxxx, xxxx $\cogirthratiowt_w(M)\le 2$ xxx xxxxx xxxxxx xxxxxxxx $w$.
 :::
 
@@ -307,7 +307,7 @@ xx xxxxxxxxxx, $\cogirthratiowt_w(M)\le 2$ xxx xxx $w$ xxxxxxx $\cogirthratio(M)
 
 xxx xxxxxxxx xxxxxxxxxx xxxxxxxx xxx xxxxxxxxxxxx xxxx xxxx xxx xxx xxx xxxxx.
 
-::: {#cor:public-0002 .corollary} xxx-xxxxx xxxxxxx-xxxxxxxx xxxxx
+::: {#cor:public-0002 .corollary title="xxx-xxxxx xxxxxxx-xxxxxxxx xxxxx"}
 xxx $0\le \ell\le k$, xxx xxxxx xx $(k,\ell)$-xxxxxxxx xxxxxxxx xxxxxxxxx
 $$
 \cogirthratio(M_{k,\ell})\le 2k.
@@ -325,7 +325,7 @@ $$
 
 xx xxx xxxxxxxxxx xxx xxxxxxxx xxx-xxxxx xxxxx xx $\ell=k$ xx xxxxxxx xxx xxxx xxxxx xxxxx xxx xxx xxxxx xxxxxxx. xxx xxxxx xxx xx xxx xxxxxxx xxx xxxxxx xx xxxxxxx xx xxxxxxx xxxxx xx xxxxxxx xxxxxxxx. xxxxxxxxxxxxx, xxxxxxxxxxx xx x $(k,k)$-xxxxxxxx xxxxxxx xx xxx xxxxxx x xxxxx xx xxxxxxx xxxxxxxx. xxxxx xxxxxxxxx xxxxxxxx xxx xxxxx $M_{k,k}$, xxx xxxxx-xxxxxxx xxxxxxxxx xxxxxxx xx xxxxxxxxxxxxx xxxxxxxxxxxx; xxxx xx xxx xxx xxxx xxxxx xx xxxxxxxxxx xxx $M/F$ xxxxxx xxxx xxxx xxx $M$ xxxxxx.
 
-::: {#thm:public-0005 .theorem} xxx $(k,k)$ xxxxx-xxxxxxx xxxxx
+::: {#thm:public-0005 .theorem title="xxx $(k,k)$ xxxxx-xxxxxxx xxxxx"}
 xxxxx xxxxxxxx-xxxx xxxxx xx x $(k,k)$-xxxxxxxx xxxxxxx xxx xxxxxxx-xxxxxxxx xxxxx xx xxxx $2k$. xxxxxxxxxxxx,
 $$
 \cogirthratio(M_{k,k}^{\minor}) \le 2k.
@@ -356,7 +356,7 @@ $$
 xxxxx xxxxx xxxxxxxx-xxxx xxxxx xx x $(k,k)$-xxxxxxxx xxxxxxx xxx xxxxxxx-xxxxxxxx xxxxx xx xxxx $2k$, xx xxxxxxx.
 :::
 
-::: {#lem:public-0005 .lemma} xxxxxxxxxxx xx xxxx-xxxxxx $(k,k)$-xxxxxxxx xxxxxxxx
+::: {#lem:public-0005 .lemma title="xxxxxxxxxxx xx xxxx-xxxxxx $(k,k)$-xxxxxxxx xxxxxxxx"}
 xxx $G=(V,E)$ xxx xxx $M=M_{k,k}(G)$ xxxx xxxx $k(|V|-1)$. xxx xxxxx $F\subseteq E$, xx $N:=M/F$ xxx xxxxxxxx xxxx, xxxx $\lambda(N)\le 2k\,\sigma(N)$.
 :::
 
@@ -370,7 +370,7 @@ b_{\mathcal P}:=e_Z(\mathcal P),\qquad Z:=E\setminus F,
 $$
 xx xxx xxxxxx xx xxxxxxxxx $Z$-xxxxx xxxxxxxx xxx xxxx xxxxxxxxx. xxxxxxxx xx xxx xxxxxxxx xxx xx xxx x xxxxxxxx xxxx xxxx xxxxxx x xxxxxxxxx; xxxxxxx xx xxx xxxxx xxxx xxx xxxxxx xxxxx xxxxx xxx xxxxxx xx xxx.
 
-::: {#lem:public-0006 .lemma} xxxx-xxxx xxxxxxx xxx xxx xxxxxxxx xxxx
+::: {#lem:public-0006 .lemma title="xxxx-xxxx xxxxxxx xxx xxx xxxxxxxx xxxx"}
 xxx $G=(V,E)$, xxx $M=M_{k,k}(G)$ xxxxxxx $r_M(E)=k(|V|-1)$, xxx $F\subseteq E$, xxx $Z:=E\setminus F$, xxx xxx $N:=M/F$. xxx x xxxxxxxxx $\mathcal P$ xx $V$, xxxxxx
 $$
 \delta_{\mathcal P}:=k(|\mathcal P|-1)-e_F(\mathcal P),
@@ -394,20 +394,20 @@ $$
 xxxxx $\mathcal P$ xxxxxx xxxx xxxxxxxxxx xx $V$.
 
 xxx x xxxxxxxxx $\mathcal P$, xxxxxx $\delta_{\mathcal P}:=k(|\mathcal P|-1)-e_F(\mathcal P)$ xxx $b_{\mathcal P}:=e_Z(\mathcal P)$. xxxxx $r_M(E)=k(|V|-1)$, xxx xxxxx $S\subseteq Z$,
-$$
+\begin{equation}\label{eq:public-0002}
 r_N(S)
 =r_M(F\cup S)-r_M(F)
 =r_N(Z)-\max_{\mathcal P}\bigl(\delta_{\mathcal P}-e_S(\mathcal P)\bigr).
-$$ {#eq:public-0002}
+\end{equation}
 xxxxx xxx xxxxx $X\subseteq Z$,
-$$
+\begin{equation}\label{eq:public-0003}
 r_N(Z)-r_N(Z\setminus X)
 =\max_{\mathcal P}\bigl(e_X(\mathcal P)-b_{\mathcal P}+\delta_{\mathcal P}\bigr).
-$$ {#eq:public-0003}
+\end{equation}
 xxxxxx $X=\varnothing$ xx [@eq:public-0003] xxxxxx $b_{\mathcal P}\ge \delta_{\mathcal P}$ xxx xxxxx xxxxxxxxx $\mathcal P$.
 :::
 
-::: {#lem:public-0007 .lemma} xxxxxxxxx xxxxxxxx xxx xxxxxxxx xxx xxxxxxx xx xxx xxxxxxxx xxxx
+::: {#lem:public-0007 .lemma title="xxxxxxxxx xxxxxxxx xxx xxxxxxxx xxx xxxxxxx xx xxx xxxxxxxx xxxx"}
 xx xxx xxxxxxx xx [@lem:public-0006],
 $$
 \sigma(N)=\min_{\delta_{\mathcal P}>0}\frac{b_{\mathcal P}}{\delta_{\mathcal P}},
@@ -475,14 +475,14 @@ $$
 d_i\ge \lambda+k-1-q_i.
 $$
 xx $q_i\ge k$, xx xxxx xxx $d_i\ge 0$. xxxx xxx xxxxx $i$,
-$$
+\begin{equation}\label{eq:public-0004}
 d_i\ge \max\{0,\lambda+k-1-q_i\}.
-$$ {#eq:public-0004}
+\end{equation}
 
 xxxxx $\lambda\ge 2k$, xxx xxxxx xxxxxxx $q\ge 0$,
-$$
+\begin{equation}\label{eq:public-0005}
 \max\{0,\lambda+k-1-q\}\ge \lambda-\frac{\lambda}{2k}q.
-$$ {#eq:public-0005}
+\end{equation}
 xxxxxxx [@eq:public-0004] xxx xxxxx [@eq:public-0005], xx xxxxxx
 $$
 \begin{aligned}
@@ -504,7 +504,7 @@ xxxxx xxxx xxxxx xxx xxxxx xxxxxxxxx xxxx $\delta_{\mathcal P}>0$, [@lem:public-
 
 xxxxxx xx xxx xxxxxxxxxx xx xxxxxxx xxxx $\cogirthratio(M_{k,\ell}(G))\leq \ell$ xxx xxxx xxxxx $G$. x xxxxxxx xxxxxxxx xx xxxxxxx $M=M_{k,\ell}(G)$ xxx xx xxxxxxxx xxxxxxxx xx $M'=M_{\ell,\ell}(G')$ xxx xxxx xxxxx xxxxx $G'$. xxxx xx, xxxxxxxxx x $G'$ xx $\cogirthratio(M)\leq \cogirthratio(M')$. xxxxxxxxxxxxx, xx xxxxx xxx xxxx xx xxxx xxxxxxxxxxxx. xxxxxxx, xx xxx xxxx x xxxx $G'$ xxx $B'$ xxxx xxxx $\cogirthratio(M)\leq \cogirthratio(M'/B')$, xxx xxxxxxxx xxx xxxxxxxxxxxx xx xxxxxxxx xxxx xxxxxxx, xxxxx xx xxx xxxxxxxxx xxxxxxxxxxx.
 
-::: {#prop:public-0002 .proposition} xxxxxxxxx xx xxx $(\ell,\ell)$ xxxx
+::: {#prop:public-0002 .proposition title="xxxxxxxxx xx xxx $(\\ell,\\ell)$ xxxx"}
 xxx $k,\ell$ xx xxxxxxxx xxxx $k<\ell<2k$. xxx $G=(V,E)$ xx x xxxxxxxx xxxxxxxxxx xxxx xx xxxxxxxx xxxxxxxx xxx xx xxxxx xxx xxxx, xxx $M:=M_{k,\ell}(G)$ xx xxxxxxxxx. xxxxx xxxxx x xxxxxxxxxx $G'$ xxx x xxx $B'\subseteq E(G')$, xxxxxx $M':=M_{\ell,\ell}(G')$, xxxx xxxxxxxxx $\sigma(M'/B')\le \sigma(M)$ xxx $\lambda(M)\le \lambda(M'/B')$.
 :::
 
@@ -530,7 +530,7 @@ xxxxxx xx xxxxxxxxxxxxx xxxxxxx xxxx $F$ xx $M$ xxxxxxxxx xxx xxxxxxxx. xx [@lem
 
 xxx x xxxxxx xxx $U\subseteq V$ xxxx $|U|\ge 2$, xxxx $U$ **xxxxx xx $F$** xx $r_M(F)=k|U|-\ell$. x **xxxxx xxxxxxxxx** xx x xxxxxxx xxxxx xxx.
 
-::: {#lem:public-0009 .lemma} xxxxx xx xxxxxxxxxxxx xxxxx xxxx
+::: {#lem:public-0009 .lemma title="xxxxx xx xxxxxxxxxxxx xxxxx xxxx"}
 xx $U,W\subseteq V$ xxx xxxxx xx $F$ xxx $|U\cap W|\ge 2$, xxxx $U\cup W$ xx xxxxx xx $F$. xxxxxxxxxxxx xxxxxxxx xxxxx xxxxxxxxxx xxxx xx xx xxxx xxx xxxxxx.
 :::
 
@@ -540,7 +540,7 @@ xxxx xx xxx xxxxxxxx xxxxxxxxxx xxxxxxxx xxx xxxxx-xxxxx xxxxxxxx, xxx [@cite000
 
 xxx $U_1,\dots,U_m$ xx xxx xxxxx xxxxxxxxxx xx $F$. xxx $U:=\bigcup_{i=1}^m U_i$, xxx $Z:=V\setminus U$, xx xxxxx xxxxx xx xxxxxxxx xxxxxxxx xx $G[F]$. xxx xxxx $v\in V$ xxxxxx $\mu(v):=\min(|\{i:v\in U_i\}|,1)$. xxx $s:=\sum_{v\in V}(\mu(v)-1)=\sum_{v\in U}(\mu(v)-1)$.
 
-::: {#lem:public-0010 .lemma} xxxxxxxxx xxxxxxx
+::: {#lem:public-0010 .lemma title="xxxxxxxxx xxxxxxx"}
 xx xxx xxxxx xxxxx:
 
 0. xxxxx xxxx xx $F$ xx xxxxxxxx xx xxxx xxxxx xxxxxxxxx.
@@ -558,7 +558,7 @@ xxx (0), xxx $y\in Y$. xx xxxx xxxx xx $y$ xxx xx xxxx $U_i$, xxxx xxxxx xxxx xx
 
 xxx x xxxxx $B_i$ xx xxxx $F[U_i]$, xxx xxx $B:=\bigcup_{i=1}^m B_i$.
 
-::: {#lem:public-0011 .lemma} xxxxxxx xxxxx
+::: {#lem:public-0011 .lemma title="xxxxxxx xxxxx"}
 xxx xxx $B$ xx x xxxxx xx $M|F$.
 :::
 
@@ -569,7 +569,7 @@ xx xxxxx xxxx xxxx $B$ xx xxxxxxxxxxx. xxxxxxx xxxx $C\subseteq B$ xx x xxxxxxx.
 xxx xx xxxx xxxx $B$ xxxxx $F$. xxxxx xxxx xx $F^\circ$ xxxxxxxx xx $U_i$ xxxx xx $\operatorname{cl}_M(B_i)$ xxxxxxx $B_i$ xx x xxxxx xx $F^\circ[U_i]$. xxxxx xxxx xx $F^\circ$ xxx xxxxxxxx xx x xxxxx xxxxxxxxx xxxxxxx xx $A$ xx [@lem:public-0010], xxxxx xxxx xx $I\subseteq B$. xxxxxxx, xxx $e\in L$. xx xxx xxxxx xx [@lem:public-0010], xxx xxxx $e$ xx xxxxxxxx xx xxxx xxxxx xxxxxxxxx $U_i$ xxx xxxxx xx x xxxxxxx $C\subseteq A\cup\{e\}$ xxxx $V(C)\subseteq U_i$. xxxx $C\setminus\{e\}\subseteq A[U_i]\subseteq B_i$, xx $e\in \operatorname{cl}_M(B_i)$. xxxx $B$ xxxxx $F$, xxx xxxxxxxxx $B$ xx x xxxxx xx $M|F$.
 :::
 
-::: {#lem:public-0012 .lemma} xxxx-xxxxxxx xxxxxxxx
+::: {#lem:public-0012 .lemma title="xxxx-xxxxxxx xxxxxxxx"}
 xxx $\Delta:=r_M(E)-r_M(F)$. xxxx $\Delta=k|Z|+\ell(m-1)-ks$.
 :::
 
@@ -589,7 +589,7 @@ xxxxxx xxxxxxxx $c_x\ge 0$ xxx $x\in [m]\sqcup Z$ xxxx xxxx $\sum_x c_x=\ell$ xx
 
 xxx $B':=P\cup D$, xxx xxx $G'$ xx xxx xxxxxxxx xxxxxxxxxx xx xxxxxx xxx $W$ xxxx xxxx xxx $B'\cup \bar{F}$. xxxx xx xxx xxxxxxxxx $(\ell,\ell)$-xxxxxxxx xxxxxxxx xx xxx xxxxx xx xxx xxxxxxx.
 
-::: {#lem:public-0013 .lemma} xxxxxxxxxxx xxxxx
+::: {#lem:public-0013 .lemma title="xxxxxxxxxxx xxxxx"}
 xxx $R\subseteq \bar{F}$ xxxx $B\cup R$ xxxxxxxxxxx xx $M$. xxx xxxxx xxxxxx $S\subseteq [m]\sqcup Z$ xxxx $|S|\ge 2$, xxx xxx $|(P\cup R)[S]|\le \ell(|S|-1)-(\ell-k)|S\cap Z|$.
 :::
 
@@ -607,7 +607,7 @@ xx $q=0$, xxxx $p\ge 2$, xxx xxx xxxxxxxxxxx xxx $R_{\varnothing,J}$ xx xxxxxxxx
 xxxxxx xxx xxxxxxxxxxxx xx $P$ xxxxxx $|(P\cup R)[S]|\le ks(X)+|R_{X,J}|\le \ell(q-1)+kp$. xxxxx $|S|=q+p$, xxxx xx xxxxxxx $\ell(|S|-1)-(\ell-k)|J|$.
 :::
 
-::: {#lem:public-0014 .lemma} xxxxxxx xx xxx $(\ell,\ell)$-xxxxxxxx
+::: {#lem:public-0014 .lemma title="xxxxxxx xx xxx $(\\ell,\\ell)$-xxxxxxxx"}
 xx $R\subseteq \bar{F}$ xxx $B\cup R$ xx xxxxxxxxxxx xx $M$, xxxx $B'\cup R$ xx xxxxxxxxxxx xx $M_{\ell,\ell}(G')$.
 :::
 
@@ -631,7 +631,7 @@ xxx xxx $C$ xx x xxxxxxxxx xx $N'$. xxxxxxx, xxx xxxxxxxxxxxxx, xxxx $r_M(E\setm
 xxxx xxxxx xxxxxxxxx xx $N'$ xxxxxx xxxx xx $M$, xx $\lambda(M)\le \lambda(N')$. xxxxx $N'$ xx xxxxxxxx xxxx $N$ xx xxxxxxxx xxxxx, xx xxxxxxxx xxxx $\lambda(M)\le \lambda(N)$. xxxx xxxxxx xxx xxxxxxxxxxx.
 :::
 
-::: {#thm:public-0006 .theorem} xxxxxxxxxxxx xx xxx xxxxx xxxxx
+::: {#thm:public-0006 .theorem title="xxxxxxxxxxxx xx xxx xxxxx xxxxx"}
 xxx $k,\ell$ xx xxxxxxxx xxxx $k<\ell<2k$. xxx $G=(V,E)$ xx x xxxxxxxx xxxxxxxxxx xxxx xx xxxxxxxx xxxxxxxx, xxx xxx $M:=M_{k,\ell}(G)$ xx xxxxxxxxx xxx xxxxxxxxxx. xx $r(M)>0$, xxxx $\lambda(M)\le 2\ell\,\sigma(M)$.
 :::
 
@@ -639,7 +639,7 @@ xxx $k,\ell$ xx xxxxxxxx xxxx $k<\ell<2k$. xxx $G=(V,E)$ xx x xxxxxxxx xxxxxxxxx
 xxxxx [@prop:public-0002] xx xxxxxx x xxxxxxxxxx $G'$ xxx x xxx $B'\subseteq E(G')$ xxxx xxxx $N:=M_{\ell,\ell}(G')/B'$ xxx xxxxxxxx xxxx, $\sigma(N)\le \sigma(M)$, xxx $\lambda(M)\le \lambda(N)$. xxxxx $N$ xx x xxxxxxxx-xxxx xxxxx xx xx $(\ell,\ell)$-xxxxxxxx xxxxxxx, xxx $(\ell,\ell)$ xxxx [@thm:public-0005] xxxxx $\lambda(N)\le 2\ell\,\sigma(N)$. xxxxx $\lambda(M)\le \lambda(N)\le 2\ell\,\sigma(N)\le 2\ell\,\sigma(M)$.
 :::
 
-::: {#cor:public-0003 .corollary} xxxxx-xxxxx xxxxx-xxxxxxx xxxxx
+::: {#cor:public-0003 .corollary title="xxxxx-xxxxx xxxxx-xxxxxxx xxxxx"}
 xxx $k<\ell<2k$, xxx xxx $\cogirthratio(M_{k,\ell}^{\minor})\le 2\ell$.
 :::
 
@@ -710,7 +710,7 @@ xx $\sigma_w(M_{2,2}(K_n))\le n$.
 
 xxx x xxxxxxxxx $\mathcal P$ xx $V$ xxx x xxx xx xxxxx $S\subseteq E$, xxx $e_S(\mathcal P)$ xxxxxx xxx xxxxxx xx xxxxx xx $S$ xxxx xxxx xx xxxxxxxxx xxxxx xx $\mathcal P$.
 
-::: {#lem:public-0015 .lemma} xxxxx xxxxxxxxxxx xxx xxxxxxxxxx xx $M_{2,2}(K_n)$
+::: {#lem:public-0015 .lemma title="xxxxx xxxxxxxxxxx xxx xxxxxxxxxx xx $M_{2,2}(K_n)$"}
 xxx $M:=M_{2,2}(K_n)$ xxx xxx $C$ xx x xxxxxxxxx xx $M$. xxxx xxxxx xxxxxx x xxxxxxxxx $\mathcal P$ xx $V$ xxxx xxxx
 $$
 C\subseteq \delta_{K_n}(\mathcal P)
@@ -739,7 +739,7 @@ $$
 xxxxx xxxxxxxxxxxxx xxx xxxxxxxxx xxxxxxxxxx. xxxxxxxxx $e_{E\setminus C}(\mathcal P)=2|\mathcal P|-3$. xxx xxxxxxxxx xxxxxxx xxx $|C|$ xx xxxxxxxxx xxxxxxx xxxxx xxxx xx $C$ xxxxxxx $\mathcal P$.
 :::
 
-::: {#lem:public-0016 .lemma} xxxxxxx xxxxxxxx xxxxxxxxxx xxx xxxxxxxxx xx $F$
+::: {#lem:public-0016 .lemma title="xxxxxxx xxxxxxxx xxxxxxxxxx xxx xxxxxxxxx xx $F$"}
 xxxx xxx xxxxxxx xxxxx,
 $$
 \lambda_w(M_{2,2}(K_n))
@@ -761,19 +761,19 @@ $$
 xxx xxxxxxxxx xxxxxxx $F'$ xxx xxxxxx xx xxxxx $W$, xx xx xxxxxxx-xxxxxx xxxxxxxxx xxx xxx x xxxxx xxxx. xxxxxxxxx xxxxx xxxxxxx xxxxxxxx xxxxxxxxx xx xxxxxxxxx xx $F$, xxx xx xxxx xxxxxxxxxx xxx xxxxxx xx xxxx xxxxxxxxxxx.
 :::
 
-::: {#lem:public-0017 .lemma} xxxxxxxxx xxxxx xxxxx
+::: {#lem:public-0017 .lemma title="xxxxxxxxx xxxxx xxxxx"}
 xxxxx xxxxxxxxx $C\subseteq F$ xxx xxxx $|C|=\Omega(n\log n)$.
 :::
 
 ::: {.proof}
 xxx $C\subseteq F$ xx x xxxxxxxxx, xxx xxx $\mathcal P$ xx xxx xxxxxxxxx xxxxx xx [@lem:public-0015]. xxxxx xxx xxxxx xx $F'=E(H)$ xxxxxx xx $E\setminus C$, xx xxxx
-$$
+\begin{equation}\label{eq:public-0006}
 e_H(\mathcal P)\le e_{E\setminus C}(\mathcal P)=2|\mathcal P|-3.
-$$ {#eq:public-0006}
+\end{equation}
 xxxx,
-$$
+\begin{equation}\label{eq:public-0007}
 |C|=|\delta_{K_n}(\mathcal P)|-(2|\mathcal P|-3).
-$$ {#eq:public-0007}
+\end{equation}
 
 xxx $Q$ xx xxx xxxxxxx xxxx xx $\mathcal P$.
 
@@ -844,7 +844,7 @@ xxx xxxxx xx xxxx xxxxxxx xx xxxxxx. x xxxxxxx xxx xxx $\Hit_k(\B)$ xxxxx, xxx x
 
 xxx xxxxx xxxxxx xxxxx xx xxx xxxxxx $k$-xxxxxxxxx xxxxxxxxx xx [@cite0021, xxxxx 0.0]. xxx xxx xxxxxxxxxx xxxxx xx xxx xxxx-xxxxxxxx xxxxx, xxxxx xxxxx xxx xxxxxxxx xxxxxxxx xxxxxxxxxxx xxx xx xxxxxxx xxx xxxxx xxxxx xxxxxxxx xxxxxxx xxxxx xxxx. xxxxxxxx xxxx xx, xx xxxxxx xxx xxxxxxxxx xxxxxxxx xx [@cite0021, xxxxxxx 0.0].
 
-::: {#thm:public-0007 .theorem} xxxxx-xxxxxxxxxxxx xxxx xxxxxxxxxxxx
+::: {#thm:public-0007 .theorem title="xxxxx-xxxxxxxxxxxx xxxx xxxxxxxxxxxx"}
 xxxxxxxx x xxxxxx $\F\subseteq 2^E$ xxxx $|E|=n$. xxx $d = \HSGap_k(\F)$, xxx xxx $\lambda_k$ xx xxx xxxxxxx xxxx xx x $k$-xxxxxxx xxx xx $\F$. xxxx xxxxx xxxxxx x xxxxxxxxxxxx xxxxxxxxx xx xx xxxx $n$ xxxx xx $\F$ xxxx xxxx xxx xxxxx $\alpha\geq 1$ xxx xxxxx xxx $A\subseteq E$ xxxx $|A|\le \alpha\lambda_k$, x xxxxxx xxx xxxx xxx xxxxxxxxxxxx xxxxxxxxxx $A$ xx xx xxxx $\lfloor \alpha dk\rfloor$ xxxxxxxx xxxx xxxxxxxxxxx xx xxxxx $1-\frac{\alpha dk}{\lfloor \alpha dk\rfloor+1}$.
 :::
 
@@ -852,7 +852,7 @@ xxxxxxxx x xxxxxx $\F\subseteq 2^E$ xxxx $|E|=n$. xxx $d = \HSGap_k(\F)$, xxx xx
 xxxx xx xxxxxxx xxx xx-xxxxxxx xxxxxxxx xx [@cite0021, xxxxx 0.0].
 :::
 
-::: {#lem:public-0018 .lemma} xxxx xxxxxxxx xxxx x xxxxxxxxxx xxxx xxxxxxxxxxxx
+::: {#lem:public-0018 .lemma title="xxxx xxxxxxxx xxxx x xxxxxxxxxx xxxx xxxxxxxxxxxx"}
 xxx $M$ xx x xxxxxxx, xxx $B$ xx x xxxx xx $M$, xxx xxx $S\subseteq B$. xx $A$ xx x $k$-xxxxxxx xx $M$ xxxx $A\cap B=S$, xxxx $E(M)\setminus A$ xx x xxxx xx $M/(B\setminus S)$ xx xxxx xx xxxx $|S|-k$. xx xxxxxxxxxx, xxx xxxxx $B$ xxx $S$, xxx xxx
 $$
 A\longmapsto E(M)\setminus A
@@ -874,7 +874,7 @@ $$
 xxx xxx xx xxxxxxxxx xxxxxxx $A=E(M)\setminus F$.
 :::
 
-::: {#thm:public-0008 .theorem} xxxx-xxx $k$-xxxxxxx xxxxxxxxxxx
+::: {#thm:public-0008 .theorem title="xxxx-xxx $k$-xxxxxxx xxxxxxxxxxx"}
 xxx $M$ xx x xxxx-$r$ xxxxxxx xxxx xxxx xxxxxx $\B$, xxx $1\le k\le r$, xxx xxx $t:=\lfloor \alpha dk\rfloor$. xx $\HSGap_k(\B)\le d$, xxxx xxx xxxxx xxxxxxxx $\alpha\geq 1$ xxxxx xxx xx xxxx $n^{O(t)}$ $\alpha$-xxx-$k$-xxxxxxxx. xxxxxxxx, xxxx xxx xx xxxxxxxxxx xx xxxxxx-xxxxxxxxxx xxxx xx xxx xxxx-xxxxxx xxxxx.
 :::
 
@@ -886,7 +886,7 @@ xxx xxxx x xxxx $B$ xxx xxxxx $S:=A\cap B$. xxxx $k\le |S|\le t'$. xx [@lem:publ
 xxxxx xxx xxxx $O(r^t)$ xxxxxxx xxx $S\subseteq B$ xxxx $|S|\le t$, xx xxxxxxxxx xxxx xxx xxxxxxx xx xxx xxxx xxxxxxxxxxxx xxxxx xxx xxxxx $O(r^tn^{t-k})=n^{O(t)}$. xxxxxxx, [@cite0023] xxxxx xxxxxx-xxxxxxxxxx xxxxxxxxxxx xx xxxxx xx x xxxxxxxxxx xxxx; xxxxxxx xxxx xxx xxxxx $0,1,\ldots,t-k$ xxxxxxxxxx xxx xxxxxxxx xxx-xxxx xxxxx xxx xxxxx xxx xxxxxxxxxxxxx xxxxxxxx.
 :::
 
-::: {#cor:public-0004 .corollary} xxxxxxxx xxxxxxx xxx
+::: {#cor:public-0004 .corollary title="xxxxxxxx xxxxxxx xxx"}
 xxx $d\ge 1$. xxxxx x xxxxxxxx-xxxx xxxxxxx $M$ xx xxxx xxxxxx, xx xxx xxxxxx xxxxxxx $\lambda(M)\le d \sigma(M)$ xx $n^{O(d)}$ xxxx, xxx xx xxx xxxxxx xx xxx xxxx xxxxxx x xxxxxxx xxxxxxxxx.
 :::
 
@@ -898,7 +898,7 @@ xx xxxxxxxxxx, xxxx xxxxxx xxx xxxx xxxxxxx xx [@cite0009], xxxxx xxxxx xxx x xx
 
 xx x xxxxxx xxxxxxxxx xx xxxxxxx $\alpha=1$ xx [@thm:public-0008]:
 
-::: {#cor:public-0005 .corollary} xxxxxxxxxxxx xxxx xxxxxxx xxx
+::: {#cor:public-0005 .corollary title="xxxxxxxxxxxx xxxx xxxxxxx xxx"}
 xxx $k$ xxx $d$. xx $\C$ xx $(k,d)$-xxx-xxxxxxx, xxxx $\DecRank(\C)$ xxx xx xxxxxx xx $n^{O(kd)}$ xxxx xx xxx xxxx-xxxxxx xxxxx.
 :::
 
@@ -910,7 +910,7 @@ x xxxxx xx $\cogirthratio(\C)$ xx xxxxxxx x xxxxx xx xxx xxxxx-$1$ xxxxxxx-xxx x
 
 xxx $H_k := \sum_{i=1}^k \frac{1}{i}$ xx xxx $k$-xx xxxxxxxx xxxxxx.
 
-::: {#thm:public-0009 .theorem} xxx xxx xxxxxxxx-xxxxxxx
+::: {#thm:public-0009 .theorem title="xxx xxx xxxxxxxx-xxxxxxx"}
 xxx $\C$ xx x xxxxxxxx-xxxxxx xxxxx xx xxxxxxxx xxxx xx $(1,d)$-xxx-xxxxxxx. xxxx xxx xxxxx xxxxxxx $k\ge 1$, xxx xxxxx $\C$ xx $(k, d\cdot H_k)$-xxx-xxxxxxx.
 :::
 
@@ -942,7 +942,7 @@ xxx x xxxxxxxx xxxxxxx $M$, xxx $P(M):=\{x\in \mathbb{R}_{\ge 0}^E: x(X)\le r_M(
 
 ### xxxxxxxxx xxxx xxx xxxxxxxxx xxxxx
 
-::: {#lem:public-0019 .lemma} xxxxxxxxx xxxx
+::: {#lem:public-0019 .lemma title="xxxxxxxxx xxxx"}
 xxx $M$ xx x xxxxxxxx xxxxxxx xx xxxxxxxx xxxx. xxxxx xxxxxx x xxxxxx xxxxxx $b^*=b^*(M)\in P_{\mathrm{base}}(M)$ xxxx xxxx xxx xxxxx xxxx $\alpha>0$, xxx xxxxxx $b^*\wedge \alpha \mathbf{1}$, xxxxxxx xxxxxxxxxxxxxx xx
 $$
 (b^*\wedge \alpha \mathbf{1})_e:=\min\{b_e^*,\alpha\},
@@ -950,7 +950,7 @@ $$
 xxxxxxxxx $x(E)$ xxxx xxx $x\in P(M)$ xxxx $x\le \alpha \mathbf{1}$.
 :::
 
-::: {#lem:public-0020 .lemma} xxxxxxxxx xxxxx xxx xxxxxxxxxxx xxxxxx
+::: {#lem:public-0020 .lemma title="xxxxxxxxx xxxxx xxx xxxxxxxxxxx xxxxxx"}
 xxx $M$ xx x xxxxxxxx xxxxxxx xx xxxxxxxx xxxx, xxx xxx $b^*=b^*(M)$ xx xxx xxxxxxxxx xxxx. xxx $0<\mu_1<\cdots<\mu_q$ xx xxx xxxxxxxx xxxxxxxxxxx xx $b^*$, xxx xxxxxx
 $$
 F_i:=\{e\in E: b_e^*\le \mu_i\},\qquad F_0:=\varnothing,\qquad E_i:=F_i\setminus F_{i-1}.
@@ -978,7 +978,7 @@ xxxxxx xxx xxxxxx xxxxxxxxxxxxx, xxxx xxx xxx xxxxxxxxx. xxxx xx xxxxxxxxx xxx x
 
 ### xx xxxxxxxxxxxxx xx xxxxxxxxx xxxxxx
 
-::: {#prop:public-0003 .proposition} xxxx xxxxxxx xxx $\lambda_k^*(M)$
+::: {#prop:public-0003 .proposition title="xxxx xxxxxxx xxx $\\lambda_k^*(M)$"}
 xxx xxxxx xxxxxxxx xxxxxxx $M$ xxx xxxxx $1\le k\le r(M)$, $\lambda_k^*(M)=\max_{\eta\in P_{\mathrm{base}}(M)} \psi_k(\eta)$.
 :::
 
@@ -1013,7 +1013,7 @@ xxx xxx xxxxxxx xxxxxxxxxx, xxx $\eta\in Q(M)$ xxx $\beta\ge 0$. xxxxxx x xxxxxx
 xx xxxxxxx' xxxx-xxxxxxxx xxxxxxx, $Q(M)=P_{\mathrm{base}}(M)$. xxxxxxxxx $\lambda_k^*(M)=\max_{\eta\in P_{\mathrm{base}}(M)}\max_{\beta\ge 0}\bigl(\beta k-\sum_{e\in E}(\beta\eta_e-1)_+\bigr)$. xxx xxxxx $\eta$, xxx xxxxx xxxxxxxxxxxx xx xxx xxxx xx $\min\bigl\{\sum_{e\in E}x_e: 0\le x_e\le 1, \eta\cdot x\ge k\bigr\}=\psi_k(\eta)$. xxxxxx xxxxxxx xxxxx xxx xxxxx.
 :::
 
-::: {#cor:public-0006 .corollary} xxxxxxxxx xxxx xxxxxxx xxx xxxxxxx
+::: {#cor:public-0006 .corollary title="xxxxxxxxx xxxx xxxxxxx xxx xxxxxxx"}
 xxx xxxxx xxxxxxxx xxxxxxx $M$ xxx xxxxx $1\le k\le r(M)$, $\lambda_k^*(M)=\psi_k(b^*(M))$.
 :::
 
@@ -1033,7 +1033,7 @@ $$
 xxxxx xxx xxxxx $\beta$ xxx xxxxx xxxxxxxxx xx [@prop:public-0003] xx xxxxxxxxx xx $\eta=b^*$. xxxxxxxxx $\lambda_k^*(M)=\psi_k(b^*)$.
 :::
 
-::: {#prop:public-0004 .proposition} xxxxx xxxxxxxxxxxxx xx $\lambda_k^*(M)$
+::: {#prop:public-0004 .proposition title="xxxxx xxxxxxxxxxxxx xx $\\lambda_k^*(M)$"}
 xxx $\varnothing=F_0\subsetneq F_1\subsetneq \cdots \subsetneq F_q=E$, xxxx xxxxxx $E_i$, xxxxxxxxxxx xxxxxx $H_i$, xxxxx $r_i$, xxx xxxxxxxxx $\mu_i$, xx xxx xxxxxxxxx xxxxx xx x xxxxxxxx xxxxxxx $M$ xx xx [@lem:public-0020]. xxxxx
 $$
 R_j:=\sum_{i=j}^q r_i\qquad (j=1,\dots,q),\qquad R_{q+1}:=0.
@@ -1062,7 +1062,7 @@ $$
 xxx $H_j$ xx xxxxxxxxxxx, xx xxx xxxxxxxxx xxxx xxx x xxxxxx xxxxxxxxxx xxxxx, xxxxxx $r_j/|E_j|=\mu_j$. xxxxxxxx [@cor:public-0006] xx $H_j$ xxxxx $\lambda_t^*(H_j)=t/\mu_j$. xxxx xxxxx xxx xxxxxx xxxxxxx.
 :::
 
-::: {#prop:public-0005 .proposition} xxxxx xxxxxxxxx xx xxx xxxxxxxx xxxx
+::: {#prop:public-0005 .proposition title="xxxxx xxxxxxxxx xx xxx xxxxxxxx xxxx"}
 xxx $\varnothing=F_0\subsetneq F_1\subsetneq \cdots \subsetneq F_q=E$ xx xxx xxxxxxxxx xxxxx xx x xxxxxxxx xxxxxxx $M$, xxx xxx $j$ xxx $t$ xx xxxxxxx xxxx $k$ xx xx [@prop:public-0004]. xxxx
 $$
 \lambda_k(M)\le \sum_{i>j}|E_i|+\lambda_t(H_j).
@@ -1097,7 +1097,7 @@ $$
 xxxxxx xxx xxxxxxx xxxx xxx xxxxxxxx $S_j$ xxxxx xxx xxxxx.
 :::
 
-::: {#lem:public-0021 .lemma} xxxxxxxxxxx xxxxxxxx
+::: {#lem:public-0021 .lemma title="xxxxxxxxxxx xxxxxxxx"}
 xxx $H$ xx x xxxxxxxxxxx xxxxxxxx xxxxxxx xx xxxx $r$ xx $n$ xxxxxxxx.
 
 0. xxx xxxxxxxxx xxxx xx $H$ xx xxx xxxxxxxx xxxxxx $\frac{r}{n}\mathbf{1}$.
@@ -1118,7 +1118,7 @@ $$
 
 ### xxx xx xxxxx-xxxxxx xxxxxxx
 
-::: {#thm:public-0010 .theorem} xxx xxx xxxxx-xxxxxx xxxxxxx
+::: {#thm:public-0010 .theorem title="xxx xxx xxxxx-xxxxxx xxxxxxx"}
 xxx $\C$ xx x xxxxx-xxxxxx xxxxx xx xxxxxxxx. xx $\C$ xx $(1,d)$-xxx-xxxxxxx, xxxx $\C$ xx $(k,d)$-xxx-xxxxxxx xxx xxxxx xxxxxxx $k\ge 1$.
 :::
 
@@ -1147,4 +1147,3 @@ xxx [@lem:public-0021] xxxxxxx xxxx xxxxx xxxxxx $X\subseteq E$ xxxxxxxxx $|X|\l
 xxxxxxx xxxxxxxxxx xxxxxxxx, $\lambda_k(M)\le |C|+\lambda_{k-1}(N)\le dn/r+d\,\lambda_{k-1}^*(N)\le dn/r+d(k-1)n/r= dkn/r$.
 xxxxxxx, [@lem:public-0021] xxxxx $\lambda_k^*(M)=kn/r$, xxx xxxxxxxxx $\lambda_k(M)\le d\,\lambda_k^*(M)$. xxxx xxxxxxxxx xxx xxxxxxxxx.
 :::
-

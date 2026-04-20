@@ -1,4 +1,4 @@
-import { humanizeBlockType, isKnownBlockType, normalizeBlockType } from "./block-metadata";
+import { normalizeBlockType } from "./block-metadata";
 import {
   collectSourceBlockRanges,
   FENCED_DIV_START_RE,
@@ -17,9 +17,8 @@ export interface ParsedFencedDivBlock extends FencedDivInfo {
   readonly bodyMarkdown: string;
   readonly closingFence: string;
   readonly fence: string;
-  readonly titleLabelSuffix?: string;
   readonly titleMarkdown?: string;
-  readonly titleKind: "attribute" | "implicit" | "none" | "trailing";
+  readonly titleKind: "attribute" | "none";
 }
 
 export interface DisplayMathInfo {
@@ -29,80 +28,36 @@ export interface DisplayMathInfo {
 
 export interface ParsedDisplayMathBlock extends DisplayMathInfo {
   readonly bodyMarkdown: string;
-  readonly closingDelimiter: "\\]" | "$$";
+  readonly closingDelimiter: "\\]" | "$$" | "\\end{equation}" | "\\end{equation*}";
   readonly labelSuffix: string;
-  readonly openingDelimiter: "\\[" | "$$";
+  readonly openingDelimiter: "\\[" | "$$" | "\\begin{equation}" | "\\begin{equation*}";
 }
 
 export type SpecialBlockRange = SourceBlockRange & {
   readonly variant: "display-math" | "fenced-div";
 };
 
-function splitTrailingTitleLabel(title: string): {
-  readonly id?: string;
-  readonly labelSuffix?: string;
-  readonly title: string;
-} {
-  const match = title.match(/\s+(\{#([A-Za-z0-9_][\w.:-]*)\})\s*$/);
-  if (!match) {
-    return { title };
-  }
-  return {
-    id: match[2],
-    labelSuffix: match[1],
-    title: title.slice(0, match.index).trimEnd(),
-  };
-}
-
-function splitSingleLineFencedDivHeader(opener: string, fence: string): string | null {
-  const header = opener.replace(/^\s*:{3,}/, "");
-  const closingFence = new RegExp(`\\s:{${fence.length},}\\s*$`);
-  if (!closingFence.test(header)) {
-    return null;
-  }
-  const withoutClosingFence = header.replace(closingFence, "").trim();
-  return withoutClosingFence || null;
-}
-
-function parseFencedDivAttrs(attrs: string, trailingTitleRaw: string) {
-  const trailing = splitTrailingTitleLabel(trailingTitleRaw);
-  const trailingTitle = trailing.title;
+function parseFencedDivAttrs(attrs: string) {
   const titleAttrMatch = attrs.match(/\btitle=(?:"([^"]*)"|'([^']*)')/);
   const classes = [...attrs.matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]);
-  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1] ?? trailing.id;
+  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1];
 
   const titleAttribute = titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined;
-  const title = trailingTitle || titleAttribute;
 
   return {
-    blockType: normalizeBlockType(classes[0], trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2]),
+    blockType: normalizeBlockType(classes[0], titleAttribute),
     id,
-    title,
-    titleKind: trailingTitle || trailing.labelSuffix
-      ? "trailing"
-      : titleAttrMatch
-        ? "attribute"
-        : "none",
-    titleLabelSuffix: trailing.labelSuffix,
-    titleMarkdown: title,
+    title: titleAttribute,
+    titleKind: titleAttrMatch ? "attribute" : "none",
+    titleMarkdown: titleAttribute,
   } as const;
 }
 
 export function parseDisplayMathRaw(raw: string): DisplayMathInfo {
-  const lines = raw.split("\n");
-  if (lines[0]?.trimStart().startsWith("$$")) {
-    const lastLine = lines[lines.length - 1] ?? "";
-    const body = lines.length === 1
-      ? raw.slice(raw.indexOf("$$") + 2, raw.lastIndexOf("$$")).trim()
-      : lines.slice(1, -1).join("\n").trim();
-    return {
-      body,
-      id: lastLine.match(/\{#([^}]+)\}\s*$/)?.[1],
-    };
-  }
+  const parsed = parseStructuredDisplayMathRaw(raw);
   return {
-    body: lines.slice(1, -1).join("\n").trim(),
-    id: (lines[lines.length - 1] ?? "").match(/\{#([^}]+)\}\s*$/)?.[1],
+    body: parsed.body,
+    id: parsed.id,
   };
 }
 
@@ -121,55 +76,56 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
   const opener = lines[0] ?? "";
   const fenceMatch = opener.match(/^\s*(:{3,})/);
   const fence = fenceMatch?.[1] ?? ":::";
-  const singleLineHeader = lines.length === 1 ? splitSingleLineFencedDivHeader(opener, fence) : null;
-  const header = (singleLineHeader ?? opener.replace(/^\s*:{3,}/, "")).trim();
-  const closingFence = singleLineHeader === null ? lines[lines.length - 1]?.trim() || fence : fence;
-  const bodyMarkdown = singleLineHeader === null ? lines.slice(1, -1).join("\n") : "";
+  const header = opener.replace(/^\s*:{3,}/, "").trim();
+  const closingFence = lines[lines.length - 1]?.trim() || fence;
+  const bodyMarkdown = lines.slice(1, -1).join("\n");
   const body = bodyMarkdown.trim();
 
   if (!header.startsWith("{")) {
-    const implicitBlockType = normalizeBlockType(undefined, header || "block");
-    const headerIsKnownBlockType = header
-      ? isKnownBlockType(implicitBlockType)
-        && humanizeBlockType(implicitBlockType).toLowerCase() === header.toLowerCase()
-      : false;
-    const title = header && !headerIsKnownBlockType ? header : undefined;
+    const blockType = normalizeBlockType(header ? header.toLowerCase() : undefined, undefined);
     return {
-      blockType: implicitBlockType,
+      blockType,
       body,
       bodyMarkdown,
       closingFence,
       fence,
-      title,
-      titleMarkdown: title,
-      titleKind: title ? "implicit" : "none",
+      title: undefined,
+      titleMarkdown: undefined,
+      titleKind: "none",
     };
   }
 
   const attrsEnd = header.indexOf("}");
   const attrs = attrsEnd >= 0 ? header.slice(0, attrsEnd + 1) : header;
-  const trailingTitleRaw = attrsEnd >= 0 ? header.slice(attrsEnd + 1).trim() : "";
-  const parsedAttrs = parseFencedDivAttrs(
-    attrs,
-    singleLineHeader === null ? trailingTitleRaw : "",
-  );
-  const resolvedBodyMarkdown = singleLineHeader === null
-    ? bodyMarkdown
-    : trailingTitleRaw;
+  const parsedAttrs = parseFencedDivAttrs(attrs);
 
   return {
     attrsRaw: attrs,
     blockType: parsedAttrs.blockType,
-    body: resolvedBodyMarkdown.trim(),
-    bodyMarkdown: resolvedBodyMarkdown,
+    body,
+    bodyMarkdown,
     closingFence,
     fence,
     id: parsedAttrs.id,
     title: parsedAttrs.title,
-    titleLabelSuffix: parsedAttrs.titleLabelSuffix,
     titleMarkdown: parsedAttrs.titleMarkdown,
     titleKind: parsedAttrs.titleKind,
   };
+}
+
+function serializeTitleAttribute(title: string): string {
+  return `title=${JSON.stringify(title)}`;
+}
+
+function upsertTitleAttribute(attrsRaw: string, titleMarkdown: string): string {
+  const withoutTitle = attrsRaw
+    .replace(/\s*\btitle=(?:"[^"]*"|'[^']*')/g, "")
+    .replace(/\{\s+/, "{")
+    .replace(/\s+\}/, "}");
+  if (!titleMarkdown) {
+    return withoutTitle;
+  }
+  return withoutTitle.replace(/\}$/, (withoutTitle.endsWith("{") ? "" : " ") + serializeTitleAttribute(titleMarkdown) + "}");
 }
 
 export function serializeFencedDivRaw(
@@ -181,18 +137,10 @@ export function serializeFencedDivRaw(
 ): string {
   const bodyMarkdown = overrides?.bodyMarkdown ?? parsed.bodyMarkdown;
   const titleMarkdown = overrides?.titleMarkdown ?? parsed.titleMarkdown ?? "";
-  const attrsRaw = parsed.titleKind === "attribute" && parsed.attrsRaw
-    ? parsed.attrsRaw.replace(
-        /\btitle=(?:"([^"]*)"|'([^']*)')/,
-        `title=${JSON.stringify(titleMarkdown)}`,
-      )
-    : parsed.attrsRaw;
-  const trailingTitle = parsed.titleKind === "trailing" && (titleMarkdown || parsed.titleLabelSuffix)
-    ? `${titleMarkdown}${titleMarkdown && parsed.titleLabelSuffix ? " " : ""}${parsed.titleLabelSuffix ?? ""}`
-    : "";
+  const attrsRaw = parsed.attrsRaw ? upsertTitleAttribute(parsed.attrsRaw, titleMarkdown) : undefined;
   const header = attrsRaw
-    ? `${attrsRaw}${trailingTitle ? ` ${trailingTitle}` : ""}`
-    : titleMarkdown || parsed.title || humanizeBlockType(parsed.blockType);
+    ? attrsRaw
+    : parsed.blockType;
   return [
     `${parsed.fence}${header ? ` ${header}` : ""}`,
     bodyMarkdown,
@@ -218,9 +166,12 @@ export function buildPreviewFencedDivRaw({
   if (id) {
     attrs.push(`#${id}`);
   }
+  if (title) {
+    attrs.push(serializeTitleAttribute(title));
+  }
 
   const header = attrs.length > 0
-    ? `{${attrs.join(" ")}}${title ? ` ${title}` : ""}`
+    ? `{${attrs.join(" ")}}`
     : title ?? "";
 
   return [
@@ -233,14 +184,27 @@ export function buildPreviewFencedDivRaw({
 export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlock {
   const lines = raw.split("\n");
   const firstLine = lines[0]?.trim() ?? "";
-  const lastLine = lines[lines.length - 1]?.trim() ?? "";
+  const equationMatch = firstLine.match(/^\\begin\{(equation\*?)\}(?:\s*\\label\{([A-Za-z][\w.:-]*)\})?\s*$/);
+  if (equationMatch) {
+    const environment = equationMatch[1] as "equation" | "equation*";
+    const bodyMarkdown = lines.slice(1, -1).join("\n");
+    return {
+      body: bodyMarkdown.trim(),
+      bodyMarkdown,
+      closingDelimiter: `\\end{${environment}}`,
+      id: equationMatch[2],
+      labelSuffix: equationMatch[2] ? `\\label{${equationMatch[2]}}` : "",
+      openingDelimiter: `\\begin{${environment}}`,
+    };
+  }
+
   if (firstLine.startsWith("\\[")) {
     return {
       body: lines.slice(1, -1).join("\n").trim(),
       bodyMarkdown: lines.slice(1, -1).join("\n"),
       closingDelimiter: "\\]",
-      id: lastLine.match(/\{#([^}]+)\}\s*$/)?.[1],
-      labelSuffix: lastLine.replace(/^\\\]/, "").trim(),
+      id: undefined,
+      labelSuffix: "",
       openingDelimiter: "\\[",
     };
   }
@@ -253,14 +217,14 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
     ? raw.slice(openingIndex + 2, sameLineClosingIndex)
     : lines.slice(1, -1).join("\n");
   const labelSuffix = sameLineClosingIndex >= 0
-    ? raw.slice(sameLineClosingIndex + 2).trim()
-    : lastLine.replace(/^\$\$/, "").trim();
+    ? ""
+    : "";
 
   return {
     body: bodyMarkdown.trim(),
     bodyMarkdown,
     closingDelimiter: "$$",
-    id: labelSuffix.match(/\{#([^}]+)\}\s*$/)?.[1],
+    id: undefined,
     labelSuffix,
     openingDelimiter: "$$",
   };
@@ -270,6 +234,14 @@ export function serializeDisplayMathRaw(
   parsed: ParsedDisplayMathBlock,
   bodyMarkdown: string,
 ): string {
+  if (parsed.openingDelimiter.startsWith("\\begin{equation")) {
+    return [
+      `${parsed.openingDelimiter}${parsed.id ? `\\label{${parsed.id}}` : ""}`,
+      bodyMarkdown,
+      parsed.closingDelimiter,
+    ].join("\n");
+  }
+
   const closingLine = `${parsed.closingDelimiter}${parsed.labelSuffix ? ` ${parsed.labelSuffix}` : ""}`;
   return [
     parsed.openingDelimiter,

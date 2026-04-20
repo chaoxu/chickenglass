@@ -47,12 +47,12 @@ export async function run(page) {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(120);
 
-    await openScratchDocument(page, "focus-command.md", "::: {.theorem} Focus Command");
+    await openScratchDocument(page, "focus-command.md", '::: {.theorem title="Focus Command"}');
     await switchToMode(page, "lexical");
 
     const paragraph = page
       .locator(".cf-lexical-editor--rich[contenteditable='true'] > .cf-lexical-paragraph", {
-        hasText: "::: {.theorem} Focus Command",
+        hasText: '::: {.theorem title="Focus Command"}',
       })
       .first();
     await paragraph.click();

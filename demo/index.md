@@ -3,7 +3,7 @@ title: "Coflat Feature Showcase"
 bibliography: reference.bib
 ---
 
-This is the canonical single-page Coflat showcase. It is meant to exercise the editor's main document surfaces in one place: frontmatter, inline rendering, display math, semantic blocks, figures, tables, embeds, code, references, citations, footnotes, includes, and structure-edit behavior.
+This is the canonical single-page Coflat showcase. It is meant to exercise the editor's main document surfaces in one place: frontmatter, inline rendering, display math, semantic blocks, figures, tables, embeds, code, references, citations, footnotes, and structure-edit behavior.
 
 # Frontmatter and Structure Editing
 
@@ -67,17 +67,17 @@ $$
 
 # Labeled Display Math and Equation References
 
-Plain labeled `$$` block:
+Raw LaTeX equation environment:
 
-$$
+\begin{equation}\label{eq:gaussian}
 \int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
-$$ {#eq:gaussian}
+\end{equation}
 
-Labeled `\[\]` block:
+Another labeled equation:
 
-\[
+\begin{equation}\label{eq:binomial}
 \sum_{k=0}^n \binom{n}{k} = 2^n
-\] {#eq:binomial}
+\end{equation}
 
 Equation references should work in both bracketed and narrative forms:
 
@@ -87,7 +87,7 @@ Equation references should work in both bracketed and narrative forms:
 
 # Block Hover Preview Coverage
 
-:::: {#thm:hover-preview .theorem} Hover Preview Stress Test
+:::: {#thm:hover-preview .theorem title="Hover Preview Stress Test"}
 This referenced block exists to test hover previews for paragraphs, lists, blockquotes, citations, links, inline math, and display math.
 
 It contains **bold**, `code`, [a link](https://example.com), [@cormen2009], and inline math $x^2 + y^2$ in one paragraph.
@@ -109,7 +109,7 @@ Hover this block reference: [@thm:hover-preview].
 
 Hover the cluster items separately: [@thm:hover-preview; @thm:fundamental; @eq:gaussian].
 
-:::: {.theorem} Gap Test
+:::: {.theorem title="Gap Test"}
 Outer content before inner
 
 ::: {.blockquote}
@@ -136,7 +136,7 @@ Outer content after inner closes with $\beta$
 
 # Math in Fenced Divs
 
-::: {#thm:fundamental .theorem} Fundamental Theorem
+::: {#thm:fundamental .theorem title="Fundamental Theorem"}
 For all $n \in \N$:
 $$
 \sum_{k=1}^n k^2 = \frac{n(n+1)(2n+1)}{6}
@@ -147,7 +147,7 @@ $$
 By induction. Base case $n=1$: $1 = \frac{1 \cdot 2 \cdot 3}{6}$.
 :::
 
-:::: {.theorem #thm:nested} Outer shell
+:::: {.theorem #thm:nested title="Outer shell"}
 Outer shell content should stay rendered while an inner structure target is active.
 
 ::: {.proof #prf:nested}
@@ -235,7 +235,7 @@ https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
 # Blockquote with Math
 
-::: Blockquote
+::: {.blockquote}
 For any $\epsilon > 0$, there exists $\delta > 0$ such that:
 $$
 |x - a| < \delta \implies |f(x) - f(a)| < \epsilon
@@ -248,20 +248,14 @@ $$
 
 ![Local hover-preview figure](showcase/hover-preview-figure.svg) should render as inline image without relying on a remote placeholder.
 
-# Bold in Fenced-Div Titles
+# Fenced-Div Titles
 
-::: {.theorem} **Main Result**
-This theorem title should render "Main Result" in bold.
+::: {.theorem title="Main Result"}
+This theorem title is plain text stored in the Pandoc title attribute.
 :::
 
-::: {.problem title="**3SUM**"}
-This problem title uses the `title=` attribute and should render "3SUM" in bold.
-:::
-
-# Rich Block Titles
-
-::: {.remark} Title with [a link](https://example.com), [@cormen2009], `code`, and $x^2$
-This block title should stay rich inside the document surface.
+::: {.problem title="3SUM"}
+This problem title uses the canonical `title=` attribute.
 :::
 
 # Footnotes
@@ -281,14 +275,6 @@ Narrative block reference: @thm:fundamental.
 
 Reference cluster: [@thm:fundamental; @prop:tu; @eq:gaussian].
 
-# Includes
-
-The included block below should splice content in without exposing raw include fences during ordinary navigation.
-
-::: {.include}
-showcase/include-section.md
-:::
-
 # Search Rich-Mode Coverage
 
 Search for `SearchNeedle` and `@cormen2009`.
@@ -303,7 +289,7 @@ $$
 \text{SearchNeedle} = x + y
 $$
 
-::: {.definition} SearchNeedle Block Title
+::: {.definition title="SearchNeedle Block Title"}
 This block body also contains SearchNeedle and [@cormen2009].
 :::
 
@@ -320,12 +306,12 @@ Another SearchNeedle footnote[^search].
 
 Use this file to verify the split issues from #396 through #410.
 
-- #396: hovering the labeled display math above should preview only the equation body, not the trailing `{#eq:...}` label syntax.
+- #396: hovering the labeled display math above should preview only the equation body, not raw label syntax.
 - #397: in clustered references, hovering one rendered item should preview only that item; hovering separators should do nothing.
 - #398: when editing a raw reference token, the whole token should look like source rather than plain prose.
 - #399: hovering `[@thm:hover-preview]` should render paragraph content, display math, list items, and the blockquote in the preview.
 - #400: editing the long rich heading above should keep local inline editing behavior instead of reverting the whole heading to raw source.
-- #401: the `title="**3SUM**"` problem block should render the title the same way inline block titles render.
+- #401: the `title="3SUM"` problem block should render the title from the canonical Pandoc attribute.
 - #402: with sidenotes collapsed, footnote references and bodies should still have a rendered presentation instead of exposing raw markdown.
 - #403: rendered list markers should inherit ambient typography instead of staying monospace.
 - #404: edit a table cell, leave it, and click back in; the rendered table should reflect current document state rather than stale cached content.
@@ -337,11 +323,11 @@ Use this file to verify the split issues from #396 through #410.
 
 These blocks cover newer caption-below behavior and local PDF image rendering.
 
-::: {#fig:pdf-local .figure} Local PDF figure with math $x^2 + y^2 = z^2$
+::: {#fig:pdf-local .figure title="Local PDF figure"}
 ![Generated showcase figure rendered from a local PDF asset](showcase/generated-figure.pdf)
 :::
 
-::: {#tbl:feature-matrix .table} Feature coverage matrix
+::: {#tbl:feature-matrix .table title="Feature coverage matrix"}
 | Surface | Example | What to verify |
 |---------|---------|----------------|
 | figure block | [@fig:pdf-local] | caption stays below the media |

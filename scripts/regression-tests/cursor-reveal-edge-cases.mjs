@@ -392,7 +392,7 @@ export async function run(page) {
   await openScratch(
     page,
     "scratch-theorem-inline-reveal.md",
-    "::: {.theorem} Test\nTheorem body has *italic* and [link](https://example.com).\n:::\n",
+    '::: {.theorem title="Test"}\nTheorem body has *italic* and [link](https://example.com).\n:::\n',
   );
   await placeCaretInsideFirstText(page, ".cf-lexical-block--theorem .cf-italic", 2);
   const theoremReveal = await page.evaluate(() => ({

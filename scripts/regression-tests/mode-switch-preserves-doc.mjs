@@ -18,11 +18,15 @@ bibliography: refs.bib
 
 # Introduction {#sec:intro}
 
-::: {.theorem #thm:main} Main Result
+::: {.theorem #thm:main title="Main Result"}
 Let $x$ be a positive integer.
 :::
 
-See [@thm:main] and $$ x^2 $$ {#eq:main}.
+See [@thm:main] and [@eq:main].
+
+\\begin{equation}\\label{eq:main}
+x^2
+\\end{equation}
 `,
 };
 

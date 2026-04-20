@@ -22,7 +22,7 @@ const MAIN = [
   "The proof body.",
   ":::",
   "",
-  ":::: {.figure #fig:missing-png} Missing PNG",
+  ':::: {.figure #fig:missing-png title="Missing PNG"}',
   "![Missing PNG](missing-preview.png)",
   "::::",
   "",

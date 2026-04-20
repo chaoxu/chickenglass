@@ -23,9 +23,15 @@ title: Coflat Demo
 
 A semantic document editor for **mathematical writing**. It supports *Typora-style* inline rendering, ~~strikethrough~~, ==highlights==, and \`inline code\`.
 
-::: {.include}
-chapters/introduction.md
-:::
+# Introduction
+
+This document demonstrates the features of Coflat, a semantic editor for mathematical writing. The editor provides:
+
+- **Typora-style rendering**: source revealed only where you click
+- **KaTeX math**: inline $x^2$ and display mode with equation labels
+- **Theorem environments**: fenced divs with automatic numbering
+- **Cross-references**: click-to-navigate between theorems, equations, and citations
+- **CSL citations**: formatted bibliography from BibTeX files
 
 # Math
 
@@ -37,17 +43,17 @@ The Euler identity $e^{i\\pi} + 1 = 0$ unites five fundamental constants. Custom
 
 Display math with equation labels:
 
-$$
+\\begin{equation}\\label{eq:gaussian}
 \\int_0^\\infty e^{-x^2} \\, dx = \\frac{\\sqrt{\\pi}}{2}
-$$ {#eq:gaussian}
+\\end{equation}
 
-$$
+\\begin{equation}\\label{eq:sum}
 \\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}
-$$ {#eq:sum}
+\\end{equation}
 
 # Theorems & Proofs
 
-::: {.theorem #thm-evt} Extreme Value Theorem
+::: {.theorem #thm-evt title="Extreme Value Theorem"}
 Every continuous function $f: [a,b] \\to \\R$ attains its maximum and minimum.
 :::
 
@@ -67,17 +73,21 @@ A set $K \\subseteq \\R$ is **compact** if every open cover of $K$ has a finite 
 Every continuous function on a closed interval is bounded.
 :::
 
-::: Theorem Bolzano-Weierstrass
+::: {.theorem title="Bolzano-Weierstrass"}
 Every bounded sequence in $\\R$ has a convergent subsequence.
 :::
 
-::: {.problem #prob-macros} Custom Macros
+::: {.problem #prob-macros title="Custom Macros"}
 Show that $\\set{x \\in \\R : \\floor{x} = \\ceil{x}}$ equals $\\Z$, and that for any $\\e > 0$ there exists $n \\in \\N$ with $1/n < \\e$.
 :::
 
-::: {.corollary} Every continuous function on a closed interval is bounded. :::
+::: {.corollary}
+Every continuous function on a closed interval is bounded.
+:::
 
-::: {.remark} The converse of the Extreme Value Theorem is false. :::
+::: {.remark}
+The converse of the Extreme Value Theorem is false.
+:::
 
 # Cross-References
 
@@ -141,16 +151,35 @@ The Extreme Value Theorem[^evt] is fundamental to real analysis. Compactness[^co
 
 # Blockquote
 
-> Mathematics is the queen of the sciences and number theory is the queen of mathematics.
-> — Carl Friedrich Gauss
+::: {.blockquote}
+Mathematics is the queen of the sciences and number theory is the queen of mathematics.
 
-> The identity $e^{i\\pi} + 1 = 0$ unites five constants. For any $f: [a,b] \\to \\mathbb{R}$, the integral $\\int_a^b f(x)\\,dx$ measures signed area.
+— Carl Friedrich Gauss
+:::
+
+::: {.blockquote}
+The identity $e^{i\\pi} + 1 = 0$ unites five constants. For any $f: [a,b] \\to \\mathbb{R}$, the integral $\\int_a^b f(x)\\,dx$ measures signed area.
+:::
 
 ---
 
-::: {.include}
-chapters/background.md
+# Background
+
+## Compactness
+
+The notion of compactness is central to analysis. In $\\R^n$, the Heine-Borel theorem states that a set is compact if and only if it is closed and bounded.
+
+::: {.theorem #thm-heine-borel title="Heine-Borel"}
+A subset of $\\R^n$ is compact if and only if it is closed and bounded.
 :::
+
+## Continuity
+
+::: {.definition #def-continuous title="Continuity"}
+A function $f$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that $d(x, x_0) < \\delta$ implies $d(f(x), f(x_0)) < \\varepsilon$.
+:::
+
+This is equivalent to requiring that preimages of open sets are open.
 `,
     "refs.bib": `@article{karger2000,
   author = {David R. Karger},
@@ -208,7 +237,6 @@ This document demonstrates the features of Coflat, a semantic editor for mathema
 - **Theorem environments**: fenced divs with automatic numbering
 - **Cross-references**: click-to-navigate between theorems, equations, and citations
 - **CSL citations**: formatted bibliography from BibTeX files
-- **File includes**: compose documents from multiple files seamlessly
 `,
     "chapters/diagram.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0ioAAAAASUVORK5CYII=",
     "chapters/background.md": `# Background
@@ -217,13 +245,13 @@ This document demonstrates the features of Coflat, a semantic editor for mathema
 
 The notion of compactness is central to analysis. In $\\R^n$, the Heine-Borel theorem states that a set is compact if and only if it is closed and bounded.
 
-::: {.theorem #thm-heine-borel} Heine-Borel
+::: {.theorem #thm-heine-borel title="Heine-Borel"}
 A subset of $\\R^n$ is compact if and only if it is closed and bounded.
 :::
 
 ## Continuity
 
-::: {.definition #def-continuous} Continuity of $f: X \\to Y$
+::: {.definition #def-continuous title="Continuity"}
 A function $f$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that $d(x, x_0) < \\delta$ implies $d(f(x), f(x_0)) < \\varepsilon$.
 :::
 

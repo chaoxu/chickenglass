@@ -6,7 +6,8 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     exclude: [
       "**/node_modules/**",
-      "**/.claude/worktrees/**"
+      "**/.claude/worktrees/**",
+      "**/.worktrees/**"
     ],
   },
 });

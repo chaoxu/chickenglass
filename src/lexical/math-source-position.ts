@@ -104,6 +104,10 @@ export function inlineMathSourceOffsetFromTarget(
 
 export function displayMathBodyStartOffset(raw: string): number {
   const firstNewline = raw.indexOf("\n");
+  const firstLine = firstNewline >= 0 ? raw.slice(0, firstNewline) : raw;
+  if (/^\s*\\begin\{equation\*?\}(?:\s*\\label\{[A-Za-z][\w.:-]*\})?\s*$/.test(firstLine)) {
+    return firstNewline >= 0 ? firstNewline + 1 : raw.length;
+  }
   if (firstNewline >= 0) {
     return firstNewline + 1;
   }
@@ -114,6 +118,10 @@ export function displayMathBodyStartOffset(raw: string): number {
 }
 
 export function displayMathBodyEndOffset(raw: string): number {
+  const equationEnd = raw.search(/\n\s*\\end\{equation\*?\}\s*$/);
+  if (equationEnd >= 0) {
+    return equationEnd;
+  }
   const lastNewline = raw.lastIndexOf("\n");
   if (lastNewline > displayMathBodyStartOffset(raw)) {
     return lastNewline;

@@ -221,9 +221,7 @@ export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): stri
     config: options.config,
     referenceLabel,
   });
-  const titleHtml = parsed.titleMarkdown
-    ? renderMarkdownInlineHtml(parsed.titleMarkdown, options)
-    : "";
+  const titleHtml = parsed.titleMarkdown ? encodeHtml(parsed.titleMarkdown) : "";
   const bodyHtml = viewModel.kind === "include"
     ? `<p class="cf-lexical-include-path">${encodeHtml(parsed.bodyMarkdown.trim())}</p>`
     : renderMarkdownRichHtml(parsed.body, options);

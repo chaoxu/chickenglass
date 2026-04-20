@@ -54,6 +54,9 @@ export async function run(page) {
       message: "active theorem title draft was not included by document read",
     };
   }
+  await title.click();
+  await page.keyboard.press("Meta+A");
+  await page.keyboard.press("ArrowRight");
   await page.keyboard.type(TITLE_CONTINUATION_MARKER);
   await saveCloseAndReopen(page, DOCUMENT_PATH);
 

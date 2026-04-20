@@ -19,7 +19,7 @@ const FIXTURE = {
     "A [label](https://example.com) ![alt](image.png) [@cormen2009] [^n] $x+1$.",
     "Formatted **bold** marker.",
     "",
-    "::: {.theorem #thm:main} Main",
+    '::: {.theorem #thm:main title="Main"}',
     "Body text.",
     ":::",
     "",
@@ -83,8 +83,8 @@ export async function run(page) {
     { sourceNeedle: "^n", expected: "[^n]" },
     { sourceNeedle: "x+1", expected: "$x+1$" },
     { sourceNeedle: "**bold**", expected: "**bold**", offset: 1 },
-    { sourceNeedle: "::: {.theorem #thm:main} Main", expected: "::: {.theorem #thm:main} Main\nBody text.\n:::" },
-    { sourceNeedle: "Body text.", expected: "::: {.theorem #thm:main} Main\nBody text.\n:::", caretNeedle: "Body text." },
+    { sourceNeedle: '::: {.theorem #thm:main title="Main"}', expected: '::: {.theorem #thm:main title="Main"}\nBody text.\n:::' },
+    { sourceNeedle: "Body text.", expected: '::: {.theorem #thm:main title="Main"}\nBody text.\n:::', caretNeedle: "Body text." },
     { sourceNeedle: "Footnote body", expected: "[^n]: Footnote body." },
   ];
 

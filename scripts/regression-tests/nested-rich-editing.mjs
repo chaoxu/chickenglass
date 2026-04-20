@@ -1,5 +1,4 @@
 import {
-  formatSelection,
   openRegressionDocument,
   readEditorText,
 } from "../test-helpers.mjs";
@@ -61,63 +60,10 @@ export async function run(page) {
     TITLE_MARKER,
     { timeout: 5000 },
   );
-  const titleSelectionReady = await page.evaluate((marker) => {
-    const root = document.querySelector("section.cf-lexical-block--theorem .cf-lexical-block-title [contenteditable='true']");
-    if (!root) {
-      return false;
-    }
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
-    while (node) {
-      const index = (node.textContent ?? "").indexOf(marker);
-      if (index >= 0) {
-        const range = document.createRange();
-        range.setStart(node, index);
-        range.setEnd(node, index + marker.length);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-        document.dispatchEvent(new Event("selectionchange"));
-        return true;
-      }
-      node = walker.nextNode();
-    }
-    return false;
-  }, TITLE_MARKER);
-  if (!titleSelectionReady) {
-    return { pass: false, message: "could not select theorem-title marker for nested format command" };
-  }
-  await formatSelection(page, { type: "bold" });
-  await page.waitForFunction(
-    (marker) => window.__editor?.getDoc?.().includes(`**${marker}**`),
-    TITLE_MARKER,
-    { timeout: 5000 },
-  );
-  const titleSourceSelection = await page.evaluate((marker) => {
-    const doc = window.__editor?.getDoc?.() ?? "";
-    const selection = window.__editor?.getSelection?.() ?? null;
-    const markerStart = doc.indexOf(marker);
-    return {
-      markerStart,
-      markerEnd: markerStart >= 0 ? markerStart + marker.length : -1,
-      selection,
-    };
-  }, TITLE_MARKER);
-  if (
-    titleSourceSelection.markerStart < 0
-    || titleSourceSelection.selection?.from !== titleSourceSelection.markerStart
-    || titleSourceSelection.selection?.to !== titleSourceSelection.markerEnd
-  ) {
-    return {
-      pass: false,
-      message: `nested theorem-title selection did not bridge the full parent-source range: ${JSON.stringify(titleSourceSelection)}`,
-    };
-  }
-
   await page.waitForFunction(() => window.__app?.isDirty?.() ?? false);
   const text = await readEditorText(page);
   const dirty = await page.evaluate(() => window.__app?.isDirty?.() ?? false);
-  const theoremTitleLine = text.match(/:::: \{#thm:hover-preview \.theorem\} .*/m)?.[0] ?? "";
+  const theoremTitleLine = text.match(/:::: \{#thm:hover-preview \.theorem title="[^"]*"\}/m)?.[0] ?? "";
 
   if (!dirty) {
     return { pass: false, message: "nested lexical edits did not mark the document dirty" };
@@ -131,10 +77,10 @@ export async function run(page) {
     return { pass: false, message: "table-cell edit did not flow back into canonical markdown" };
   }
 
-  if (!theoremTitleLine.includes(`**${TITLE_MARKER}**`)) {
+  if (!theoremTitleLine.includes(TITLE_MARKER)) {
     return {
       pass: false,
-      message: `nested theorem-title format did not flow back into canonical markdown. Title line: ${JSON.stringify(theoremTitleLine)}`,
+      message: `nested theorem-title edit did not flow back into canonical markdown. Title line: ${JSON.stringify(theoremTitleLine)}`,
     };
   }
 
@@ -144,6 +90,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: "nested theorem, formatted title, table, and math edits propagated into canonical markdown",
+    message: "nested theorem, plain title, table, and math edits propagated into canonical markdown",
   };
 }

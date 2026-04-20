@@ -37,7 +37,7 @@ export async function run(page) {
       const pdfPreview = document.querySelector("img[alt='Generated showcase figure rendered from a local PDF asset']");
       const pdfFallback = [...document.querySelectorAll(".cf-lexical-media-fallback")]
         .find((element) => (element.textContent ?? "").includes("showcase/generated-figure.pdf"));
-      const problemStrong = document.querySelector(".cf-lexical-block--problem .cf-lexical-block-title strong");
+      const problemTitle = document.querySelector(".cf-lexical-block--problem .cf-lexical-block-title");
       const figureRef = document.querySelector("[data-coflat-ref-id='fig:pdf-local'], [data-coflat-single-ref-id='fig:pdf-local']");
       const tableRef = document.querySelector("[data-coflat-ref-id='tbl:feature-matrix'], [data-coflat-single-ref-id='tbl:feature-matrix']");
 
@@ -47,7 +47,7 @@ export async function run(page) {
         hasPdfPreview: Boolean(pdfPreview),
         inlineImageBlockAncestor: Boolean(inlineImage?.closest(".cf-lexical-block")),
         pdfFallbackText: pdfFallback?.textContent?.trim() ?? "",
-        problemStrongText: problemStrong?.textContent?.trim() ?? "",
+        problemTitleText: problemTitle?.textContent?.trim() ?? "",
         tableRefText: tableRef?.textContent?.trim() ?? "",
       };
     });
@@ -123,10 +123,10 @@ export async function run(page) {
     };
   }
 
-  if (value.initialState.problemStrongText !== "3SUM") {
+  if (value.initialState.problemTitleText !== "3SUM") {
     return {
       pass: false,
-      message: "problem block title= markdown is not rendering rich inline formatting",
+      message: "problem block title attribute did not render as plain text",
     };
   }
 
@@ -137,7 +137,7 @@ export async function run(page) {
     };
   }
 
-  if (value.equationPreview.includes("{#eq:gaussian}")) {
+  if (value.equationPreview.includes("\\label{eq:gaussian}")) {
     return {
       pass: false,
       message: "equation hover preview leaked raw label syntax instead of rendering only the equation body",
@@ -174,6 +174,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: "inline images, rich titles, equation previews, and rendered source-reveal editing behave on index.md",
+    message: "inline images, plain titles, equation previews, and rendered source-reveal editing behave on index.md",
   };
 }

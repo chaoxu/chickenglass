@@ -67,7 +67,7 @@ export async function run(page) {
   await openScratch(
     page,
     `${SCRATCH_PREFIX}/inline-token-after-nested-math.md`,
-    "::: {.theorem} Boundary\nBody\n:::",
+    '::: {.theorem title="Boundary"}\nBody\n:::',
   );
   const theoremBody = page.locator(".cf-lexical-nested-editor--block-body").first();
   await theoremBody.click();

@@ -3,11 +3,11 @@ import { readEditorText } from "../test-helpers.mjs";
 export const name = "embedded-field-dirty-state";
 export const groups = ["surfaces"];
 
-const DOC = `::: {#thm:embedded-dirty .theorem} Original theorem title
+const DOC = `::: {#thm:embedded-dirty .theorem title="Original theorem title"}
 Body text.
 :::
 
-::: {#tbl:embedded-dirty .table} Original table caption
+::: {#tbl:embedded-dirty .table title="Original table caption"}
 | Column |
 |--------|
 | Value  |
@@ -45,14 +45,14 @@ async function appendToEmbeddedField(page, fieldSelector, marker) {
   await page.keyboard.type(marker);
 
   await page.waitForFunction(
-    (needle) => window.__editor?.peekDoc?.().includes(needle),
+    (needle) => window.__editor?.getDoc?.().includes(needle),
     marker,
-    { timeout: 1000 },
+    { timeout: 5000 },
   );
 
   const state = await page.evaluate((needle) => ({
     dirty: window.__app?.isDirty?.() ?? false,
-    docIncludesMarker: window.__editor?.peekDoc?.().includes(needle) ?? false,
+    docIncludesMarker: window.__editor?.getDoc?.().includes(needle) ?? false,
   }), marker);
 
   if (!state.docIncludesMarker || !state.dirty) {

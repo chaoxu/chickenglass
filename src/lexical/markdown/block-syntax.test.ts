@@ -31,31 +31,23 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
-  it("hides trailing label syntax from fenced div title fields while preserving source", () => {
+  it("adds title attributes instead of trailing titles", () => {
     const parsed = parseStructuredFencedDivRaw([
-      "::: {.theorem} Pythagoras {#thm:pythagoras}",
+      "::: {.theorem #thm:pythagoras}",
       "Body",
       ":::",
     ].join("\n"));
 
-    expect(parsed).toMatchObject({
-      blockType: "theorem",
-      id: "thm:pythagoras",
-      title: "Pythagoras",
-      titleLabelSuffix: "{#thm:pythagoras}",
-      titleMarkdown: "Pythagoras",
-      titleKind: "trailing",
-    });
     expect(serializeFencedDivRaw(parsed, {
-      titleMarkdown: "Updated",
+      titleMarkdown: "Pythagoras",
     })).toBe([
-      "::: {.theorem} Updated {#thm:pythagoras}",
+      '::: {.theorem #thm:pythagoras title="Pythagoras"}',
       "Body",
       ":::",
     ].join("\n"));
   });
 
-  it("uses trailing inline titles ahead of title attributes", () => {
+  it("ignores non-canonical trailing opener text as a title", () => {
     const parsed = parseStructuredFencedDivRaw([
       '::: {#thm:main .theorem title="Attribute Title"} Trailing Title',
       "Body",
@@ -65,9 +57,9 @@ describe("block-syntax", () => {
     expect(parsed).toMatchObject({
       blockType: "theorem",
       id: "thm:main",
-      title: "Trailing Title",
-      titleKind: "trailing",
-      titleMarkdown: "Trailing Title",
+      title: "Attribute Title",
+      titleKind: "attribute",
+      titleMarkdown: "Attribute Title",
     });
   });
 
@@ -85,68 +77,64 @@ describe("block-syntax", () => {
       titleMarkdown: undefined,
     });
     expect(serializeFencedDivRaw(parsed)).toBe([
-      "::: Proof",
+      "::: proof",
       "Body",
       ":::",
     ].join("\n"));
-  });
-
-  it("parses documented single-line fenced divs as body content", () => {
-    const parsed = parseStructuredFencedDivRaw("::: {.theorem #thm:short} Short statement. :::");
-
-    expect(parsed).toMatchObject({
-      blockType: "theorem",
-      body: "Short statement.",
-      bodyMarkdown: "Short statement.",
-      id: "thm:short",
-      title: undefined,
-      titleKind: "none",
-    });
   });
 
   it("parses and serializes structured display math", () => {
     const parsed = parseStructuredDisplayMathRaw([
       "$$",
       "x + y",
-      "$$ {#eq:sum}",
+      "$$",
     ].join("\n"));
 
     expect(parsed).toMatchObject({
       body: "x + y",
-      id: "eq:sum",
-      labelSuffix: "{#eq:sum}",
+      id: undefined,
+      labelSuffix: "",
       openingDelimiter: "$$",
     });
     expect(serializeDisplayMathRaw(parsed, "x + y + z")).toBe([
       "$$",
       "x + y + z",
-      "$$ {#eq:sum}",
+      "$$",
     ].join("\n"));
   });
 
-  it("parses single-line display math label suffixes without folding body into the label", () => {
-    const parsed = parseStructuredDisplayMathRaw("$$x + y$$ {#eq:sum}");
+  it("parses canonical raw LaTeX equation environments", () => {
+    const parsed = parseStructuredDisplayMathRaw([
+      "\\begin{equation}\\label{eq:sum}",
+      "x + y",
+      "\\end{equation}",
+    ].join("\n"));
 
     expect(parsed).toMatchObject({
       body: "x + y",
       bodyMarkdown: "x + y",
       id: "eq:sum",
-      labelSuffix: "{#eq:sum}",
-      openingDelimiter: "$$",
+      labelSuffix: "\\label{eq:sum}",
+      openingDelimiter: "\\begin{equation}",
     });
+    expect(serializeDisplayMathRaw(parsed, "x + y + z")).toBe([
+      "\\begin{equation}\\label{eq:sum}",
+      "x + y + z",
+      "\\end{equation}",
+    ].join("\n"));
   });
 
-  it("finds fenced div and display math ranges without swallowing surrounding markdown", () => {
+  it("finds fenced div and canonical raw equation ranges without swallowing surrounding markdown", () => {
     const markdown = [
       "Intro",
       "",
-      "::: {.theorem #thm:a} Title",
+      '::: {.theorem #thm:a title="Title"}',
       "Body",
       ":::",
       "",
-      "$$",
+      "\\begin{equation}\\label{eq:x}",
       "x",
-      "$$ {#eq:x}",
+      "\\end{equation}",
       "",
       "Outro",
     ].join("\n");

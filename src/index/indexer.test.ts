@@ -12,7 +12,7 @@ import type { FileIndex } from "./query-api";
 describe("extractFileIndex", () => {
   describe("fenced divs", () => {
     it("extracts a basic theorem block", () => {
-      const content = `::: {.theorem #thm-1} Main Result
+      const content = `::: {.theorem #thm-1 title="Main Result"}
 Let $x$ be a positive integer.
 :::`;
       const result = extractFileIndex(content, "test.md");
@@ -70,22 +70,15 @@ Inner proof.
       expect(result.entries[1]).toMatchObject({ type: "proof" });
     });
 
-    it("indexes documented single-line fenced divs as body content", () => {
+    it("does not index non-canonical single-line fenced divs", () => {
       const content = "::: {.remark #rem:short} Short note. :::";
       const result = extractFileIndex(content, "test.md");
 
-      expect(result.entries).toMatchObject([
-        {
-          content: "Short note.",
-          label: "rem:short",
-          title: undefined,
-          type: "remark",
-        },
-      ]);
+      expect(result.entries).toEqual([]);
     });
 
     it("extracts block with title only (no label)", () => {
-      const content = `::: {.remark} A Note
+      const content = `::: {.remark title="A Note"}
 Some remark content.
 :::`;
       const result = extractFileIndex(content, "test.md");
@@ -100,7 +93,9 @@ Some remark content.
     it("extracts an equation label", () => {
       const content = `Some text.
 
-$$ e^{i\\pi} + 1 = 0 $$ {#eq:euler}
+\\begin{equation}\\label{eq:euler}
+e^{i\\pi} + 1 = 0
+\\end{equation}
 
 More text.`;
       const result = extractFileIndex(content, "math.md");
@@ -111,9 +106,13 @@ More text.`;
     });
 
     it("extracts multiple equation labels", () => {
-      const content = `$$ a^2 + b^2 = c^2 $$ {#eq:pythag}
+      const content = `\\begin{equation}\\label{eq:pythag}
+a^2 + b^2 = c^2
+\\end{equation}
 
-$$ F = ma $$ {#eq:newton}`;
+\\begin{equation}\\label{eq:newton}
+F = ma
+\\end{equation}`;
       const result = extractFileIndex(content, "formulas.md");
 
       const equations = result.entries.filter((e) => e.type === "equation");
@@ -122,7 +121,7 @@ $$ F = ma $$ {#eq:newton}`;
       expect(equations[1].label).toBe("eq:newton");
     });
 
-    it("ignores stray #tokens after valid closing equation fences and rejects malformed closers", () => {
+    it("does not treat display-math suffixes as equation labels", () => {
       const content = `$$ x $$ #todo
 
 \\[
@@ -131,8 +130,7 @@ y
       const result = extractFileIndex(content, "math.md");
 
       const equations = result.entries.filter((e) => e.type === "equation");
-      expect(equations).toHaveLength(1);
-      expect(equations[0].label).toBeUndefined();
+      expect(equations).toHaveLength(0);
     });
   });
 
@@ -299,10 +297,14 @@ Real theorem.
 
     it("ignores equation labels inside fenced code blocks", () => {
       const content = `\`\`\`latex
-$$ x^2 $$ {#eq:fake}
+\\begin{equation}\\label{eq:fake}
+x^2
+\\end{equation}
 \`\`\`
 
-$$ y^2 $$ {#eq:real}`;
+\\begin{equation}\\label{eq:real}
+y^2
+\\end{equation}`;
       const result = extractFileIndex(content, "test.md");
 
       const equations = result.entries.filter((e) => e.type === "equation");
@@ -345,13 +347,15 @@ We study groups as defined below.
 A **group** is a set $G$ with an operation.
 :::
 
-::: {.theorem #thm-main} Main Theorem
+::: {.theorem #thm-main title="Main Theorem"}
 Every finite group has an identity element.
 :::
 
 By [@def-group], the identity in [@thm-main] is unique.
 
-$$ |G| = \\sum_{i} |C_i| $$ {#eq:class}
+\\begin{equation}\\label{eq:class}
+|G| = \\sum_{i} |C_i|
+\\end{equation}
 
 See [@eq:class] for the class equation.`;
       const result = extractFileIndex(content, "paper.md");

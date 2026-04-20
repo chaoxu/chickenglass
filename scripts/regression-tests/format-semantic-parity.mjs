@@ -20,19 +20,19 @@ const FORMAT_DOC = [
   "",
   "Intro cites [@thm:format], [@claim:format], [@eq:format], [@tbl:format], and [@sec:format].",
   "",
-  "$$",
+  "\\begin{equation}\\label{eq:format}",
   "x + y",
-  "$$ {#eq:format}",
+  "\\end{equation}",
   "",
-  '::: {#thm:format .theorem title="Attribute Title"} Trailing **Title**',
+  '::: {#thm:format .theorem title="Attribute Title"}',
   "Statement with $x$ and a footnote[^fmt].",
   ":::",
   "",
-  "::: {.claim #claim:format} Custom Claim",
+  '::: {.claim #claim:format title="Custom Claim"}',
   "Claim body.",
   ":::",
   "",
-  "::: {.table #tbl:format} Running Times",
+  '::: {.table #tbl:format title="Running Times"}',
   "| Term | Value |",
   "|------|-------|",
   "| Math | $x$ and [@thm:format] |",
@@ -107,7 +107,6 @@ export async function run(page) {
       tableHasKatex: Boolean(tableBlock?.querySelector(".katex")),
       tableTitleText: normalize(tableTitle?.textContent),
       theoremLabelText: normalize(theoremLabel?.textContent),
-      theoremTitleHasBold: Boolean(theoremTitle?.querySelector("strong, .cf-bold")),
       theoremTitleText: normalize(theoremTitle?.textContent),
     };
   });
@@ -116,8 +115,7 @@ export async function run(page) {
     richState.headingNumber !== "1"
     || !richState.displayMathHasKatex
     || richState.theoremLabelText !== "Theorem 1"
-    || richState.theoremTitleText !== "Trailing Title"
-    || !richState.theoremTitleHasBold
+    || richState.theoremTitleText !== "Attribute Title"
     || richState.claimLabelText !== "Claim 2"
     || richState.claimTitleText !== "Custom Claim"
     || richState.tableLabelText !== "Table 3"
