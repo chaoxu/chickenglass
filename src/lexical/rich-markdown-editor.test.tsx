@@ -17,12 +17,14 @@ import { describe, expect, it } from "vitest";
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
-import "./renderers/block-renderers";
+import { registerCoflatDecoratorRenderers } from "./renderers/block-renderers";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 import { HEADING_SOURCE_SELECTOR } from "./source-position-contract";
 import { ACTIVATE_STRUCTURE_EDIT_COMMAND } from "./structure-edit-plugin";
 
 type RichMarkdownEditorProps = ComponentProps<typeof LexicalRichMarkdownEditor>;
+
+registerCoflatDecoratorRenderers();
 
 const TABLE_MD = `| H1 | H2 |
 | --- | --- |

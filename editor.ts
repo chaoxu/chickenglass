@@ -9,6 +9,9 @@ import {
   type MarkdownEditorHandle,
 } from "./src/lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "./src/lexical/markdown-editor";
+import { registerCoflatDecoratorRenderers } from "./src/lexical/renderers/block-renderers";
+
+registerCoflatDecoratorRenderers();
 
 export type StandaloneEditorMode = "lexical" | "paragraph" | "source";
 

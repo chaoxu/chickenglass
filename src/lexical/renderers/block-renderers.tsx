@@ -676,11 +676,9 @@ export const RawBlockRenderer = memo(function RawBlockRenderer({
   );
 });
 
-// Bind decorator renderers to their node registries at module load time.
-// `raw-block-node.ts` and `footnote-reference-node.ts` hold these through
-// small registry modules so they never statically reach back into
-// `block-renderers.tsx`, which would close the rich-markdown-editor hub cycle.
-registerRenderers({
-  footnoteReference: FootnoteReferenceRenderer,
-  rawBlock: RawBlockRenderer,
-});
+export function registerCoflatDecoratorRenderers(): void {
+  registerRenderers({
+    footnoteReference: FootnoteReferenceRenderer,
+    rawBlock: RawBlockRenderer,
+  });
+}

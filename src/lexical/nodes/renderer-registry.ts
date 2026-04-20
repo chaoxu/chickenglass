@@ -7,9 +7,8 @@
  * cycle. This registry lets each node hold a typed reference to its renderer
  * without importing the renderer module.
  *
- * `block-renderers.tsx` calls `registerRenderers(...)` once at module load.
- * `lexical-editor-surface.tsx` imports `block-renderers.tsx` as a side effect
- * so registration runs before the first editor mounts.
+ * Production editor entrypoints call `registerCoflatDecoratorRenderers()`
+ * before mounting. Headless markdown tests do not import React renderers.
  *
  * Fallback components cover the pre-registration window (headless tests,
  * hot-reload ordering) without crashing — they render visibly so a missing

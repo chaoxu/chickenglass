@@ -6,14 +6,13 @@ import {
   type MarkdownEditorSelection,
 } from "../../lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
-// Side-effect import binds block renderers to their node registries before any
-// editor mounts. See nodes/footnote-reference-renderer-registry.ts and
-// nodes/raw-block-renderer-registry.ts.
-import "../../lexical/renderers/block-renderers";
+import { registerCoflatDecoratorRenderers } from "../../lexical/renderers/block-renderers";
 import { FORMAT_EVENT, type FormatEventDetail } from "../../constants/events";
 import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import type { EditorMode, RevealPresentation } from "../editor-mode";
 import { planMarkdownFormat } from "../format-markdown";
+
+registerCoflatDecoratorRenderers();
 
 export interface LexicalEditorSurfaceProps {
   readonly doc: string;
