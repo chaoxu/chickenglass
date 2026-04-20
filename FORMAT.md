@@ -612,6 +612,10 @@ math:
 \newcommand{\floor}[1]{\lfloor #1 \rfloor}
 ```
 
+The LaTeX importer recognizes the same exported `\newcommand` shape, plus
+`\renewcommand`, `\def`, `\let`, and `\DeclareMathOperator`, and maps used
+macros back into frontmatter `math:`.
+
 ### Template variants
 
 - `template/article.tex` — plain `\documentclass{article}` fallback with `amsthm`, `cleveref`, `soul`, `tabularx`, `booktabs`, `algorithm`, `hyperref`.

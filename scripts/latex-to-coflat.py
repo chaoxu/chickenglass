@@ -183,6 +183,42 @@ def read_control_word(text: str, index: int) -> tuple[str, int]:
     return text[start:index], index
 
 
+def read_bracket_group(text: str, index: int) -> tuple[str, int]:
+    if index >= len(text) or text[index] != "[":
+        raise ValueError("expected bracket group")
+    depth = 0
+    buf: list[str] = []
+    i = index
+    while i < len(text):
+        ch = text[i]
+        if ch == "[":
+            depth += 1
+            if depth > 1:
+                buf.append(ch)
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return "".join(buf), i + 1
+            buf.append(ch)
+        else:
+            buf.append(ch)
+        i += 1
+    raise ValueError("unbalanced brackets")
+
+
+def read_macro_definition_name(text: str, index: int) -> tuple[str | None, int]:
+    index = skip_ws(text, index)
+    if index < len(text) and text[index] == "{":
+        group, cursor = read_brace_group(text, index)
+        name = group.strip()
+        return (name if name.startswith("\\") else None), cursor
+    if index < len(text) and text[index] == "\\":
+        name, cursor = read_control_word(text, index + 1)
+        if name:
+            return f"\\{name}", cursor
+    return None, index
+
+
 def extract_command_groups(text: str, command: str, group_count: int) -> list[list[str]]:
     results: list[list[str]] = []
     token = f"\\{command}"
@@ -259,6 +295,32 @@ def parse_macros(tex: str) -> dict[str, str]:
     i = 0
 
     while i < len(preamble):
+        macro_command = None
+        if preamble.startswith("\\newcommand", i):
+            macro_command = "\\newcommand"
+        elif preamble.startswith("\\renewcommand", i):
+            macro_command = "\\renewcommand"
+        if macro_command:
+            cursor = i + len(macro_command)
+            try:
+                name, cursor = read_macro_definition_name(preamble, cursor)
+                if not name:
+                    i += 1
+                    continue
+                cursor = skip_ws(preamble, cursor)
+                if cursor < len(preamble) and preamble[cursor] == "[":
+                    _arity, cursor = read_bracket_group(preamble, cursor)
+                    cursor = skip_ws(preamble, cursor)
+                    if cursor < len(preamble) and preamble[cursor] == "[":
+                        _default, cursor = read_bracket_group(preamble, cursor)
+                        cursor = skip_ws(preamble, cursor)
+                body, cursor = read_brace_group(preamble, cursor)
+            except ValueError:
+                i += 1
+                continue
+            macros[name] = body
+            i = cursor
+            continue
         if preamble.startswith("\\def\\", i):
             cursor = i + len("\\def\\")
             name, cursor = read_control_word(preamble, cursor)

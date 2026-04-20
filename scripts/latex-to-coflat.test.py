@@ -51,6 +51,28 @@ class LatexToCoflatManifestTest(unittest.TestCase):
 
         self.assertIn("::: {#conj:main .conjecture}", rewritten)
 
+    def test_parse_macros_supports_exported_and_legacy_forms(self):
+        tex = r"""
+        \newcommand{\R}{\mathbb{R}}
+        \newcommand{\floor}[1]{\lfloor #1 \rfloor}
+        \renewcommand{\epsilon}{\varepsilon}
+        \def\old#1{\operatorname{old}(#1)}
+        \let\alias\R
+        \DeclareMathOperator{\supp}{supp}
+        \begin{document}
+        Body
+        \end{document}
+        """
+
+        macros = self.module.parse_macros(tex)
+
+        self.assertEqual(macros["\\R"], "\\mathbb{R}")
+        self.assertEqual(macros["\\floor"], "\\lfloor #1 \\rfloor")
+        self.assertEqual(macros["\\epsilon"], "\\varepsilon")
+        self.assertEqual(macros["\\old"], "\\operatorname{old}(#1)")
+        self.assertEqual(macros["\\alias"], "\\mathbb{R}")
+        self.assertEqual(macros["\\supp"], "\\operatorname{supp}")
+
 
 if __name__ == "__main__":
     unittest.main()
