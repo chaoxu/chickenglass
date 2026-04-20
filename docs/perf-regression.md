@@ -8,9 +8,13 @@ Fixture defaults live in `scripts/tooling-fixtures.mjs`; update that catalog
 instead of editing perf scripts, browser regressions, or DevX status output
 directly.
 
-- Preferred heavy scroll/perf fixture: `fixtures/rankdecrease/main.md`
-- Typing/perf semantic hotspot fixture: `fixtures/cogirth/main2.md`
+- Public heavy scroll/perf fixture: `demo/perf-heavy/main.md`
 - Public fallback: `demo/index.md`
+
+Regenerate the public heavy fixture with
+`node scripts/generate-public-heavy-fixture.mjs --source <private-main.md> --bib <private-ref.bib>`.
+The generator preserves math and editor structure, remaps citations/labels, and
+redacts non-math prose.
 
 ## Common scenarios
 
@@ -32,5 +36,6 @@ node scripts/perf-regression.mjs compare --scenario typing-lexical-burst --basel
 ## Requirements
 
 - Report before/after numbers on a real document.
-- Note when a private fixture was unavailable and a public fallback was used.
+- The required typing burst gate uses the public heavy fixture so clean worktrees
+  and CI do not depend on private local documents.
 - Keep scenario names and required metrics stable when possible so old baselines remain comparable.

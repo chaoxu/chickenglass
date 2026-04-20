@@ -174,7 +174,7 @@ Do not use the Playwright MCP plugin for this repo.
 
 - Use `pnpm perf:baseline` and `pnpm perf:check` for the standard workflow, or
   `scripts/perf-regression.mjs` for custom scenarios
-- Preferred heavy fixture: `fixtures/rankdecrease/main.md`
+- Preferred heavy fixture: `demo/perf-heavy/main.md`
 - Fallback public fixture: `demo/index.md`
 - Every perf change must report before/after numbers on a real document
 

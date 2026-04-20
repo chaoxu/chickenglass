@@ -53,8 +53,8 @@ async function clickLastTopLevelParagraph(page) {
 }
 
 export async function run(page) {
-  const path = `rankdecrease/native-step-authoring-${Date.now()}.md`;
-  await openRegressionDocument(page, "rankdecrease/main.md", { mode: "lexical" });
+  const path = `perf-heavy/native-step-authoring-${Date.now()}.md`;
+  await openRegressionDocument(page, "perf-heavy/main.md", { mode: "lexical" });
   await page.evaluate(async (path) => {
     if (window.__app.getCurrentDocument?.()) {
       await window.__app.closeFile({ discard: true });
@@ -71,7 +71,7 @@ export async function run(page) {
   await page.keyboard.type("# Native step authoring {#sec:native-step}");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
-  await page.keyboard.type("This paragraph introduces $M$ and cites [@Vardy97].");
+  await page.keyboard.type("This paragraph introduces $M$ and cites [@cite0001].");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
 
@@ -134,7 +134,7 @@ export async function run(page) {
   const beforeSave = await readEditorText(page);
   for (const needle of [
     "# Native step authoring",
-    "[@Vardy97]",
+    "[@cite0001]",
     "\\rho(M)=\\lambda(M)/\\sigma(M)",
     "::: {.theorem #thm:native-step} Native Step Theorem",
     "native theorem body remains editable",

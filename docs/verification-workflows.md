@@ -73,19 +73,22 @@ Use heavy-doc perf mode for typing-rich and fixture-heavy scenarios:
 
 ```
 pnpm perf:capture:heavy -- \
-  --scenario typing-rich-burst \
+  --scenario typing-lexical-burst \
   --iterations 3 \
   --warmup 1 \
-  --output output/perf/typing-rich-burst-heavy.json
+  --output output/perf/typing-lexical-burst-heavy.json
 ```
 
 Compare against a baseline:
 
 ```
 pnpm perf:compare:heavy -- \
-  --baseline output/perf/typing-rich-burst-heavy-baseline.json \
-  --current output/perf/typing-rich-burst-heavy.json
+  --scenario typing-lexical-burst \
+  --baseline output/perf/typing-lexical-burst-heavy-baseline.json
 ```
 
 The `--heavy-doc` flag (used implicitly by `perf:capture:heavy` and
 `perf:compare:heavy`) increases settle times for large documents.
+The default `typing-lexical-burst` scenario performs x100 insert bursts against
+`demo/index.md` and the public redacted heavy fixture at
+`demo/perf-heavy/main.md`.

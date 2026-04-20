@@ -3,13 +3,13 @@ import {
   readEditorText,
 } from "../test-helpers.mjs";
 
-export const name = "rankdecrease-title-editing";
+export const name = "public-heavy-title-editing";
 export const groups = ["surfaces"];
 
-const TITLE_MARKER = "RankDecreaseTitleNeedle";
+const TITLE_MARKER = "PublicHeavyTitleNeedle";
 
 export async function run(page) {
-  await openRegressionDocument(page, "rankdecrease/main.md", { mode: "lexical" });
+  await openRegressionDocument(page, "perf-heavy/main.md", { mode: "lexical" });
 
   const title = page
     .locator(".cf-lexical-block--lemma .cf-lexical-nested-editor--title")
@@ -36,17 +36,17 @@ export async function run(page) {
 
   const text = await readEditorText(page);
   const titleLine = text.split("\n").find((line) =>
-    line.includes("Weighted ratio equals parallel-closure ratio")) ?? "";
+    line.includes(".lemma") && line.includes(TITLE_MARKER)) ?? "";
 
   if (!titleLine.includes(TITLE_MARKER)) {
     return {
       pass: false,
-      message: `rankdecrease block title typing did not survive focus activation. Title line: ${JSON.stringify(titleLine)}`,
+      message: `public heavy block title typing did not survive focus activation. Title line: ${JSON.stringify(titleLine)}`,
     };
   }
 
   return {
     pass: true,
-    message: "rankdecrease focus-activated block title accepts continuous typing and commits on blur",
+    message: "public heavy focus-activated block title accepts continuous typing and commits on blur",
   };
 }

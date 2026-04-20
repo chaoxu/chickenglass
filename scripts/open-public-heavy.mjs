@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Open the rankdecrease fixture in the shared Chrome for Testing app window
+ * Open the public heavy fixture in the shared Chrome for Testing app window
  * driven over CDP (the same lane as `pnpm chrome`).
  *
  * Usage:
  *   pnpm build && pnpm preview &          # serve at :5188
- *   node scripts/open-rankdecrease.mjs
+ *   node scripts/open-public-heavy.mjs
  *
  * Reuses an existing CDP session on :9322 if one is running; otherwise
  * launches a detached Chrome window and then connects. After loading the
@@ -29,7 +29,7 @@ import {
 const APP_URL = "http://localhost:5188/";
 const CDP_PORT = 9322;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PROFILE_DIR = resolve(process.env.HOME ?? "", ".codex/tmp/coflat/chrome-testing/rankdecrease");
+const PROFILE_DIR = resolve(process.env.HOME ?? "", ".codex/tmp/coflat/chrome-testing/public-heavy");
 
 async function ensureBrowser() {
   const existing = await connectToChrome(CDP_PORT);
@@ -64,8 +64,8 @@ async function pickOrOpenPage(browser) {
 
 async function main() {
   const [md, bib] = await Promise.all([
-    readFile(resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"), "utf8"),
-    readFile(resolve(REPO_ROOT, "fixtures/rankdecrease/ref.bib"), "utf8"),
+    readFile(resolve(REPO_ROOT, "demo/perf-heavy/main.md"), "utf8"),
+    readFile(resolve(REPO_ROOT, "demo/perf-heavy/refs.bib"), "utf8"),
   ]);
 
   const browser = await ensureBrowser();
@@ -78,7 +78,7 @@ async function main() {
     });
     process.stderr.write("loading ref.bib\n");
     await page.evaluate(async (bibText) => {
-      await window.__app.openFileWithContent("rankdecrease/ref.bib", bibText);
+      await window.__app.openFileWithContent("perf-heavy/refs.bib", bibText);
     }, bib);
     // openFileWithContent commits the doc as dirty; the next switch would
     // block on the unsaved-changes dialog in preview mode, so discard first.
@@ -88,9 +88,9 @@ async function main() {
     await sleep(100);
     process.stderr.write("loading main.md\n");
     await page.evaluate(async (mdText) => {
-      await window.__app.openFileWithContent("rankdecrease/main.md", mdText);
+      await window.__app.openFileWithContent("perf-heavy/main.md", mdText);
     }, md);
-    process.stderr.write(`rankdecrease loaded at ${APP_URL}\n`);
+    process.stderr.write(`public heavy fixture loaded at ${APP_URL}\n`);
   } finally {
     // Disconnect from CDP without killing the detached browser.
     await browser.close();

@@ -78,7 +78,7 @@ async function discardDirtyPerfState(page) {
   }
 }
 
-const SCROLL_FIXTURE = fixtureForHarness("rankdecrease");
+const SCROLL_FIXTURE = fixtureForHarness("publicHeavy");
 const PUBLIC_SCROLL_FALLBACK = fixtureForHarness("publicShowcase");
 
 export const TYPING_BURST_REQUIRED_METRICS = [
@@ -137,15 +137,9 @@ export const TYPING_BURST_CASES = [
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
   },
   {
-    ...fixtureForHarness("rankdecrease"),
-    catalogKey: "rankdecrease",
-    key: "rankdecrease",
-    positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
-  },
-  {
-    ...fixtureForHarness("cogirthMain2"),
-    catalogKey: "cogirthMain2",
-    key: "cogirth_main2",
+    ...fixtureForHarness("publicHeavy"),
+    catalogKey: "publicHeavy",
+    key: "public_heavy",
     positionKeys: [
       ...DEFAULT_TYPING_BURST_POSITION_KEYS,
       "inline_math",
@@ -153,7 +147,7 @@ export const TYPING_BURST_CASES = [
     ],
   },
 ];
-const TYPING_BURST_INSERT_COUNT = 100;
+export const TYPING_BURST_INSERT_COUNT = 100;
 
 export function availableTypingBurstCases(caseDefinitions = TYPING_BURST_CASES) {
   return caseDefinitions.filter((caseDef) => hasFixtureDocument(caseDef));
@@ -322,7 +316,7 @@ function scrollFixtureCoverageWarnings() {
     return [];
   }
   return [
-    `${fixtureCoverageWarning("rankdecrease", "publicShowcase")} Perf coverage is public fallback only.`,
+    `${fixtureCoverageWarning("publicHeavy", "publicShowcase")} Perf coverage is showcase fallback only.`,
   ];
 }
 
@@ -462,7 +456,7 @@ export const scenarios = {
     },
   },
   "open-scroll-fixture": {
-    description: "Reload the app and open the preferred heavy markdown fixture in Lexical mode.",
+    description: "Reload the app and open the public heavy markdown fixture in Lexical mode.",
     defaultSettleMs: 700,
     run: async (page) => {
       await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical", project: "full-project" });
@@ -503,7 +497,7 @@ export const scenarios = {
     },
   },
   "scroll-step-lexical": {
-    description: "Open the preferred heavy Lexical-mode scroll fixture, falling back to demo/index.md when private fixtures are unavailable.",
+    description: "Open the public heavy Lexical-mode scroll fixture, falling back to demo/index.md when unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
       await openFixtureDocument(page, resolveScrollFixture(), { mode: "lexical", project: "full-project" });
@@ -513,7 +507,7 @@ export const scenarios = {
     },
   },
   "scroll-step-source": {
-    description: "Open the preferred heavy Source-mode scroll fixture, falling back to demo/index.md when private fixtures are unavailable.",
+    description: "Open the public heavy Source-mode scroll fixture, falling back to demo/index.md when unavailable.",
     defaultSettleMs: 400,
     run: async (page) => {
       await openFixtureDocument(page, resolveScrollFixture(), { mode: "source", project: "full-project" });
@@ -551,7 +545,7 @@ Options:
   -h, --help               Show this help text
 
 Fixtures:
-  Preferred heavy fixture: ${TOOLING_FIXTURES.rankdecrease.displayPath}
+  Public heavy fixture: ${TOOLING_FIXTURES.publicHeavy.displayPath}
   Fallback public fixture: ${TOOLING_FIXTURES.publicShowcase.displayPath}
 
 Examples:

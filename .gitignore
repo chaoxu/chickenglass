@@ -1,4 +1,5 @@
 node_modules/
+node_modules
 dist/
 dist-server/
 src-tauri/target/
@@ -21,6 +22,8 @@ demo/*
 !demo/reference.bib
 !demo/showcase/
 !demo/showcase/**
+!demo/perf-heavy/
+!demo/perf-heavy/**
 # Local-only heavy/regression fixtures. Keep the policy note tracked.
 fixtures/*
 !fixtures/README.md

@@ -3,10 +3,10 @@ import {
   readEditorText,
 } from "../test-helpers.mjs";
 
-export const name = "rankdecrease-embedded-field-immediate-save";
+export const name = "public-heavy-embedded-field-immediate-save";
 export const groups = ["surfaces"];
 
-const DOCUMENT_PATH = "rankdecrease/main.md";
+const DOCUMENT_PATH = "perf-heavy/main.md";
 const TITLE_MARKER = " ImmediateSaveTitleNeedle";
 const TITLE_CONTINUATION_MARKER = " ImmediateSaveTitleAfterReadNeedle";
 const BODY_MARKER = " ImmediateSaveBodyNeedle";

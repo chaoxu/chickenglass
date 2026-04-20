@@ -16,8 +16,8 @@ const DOWN_OVERSHOOT_TOLERANCE_PX = 120;
 const UP_OVERSHOOT_TOLERANCE_PX = 120;
 const REVERSE_TOLERANCE_PX = 40;
 
-const HEAVY_FIXTURE = fixtureForHarness("rankdecrease");
-const PUBLIC_SCROLL_FALLBACK = fallbackFixtureFor("rankdecrease");
+const HEAVY_FIXTURE = fixtureForHarness("publicHeavy");
+const PUBLIC_SCROLL_FALLBACK = fallbackFixtureFor("publicHeavy");
 
 function describeSample(sample) {
   return `${sample.label}: scrollTop=${sample.scrollTop}`;

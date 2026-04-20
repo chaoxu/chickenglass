@@ -10,6 +10,7 @@ import { probeAppUrl } from "./tooling/http.mjs";
 import { fixtureStatus as catalogFixtureStatus } from "./tooling-fixtures.mjs";
 
 const OPTIONAL_FIXTURE_KEYS = [
+  "publicHeavy",
   "rankdecrease",
   "cogirthMain2",
   "cogirthIncludeLabels",

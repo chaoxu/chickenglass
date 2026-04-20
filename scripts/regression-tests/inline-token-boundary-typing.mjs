@@ -9,6 +9,7 @@ import {
 
 export const name = "inline-token-boundary-typing";
 export const groups = ["authoring", "reveal"];
+const SCRATCH_PREFIX = "perf-heavy";
 
 async function openScratch(page, path, content = "") {
   await discardCurrentFile(page);
@@ -25,9 +26,9 @@ async function openScratch(page, path, content = "") {
 }
 
 export async function run(page) {
-  await openRegressionDocument(page, "rankdecrease/main.md", { mode: "lexical" });
+  await openRegressionDocument(page, "perf-heavy/main.md", { mode: "lexical" });
 
-  await openScratch(page, "rankdecrease/inline-token-plain-typing.md");
+  await openScratch(page, `${SCRATCH_PREFIX}/inline-token-plain-typing.md`);
   await page.keyboard.type("x");
   await waitForBrowserSettled(page, 3);
   const plainDoc = await readEditorText(page);
@@ -38,7 +39,7 @@ export async function run(page) {
     };
   }
 
-  await openScratch(page, "rankdecrease/inline-token-after-math.md");
+  await openScratch(page, `${SCRATCH_PREFIX}/inline-token-after-math.md`);
   await page.keyboard.type("$M$");
   await waitForBrowserSettled(page, 3);
   await page.keyboard.type("1");
@@ -51,7 +52,7 @@ export async function run(page) {
     };
   }
 
-  await openScratch(page, "rankdecrease/inline-token-non-boundary-typing.md", "a $M$");
+  await openScratch(page, `${SCRATCH_PREFIX}/inline-token-non-boundary-typing.md`, "a $M$");
   await setSelection(page, 0);
   await page.keyboard.type("x");
   await waitForBrowserSettled(page, 3);
@@ -65,7 +66,7 @@ export async function run(page) {
 
   await openScratch(
     page,
-    "rankdecrease/inline-token-after-nested-math.md",
+    `${SCRATCH_PREFIX}/inline-token-after-nested-math.md`,
     "::: {.theorem} Boundary\nBody\n:::",
   );
   const theoremBody = page.locator(".cf-lexical-nested-editor--block-body").first();
@@ -82,7 +83,7 @@ export async function run(page) {
     };
   }
 
-  await openScratch(page, "rankdecrease/inline-token-after-table-math.md");
+  await openScratch(page, `${SCRATCH_PREFIX}/inline-token-after-table-math.md`);
   await page.keyboard.type("| A | B |");
   await page.keyboard.press("Enter");
   await page.keyboard.type("| --- | --- |");
@@ -101,13 +102,13 @@ export async function run(page) {
     };
   }
 
-  await openScratch(page, "rankdecrease/inline-token-after-reference.md");
-  await page.keyboard.type("[@Vardy97]");
+  await openScratch(page, `${SCRATCH_PREFIX}/inline-token-after-reference.md`);
+  await page.keyboard.type("[@cite0001]");
   await waitForBrowserSettled(page, 3);
   await page.keyboard.type("x");
   await waitForBrowserSettled(page, 3);
   const referenceDoc = await readEditorText(page);
-  if (referenceDoc !== "[@Vardy97]x") {
+  if (referenceDoc !== "[@cite0001]x") {
     return {
       pass: false,
       message: `typing after a reference token was not canonical: ${JSON.stringify(referenceDoc)}`,

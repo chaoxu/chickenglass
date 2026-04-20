@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * One-shot CORS file server for rankdecrease, so a remote browser tab on
+ * One-shot CORS file server for the public heavy fixture, so a remote browser tab on
  * :5188 can fetch the fixture and feed it into the debug bridge.
  *
  * Usage:
- *   node scripts/serve-rankdecrease.mjs
+ *   node scripts/serve-public-heavy.mjs
  *
  * Then paste the printed snippet into the devtools console of the :5188 tab.
  */
@@ -16,8 +16,8 @@ import { fileURLToPath } from "node:url";
 const PORT = 5190;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROUTES = {
-  "/rankdecrease/main.md": resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
-  "/rankdecrease/ref.bib": resolve(REPO_ROOT, "fixtures/rankdecrease/ref.bib"),
+  "/perf-heavy/main.md": resolve(REPO_ROOT, "demo/perf-heavy/main.md"),
+  "/perf-heavy/refs.bib": resolve(REPO_ROOT, "demo/perf-heavy/refs.bib"),
 };
 
 const server = createServer(async (req, res) => {
@@ -41,19 +41,19 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  process.stderr.write(`rankdecrease fixture server listening on :${PORT}\n`);
+  process.stderr.write(`public heavy fixture server listening on :${PORT}\n`);
   process.stderr.write("paste this into the devtools console of the :5188 tab:\n\n");
   const snippet = `(async () => {
   const base = \`\${location.protocol}//\${location.hostname}:${PORT}\`;
   const [bib, md] = await Promise.all([
-    fetch(\`\${base}/rankdecrease/ref.bib\`).then(r => r.text()),
-    fetch(\`\${base}/rankdecrease/main.md\`).then(r => r.text()),
+    fetch(\`\${base}/perf-heavy/refs.bib\`).then(r => r.text()),
+    fetch(\`\${base}/perf-heavy/main.md\`).then(r => r.text()),
   ]);
   await Promise.all([window.__app.ready, window.__editor.ready]);
-  await window.__app.openFileWithContent("rankdecrease/ref.bib", bib);
+  await window.__app.openFileWithContent("perf-heavy/refs.bib", bib);
   await window.__app.closeFile({ discard: true });
-  await window.__app.openFileWithContent("rankdecrease/main.md", md);
-  console.log("rankdecrease loaded");
+  await window.__app.openFileWithContent("perf-heavy/main.md", md);
+  console.log("public heavy fixture loaded");
 })();`;
   process.stdout.write(`${snippet}\n`);
 });

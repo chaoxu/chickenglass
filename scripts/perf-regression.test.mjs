@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   availableTypingBurstCases,
+  TYPING_BURST_INSERT_COUNT,
   TYPING_BURST_CASES,
   TYPING_BURST_REQUIRED_METRICS,
   findTypingBurstPositions,
@@ -43,20 +44,21 @@ describe("perf regression scenarios", () => {
     expect(scenarios["typing-lexical-burst"]).toMatchObject({
       defaultSettleMs: 200,
     });
+    expect(TYPING_BURST_INSERT_COUNT).toBe(100);
     expect(TYPING_BURST_CASES.map(({ key, displayPath }) => ({ key, displayPath }))).toEqual([
       { key: "index", displayPath: "demo/index.md" },
-      { key: "rankdecrease", displayPath: "fixtures/rankdecrease/main.md" },
-      { key: "cogirth_main2", displayPath: "fixtures/cogirth/main2.md" },
+      { key: "public_heavy", displayPath: "demo/perf-heavy/main.md" },
     ]);
     expect(availableCases).toContainEqual({ key: "index", displayPath: "demo/index.md" });
+    expect(availableCases).toContainEqual({ key: "public_heavy", displayPath: "demo/perf-heavy/main.md" });
     expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
       "typing.wall_ms.index.after_frontmatter",
     );
     expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
-      "typing.wall_ms.cogirth_main2.inline_math",
+      "typing.wall_ms.public_heavy.inline_math",
     );
     expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
-      "typing.settle_ms.cogirth_main2.citation_ref",
+      "typing.settle_ms.public_heavy.citation_ref",
     );
   });
 
@@ -72,7 +74,7 @@ describe("perf regression scenarios", () => {
 
     expect(missingCases.map(({ key }) => key)).toEqual(["missing_private"]);
     expect(scenarios["typing-lexical-burst"].requiredMetrics).toContain(
-      "typing.wall_ms.rankdecrease.after_frontmatter",
+      "typing.wall_ms.public_heavy.after_frontmatter",
     );
   });
 

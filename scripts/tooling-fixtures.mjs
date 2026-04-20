@@ -18,13 +18,22 @@ export const TOOLING_FIXTURES = {
     purpose: "public showcase fallback",
     virtualPath: "index.md",
   },
+  publicHeavy: {
+    candidates: [resolve(REPO_ROOT, "demo/perf-heavy/main.md")],
+    displayPath: "demo/perf-heavy/main.md",
+    fallback: "publicShowcase",
+    key: "publicHeavy",
+    privacy: "public",
+    purpose: "public redacted heavy scroll/perf fixture",
+    virtualPath: "perf-heavy/main.md",
+  },
   rankdecrease: {
     candidates: [resolve(REPO_ROOT, "fixtures/rankdecrease/main.md")],
     displayPath: "fixtures/rankdecrease/main.md",
-    fallback: "publicShowcase",
+    fallback: "publicHeavy",
     key: "rankdecrease",
     privacy: "local",
-    purpose: "preferred heavy scroll/perf fixture",
+    purpose: "local private legacy heavy scroll/perf fixture",
     virtualPath: "rankdecrease/main.md",
   },
   cogirthMain2: {
@@ -101,4 +110,3 @@ export function fixtureStatus(key) {
     status: present ? "present" : `missing; fallback: ${fallback?.displayPath ?? "inline public fallback"}`,
   };
 }
-

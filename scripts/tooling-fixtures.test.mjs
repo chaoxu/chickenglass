@@ -10,22 +10,30 @@ import {
 
 describe("tooling fixture catalog", () => {
   it("declares the shared perf/browser fixture defaults", () => {
+    expect(fixtureForHarness("publicHeavy")).toMatchObject({
+      displayPath: "demo/perf-heavy/main.md",
+      virtualPath: "perf-heavy/main.md",
+    });
+    expect(fallbackFixtureFor("publicHeavy")).toMatchObject({
+      displayPath: "demo/index.md",
+      virtualPath: "index.md",
+    });
     expect(fixtureForHarness("rankdecrease")).toMatchObject({
       displayPath: "fixtures/rankdecrease/main.md",
       virtualPath: "rankdecrease/main.md",
     });
     expect(fallbackFixtureFor("rankdecrease")).toMatchObject({
-      displayPath: "demo/index.md",
-      virtualPath: "index.md",
+      displayPath: "demo/perf-heavy/main.md",
+      virtualPath: "perf-heavy/main.md",
     });
     expect(TOOLING_FIXTURES.cogirthMain2.purpose).toContain("typing/perf");
   });
 
   it("formats missing-fixture warnings with purpose, fallback, and candidates", () => {
-    const warning = fixtureCoverageWarning("rankdecrease", "publicShowcase");
+    const warning = fixtureCoverageWarning("publicHeavy", "publicShowcase");
 
-    expect(warning).toContain("preferred heavy scroll/perf fixture");
-    expect(warning).toContain("fixtures/rankdecrease/main.md");
+    expect(warning).toContain("public redacted heavy scroll/perf fixture");
+    expect(warning).toContain("demo/perf-heavy/main.md");
     expect(warning).toContain("demo/index.md");
     expect(warning).toContain("Tried:");
   });
@@ -38,4 +46,3 @@ describe("tooling fixture catalog", () => {
     expect(status.privacy).toBe("local");
   });
 });
-
