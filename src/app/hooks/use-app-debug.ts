@@ -18,6 +18,7 @@ import {
 import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { getInteractionLog, clearInteractionLog } from "../../lexical/interaction-trace";
 import { useDevSettings } from "../../state/dev-settings";
+import { applyMarkdownFormatAction } from "../editor-format-actions";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -296,6 +297,18 @@ export function useAppDebug({
           detail: { anchor, focus },
         });
         currentEditorHandle().setSelection(anchor, focus);
+      },
+      formatSelection: (detail) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `editor.formatSelection ${detail.type}`,
+          detail,
+        });
+        return applyMarkdownFormatAction({
+          editorHandle: current().editorHandle,
+          getCurrentDocText: current().getCurrentDocText,
+        }, detail);
       },
     });
 

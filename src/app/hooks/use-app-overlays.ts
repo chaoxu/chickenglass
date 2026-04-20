@@ -2,13 +2,10 @@ import { useCallback, useMemo } from "react";
 
 import type { BackgroundIndexer } from "../../index";
 import type { FormatEventDetail, HeadingFormatLevel, SimpleFormatEventType } from "../../constants/events";
-import { getActiveEditor } from "../../lexical/active-editor-tracker";
-import { FORMAT_MARKDOWN_COMMAND } from "../../lexical/editor-format-command";
 import type { DocumentLabelBacklinksResult } from "../markdown/labels";
 import { useDevSettings } from "../../state/dev-settings";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
-import { planMarkdownFormat } from "../format-markdown";
 import type { PaletteCommand } from "../components/command-palette";
 import { useAutoSave } from "./use-auto-save";
 import type { UseDialogsReturn } from "./use-dialogs";
@@ -18,6 +15,7 @@ import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
 import { TAURI_MENU_IDS } from "../tauri-client/bridge-metadata";
+import { applyMarkdownFormatAction } from "../editor-format-actions";
 import {
   toHotkeyBindings,
   toMenuHandlers,
@@ -92,24 +90,10 @@ export function useAppOverlays({
   }, [dialogs, editor]);
 
   const applyFormat = useCallback((detail: FormatEventDetail) => {
-    const activeEditor = getActiveEditor();
-    if (activeEditor?.dispatchCommand(FORMAT_MARKDOWN_COMMAND, detail)) {
-      return;
-    }
-
-    const handle = editor.editorHandle;
-    if (!handle) {
-      return;
-    }
-
-    const plan = planMarkdownFormat(
-      editor.getCurrentDocText(),
-      handle.getSelection(),
-      detail,
-    );
-    handle.applyChanges(plan.changes);
-    handle.setSelection(plan.selection.anchor, plan.selection.focus);
-    handle.focus();
+    applyMarkdownFormatAction({
+      editorHandle: editor.editorHandle,
+      getCurrentDocText: editor.getCurrentDocText,
+    }, detail);
   }, [editor]);
 
   const applySimpleFormat = useCallback((type: SimpleFormatEventType) => {

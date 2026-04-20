@@ -1,4 +1,5 @@
 import {
+  formatSelection,
   openFixtureDocument,
   readEditorText,
   switchToMode,
@@ -47,11 +48,7 @@ export async function run(page) {
     return { pass: false, message: "fixture text missing the visible lexical selection target" };
   }
 
-  await page.evaluate(() => {
-    document.dispatchEvent(new CustomEvent("cf:format", {
-      detail: { type: "bold" },
-    }));
-  });
+  await formatSelection(page, { type: "bold" });
   await page.waitForTimeout(150);
 
   const richFormatted = await readEditorText(page);
@@ -69,11 +66,7 @@ export async function run(page) {
   if (alphaStart < 0 || !await selectVisibleText(page, "Alpha")) {
     return { pass: false, message: "fixture text missing the source selection target" };
   }
-  await page.evaluate(() => {
-    document.dispatchEvent(new CustomEvent("cf:format", {
-      detail: { type: "italic" },
-    }));
-  });
+  await formatSelection(page, { type: "italic" });
   await page.waitForTimeout(150);
 
   const sourceModeFormatted = await readEditorText(page);
@@ -81,5 +74,5 @@ export async function run(page) {
     return { pass: false, message: `source format event updated the wrong document text: ${JSON.stringify(sourceModeFormatted)}` };
   }
 
-  return { pass: true, message: "format events rewrite markdown through the Lexical surface" };
+  return { pass: true, message: "format commands rewrite markdown through the Lexical surface" };
 }

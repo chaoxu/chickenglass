@@ -12,6 +12,7 @@
  * around `window.__app` is needed.
  */
 import type { LexicalEditor } from "lexical";
+import type { FormatEventDetail } from "../constants/events";
 import type { SourceMap } from "../app/source-map";
 import type { EditorMode } from "../app/editor-mode";
 import type {
@@ -59,6 +60,7 @@ export interface EditorBridgeMethods {
   insertText: (text: string) => void;
   setDoc: (doc: string) => void;
   setSelection: (anchor: number, focus?: number) => void;
+  formatSelection: (detail: FormatEventDetail) => boolean;
 }
 
 export interface TauriSmokeMethods {
@@ -234,6 +236,7 @@ function installWindowBridge(): void {
     insertText: (text) => requireEditor().insertText(text),
     setDoc: (doc) => requireEditor().setDoc(doc),
     setSelection: (anchor, focus) => requireEditor().setSelection(anchor, focus),
+    formatSelection: (detail) => requireEditor().formatSelection(detail),
     ready: readyPromises.editor,
   };
 

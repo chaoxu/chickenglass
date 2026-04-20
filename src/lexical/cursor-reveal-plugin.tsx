@@ -15,7 +15,7 @@
  *   the text is re-parsed via the same adapter — valid syntax becomes
  *   the original kind of node, anything else stays plain text.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
@@ -45,14 +45,12 @@ import {
   type EditorMode,
   type RevealPresentation,
 } from "../app/editor-mode";
-import { SurfaceFloatingPortal } from "../lexical-next";
 import {
   PARAGRAPH_REVEAL_ADAPTERS,
   REVEAL_ADAPTERS,
   pickRevealSubject,
   type RevealAdapter,
 } from "./cursor-reveal-adapters";
-import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isInlineImageNode } from "./nodes/inline-image-node";
@@ -67,15 +65,30 @@ import {
   createRevealOpenRequest,
   findRevealAdapter,
   OPEN_CURSOR_REVEAL_COMMAND,
-  registerDecoratorClickRevealEntry,
-  registerDecoratorKeyboardBoundaryRevealEntry,
   type CursorRevealOpenRequest,
 } from "./cursor-reveal-controller";
-import { renderRevealChromePreview } from "./reveal-chrome";
+import {
+  canOpenUserDrivenReveal,
+  domSelectionInsideRevealText,
+  getDomSelectionOffsetInsideRevealText,
+  registerDecoratorClickRevealEntry,
+  registerDecoratorKeyboardBoundaryRevealEntry,
+  useDocumentKeyDownCapture,
+  useDocumentSelectionChange,
+  usePointerSelectionReveal,
+  useUserDrivenSelectionReveal,
+} from "./cursor-reveal-dom-bridge";
+import {
+  FloatingRevealPresentation,
+  type FloatingRevealPresentationState,
+} from "./cursor-reveal-floating-presentation";
+import {
+  InlineRevealChrome,
+  type InlineRevealChromeState,
+} from "./cursor-reveal-inline-presentation";
 import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
 import { setCursorRevealActive } from "./cursor-reveal-state";
 import {
-  REVEAL_SOURCE_STYLE_PROPERTY,
   REVEAL_SOURCE_TEXT_STYLE,
 } from "./reveal-source-style";
 
@@ -104,106 +117,11 @@ export function CursorRevealPlugin({
   return <FloatingCursorReveal adapters={adapters} />;
 }
 
-function useUserDrivenSelectionReveal(editor: LexicalEditor): MutableRefObject<boolean> {
-  const enabledRef = useRef(false);
-
-  useEffect(() => {
-    const markUserSelectionIntent = (event: Event) => {
-      const root = editor.getRootElement();
-      const target = event.target instanceof Node ? event.target : null;
-      const targetElement = target instanceof Element ? target : target?.parentElement ?? null;
-      if (!root || !target || !root.contains(target) || targetElement?.closest("[contenteditable='true']") !== root) {
-        return;
-      }
-      enabledRef.current = true;
-    };
-
-    document.addEventListener("pointerdown", markUserSelectionIntent, true);
-    document.addEventListener("keydown", markUserSelectionIntent, true);
-    return () => {
-      document.removeEventListener("pointerdown", markUserSelectionIntent, true);
-      document.removeEventListener("keydown", markUserSelectionIntent, true);
-    };
-  }, [editor]);
-
-  return enabledRef;
-}
-
-function canOpenUserDrivenReveal(
-  adapter: RevealAdapter,
-  userSelectionRevealRef: MutableRefObject<boolean>,
-): boolean {
-  if (adapter.id !== "paragraph") {
-    return true;
-  }
-  if (!userSelectionRevealRef.current) {
-    return false;
-  }
-  userSelectionRevealRef.current = false;
-  return true;
-}
-
-function usePointerSelectionReveal(
-  editor: LexicalEditor,
-  adapters: readonly RevealAdapter[],
-  userSelectionRevealRef: MutableRefObject<boolean>,
-): void {
-  useEffect(() => {
-    const handlePointerUp = (event: PointerEvent) => {
-      const root = editor.getRootElement();
-      const target = event.target instanceof Node ? event.target : null;
-      const targetElement = target instanceof Element ? target : target?.parentElement ?? null;
-      if (
-        !root
-        || !target
-        || !root.contains(target)
-        || targetElement?.closest("[contenteditable='true']") !== root
-      ) {
-        return;
-      }
-      window.setTimeout(() => {
-        editor.update(() => {
-          const selection = $getSelection();
-          if (!selection) {
-            return;
-          }
-          const pick = pickRevealSubject(selection, adapters);
-          if (!pick) {
-            return;
-          }
-          if (!canOpenUserDrivenReveal(pick.adapter, userSelectionRevealRef)) {
-            return;
-          }
-          const preferredOffset = "anchor" in selection
-            ? (selection.anchor as { offset: number }).offset
-            : pick.subject.caretOffset ?? pick.subject.source.length;
-          editor.dispatchCommand(
-            OPEN_CURSOR_REVEAL_COMMAND,
-            createRevealOpenRequest(pick.subject, pick.adapter, preferredOffset),
-          );
-        }, { discrete: true });
-      }, 0);
-    };
-
-    document.addEventListener("pointerup", handlePointerUp, true);
-    return () => {
-      document.removeEventListener("pointerup", handlePointerUp, true);
-    };
-  }, [adapters, editor, userSelectionRevealRef]);
-}
-
 // ─── Floating presentation ──────────────────────────────────────────────
-
-interface FloatingState {
-  readonly nodeKey: NodeKey;
-  readonly anchor: HTMLElement;
-  readonly adapter: RevealAdapter;
-  readonly caretOffset: number;
-}
 
 function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
   const [editor] = useLexicalComposerContext();
-  const [state, setState] = useState<FloatingState | null>(null);
+  const [state, setState] = useState<FloatingRevealPresentationState | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const userSelectionRevealRef = useUserDrivenSelectionReveal(editor);
@@ -300,7 +218,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
     input.setSelectionRange(offset, offset);
   }, [state]);
 
-  const commitDraft = (current: FloatingState, nextRaw: string) => {
+  const commitDraft = (current: FloatingRevealPresentationState, nextRaw: string) => {
     if (current.adapter.id === "raw-block") {
       editor.update(() => {
         const node = $getNodeByKey(current.nodeKey);
@@ -342,40 +260,21 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
     return null;
   }
 
-  const widthCh = Math.max(3, draft.length + 1);
-
   return (
-    <SurfaceFloatingPortal anchor={state.anchor} offsetPx={8}>
-      <EditorChromePanel className="cf-lexical-floating-source-shell cf-lexical-inline-token-panel-shell">
-        <EditorChromeBody className="cf-lexical-floating-source-surface cf-lexical-inline-token-panel-surface">
-          <EditorChromeInput
-            ref={inputRef}
-            className="cf-lexical-inline-token-source cf-lexical-floating-source-editor cf-lexical-inline-token-panel-editor"
-            onBlur={() => {
-              commitDraft(state, draft);
-              flushSync(() => setState(null));
-            }}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commitDraft(state, draft);
-                setState(null);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                lastRevealedKeyRef.current = state.nodeKey;
-                setState(null);
-              }
-            }}
-            size={widthCh}
-            style={{
-              width: `min(calc(100vw - 8px), calc(${widthCh}ch + 0.2rem))`,
-            }}
-            value={draft}
-          />
-        </EditorChromeBody>
-      </EditorChromePanel>
-    </SurfaceFloatingPortal>
+    <FloatingRevealPresentation
+      draft={draft}
+      inputRef={inputRef}
+      onCancel={() => {
+        lastRevealedKeyRef.current = state.nodeKey;
+        setState(null);
+      }}
+      onCommit={() => {
+        commitDraft(state, draft);
+        flushSync(() => setState(null));
+      }}
+      onDraftChange={setDraft}
+      state={state}
+    />
   );
 }
 
@@ -393,12 +292,6 @@ interface InlineRevealHandle {
 interface InlineRevealCommitResult {
   readonly replacement: LexicalNode | null;
   readonly sourceChanged: boolean;
-}
-
-interface InlineRevealChromeState {
-  readonly plainKey: NodeKey;
-  readonly adapter: RevealAdapter;
-  readonly source: string;
 }
 
 function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
@@ -613,124 +506,114 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
     };
   }, [editor, selectAfterRevealCommit]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const active = activeRef.current;
-      if (
-        !active
-        || shouldSkipOpeningArrow(active, skipOpeningArrowUntilRef)
-        || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
-        || event.altKey
-        || event.ctrlKey
-        || event.metaKey
-        || event.shiftKey
-      ) {
+  const handleDocumentKeyDown = useCallback((event: KeyboardEvent) => {
+    const active = activeRef.current;
+    if (
+      !active
+      || shouldSkipOpeningArrow(active, skipOpeningArrowUntilRef)
+      || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+      || event.shiftKey
+    ) {
+      return;
+    }
+
+    const direction = event.key === "ArrowRight" ? "right" : "left";
+    lastArrowDirectionRef.current = direction;
+    let handled = false;
+
+    editor.update(() => {
+      const live = $getNodeByKey(active.plainKey);
+      const selection = $getSelection();
+      if (!$isTextNode(live)) {
+        return;
+      }
+      const lexicalOffset = $isRangeSelection(selection)
+        && selection.isCollapsed()
+        && selection.anchor.getNode().getKey() === active.plainKey
+        ? selection.anchor.offset
+        : null;
+      const domOffset = getDomSelectionOffsetInsideRevealText(live.getTextContent());
+      const offset = lexicalOffset ?? (
+        domOffset === null ? null : Math.min(domOffset, live.getTextContentSize())
+      );
+      if (offset === null) {
         return;
       }
 
-      const direction = event.key === "ArrowRight" ? "right" : "left";
-      lastArrowDirectionRef.current = direction;
-      let handled = false;
+      const size = live.getTextContentSize();
+      const nextOffset = direction === "right" ? offset + 1 : offset - 1;
+      if (nextOffset >= 0 && nextOffset <= size) {
+        $addUpdateTag(COFLAT_REVEAL_UI_TAG);
+        selectRevealText(live, nextOffset);
+        activeRef.current = { ...active, selectionState: "active" };
+        handled = true;
+        return;
+      }
+
+      const commit = $commitInlineReveal(active);
+      selectAfterRevealCommit(commit.replacement);
+      activeRef.current = null;
+      setChromeState(null);
+      setCursorRevealActive(editor, false);
+      handled = true;
+    }, { discrete: true });
+
+    if (!handled) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }, [editor, selectAfterRevealCommit]);
+
+  useDocumentKeyDownCapture(handleDocumentKeyDown);
+
+  const handleDocumentSelectionChange = useCallback(() => {
+    const active = activeRef.current;
+    if (!active) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      const current = activeRef.current;
+      if (!current || current.plainKey !== active.plainKey) {
+        return;
+      }
 
       editor.update(() => {
-        const live = $getNodeByKey(active.plainKey);
+        const latest = activeRef.current;
+        if (!latest || latest.plainKey !== active.plainKey) {
+          return;
+        }
+        const live = $getNodeByKey(latest.plainKey);
         const selection = $getSelection();
-        if (!$isTextNode(live)) {
+        const domInsideReveal = $isTextNode(live)
+          && domSelectionInsideRevealText(live.getTextContent());
+        if (anchorTextKey(selection) === latest.plainKey) {
+          activeRef.current = domInsideReveal
+            ? { ...latest, selectionState: "active" }
+            : latest;
           return;
         }
-        const lexicalOffset = $isRangeSelection(selection)
-          && selection.isCollapsed()
-          && selection.anchor.getNode().getKey() === active.plainKey
-          ? selection.anchor.offset
-          : null;
-        const domOffset = getDomSelectionOffsetInsideRevealText(live.getTextContent());
-        const offset = lexicalOffset ?? (
-          domOffset === null ? null : Math.min(domOffset, live.getTextContentSize())
-        );
-        if (offset === null) {
+        if (domInsideReveal) {
+          activeRef.current = { ...latest, selectionState: "active" };
           return;
         }
-
-        const size = live.getTextContentSize();
-        const nextOffset = direction === "right" ? offset + 1 : offset - 1;
-        if (nextOffset >= 0 && nextOffset <= size) {
-          $addUpdateTag(COFLAT_REVEAL_UI_TAG);
-          selectRevealText(live, nextOffset);
-          activeRef.current = { ...active, selectionState: "active" };
-          handled = true;
+        if (restoreOpeningRevealSelection(latest, live)) {
           return;
         }
 
-        const commit = $commitInlineReveal(active);
-        selectAfterRevealCommit(commit.replacement);
+        $commitInlineReveal(latest);
         activeRef.current = null;
         setChromeState(null);
         setCursorRevealActive(editor, false);
-        handled = true;
       }, { discrete: true });
-
-      if (!handled) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [editor, selectAfterRevealCommit]);
-
-  useEffect(() => {
-    const onSelectionChange = () => {
-      const active = activeRef.current;
-      if (!active) {
-        return;
-      }
-
-      queueMicrotask(() => {
-        const current = activeRef.current;
-        if (!current || current.plainKey !== active.plainKey) {
-          return;
-        }
-
-        editor.update(() => {
-          const latest = activeRef.current;
-          if (!latest || latest.plainKey !== active.plainKey) {
-            return;
-          }
-          const live = $getNodeByKey(latest.plainKey);
-          const selection = $getSelection();
-          const domInsideReveal = $isTextNode(live)
-            && domSelectionInsideRevealText(live.getTextContent());
-          if (anchorTextKey(selection) === latest.plainKey) {
-            activeRef.current = domInsideReveal
-              ? { ...latest, selectionState: "active" }
-              : latest;
-            return;
-          }
-          if (domInsideReveal) {
-            activeRef.current = { ...latest, selectionState: "active" };
-            return;
-          }
-          if (restoreOpeningRevealSelection(latest, live)) {
-            return;
-          }
-
-          $commitInlineReveal(latest);
-          activeRef.current = null;
-          setChromeState(null);
-          setCursorRevealActive(editor, false);
-        }, { discrete: true });
-      });
-    };
-
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () => {
-      document.removeEventListener("selectionchange", onSelectionChange);
-    };
+    });
   }, [editor]);
+
+  useDocumentSelectionChange(handleDocumentSelectionChange);
 
   useRegisterEmbeddedFieldFlush(() => {
     const active = activeRef.current;
@@ -791,52 +674,6 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   );
 }
 
-function InlineRevealChrome({
-  editor,
-  onClose,
-  state,
-}: {
-  readonly editor: LexicalEditor;
-  readonly onClose: () => void;
-  readonly state: InlineRevealChromeState | null;
-}) {
-  const anchor = useLexicalElementByKey(editor, state?.plainKey ?? null);
-
-  if (!state) {
-    return null;
-  }
-
-  const preview = state.adapter.getChromePreview?.(state.source) ?? null;
-  if (!preview || !anchor) {
-    return null;
-  }
-
-  return renderRevealChromePreview(preview, {
-    anchor,
-    onAnchorLost: onClose,
-    source: state.source,
-  });
-}
-
-function useLexicalElementByKey(
-  editor: LexicalEditor,
-  key: NodeKey | null,
-): HTMLElement | null {
-  const [element, setElement] = useState<HTMLElement | null>(() => (
-    key ? editor.getElementByKey(key) : null
-  ));
-
-  useEffect(() => {
-    const resolve = () => {
-      setElement(key ? editor.getElementByKey(key) : null);
-    };
-    resolve();
-    return editor.registerUpdateListener(resolve);
-  }, [editor, key]);
-
-  return element;
-}
-
 function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | null {
   if (!selection || !("anchor" in selection)) {
     return null;
@@ -847,47 +684,6 @@ function anchorTextKey(selection: ReturnType<typeof $getSelection>): NodeKey | n
   return node && typeof (node as { getKey?: () => string }).getKey === "function"
     ? (node as { getKey: () => string }).getKey()
     : null;
-}
-
-function domSelectionInsideRevealText(text: string): boolean {
-  return getDomSelectionOffsetInsideRevealText(text) !== null;
-}
-
-function getDomSelectionOffsetInsideRevealText(text: string): number | null {
-  if (typeof document === "undefined") {
-    return null;
-  }
-  const selection = document.getSelection();
-  const anchor = selection?.anchorNode ?? null;
-  if (!anchor) {
-    return null;
-  }
-  const element = getLexicalTextElement(anchor);
-  if (
-    !element
-    || element.textContent !== text
-    || !element.style.getPropertyValue(REVEAL_SOURCE_STYLE_PROPERTY)
-  ) {
-    return null;
-  }
-  const range = document.createRange();
-  range.selectNodeContents(element);
-  try {
-    range.setEnd(anchor, selection?.anchorOffset ?? 0);
-  } catch {
-    return null;
-  }
-  return range.toString().length;
-}
-
-function getLexicalTextElement(anchor: Node | null): HTMLElement | null {
-  if (!anchor) {
-    return null;
-  }
-  const element = anchor instanceof HTMLElement
-    ? anchor
-    : anchor.parentElement;
-  return element?.closest<HTMLElement>("[data-lexical-text='true']") ?? null;
 }
 
 function shouldSkipOpeningArrow(

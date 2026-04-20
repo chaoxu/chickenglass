@@ -1,4 +1,5 @@
 import {
+  formatSelection,
   openRegressionDocument,
   readEditorText,
 } from "../test-helpers.mjs";
@@ -86,11 +87,7 @@ export async function run(page) {
   if (!titleSelectionReady) {
     return { pass: false, message: "could not select theorem-title marker for nested format command" };
   }
-  await page.evaluate(() => {
-    document.dispatchEvent(new CustomEvent("cf:format", {
-      detail: { type: "bold" },
-    }));
-  });
+  await formatSelection(page, { type: "bold" });
   await page.waitForFunction(
     (marker) => window.__editor?.getDoc?.().includes(`**${marker}**`),
     TITLE_MARKER,

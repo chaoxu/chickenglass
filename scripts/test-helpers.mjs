@@ -77,6 +77,16 @@ export async function setSelection(page, anchor, focus = anchor) {
   await waitForEditorSelection(page, anchor, focus);
 }
 
+export async function formatSelection(page, detail) {
+  await waitForEditorSurface(page);
+  const applied = await page.evaluate((nextDetail) => (
+    window.__editor.formatSelection(nextDetail)
+  ), detail);
+  if (!applied) {
+    throw new Error(`formatSelection did not apply: ${JSON.stringify(detail)}`);
+  }
+}
+
 export async function saveCurrentFile(page) {
   await page.evaluate(async () => {
     await window.__app.saveFile();

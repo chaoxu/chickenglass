@@ -31,6 +31,7 @@ describe("debug-bridge eager install", () => {
     expect(typeof window.__app.getMode).toBe("function");
     expect(typeof window.__editor).toBe("object");
     expect(typeof window.__editor.focus).toBe("function");
+    expect(typeof window.__editor.formatSelection).toBe("function");
     expect(typeof window.__cmView).toBe("object");
     expect(typeof window.__cmDebug).toBe("object");
     expect(typeof window.__cmDebug.treeString).toBe("function");

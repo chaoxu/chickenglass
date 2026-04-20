@@ -104,6 +104,7 @@ __editor.getSelection()
 __editor.insertText("hello")
 __editor.setDoc("# Replaced")
 __editor.setSelection(10, 15)
+__editor.formatSelection({ type: "bold" })
 
 __cfDebug.perfSummary()
 __cfDebug.printPerfSummary()
