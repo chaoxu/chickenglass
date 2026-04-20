@@ -55,6 +55,22 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
+  it("uses trailing inline titles ahead of title attributes", () => {
+    const parsed = parseStructuredFencedDivRaw([
+      '::: {#thm:main .theorem title="Attribute Title"} Trailing Title',
+      "Body",
+      ":::",
+    ].join("\n"));
+
+    expect(parsed).toMatchObject({
+      blockType: "theorem",
+      id: "thm:main",
+      title: "Trailing Title",
+      titleKind: "trailing",
+      titleMarkdown: "Trailing Title",
+    });
+  });
+
   it("treats bare known block labels as type-only fenced div openers", () => {
     const parsed = parseStructuredFencedDivRaw([
       "::: Proof",

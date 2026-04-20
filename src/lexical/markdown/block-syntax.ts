@@ -71,17 +71,20 @@ function parseFencedDivAttrs(attrs: string, trailingTitleRaw: string) {
   const classes = [...attrs.matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]);
   const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1] ?? trailing.id;
 
+  const titleAttribute = titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined;
+  const title = trailingTitle || titleAttribute;
+
   return {
     blockType: normalizeBlockType(classes[0], trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2]),
     id,
-    title: titleAttrMatch?.[1] || titleAttrMatch?.[2] || trailingTitle || undefined,
+    title,
     titleKind: trailingTitle || trailing.labelSuffix
       ? "trailing"
       : titleAttrMatch
         ? "attribute"
         : "none",
     titleLabelSuffix: trailing.labelSuffix,
-    titleMarkdown: trailingTitle || titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined,
+    titleMarkdown: title,
   } as const;
 }
 
