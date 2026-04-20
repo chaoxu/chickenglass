@@ -7,6 +7,7 @@ use base64::Engine;
 use same_file::Handle as FileHandle;
 use serde::Serialize;
 
+use crate::commands::error::{AppError, AppResult};
 use crate::commands::state::ProjectRootEntry;
 use crate::services::project_visibility::is_ignored_entry_name;
 use crate::services::window_generation::accepts_generation;
@@ -42,38 +43,48 @@ pub fn install_project_root(
     true
 }
 
-pub fn read_text_file(path: &Path, relative_path: &str) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|e| format!("Failed to read '{}': {}", relative_path, e))
+pub fn read_text_file(path: &Path, relative_path: &str) -> AppResult<String> {
+    fs::read_to_string(path)
+        .map_err(|e| AppError::native_io(format!("Failed to read '{}': {}", relative_path, e)))
 }
 
-pub fn write_text_file(path: &Path, relative_path: &str, content: &str) -> Result<(), String> {
+pub fn write_text_file(path: &Path, relative_path: &str, content: &str) -> AppResult<()> {
     write_existing_file(path, content).map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => format!("File not found: {}", relative_path),
-        _ => format!("Failed to write '{}': {}", relative_path, e),
+        std::io::ErrorKind::NotFound => {
+            AppError::fs_not_found(format!("File not found: {}", relative_path), relative_path)
+        }
+        _ => AppError::native_io(format!("Failed to write '{}': {}", relative_path, e)),
     })
 }
 
-pub fn create_text_file(
-    path: &Path,
-    relative_path: &str,
-    content: Option<&str>,
-) -> Result<(), String> {
+pub fn create_text_file(path: &Path, relative_path: &str, content: Option<&str>) -> AppResult<()> {
     if path.exists() {
-        return Err(format!("File already exists: {}", relative_path));
+        return Err(AppError::fs_already_exists(
+            format!("File already exists: {}", relative_path),
+            relative_path,
+        ));
     }
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| AppError::native_io(format!("Failed to create directories: {}", e)))?;
     }
     fs::write(path, content.unwrap_or_default())
-        .map_err(|e| format!("Failed to create '{}': {}", relative_path, e))
+        .map_err(|e| AppError::native_io(format!("Failed to create '{}': {}", relative_path, e)))
 }
 
-pub fn create_directory(path: &Path, relative_path: &str) -> Result<(), String> {
+pub fn create_directory(path: &Path, relative_path: &str) -> AppResult<()> {
     if path.exists() {
-        return Err(format!("Directory already exists: {}", relative_path));
+        return Err(AppError::fs_already_exists(
+            format!("Directory already exists: {}", relative_path),
+            relative_path,
+        ));
     }
-    fs::create_dir_all(path)
-        .map_err(|e| format!("Failed to create directory '{}': {}", relative_path, e))
+    fs::create_dir_all(path).map_err(|e| {
+        AppError::native_io(format!(
+            "Failed to create directory '{}': {}",
+            relative_path, e
+        ))
+    })
 }
 
 pub fn rename_path(
@@ -81,54 +92,67 @@ pub fn rename_path(
     old_relative_path: &str,
     new_path: &Path,
     new_relative_path: &str,
-) -> Result<(), String> {
+) -> AppResult<()> {
     if new_path.exists() {
-        return Err(format!("File already exists: {}", new_relative_path));
+        return Err(AppError::fs_already_exists(
+            format!("File already exists: {}", new_relative_path),
+            new_relative_path,
+        ));
     }
     fs::rename(old_path, new_path).map_err(|e| {
-        format!(
+        AppError::native_io(format!(
             "Failed to rename '{}' to '{}': {}",
             old_relative_path, new_relative_path, e
-        )
+        ))
     })
 }
 
-pub fn delete_path(path: &Path, relative_path: &str) -> Result<(), String> {
+pub fn delete_path(path: &Path, relative_path: &str) -> AppResult<()> {
     if path.is_dir() {
-        fs::remove_dir_all(path)
-            .map_err(|e| format!("Failed to delete directory '{}': {}", relative_path, e))
+        fs::remove_dir_all(path).map_err(|e| {
+            AppError::native_io(format!(
+                "Failed to delete directory '{}': {}",
+                relative_path, e
+            ))
+        })
     } else {
-        fs::remove_file(path).map_err(|e| format!("Failed to delete '{}': {}", relative_path, e))
+        fs::remove_file(path).map_err(|e| {
+            AppError::native_io(format!("Failed to delete '{}': {}", relative_path, e))
+        })
     }
 }
 
-pub fn write_binary_file(
-    path: &Path,
-    relative_path: &str,
-    data_base64: &str,
-) -> Result<(), String> {
+pub fn write_binary_file(path: &Path, relative_path: &str, data_base64: &str) -> AppResult<()> {
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directories: {}", e))?;
+                .map_err(|e| AppError::native_io(format!("Failed to create directories: {}", e)))?;
         }
     }
 
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64)
-        .map_err(|e| format!("Invalid base64 data: {}", e))?;
+        .map_err(|e| AppError::native_error(format!("Invalid base64 data: {}", e)))?;
 
-    fs::write(path, &bytes)
-        .map_err(|e| format!("Failed to write binary file '{}': {}", relative_path, e))
+    fs::write(path, &bytes).map_err(|e| {
+        AppError::native_io(format!(
+            "Failed to write binary file '{}': {}",
+            relative_path, e
+        ))
+    })
 }
 
-pub fn read_binary_file(path: &Path, relative_path: &str) -> Result<String, String> {
-    let bytes = fs::read(path)
-        .map_err(|e| format!("Failed to read binary file '{}': {}", relative_path, e))?;
+pub fn read_binary_file(path: &Path, relative_path: &str) -> AppResult<String> {
+    let bytes = fs::read(path).map_err(|e| {
+        AppError::native_io(format!(
+            "Failed to read binary file '{}': {}",
+            relative_path, e
+        ))
+    })?;
     Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }
 
-pub fn list_tree(project_root: &Path) -> Result<FileEntry, String> {
+pub fn list_tree(project_root: &Path) -> AppResult<FileEntry> {
     let name = project_root
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -136,7 +160,7 @@ pub fn list_tree(project_root: &Path) -> Result<FileEntry, String> {
     build_tree(project_root, &name, "")
 }
 
-pub fn list_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
+pub fn list_children(dir: &Path, relative_path: &str) -> AppResult<Vec<FileEntry>> {
     read_directory_children(dir, relative_path)
 }
 
@@ -172,16 +196,18 @@ fn write_existing_file_with_handle(
     file.write_all(content.as_bytes())
 }
 
-fn enumerate_directory_children(
-    dir: &Path,
-    relative_path: &str,
-) -> Result<Vec<DirectoryChild>, String> {
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("Failed to read directory '{}': {}", dir.display(), e))?;
+fn enumerate_directory_children(dir: &Path, relative_path: &str) -> AppResult<Vec<DirectoryChild>> {
+    let entries = fs::read_dir(dir).map_err(|e| {
+        AppError::native_io(format!(
+            "Failed to read directory '{}': {}",
+            dir.display(),
+            e
+        ))
+    })?;
 
     let mut children = Vec::new();
     for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
+        let entry = entry.map_err(|e| AppError::native_io(e.to_string()))?;
         let file_name = entry.file_name().to_string_lossy().to_string();
 
         if is_ignored_entry_name(&file_name) {
@@ -194,7 +220,9 @@ fn enumerate_directory_children(
             format!("{}/{}", relative_path, file_name)
         };
 
-        let file_type = entry.file_type().map_err(|e| e.to_string())?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| AppError::native_io(e.to_string()))?;
         children.push(DirectoryChild {
             name: file_name,
             relative_path: child_path,
@@ -207,7 +235,7 @@ fn enumerate_directory_children(
     Ok(children)
 }
 
-fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
+fn read_directory_children(dir: &Path, relative_path: &str) -> AppResult<Vec<FileEntry>> {
     Ok(enumerate_directory_children(dir, relative_path)?
         .into_iter()
         .map(|child| FileEntry {
@@ -233,7 +261,7 @@ fn sort_child_records(entries: &mut [DirectoryChild]) {
     });
 }
 
-fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, String> {
+fn build_tree(dir: &Path, name: &str, relative_path: &str) -> AppResult<FileEntry> {
     let mut children = Vec::new();
     for child in enumerate_directory_children(dir, relative_path)? {
         if child.is_directory {

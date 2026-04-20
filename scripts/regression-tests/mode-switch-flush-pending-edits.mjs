@@ -1,4 +1,5 @@
 import {
+  DEBUG_EDITOR_SELECTOR,
   openFixtureDocument,
   readEditorText,
   setRevealPresentation,
@@ -16,9 +17,9 @@ const INLINE_FIXTURE = {
 };
 
 async function readSourceSurfaceText(page) {
-  return page.evaluate(() =>
-    document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? ""
-  );
+  return page.evaluate((editorSelector) =>
+    document.querySelector(editorSelector)?.textContent ?? "",
+  DEBUG_EDITOR_SELECTOR);
 }
 
 export async function run(page) {

@@ -16,8 +16,8 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { delimiter, dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   buildLatexPandocArgs,
@@ -50,15 +50,33 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-async function runPandoc({ markdown, output, template, bibliography, pandocBin }) {
+export function buildPandocResourcePath(sourceDir, projectRoot) {
+  return sourceDir === projectRoot
+    ? sourceDir
+    : [sourceDir, projectRoot].join(delimiter);
+}
+
+async function runPandoc({
+  bibliography,
+  markdown,
+  output,
+  pandocBin,
+  projectRoot,
+  sourceDir,
+  template,
+}) {
   const args = buildLatexPandocArgs({
     bibliography,
     filterPath: FILTER_PATH,
     output,
+    resourcePath: buildPandocResourcePath(sourceDir, projectRoot),
     template,
   });
 
-  const child = spawn(pandocBin, args, { stdio: ["pipe", "inherit", "inherit"] });
+  const child = spawn(pandocBin, args, {
+    cwd: sourceDir,
+    stdio: ["pipe", "inherit", "inherit"],
+  });
   child.stdin.write(markdown);
   child.stdin.end();
   return new Promise((resolvePromise, rejectPromise) => {
@@ -80,6 +98,8 @@ async function main() {
   const input = resolve(process.cwd(), positional[0]);
   const output = resolve(process.cwd(), flags.output ?? input.replace(/\.md$/, ".tex"));
   const pandocBin = flags.pandoc ?? "pandoc";
+  const projectRoot = process.cwd();
+  const sourceDir = dirname(input);
 
   const source = await readFile(input, "utf8");
   const exportOptions = resolveLatexExportOptions({
@@ -99,11 +119,21 @@ async function main() {
     await writeFile(output.replace(/\.tex$/, ".pandoc.md"), processed, "utf8");
   }
 
-  await runPandoc({ markdown: processed, output, template, bibliography, pandocBin });
+  await runPandoc({
+    bibliography,
+    markdown: processed,
+    output,
+    pandocBin,
+    projectRoot,
+    sourceDir,
+    template,
+  });
   console.error(`wrote ${output}`);
 }
 
-main().catch((error) => {
-  console.error(error.message ?? error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error.message ?? error);
+    process.exit(1);
+  });
+}

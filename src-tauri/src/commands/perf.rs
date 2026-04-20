@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use tauri::{State, command};
 
-use super::error::AppResult;
+use super::error::{AppError, AppResult};
 use super::state::{PerfSnapshot, PerfState};
 
 pub fn measure_command<T, F>(
@@ -12,9 +12,9 @@ pub fn measure_command<T, F>(
     category: &str,
     detail: Option<&str>,
     task: F,
-) -> Result<T, String>
+) -> AppResult<T>
 where
-    F: FnOnce() -> Result<T, String>,
+    F: FnOnce() -> AppResult<T>,
 {
     let started_at = perf.inner().now_ms().unwrap_or(0.0);
     let started = Instant::now();
@@ -35,10 +35,10 @@ where
 
 #[command]
 pub fn get_perf_snapshot(perf: State<'_, PerfState>) -> AppResult<PerfSnapshot> {
-    Ok(perf.inner().snapshot()?)
+    perf.inner().snapshot().map_err(AppError::native_error)
 }
 
 #[command]
 pub fn clear_perf_snapshot(perf: State<'_, PerfState>) -> AppResult<()> {
-    Ok(perf.inner().clear()?)
+    perf.inner().clear().map_err(AppError::native_error)
 }

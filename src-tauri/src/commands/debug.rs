@@ -2,14 +2,16 @@ use serde::Serialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, command};
 
-use super::error::AppResult;
+use super::error::{AppError, AppResult};
 use super::state::{FileWatcherState, LastFocusedWindow, ProjectRoot};
 
-fn ensure_debug_build() -> Result<(), String> {
+fn ensure_debug_build() -> AppResult<()> {
     if cfg!(debug_assertions) {
         Ok(())
     } else {
-        Err("Native debug commands are only available in debug builds".to_string())
+        Err(AppError::native_error(
+            "Native debug commands are only available in debug builds",
+        ))
     }
 }
 
@@ -57,7 +59,10 @@ pub fn debug_get_native_state(
 
     let label = window.label();
     let (project_root, project_generation) = {
-        let lock = project_root.0.lock().map_err(|e| e.to_string())?;
+        let lock = project_root
+            .0
+            .lock()
+            .map_err(|e| AppError::native_error(e.to_string()))?;
         let entry = lock.get(label);
         (
             entry.map(|value| value.path.display().to_string()),
@@ -65,7 +70,10 @@ pub fn debug_get_native_state(
         )
     };
     let (watcher_root, watcher_generation, watcher_active) = {
-        let lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+        let lock = watcher_state
+            .0
+            .lock()
+            .map_err(|e| AppError::native_error(e.to_string()))?;
         let entry = lock.get(label);
         (
             entry.map(|value| value.root.display().to_string()),
@@ -76,7 +84,7 @@ pub fn debug_get_native_state(
     let last_focused_window = last_focused_window
         .0
         .lock()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| AppError::native_error(e.to_string()))?
         .clone();
 
     Ok(NativeDebugState {
@@ -93,19 +101,28 @@ pub fn debug_get_native_state(
 pub fn debug_emit_file_changed(
     app: AppHandle,
     window: WebviewWindow,
+    watcher_state: State<'_, FileWatcherState>,
     relative_path: String,
     tree_changed: Option<bool>,
 ) -> AppResult<()> {
     ensure_debug_build()?;
+    let generation = watcher_state
+        .0
+        .lock()
+        .map_err(|e| AppError::native_error(e.to_string()))?
+        .get(window.label())
+        .map(|entry| entry.generation)
+        .unwrap_or(0);
     app.emit_to(
         window.label(),
         "file-changed",
         &json!({
             "path": relative_path,
             "treeChanged": tree_changed.unwrap_or(false),
+            "generation": generation,
         }),
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| AppError::native_error(e.to_string()))?;
 
     Ok(())
 }

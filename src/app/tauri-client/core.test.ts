@@ -9,6 +9,10 @@ describe("native command errors", () => {
       message: "File not found: notes.md",
     })).toBe(true);
 
+    expect(isNativeCommandError({
+      code: "fs.missing",
+      message: "File not found: notes.md",
+    })).toBe(false);
     expect(isNativeCommandError("File not found: notes.md")).toBe(false);
     expect(isNativeCommandError({ message: "File not found: notes.md" })).toBe(false);
   });

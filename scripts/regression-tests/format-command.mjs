@@ -1,4 +1,5 @@
 import {
+  DEBUG_EDITOR_SELECTOR,
   formatSelection,
   openFixtureDocument,
   readEditorText,
@@ -15,8 +16,8 @@ const FIXTURE = {
 };
 
 async function selectVisibleText(page, text) {
-  return page.evaluate((needle) => {
-    const root = document.querySelector("[data-testid='lexical-editor'][contenteditable='true']");
+  return page.evaluate(({ editorSelector, needle }) => {
+    const root = document.querySelector(`${editorSelector}[contenteditable='true']`);
     if (!root) {
       return false;
     }
@@ -38,7 +39,7 @@ async function selectVisibleText(page, text) {
       node = walker.nextNode();
     }
     return false;
-  }, text);
+  }, { editorSelector: DEBUG_EDITOR_SELECTOR, needle: text });
 }
 
 export async function run(page) {

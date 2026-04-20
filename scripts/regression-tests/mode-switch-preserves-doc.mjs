@@ -1,4 +1,5 @@
 import {
+  DEBUG_EDITOR_SELECTOR,
   openFixtureDocument,
   readEditorText,
   switchToMode,
@@ -31,10 +32,10 @@ export async function run(page) {
 
   await switchToMode(page, "source");
   const sourceText = await readEditorText(page);
-  const sourceState = await page.evaluate(() => ({
+  const sourceState = await page.evaluate((editorSelector) => ({
     mode: window.__app?.getMode?.() ?? null,
-    contentEditable: document.querySelector('[data-testid="lexical-editor"]')?.getAttribute("contenteditable"),
-  }));
+    contentEditable: document.querySelector(editorSelector)?.getAttribute("contenteditable"),
+  }), DEBUG_EDITOR_SELECTOR);
   await switchToMode(page, "lexical");
   const after = await readEditorText(page);
 

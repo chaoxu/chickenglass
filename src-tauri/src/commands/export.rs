@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
-use super::error::AppResult;
+use super::error::{AppError, AppResult};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::{project_relative_path, resolve_project_path};
 
@@ -17,8 +17,7 @@ const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
     "tauri.export.export_document",
     "tauri",
 );
-const LATEX_PANDOC_FROM: &str =
-    "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash";
+const LATEX_PANDOC_FROM: &str = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash";
 
 /// Check whether Pandoc is installed and return its version string.
 #[command]
@@ -27,10 +26,14 @@ pub fn check_pandoc(perf: State<'_, PerfState>) -> AppResult<String> {
         let output = Command::new("pandoc")
             .arg("--version")
             .output()
-            .map_err(|e| format!("Failed to run pandoc: {}", e))?;
+            .map_err(|e| {
+                AppError::export_pandoc_unavailable(format!("Failed to run pandoc: {}", e))
+            })?;
 
         if !output.status.success() {
-            return Err("pandoc --version returned a non-zero exit code".to_string());
+            return Err(AppError::export_pandoc_unavailable(
+                "pandoc --version returned a non-zero exit code",
+            ));
         }
 
         let version = String::from_utf8_lossy(&output.stdout);
@@ -43,22 +46,22 @@ pub fn check_pandoc(perf: State<'_, PerfState>) -> AppResult<String> {
 }
 
 /// Export a markdown document to PDF or LaTeX via Pandoc.
-fn resolve_export_output_path(project_root: &Path, output_path: &str) -> Result<PathBuf, String> {
+fn resolve_export_output_path(project_root: &Path, output_path: &str) -> AppResult<PathBuf> {
     let resolved_path = resolve_project_path(project_root, output_path)?;
 
     if let Some(parent) = resolved_path.parent() {
         if !parent.exists() {
-            return Err(format!(
+            return Err(AppError::path_resolve(format!(
                 "Output directory does not exist: {}",
                 parent.display()
-            ));
+            )));
         }
     }
 
     Ok(resolved_path)
 }
 
-fn resolve_export_source_dir(project_root: &Path, source_path: &str) -> Result<PathBuf, String> {
+fn resolve_export_source_dir(project_root: &Path, source_path: &str) -> AppResult<PathBuf> {
     let resolved_source_path = resolve_project_path(project_root, source_path)?;
     Ok(resolved_source_path
         .parent()
@@ -66,14 +69,15 @@ fn resolve_export_source_dir(project_root: &Path, source_path: &str) -> Result<P
         .to_path_buf())
 }
 
-fn build_pandoc_resource_path(project_root: &Path, source_dir: &Path) -> Result<OsString, String> {
+fn build_pandoc_resource_path(project_root: &Path, source_dir: &Path) -> AppResult<OsString> {
     let mut resource_paths = vec![source_dir.to_path_buf()];
     if source_dir != project_root {
         resource_paths.push(project_root.to_path_buf());
     }
 
-    std::env::join_paths(resource_paths)
-        .map_err(|e| format!("Failed to construct Pandoc resource path: {}", e))
+    std::env::join_paths(resource_paths).map_err(|e| {
+        AppError::native_error(format!("Failed to construct Pandoc resource path: {}", e))
+    })
 }
 
 fn latex_dir() -> PathBuf {
@@ -84,7 +88,7 @@ fn latex_dir() -> PathBuf {
         .join("latex")
 }
 
-fn resolve_latex_template(project_root: &Path, template: Option<&str>) -> Result<PathBuf, String> {
+fn resolve_latex_template(project_root: &Path, template: Option<&str>) -> AppResult<PathBuf> {
     let name = template.unwrap_or("article");
     let latex_dir = latex_dir();
     match name {
@@ -96,7 +100,12 @@ fn resolve_latex_template(project_root: &Path, template: Option<&str>) -> Result
 
 fn bibliography_metadata_value(bibliography: &str) -> Option<String> {
     let file_name = Path::new(bibliography).file_name()?.to_string_lossy();
-    Some(file_name.strip_suffix(".bib").unwrap_or(&file_name).to_string())
+    Some(
+        file_name
+            .strip_suffix(".bib")
+            .unwrap_or(&file_name)
+            .to_string(),
+    )
 }
 
 fn build_latex_pandoc_args(
@@ -106,7 +115,7 @@ fn build_latex_pandoc_args(
     format: &str,
     template: Option<&str>,
     bibliography: Option<&str>,
-) -> Result<Vec<String>, String> {
+) -> AppResult<Vec<String>> {
     let resource_path = build_pandoc_resource_path(project_root, source_dir)?;
     let filter_path = latex_dir().join("filter.lua");
     let template_path = resolve_latex_template(project_root, template)?;
@@ -128,7 +137,12 @@ fn build_latex_pandoc_args(
     match format {
         "pdf" => args.push("--pdf-engine=xelatex".to_string()),
         "latex" => {}
-        _ => return Err(format!("Unsupported export format: {}", format)),
+        _ => {
+            return Err(AppError::export_unsupported_format(
+                format!("Unsupported export format: {}", format),
+                format,
+            ));
+        }
     }
 
     Ok(args)
@@ -168,21 +182,26 @@ pub fn export_document(
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
-                .map_err(|e| format!("Failed to start pandoc: {}", e))?;
+                .map_err(|e| {
+                    AppError::export_pandoc_unavailable(format!("Failed to start pandoc: {}", e))
+                })?;
 
             if let Some(ref mut stdin) = child.stdin {
-                stdin
-                    .write_all(content.as_bytes())
-                    .map_err(|e| format!("Failed to write to pandoc stdin: {}", e))?;
+                stdin.write_all(content.as_bytes()).map_err(|e| {
+                    AppError::native_io(format!("Failed to write to pandoc stdin: {}", e))
+                })?;
             }
 
             let output = child
                 .wait_with_output()
-                .map_err(|e| format!("Failed to wait for pandoc: {}", e))?;
+                .map_err(|e| AppError::native_io(format!("Failed to wait for pandoc: {}", e)))?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("Pandoc failed: {}", stderr));
+                return Err(AppError::export_pandoc_failed(format!(
+                    "Pandoc failed: {}",
+                    stderr
+                )));
             }
 
             project_relative_path(&project_root, &output_path)
@@ -193,9 +212,9 @@ pub fn export_document(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_latex_pandoc_args, build_pandoc_resource_path, bibliography_metadata_value,
-        resolve_export_output_path, resolve_export_source_dir, resolve_latex_template,
-        LATEX_PANDOC_FROM,
+        LATEX_PANDOC_FROM, bibliography_metadata_value, build_latex_pandoc_args,
+        build_pandoc_resource_path, resolve_export_output_path, resolve_export_source_dir,
+        resolve_latex_template,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -236,7 +255,8 @@ mod tests {
         let error = resolve_export_output_path(&project_root, "../out.pdf")
             .expect_err("path traversal should fail");
 
-        assert!(error.contains("escapes project root"));
+        assert_eq!(error.code, "path.escape");
+        assert!(error.message.contains("escapes project root"));
 
         fs::remove_dir_all(&project_root).expect("remove project root");
     }
@@ -251,7 +271,8 @@ mod tests {
             resolve_export_output_path(&project_root, outside_path.to_str().expect("utf-8 path"))
                 .expect_err("absolute path outside root should fail");
 
-        assert!(error.contains("escapes project root"));
+        assert_eq!(error.code, "path.escape");
+        assert!(error.message.contains("escapes project root"));
 
         fs::remove_dir_all(&project_root).expect("remove project root");
         fs::remove_dir_all(&outside_root).expect("remove outside root");
@@ -305,7 +326,8 @@ mod tests {
 
         let article =
             resolve_latex_template(&project_root, Some("article")).expect("article template");
-        let lipics = resolve_latex_template(&project_root, Some("lipics")).expect("lipics template");
+        let lipics =
+            resolve_latex_template(&project_root, Some("lipics")).expect("lipics template");
 
         assert!(article.ends_with("src/latex/template/article.tex"));
         assert!(lipics.ends_with("src/latex/template/lipics.tex"));
@@ -334,7 +356,8 @@ mod tests {
         let error = resolve_latex_template(&project_root, Some("../template.tex"))
             .expect_err("path traversal should fail");
 
-        assert!(error.contains("escapes project root"));
+        assert_eq!(error.code, "path.escape");
+        assert!(error.message.contains("escapes project root"));
 
         fs::remove_dir_all(&project_root).expect("remove project root");
     }
@@ -373,7 +396,10 @@ mod tests {
         assert!(args.contains(&"--wrap=preserve".to_string()));
         assert!(args.contains(&"--syntax-highlighting=none".to_string()));
         assert!(args.iter().any(|arg| arg.ends_with("src/latex/filter.lua")));
-        assert!(args.iter().any(|arg| arg.ends_with("src/latex/template/lipics.tex")));
+        assert!(
+            args.iter()
+                .any(|arg| arg.ends_with("src/latex/template/lipics.tex"))
+        );
         assert!(args.iter().any(|arg| arg.starts_with("--resource-path=")));
         assert!(args.iter().any(|arg| arg.starts_with("--output=")));
         assert!(args.contains(&"--metadata=bibliography=project".to_string()));

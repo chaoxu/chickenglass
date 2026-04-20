@@ -1,4 +1,8 @@
-import { openFixtureDocument, sleep } from "../test-helpers.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  openFixtureDocument,
+  sleep,
+} from "../test-helpers.mjs";
 import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 import { fallbackFixtureFor, fixtureForHarness } from "../tooling-fixtures.mjs";
 
@@ -53,8 +57,8 @@ export async function run(page) {
   await sleep(600);
 
   const samples = await page.evaluate(
-    async ({ stepPx, stepCount, settleMs }) => {
-      const scroller = document.querySelector('[data-testid="lexical-editor"]');
+    async ({ editorSelector, stepPx, stepCount, settleMs }) => {
+      const scroller = document.querySelector(editorSelector);
       if (!(scroller instanceof HTMLElement)) {
         throw new Error("visible lexical editor scroller is missing");
       }
@@ -89,6 +93,7 @@ export async function run(page) {
       return trace;
     },
     {
+      editorSelector: DEBUG_EDITOR_SELECTOR,
       stepPx: STEP_PX,
       stepCount: STEP_COUNT,
       settleMs: STEP_SETTLE_MS,

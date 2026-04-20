@@ -1,4 +1,5 @@
 import {
+  DEBUG_EDITOR_SELECTOR,
   setRevealPresentation,
   waitForBrowserSettled,
 } from "../test-helpers.mjs";
@@ -124,16 +125,16 @@ export async function run(page) {
   await page.locator(".cf-lexical-inline-math").first().click({ position: { x: 1, y: 5 } });
   await waitForSelectionAnchorText(page, "$x+1$");
   await waitForInlineMathRevealPreview(page);
-  const inlineMathLeft = await page.evaluate(() => {
+  const inlineMathLeft = await page.evaluate((editorSelector) => {
     const selection = window.getSelection();
     return {
       anchorOffset: selection?.anchorOffset ?? null,
       anchorText: selection?.anchorNode?.textContent ?? "",
       hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
       previewText: document.querySelector(".cf-lexical-inline-math-preview")?.textContent ?? "",
-      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+      text: document.querySelector(editorSelector)?.textContent ?? "",
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
   if (
     inlineMathLeft.anchorText !== "$x+1$"
     || inlineMathLeft.anchorOffset === null
@@ -152,15 +153,15 @@ export async function run(page) {
   await waitForSelectionAnchorText(page, "$k$");
   await waitForInlineMathRevealPreview(page);
   await page.waitForTimeout(100);
-  const formattedMathOpen = await page.evaluate(() => ({
+  const formattedMathOpen = await page.evaluate((editorSelector) => ({
     dirty: window.__app.isDirty(),
     hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
     selection: {
       anchorOffset: window.getSelection()?.anchorOffset ?? null,
       anchorText: window.getSelection()?.anchorNode?.textContent ?? "",
     },
-    text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
-  }));
+    text: document.querySelector(editorSelector)?.textContent ?? "",
+  }), DEBUG_EDITOR_SELECTOR);
   if (
     formattedMathOpen.dirty
     || !formattedMathOpen.hasPreview
@@ -259,16 +260,16 @@ export async function run(page) {
   await page.keyboard.press("ArrowRight");
   await waitForSelectionAnchorText(page, "$x+1$");
   await waitForInlineMathRevealPreview(page);
-  const inlineMathKeyboardForward = await page.evaluate(() => {
+  const inlineMathKeyboardForward = await page.evaluate((editorSelector) => {
     const selection = window.getSelection();
     return {
       anchorOffset: selection?.anchorOffset ?? null,
       anchorText: selection?.anchorNode?.textContent ?? "",
       hasPreview: Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .cf-lexical-inline-math-preview .katex")),
       inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
-      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+      text: document.querySelector(editorSelector)?.textContent ?? "",
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
   if (
     inlineMathKeyboardForward.anchorText !== "$x+1$"
     || inlineMathKeyboardForward.anchorOffset === null
@@ -286,15 +287,15 @@ export async function run(page) {
   await placeCaretAtVisibleText(page, "Before ", "end");
   await page.keyboard.press("ArrowRight");
   await waitForSelectionAnchorText(page, "[@cormen2009]");
-  const citationKeyboardForward = await page.evaluate(() => {
+  const citationKeyboardForward = await page.evaluate((editorSelector) => {
     const selection = window.getSelection();
     return {
       anchorOffset: selection?.anchorOffset ?? null,
       anchorText: selection?.anchorNode?.textContent ?? "",
       referenceStillRendered: Boolean(document.querySelector("[data-coflat-reference='true']")),
-      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+      text: document.querySelector(editorSelector)?.textContent ?? "",
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
   if (
     citationKeyboardForward.anchorText !== "[@cormen2009]"
     || citationKeyboardForward.anchorOffset !== 0
@@ -311,15 +312,15 @@ export async function run(page) {
   await placeCaretAtVisibleText(page, " after", "start");
   await page.keyboard.press("ArrowLeft");
   await waitForSelectionAnchorText(page, "$x+1$");
-  const inlineMathKeyboardBackward = await page.evaluate(() => {
+  const inlineMathKeyboardBackward = await page.evaluate((editorSelector) => {
     const selection = window.getSelection();
     return {
       anchorOffset: selection?.anchorOffset ?? null,
       anchorText: selection?.anchorNode?.textContent ?? "",
       inlineMathStillRendered: Boolean(document.querySelector(".cf-lexical-inline-math")),
-      text: document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "",
+      text: document.querySelector(editorSelector)?.textContent ?? "",
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
   if (
     inlineMathKeyboardBackward.anchorText !== "$x+1$"
     || inlineMathKeyboardBackward.anchorOffset !== 4

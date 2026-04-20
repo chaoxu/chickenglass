@@ -12,7 +12,7 @@ pub struct AppError {
 }
 
 impl AppError {
-    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+    fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
@@ -20,7 +20,7 @@ impl AppError {
         }
     }
 
-    pub fn with_details(
+    fn with_details(
         code: impl Into<String>,
         message: impl Into<String>,
         details: impl Into<String>,
@@ -32,67 +32,52 @@ impl AppError {
         }
     }
 
-    pub fn from_message(message: impl Into<String>) -> Self {
-        let message = message.into();
-        let code = classify_error_message(&message);
-        Self::new(code, message)
+    pub fn project_no_project() -> Self {
+        Self::new("project.noProject", "No project folder open")
     }
-}
 
-impl From<String> for AppError {
-    fn from(message: String) -> Self {
-        Self::from_message(message)
+    pub fn fs_not_found(message: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::with_details("fs.notFound", message, details)
     }
-}
 
-impl From<&str> for AppError {
-    fn from(message: &str) -> Self {
-        Self::from_message(message)
+    pub fn fs_already_exists(message: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::with_details("fs.alreadyExists", message, details)
     }
-}
 
-fn classify_error_message(message: &str) -> &'static str {
-    if message == "No project folder open" {
-        return "project.noProject";
+    pub fn path_escape(message: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::with_details("path.escape", message, details)
     }
-    if message.starts_with("File not found:")
-        || (message.contains("No such file or directory") && !message.contains("pandoc"))
-    {
-        return "fs.notFound";
+
+    pub fn path_resolve(message: impl Into<String>) -> Self {
+        Self::new("path.resolve", message)
     }
-    if message.starts_with("File already exists:")
-        || message.starts_with("Directory already exists:")
-    {
-        return "fs.alreadyExists";
+
+    pub fn path_not_directory(message: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::with_details("path.notDirectory", message, details)
     }
-    if message.contains("escapes project root") {
-        return "path.escape";
+
+    pub fn export_unsupported_format(
+        message: impl Into<String>,
+        details: impl Into<String>,
+    ) -> Self {
+        Self::with_details("export.unsupportedFormat", message, details)
     }
-    if message.starts_with("Cannot resolve path")
-        || message.starts_with("Cannot canonicalize")
-        || message.starts_with("Cannot inspect")
-    {
-        return "path.resolve";
+
+    pub fn export_pandoc_unavailable(message: impl Into<String>) -> Self {
+        Self::new("export.pandocUnavailable", message)
     }
-    if message.starts_with("Unsupported export format:") {
-        return "export.unsupportedFormat";
+
+    pub fn export_pandoc_failed(message: impl Into<String>) -> Self {
+        Self::new("export.pandocFailed", message)
     }
-    if message.starts_with("Failed to run pandoc:")
-        || message.starts_with("Failed to start pandoc:")
-        || message == "pandoc --version returned a non-zero exit code"
-    {
-        return "export.pandocUnavailable";
+
+    pub fn native_io(message: impl Into<String>) -> Self {
+        Self::new("native.io", message)
     }
-    if message.starts_with("Pandoc failed:") {
-        return "export.pandocFailed";
+
+    pub fn native_error(message: impl Into<String>) -> Self {
+        Self::new("native.error", message)
     }
-    if message.starts_with("Not a directory:") {
-        return "path.notDirectory";
-    }
-    if message.starts_with("Failed to") {
-        return "native.io";
-    }
-    "native.error"
 }
 
 #[cfg(test)]
@@ -100,46 +85,11 @@ mod tests {
     use super::AppError;
 
     #[test]
-    fn classifies_common_command_errors_with_stable_codes() {
-        let cases = [
-            ("File not found: notes.md", "fs.notFound"),
-            (
-                "Cannot resolve path 'missing.md': No such file or directory",
-                "fs.notFound",
-            ),
-            ("File already exists: notes.md", "fs.alreadyExists"),
-            ("Directory already exists: docs", "fs.alreadyExists"),
-            ("Path '../secret.md' escapes project root", "path.escape"),
-            ("Cannot resolve path: invalid", "path.resolve"),
-            (
-                "Cannot canonicalize root: permission denied",
-                "path.resolve",
-            ),
-            ("Cannot inspect notes.md: permission denied", "path.resolve"),
-            (
-                "Unsupported export format: html",
-                "export.unsupportedFormat",
-            ),
-            (
-                "Failed to run pandoc: No such file or directory",
-                "export.pandocUnavailable",
-            ),
-            (
-                "Failed to start pandoc: No such file or directory",
-                "export.pandocUnavailable",
-            ),
-            (
-                "pandoc --version returned a non-zero exit code",
-                "export.pandocUnavailable",
-            ),
-            ("Pandoc failed: unknown option", "export.pandocFailed"),
-            ("Not a directory: /tmp/file.md", "path.notDirectory"),
-            ("Failed to write file: permission denied", "native.io"),
-        ];
+    fn fallback_native_errors_use_explicit_constructor() {
+        let error = AppError::native_error("File not found: notes.md");
 
-        for (message, code) in cases {
-            assert_eq!(AppError::from_message(message).code, code);
-        }
+        assert_eq!(error.code, "native.error");
+        assert_eq!(error.message, "File not found: notes.md");
     }
 
     #[test]

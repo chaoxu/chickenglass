@@ -8,7 +8,11 @@
  * shows the raw `*...*` form, then move the caret out and confirm the
  * markers are re-applied as a styled span.
  */
-import { openRegressionDocument, readEditorText } from "../test-helpers.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  openRegressionDocument,
+  readEditorText,
+} from "../test-helpers.mjs";
 
 export const name = "cursor-reveal";
 export const groups = ["reveal"];
@@ -47,18 +51,18 @@ export async function run(page) {
   });
   await page.waitForTimeout(200);
 
-  const duringReveal = await page.evaluate(() => {
-    const bodyText = document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "";
+  const duringReveal = await page.evaluate((editorSelector) => {
+    const bodyText = document.querySelector(editorSelector)?.textContent ?? "";
     return {
       bodyText,
       italicsPresent: Boolean(document.querySelector(".cf-italic")),
       hasStars: bodyText.includes("*world*"),
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
 
   // Move caret to the very start of the document → commit reveal back.
-  await page.evaluate(() => {
-    const root = document.querySelector('[data-testid="lexical-editor"]');
+  await page.evaluate((editorSelector) => {
+    const root = document.querySelector(editorSelector);
     if (!(root instanceof HTMLElement)) {
       return;
     }
@@ -76,7 +80,7 @@ export async function run(page) {
     sel?.addRange(range);
     root.dispatchEvent(new Event("selectionchange", { bubbles: true }));
     document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
-  });
+  }, DEBUG_EDITOR_SELECTOR);
   await page.waitForTimeout(200);
 
   const afterReveal = await readEditorText(page);

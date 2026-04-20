@@ -1,4 +1,5 @@
 import {
+  HEADING_SOURCE_CLASS,
   readHeadingSourcePos,
   readSourceFrom,
   SOURCE_POSITION_SELECTOR,
@@ -14,7 +15,7 @@ function sourcePositionFromMarkedElement(element: HTMLElement | null): number | 
     return sourceFrom;
   }
 
-  if (element.classList.contains("cf-lexical-heading")) {
+  if (element.classList.contains(HEADING_SOURCE_CLASS)) {
     const headingPos = readHeadingSourcePos(element);
     if (headingPos !== null) {
       return headingPos;

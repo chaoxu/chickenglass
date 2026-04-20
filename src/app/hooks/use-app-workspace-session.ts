@@ -105,17 +105,12 @@ export interface AppWorkspaceSessionController {
 
 export interface AppWorkspaceSessionDeps {
   readonly restoredProjectRoot: string | null;
-  readonly saveWorkspaceWindowState: (patch: {
-    projectRoot?: string | null;
-    currentDocument?: { path: string; name: string } | null;
-  }) => void;
 }
 
 export function useAppWorkspaceSession(
   fs: FileSystem,
   {
     restoredProjectRoot,
-    saveWorkspaceWindowState,
   }: AppWorkspaceSessionDeps,
 ): AppWorkspaceSessionController {
   const [projectRoot, setProjectRoot] = useState<string | null>(restoredProjectRoot);
@@ -130,11 +125,7 @@ export function useAppWorkspaceSession(
     setProjectRoot(null);
     setFileTree(null);
     setProjectConfig({});
-    saveWorkspaceWindowState({
-      projectRoot: null,
-      currentDocument: null,
-    });
-  }, [saveWorkspaceWindowState]);
+  }, []);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     const listChildren = fs.listChildren;
@@ -245,18 +236,11 @@ export function useAppWorkspaceSession(
   /** Open a Tauri project folder with stale-request protection, set the root,
    *  and hydrate workspace contents.
    *
-   *  Shared by startup restore and user-initiated project open.  `onRootSet`
-   *  runs after the folder is validated and the root is set but before workspace
-   *  contents are loaded — use it to clear state that must not leak across
-   *  projects (window state, etc.).
-   *
-   *  Returns the file tree on success or null when the folder couldn't be opened
-   *  or a newer request superseded this one.  Stale errors are silently
-   *  swallowed; current errors re-throw. */
-  const openTauriFolder = useCallback(async (
-    path: string,
-    onRootSet?: () => void,
-  ): Promise<FileEntry | null> => {
+   *  Shared by startup restore and user-initiated project open. Returns the
+   *  file tree on success or null when the folder couldn't be opened or a newer
+   *  request superseded this one. Stale errors are silently swallowed; current
+   *  errors re-throw. */
+  const openTauriFolder = useCallback(async (path: string): Promise<FileEntry | null> => {
     const requestId = ++workspaceRequestRef.current;
     try {
       const { openFolderAt } = await tauriFs();
@@ -265,7 +249,6 @@ export function useAppWorkspaceSession(
         return null;
       }
       setProjectRoot(path);
-      onRootSet?.();
       return loadWorkspaceContents(requestId);
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) return null;
@@ -275,10 +258,8 @@ export function useAppWorkspaceSession(
 
   const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
     if (!isTauri()) return null;
-    return openTauriFolder(path, () => {
-      saveWorkspaceWindowState({ projectRoot: path, currentDocument: null });
-    });
-  }, [openTauriFolder, saveWorkspaceWindowState]);
+    return openTauriFolder(path);
+  }, [openTauriFolder]);
 
   useEffect(() => {
     if (didRunStartupRef.current) {

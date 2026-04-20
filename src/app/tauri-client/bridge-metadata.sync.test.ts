@@ -130,6 +130,6 @@ describe("bridge-metadata sync with Rust backend", () => {
     const tsFields = [...TAURI_FILE_CHANGED_EVENT_FIELDS].sort();
 
     expect(tsFields).toEqual(rustWatcherFields);
-    expect(debugFields.every((field) => tsFields.includes(field))).toBe(true);
+    expect(debugFields).toEqual(rustWatcherFields);
   });
 });

@@ -4,7 +4,7 @@ use std::time::Duration;
 use tauri::{AppHandle, State, WebviewWindow, command};
 
 use super::context::{CommandSpec, run_command};
-use super::error::AppResult;
+use super::error::{AppError, AppResult};
 use super::state::{FileWatcherState, PerfState};
 use crate::services::watch::{
     WatchEventMessage, attach_watcher, create_directory_watcher, remove_watcher_generation,
@@ -32,17 +32,23 @@ pub fn watch_directory(
     generation: u64,
 ) -> AppResult<bool> {
     run_command(&perf, WATCH_DIRECTORY, Some(&path), || {
-        let watch_path = PathBuf::from(&path)
-            .canonicalize()
-            .map_err(|e| format!("Cannot resolve path '{}': {}", path, e))?;
+        let watch_path = PathBuf::from(&path).canonicalize().map_err(|e| {
+            AppError::path_resolve(format!("Cannot resolve path '{}': {}", path, e))
+        })?;
 
         if !watch_path.is_dir() {
-            return Err(format!("Not a directory: {}", watch_path.display()));
+            return Err(AppError::path_not_directory(
+                format!("Not a directory: {}", watch_path.display()),
+                watch_path.display().to_string(),
+            ));
         }
 
         let window_label = window.label().to_string();
         {
-            let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+            let mut lock = watcher_state
+                .0
+                .lock()
+                .map_err(|e| AppError::native_error(e.to_string()))?;
             if !reserve_watcher_slot(&mut lock, &window_label, watch_path.clone(), generation) {
                 return Ok(false);
             }
@@ -53,7 +59,10 @@ pub fn watch_directory(
             spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms)?;
         let watcher = create_directory_watcher(watch_path, generation, event_sender.clone())?;
 
-        let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+        let mut lock = watcher_state
+            .0
+            .lock()
+            .map_err(|e| AppError::native_error(e.to_string()))?;
         let attached = attach_watcher(&mut lock, &window_label, generation, watcher);
         drop(lock);
 
@@ -73,7 +82,10 @@ pub fn unwatch_directory(
     generation: u64,
 ) -> AppResult<bool> {
     run_command(&perf, UNWATCH_DIRECTORY, None, || {
-        let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
+        let mut lock = watcher_state
+            .0
+            .lock()
+            .map_err(|e| AppError::native_error(e.to_string()))?;
         Ok(remove_watcher_generation(
             &mut lock,
             window.label(),

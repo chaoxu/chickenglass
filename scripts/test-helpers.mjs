@@ -27,7 +27,11 @@ import {
   issueMatches,
   mergeRuntimeIssueOptions,
 } from "./test-helpers/runtime-issues.mjs";
-export { PUBLIC_SHOWCASE_FIXTURE, sleep } from "./test-helpers/shared.mjs";
+export {
+  DEBUG_EDITOR_SELECTOR,
+  PUBLIC_SHOWCASE_FIXTURE,
+  sleep,
+} from "./test-helpers/shared.mjs";
 export {
   connectEditor,
   disconnectBrowser,

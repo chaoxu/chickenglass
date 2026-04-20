@@ -1,4 +1,5 @@
 import {
+  DEBUG_EDITOR_SELECTOR,
   setRevealPresentation,
   waitForBrowserSettled,
 } from "../test-helpers.mjs";
@@ -81,9 +82,9 @@ async function openReferenceFixture(page) {
 }
 
 async function readCitationInlineState(page) {
-  return page.evaluate(() => {
+  return page.evaluate((editorSelector) => {
     const citation = document.querySelector("[data-coflat-citation='true']");
-    const editor = document.querySelector('[data-testid="lexical-editor"]');
+    const editor = document.querySelector(editorSelector);
     const walker = editor ? document.createTreeWalker(editor, NodeFilter.SHOW_TEXT) : null;
     let text = walker?.nextNode() ?? null;
     while (text && !(text.textContent ?? "").includes(" after citation.")) {
@@ -105,7 +106,7 @@ async function readCitationInlineState(page) {
         : false,
       citationText: citation?.textContent ?? "",
     };
-  });
+  }, DEBUG_EDITOR_SELECTOR);
 }
 
 export async function run(page) {
@@ -238,7 +239,7 @@ export async function run(page) {
     };
   }
 
-  await page.locator('[data-testid="lexical-editor"] .cf-lexical-inline-math').first().click({ force: true });
+  await page.locator(`${DEBUG_EDITOR_SELECTOR} .cf-lexical-inline-math`).first().click({ force: true });
   await page.waitForFunction(
     () => Boolean(document.querySelector(".cf-lexical-inline-reveal-preview-shell .katex")),
     undefined,

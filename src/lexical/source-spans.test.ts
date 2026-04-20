@@ -50,6 +50,30 @@ describe("source spans", () => {
     });
   });
 
+  it("maps combined formatted text through the authored delimiter span", () => {
+    const doc = "Alpha _**both**_ omega.";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const index = createSourceSpanIndex(doc);
+      const delimiterLocation = index.findNearestLocation(doc.indexOf("_**"));
+      expect(delimiterLocation).toMatchObject({
+        adapterId: "text-format",
+        kind: "reveal",
+        offset: 0,
+        source: "_**both**_",
+      });
+
+      const textLocation = index.findNearestLocation(doc.indexOf("both") + 2);
+      expect(textLocation).toMatchObject({
+        kind: "text",
+        offset: 2,
+      });
+      expect(textLocation?.kind === "text" ? textLocation.node.getTextContent() : null).toBe("both");
+    });
+  });
+
   it("maps repeated visible text through the selected node span", () => {
     const doc = "- same alpha\n- same beta";
     const editor = createHeadlessCoflatEditor();

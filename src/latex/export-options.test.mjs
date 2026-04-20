@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,6 +11,29 @@ import {
   resolveLatexExportOptions,
   resolveLatexTemplatePath,
 } from "./export-options.mjs";
+
+const rustExportSource = () =>
+  readFileSync(join(process.cwd(), "src-tauri/src/commands/export.rs"), "utf8");
+
+function extractRustLatexPandocFrom(source) {
+  const match = source.match(/const LATEX_PANDOC_FROM: &str =\s*"([^"]+)";/);
+  if (!match) {
+    throw new Error("Rust export command is missing LATEX_PANDOC_FROM");
+  }
+  return match[1];
+}
+
+function extractRustBuildLatexPandocArgsBody(source) {
+  const start = source.indexOf("fn build_latex_pandoc_args(");
+  if (start < 0) {
+    throw new Error("Rust export command is missing build_latex_pandoc_args");
+  }
+  const testsStart = source.indexOf("#[cfg(test)]", start);
+  if (testsStart < 0) {
+    throw new Error("Rust export command is missing test module boundary");
+  }
+  return source.slice(start, testsStart);
+}
 
 describe("parseLatexFrontmatterConfig", () => {
   it("parses LaTeX export options from frontmatter", () => {
@@ -149,8 +175,8 @@ describe("buildLatexPandocArgs", () => {
       "--syntax-highlighting=none",
       "--lua-filter=/repo/src/latex/filter.lua",
       "--template=/repo/src/latex/template/article.tex",
-      "--output=/project/out.tex",
       "--resource-path=/project/notes:/project",
+      "--output=/project/out.tex",
       "--metadata=bibliography=project",
     ]);
   });
@@ -173,6 +199,58 @@ describe("buildLatexPandocArgs", () => {
         template: "/template.tex",
       }),
     ).not.toContain("--pdf-engine=xelatex");
+  });
+});
+
+describe("Rust/JS LaTeX export profile sync", () => {
+  it("keeps the duplicated native Pandoc profile aligned with the JS builder", () => {
+    const rust = rustExportSource();
+    const rustBuilder = extractRustBuildLatexPandocArgsBody(rust);
+    const expectedProfileOrder = [
+      "--from={}",
+      "--to=latex",
+      "--wrap=preserve",
+      "--syntax-highlighting=none",
+      "--lua-filter={}",
+      "--template={}",
+      "--resource-path={}",
+      "--output={}",
+    ];
+    const jsProfileOrder = buildLatexPandocArgs({
+      filterPath: "FILTER",
+      output: "OUTPUT",
+      resourcePath: "RESOURCE",
+      template: "TEMPLATE",
+    })
+      .slice(0, expectedProfileOrder.length)
+      .map((arg) =>
+        arg
+          .replace(/^--from=.*/, "--from={}")
+          .replace(/^--lua-filter=.*/, "--lua-filter={}")
+          .replace(/^--template=.*/, "--template={}")
+          .replace(/^--resource-path=.*/, "--resource-path={}")
+          .replace(/^--output=.*/, "--output={}")
+      );
+
+    expect(extractRustLatexPandocFrom(rust)).toBe(LATEX_PANDOC_FROM);
+    expect(jsProfileOrder).toEqual(expectedProfileOrder);
+    let previousRustIndex = -1;
+    for (const profileArg of expectedProfileOrder) {
+      const rustIndex = rustBuilder.indexOf(`"${profileArg}"`);
+      expect(rustIndex).toBeGreaterThan(previousRustIndex);
+      previousRustIndex = rustIndex;
+    }
+    for (const fixedArg of [
+      "--to=latex",
+      "--wrap=preserve",
+      "--syntax-highlighting=none",
+      "--pdf-engine=xelatex",
+    ]) {
+      expect(rustBuilder).toContain(`"${fixedArg}".to_string()`);
+    }
+    for (const dynamicFormat of [...expectedProfileOrder, "--metadata=bibliography={}"]) {
+      expect(rustBuilder).toContain(`"${dynamicFormat}"`);
+    }
   });
 });
 

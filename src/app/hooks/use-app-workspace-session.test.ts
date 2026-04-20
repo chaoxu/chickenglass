@@ -154,7 +154,6 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
   const Harness: FC = () => {
     const result = useAppWorkspaceSession(fs, {
       restoredProjectRoot: workspaceMockState.windowState.projectRoot,
-      saveWorkspaceWindowState: workspaceMockState.saveWindowState,
     });
     ref.projectRoot = result.projectRoot;
     ref.fileTree = result.fileTree;
@@ -231,7 +230,7 @@ describe("useAppWorkspaceSession", () => {
     container.remove();
   });
 
-  it("clears invalid restored project state when reopening the saved root fails", async () => {
+  it("clears invalid restored project state in memory when reopening the saved root fails", async () => {
     workspaceMockState.openFolderAt.mockRejectedValueOnce(new Error("missing folder"));
     const { Harness, ref } = createHarness(fsStub);
 
@@ -243,13 +242,10 @@ describe("useAppWorkspaceSession", () => {
 
     expect(ref.startupComplete).toBe(true);
     expect(ref.projectRoot).toBeNull();
-    expect(workspaceMockState.saveWindowState).toHaveBeenCalledWith({
-      projectRoot: null,
-      currentDocument: null,
-    });
+    expect(workspaceMockState.saveWindowState).not.toHaveBeenCalled();
   });
 
-  it("clears the persisted document when switching to a different project root", async () => {
+  it("opens a different project root without owning window-state persistence", async () => {
     workspaceMockState.windowState = {
       ...workspaceMockState.windowState,
       projectRoot: null,
@@ -273,10 +269,7 @@ describe("useAppWorkspaceSession", () => {
       "/tmp/next-project",
       expect.any(Number),
     );
-    expect(workspaceMockState.saveWindowState).toHaveBeenCalledWith({
-      projectRoot: "/tmp/next-project",
-      currentDocument: null,
-    });
+    expect(workspaceMockState.saveWindowState).not.toHaveBeenCalled();
   });
 
   it("keeps tree and config from the newest overlapping project-root load", async () => {
@@ -371,10 +364,7 @@ describe("useAppWorkspaceSession", () => {
     expect(ref.projectRoot).toBe("/tmp/manual-project");
     expect(ref.fileTree?.name).toBe("manual");
     expect(ref.projectConfig).toEqual({ bibliography: "manual.bib" });
-    expect(workspaceMockState.saveWindowState).not.toHaveBeenCalledWith({
-      projectRoot: null,
-      currentDocument: null,
-    });
+    expect(workspaceMockState.saveWindowState).not.toHaveBeenCalled();
   });
 
   it("does not rerun startup restore when persisted project root changes after startup", async () => {

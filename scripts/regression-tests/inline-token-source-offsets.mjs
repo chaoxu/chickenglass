@@ -90,6 +90,29 @@ async function typeFromLexicalSourceOffset(page, doc, needle, offsetInNeedle, ma
   return readEditorText(page);
 }
 
+async function replaceFirstRevealSource(page, nextSource) {
+  await page.waitForFunction(
+    () => [...document.querySelectorAll("[data-lexical-text='true']")]
+      .some((element) => element.textContent?.startsWith("[")),
+    undefined,
+    { timeout: 5000 },
+  );
+  await page.evaluate(() => {
+    const reveal = [...document.querySelectorAll("[data-lexical-text='true']")]
+      .find((element) => element.textContent?.startsWith("["));
+    if (!reveal?.firstChild) {
+      throw new Error("missing reveal source text");
+    }
+    const range = document.createRange();
+    range.selectNodeContents(reveal.firstChild);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.type(nextSource);
+  await waitForBrowserSettled(page);
+}
+
 export async function run(page) {
   await openScratch(page, "A $x+1$ B.", "math");
   await setSelection(page, 3, 3);
@@ -150,6 +173,33 @@ export async function run(page) {
   );
   if (!titledLinkDoc.includes('[**rich** link](https://example.com/path "A tiTtle")')) {
     return { pass: false, message: `link title/formatted-label source offset edited the wrong location: ${JSON.stringify(titledLinkDoc)}` };
+  }
+
+  await openScratch(
+    page,
+    'Alpha [plain](https://example.com/path "A title") omega.',
+    "noncanonical-link",
+  );
+  await page.locator("a.cf-lexical-link").first().click({ force: true });
+  await replaceFirstRevealSource(page, "[paren](https://example.com/a(b)c (paren title))");
+  await page.keyboard.press("ArrowRight");
+  await waitForBrowserSettled(page);
+  const nonCanonicalLinkState = await page.evaluate(() => ({
+    doc: window.__editor?.getDoc?.() ?? "",
+    href: document.querySelector("a.cf-lexical-link")?.getAttribute("href") ?? "",
+    text: document.querySelector("a.cf-lexical-link")?.textContent ?? "",
+    title: document.querySelector("a.cf-lexical-link")?.getAttribute("title") ?? "",
+  }));
+  if (
+    nonCanonicalLinkState.href !== "https://example.com/a(b)c"
+    || nonCanonicalLinkState.text !== "paren"
+    || nonCanonicalLinkState.title !== "paren title"
+    || !nonCanonicalLinkState.doc.includes('[paren](https://example.com/a(b)c "paren title")')
+  ) {
+    return {
+      pass: false,
+      message: `noncanonical link reveal did not reparse through the source scanner: ${JSON.stringify(nonCanonicalLinkState)}`,
+    };
   }
 
   const headingDoc = await typeFromSourceOffset(

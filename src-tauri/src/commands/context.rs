@@ -34,7 +34,7 @@ pub fn run_command<T, F>(
     task: F,
 ) -> AppResult<T>
 where
-    F: FnOnce() -> Result<T, String>,
+    F: FnOnce() -> AppResult<T>,
 {
     measure_command(
         perf,
@@ -44,7 +44,6 @@ where
         detail,
         task,
     )
-    .map_err(AppError::from)
 }
 
 pub struct WindowCommandContext<'a> {
@@ -64,7 +63,7 @@ impl<'a> WindowCommandContext<'a> {
 
     pub fn run<T, F>(&self, spec: CommandSpec, detail: Option<&str>, task: F) -> AppResult<T>
     where
-        F: FnOnce(&Path) -> Result<T, String>,
+        F: FnOnce(&Path) -> AppResult<T>,
     {
         run_command(self.perf, spec, detail, || {
             let project_root = self.project_root()?;
@@ -72,10 +71,14 @@ impl<'a> WindowCommandContext<'a> {
         })
     }
 
-    pub fn project_root(&self) -> Result<PathBuf, String> {
-        let lock = self.root.0.lock().map_err(|e| e.to_string())?;
+    pub fn project_root(&self) -> AppResult<PathBuf> {
+        let lock = self
+            .root
+            .0
+            .lock()
+            .map_err(|e| AppError::native_error(e.to_string()))?;
         lock.get(self.window.label())
             .map(|entry| entry.path.clone())
-            .ok_or("No project folder open".to_string())
+            .ok_or_else(AppError::project_no_project)
     }
 }

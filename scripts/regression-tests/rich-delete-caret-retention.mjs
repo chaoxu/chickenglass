@@ -1,4 +1,8 @@
-import { focusEditor, readEditorText } from "../test-helpers.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  focusEditor,
+  readEditorText,
+} from "../test-helpers.mjs";
 
 export const name = "rich-delete-caret-retention";
 export const groups = ["authoring", "navigation"];
@@ -33,8 +37,8 @@ async function openScratch(page, path, doc, mode) {
 }
 
 function selectVisibleText(page, needle) {
-  return page.evaluate((targetText) => {
-    const root = document.querySelector('[data-testid="lexical-editor"]');
+  return page.evaluate(({ editorSelector, targetText }) => {
+    const root = document.querySelector(editorSelector);
     if (!root) {
       throw new Error("missing editor root");
     }
@@ -58,7 +62,7 @@ function selectVisibleText(page, needle) {
     }
 
     return false;
-  }, needle);
+  }, { editorSelector: DEBUG_EDITOR_SELECTOR, targetText: needle });
 }
 
 export async function run(page) {

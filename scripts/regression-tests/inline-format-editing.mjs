@@ -14,6 +14,7 @@
  *      every formatting marker.
  */
 import {
+  DEBUG_EDITOR_SELECTOR,
   formatRuntimeIssues,
   openRegressionDocument,
   readEditorText,
@@ -45,8 +46,8 @@ async function placeCaretInsideToken(page, selector, text) {
 }
 
 async function moveCaretToStart(page) {
-  await page.evaluate(() => {
-    const root = document.querySelector('[data-testid="lexical-editor"]');
+  await page.evaluate((editorSelector) => {
+    const root = document.querySelector(editorSelector);
     if (!(root instanceof HTMLElement)) return;
     root.focus();
     const first = root.firstChild;
@@ -59,7 +60,7 @@ async function moveCaretToStart(page) {
     selection?.addRange(range);
     root.dispatchEvent(new Event("selectionchange", { bubbles: true }));
     document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
-  });
+  }, DEBUG_EDITOR_SELECTOR);
 }
 
 export async function run(page) {
@@ -72,14 +73,14 @@ export async function run(page) {
       const placed = await placeCaretInsideToken(page, probe.selector, probe.text);
       const sourceNeedle = `${probe.marker}${probe.text}${probe.marker}`;
       await page.waitForFunction(
-        (needle) => (document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "").includes(needle),
-        sourceNeedle,
+        ({ editorSelector, needle }) => (document.querySelector(editorSelector)?.textContent ?? "").includes(needle),
+        { editorSelector: DEBUG_EDITOR_SELECTOR, needle: sourceNeedle },
         { timeout: 1000 },
       ).catch(() => {});
-      const sawSource = await page.evaluate((needle) => {
-        const editor = document.querySelector('[data-testid="lexical-editor"]');
+      const sawSource = await page.evaluate(({ editorSelector, needle }) => {
+        const editor = document.querySelector(editorSelector);
         return (editor?.textContent ?? "").includes(needle);
-      }, sourceNeedle);
+      }, { editorSelector: DEBUG_EDITOR_SELECTOR, needle: sourceNeedle });
       revealChecks.push({
         marker: probe.marker,
         placed,
@@ -89,8 +90,8 @@ export async function run(page) {
       });
       await moveCaretToStart(page);
       await page.waitForFunction(
-        (needle) => !(document.querySelector('[data-testid="lexical-editor"]')?.textContent ?? "").includes(needle),
-        sourceNeedle,
+        ({ editorSelector, needle }) => !(document.querySelector(editorSelector)?.textContent ?? "").includes(needle),
+        { editorSelector: DEBUG_EDITOR_SELECTOR, needle: sourceNeedle },
         { timeout: 1000 },
       ).catch(() => {});
     }

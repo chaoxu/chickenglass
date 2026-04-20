@@ -45,6 +45,19 @@ describe("inline source helpers", () => {
     });
   });
 
+  it("parses non-canonical link destinations and title delimiters", () => {
+    expect(parseMarkdownLinkSource("[nested [label]](<https://example.com/a b> 'single title')")).toMatchObject({
+      labelMarkdown: "nested [label]",
+      title: "single title",
+      url: "https://example.com/a b",
+    });
+    expect(parseMarkdownLinkSource("[paren](https://example.com/a(b)c (paren title))")).toMatchObject({
+      labelMarkdown: "paren",
+      title: "paren title",
+      url: "https://example.com/a(b)c",
+    });
+  });
+
   it("matches imported underscore formatted text sources", () => {
     const markdown = "Alpha _italic_ omega.";
     const editor = createHeadlessCoflatEditor();
@@ -61,5 +74,24 @@ describe("inline source helpers", () => {
       openLength: 1,
       source: "_italic_",
     });
+  });
+
+  it("matches imported combined formatted text sources", () => {
+    const markdown = "Alpha _**both**_ and ___also both___.";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, markdown);
+
+    const matches = editor.getEditorState().read(() =>
+      $getRoot().getAllTextNodes()
+        .filter((node) =>
+          node.getTextContent().includes("both")
+          && node.hasFormat("bold")
+          && node.hasFormat("italic")
+        )
+        .map((node) => findMatchingFormattedTextSource(markdown, node))
+        .map((match) => match?.source ?? null)
+    );
+
+    expect(matches).toEqual(["_**both**_", "___also both___"]);
   });
 });

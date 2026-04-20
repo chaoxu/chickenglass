@@ -47,12 +47,18 @@ export interface FileWatcherConfig {
 export interface FileChangedEvent {
   path: string;
   treeChanged: boolean;
+  generation: number;
+}
+
+interface NormalizedFileChangedEvent {
+  path: string;
+  treeChanged: boolean;
   generation?: number;
 }
 
-export type FileChangedPayload = FileChangedEvent | string;
+export type FileChangedPayload = FileChangedEvent | NormalizedFileChangedEvent | string;
 
-function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEvent {
+function normalizeFileChangedEvent(payload: FileChangedPayload): NormalizedFileChangedEvent {
   if (typeof payload === "string") {
     return { path: payload, treeChanged: false };
   }
@@ -103,9 +109,9 @@ export class FileWatcher {
     // race ahead of the frontend subscription.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
-    const unlisten = await listen<FileChangedPayload>(TAURI_FILE_CHANGED_EVENT_CHANNEL, (event) => {
-      const payload = normalizeFileChangedEvent(event.payload);
-      if (payload.generation !== undefined && payload.generation !== watchToken) {
+    const unlisten = await listen<FileChangedEvent>(TAURI_FILE_CHANGED_EVENT_CHANNEL, (event) => {
+      const payload = event.payload;
+      if (payload.generation !== watchToken) {
         return;
       }
       void this.processFileChanged(payload).catch(

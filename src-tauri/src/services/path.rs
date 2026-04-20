@@ -1,39 +1,58 @@
 use std::path::{Path, PathBuf};
 
-pub fn resolve_project_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+use crate::commands::error::{AppError, AppResult};
+
+pub fn resolve_project_path(root: &Path, relative: &str) -> AppResult<PathBuf> {
     let full = root.join(relative);
     // Resolve `..` and symlink aliases before checking project-root containment.
-    let canonical = canonicalize_maybe_missing(&full)
-        .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
+    let canonical = canonicalize_maybe_missing(&full).map_err(|e| {
+        AppError::path_resolve(format!("Cannot resolve path '{}': {}", relative, e))
+    })?;
     let canonical_root = root
         .canonicalize()
-        .map_err(|e| format!("Cannot canonicalize root: {}", e))?;
+        .map_err(|e| AppError::path_resolve(format!("Cannot canonicalize root: {}", e)))?;
     if !canonical.starts_with(&canonical_root) {
-        return Err(format!("Path '{}' escapes project root", relative));
+        return Err(AppError::path_escape(
+            format!("Path '{}' escapes project root", relative),
+            relative,
+        ));
     }
     Ok(canonical)
 }
 
-pub fn resolve_existing_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+pub fn resolve_existing_path(root: &Path, relative: &str) -> AppResult<PathBuf> {
     let full = resolve_project_path(root, relative)?;
     if !full.exists() {
-        return Err(format!(
-            "Cannot resolve path '{}': No such file or directory",
-            relative
+        return Err(AppError::fs_not_found(
+            format!(
+                "Cannot resolve path '{}': No such file or directory",
+                relative
+            ),
+            relative,
         ));
     }
     Ok(full)
 }
 
-pub fn project_relative_path(root: &Path, candidate: &Path) -> Result<String, String> {
-    let canonical_root = canonicalize_maybe_missing(root)
-        .map_err(|_| format!("Cannot resolve project root '{}'", root.display()))?;
-    let canonical_candidate = canonicalize_maybe_missing(candidate)
-        .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
+pub fn project_relative_path(root: &Path, candidate: &Path) -> AppResult<String> {
+    let canonical_root = canonicalize_maybe_missing(root).map_err(|_| {
+        AppError::path_resolve(format!("Cannot resolve project root '{}'", root.display()))
+    })?;
+    let canonical_candidate = canonicalize_maybe_missing(candidate).map_err(|_| {
+        AppError::path_escape(
+            format!("Path '{}' escapes project root", candidate.display()),
+            candidate.display().to_string(),
+        )
+    })?;
 
     let relative = canonical_candidate
         .strip_prefix(&canonical_root)
-        .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
+        .map_err(|_| {
+            AppError::path_escape(
+                format!("Path '{}' escapes project root", candidate.display()),
+                candidate.display().to_string(),
+            )
+        })?;
 
     Ok(relative.to_string_lossy().replace('\\', "/"))
 }
@@ -180,7 +199,8 @@ mod tests {
         fs::write(&candidate, "").unwrap();
 
         let err = project_relative_path(&root, &candidate).expect_err("should reject");
-        assert!(err.contains("escapes project root"));
+        assert_eq!(err.code, "path.escape");
+        assert!(err.message.contains("escapes project root"));
 
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(&outside).unwrap();
@@ -193,7 +213,8 @@ mod tests {
 
         let err = resolve_project_path(&root, "sub/../../etc/passwd")
             .expect_err("should reject traversal");
-        assert!(err.contains("escapes project root"), "got: {err}");
+        assert_eq!(err.code, "path.escape");
+        assert!(err.message.contains("escapes project root"), "got: {err:?}");
 
         fs::remove_dir_all(&root).unwrap();
     }
@@ -261,8 +282,8 @@ mod tests {
         let err = resolve_project_path(&root, "escape.md")
             .expect_err("dangling symlink leaf should be rejected");
         assert!(
-            err.contains("Cannot resolve path 'escape.md'"),
-            "got: {err}"
+            err.message.contains("Cannot resolve path 'escape.md'"),
+            "got: {err:?}"
         );
 
         fs::remove_dir_all(&root).unwrap();
@@ -284,8 +305,8 @@ mod tests {
         let err = resolve_project_path(&root, "escape/note.md")
             .expect_err("dangling symlink ancestor should be rejected");
         assert!(
-            err.contains("Cannot resolve path 'escape/note.md'"),
-            "got: {err}"
+            err.message.contains("Cannot resolve path 'escape/note.md'"),
+            "got: {err:?}"
         );
 
         fs::remove_dir_all(&root).unwrap();

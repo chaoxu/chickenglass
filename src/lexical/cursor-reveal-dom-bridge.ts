@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect } from "react";
 import {
   $getNearestNodeFromDOMNode,
   $getSelection,
@@ -26,9 +26,10 @@ import {
 } from "./cursor-reveal-controller";
 import { REVEAL_SOURCE_STYLE_PROPERTY } from "./reveal-source-style";
 
-export function useUserDrivenSelectionReveal(editor: LexicalEditor): MutableRefObject<boolean> {
-  const enabledRef = useRef(false);
-
+export function useUserDrivenSelectionReveal(
+  editor: LexicalEditor,
+  onIntent: () => void,
+): void {
   useEffect(() => {
     const markUserSelectionIntent = (event: Event) => {
       const root = editor.getRootElement();
@@ -37,7 +38,7 @@ export function useUserDrivenSelectionReveal(editor: LexicalEditor): MutableRefO
       if (!root || !target || !root.contains(target) || targetElement?.closest("[contenteditable='true']") !== root) {
         return;
       }
-      enabledRef.current = true;
+      onIntent();
     };
 
     document.addEventListener("pointerdown", markUserSelectionIntent, true);
@@ -46,29 +47,14 @@ export function useUserDrivenSelectionReveal(editor: LexicalEditor): MutableRefO
       document.removeEventListener("pointerdown", markUserSelectionIntent, true);
       document.removeEventListener("keydown", markUserSelectionIntent, true);
     };
-  }, [editor]);
-
-  return enabledRef;
-}
-
-export function canOpenUserDrivenReveal(
-  adapter: RevealAdapter,
-  userSelectionRevealRef: MutableRefObject<boolean>,
-): boolean {
-  if (adapter.id !== "paragraph") {
-    return true;
-  }
-  if (!userSelectionRevealRef.current) {
-    return false;
-  }
-  userSelectionRevealRef.current = false;
-  return true;
+  }, [editor, onIntent]);
 }
 
 export function usePointerSelectionReveal(
   editor: LexicalEditor,
   adapters: readonly RevealAdapter[],
-  userSelectionRevealRef: MutableRefObject<boolean>,
+  canOpenReveal: (adapter: RevealAdapter) => boolean,
+  onNoRevealCandidate: () => void,
 ): void {
   useEffect(() => {
     const handlePointerUp = (event: PointerEvent) => {
@@ -87,13 +73,15 @@ export function usePointerSelectionReveal(
         editor.update(() => {
           const selection = $getSelection();
           if (!selection) {
+            onNoRevealCandidate();
             return;
           }
           const pick = pickRevealSubject(selection, adapters);
           if (!pick) {
+            onNoRevealCandidate();
             return;
           }
-          if (!canOpenUserDrivenReveal(pick.adapter, userSelectionRevealRef)) {
+          if (!canOpenReveal(pick.adapter)) {
             return;
           }
           const preferredOffset = "anchor" in selection
@@ -111,7 +99,7 @@ export function usePointerSelectionReveal(
     return () => {
       document.removeEventListener("pointerup", handlePointerUp, true);
     };
-  }, [adapters, editor, userSelectionRevealRef]);
+  }, [adapters, canOpenReveal, editor, onNoRevealCandidate]);
 }
 
 export function registerDecoratorClickRevealEntry(

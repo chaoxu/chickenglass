@@ -43,11 +43,13 @@ function createFileTree(path: string, children?: FileEntry[]): FileEntry {
 
 interface TestRef {
   openFileCalls: string[];
+  saveWindowStateCalls: unknown[];
   setSidebarCollapsedCalls: boolean[];
   setSidebarWidthCalls: number[];
 }
 
 function createHarness(deps: {
+  projectRoot?: string | null;
   fileTree: FileEntry | null;
   listChildren?: (path: string) => Promise<FileEntry[]>;
   workspaceRequestRef: { current: number };
@@ -56,6 +58,7 @@ function createHarness(deps: {
 }): { Harness: FC; ref: TestRef } {
   const ref: TestRef = {
     openFileCalls: [],
+    saveWindowStateCalls: [],
     setSidebarCollapsedCalls: [],
     setSidebarWidthCalls: [],
   };
@@ -72,11 +75,14 @@ function createHarness(deps: {
 
   const Harness: FC = () => {
     useAppSessionPersistence({
+      projectRoot: deps.projectRoot === undefined ? deps.windowState.projectRoot : deps.projectRoot,
       fileTree: deps.fileTree,
       listChildren: deps.listChildren,
       workspaceRequestRef: deps.workspaceRequestRef,
       windowState: deps.windowState,
-      saveWindowState: vi.fn(),
+      saveWindowState: (patch) => {
+        ref.saveWindowStateCalls.push(patch);
+      },
       startupComplete: true,
       sidebarLayout: {
         sidebarCollapsed: false,
@@ -175,6 +181,79 @@ describe("useAppSessionPersistence", () => {
     });
 
     expect(ref.setSidebarCollapsedCalls).toContain(true);
+  });
+
+  it("does not clear the saved document when the restored project root still matches", async () => {
+    const windowState = createMockWindowState({
+      projectRoot: "/tmp/restored-project",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      projectRoot: "/tmp/restored-project",
+      fileTree: createFileTree("draft.md"),
+      workspaceRequestRef: { current: 1 },
+      windowState,
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    expect(ref.openFileCalls).toContain("draft.md");
+    expect(ref.saveWindowStateCalls).not.toContainEqual({
+      projectRoot: "/tmp/restored-project",
+      currentDocument: null,
+    });
+  });
+
+  it("persists an invalidated restored project root and clears the saved document", async () => {
+    const windowState = createMockWindowState({
+      projectRoot: "/tmp/missing-project",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      projectRoot: null,
+      fileTree: null,
+      workspaceRequestRef: { current: 1 },
+      windowState,
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    expect(ref.saveWindowStateCalls).toContainEqual({
+      projectRoot: null,
+      currentDocument: null,
+    });
+  });
+
+  it("persists project switches and clears the saved document", async () => {
+    const windowState = createMockWindowState({
+      projectRoot: "/tmp/old-project",
+      currentDocument: { path: "old.md", name: "old.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      projectRoot: "/tmp/next-project",
+      fileTree: createFileTree("main.md"),
+      workspaceRequestRef: { current: 2 },
+      windowState,
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    expect(ref.saveWindowStateCalls).toContainEqual({
+      projectRoot: "/tmp/next-project",
+      currentDocument: null,
+    });
   });
 
   it("discards stale restore result when project switches during lazy search", async () => {

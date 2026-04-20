@@ -3,7 +3,7 @@ use std::process::Command;
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
-use super::error::AppResult;
+use super::error::{AppError, AppResult};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::resolve_existing_path;
 
@@ -22,7 +22,10 @@ pub fn open_url(perf: State<'_, PerfState>, url: String) -> AppResult<()> {
     run_command(&perf, OPEN_URL, Some(&url), || {
         let lower = url.to_ascii_lowercase();
         if !lower.starts_with("http://") && !lower.starts_with("https://") {
-            return Err(format!("Blocked non-http(s) URL: {}", url));
+            return Err(AppError::native_error(format!(
+                "Blocked non-http(s) URL: {}",
+                url
+            )));
         }
 
         #[cfg(target_os = "macos")]
@@ -30,7 +33,7 @@ pub fn open_url(perf: State<'_, PerfState>, url: String) -> AppResult<()> {
             Command::new("open")
                 .arg(&url)
                 .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
+                .map_err(|e| AppError::native_io(format!("Failed to open URL: {}", e)))?;
         }
 
         #[cfg(target_os = "windows")]
@@ -38,7 +41,7 @@ pub fn open_url(perf: State<'_, PerfState>, url: String) -> AppResult<()> {
             Command::new("rundll32")
                 .args(["url.dll,FileProtocolHandler", &url])
                 .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
+                .map_err(|e| AppError::native_io(format!("Failed to open URL: {}", e)))?;
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -46,7 +49,7 @@ pub fn open_url(perf: State<'_, PerfState>, url: String) -> AppResult<()> {
             Command::new("xdg-open")
                 .arg(&url)
                 .spawn()
-                .map_err(|e| format!("Failed to open URL: {}", e))?;
+                .map_err(|e| AppError::native_io(format!("Failed to open URL: {}", e)))?;
         }
 
         Ok(())
@@ -74,7 +77,9 @@ pub fn reveal_in_finder(
                 Command::new("open")
                     .args(["-R", &abs_path])
                     .spawn()
-                    .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+                    .map_err(|e| {
+                        AppError::native_io(format!("Failed to reveal in Finder: {}", e))
+                    })?;
             }
 
             #[cfg(target_os = "windows")]
@@ -82,17 +87,18 @@ pub fn reveal_in_finder(
                 Command::new("explorer")
                     .arg(format!("/select,{}", abs_path))
                     .spawn()
-                    .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
+                    .map_err(|e| {
+                        AppError::native_io(format!("Failed to reveal in Explorer: {}", e))
+                    })?;
             }
 
             #[cfg(not(any(target_os = "macos", target_os = "windows")))]
             {
                 let path = std::path::PathBuf::from(&abs_path);
                 let parent = path.parent().unwrap_or(&path);
-                Command::new("xdg-open")
-                    .arg(parent)
-                    .spawn()
-                    .map_err(|e| format!("Failed to open file manager: {}", e))?;
+                Command::new("xdg-open").arg(parent).spawn().map_err(|e| {
+                    AppError::native_io(format!("Failed to open file manager: {}", e))
+                })?;
             }
 
             Ok(())

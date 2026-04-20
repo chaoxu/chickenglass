@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
-use super::error::AppResult;
+use super::error::{AppError, AppResult};
 use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{filesystem, path as path_service};
@@ -51,12 +51,18 @@ pub fn open_folder(
     run_command(&perf, OPEN_FOLDER, Some(&path), || {
         let path = PathBuf::from(&path);
         if !path.is_dir() {
-            return Err(format!("Not a directory: {}", path.display()));
+            return Err(AppError::path_not_directory(
+                format!("Not a directory: {}", path.display()),
+                path.display().to_string(),
+            ));
         }
         let canonical = path
             .canonicalize()
-            .map_err(|e| format!("Cannot resolve path: {}", e))?;
-        let mut lock = root.0.lock().map_err(|e| e.to_string())?;
+            .map_err(|e| AppError::path_resolve(format!("Cannot resolve path: {}", e)))?;
+        let mut lock = root
+            .0
+            .lock()
+            .map_err(|e| AppError::native_error(e.to_string()))?;
         Ok(filesystem::install_project_root(
             &mut lock,
             window.label(),

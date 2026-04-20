@@ -100,11 +100,11 @@ export function buildLatexPandocArgs({
     "--syntax-highlighting=none",
     `--lua-filter=${filterPath}`,
     `--template=${template}`,
-    `--output=${output}`,
   ];
   if (resourcePath) {
     args.push(`--resource-path=${resourcePath}`);
   }
+  args.push(`--output=${output}`);
   const bibliographyMetadata = latexBibliographyMetadataValue(bibliography);
   if (bibliographyMetadata) {
     args.push(`--metadata=bibliography=${bibliographyMetadata}`);

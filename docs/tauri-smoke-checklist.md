@@ -55,15 +55,14 @@ Use this bridge to verify native state transitions deterministically:
 | 2c | Press **Cmd+Shift+O** | The same native folder picker dialog appears | Dialog is visible (same behavior as menu) |
 | 2d | Open a folder, then open a different folder | The file tree switches to the new folder | Previous folder's files are gone; new folder's files are listed |
 
-## 3. Export HTML (menu + Cmd+Shift+E)
+## 3. Export Surfaces
 
 | Step | Action | Expected Result | How to Verify |
 |------|--------|-----------------|---------------|
-| 3a | Open a `.md` file with content (headings, math, fenced divs) | File loads in the editor | Content is displayed |
-| 3b | Click **File > Export...** in the native menu bar | An export dialog or save dialog appears | Dialog is visible |
-| 3c | Choose HTML export and confirm | An `.html` file is written next to the source file | Check the filesystem for the output file; open it in a browser to confirm valid HTML with rendered math |
-| 3d | Press **Cmd+Shift+E** | Same export flow as the menu action | Export completes without error |
-| 3e | Open the exported HTML in a browser | Self-contained HTML with KaTeX math, headings, fenced div blocks | Visual inspection: math renders, structure matches source |
+| 3a | Open Settings > Export | Export preferences load | Default format choices are visible |
+| 3b | Verify the supported format list | Only currently supported formats are offered | PDF and LaTeX are visible; HTML is not advertised |
+| 3c | Open the command palette and search "export" | No unfinished HTML export command is advertised | No `Export Current File to HTML` command appears |
+| 3d | Click **File > Export...** in the native menu bar | No frontend handler is currently wired | No export file is written; no console error is emitted |
 
 ## 4. Quit with Dirty-File Confirmation (Cmd+Q)
 
@@ -91,9 +90,9 @@ Use this bridge to verify native state transitions deterministically:
 | Step | Action | Expected Result | How to Verify |
 |------|--------|-----------------|---------------|
 | 6a | Press **Cmd+P** (or click the command icon in the status bar) | The command palette opens | A searchable command list overlay appears |
-| 6b | Verify command entries include at least: Open File, Open Folder, Save File, Save As, Quit App, Export HTML, Keyboard Shortcuts, Toggle Sidebar | All listed commands appear in the palette | Scroll or search for each command |
+| 6b | Verify command entries include at least: Open File, Open Folder, Save File, Save As, Quit App, Keyboard Shortcuts, Toggle Sidebar | All listed commands appear in the palette | Scroll or search for each command |
 | 6c | Type "save" and select "Save File" | The active file is saved | File saved indicator updates; no console errors |
-| 6d | Type "export" and select "Export Current File to HTML" | The export flow starts (same as menu) | Export dialog or file write proceeds |
+| 6d | Type "export" | No unfinished current-file export command is shown | Palette does not advertise HTML export |
 | 6e | Type "shortcut" and select "Keyboard Shortcuts" | The shortcuts dialog opens | Dialog appears |
 | 6f | Press **Escape** to dismiss the palette | Palette closes without side effects | Palette disappears; editor is focused |
 | 6g | Cross-check: every native menu item with a wired handler has a corresponding palette entry | No menu actions are missing from the palette | Compare File/Edit/View/Format/Help menu items against palette commands |
@@ -141,7 +140,7 @@ handler (from `src/app/hooks/use-menu-events.ts`) and command palette entry (fro
 | `file_open_folder` | Open Folder | `onOpenFolder` | Open Folder... | `file.open-folder` |
 | `file_save` | Save | `onSave` | Save File | `file.save` |
 | `file_save_as` | Save As | `onSaveAs` | Save As... | `file.save-as` |
-| `file_export` | Export... | `onExport` | Export Current File to HTML | `export.html` |
+| `file_export` | Export... | -- | -- | -- |
 | `file_close_tab` | Close File | `onCloseFile` | Close File | `file.close-file` |
 | `file_quit` | Quit | `onQuit` | Quit App | `file.quit` |
 | `edit_find` | Find | `onShowSearch` | Find in Files | `nav.search` |

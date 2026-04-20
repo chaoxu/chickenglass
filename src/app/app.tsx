@@ -94,7 +94,6 @@ function AppInner() {
   const windowStateController = useWindowState();
   const workspace = useAppWorkspaceSession(fs, {
     restoredProjectRoot: windowStateController.windowState.projectRoot,
-    saveWorkspaceWindowState: windowStateController.saveState,
   });
   const preferences = useAppPreferences({
     projectRoot: workspace.projectRoot,
@@ -152,6 +151,7 @@ function AppInner() {
   });
 
   useAppSessionPersistence({
+    projectRoot: workspace.projectRoot,
     fileTree: workspace.fileTree,
     listChildren: listChildrenStable,
     workspaceRequestRef: workspace.workspaceRequestRef,

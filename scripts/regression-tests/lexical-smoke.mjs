@@ -1,5 +1,6 @@
 import {
   assertEditorHealth,
+  DEBUG_EDITOR_SELECTOR,
   openRegressionDocument,
   readEditorText,
 } from "../test-helpers.mjs";
@@ -12,7 +13,8 @@ export async function run(page) {
   await assertEditorHealth(page, "lexical-smoke");
   const text = await readEditorText(page);
   const hasEditor = await page.evaluate(
-    () => Boolean(document.querySelector('[data-testid="lexical-editor"]')),
+    (editorSelector) => Boolean(document.querySelector(editorSelector)),
+    DEBUG_EDITOR_SELECTOR,
   );
 
   if (!hasEditor) {

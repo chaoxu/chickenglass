@@ -29,8 +29,6 @@ export interface MarkdownFormattedTextSourceMatch {
   readonly to: number;
 }
 
-const LINK_SOURCE_RE = /\[([^[\]]*(?:\[[^[\]]*\][^[\]]*)*)\]\(([^()\s]+)(?:\s"((?:[^"\\]|\\.)*)"\s*)?\)/g;
-const LINK_SOURCE_ANCHORED_RE = new RegExp(`^(?:${LINK_SOURCE_RE.source})$`);
 const MARKDOWN_ESCAPE_RE = /\\([\\`*{}[\]()#+\-.!_>"])/g;
 
 function unescapeMarkdownSource(value: string): string {
@@ -70,6 +68,162 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function isEscaped(source: string, index: number): boolean {
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && source[cursor] === "\\"; cursor -= 1) {
+    slashCount += 1;
+  }
+  return slashCount % 2 === 1;
+}
+
+function findLabelEnd(markdown: string, labelStart: number): number {
+  let depth = 0;
+  for (let index = labelStart; index < markdown.length; index += 1) {
+    const char = markdown[index];
+    if (isEscaped(markdown, index)) {
+      continue;
+    }
+    if (char === "[") {
+      depth += 1;
+    } else if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+function findLinkDestinationEnd(markdown: string, openParen: number): number {
+  let depth = 0;
+  let inAngleDestination = false;
+  for (let index = openParen; index < markdown.length; index += 1) {
+    const char = markdown[index];
+    if (isEscaped(markdown, index)) {
+      continue;
+    }
+    if (inAngleDestination) {
+      if (char === ">") {
+        inAngleDestination = false;
+      }
+      continue;
+    }
+    if (char === "<" && index === openParen + 1) {
+      inAngleDestination = true;
+      continue;
+    }
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+function readBalancedBareDestination(value: string): {
+  readonly raw: string;
+  readonly rest: string;
+} | null {
+  let depth = 0;
+  let index = 0;
+  while (index < value.length) {
+    const char = value[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (/\s/.test(char) && depth === 0) {
+      break;
+    }
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      if (depth === 0) {
+        break;
+      }
+      depth -= 1;
+    }
+    index += 1;
+  }
+  if (index === 0 || depth !== 0) {
+    return null;
+  }
+  return {
+    raw: value.slice(0, index),
+    rest: value.slice(index).trim(),
+  };
+}
+
+function readQuotedTitle(value: string): string | null {
+  if (value === "") {
+    return null;
+  }
+  const opener = value[0];
+  const closer = opener === "(" ? ")" : opener;
+  if (opener !== "\"" && opener !== "'" && opener !== "(") {
+    return null;
+  }
+  if (!value.endsWith(closer)) {
+    return null;
+  }
+  const body = value.slice(1, -1);
+  for (let index = 0; index < body.length; index += 1) {
+    if (body[index] === closer && !isEscaped(body, index)) {
+      return null;
+    }
+  }
+  return unescapeMarkdownSource(body);
+}
+
+function parseLinkDestinationAndTitle(value: string): {
+  readonly title: string | null;
+  readonly url: string;
+} | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  let destination: string;
+  let rest: string;
+  if (trimmed.startsWith("<")) {
+    let close = -1;
+    for (let index = 1; index < trimmed.length; index += 1) {
+      if (trimmed[index] === ">" && !isEscaped(trimmed, index)) {
+        close = index;
+        break;
+      }
+    }
+    if (close < 0) {
+      return null;
+    }
+    destination = trimmed.slice(1, close);
+    rest = trimmed.slice(close + 1).trim();
+  } else {
+    const parsed = readBalancedBareDestination(trimmed);
+    if (!parsed) {
+      return null;
+    }
+    destination = parsed.raw;
+    rest = parsed.rest;
+  }
+
+  const title = rest === "" ? null : readQuotedTitle(rest);
+  if (rest !== "" && title === null) {
+    return null;
+  }
+
+  return {
+    title,
+    url: unescapeMarkdownSource(destination),
+  };
+}
+
 function delimiterCandidates(spec: InlineTextFormatSpec): readonly {
   readonly close: string;
   readonly open: string;
@@ -87,6 +241,61 @@ function delimiterCandidates(spec: InlineTextFormatSpec): readonly {
     ];
   }
   return [{ close: spec.markdownClose, open: spec.markdownOpen }];
+}
+
+function permutations<T>(values: readonly T[]): readonly (readonly T[])[] {
+  if (values.length <= 1) {
+    return [values];
+  }
+  const result: T[][] = [];
+  values.forEach((value, index) => {
+    const rest = [...values.slice(0, index), ...values.slice(index + 1)];
+    for (const tail of permutations(rest)) {
+      result.push([value, ...tail]);
+    }
+  });
+  return result;
+}
+
+function expandDelimiterChains(
+  specs: readonly InlineTextFormatSpec[],
+): readonly {
+  readonly closeLength: number;
+  readonly openLength: number;
+  readonly prefix: string;
+  readonly suffix: string;
+}[] {
+  const chains: {
+    readonly closeLength: number;
+    readonly openLength: number;
+    readonly prefix: string;
+    readonly suffix: string;
+  }[] = [];
+
+  for (const orderedSpecs of permutations(specs)) {
+    const appendCandidates = (
+      index: number,
+      chosen: readonly { readonly close: string; readonly open: string }[],
+    ) => {
+      if (index === orderedSpecs.length) {
+        const prefix = chosen.map((candidate) => candidate.open).join("");
+        const suffix = [...chosen].reverse().map((candidate) => candidate.close).join("");
+        chains.push({
+          closeLength: suffix.length,
+          openLength: prefix.length,
+          prefix,
+          suffix,
+        });
+        return;
+      }
+      for (const candidate of delimiterCandidates(orderedSpecs[index])) {
+        appendCandidates(index + 1, [...chosen, candidate]);
+      }
+    };
+    appendCandidates(0, []);
+  }
+
+  return chains;
 }
 
 export function serializeInlineNodeSource(node: LexicalNode): string {
@@ -117,19 +326,18 @@ export function findMatchingFormattedTextSource(
   searchFrom = 0,
 ): MarkdownFormattedTextSourceMatch | null {
   const specs = getInlineTextFormatSpecs().filter((spec) => node.hasFormat(spec.lexicalFormat));
-  if (specs.length !== 1) {
+  if (specs.length === 0) {
     return null;
   }
-  const [spec] = specs;
   const text = node.getTextContent();
-  for (const candidate of delimiterCandidates(spec)) {
-    const source = `${candidate.open}${text}${candidate.close}`;
+  for (const candidate of expandDelimiterChains(specs)) {
+    const source = `${candidate.prefix}${text}${candidate.suffix}`;
     const from = markdown.indexOf(source, searchFrom);
     if (from >= 0) {
       return {
-        closeLength: candidate.close.length,
+        closeLength: candidate.closeLength,
         from,
-        openLength: candidate.open.length,
+        openLength: candidate.openLength,
         source,
         to: from + source.length,
       };
@@ -137,18 +345,18 @@ export function findMatchingFormattedTextSource(
   }
 
   const escapedText = escapeRegExp(text);
-  for (const candidate of delimiterCandidates(spec)) {
+  for (const candidate of expandDelimiterChains(specs)) {
     const pattern = new RegExp(
-      `${escapeRegExp(candidate.open)}${escapedText}${escapeRegExp(candidate.close)}`,
+      `${escapeRegExp(candidate.prefix)}${escapedText}${escapeRegExp(candidate.suffix)}`,
       "g",
     );
     pattern.lastIndex = Math.max(0, searchFrom);
     const match = pattern.exec(markdown);
     if (match?.index !== undefined) {
       return {
-        closeLength: candidate.close.length,
+        closeLength: candidate.closeLength,
         from: match.index,
-        openLength: candidate.open.length,
+        openLength: candidate.openLength,
         source: match[0],
         to: match.index + match[0].length,
       };
@@ -173,15 +381,26 @@ export function serializeMarkdownLinkSource(node: LinkNode): string {
 }
 
 export function parseMarkdownLinkSource(raw: string): ParsedMarkdownLinkSource | null {
-  const match = raw.match(LINK_SOURCE_ANCHORED_RE);
-  if (!match) {
+  if (!raw.startsWith("[") || raw.startsWith("![")) {
+    return null;
+  }
+  const labelEnd = findLabelEnd(raw, 0);
+  if (labelEnd < 0 || raw[labelEnd + 1] !== "(") {
+    return null;
+  }
+  const linkEnd = findLinkDestinationEnd(raw, labelEnd + 1);
+  if (linkEnd !== raw.length - 1) {
+    return null;
+  }
+  const destination = parseLinkDestinationAndTitle(raw.slice(labelEnd + 2, linkEnd));
+  if (!destination) {
     return null;
   }
   return {
-    labelMarkdown: match[1],
+    labelMarkdown: raw.slice(1, labelEnd),
     raw,
-    title: match[3] === undefined ? null : unescapeMarkdownSource(match[3]),
-    url: unescapeMarkdownSource(match[2]),
+    title: destination.title,
+    url: destination.url,
   };
 }
 
@@ -199,18 +418,36 @@ export function findMatchingMarkdownLinkSource(
   node: LinkNode,
   searchFrom = 0,
 ): MarkdownLinkSourceMatch | null {
-  LINK_SOURCE_RE.lastIndex = Math.max(0, searchFrom);
-  let match: RegExpExecArray | null;
-  while ((match = LINK_SOURCE_RE.exec(markdown)) !== null) {
-    const raw = match[0];
+  let cursor = Math.max(0, searchFrom);
+  while (cursor < markdown.length) {
+    const labelStart = markdown.indexOf("[", cursor);
+    if (labelStart < 0) {
+      return null;
+    }
+    if (labelStart > 0 && markdown[labelStart - 1] === "!") {
+      cursor = labelStart + 1;
+      continue;
+    }
+    const labelEnd = findLabelEnd(markdown, labelStart);
+    if (labelEnd < 0 || markdown[labelEnd + 1] !== "(") {
+      cursor = labelStart + 1;
+      continue;
+    }
+    const linkEnd = findLinkDestinationEnd(markdown, labelEnd + 1);
+    if (linkEnd < 0) {
+      cursor = labelStart + 1;
+      continue;
+    }
+    const raw = markdown.slice(labelStart, linkEnd + 1);
     const parsed = parseMarkdownLinkSource(raw);
     if (parsed && linkNodeMatchesParsedSource(node, parsed)) {
       return {
         ...parsed,
-        from: match.index,
-        to: match.index + raw.length,
+        from: labelStart,
+        to: linkEnd + 1,
       };
     }
+    cursor = linkEnd + 1;
   }
   return null;
 }

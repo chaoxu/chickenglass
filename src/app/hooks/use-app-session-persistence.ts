@@ -6,6 +6,7 @@ import type { SidebarLayoutController } from "./use-sidebar-layout";
 import type { UseWindowStateReturn } from "./use-window-state";
 
 interface AppSessionPersistenceDeps {
+  projectRoot: string | null;
   fileTree: FileEntry | null;
   /** When provided, default-doc search loads subdirectories lazily. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
@@ -26,6 +27,7 @@ interface AppSessionPersistenceDeps {
 }
 
 export function useAppSessionPersistence({
+  projectRoot,
   fileTree,
   listChildren,
   workspaceRequestRef,
@@ -36,6 +38,7 @@ export function useAppSessionPersistence({
   editor,
 }: AppSessionPersistenceDeps): void {
   const didInitRef = useRef(false);
+  const persistedProjectRootRef = useRef(windowState.projectRoot);
   const restorePromiseRef = useRef<Promise<void> | null>(null);
   const {
     sidebarCollapsed,
@@ -48,6 +51,15 @@ export function useAppSessionPersistence({
     currentPath,
   } = editor.state;
   const { openFile } = editor.files;
+
+  useEffect(() => {
+    if (!startupComplete || projectRoot === persistedProjectRootRef.current) return;
+    persistedProjectRootRef.current = projectRoot;
+    saveWindowState({
+      projectRoot,
+      currentDocument: null,
+    });
+  }, [projectRoot, saveWindowState, startupComplete]);
 
   useEffect(() => {
     if (!didInitRef.current) return;

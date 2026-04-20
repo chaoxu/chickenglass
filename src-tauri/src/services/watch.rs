@@ -9,6 +9,7 @@ use notify::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::commands::error::{AppError, AppResult};
 use crate::commands::state::FileWatcherEntry;
 use crate::services::project_visibility::is_ignored_relative_path;
 use crate::services::window_generation::{accepts_generation, matches_generation};
@@ -112,7 +113,7 @@ pub fn spawn_debounced_event_worker(
     app: AppHandle,
     window_label: String,
     debounce_window: Duration,
-) -> Result<mpsc::Sender<WatchEventMessage>, String> {
+) -> AppResult<mpsc::Sender<WatchEventMessage>> {
     let (sender, receiver) = mpsc::channel();
 
     std::thread::Builder::new()
@@ -143,7 +144,12 @@ pub fn spawn_debounced_event_worker(
                 dispatcher.emit_ready(Instant::now(), &mut emit_payload);
             }
         })
-        .map_err(|e| format!("Failed to start file watcher debounce worker: {}", e))?;
+        .map_err(|e| {
+            AppError::native_io(format!(
+                "Failed to start file watcher debounce worker: {}",
+                e
+            ))
+        })?;
 
     Ok(sender)
 }
@@ -152,7 +158,7 @@ pub fn create_directory_watcher(
     root: PathBuf,
     generation: u64,
     event_sender: mpsc::Sender<WatchEventMessage>,
-) -> Result<RecommendedWatcher, String> {
+) -> AppResult<RecommendedWatcher> {
     let root_for_closure = root.clone();
     let event_sender_for_closure = event_sender.clone();
 
@@ -196,11 +202,11 @@ pub fn create_directory_watcher(
         },
         Config::default(),
     )
-    .map_err(|e| format!("Failed to create watcher: {}", e))?;
+    .map_err(|e| AppError::native_io(format!("Failed to create watcher: {}", e)))?;
 
     watcher
         .watch(&root, RecursiveMode::Recursive)
-        .map_err(|e| format!("Failed to watch directory: {}", e))?;
+        .map_err(|e| AppError::native_io(format!("Failed to watch directory: {}", e)))?;
 
     Ok(watcher)
 }
@@ -305,7 +311,7 @@ mod tests {
     };
     use std::collections::HashMap;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     fn queued_event(
