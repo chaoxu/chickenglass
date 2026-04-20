@@ -1,6 +1,7 @@
 import { openRegressionDocument, readEditorText } from "../test-helpers.mjs";
 
 export const name = "reference-autocomplete";
+export const groups = ["authoring"];
 
 async function placeVisibleCaretAtEnd(page) {
   const placed = await page.evaluate(() => {

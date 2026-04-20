@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "focus-command-surfaces";
+export const groups = ["navigation"];
 
 async function openScratchDocument(page, path, content) {
   await page.evaluate(async ({ nextContent, nextPath }) => {

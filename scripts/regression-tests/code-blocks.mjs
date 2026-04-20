@@ -1,6 +1,7 @@
 import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "code-blocks";
+export const groups = ["surfaces"];
 
 export async function run(page) {
   await openRegressionDocument(page, "index.md", { mode: "lexical" });

@@ -4,6 +4,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "rankdecrease-embedded-field-immediate-save";
+export const groups = ["surfaces"];
 
 const DOCUMENT_PATH = "rankdecrease/main.md";
 const TITLE_MARKER = " ImmediateSaveTitleNeedle";

@@ -1,6 +1,7 @@
 import { focusEditor, readEditorText } from "../test-helpers.mjs";
 
 export const name = "rich-delete-caret-retention";
+export const groups = ["authoring", "navigation"];
 
 const DOC = [
   "Alpha bravo charlie delta.",

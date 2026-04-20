@@ -4,6 +4,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "nested-rich-editing";
+export const groups = ["surfaces"];
 
 const BLOCK_MARKER = "NestedBlockEditNeedle";
 const CELL_MARKER = "NestedCellEditNeedle";

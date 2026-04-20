@@ -12,6 +12,7 @@
  * list type.
  */
 export const name = "list-marker-strip-on-continuation";
+export const groups = ["app"];
 
 const CASES = [
   { label: "dash", typed: "- one\n- two", expect: "- one\n- two" },

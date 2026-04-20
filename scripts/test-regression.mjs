@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import {
   expandBrowserTestSelection,
   formatBrowserTestList,
+  normalizeBrowserTestGroups,
 } from "./browser-test-groups.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import {
@@ -53,6 +54,7 @@ export async function loadTests() {
     }
     tests.push({
       file,
+      groups: normalizeBrowserTestGroups(file, mod.groups),
       name: mod.name,
       run: mod.run,
       runtimeIssueOptions: mod.runtimeIssueOptions ?? {},
@@ -79,7 +81,7 @@ export async function main() {
   }
 
   const selection = expandBrowserTestSelection({
-    availableTestNames: allTests.map((test) => test.name),
+    tests: allTests,
     filterArg,
     groupArg,
   });

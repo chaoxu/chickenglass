@@ -1,6 +1,7 @@
 import { setSelection } from "../test-helpers.mjs";
 
 export const name = "block-insert-focus";
+export const groups = ["core", "navigation"];
 
 async function openScratch(page, path, text) {
   await page.evaluate(async ({ path, text }) => {

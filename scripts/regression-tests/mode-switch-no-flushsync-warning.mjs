@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "mode-switch-no-flushsync-warning";
+export const groups = ["app"];
 
 const FIXTURE = {
   virtualPath: "mode-switch-flushsync.md",

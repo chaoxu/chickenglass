@@ -2,6 +2,7 @@ import { openFixtureDocument, switchToMode } from "../test-helpers.mjs";
 import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 
 export const name = "include-composition";
+export const groups = ["surfaces"];
 
 const MAIN_CONTENT = [
   "# Include Composition",

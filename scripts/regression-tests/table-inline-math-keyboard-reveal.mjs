@@ -1,6 +1,7 @@
 import { readEditorText, waitForBrowserSettled } from "../test-helpers.mjs";
 
 export const name = "table-inline-math-keyboard-reveal";
+export const groups = ["reveal"];
 
 const DOC = [
   "| A | B |",

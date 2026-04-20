@@ -1,6 +1,7 @@
 import { openAndSettleRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "cross-references";
+export const groups = ["index"];
 
 export async function run(page) {
   await openAndSettleRegressionDocument(page, "index.md");

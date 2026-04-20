@@ -4,6 +4,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "cursor-reveal-edge-cases";
+export const groups = ["core", "reveal"];
 
 async function openScratch(page, path, text) {
   await page.evaluate(async ({ path, text }) => {

@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "native-step-authoring";
+export const groups = ["authoring"];
 
 const AUTHORING_TIMEOUT = 10_000;
 

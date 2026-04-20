@@ -8,6 +8,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "source-rich-reveal-offsets";
+export const groups = ["navigation", "reveal"];
 
 const FIXTURE = {
   virtualPath: "source-rich-reveal-offsets.md",

@@ -8,6 +8,7 @@
 import { openRegressionDocument, readEditorText } from "../test-helpers.mjs";
 
 export const name = "paragraph-reveal";
+export const groups = ["reveal"];
 
 const FIXTURE = "Paragraph reveal probe with *italic* and **bold** runs.\n\nSibling block used as a commit target.\n";
 

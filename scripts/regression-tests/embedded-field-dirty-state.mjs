@@ -1,6 +1,7 @@
 import { readEditorText } from "../test-helpers.mjs";
 
 export const name = "embedded-field-dirty-state";
+export const groups = ["surfaces"];
 
 const DOC = `::: {#thm:embedded-dirty .theorem} Original theorem title
 Body text.

@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "nested-blank-click-selection";
+export const groups = ["navigation"];
 
 const DOC = `::: {.theorem} Test
 Alpha

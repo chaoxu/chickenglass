@@ -4,6 +4,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "rankdecrease-title-editing";
+export const groups = ["surfaces"];
 
 const TITLE_MARKER = "RankDecreaseTitleNeedle";
 

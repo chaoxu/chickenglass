@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "active-nested-source-switch";
+export const groups = ["surfaces"];
 
 async function openScratch(page, label, doc) {
   const path = `scratch-active-nested-source-${label}-${Date.now()}.md`;

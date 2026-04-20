@@ -11,6 +11,7 @@
 import { openRegressionDocument, readEditorText } from "../test-helpers.mjs";
 
 export const name = "cursor-reveal";
+export const groups = ["reveal"];
 
 const FIXTURE = "Reveal probe: hello *world*.\n";
 

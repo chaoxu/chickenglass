@@ -2,6 +2,7 @@ import { closeAppSearch, openAppSearch, openFixtureDocument } from "../test-help
 import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs";
 
 export const name = "search-mode-awareness";
+export const groups = ["app"];
 
 const RAW_TOKEN = "raw_token_785_only_in_source";
 const SEMANTIC_LABEL = "#thm-search-785";

@@ -9,6 +9,7 @@
 import { readEditorText } from "../test-helpers.mjs";
 
 export const name = "reveal-no-trigger-after-markdown-transform";
+export const groups = ["reveal"];
 
 const CASES = [
   { name: "bold", typed: "**bold** done.", expect: "**bold** done." },

@@ -7,6 +7,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "mode-switch-flush-pending-edits";
+export const groups = ["app", "reveal"];
 
 const INLINE_FIXTURE = {
   virtualPath: "mode-switch-inline.md",

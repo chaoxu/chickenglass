@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "index-structure-parity";
+export const groups = ["index"];
 
 const HEADING_MARKER = " HeadingEditNeedle";
 

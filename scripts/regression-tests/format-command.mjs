@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "format-command";
+export const groups = ["authoring"];
 
 const FIXTURE = {
   virtualPath: "format-command.md",

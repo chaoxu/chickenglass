@@ -1,6 +1,7 @@
 import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "index-media-surface";
+export const groups = ["index"];
 
 export async function run(page) {
   await openRegressionDocument(page, "index.md", { mode: "lexical" });

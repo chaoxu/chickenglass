@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "authoring-surfaces";
+export const groups = ["authoring", "surfaces"];
 
 export async function run(page) {
   await openRegressionDocument(page, "index.md");

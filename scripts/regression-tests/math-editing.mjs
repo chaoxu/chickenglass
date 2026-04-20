@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "math-editing";
+export const groups = ["core", "reveal"];
 
 const INLINE_MARKER = "$\\frac{z^2 + \\alpha_1 + \\alpha_2}{1 + \\beta_1 + \\beta_2}$";
 const DISPLAY_MARKER = "q^2 = r^2";

@@ -1,6 +1,7 @@
 import { openRegressionDocument, setRevealPresentation } from "../test-helpers.mjs";
 
 export const name = "rich-surface-overlays";
+export const groups = ["core", "surfaces"];
 
 function nearlyEqual(left, right, tolerance = 3) {
   return Math.abs(left - right) <= tolerance;

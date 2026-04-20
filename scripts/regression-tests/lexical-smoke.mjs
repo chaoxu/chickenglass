@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "lexical-smoke";
+export const groups = ["core", "smoke"];
 
 export async function run(page) {
   await openRegressionDocument(page);

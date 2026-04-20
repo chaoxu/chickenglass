@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "inline-token-source-offsets";
+export const groups = ["reveal"];
 
 async function openScratch(page, doc, label) {
   const path = `scratch-inline-token-offsets-${label}-${Date.now()}.md`;

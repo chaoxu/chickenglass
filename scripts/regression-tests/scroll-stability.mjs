@@ -3,6 +3,7 @@ import { resolveFixtureDocumentWithFallback } from "../test-helpers/fixtures.mjs
 import { fallbackFixtureFor, fixtureForHarness } from "../tooling-fixtures.mjs";
 
 export const name = "scroll-stability";
+export const groups = ["navigation"];
 
 const STEP_PX = 180;
 const STEP_COUNT = 8;

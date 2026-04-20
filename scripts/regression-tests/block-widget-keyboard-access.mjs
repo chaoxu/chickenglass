@@ -1,6 +1,7 @@
 import { openRegressionDocument, readEditorText, switchToMode } from "../test-helpers.mjs";
 
 export const name = "block-widget-keyboard-access";
+export const groups = ["core", "navigation"];
 
 const DISPLAY_MARKER = "DisplayMathKeyboardNeedle";
 const TABLE_MARKER = "TableKeyboardNeedle";

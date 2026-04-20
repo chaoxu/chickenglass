@@ -8,6 +8,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "inline-token-boundary-typing";
+export const groups = ["authoring", "reveal"];
 
 async function openScratch(page, path, content = "") {
   await discardCurrentFile(page);

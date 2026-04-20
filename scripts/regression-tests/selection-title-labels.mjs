@@ -1,4 +1,5 @@
 export const name = "selection-title-labels";
+export const groups = ["surfaces"];
 
 const DOC = [
   "# Heading Title {#sec:heading-title}",

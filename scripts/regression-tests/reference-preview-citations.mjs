@@ -1,6 +1,7 @@
 import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "reference-preview-citations";
+export const groups = ["index"];
 
 function visiblePreviewText(page) {
   return page.evaluate(

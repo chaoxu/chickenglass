@@ -1,89 +1,55 @@
-export const BROWSER_TEST_GROUPS = {
-  app: [
-    "list-marker-strip-on-continuation",
-    "mode-switch-no-flushsync-warning",
-    "mode-switch-preserves-doc",
-    "save-flow",
-    "search-mode-awareness",
-  ],
-  authoring: [
-    "authoring-surfaces",
-    "format-command",
-    "reference-autocomplete",
-    "undo-bridge",
-  ],
-  core: [
-    "lexical-smoke",
-    "cursor-reveal-edge-cases",
-    "math-editing",
-    "block-insert-focus",
-    "block-widget-keyboard-access",
-    "rich-surface-overlays",
-    "rich-surface-parity",
-    "index-wysiwyg-parity",
-  ],
-  index: [
-    "cross-references",
-    "footnotes",
-    "headings",
-    "index-media-surface",
-    "index-structure-parity",
-    "index-wysiwyg-parity",
-    "reference-preview-citations",
-  ],
-  navigation: [
-    "block-insert-focus",
-    "block-widget-keyboard-access",
-    "focus-command-surfaces",
-    "nested-blank-click-selection",
-    "source-rich-nested-offsets",
-    "undo-bridge",
-  ],
-  reveal: [
-    "cursor-reveal",
-    "cursor-reveal-edge-cases",
-    "inline-format-editing",
-    "inline-token-source-offsets",
-    "math-editing",
-    "paragraph-reveal",
-    "reveal-no-trigger-after-markdown-transform",
-    "table-inline-math-keyboard-reveal",
-  ],
-  smoke: [
-    "lexical-smoke",
-  ],
-  surfaces: [
-    "active-nested-source-switch",
-    "authoring-surfaces",
-    "code-blocks",
-    "embedded-field-dirty-state",
-    "include-composition",
-    "nested-rich-editing",
-    "rich-surface-overlays",
-    "rich-surface-parity",
-    "tables",
-    "source-rich-nested-offsets",
-  ],
-};
-
 function splitCsv(value) {
   return value
     ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
     : [];
 }
 
+export function normalizeBrowserTestGroups(file, groups) {
+  if (!Array.isArray(groups)) {
+    throw new Error(`${file}: missing groups export. Add "export const groups = [...]" next to the test name.`);
+  }
+
+  const normalized = [...new Set(groups.map((group) => {
+    if (typeof group !== "string") {
+      throw new Error(`${file}: browser test groups must be strings.`);
+    }
+    return group.trim();
+  }).filter(Boolean))];
+
+  if (normalized.length === 0) {
+    throw new Error(`${file}: browser test must declare at least one group.`);
+  }
+
+  return normalized;
+}
+
+export function buildBrowserTestGroups(tests) {
+  const groups = new Map();
+  for (const test of tests) {
+    for (const groupName of normalizeBrowserTestGroups(test.file ?? test.name, test.groups)) {
+      const group = groups.get(groupName) ?? [];
+      group.push(test.name);
+      groups.set(groupName, group);
+    }
+  }
+
+  return Object.fromEntries([...groups.entries()].sort(([left], [right]) => left.localeCompare(right)));
+}
+
 export function expandBrowserTestSelection({
-  availableTestNames,
+  tests,
   filterArg = "",
   groupArg = "",
 }) {
+  const availableTestNames = tests.map((test) => test.name);
   const available = new Set(availableTestNames);
+  const groups = buildBrowserTestGroups(tests);
   const requested = new Set();
   const unknownGroups = [];
   const unknownTests = [];
 
   for (const groupName of splitCsv(groupArg)) {
-    const groupTests = BROWSER_TEST_GROUPS[groupName];
+    const groupTests = groups[groupName];
     if (!groupTests) {
       unknownGroups.push(groupName);
       continue;
@@ -124,11 +90,13 @@ export function expandBrowserTestSelection({
 export function formatBrowserTestList(tests) {
   const lines = ["Available browser regression tests:"];
   for (const test of tests) {
-    lines.push(`  ${test.name}`);
+    const groups = normalizeBrowserTestGroups(test.file ?? test.name, test.groups);
+    lines.push(`  ${test.name} [${groups.join(", ")}]`);
   }
 
+  const groups = buildBrowserTestGroups(tests);
   lines.push("", "Groups:");
-  for (const [name, testNames] of Object.entries(BROWSER_TEST_GROUPS)) {
+  for (const [name, testNames] of Object.entries(groups)) {
     lines.push(`  ${name}: ${testNames.join(", ")}`);
   }
   return lines.join("\n");

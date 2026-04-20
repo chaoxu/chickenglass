@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "mode-switch-preserves-doc";
+export const groups = ["app"];
 
 const FIXTURE = {
   virtualPath: "mode-switch.md",

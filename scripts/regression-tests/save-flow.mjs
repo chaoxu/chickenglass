@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "save-flow";
+export const groups = ["app"];
 
 const FIXTURE = {
   virtualPath: "save-flow.md",

@@ -22,6 +22,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "inline-format-editing";
+export const groups = ["reveal"];
 
 const TOKEN_PROBES = [
   { selector: ".cf-bold", text: "Bold text", marker: "**" },

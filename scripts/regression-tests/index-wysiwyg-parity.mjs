@@ -7,6 +7,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "index-wysiwyg-parity";
+export const groups = ["core", "index"];
 
 const UPDATED_LINK = "[Link text](https://example.org)";
 const UPDATED_CITATION = "[@cormen2009, p. 7]";

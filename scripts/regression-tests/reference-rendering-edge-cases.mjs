@@ -4,6 +4,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "reference-rendering-edge-cases";
+export const groups = ["index"];
 
 const MAIN = [
   "---",

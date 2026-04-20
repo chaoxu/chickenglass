@@ -1,6 +1,7 @@
 import { openRegressionDocument, readEditorText, sleep, switchToMode } from "../test-helpers.mjs";
 
 export const name = "undo-bridge";
+export const groups = ["authoring", "navigation"];
 
 /**
  * Regression coverage for Issue #100: edits made inside a rich surface (table

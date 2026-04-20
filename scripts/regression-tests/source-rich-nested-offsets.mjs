@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "source-rich-nested-offsets";
+export const groups = ["navigation", "surfaces"];
 
 const DOC = [
   "Before",

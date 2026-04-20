@@ -15,6 +15,7 @@
 import { openRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "rich-surface-parity";
+export const groups = ["core", "surfaces"];
 
 function getContentCell(page, label) {
   return page

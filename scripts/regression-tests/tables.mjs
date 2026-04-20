@@ -1,6 +1,7 @@
 import { openAndSettleRegressionDocument } from "../test-helpers.mjs";
 
 export const name = "tables";
+export const groups = ["surfaces"];
 
 export async function run(page) {
   await openAndSettleRegressionDocument(page, "index.md");
