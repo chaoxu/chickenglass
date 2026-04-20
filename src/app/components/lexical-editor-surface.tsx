@@ -17,6 +17,7 @@ export interface LexicalEditorSurfaceProps {
   readonly docPath?: string;
   readonly editorMode: EditorMode;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
+  readonly onDirtyChange?: () => void;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly onRichRootElementChange?: (root: HTMLElement | null) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
@@ -33,6 +34,7 @@ export function LexicalEditorSurface({
   docPath,
   editorMode,
   onDocChange,
+  onDirtyChange,
   onEditorReady,
   onRichRootElementChange,
   onSelectionChange,
@@ -83,6 +85,7 @@ export function LexicalEditorSurface({
       ].join(" ")}
       namespace="coflat-app-lexical-surface"
       onDocChange={onDocChange}
+      onDirtyChange={onDirtyChange}
       onEditorReady={handleEditorReady}
       onRootElementChange={onRichRootElementChange}
       onScrollChange={onScrollChange}

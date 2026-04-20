@@ -10,7 +10,6 @@ const JSON_CONTENT_TYPE = "application/json";
 const FLUSH_DELAY_MS = 400;
 const MAX_BATCH_SIZE = 100;
 const MAX_LOCAL_EVENTS = 500;
-const EDITOR_EXCERPT_RADIUS = 240;
 
 export interface DebugSessionEvent {
   readonly timestamp: number;
@@ -21,7 +20,7 @@ export interface DebugSessionEvent {
     readonly document: DebugDocumentState | null;
     readonly mode: string | null;
     readonly selection: EditorSelectionSnapshot | null;
-    readonly editor: EditorTextSnapshot | null;
+    readonly editor: null;
     readonly activeElement: ElementSnapshot | null;
     readonly settings: SettingsSnapshot;
     readonly location: string;
@@ -41,22 +40,6 @@ interface EditorSelectionSnapshot {
   readonly focusOffset: number | null;
   readonly focusText: string | null;
   readonly selectedText: string;
-}
-
-interface EditorTextSnapshot {
-  readonly docLength: number;
-  readonly docHash: string;
-  readonly selection: {
-    readonly anchor: number;
-    readonly focus: number;
-    readonly from: number;
-    readonly to: number;
-  } | null;
-  readonly excerpt: {
-    readonly from: number;
-    readonly to: number;
-    readonly text: string;
-  };
 }
 
 interface ElementSnapshot {
@@ -82,15 +65,6 @@ const pendingEvents: PendingEvent[] = [];
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
-}
-
-function hashText(text: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function parseLocalEvents(): PendingEvent[] {
@@ -200,31 +174,6 @@ function currentSelection(): EditorSelectionSnapshot | null {
   };
 }
 
-function currentEditorSnapshot(): EditorTextSnapshot | null {
-  const editor = getConnectedEditor();
-  if (!editor) return null;
-
-  try {
-    const doc = editor.peekDoc();
-    const selection = editor.peekSelection();
-    const center = selection?.from ?? 0;
-    const from = Math.max(0, center - EDITOR_EXCERPT_RADIUS);
-    const to = Math.min(doc.length, center + EDITOR_EXCERPT_RADIUS);
-    return {
-      docHash: hashText(doc),
-      docLength: doc.length,
-      excerpt: {
-        from,
-        text: doc.slice(from, to),
-        to,
-      },
-      selection,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function currentContext(): DebugSessionEvent["context"] {
   if (!isBrowser()) {
     return {
@@ -245,7 +194,7 @@ function currentContext(): DebugSessionEvent["context"] {
   return {
     activeElement: activeElementSnapshot(),
     document: app ? app.getCurrentDocument() : null,
-    editor: currentEditorSnapshot(),
+    editor: null,
     mode: app ? app.getMode() : null,
     selection,
     settings: readSettingsSnapshot(),

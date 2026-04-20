@@ -1,8 +1,10 @@
 import {
+  focusEditor,
   openFixtureDocument,
   readEditorText,
-  replaceEditorText,
   saveCurrentFile,
+  setSelection,
+  waitForBrowserSettled,
 } from "../test-helpers.mjs";
 
 export const name = "save-flow";
@@ -17,7 +19,10 @@ const FIXTURE = {
 export async function run(page) {
   await openFixtureDocument(page, FIXTURE, { mode: "lexical" });
   const original = await readEditorText(page);
-  await replaceEditorText(page, `${original}\nAppended line.\n`);
+  await setSelection(page, original.indexOf("Paragraph.") + "Paragraph.".length);
+  await focusEditor(page);
+  await page.keyboard.type("\n\nAppended line.");
+  await waitForBrowserSettled(page, 3);
 
   const dirtyBeforeSave = await page.evaluate(() => window.__app?.isDirty?.() ?? false);
   if (!dirtyBeforeSave) {

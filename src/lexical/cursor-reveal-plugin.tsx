@@ -685,12 +685,7 @@ function InlineCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }
   }, true);
 
   useEffect(() => () => {
-    const active = getCursorRevealSession(activeRef.current);
-    if (active) {
-      editor.update(() => {
-        commitAndCloseInlineReveal(activeRef, active);
-      }, { discrete: true });
-    }
+    activeRef.current = createCursorRevealIdle();
     setCursorRevealActive(editor, false);
   }, [editor]);
 

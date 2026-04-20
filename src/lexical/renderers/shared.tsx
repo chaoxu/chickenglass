@@ -87,11 +87,7 @@ export function useRawBlockUpdater(nodeKey: NodeKey): (raw: RawUpdate) => void {
       const rangeChange = range
         ? documentChangeBridge?.createSourceReplacement(range, currentRaw, nextRaw) ?? null
         : null;
-      pendingIncremental.change = rangeChange ?? documentChangeBridge?.createNodeSourceReplacement(
-          node,
-          currentRaw,
-          nextRaw,
-        ) ?? null;
+      pendingIncremental.change = rangeChange;
       pendingIncremental.rangeElement = rangeElement;
       pendingIncremental.nextRawLength = nextRaw.length;
       if (pendingIncremental.change) {

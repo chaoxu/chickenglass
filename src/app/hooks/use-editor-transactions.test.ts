@@ -2,10 +2,6 @@ import { act, createElement, type FC, type MutableRefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  applyEditorDocumentChanges,
-  type EditorDocumentChange,
-} from "../../lib/editor-doc-change";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import {
   type EditorTransactionIntent,
@@ -49,7 +45,7 @@ function createHarness({
   readonly ref: HarnessRef;
   readonly editorHandleRef: MutableRefObject<MarkdownEditorHandle | null>;
   readonly getSessionCurrentDocText: () => string;
-  readonly handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
+  readonly handleDocumentSnapshot: (doc: string) => void;
 } {
   const ref: HarnessRef = {
     result: null as unknown as ReturnType<typeof useEditorTransactions>,
@@ -59,8 +55,8 @@ function createHarness({
   };
   let currentSessionDoc = sessionDoc;
   const getSessionCurrentDocText = vi.fn(() => currentSessionDoc);
-  const handleDocChange = vi.fn((changes: readonly EditorDocumentChange[]) => {
-    currentSessionDoc = applyEditorDocumentChanges(currentSessionDoc, changes);
+  const handleDocumentSnapshot = vi.fn((doc: string) => {
+    currentSessionDoc = doc;
   });
 
   const Harness: FC = () => {
@@ -69,7 +65,7 @@ function createHarness({
       editorDoc,
       editorHandleRef,
       getSessionCurrentDocText,
-      handleDocChange,
+      handleDocumentSnapshot,
     });
     return null;
   };
@@ -78,7 +74,7 @@ function createHarness({
     Harness,
     editorHandleRef,
     getSessionCurrentDocText,
-    handleDocChange,
+    handleDocumentSnapshot,
     ref,
   };
 }
@@ -103,7 +99,7 @@ describe("useEditorTransactions", () => {
     const {
       Harness,
       getSessionCurrentDocText,
-      handleDocChange,
+      handleDocumentSnapshot,
       ref,
     } = createHarness({
       currentPath: "a.md",
@@ -122,16 +118,11 @@ describe("useEditorTransactions", () => {
       );
     });
 
-    const getSelectionOrder = vi.mocked(handle.getSelection).mock.invocationCallOrder[0];
     const flushOrder = vi.mocked(handle.flushPendingEdits).mock.invocationCallOrder[0];
-    const peekDocOrder = vi.mocked(handle.peekDoc).mock.invocationCallOrder[0];
-    expect(getSelectionOrder).toBeLessThan(flushOrder);
-    expect(flushOrder).toBeLessThan(peekDocOrder);
-    expect(handleDocChange).toHaveBeenCalledWith([{
-      from: 3,
-      insert: " edited",
-      to: 3,
-    }]);
+    const getDocOrder = vi.mocked(handle.getDoc).mock.invocationCallOrder[0];
+    expect(handle.getSelection).not.toHaveBeenCalled();
+    expect(flushOrder).toBeLessThan(getDocOrder);
+    expect(handleDocumentSnapshot).toHaveBeenCalledWith("# A edited\n");
     expect(result).toEqual({
       flush: {
         shouldDeferModeSwitch: true,
@@ -146,7 +137,7 @@ describe("useEditorTransactions", () => {
     const {
       Harness,
       getSessionCurrentDocText,
-      handleDocChange,
+      handleDocumentSnapshot,
       ref,
     } = createHarness({
       currentPath: null,
@@ -167,7 +158,7 @@ describe("useEditorTransactions", () => {
 
     expect(handle.getSelection).not.toHaveBeenCalled();
     expect(handle.flushPendingEdits).not.toHaveBeenCalled();
-    expect(handleDocChange).not.toHaveBeenCalled();
+    expect(handleDocumentSnapshot).not.toHaveBeenCalled();
     expect(result?.flush.shouldDeferModeSwitch).toBe(false);
     expect(result?.value).toBe("");
   });
@@ -176,7 +167,7 @@ describe("useEditorTransactions", () => {
     const handle = createHandle("# A edited\n");
     const {
       Harness,
-      handleDocChange,
+      handleDocumentSnapshot,
       ref,
     } = createHarness({
       currentPath: "a.md",
@@ -198,6 +189,6 @@ describe("useEditorTransactions", () => {
       expect(result.intent).toBe(intent);
       expect(result.flush.shouldDeferModeSwitch).toBe(true);
     }
-    expect(handleDocChange).not.toHaveBeenCalled();
+    expect(handleDocumentSnapshot).not.toHaveBeenCalled();
   });
 });

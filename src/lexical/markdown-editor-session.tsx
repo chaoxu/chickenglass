@@ -178,6 +178,8 @@ export interface MarkdownEditorSessionController {
   readonly syncSelectionToDocLength: (docLength: number) => void;
 }
 
+type RichChangePolicy = "markdown" | "dirty";
+
 function isUserCommittedRichChange(
   requireUserEditFlag: boolean,
   userEditPending: boolean,
@@ -195,16 +197,20 @@ export function useMarkdownEditorSessionController({
   doc,
   focusOwner,
   onDocChange,
+  onDirtyChange,
   onSelectionChange,
   onTextChange,
   requireUserEditFlag = true,
+  richChangePolicy = "markdown",
 }: {
   readonly doc: string;
   readonly focusOwner: SurfaceFocusOwner;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
+  readonly onDirtyChange?: () => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly onTextChange?: (text: string) => void;
   readonly requireUserEditFlag?: boolean;
+  readonly richChangePolicy?: RichChangePolicy;
 }): MarkdownEditorSessionController {
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
@@ -223,6 +229,12 @@ export function useMarkdownEditorSessionController({
       return;
     }
     if (!isUserCommittedRichChange(requireUserEditFlag, userEditPendingRef.current, tags)) {
+      return;
+    }
+
+    if (richChangePolicy === "dirty") {
+      userEditPendingRef.current = false;
+      onDirtyChange?.();
       return;
     }
 
@@ -249,7 +261,14 @@ export function useMarkdownEditorSessionController({
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
-  }, [onDocChange, onSelectionChange, onTextChange, requireUserEditFlag]);
+  }, [
+    onDirtyChange,
+    onDocChange,
+    onSelectionChange,
+    onTextChange,
+    requireUserEditFlag,
+    richChangePolicy,
+  ]);
 
   const syncSelectionToDocLength = useCallback((docLength: number) => {
     sourceSelectionRef.current = createMarkdownSelection(
@@ -442,6 +461,27 @@ export function MarkdownEditorHandlePlugin({
 
     const readDocumentSnapshot = () => readEditorDocument(editor, editorModeRef.current);
 
+    const stageDocumentSnapshot = (nextDoc: string) => {
+      if (nextDoc !== lastCommittedDocRef.current) {
+        pendingLocalEchoDocRef.current = nextDoc;
+      }
+      userEditPendingRef.current = false;
+    };
+
+    const publishDocumentSnapshot = (nextDoc: string) => {
+      const changes = createMinimalEditorDocumentChanges(
+        lastCommittedDocRef.current,
+        nextDoc,
+      );
+      pendingLocalEchoDocRef.current = nextDoc;
+      lastCommittedDocRef.current = nextDoc;
+      userEditPendingRef.current = false;
+      onTextChange?.(nextDoc);
+      if (changes.length > 0) {
+        onDocChange?.(changes);
+      }
+    };
+
     const readSelectionSnapshot = () => {
       const currentDoc = readDocumentSnapshot();
       if (editorModeRef.current === "source") {
@@ -471,15 +511,14 @@ export function MarkdownEditorHandlePlugin({
     };
 
     const flushPendingEdits = () => {
-      const selection = readSelectionSnapshot();
       embeddedFieldFlushRegistry?.flush();
-      selectionRef.current = selection;
-      onSelectionChange?.(selection);
     };
 
     const readFreshDocument = () => {
       flushPendingEdits();
-      return readDocumentSnapshot();
+      const nextDoc = readDocumentSnapshot();
+      stageDocumentSnapshot(nextDoc);
+      return nextDoc;
     };
 
     const insertTextIntoRichSelection = (
@@ -571,6 +610,7 @@ export function MarkdownEditorHandlePlugin({
           selectionRef.current.anchor,
           selectionRef.current.focus,
         );
+        publishDocumentSnapshot(nextDoc);
         setLexicalMarkdown(editor, nextDoc);
       },
       focus: () => {
@@ -585,9 +625,7 @@ export function MarkdownEditorHandlePlugin({
       peekDoc: readDocumentSnapshot,
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {
-        const currentDoc = editorModeRef.current === "source"
-          ? readFreshDocument()
-          : lastCommittedDocRef.current;
+        const currentDoc = readFreshDocument();
         const selection = createMarkdownSelection(
           selectionRef.current.anchor,
           selectionRef.current.focus,
@@ -618,19 +656,9 @@ export function MarkdownEditorHandlePlugin({
 
         const richInsert = insertTextIntoRichSelection(currentDoc, text);
         if (richInsert) {
-          const changes = createMinimalEditorDocumentChanges(
-            lastCommittedDocRef.current,
-            richInsert.nextDoc,
-          );
           selectionRef.current = richInsert.nextSelection;
           onSelectionChange?.(richInsert.nextSelection);
-          if (changes.length > 0) {
-            pendingLocalEchoDocRef.current = richInsert.nextDoc;
-            lastCommittedDocRef.current = richInsert.nextDoc;
-            userEditPendingRef.current = false;
-            onTextChange?.(richInsert.nextDoc);
-            onDocChange?.(changes);
-          }
+          publishDocumentSnapshot(richInsert.nextDoc);
           return;
         }
 
@@ -641,6 +669,7 @@ export function MarkdownEditorHandlePlugin({
           nextOffset,
         );
         userEditPendingRef.current = true;
+        publishDocumentSnapshot(nextDoc);
         setLexicalMarkdown(editor, nextDoc);
       },
       setDoc: (doc) => {
@@ -662,6 +691,7 @@ export function MarkdownEditorHandlePlugin({
         }
 
         userEditPendingRef.current = true;
+        publishDocumentSnapshot(doc);
         setLexicalMarkdown(editor, doc);
       },
       setSelection: (anchor, focus = anchor, options) => {

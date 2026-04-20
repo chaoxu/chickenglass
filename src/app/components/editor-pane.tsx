@@ -19,6 +19,7 @@ export interface EditorPaneProps {
   readonly docPath?: string;
   readonly editorMode: EditorMode;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
+  readonly onDirtyChange?: () => void;
   readonly onDocumentReady?: (docPath: string | undefined) => void;
   readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
@@ -32,6 +33,7 @@ export function EditorPane({
   docPath,
   editorMode,
   onDocChange,
+  onDirtyChange,
   onDocumentReady,
   onHeadingsChange,
   onLexicalEditorReady,
@@ -126,6 +128,7 @@ export function EditorPane({
         docPath={docPath}
         editorMode={editorMode}
         onDocChange={onDocChange}
+        onDirtyChange={onDirtyChange}
         onEditorReady={handleEditorReady}
         onRichRootElementChange={handleRichRootElementChange}
         onSelectionChange={handleSelectionChange}

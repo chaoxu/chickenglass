@@ -15,6 +15,7 @@ import type {
   UnsavedChangesRequest,
 } from "./unsaved-changes";
 import {
+  createMinimalEditorDocumentChanges,
   editorDocumentToString,
   type EditorDocumentChange,
 } from "../lib/editor-doc-change";
@@ -33,6 +34,8 @@ export interface EditorSessionService {
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
   handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
+  handleDocumentSnapshot: (doc: string) => void;
+  markCurrentDocumentDirty: () => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
   setDocumentSourceMap: (path: string, sourceMap: SourceMap | null) => void;
   openFile: (path: string) => Promise<void>;
@@ -161,6 +164,37 @@ export function createEditorSessionService({
       dirty,
     );
     runtime.commit(nextState);
+  };
+
+  const handleDocumentSnapshot = (doc: string) => {
+    const currentPath = runtime.getCurrentPath();
+    if (!currentPath) return;
+
+    const currentDoc = store.readCurrentDocumentText();
+    const changes = createMinimalEditorDocumentChanges(currentDoc, doc);
+    const dirty = changes.length > 0
+      ? store.applyLiveChanges(currentPath, changes).dirty
+      : runtime.getCurrentDocument()?.dirty ?? false;
+    if (changes.length > 0) {
+      runtime.activeDocumentSignal.publish(currentPath);
+    }
+
+    runtime.commit(
+      markSessionDocumentDirty(runtime.getState(), currentPath, dirty),
+      { editorDoc: doc },
+    );
+  };
+
+  const markCurrentDocumentDirty = () => {
+    const currentPath = runtime.getCurrentPath();
+    if (!currentPath || runtime.isPathDirty(currentPath)) {
+      return;
+    }
+
+    runtime.activeDocumentSignal.publish(currentPath);
+    runtime.commit(
+      markSessionDocumentDirty(runtime.getState(), currentPath, true),
+    );
   };
 
   const handleProgrammaticDocChange = (path: string, doc: string) => {
@@ -413,6 +447,8 @@ export function createEditorSessionService({
     isPathDirty,
     cancelPendingOpenFile,
     handleDocChange,
+    handleDocumentSnapshot,
+    markCurrentDocumentDirty,
     handleProgrammaticDocChange,
     setDocumentSourceMap,
     openFile,

@@ -121,8 +121,8 @@ export function readRawBlockSourcePosition(
 }
 
 function readStructureBlockPosition(editor: LexicalEditor, nodeKey: NodeKey): number | null {
-  return readRawBlockSourcePosition(editor, nodeKey)
-    ?? readSourcePositionFromElement(editor.getElementByKey(nodeKey));
+  return readSourcePositionFromElement(editor.getElementByKey(nodeKey))
+    ?? readRawBlockSourcePosition(editor, nodeKey);
 }
 
 export function useEmbeddedMarkdownSourceSelectionBridge(

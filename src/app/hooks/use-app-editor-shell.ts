@@ -105,6 +105,7 @@ export interface AppEditorFileCommands {
 
 export interface AppEditorSurfaceCommands {
   readonly handleDocChange: UseEditorSessionReturn["handleDocChange"];
+  readonly handleDirtyChange: UseEditorSessionReturn["markCurrentDocumentDirty"];
   readonly handleProgrammaticDocChange: UseEditorSessionReturn["handleProgrammaticDocChange"];
   readonly setDocumentSourceMap: UseEditorSessionReturn["setDocumentSourceMap"];
   readonly handleHeadingsChange: (headings: HeadingEntry[]) => void;
@@ -182,7 +183,7 @@ export function useAppEditorShell({
     editorDoc,
     editorHandleRef,
     getSessionCurrentDocText,
-    handleDocChange: session.handleDocChange,
+    handleDocumentSnapshot: session.handleDocumentSnapshot,
   });
 
   const getDebugCurrentDocText = useCallback(() => {
@@ -195,14 +196,43 @@ export function useAppEditorShell({
 
   const peekCurrentDocText = useCallback(() => getSessionCurrentDocText(), [getSessionCurrentDocText]);
 
-  const saveFile = useCallback(async () => {
+  const flushEditorDocumentBoundary = useCallback(() => {
     runEditorTransaction("save", () => undefined);
+  }, [runEditorTransaction]);
+
+  const saveFile = useCallback(async () => {
+    flushEditorDocumentBoundary();
     await Promise.resolve();
     await sessionSaveFile();
-  }, [runEditorTransaction, sessionSaveFile]);
+  }, [flushEditorDocumentBoundary, sessionSaveFile]);
+
+  const openFileCommand = useCallback(async (path: string) => {
+    flushEditorDocumentBoundary();
+    await openFile(path);
+  }, [flushEditorDocumentBoundary, openFile]);
+
+  const openFileWithContentCommand = useCallback(async (name: string, content: string) => {
+    flushEditorDocumentBoundary();
+    await openFileWithContent(name, content);
+  }, [flushEditorDocumentBoundary, openFileWithContent]);
+
+  const closeCurrentFileCommand = useCallback(async (options?: { discard?: boolean }) => {
+    flushEditorDocumentBoundary();
+    return session.closeCurrentFile(options);
+  }, [flushEditorDocumentBoundary, session]);
+
+  const saveAsCommand = useCallback(async () => {
+    flushEditorDocumentBoundary();
+    await session.saveAs();
+  }, [flushEditorDocumentBoundary, session]);
+
+  const handleWindowCloseRequestCommand = useCallback(async () => {
+    flushEditorDocumentBoundary();
+    return session.handleWindowCloseRequest();
+  }, [flushEditorDocumentBoundary, session]);
 
   const navigation = useEditorNavigation({
-    openFile,
+    openFile: openFileCommand,
     isPathOpen,
     currentPath,
     getCurrentDocText: getSourceSelectionDocText,
@@ -334,10 +364,10 @@ export function useAppEditorShell({
         continue;
       }
       void file.text().then((text) => {
-        openFileWithContent(file.name, text);
+        openFileWithContentCommand(file.name, text);
       });
     }
-  }, [openFileWithContent]);
+  }, [openFileWithContentCommand]);
 
   return {
     state: {
@@ -362,21 +392,22 @@ export function useAppEditorShell({
     },
     files: {
       cancelPendingOpenFile: session.cancelPendingOpenFile,
-      openFile,
-      openFileWithContent,
+      openFile: openFileCommand,
+      openFileWithContent: openFileWithContentCommand,
       reloadFile: session.reloadFile,
       syncExternalChange: session.syncExternalChange,
       saveFile,
       createFile: session.createFile,
       createDirectory: session.createDirectory,
-      closeCurrentFile: session.closeCurrentFile,
+      closeCurrentFile: closeCurrentFileCommand,
       handleRename: session.handleRename,
       handleDelete: session.handleDelete,
-      saveAs: session.saveAs,
-      handleWindowCloseRequest: session.handleWindowCloseRequest,
+      saveAs: saveAsCommand,
+      handleWindowCloseRequest: handleWindowCloseRequestCommand,
     },
     surface: {
       handleDocChange: session.handleDocChange,
+      handleDirtyChange: session.markCurrentDocumentDirty,
       handleProgrammaticDocChange: session.handleProgrammaticDocChange,
       setDocumentSourceMap: session.setDocumentSourceMap,
       handleHeadingsChange,

@@ -1,8 +1,6 @@
 import { useCallback, type MutableRefObject } from "react";
 
-import { createMinimalEditorDocumentChanges } from "../../lib/editor-doc-change";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
-import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 
 export type EditorTransactionIntent =
   | "debug-read"
@@ -26,7 +24,7 @@ export interface UseEditorTransactionsOptions {
   readonly editorDoc: string;
   readonly editorHandleRef: MutableRefObject<MarkdownEditorHandle | null>;
   readonly getSessionCurrentDocText: () => string;
-  readonly handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
+  readonly handleDocumentSnapshot: (doc: string) => void;
 }
 
 export function useEditorTransactions({
@@ -34,9 +32,11 @@ export function useEditorTransactions({
   editorDoc,
   editorHandleRef,
   getSessionCurrentDocText,
-  handleDocChange,
+  handleDocumentSnapshot,
 }: UseEditorTransactionsOptions) {
-  const flushPendingEditorEdits = useCallback((): EditorTransactionFlushResult => {
+  const flushPendingEditorEdits = useCallback((
+    intent: EditorTransactionIntent,
+  ): EditorTransactionFlushResult => {
     const handle = editorHandleRef.current;
     if (!handle || !currentPath) {
       return {
@@ -44,15 +44,20 @@ export function useEditorTransactions({
       };
     }
 
-    // Capture source-position intent before committing reveal/nested editors;
-    // after commit the live Lexical selection may sit on the replacement node.
-    handle.getSelection();
+    if (
+      intent === "mode-switch"
+      || intent === "search-navigation"
+      || intent === "source-selection"
+    ) {
+      // Capture source-position intent before committing reveal/nested editors;
+      // after commit the live Lexical selection may sit on the replacement node.
+      handle.getSelection();
+    }
     handle.flushPendingEdits();
-    const freshDoc = handle.peekDoc();
+    const freshDoc = handle.getDoc();
     const currentDoc = getSessionCurrentDocText();
-    const changes = createMinimalEditorDocumentChanges(currentDoc, freshDoc);
-    if (changes.length > 0) {
-      handleDocChange(changes);
+    if (freshDoc !== currentDoc) {
+      handleDocumentSnapshot(freshDoc);
       return {
         shouldDeferModeSwitch: true,
       };
@@ -65,14 +70,14 @@ export function useEditorTransactions({
     editorDoc,
     editorHandleRef,
     getSessionCurrentDocText,
-    handleDocChange,
+    handleDocumentSnapshot,
   ]);
 
   const runEditorTransaction = useCallback(<T>(
     intent: EditorTransactionIntent,
     body: () => T,
   ): EditorTransactionResult<T> => {
-    const flush = flushPendingEditorEdits();
+    const flush = flushPendingEditorEdits(intent);
     return {
       intent,
       flush,

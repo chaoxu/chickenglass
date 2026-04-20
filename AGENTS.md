@@ -197,6 +197,32 @@ Do not use the Playwright MCP plugin for this repo.
 - Keep modules small and focused
 - If a file is already too large or mixes unrelated concerns, split it before adding more
 
+## Locality and performance invariants
+
+- Local editor operations must stay local. Typing, deletion, key-repeat,
+  arrow-key movement, selection changes, and formatting inside rich mode must
+  touch only the active editor, node, field, or minimal subtree needed for that
+  operation.
+- Do not put whole-document work on hot paths. Full markdown export, full
+  markdown parsing, source-span construction, global source-map rebuilds,
+  whole-editor DOM queries, indexing, bibliography refresh, and include
+  expansion must not run for ordinary local editing or caret movement.
+- Source spans and canonical source offsets are boundary tools, not the live
+  editing model. Use them when entering from a source offset, opening reveal
+  source, committing a revealed/local edit, switching modes, saving, searching,
+  or serving explicit debug/API reads. Do not continuously synchronize global
+  source offsets during normal rich selection movement.
+- If a change makes a local operation require global state, treat that as an
+  architectural bug. Redesign ownership so the active surface owns local state
+  and publishes minimal patches at synchronization boundaries.
+- Aggressively monitor locality. Any new update listener, selection listener,
+  command handler, transform, debug recorder, or overlay sync must be checked
+  for accidental whole-document work, repeated serialization, broad
+  `querySelectorAll`, or source-map rebuilds.
+- Performance fixes must be structural, not throttles around bad ownership.
+  If non-local work is unavoidable, document the boundary, prove it is outside
+  key-repeat/input hot paths, and add browser/perf coverage on a heavy document.
+
 ## Rich surface architecture
 
 - Preserve render/edit parity. If clicking into a surface changes content,

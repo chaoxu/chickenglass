@@ -38,6 +38,8 @@ export interface UseEditorSessionReturn {
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
   handleDocChange: (changes: readonly EditorDocumentChange[]) => void;
+  handleDocumentSnapshot: (doc: string) => void;
+  markCurrentDocumentDirty: () => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
   setDocumentSourceMap: (path: string, sourceMap: SourceMap | null) => void;
   openFile: (path: string) => Promise<void>;
@@ -118,6 +120,8 @@ export function useEditorSession({
     isPathDirty: sessionService.isPathDirty,
     cancelPendingOpenFile: sessionService.cancelPendingOpenFile,
     handleDocChange: sessionService.handleDocChange,
+    handleDocumentSnapshot: sessionService.handleDocumentSnapshot,
+    markCurrentDocumentDirty: sessionService.markCurrentDocumentDirty,
     handleProgrammaticDocChange: sessionService.handleProgrammaticDocChange,
     setDocumentSourceMap: sessionService.setDocumentSourceMap,
     openFile: sessionService.openFile,

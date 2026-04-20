@@ -24,8 +24,6 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
 import {
   COMMAND_PRIORITY_LOW,
-  SELECTION_CHANGE_COMMAND,
-  mergeRegister,
   type LexicalEditor,
 } from "lexical";
 
@@ -80,7 +78,6 @@ import {
   type LexicalRenderContextValue,
 } from "./render-context";
 import {
-  readSourceSelectionFromLexicalSelection,
   readSourcePositionFromElement,
   SourcePositionPlugin,
 } from "./source-position-plugin";
@@ -94,7 +91,6 @@ import { DocumentChangeBridgeProvider } from "./document-change-bridge";
 import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import {
-  canReadLiveSelectionFromEditor,
   MarkdownEditorHandlePlugin,
   MarkdownModeSyncPlugin,
   readEditorDocument,
@@ -160,88 +156,6 @@ function SourceSelectionPlugin({
   return null;
 }
 
-function RichSelectionPlugin({
-  editorMode,
-  onSelectionChange,
-  selectionRef,
-}: {
-  readonly editorMode: EditorMode;
-  readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
-  readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
-}) {
-  const [editor] = useLexicalComposerContext();
-  const latestSelectionRef = useRef(selectionRef.current);
-
-  useEffect(() => {
-    latestSelectionRef.current = selectionRef.current;
-  }, [selectionRef]);
-
-  useEffect(() => {
-    if (editorMode === "source") {
-      return;
-    }
-
-    const syncSelection = (nextSelection: MarkdownEditorSelection | null) => {
-      if (!nextSelection || sameSelection(latestSelectionRef.current, nextSelection)) {
-        return;
-      }
-      latestSelectionRef.current = nextSelection;
-      selectionRef.current = nextSelection;
-      onSelectionChange?.(nextSelection);
-    };
-
-    const syncLiveSelection = () => {
-      if (!canReadLiveSelectionFromEditor(editor)) {
-        return;
-      }
-      const currentDoc = readEditorDocument(editor, editorMode);
-      syncSelection(readSourceSelectionFromLexicalSelection(editor, {
-        fallback: latestSelectionRef.current,
-        markdown: currentDoc,
-      }));
-    };
-
-    let cancelled = false;
-    let ready = false;
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-      ready = true;
-      syncLiveSelection();
-    });
-
-    return mergeRegister(
-      editor.registerCommand(
-        SELECTION_CHANGE_COMMAND,
-        () => {
-          if (!ready) {
-            return false;
-          }
-          syncLiveSelection();
-          return false;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerUpdateListener(() => {
-        if (!ready) {
-          return;
-        }
-        if (!canReadLiveSelectionFromEditor(editor)) {
-          return;
-        }
-
-        syncLiveSelection();
-      }),
-      () => {
-        cancelled = true;
-      },
-    );
-  }, [editor, editorMode, onSelectionChange, selectionRef]);
-
-  return null;
-}
-
 function ExplicitSourceSelectionPlugin({
   editorMode,
   onSelectionChange,
@@ -294,6 +208,7 @@ export interface LexicalMarkdownEditorProps {
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onBlurCapture?: FocusEventHandler<HTMLDivElement>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
+  readonly onDirtyChange?: () => void;
   readonly onFocus?: FocusEventHandler<HTMLDivElement>;
   readonly onFocusOwnerChange?: (owner: FocusOwner) => void;
   readonly onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
@@ -319,6 +234,7 @@ export function LexicalMarkdownEditor({
   onDocChange,
   onBlurCapture,
   onEditorReady,
+  onDirtyChange,
   onFocus,
   onFocusOwnerChange,
   onKeyDown,
@@ -359,8 +275,10 @@ export function LexicalMarkdownEditor({
     doc,
     focusOwner,
     onDocChange,
+    onDirtyChange,
     onSelectionChange,
     onTextChange,
+    richChangePolicy: "dirty",
   });
 
   const initialConfig = useMemo(() => ({
@@ -488,11 +406,6 @@ export function LexicalMarkdownEditor({
                   userEditPendingRef={userEditPendingRef}
                 />
                 <SourceSelectionPlugin
-                  editorMode={editorMode}
-                  onSelectionChange={onSelectionChange}
-                  selectionRef={sourceSelectionRef}
-                />
-                <RichSelectionPlugin
                   editorMode={editorMode}
                   onSelectionChange={onSelectionChange}
                   selectionRef={sourceSelectionRef}

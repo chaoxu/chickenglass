@@ -33,6 +33,7 @@ export function AppMainShell({
             doc={editor.state.editorDoc}
             docPath={currentPath}
             onDocChange={editor.surface.handleDocChange}
+            onDirtyChange={editor.surface.handleDirtyChange}
             onHeadingsChange={editor.surface.handleHeadingsChange}
             onDocumentReady={editor.surface.handleEditorDocumentReady}
             onLexicalEditorReady={editor.surface.handleLexicalEditorReady}

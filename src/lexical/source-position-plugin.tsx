@@ -27,7 +27,6 @@ import {
   SOURCE_BLOCK_SELECTOR,
 } from "./source-position-contract";
 import { consumeIncrementalSourcePositionSync } from "./source-position-incremental-sync";
-import { COFLAT_INCREMENTAL_DOC_CHANGE_TAG } from "./update-tags";
 
 export { readSourcePositionFromElement } from "./source-position-dom";
 export {
@@ -210,15 +209,8 @@ export function SourcePositionPlugin({
       queueMicrotask(sync);
       requestAnimationFrame(sync);
     }
-    const unregister = editor.registerUpdateListener(({ tags }) => {
-      if (tags.has(COFLAT_INCREMENTAL_DOC_CHANGE_TAG)) {
-        return;
-      }
-      sync();
-    });
     return () => {
       cancelled = true;
-      unregister();
     };
   }, [editor, syncToken]);
 

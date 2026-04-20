@@ -113,28 +113,34 @@ export async function run(page) {
 
   await openScratch(page, "key-repeat-heavy.md", HEAVY_DOC);
   await placeSelection(page, HEAVY_DOC.indexOf("Body 24"));
-  await page.evaluate(() => window.__cfDebug.clearPerf());
   const heavyState = await page.evaluate(async ({ char, repeatCount }) => {
     const beforeLength = window.__editor.peekDoc().length;
     const start = performance.now();
     return { beforeLength, start, char, repeatCount };
   }, { char: "c", repeatCount: REPEAT_COUNT });
+  await page.evaluate(() => window.__cfDebug.clearPerf());
   await dispatchPrintableRepeat(page, heavyState.char, heavyState.repeatCount);
   await waitForBrowserSettled(page, 3);
   const heavyResult = await page.evaluate(async ({ beforeLength, start }) => {
-    const doc = window.__editor.peekDoc();
     const summary = await window.__cfDebug.perfSummary();
+    const doc = window.__editor.peekDoc();
     return {
+      getCount: summary.frontend.summaries
+        .find((entry) => entry.name === "lexical.getLexicalMarkdown")?.count ?? 0,
       insertedChars: doc.length - beforeLength,
       setCount: summary.frontend.summaries
         .find((entry) => entry.name === "lexical.setLexicalMarkdown")?.count ?? 0,
+      sourceSyncCount: summary.frontend.summaries
+        .find((entry) => entry.name === "source.syncSourceBlockPositions")?.count ?? 0,
       wallMs: performance.now() - start,
     };
   }, heavyState);
 
   if (
     heavyResult.insertedChars !== REPEAT_COUNT + 1
+    || heavyResult.getCount > 0
     || heavyResult.setCount > 2
+    || heavyResult.sourceSyncCount > 0
     || heavyResult.wallMs > 1500
   ) {
     return {
