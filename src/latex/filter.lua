@@ -5,8 +5,10 @@
 --   * [@thm:foo], [@sec:foo], etc. -> \cref; bare-id refs to known labels
 --     likewise; anything else -> \cite.
 --   * ::: {.theorem|.lemma|.corollary|.proposition|.conjecture|.definition
---     |.problem|.example|.remark|.proof|.algorithm|.figure|.table|.blockquote}
+--     |.problem|.example|.remark|.proof|.algorithm|.figure|.table|.blockquote
+--     |.embed|.iframe|.youtube|.gist}
 --     divs -> matching LaTeX environments.
+--   * Embed-family divs -> omitted-content notice with URL footnote.
 --   * Multi-image figure divs -> subfigure wrappers.
 --   * <br> in table cells -> \newline.
 --
@@ -42,9 +44,23 @@ local theorem_envs = {
   proof = "proof",
 }
 
+local embed_envs = {
+  embed = true,
+  iframe = true,
+  youtube = true,
+  gist = true,
+}
+
 local function first_theorem_class(classes)
   for _, c in ipairs(classes) do
     if theorem_envs[c] then return c end
+  end
+  return nil
+end
+
+local function first_embed_class(classes)
+  for _, c in ipairs(classes) do
+    if embed_envs[c] then return c end
   end
   return nil
 end
@@ -224,11 +240,40 @@ local function handle_blockquote(el)
   return out
 end
 
+local function trim(s)
+  return (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function latex_url(url)
+  -- \url{...} cannot contain literal braces because they terminate the
+  -- argument; dropping them is safer than producing invalid LaTeX.
+  return trim(url):gsub("[{}]", "")
+end
+
+local function handle_embed(el, cls)
+  local url = latex_url(stringify(el.content))
+  local label = cls:gsub("^%l", string.upper)
+  local chunks = {
+    "\\PackageWarning{coflat}{"
+      .. label
+      .. " content omitted in LaTeX export}",
+    "\\par\\noindent\\emph{"
+      .. label
+      .. " content omitted in LaTeX export.}",
+  }
+  if url ~= "" then
+    chunks[2] = chunks[2] .. "\\footnote{\\url{" .. url .. "}}"
+  end
+  return { raw(table.concat(chunks, "\n")) }
+end
+
 local function transform_div(el)
   local cls = first_theorem_class(el.classes)
   if cls then
     return make_env(theorem_envs[cls], pop_title(el), el.identifier, el.content)
   end
+  local embed_cls = first_embed_class(el.classes)
+  if embed_cls then return handle_embed(el, embed_cls) end
   for _, c in ipairs(el.classes) do
     if c == "figure"     then return handle_figure(el) end
     if c == "table"      then return handle_table_div(el) end
