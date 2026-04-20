@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   type MouseEvent,
   type RefObject,
@@ -13,6 +14,10 @@ import {
   surfaceActivationProps,
   type SurfaceActivationPropsOptions,
 } from "../surface-activation";
+import {
+  getPendingEmbeddedSurfaceFocusId,
+  type PendingEmbeddedSurfaceFocusTarget,
+} from "../pending-surface-focus";
 
 type RawUpdatableNode = {
   getRaw?: () => string;
@@ -54,6 +59,17 @@ export function useRawBlockUpdater(nodeKey: NodeKey): (raw: RawUpdate) => void {
       tag: COFLAT_NESTED_EDIT_TAG,
     });
   }, [editor, nodeKey]);
+}
+
+export function usePendingEmbeddedSurfaceFocusId(
+  nodeKey: NodeKey,
+  target: PendingEmbeddedSurfaceFocusTarget,
+): string {
+  const [editor] = useLexicalComposerContext();
+  return useMemo(
+    () => getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, target),
+    [editor, nodeKey, target],
+  );
 }
 
 const LAZY_VISIBILITY_ROOT_MARGIN = "1500px";

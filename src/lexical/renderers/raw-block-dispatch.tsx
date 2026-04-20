@@ -1,0 +1,67 @@
+import { memo, useMemo, type ComponentType, type JSX } from "react";
+import type { NodeKey } from "lexical";
+
+import { FigureMedia } from "../figure-media";
+import { parseMarkdownImage } from "../markdown/image-markdown";
+import { rawBlockSourceAttrs } from "../source-position-contract";
+import type { RawBlockVariant } from "../nodes/raw-block-node";
+import { FencedDivBlockRenderer } from "./fenced-div-renderers";
+import { FootnoteDefinitionBlockRenderer } from "./footnote-renderers";
+import { FrontmatterRenderer } from "./frontmatter-renderer";
+import { DisplayMathBlockRenderer } from "./math-renderers";
+
+interface RawBlockContentRendererProps {
+  readonly nodeKey: NodeKey;
+  readonly raw: string;
+}
+
+function ImageBlockRenderer({
+  raw,
+}: {
+  readonly raw: string;
+}) {
+  const parsed = useMemo(() => parseMarkdownImage(raw), [raw]);
+  if (!parsed) {
+    return <div className="cf-lexical-raw-fallback">{raw}</div>;
+  }
+
+  return <FigureMedia alt={parsed.alt} src={parsed.src} />;
+}
+
+function RawFallbackRenderer({ raw }: RawBlockContentRendererProps): JSX.Element {
+  return <div className="cf-lexical-raw-fallback">{raw}</div>;
+}
+
+const RAW_BLOCK_CONTENT_RENDERERS = {
+  "display-math": DisplayMathBlockRenderer,
+  "fenced-div": FencedDivBlockRenderer,
+  "footnote-definition": FootnoteDefinitionBlockRenderer,
+  frontmatter: FrontmatterRenderer,
+  image: ImageBlockRenderer,
+} satisfies Record<RawBlockVariant, ComponentType<RawBlockContentRendererProps>>;
+
+// Lexical recreates the decorator React element on every reconciliation pass
+// with primitive props (`nodeKey`, `raw`, `variant`). Memoizing skips the
+// dispatch logic AND the inner variant component re-render whenever those
+// props are unchanged — a major win on docs with hundreds of blocks where a
+// single edit otherwise re-renders every decorator.
+export const RawBlockRenderer = memo(function RawBlockRenderer({
+  nodeKey,
+  raw,
+  variant,
+}: {
+  readonly nodeKey: NodeKey;
+  readonly raw: string;
+  readonly variant: RawBlockVariant;
+}) {
+  const ContentRenderer = RAW_BLOCK_CONTENT_RENDERERS[variant] ?? RawFallbackRenderer;
+
+  return (
+    <section
+      className={`cf-lexical-raw-block-shell cf-lexical-raw-block-shell--${variant}`}
+      {...rawBlockSourceAttrs(variant)}
+    >
+      <ContentRenderer nodeKey={nodeKey} raw={raw} />
+    </section>
+  );
+});
