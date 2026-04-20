@@ -6,6 +6,7 @@ import { MemoryFileSystem } from "./file-manager";
 import { createEditorSessionPersistence } from "./editor-session-persistence";
 import { createEditorSessionRuntime } from "./editor-session-runtime";
 import { createEditorSessionService } from "./editor-session-service";
+import { createEditorSessionStore } from "./editor-session-store";
 
 vi.mock("./perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
@@ -88,11 +89,13 @@ function createHybridFileSystem(
 
 function createSessionHarness(fs: FileSystem) {
   const runtime = createEditorSessionRuntime();
+  const store = createEditorSessionStore(runtime);
   const persistence = createEditorSessionPersistence({
     fs,
     refreshTree: async () => {},
     addRecentFile: () => {},
     runtime,
+    store,
   });
   runtime.setWriteDocumentSnapshot(persistence.writeDocumentSnapshot);
   const service = createEditorSessionService({
@@ -101,6 +104,7 @@ function createSessionHarness(fs: FileSystem) {
     addRecentFile: () => {},
     requestUnsavedChangesDecision: async () => "discard",
     runtime,
+    store,
     saveCurrentDocument: persistence.saveCurrentDocument,
   });
 

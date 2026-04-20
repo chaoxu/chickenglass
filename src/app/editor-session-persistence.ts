@@ -6,20 +6,12 @@ import {
   renameSessionDocument,
 } from "./editor-session-actions";
 import { getCurrentSessionDocument } from "./editor-session-model";
-import {
-  editorDocumentToString,
-  emptyEditorDocument,
-} from "../lib/editor-doc-change";
-import { applySaveAsResult } from "./editor-session-save";
-import {
-  clearPathBuffersKeepPipeline,
-  readDocumentText,
-  renamePathBuffers,
-} from "./editor-session-buffers";
+import { editorDocumentToString } from "../lib/editor-doc-change";
 import { buildProjectedWritePlan } from "./editor-session-write-plan";
 import {
   type EditorSessionRuntime,
 } from "./editor-session-runtime";
+import type { EditorSessionStore } from "./editor-session-store";
 import type { FileSystem } from "./file-manager";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
@@ -33,6 +25,7 @@ export interface EditorSessionPersistenceOptions {
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
   runtime: EditorSessionRuntime;
+  store: EditorSessionStore;
 }
 
 export interface EditorSessionPersistence {
@@ -49,19 +42,13 @@ export interface EditorSessionPersistence {
   saveAs: () => Promise<void>;
 }
 
-function currentDocumentText(
-  path: string | null,
-  runtime: EditorSessionRuntime,
-): string {
-  return readDocumentText(runtime, path);
-}
-
 export function createEditorSessionPersistence({
   fs,
   refreshTree,
   addRecentFile,
   onAfterSave,
   runtime,
+  store,
 }: EditorSessionPersistenceOptions): EditorSessionPersistence {
   const writeDocumentSnapshot = async (
     targetPath: string,
@@ -100,16 +87,10 @@ export function createEditorSessionPersistence({
     const currentPath = runtime.getCurrentPath();
     if (!currentPath) return true;
 
-    const result = await runtime.pipeline.save(currentPath, () => {
-      const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
-      const sourceMap = runtime.sourceMaps.get(currentPath) ?? null;
-      return { content: editorDocumentToString(doc), sourceMap };
-    });
+    const result = await store.saveDocument(currentPath);
 
     if (result.saved) {
-      const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
-      runtime.buffers.set(currentPath, doc);
-      runtime.liveDocs.set(currentPath, doc);
+      const doc = store.markSaved(currentPath);
       runtime.commit(
         markSessionDocumentDirty(runtime.getState(), currentPath, false),
         { editorDoc: editorDocumentToString(doc) },
@@ -127,12 +108,12 @@ export function createEditorSessionPersistence({
   };
 
   const renameBuffers = (oldPath: string, newPath: string, rawDiskContent: string) => {
-    renamePathBuffers(runtime, oldPath, newPath, rawDiskContent);
+    const editorDoc = store.renameDocumentPath(oldPath, newPath, rawDiskContent);
 
     runtime.commit(
       renameSessionDocument(runtime.getState(), oldPath, newPath, basename(newPath)),
       runtime.getCurrentPath() === oldPath
-        ? { editorDoc: currentDocumentText(newPath, runtime) }
+        ? { editorDoc }
         : undefined,
     );
   };
@@ -170,7 +151,7 @@ export function createEditorSessionPersistence({
 
     const currentDocument = getCurrentSessionDocument(runtime.getState());
     if (currentDocument && isSameOrDescendantProjectPath(currentDocument.path, path)) {
-      clearPathBuffersKeepPipeline(runtime, currentDocument.path);
+      store.clearDocumentKeepPipeline(currentDocument.path);
       runtime.commit(
         clearSessionDocument(runtime.getState(), currentDocument.path),
         { editorDoc: "" },
@@ -183,9 +164,8 @@ export function createEditorSessionPersistence({
   const saveAs = async () => {
     const currentPath = runtime.getCurrentPath();
     if (!currentPath) return;
-    const liveDoc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
-    const doc = editorDocumentToString(liveDoc);
-    const sourceMap = runtime.sourceMaps.get(currentPath) ?? null;
+    const snapshot = store.readDocumentSnapshot(currentPath);
+    const doc = snapshot.content;
 
     if (isTauri()) {
       try {
@@ -198,26 +178,17 @@ export function createEditorSessionPersistence({
 
         const { toProjectRelativePathCommand } = await import("./tauri-client/fs");
         const relativePath = await toProjectRelativePathCommand(savePath);
-        const mainDiskContent = await writeDocumentSnapshot(relativePath, doc, sourceMap, {
+        const mainDiskContent = await writeDocumentSnapshot(relativePath, doc, snapshot.sourceMap, {
           createTargetIfMissing: true,
         });
 
-        if (sourceMap && currentPath !== relativePath) {
-          runtime.sourceMaps.delete(currentPath);
-          runtime.sourceMaps.set(relativePath, sourceMap);
-        }
-
-        runtime.pipeline.clear(currentPath);
-        runtime.pipeline.initPath(relativePath, mainDiskContent);
-
         runtime.commit(
-          applySaveAsResult({
+          store.applySaveAsResult({
             state: runtime.getState(),
-            buffers: runtime.buffers,
-            liveDocs: runtime.liveDocs,
             oldPath: currentPath,
             newPath: relativePath,
-            doc: liveDoc,
+            doc: snapshot.documentText,
+            mainDiskContent,
           }),
           { editorDoc: doc },
         );

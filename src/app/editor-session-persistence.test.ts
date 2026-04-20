@@ -15,6 +15,7 @@ import {
   createEditorSessionPersistence,
   type EditorSessionPersistence,
 } from "./editor-session-persistence";
+import { createEditorSessionStore } from "./editor-session-store";
 
 const sessionMockState = vi.hoisted(() => ({
   isTauri: false,
@@ -79,6 +80,7 @@ function createHarness({
   addRecentFile = () => {},
 }: HarnessOptions): HarnessRef {
   const runtime = createEditorSessionRuntime();
+  const store = createEditorSessionStore(runtime);
   runtime.commit(createEditorSessionState(currentDocument), { editorDoc });
   for (const [path, doc] of initialBuffers) {
     runtime.buffers.set(path, doc);
@@ -100,6 +102,7 @@ function createHarness({
     refreshTree,
     addRecentFile,
     runtime,
+    store,
   });
 
   return {

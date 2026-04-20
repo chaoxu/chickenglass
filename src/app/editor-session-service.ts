@@ -9,31 +9,19 @@ import {
 } from "./editor-session-model";
 import type { FileSystem } from "./file-manager";
 import { measureAsync, withPerfOperation } from "./perf";
-import {
-  createEditorDocumentChangePositionMapping,
-  type SourceMap,
-} from "./source-map";
+import { type SourceMap } from "./source-map";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from "./unsaved-changes";
 import {
-  applyEditorDocumentChanges,
-  createEditorDocumentText,
   editorDocumentToString,
-  emptyEditorDocument,
   type EditorDocumentChange,
 } from "../lib/editor-doc-change";
 import {
-  documentForPath,
-  documentTextForPath,
   type EditorSessionRuntime,
 } from "./editor-session-runtime";
-import {
-  clearPathBuffers,
-  installPathDocument,
-  resetLiveDocToBuffer,
-} from "./editor-session-buffers";
+import type { EditorSessionStore } from "./editor-session-store";
 import { expandDocumentIncludes } from "./include-resolver";
 
 export type ExternalDocumentSyncResult = "ignore" | "notify" | "reloaded";
@@ -65,6 +53,7 @@ export interface EditorSessionServiceOptions {
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
   runtime: EditorSessionRuntime;
+  store: EditorSessionStore;
   saveCurrentDocument: () => Promise<boolean>;
 }
 
@@ -89,6 +78,7 @@ export function createEditorSessionService({
   addRecentFile,
   requestUnsavedChangesDecision,
   runtime,
+  store,
   saveCurrentDocument,
 }: EditorSessionServiceOptions): EditorSessionService {
   const applyReloadedDocument = (
@@ -101,9 +91,8 @@ export function createEditorSessionService({
       return false;
     }
 
-    const documentText = createEditorDocumentText(content);
-    clearPathBuffers(runtime, path);
-    installPathDocument(runtime, path, documentText, rawContent, sourceMap);
+    store.clearDocument(path);
+    store.installDocument({ path, content, rawContent, sourceMap });
     runtime.commit(
       markSessionDocumentDirty(runtime.getState(), path, false),
       runtime.getCurrentPath() === path
@@ -114,7 +103,7 @@ export function createEditorSessionService({
   };
 
   const discardDocumentChanges = (path: string) => {
-    const savedDoc = resetLiveDocToBuffer(runtime, path);
+    const savedDoc = store.resetLiveDocumentToBuffer(path);
     runtime.commit(
       markSessionDocumentDirty(runtime.getState(), path, false),
       runtime.getCurrentPath() === path
@@ -148,13 +137,10 @@ export function createEditorSessionService({
     return true;
   };
 
-  const getCurrentDocText = (): string =>
-    documentForPath(runtime.getCurrentPath(), runtime.liveDocs, runtime.buffers);
+  const getCurrentDocText = (): string => store.readCurrentDocumentText();
 
-  const getCurrentSourceMap = (): SourceMap | null => {
-    const currentPath = runtime.getCurrentPath();
-    return currentPath ? runtime.sourceMaps.get(currentPath) ?? null : null;
-  };
+  const getCurrentSourceMap = (): SourceMap | null =>
+    store.getSourceMap(runtime.getCurrentPath());
 
   const isPathOpen = (path: string): boolean => runtime.hasPath(path);
 
@@ -166,24 +152,13 @@ export function createEditorSessionService({
     const currentPath = runtime.getCurrentPath();
     if (!currentPath) return;
 
-    const previousDoc = documentTextForPath(currentPath, runtime.liveDocs, runtime.buffers);
-    const doc = applyEditorDocumentChanges(previousDoc, changes);
-    const sourceMap = runtime.sourceMaps.get(currentPath);
-    if (sourceMap && changes.length > 0) {
-      if (sourceMap.canMapDocumentChanges(changes)) {
-        sourceMap.mapThrough(createEditorDocumentChangePositionMapping(changes));
-      } else {
-        runtime.sourceMaps.delete(currentPath);
-      }
-    }
-    runtime.liveDocs.set(currentPath, doc);
-    runtime.pipeline.bumpRevision(currentPath);
+    const { dirty } = store.applyLiveChanges(currentPath, changes);
     runtime.activeDocumentSignal.publish(currentPath);
 
     const nextState = markSessionDocumentDirty(
       runtime.getState(),
       currentPath,
-      doc !== (runtime.buffers.get(currentPath) ?? emptyEditorDocument),
+      dirty,
     );
     runtime.commit(nextState);
   };
@@ -192,11 +167,9 @@ export function createEditorSessionService({
     const currentDocument = runtime.getCurrentDocument();
     if (currentDocument?.path !== path) return;
 
-    const nextDoc = createEditorDocumentText(doc);
-    if (!currentDocument.dirty) {
-      runtime.buffers.set(path, nextDoc);
-    }
-    runtime.liveDocs.set(path, nextDoc);
+    store.applyProgrammaticDocument(path, doc, {
+      updateBuffer: !currentDocument.dirty,
+    });
     runtime.commit(
       currentDocument.dirty
         ? runtime.getState()
@@ -206,11 +179,7 @@ export function createEditorSessionService({
   };
 
   const setDocumentSourceMap = (path: string, sourceMap: SourceMap | null) => {
-    if (sourceMap) {
-      runtime.sourceMaps.set(path, sourceMap);
-      return;
-    }
-    runtime.sourceMaps.delete(path);
+    store.setSourceMap(path, sourceMap);
   };
 
   const reportIncludeExpansionFailure = (
@@ -264,13 +233,16 @@ export function createEditorSessionService({
 
         const previousPath = runtime.getCurrentPath();
         if (previousPath && previousPath !== path) {
-          clearPathBuffers(runtime, previousPath);
+          store.clearDocument(previousPath);
         }
 
-        const documentText = createEditorDocumentText(expanded.text);
-        runtime.sourceMaps.delete(path);
         reportIncludeExpansionFailure(path, expanded);
-        installPathDocument(runtime, path, documentText, rawContent, expanded.sourceMap ?? null);
+        store.installDocument({
+          path,
+          content: expanded.text,
+          rawContent,
+          sourceMap: expanded.sourceMap ?? null,
+        });
         runtime.commit(
           setCurrentSessionDocument(runtime.getState(), {
             path,
@@ -314,20 +286,19 @@ export function createEditorSessionService({
 
     const previousPath = runtime.getCurrentPath();
     if (previousPath && previousPath !== path) {
-      clearPathBuffers(runtime, previousPath);
+      store.clearDocument(previousPath);
     }
 
-    const documentText = createEditorDocumentText(content);
-    const bufferText = createEditorDocumentText(existingContent ?? content);
-    runtime.sourceMaps.delete(path);
-    runtime.pipeline.initPath(path, existingContent ?? content);
-    runtime.buffers.set(path, bufferText);
-    runtime.liveDocs.set(path, documentText);
+    store.installSyntheticDocument({
+      path,
+      content,
+      bufferContent: existingContent ?? content,
+    });
     runtime.commit(
       setCurrentSessionDocument(runtime.getState(), {
         path,
         name: basename(path),
-        dirty: documentText !== bufferText,
+        dirty: content !== (existingContent ?? content),
       }),
       { editorDoc: content },
     );
@@ -368,7 +339,7 @@ export function createEditorSessionService({
       return "ignore";
     }
 
-    if (runtime.pipeline.isSelfChange(path, rawContent)) {
+    if (store.isSelfChange(path, rawContent)) {
       return "ignore";
     }
 
@@ -424,7 +395,7 @@ export function createEditorSessionService({
       if (!canClose) return false;
     }
 
-    clearPathBuffers(runtime, currentDocument.path);
+    store.clearDocument(currentDocument.path);
     runtime.commit(
       clearSessionDocument(runtime.getState(), currentDocument.path),
       { editorDoc: "" },

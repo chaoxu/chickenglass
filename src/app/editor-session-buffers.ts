@@ -7,10 +7,8 @@ import type { EditorSessionRuntime } from "./editor-session-runtime";
 import type { SourceMap } from "./source-map";
 
 /**
- * Low-level helpers for mutating the runtime's document buffers in a single
- * place. Callers (service, persistence) should go through these so that
- * `buffers`, `liveDocs`, `sourceMaps`, and `pipeline` stay consistent and the
- * access surface is narrow.
+ * Low-level helpers for EditorSessionStore. Service and persistence should not
+ * import this module directly; they request explicit store operations instead.
  */
 
 /** Drop all cached state for `path` from the runtime. */

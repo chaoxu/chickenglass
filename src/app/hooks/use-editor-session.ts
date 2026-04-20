@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { FileSystem } from "../file-manager";
 import { type SessionDocument } from "../editor-session-model";
 import type { SourceMap } from "../source-map";
@@ -14,6 +14,7 @@ import {
 } from "../editor-session-service";
 import { createEditorSessionPersistence } from "../editor-session-persistence";
 import { createEditorSessionRuntime } from "../editor-session-runtime";
+import { createEditorSessionStore } from "../editor-session-store";
 
 export interface EditorSessionDeps {
   fs: FileSystem;
@@ -66,29 +67,35 @@ export function useEditorSession({
     runtime.getSnapshot,
     runtime.getSnapshot,
   );
+  const store = useMemo(() => createEditorSessionStore(runtime), [runtime]);
   const sessionPersistence = useMemo(() => createEditorSessionPersistence({
     fs,
     refreshTree,
     addRecentFile,
     onAfterSave,
     runtime,
+    store,
   }), [
     addRecentFile,
     fs,
     onAfterSave,
     refreshTree,
     runtime,
+    store,
   ]);
 
-  runtime.setWriteDocumentSnapshot((path, content, sourceMap) =>
-    sessionPersistence.writeDocumentSnapshot(path, content, sourceMap as SourceMap | null),
-  );
+  useEffect(() => {
+    runtime.setWriteDocumentSnapshot((path, content, sourceMap) =>
+      sessionPersistence.writeDocumentSnapshot(path, content, sourceMap as SourceMap | null),
+    );
+  }, [runtime, sessionPersistence]);
   const sessionService = useMemo(() => createEditorSessionService({
     fs,
     refreshTree,
     addRecentFile,
     requestUnsavedChangesDecision,
     runtime,
+    store,
     saveCurrentDocument: sessionPersistence.saveCurrentDocument,
   }), [
     addRecentFile,
@@ -97,6 +104,7 @@ export function useEditorSession({
     requestUnsavedChangesDecision,
     runtime,
     sessionPersistence,
+    store,
   ]);
 
   return {
