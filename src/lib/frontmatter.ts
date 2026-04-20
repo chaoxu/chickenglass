@@ -1,8 +1,10 @@
 import { parse as parseYaml } from "yaml";
+import {
+  FRONTMATTER_DELIMITER,
+  FRONTMATTER_DELIMITER_RE,
+} from "./frontmatter-delimiter.js";
 
-/** Frontmatter fence — three hyphens, optional trailing whitespace, end of line. */
-export const FRONTMATTER_DELIMITER = "---";
-export const FRONTMATTER_DELIMITER_RE = /^---\s*$/;
+export { FRONTMATTER_DELIMITER, FRONTMATTER_DELIMITER_RE };
 
 export interface BlockConfig {
   counter?: string | null;

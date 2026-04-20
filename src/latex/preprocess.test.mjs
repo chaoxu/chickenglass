@@ -10,6 +10,7 @@ import {
   promoteLabeledDisplayMath,
   renderMathMacros,
   resolveIncludes,
+  stripFrontmatter,
 } from "./preprocess.mjs";
 
 describe("liftFencedDivTitles", () => {
@@ -74,6 +75,22 @@ describe("resolveIncludes", () => {
   });
 });
 
+describe("stripFrontmatter", () => {
+  it("strips frontmatter with closing delimiter whitespace", () => {
+    expect(stripFrontmatter("---\ntitle: Chapter\n---   \n\n# Chapter\n")).toBe("\n# Chapter\n");
+  });
+
+  it("leaves documents without opening frontmatter unchanged", () => {
+    const source = "Body.\n\n---\ntitle: Not frontmatter\n---\n";
+    expect(stripFrontmatter(source)).toBe(source);
+  });
+
+  it("leaves delimiter-like body lines untouched", () => {
+    const source = "# Chapter\n\n---\nNot frontmatter.\n";
+    expect(stripFrontmatter(source)).toBe(source);
+  });
+});
+
 describe("renderMathMacros", () => {
   it("detects arity by scanning for #N", () => {
     const out = renderMathMacros({ R: "\\mathbb{R}", floor: "\\lfloor #1 \\rfloor" });
@@ -110,6 +127,21 @@ describe("hoistMathMacros", () => {
   it("no-ops when no math frontmatter", () => {
     const src = "---\ntitle: X\n---\nBody\n";
     expect(hoistMathMacros(src)).toBe(src);
+  });
+
+  it("accepts closing delimiter whitespace", () => {
+    const src = [
+      "---",
+      "title: Paper",
+      "math:",
+      "  R: \"\\\\mathbb{R}\"",
+      "---   ",
+      "",
+      "Body.",
+    ].join("\n");
+    const out = hoistMathMacros(src);
+    expect(out).toContain("\\newcommand{\\R}{\\mathbb{R}}");
+    expect(out).toContain("Body.");
   });
 });
 

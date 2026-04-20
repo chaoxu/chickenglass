@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { parse as parseYaml, stringify as yamlStringify } from "yaml";
+import {
+  FRONTMATTER_DELIMITER,
+  isFrontmatterDelimiterLine,
+} from "../lib/frontmatter-delimiter.js";
 
 /**
  * Move a fenced-div opener's trailing inline title into a `title="..."`
@@ -26,13 +30,12 @@ export function liftFencedDivTitles(markdown) {
 }
 
 const INCLUDE_OPEN_RE = /^(:::+)\s*\{([^}]*\binclude\b[^}]*)\}\s*$/;
-const FRONTMATTER_OPEN_RE = /^---\s*$/;
 
-function stripFrontmatter(source) {
-  if (!FRONTMATTER_OPEN_RE.test(source.split("\n", 1)[0] ?? "")) return source;
+export function stripFrontmatter(source) {
+  if (!isFrontmatterDelimiterLine(source.split("\n", 1)[0] ?? "")) return source;
   const lines = source.split("\n");
   for (let i = 1; i < lines.length; i += 1) {
-    if (FRONTMATTER_OPEN_RE.test(lines[i])) {
+    if (isFrontmatterDelimiterLine(lines[i])) {
       return lines.slice(i + 1).join("\n");
     }
   }
@@ -90,7 +93,7 @@ async function splice(markdown, sourcePath, seen) {
   return out.join("\n");
 }
 
-const FRONTMATTER_FENCE = "---";
+const FRONTMATTER_FENCE = FRONTMATTER_DELIMITER;
 
 /**
  * Rewrite labeled display-math blocks into raw-LaTeX equation environments.
@@ -177,10 +180,10 @@ export function renderMathMacros(math) {
  */
 export function hoistMathMacros(markdown) {
   const lines = markdown.split("\n");
-  if (lines[0] !== FRONTMATTER_FENCE) return markdown;
+  if (!isFrontmatterDelimiterLine(lines[0] ?? "")) return markdown;
   let closeIdx = -1;
   for (let i = 1; i < lines.length; i += 1) {
-    if (lines[i] === FRONTMATTER_FENCE) {
+    if (isFrontmatterDelimiterLine(lines[i])) {
       closeIdx = i;
       break;
     }
