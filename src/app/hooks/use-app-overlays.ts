@@ -1,11 +1,14 @@
 import { useCallback, useMemo } from "react";
 
 import type { BackgroundIndexer } from "../../index";
-import { dispatchFormatEvent } from "../../constants/events";
+import type { FormatEventDetail, HeadingFormatLevel, SimpleFormatEventType } from "../../constants/events";
+import { getActiveEditor } from "../../lexical/active-editor-tracker";
+import { FORMAT_MARKDOWN_COMMAND } from "../../lexical/editor-format-command";
 import type { DocumentLabelBacklinksResult } from "../markdown/labels";
 import { useDevSettings } from "../../state/dev-settings";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
+import { planMarkdownFormat } from "../format-markdown";
 import type { PaletteCommand } from "../components/command-palette";
 import { useAutoSave } from "./use-auto-save";
 import type { UseDialogsReturn } from "./use-dialogs";
@@ -88,6 +91,35 @@ export function useAppOverlays({
     dialogs.setSearchOpen(!dialogs.searchOpen);
   }, [dialogs, editor]);
 
+  const applyFormat = useCallback((detail: FormatEventDetail) => {
+    const activeEditor = getActiveEditor();
+    if (activeEditor?.dispatchCommand(FORMAT_MARKDOWN_COMMAND, detail)) {
+      return;
+    }
+
+    const handle = editor.editorHandle;
+    if (!handle) {
+      return;
+    }
+
+    const plan = planMarkdownFormat(
+      editor.getCurrentDocText(),
+      handle.getSelection(),
+      detail,
+    );
+    handle.applyChanges(plan.changes);
+    handle.setSelection(plan.selection.anchor, plan.selection.focus);
+    handle.focus();
+  }, [editor]);
+
+  const applySimpleFormat = useCallback((type: SimpleFormatEventType) => {
+    applyFormat({ type });
+  }, [applyFormat]);
+
+  const applyHeading = useCallback((level: HeadingFormatLevel) => {
+    applyFormat({ type: "heading", level });
+  }, [applyFormat]);
+
   // ── Single command registry ──────────────────────────────────────────────
   // Each command is defined once. Palette entries, hotkey bindings, and
   // Tauri menu handlers are all derived from this array.
@@ -102,11 +134,15 @@ export function useAppOverlays({
     { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: TAURI_MENU_IDS.fileQuit, action: onQuit },
 
     // ── Format ────────────────────────────────────────────────────────────
-    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
-    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, action: () => dispatchFormatEvent("italic") },
-    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
-    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
-    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
+    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, menuId: TAURI_MENU_IDS.formatBold, action: () => applySimpleFormat("bold") },
+    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, menuId: TAURI_MENU_IDS.formatItalic, action: () => applySimpleFormat("italic") },
+    { id: "format.code", label: "Toggle Code", category: "Format", menuId: TAURI_MENU_IDS.formatCode, action: () => applySimpleFormat("code") },
+    { id: "format.strikethrough", label: "Toggle Strikethrough", category: "Format", menuId: TAURI_MENU_IDS.formatStrikethrough, action: () => applySimpleFormat("strikethrough") },
+    { id: "format.highlight", label: "Toggle Highlight", category: "Format", menuId: TAURI_MENU_IDS.formatHighlight, action: () => applySimpleFormat("highlight") },
+    { id: "format.link", label: "Insert Link", category: "Format", menuId: TAURI_MENU_IDS.formatLink, action: () => applySimpleFormat("link") },
+    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => applyHeading(1) },
+    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => applyHeading(2) },
+    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => applyHeading(3) },
 
     // ── Edit ──────────────────────────────────────────────────────────────
     { id: "edit.rename-local-label", label: "Rename Local Label", category: "Edit", action: labelCommands.handleRenameDocumentLabel },
@@ -139,7 +175,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, sidebarLayout, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit, openSearch, toggleSearch]);
+  ], [applyHeading, applySimpleFormat, dialogs, editor, workspace, sidebarLayout, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit, openSearch, toggleSearch]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);

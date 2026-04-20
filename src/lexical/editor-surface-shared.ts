@@ -2,22 +2,22 @@ import { useEffect } from "react";
 import type { MouseEvent as ReactMouseEvent, MutableRefObject } from "react";
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { FORMAT_TEXT_COMMAND } from "lexical";
+import { COMMAND_PRIORITY_LOW, FORMAT_TEXT_COMMAND } from "lexical";
 
 import { getInlineTextFormatSpec, useEditorScrollSurface } from "../lexical-next";
-import { FORMAT_EVENT, type FormatEventDetail } from "../constants/events";
+import type { FormatEventDetail } from "../constants/events";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import {
   HEADING_SOURCE_SELECTOR,
   SOURCE_POSITION_DATASET,
 } from "./source-position-contract";
-import { COFLAT_FORMAT_EVENT_TAG } from "./update-tags";
 import {
   $readSourceTextSelectionFromLexicalRoot,
   readSourceTextFromLexicalRoot,
   selectSourceOffsetsInLexicalRoot,
   writeSourceTextToLexicalRoot,
 } from "./source-text";
+import { FORMAT_MARKDOWN_COMMAND } from "./editor-format-command";
 
 /**
  * Pure helpers and shared plugins for the rich/source markdown editor
@@ -337,38 +337,31 @@ export function FormatEventPlugin(): null {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    const handleFormat = (event: Event) => {
-      const detail = (event as CustomEvent<FormatEventDetail>).detail;
-      if (!isInlineTextFormatEvent(detail)) {
-        return;
-      }
+    return editor.registerCommand(
+      FORMAT_MARKDOWN_COMMAND,
+      (detail) => {
+        if (!isInlineTextFormatEvent(detail)) {
+          return false;
+        }
 
-      const root = editor.getRootElement();
-      if (!editorOwnsActiveSelection(root)) {
-        return;
-      }
-      if (!root) {
-        return;
-      }
+        const root = editor.getRootElement();
+        if (!editorOwnsActiveSelection(root)) {
+          return false;
+        }
+        if (!root) {
+          return false;
+        }
 
-      editor.update(() => {
         if (isSourceEditorRoot(root)) {
           const domSelection = readSourceDomSelection(root);
           applySourceFormat(detail, domSelection);
-          return;
+          return true;
         }
         editor.dispatchCommand(FORMAT_TEXT_COMMAND, detail.type);
-      }, {
-        discrete: true,
-        tag: COFLAT_FORMAT_EVENT_TAG,
-      });
-      event.stopImmediatePropagation();
-    };
-
-    document.addEventListener(FORMAT_EVENT, handleFormat);
-    return () => {
-      document.removeEventListener(FORMAT_EVENT, handleFormat);
-    };
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
   }, [editor]);
 
   return null;

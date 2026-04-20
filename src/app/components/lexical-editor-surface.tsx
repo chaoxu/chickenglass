@@ -7,10 +7,8 @@ import {
 } from "../../lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import { registerCoflatDecoratorRenderers } from "../../lexical/renderers/block-renderers";
-import { FORMAT_EVENT, type FormatEventDetail } from "../../constants/events";
 import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import type { EditorMode, RevealPresentation } from "../editor-mode";
-import { planMarkdownFormat } from "../format-markdown";
 
 registerCoflatDecoratorRenderers();
 
@@ -46,12 +44,7 @@ export function LexicalEditorSurface({
   revealPresentation,
 }: LexicalEditorSurfaceProps) {
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
-  const docRef = useRef(doc);
   const readyPendingRef = useRef(false);
-
-  useEffect(() => {
-    docRef.current = doc;
-  }, [doc]);
 
   const handleEditorReady = useCallback((handle: MarkdownEditorHandle, editor: LexicalEditor) => {
     handleRef.current = handle;
@@ -77,38 +70,6 @@ export function LexicalEditorSurface({
     }
     readyPendingRef.current = true;
   }, [doc, editorMode, onDocumentReady, onEditorReady]);
-
-  useEffect(() => {
-    const handleFormat = (event: Event) => {
-      const detail = (event as CustomEvent<FormatEventDetail>).detail;
-      if (
-        editorMode !== "source"
-        && (
-          detail.type === "bold"
-          || detail.type === "code"
-          || detail.type === "highlight"
-          || detail.type === "italic"
-          || detail.type === "strikethrough"
-        )
-      ) {
-        return;
-      }
-
-      const handle = handleRef.current;
-      if (!handle) {
-        return;
-      }
-      const plan = planMarkdownFormat(docRef.current, handle.getSelection(), detail);
-      handle.applyChanges(plan.changes);
-      handle.setSelection(plan.selection.anchor, plan.selection.focus);
-      handle.focus();
-    };
-
-    document.addEventListener(FORMAT_EVENT, handleFormat);
-    return () => {
-      document.removeEventListener(FORMAT_EVENT, handleFormat);
-    };
-  }, [editorMode]);
 
   return (
     <LexicalMarkdownEditor

@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { LexicalEditor } from "lexical";
 
 import { BackgroundIndexer } from "../../index";
 import { createActiveDocumentSignal } from "../active-document-signal";
@@ -7,6 +8,9 @@ import type { PaletteCommand } from "../components/command-palette";
 import { useDevSettings } from "../../state/dev-settings";
 import { MemoryFileSystem } from "../file-manager";
 import type { Settings } from "../lib/types";
+import { clearActiveEditor, setActiveEditor } from "../../lexical/active-editor-tracker";
+import { FORMAT_MARKDOWN_COMMAND } from "../../lexical/editor-format-command";
+import { TAURI_MENU_IDS } from "../tauri-client/bridge-metadata";
 
 const overlayHookState = vi.hoisted(() => ({
   hotkeys: [] as Array<{ key: string; handler: () => void }>,
@@ -238,6 +242,7 @@ describe("useAppOverlays", () => {
   });
 
   afterEach(() => {
+    clearActiveEditor();
     vi.restoreAllMocks();
   });
 
@@ -358,6 +363,46 @@ describe("useAppOverlays", () => {
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(1, true);
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(2, true);
     expect(dialogs.setSearchOpen).toHaveBeenNthCalledWith(3, true);
+  });
+
+  it("formats through the active Lexical editor before falling back to the app editor handle", async () => {
+    const doc = "abcde";
+    const { props, editorHarness } = await createHookProps({
+      currentDocText: doc,
+      selection: { from: 1, to: 4 },
+    });
+    const activeRoot = document.createElement("div");
+    document.body.appendChild(activeRoot);
+    const dispatchCommand = vi.fn(() => true);
+    setActiveEditor({
+      dispatchCommand,
+      getRootElement: () => activeRoot,
+    } as unknown as LexicalEditor);
+
+    try {
+      const { result } = renderHook(
+        (hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps),
+        { initialProps: props },
+      );
+
+      getCommand(result.current.commands, "format.bold").action();
+
+      expect(dispatchCommand).toHaveBeenCalledWith(FORMAT_MARKDOWN_COMMAND, { type: "bold" });
+      expect(editorHarness.applyChanges).not.toHaveBeenCalled();
+
+      dispatchCommand.mockReturnValue(false);
+      overlayHookState.menuHandlers[TAURI_MENU_IDS.formatBold]?.();
+
+      expect(editorHarness.applyChanges).toHaveBeenCalledWith([{
+        from: 1,
+        to: 4,
+        insert: "**bcd**",
+      }]);
+      expect(props.editor.editorHandle?.setSelection).toHaveBeenCalledWith(3, 6);
+      expect(props.editor.editorHandle?.focus).toHaveBeenCalledTimes(1);
+    } finally {
+      activeRoot.remove();
+    }
   });
 
   it("toggles selectionAlwaysOn via the palette command", async () => {

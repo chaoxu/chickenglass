@@ -9,25 +9,12 @@
  * Handler-based events (file, edit, view, help) are dispatched via the
  * `handlers` map passed by the caller (built from the shared command registry).
  *
- * Format actions (bold, italic, etc.) are dispatched as `cf:format` CustomEvents
- * on `document`, matching the pattern used by the command palette.
- *
  * In browser mode (no Tauri), the hook is a no-op.
  */
 
 import { useEffect, useRef } from "react";
 import { isTauri } from "../../lib/tauri";
-import { dispatchFormatEvent, type SimpleFormatEventType } from "../../constants/events";
-import {
-  TAURI_FORMAT_MENU_EVENT_TYPES,
-  TAURI_MENU_EVENT_CHANNEL,
-} from "../tauri-client/bridge-metadata";
-
-/**
- * Map from menu-event IDs that dispatch a cf:format event for the markdown editor.
- * To add a new format action, add an entry here.
- */
-const formatEventMap: Readonly<Record<string, SimpleFormatEventType>> = TAURI_FORMAT_MENU_EVENT_TYPES;
+import { TAURI_MENU_EVENT_CHANNEL } from "../tauri-client/bridge-metadata";
 
 /**
  * Listen for native Tauri menu events and dispatch to handlers.
@@ -58,17 +45,9 @@ export function useMenuEvents(handlers: Record<string, () => void>): void {
         const id = event.payload;
         const h = handlersRef.current;
 
-        // Handler-based events (file, edit, view, help)
         const handler = h[id];
         if (handler) {
           handler();
-          return;
-        }
-
-        // Format events dispatched as cf:format CustomEvents for the active editor surface
-        const formatAction = formatEventMap[id];
-        if (formatAction) {
-          dispatchFormatEvent(formatAction);
           return;
         }
 

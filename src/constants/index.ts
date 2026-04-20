@@ -42,7 +42,6 @@ export {
 
 export {
   PERF_PANEL_REFRESH_EVENT,
-  FORMAT_EVENT,
   MODE_CHANGE_EVENT,
   OPEN_FILE_EVENT,
 } from "./events";

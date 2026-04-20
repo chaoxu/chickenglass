@@ -1,5 +1,3 @@
-import type { SimpleFormatEventType } from "../../constants/events";
-
 export const TAURI_EVENT_CHANNELS = {
   fileChanged: "file-changed",
   menu: "menu-event",
@@ -66,12 +64,3 @@ export const TAURI_MENU_IDS = {
   helpAbout: "help_about",
   helpShortcuts: "help_shortcuts",
 } as const;
-
-export const TAURI_FORMAT_MENU_EVENT_TYPES: Readonly<Record<string, SimpleFormatEventType>> = {
-  [TAURI_MENU_IDS.formatBold]: "bold",
-  [TAURI_MENU_IDS.formatItalic]: "italic",
-  [TAURI_MENU_IDS.formatCode]: "code",
-  [TAURI_MENU_IDS.formatStrikethrough]: "strikethrough",
-  [TAURI_MENU_IDS.formatHighlight]: "highlight",
-  [TAURI_MENU_IDS.formatLink]: "link",
-};

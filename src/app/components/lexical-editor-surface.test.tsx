@@ -3,7 +3,6 @@ import { createRoot, type Root } from "react-dom/client";
 import type { LexicalEditor } from "lexical";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { dispatchFormatEvent } from "../../constants/events";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 const { markdownEditorMock } = vi.hoisted(() => ({
@@ -79,7 +78,7 @@ describe("LexicalEditorSurface", () => {
     });
   });
 
-  it("formats through the single editor handle in source mode", () => {
+  it("signals document readiness after the single editor handle is ready", () => {
     const onDocumentReady = vi.fn();
     const onEditorReady = vi.fn();
     const handle = {
@@ -124,16 +123,7 @@ describe("LexicalEditorSurface", () => {
     expect(onEditorReady).toHaveBeenCalledWith(handle, expect.anything());
     expect(onDocumentReady).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      dispatchFormatEvent("bold");
-    });
-
-    expect(handle.applyChanges).toHaveBeenCalledWith([{
-      from: 1,
-      to: 4,
-      insert: "**bcd**",
-    }]);
-    expect(handle.setSelection).toHaveBeenCalledWith(3, 6);
-    expect(handle.focus).toHaveBeenCalledTimes(1);
+    expect(handle.applyChanges).not.toHaveBeenCalled();
+    expect(handle.focus).not.toHaveBeenCalled();
   });
 });
