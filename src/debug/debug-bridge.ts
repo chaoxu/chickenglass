@@ -103,6 +103,7 @@ let connectedApp: AppBridgeMethods | null = null;
 let connectedEditor: EditorBridgeMethods | null = null;
 let connectedLexical: LexicalEditor | null = null;
 let connectedSourceMap: SourceMap | null = null;
+let connectedSourceMapProvider: (() => SourceMap | null) | null = null;
 let connectedTauriSmoke: TauriSmokeMethods | null = null;
 
 /**
@@ -146,7 +147,7 @@ export function getConnectedEditor(): EditorBridgeMethods | null {
 }
 
 export function getConnectedSourceMap(): SourceMap | null {
-  return connectedSourceMap;
+  return connectedSourceMapProvider ? connectedSourceMapProvider() : connectedSourceMap;
 }
 
 export function connectAppBridge(methods: AppBridgeMethods): void {
@@ -171,6 +172,12 @@ export function connectLexicalEditor(editor: LexicalEditor | null): void {
 
 export function connectSourceMap(sourceMap: SourceMap | null): void {
   connectedSourceMap = sourceMap;
+  connectedSourceMapProvider = null;
+}
+
+export function connectSourceMapProvider(provider: (() => SourceMap | null) | null): void {
+  connectedSourceMapProvider = provider;
+  connectedSourceMap = null;
 }
 
 export function connectTauriSmoke(methods: TauriSmokeMethods | null): void {
@@ -295,7 +302,7 @@ function installWindowBridge(): void {
   Object.defineProperty(window, "__cfSourceMap", {
     configurable: true,
     get(): SourceMap | null {
-      return connectedSourceMap;
+      return getConnectedSourceMap();
     },
   });
 

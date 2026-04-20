@@ -33,7 +33,10 @@ vi.mock("../tauri-client/debug", () => ({
   debugEmitFileChangedCommand: nativeDebugMockState.debugEmitFileChanged,
 }));
 
-const { useAppDebug } = await import("./use-app-debug");
+const { getConnectedApp, getConnectedSourceMap, useAppDebug } = {
+  ...await import("../../debug/debug-bridge"),
+  ...await import("./use-app-debug"),
+};
 
 const openProject = vi.fn(async (_path: string) => true);
 const openFile = vi.fn(async (_path: string) => {});
@@ -59,7 +62,26 @@ const editorHandle = {
   applyChanges: vi.fn(),
 };
 
-const Harness: FC = () => {
+interface HarnessProps {
+  readonly currentDocument?: {
+    readonly path: string;
+    readonly name: string;
+    readonly dirty: boolean;
+  };
+  readonly mode?: EditorMode;
+  readonly sourceMap?: SourceMap;
+}
+
+const Harness: FC<HarnessProps> = ({
+  currentDocument = {
+    path: "notes.md",
+    name: "notes.md",
+    dirty: true,
+  },
+  mode = "lexical",
+  sourceMap = new SourceMap([]),
+}) => {
+  const getHarnessMode = () => mode;
   useAppDebug({
     editorHandle,
     lexicalEditor: null,
@@ -72,16 +94,12 @@ const Harness: FC = () => {
     setSearchOpen,
     requestNativeClose,
     setMode,
-    getMode,
+    getMode: getHarnessMode,
     getCurrentDocText: () => "# Notes",
-    getCurrentSourceMap,
+    getCurrentSourceMap: () => sourceMap,
     projectRoot: "/tmp/frontend-project",
-    currentDocument: {
-      path: "notes.md",
-      name: "notes.md",
-      dirty: true,
-    },
-    hasDirtyDocument: true,
+    currentDocument,
+    hasDirtyDocument: currentDocument.dirty,
     startupComplete: true,
     restoredProjectRoot: "/tmp/saved-project",
   });
@@ -163,5 +181,42 @@ describe("useAppDebug", () => {
     await expect(window.__tauriSmoke?.listWindows()).resolves.toEqual([
       { label: "main", focused: true },
     ]);
+  });
+
+  it("keeps bridge providers stable while returning fresh app state", async () => {
+    const initialSourceMap = new SourceMap([]);
+    const nextSourceMap = new SourceMap([]);
+    act(() => {
+      root.render(createElement(Harness, { sourceMap: initialSourceMap }));
+    });
+
+    const connectedApp = getConnectedApp();
+    const appOpenFile = window.__app.openFile;
+    const editorGetDoc = window.__editor.getDoc;
+
+    act(() => {
+      root.render(createElement(Harness, {
+        currentDocument: {
+          path: "next.md",
+          name: "next.md",
+          dirty: false,
+        },
+        mode: "source",
+        sourceMap: nextSourceMap,
+      }));
+    });
+
+    expect(getConnectedApp()).toBe(connectedApp);
+    expect(window.__app.openFile).toBe(appOpenFile);
+    expect(window.__editor.getDoc).toBe(editorGetDoc);
+    expect(window.__app.getMode()).toBe("source");
+    expect(window.__app.getCurrentDocument()).toEqual({
+      path: "next.md",
+      name: "next.md",
+      dirty: false,
+    });
+    expect(window.__app.isDirty()).toBe(false);
+    expect(getConnectedSourceMap()).toBe(nextSourceMap);
+    expect(window.__cfSourceMap).toBe(nextSourceMap);
   });
 });

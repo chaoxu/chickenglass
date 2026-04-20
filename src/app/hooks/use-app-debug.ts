@@ -28,7 +28,7 @@ import {
   connectEditorBridge,
   connectLexicalEditor,
   connectPerfBridge,
-  connectSourceMap,
+  connectSourceMapProvider,
   connectTauriSmoke,
   disconnectAppBridge,
   type TauriSmokeWindowState,
@@ -66,6 +66,10 @@ interface AppDebugDeps {
   restoredProjectRoot: string | null;
 }
 
+type AppDebugSnapshot = AppDebugDeps & {
+  readonly mode: EditorMode;
+};
+
 export function useAppDebug({
   editorHandle,
   lexicalEditor,
@@ -90,6 +94,30 @@ export function useAppDebug({
 }: AppDebugDeps): void {
   const lastAppStateRef = useRef<string | null>(null);
   const mode = getMode();
+  const depsRef = useRef<AppDebugSnapshot | null>(null);
+  depsRef.current = {
+    editorHandle,
+    lexicalEditor,
+    openProject,
+    openFile,
+    hasFile,
+    openFileWithContent,
+    loadFixtureProject,
+    saveFile,
+    closeFile,
+    setSearchOpen,
+    requestNativeClose,
+    setMode,
+    getMode,
+    getCurrentDocText,
+    getCurrentSourceMap,
+    projectRoot,
+    currentDocument,
+    hasDirtyDocument,
+    startupComplete,
+    restoredProjectRoot,
+    mode,
+  };
 
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).
@@ -133,6 +161,20 @@ export function useAppDebug({
   ]);
 
   useEffect(() => {
+    const current = () => {
+      if (!depsRef.current) {
+        throw new Error("Debug bridge provider used before app debug state initialized.");
+      }
+      return depsRef.current;
+    };
+    const currentEditorHandle = () => {
+      const handle = current().editorHandle;
+      if (!handle) {
+        throw new Error("Debug editor bridge called before an editor handle is available.");
+      }
+      return handle;
+    };
+
     connectAppBridge({
       openFile: async (path) => {
         recordDebugSessionEvent({
@@ -141,9 +183,9 @@ export function useAppDebug({
           summary: `openFile ${path}`,
           detail: { path },
         });
-        await openFile(path);
+        await current().openFile(path);
       },
-      hasFile: async (path) => hasFile(path),
+      hasFile: async (path) => current().hasFile(path),
       openFileWithContent: async (name, content) => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
@@ -155,30 +197,32 @@ export function useAppDebug({
             content,
           },
         });
-        await openFileWithContent(name, content);
+        await current().openFileWithContent(name, content);
       },
-      loadFixtureProject: loadFixtureProject
-        ? async (files, initialPath) => {
-            recordDebugSessionEvent({
-              timestamp: Date.now(),
-              type: "app",
-              summary: `loadFixtureProject ${initialPath ?? "(no initial file)"}`,
-              detail: {
-                initialPath: initialPath ?? null,
-                fileCount: files.length,
-                files,
-              },
-            });
-            await loadFixtureProject(files, initialPath);
-          }
-        : undefined,
+      loadFixtureProject: async (files, initialPath) => {
+        const load = current().loadFixtureProject;
+        if (!load) {
+          throw new Error("Debug fixture project loading is not available in this app mode.");
+        }
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `loadFixtureProject ${initialPath ?? "(no initial file)"}`,
+          detail: {
+            initialPath: initialPath ?? null,
+            fileCount: files.length,
+            files,
+          },
+        });
+        await load(files, initialPath);
+      },
       saveFile: async () => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
           type: "app",
           summary: "saveFile",
         });
-        await saveFile();
+        await current().saveFile();
       },
       closeFile: async (options) => {
         recordDebugSessionEvent({
@@ -187,7 +231,7 @@ export function useAppDebug({
           summary: "closeFile",
           detail: options ?? null,
         });
-        return closeFile(options);
+        return current().closeFile(options);
       },
       setSearchOpen: (open) => {
         recordDebugSessionEvent({
@@ -196,7 +240,7 @@ export function useAppDebug({
           summary: `setSearchOpen ${open ? "open" : "closed"}`,
           detail: { open },
         });
-        setSearchOpen(open);
+        current().setSearchOpen(open);
       },
       setMode: (nextMode) => {
         recordDebugSessionEvent({
@@ -205,62 +249,57 @@ export function useAppDebug({
           summary: `setMode ${nextMode}`,
           detail: { mode: nextMode },
         });
-        setMode(nextMode);
+        current().setMode(nextMode);
       },
-      getMode,
-      getProjectRoot: () => projectRoot,
-      getCurrentDocument: () => currentDocument,
-      isDirty: () => hasDirtyDocument,
+      getMode: () => current().getMode(),
+      getProjectRoot: () => current().projectRoot,
+      getCurrentDocument: () => current().currentDocument,
+      isDirty: () => current().hasDirtyDocument,
     });
 
-    connectEditorBridge(
-      editorHandle
-        ? {
-            focus: () => {
-              recordDebugSessionEvent({
-                timestamp: Date.now(),
-                type: "app",
-                summary: "editor.focus",
-              });
-              editorHandle.focus();
-            },
-            getDoc: () => getCurrentDocText(),
-            getSelection: () => editorHandle.getSelection(),
-            peekDoc: () => editorHandle.peekDoc(),
-            peekSelection: () => editorHandle.peekSelection(),
-            insertText: (text) => {
-              recordDebugSessionEvent({
-                timestamp: Date.now(),
-                type: "app",
-                summary: `editor.insertText ${text.length}`,
-                detail: { text },
-              });
-              editorHandle.insertText(text);
-            },
-            setDoc: (doc) => {
-              recordDebugSessionEvent({
-                timestamp: Date.now(),
-                type: "app",
-                summary: `editor.setDoc ${doc.length}`,
-                detail: { docLength: doc.length },
-              });
-              editorHandle.setDoc(doc);
-            },
-            setSelection: (anchor, focus = anchor) => {
-              recordDebugSessionEvent({
-                timestamp: Date.now(),
-                type: "app",
-                summary: `editor.setSelection ${anchor}:${focus}`,
-                detail: { anchor, focus },
-              });
-              editorHandle.setSelection(anchor, focus);
-            },
-          }
-        : null,
-    );
+    connectEditorBridge({
+      focus: () => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: "editor.focus",
+        });
+        currentEditorHandle().focus();
+      },
+      getDoc: () => current().getCurrentDocText(),
+      getSelection: () => currentEditorHandle().getSelection(),
+      peekDoc: () => currentEditorHandle().peekDoc(),
+      peekSelection: () => currentEditorHandle().peekSelection(),
+      insertText: (text) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `editor.insertText ${text.length}`,
+          detail: { text },
+        });
+        currentEditorHandle().insertText(text);
+      },
+      setDoc: (doc) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `editor.setDoc ${doc.length}`,
+          detail: { docLength: doc.length },
+        });
+        currentEditorHandle().setDoc(doc);
+      },
+      setSelection: (anchor, focus = anchor) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `editor.setSelection ${anchor}:${focus}`,
+          detail: { anchor, focus },
+        });
+        currentEditorHandle().setSelection(anchor, focus);
+      },
+    });
 
-    connectLexicalEditor(lexicalEditor);
-    connectSourceMap(getCurrentSourceMap());
+    connectSourceMapProvider(() => current().getCurrentSourceMap());
 
     connectPerfBridge({
       perfSummary: getCombinedPerfSnapshot,
@@ -275,19 +314,20 @@ export function useAppDebug({
     });
     if (import.meta.env.DEV && isTauri()) {
       connectTauriSmoke({
-        openProject,
-        openFile,
-        requestNativeClose,
+        openProject: (path) => current().openProject(path),
+        openFile: (path) => current().openFile(path),
+        requestNativeClose: () => current().requestNativeClose(),
         listWindows: () => debugListWindowsCommand(),
         getWindowState: async (): Promise<TauriSmokeWindowState> => {
           const nativeState = await debugGetNativeStateCommand();
+          const snapshot = current();
           return {
-            projectRoot,
-            currentDocument,
-            dirty: hasDirtyDocument,
-            startupComplete,
-            restoredProjectRoot,
-            mode: getMode(),
+            projectRoot: snapshot.projectRoot,
+            currentDocument: snapshot.currentDocument,
+            dirty: snapshot.hasDirtyDocument,
+            startupComplete: snapshot.startupComplete,
+            restoredProjectRoot: snapshot.restoredProjectRoot,
+            mode: snapshot.getMode(),
             backendProjectRoot: nativeState.projectRoot,
             backendProjectGeneration: nativeState.projectGeneration,
             watcherRoot: nativeState.watcherRoot,
@@ -309,31 +349,15 @@ export function useAppDebug({
       // surfaces remain shaped; calling them will throw DebugBridgeError.
       disconnectAppBridge();
       connectEditorBridge(null);
-      connectLexicalEditor(null);
-      connectSourceMap(null);
+      connectSourceMapProvider(null);
       connectTauriSmoke(null);
     };
-  }, [
-    editorHandle,
-    lexicalEditor,
-    openProject,
-    openFile,
-    hasFile,
-    openFileWithContent,
-    loadFixtureProject,
-    saveFile,
-    closeFile,
-    setSearchOpen,
-    requestNativeClose,
-    setMode,
-    getMode,
-    getCurrentDocText,
-    getCurrentSourceMap,
-    projectRoot,
-    currentDocument,
-    hasDirtyDocument,
-    startupComplete,
-    restoredProjectRoot,
-    mode,
-  ]);
+  }, []);
+
+  useEffect(() => {
+    connectLexicalEditor(lexicalEditor);
+    return () => {
+      connectLexicalEditor(null);
+    };
+  }, [lexicalEditor]);
 }
