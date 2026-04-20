@@ -16,9 +16,15 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  buildLatexPandocArgs,
+  parseLatexFrontmatterConfig,
+  resolveLatexExportOptions,
+  resolveLatexTemplatePath,
+} from "../src/latex/export-options.mjs";
 import { preprocess } from "../src/latex/preprocess.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -44,26 +50,13 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-function resolveTemplate(name) {
-  if (!name || name === "article") return resolve(LATEX_DIR, "template/article.tex");
-  if (name === "lipics") return resolve(LATEX_DIR, "template/lipics.tex");
-  return isAbsolute(name) ? name : resolve(process.cwd(), name);
-}
-
 async function runPandoc({ markdown, output, template, bibliography, pandocBin }) {
-  const args = [
-    "--from=markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash",
-    "--to=latex",
-    "--wrap=preserve",
-    "--syntax-highlighting=none",
-    `--lua-filter=${FILTER_PATH}`,
-    `--template=${template}`,
-    `--output=${output}`,
-  ];
-  if (bibliography) {
-    const base = basename(bibliography, ".bib");
-    args.push(`--metadata=bibliography=${base}`);
-  }
+  const args = buildLatexPandocArgs({
+    bibliography,
+    filterPath: FILTER_PATH,
+    output,
+    template,
+  });
 
   const child = spawn(pandocBin, args, { stdio: ["pipe", "inherit", "inherit"] });
   child.stdin.write(markdown);
@@ -86,11 +79,18 @@ async function main() {
 
   const input = resolve(process.cwd(), positional[0]);
   const output = resolve(process.cwd(), flags.output ?? input.replace(/\.md$/, ".tex"));
-  const template = resolveTemplate(flags.template);
-  const bibliography = flags.bibliography;
   const pandocBin = flags.pandoc ?? "pandoc";
 
   const source = await readFile(input, "utf8");
+  const exportOptions = resolveLatexExportOptions({
+    config: parseLatexFrontmatterConfig(source),
+    flags,
+  });
+  const template = resolveLatexTemplatePath(exportOptions.template, {
+    latexDir: LATEX_DIR,
+    pathResolve: resolve,
+  });
+  const bibliography = exportOptions.bibliography;
   const processed = await preprocess(source, input);
 
   await mkdir(dirname(output), { recursive: true });

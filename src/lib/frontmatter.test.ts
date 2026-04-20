@@ -26,6 +26,25 @@ describe("frontmatter delimiter contract", () => {
     expect(result.end).toBe("---\ntitle: Paper\n---   \n".length);
   });
 
+  it("parses LaTeX export options", () => {
+    const result = parseFrontmatter([
+      "---",
+      "bibliography: refs/project.bib",
+      "latex:",
+      "  template: lipics",
+      "  bibliography: refs/paper.bib",
+      "---",
+      "",
+      "Body",
+    ].join("\n"));
+
+    expect(result.config.bibliography).toBe("refs/project.bib");
+    expect(result.config.latex).toEqual({
+      bibliography: "refs/paper.bib",
+      template: "lipics",
+    });
+  });
+
   it("does not treat delimiter-like body lines as frontmatter", () => {
     const result = parseFrontmatter("Body\n\n---\ntitle: Not frontmatter\n---\n");
 

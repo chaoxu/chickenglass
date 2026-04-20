@@ -16,6 +16,9 @@ imageFolder: images
 math:
   \R: "\\mathbb{R}"
   \N: "\\mathbb{N}"
+latex:
+  template: article
+  bibliography: reference.bib
 blocks:
   claim:
     title: Claim
@@ -30,6 +33,7 @@ blocks:
 | `csl` | string | Path to CSL style file |
 | `numbering` | `"global"` \| `"grouped"` | Block numbering scheme. `global`: all numbered blocks share one counter. `grouped`: each type has its own. |
 | `math` | map | KaTeX macro definitions (`\command: "expansion"`) |
+| `latex` | map | LaTeX export options. Supported keys: `template`, `bibliography`. |
 | `blocks` | map | Custom block definitions and overrides (`title`, `numbered`, `counter`, enable/disable) |
 | `imageFolder` | string | Default folder for pasted/dropped images. Also accepts `image-folder`. |
 
@@ -539,7 +543,7 @@ Three or more hyphens on a line. Must not be at the start of the document (where
 
 ## LaTeX Export
 
-The LaTeX export pipeline (`scripts/export-latex.mjs`, `src/latex/`) emits a compilable `.tex` file from a Coflat markdown document. The stages are:
+The LaTeX export pipeline (`scripts/export-latex.mjs`, desktop PDF/LaTeX export, `src/latex/`) emits a compilable `.tex` or `.pdf` file from a Coflat markdown document. The stages are:
 
 1. **Resolve** — splice `::: {.include}` blocks, preserve root frontmatter as pandoc metadata, and hoist supported export-only fields such as `math:` into pandoc-compatible metadata.
 2. **Lift inline titles** — any `::: {#id .class} Inline Title` opener is rewritten to `::: {#id .class title="Inline Title"}` so pandoc's `Div` node carries the title as an attribute.
@@ -547,10 +551,10 @@ The LaTeX export pipeline (`scripts/export-latex.mjs`, `src/latex/`) emits a com
 
    ```text
    pandoc --from markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars \
-          --to latex --wrap=preserve --no-highlight \
+          --to latex --wrap=preserve --syntax-highlighting=none \
           --lua-filter=src/latex/filter.lua \
           --template=src/latex/template/<variant>.tex \
-          --bibliography=<resolved.bib> \
+          --metadata=bibliography=<bib-name-without-.bib> \
           --output=out/<doc>.tex
    ```
 
@@ -621,4 +625,4 @@ macros back into frontmatter `math:`.
 - `template/article.tex` — plain `\documentclass{article}` fallback with `amsthm`, `cleveref`, `soul`, `tabularx`, `booktabs`, `algorithm`, `hyperref`.
 - `template/lipics.tex` — LIPIcs submissions; consumes the Publisher metadata frontmatter (authors, ccsdesc, keywords, copyright, titlerunning, authorrunning, funding, acknowledgements, category, relatedversion).
 
-Select a variant with `scripts/export-latex.mjs --template lipics` or by setting `latex.template: lipics` in frontmatter.
+Select a variant with `scripts/export-latex.mjs --template lipics` or by setting `latex.template: lipics` in frontmatter. `latex.bibliography` overrides the top-level `bibliography` value for LaTeX export; command-line `--template` and `--bibliography` flags override frontmatter in the CLI.

@@ -8,6 +8,13 @@
  */
 
 import { isTauri } from "../lib/tauri";
+import { parseFrontmatter } from "../lib/frontmatter";
+import {
+  normalizeProjectPath,
+  resolveProjectPathFromDocument,
+} from "../lib/project-paths";
+import { resolveLatexExportOptions } from "../latex/export-options.mjs";
+import { preprocessWithReadFile } from "../latex/preprocess-core.mjs";
 import { measureAsync } from "./perf";
 import type { FileSystem, FileEntry } from "./file-manager";
 import type { ExportFormat } from "./lib/types";
@@ -144,6 +151,7 @@ function serializeExportThemeTokens(tokens: Record<string, string>): string {
 export const _buildHtmlDocumentForTest = buildHtmlDocument;
 export const _buildHtmlDocumentAsyncForTest = buildHtmlDocumentWithResolvedImages;
 export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
+export const _preprocessLatexExportForTest = preprocessLatexExport;
 
 function escapeHtml(value: string): string {
   return value
@@ -198,8 +206,31 @@ export async function exportDocument(
   }
 
   const outputPath = deriveOutputPath(sourcePath, format);
+  const latexOptions = resolveLatexExportOptions({
+    config: parseFrontmatter(content).config,
+  });
+  const latexContent = await preprocessLatexExport(content, sourcePath, fs);
 
-  return exportDocumentCommand(content, format, outputPath, sourcePath);
+  return exportDocumentCommand(latexContent, format, outputPath, sourcePath, latexOptions);
+}
+
+async function preprocessLatexExport(
+  content: string,
+  sourcePath: string,
+  fs?: FileSystem,
+): Promise<string> {
+  return preprocessWithReadFile(content, sourcePath, {
+    pathKey: normalizeProjectPath,
+    readFile: async (path: string) => {
+      if (!fs) {
+        throw new Error(
+          `Cannot resolve LaTeX include "${path}" without a project filesystem.`,
+        );
+      }
+      return fs.readFile(path);
+    },
+    resolvePath: resolveProjectPathFromDocument,
+  });
 }
 
 /**

@@ -18,6 +18,10 @@ export interface FrontmatterConfig {
   title?: string;
   bibliography?: string;
   csl?: string;
+  latex?: {
+    bibliography?: string;
+    template?: string;
+  };
   numbering?: NumberingScheme;
   blocks?: Record<string, boolean | BlockConfig>;
   math?: Record<string, string>;
@@ -166,6 +170,16 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
     const validated = validateMath(math);
     if (Object.keys(validated).length > 0) {
       config.math = validated;
+    }
+  }
+
+  const latex = raw["latex"];
+  if (isRecord(latex)) {
+    const latexConfig: NonNullable<FrontmatterConfig["latex"]> = {};
+    if (typeof latex["template"] === "string") latexConfig.template = latex["template"];
+    if (typeof latex["bibliography"] === "string") latexConfig.bibliography = latex["bibliography"];
+    if (Object.keys(latexConfig).length > 0) {
+      config.latex = latexConfig;
     }
   }
 

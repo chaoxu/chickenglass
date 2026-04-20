@@ -7,10 +7,18 @@ export const checkPandocCommand = tauriCommand<string>(TAURI_COMMANDS.checkPando
 
 /** Export a document to PDF or LaTeX via the Rust/Pandoc backend. */
 export const exportDocumentCommand = tauriArgs<string>(TAURI_COMMANDS.exportDocument)(
-  (content: string, format: NativeExportFormat, outputPath: string, sourcePath: string) => ({
+  (
+    content: string,
+    format: NativeExportFormat,
+    outputPath: string,
+    sourcePath: string,
+    options: { readonly bibliography?: string; readonly template?: string } = {},
+  ) => ({
+    bibliography: options.bibliography,
     content,
     format,
     outputPath,
     sourcePath,
+    template: options.template,
   }),
 );

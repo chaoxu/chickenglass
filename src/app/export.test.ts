@@ -4,6 +4,7 @@ import {
   _buildHtmlDocumentForTest,
   _buildHtmlDocumentAsyncForTest,
   _resolveExportThemeTokensForTest,
+  _preprocessLatexExportForTest,
   batchExport,
   sanitizeCssValue,
 } from "./export";
@@ -141,6 +142,46 @@ describe("batchExport", () => {
         value: originalRevokeObjectUrl,
       });
     }
+  });
+});
+
+describe("preprocessLatexExport", () => {
+  it("uses the canonical LaTeX preprocessing pipeline for desktop export", async () => {
+    const fs = new MemoryFileSystem({
+      "chapters/one.md": [
+        "---",
+        "title: Included",
+        "---",
+        "",
+        "::: {.theorem} Included Title",
+        "Body.",
+        ":::",
+      ].join("\n"),
+    });
+    const source = [
+      "---",
+      "math:",
+      "  R: \"\\\\mathbb{R}\"",
+      "---",
+      "",
+      "Intro.",
+      "",
+      "::: {.include}",
+      "chapters/one.md",
+      ":::",
+      "",
+      "$$",
+      "x \\in \\R",
+      "$$ {#eq:x}",
+    ].join("\n");
+
+    const processed = await _preprocessLatexExportForTest(source, "main.md", fs);
+
+    expect(processed).not.toContain("::: {.include}");
+    expect(processed).not.toContain("title: Included");
+    expect(processed).toContain('::: {.theorem title="Included Title"}');
+    expect(processed).toContain("\\newcommand{\\R}{\\mathbb{R}}");
+    expect(processed).toContain("\\begin{equation}\\label{eq:x}");
   });
 });
 
