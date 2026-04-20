@@ -106,6 +106,134 @@ describe("source spans", () => {
     });
   });
 
+  it("maps text after an inline token inside a formatted run", () => {
+    const doc = "A **$k$-hitting set** B";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const index = createSourceSpanIndex(doc);
+      const mathLocation = index.findNearestLocation(doc.indexOf("$k$") + 1);
+      expect(mathLocation).toMatchObject({
+        adapterId: "inline-math",
+        kind: "reveal",
+        offset: 1,
+        source: "$k$",
+      });
+
+      const textLocation = index.findNearestLocation(doc.indexOf("-hitting") + 3);
+      expect(textLocation).toMatchObject({
+        kind: "text",
+        offset: 3,
+      });
+      expect(textLocation?.kind === "text" ? textLocation.node.getTextContent() : null).toBe("-hitting set");
+    });
+  });
+
+  it("reads formatted text selections after preceding plain title text", () => {
+    const marker = "NestedTitleEditNeedle";
+    const doc = `Hover Preview Stress Test **${marker}**`;
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.update(() => {
+      let text: TextNode | null = null;
+      const visit = (node: LexicalNode) => {
+        if ($isTextNode(node) && node.getTextContent() === marker) {
+          text = node;
+          return;
+        }
+        if ($isElementNode(node)) {
+          for (const child of node.getChildren()) {
+            visit(child);
+            if (text) return;
+          }
+        }
+      };
+      visit($getRoot());
+      if (!$isTextNode(text)) throw new Error("expected formatted marker text node");
+      text.select(0, marker.length);
+    }, { discrete: true });
+
+    expect(readSourceSelectionFromLexicalSelection(editor, { markdown: doc })).toEqual({
+      anchor: doc.indexOf(marker),
+      focus: doc.indexOf(marker) + marker.length,
+      from: doc.indexOf(marker),
+      to: doc.indexOf(marker) + marker.length,
+    });
+  });
+
+  it("maps duplicate link labels through the selected link token", () => {
+    const doc = "[same](https://one.example) and [same](https://two.example)";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const index = createSourceSpanIndex(doc);
+      const location = index.findNearestLocation(doc.lastIndexOf("same") + 2);
+      expect(location).toMatchObject({
+        kind: "text",
+        offset: 2,
+      });
+      expect(location?.kind === "text" ? location.node.getTextContent() : null).toBe("same");
+      expect(location?.kind === "text" ? location.node.getParent()?.getTextContent() : null).toBe("same");
+      expect(location?.span.from).toBe(doc.lastIndexOf("same"));
+    });
+  });
+
+  it("maps inline math inside table cells from the parsed cell span", () => {
+    const doc = "| H | I |\n|---|---|\n| $x$ | $x$ |";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const index = createSourceSpanIndex(doc);
+      const secondMath = doc.lastIndexOf("$x$");
+      const location = index.findNearestLocation(secondMath + 1);
+      expect(location).toMatchObject({
+        adapterId: "inline-math",
+        kind: "reveal",
+        offset: 1,
+        source: "$x$",
+      });
+      expect(location?.span.from).toBe(secondMath);
+    });
+  });
+
+  it("maps heading attributes through their parsed source span", () => {
+    const doc = "# Intro {#sec:intro}\n\nBody\n";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const index = createSourceSpanIndex(doc);
+      const location = index.findNearestLocation(doc.indexOf("sec:intro") + 4);
+      expect(location).toMatchObject({
+        adapterId: "heading-attribute",
+        kind: "reveal",
+        offset: " {#sec:".length,
+        source: " {#sec:intro}",
+      });
+    });
+  });
+
+  it("uses importer-owned footnote definition ranges including the terminating blank", () => {
+    const doc = "Alpha\n\n[^n]: Footnote body.\n\nOmega";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const index = createSourceSpanIndex(doc);
+      const location = index.findNearestLocation(doc.indexOf("Footnote body") + 3);
+      expect(location).toMatchObject({
+        adapterId: "raw-block",
+        kind: "reveal",
+        offset: "[^n]: Foo".length,
+        source: "[^n]: Footnote body.\n",
+      });
+    });
+  });
+
   it("opens reveal on the second identical inline token from its source span", () => {
     const doc = "First $x$ and second $x$.";
     const editor = createHeadlessCoflatEditor();

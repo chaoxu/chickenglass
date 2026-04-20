@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { NodeKey } from "lexical";
 
+import { readVisibleTextDomSelection } from "../dom-selection";
 import { EmbeddedFieldEditor } from "../embedded-field-editor";
 import { computeEmbedSrc, embedSandboxPermissions } from "../embed";
 import { createFencedDivViewModel } from "../markdown/fenced-div-view-model";
@@ -239,6 +240,7 @@ export function FencedDivBlockRenderer({
   const surfaceEditable = useLexicalSurfaceEditable();
   const context = useLexicalRenderContext();
   const parsed = useMemo(() => parseStructuredFencedDivRaw(raw), [raw]);
+  const titleShellRef = useRef<HTMLDivElement | null>(null);
   const updateRaw = useRawBlockUpdater(nodeKey);
   const openerEdit = useStructureEditToggle(nodeKey, "fenced-div", "block-opener");
   const pendingBodyFocusId = usePendingEmbeddedSurfaceFocusId(nodeKey, "block-body");
@@ -255,6 +257,13 @@ export function FencedDivBlockRenderer({
     nodeKey,
     titleOffset ?? 0,
   );
+  const publishTitleSelection = useCallback((nextTitle: string) => {
+    const root = titleShellRef.current?.querySelector<HTMLElement>("[contenteditable='true']") ?? null;
+    const visibleSelection = readVisibleTextDomSelection(root);
+    if (visibleSelection) {
+      onTitleSelectionChange(visibleSelection, nextTitle);
+    }
+  }, [onTitleSelectionChange]);
   const referenceLabel = parsed.id ? context.renderIndex.references.get(parsed.id)?.label : undefined;
   const viewModel = useMemo(
     () => createFencedDivViewModel(parsed, {
@@ -312,7 +321,7 @@ export function FencedDivBlockRenderer({
           {label}
         </span>
         {parsed.titleMarkdown ? (
-          <div className="cf-lexical-block-title">
+          <div className="cf-lexical-block-title" ref={titleShellRef}>
             <EmbeddedFieldEditor
               activation="focus"
               className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--title"
@@ -320,9 +329,16 @@ export function FencedDivBlockRenderer({
               family="title"
               namespace={`coflat-block-title-${nodeKey}`}
               onSelectionChange={titleOffset === null ? undefined : onTitleSelectionChange}
-              onTextChange={(nextTitle) => updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
-                titleMarkdown: nextTitle,
-              }))}
+              onTextChange={(nextTitle) => {
+                publishTitleSelection(nextTitle);
+                updateRaw((currentRaw) => updateFencedDivField(currentRaw, {
+                  titleMarkdown: nextTitle,
+                }));
+                queueMicrotask(() => publishTitleSelection(nextTitle));
+                requestAnimationFrame(() => publishTitleSelection(nextTitle));
+                setTimeout(() => publishTitleSelection(nextTitle), 0);
+                setTimeout(() => publishTitleSelection(nextTitle), 100);
+              }}
               pendingFocusId={pendingTitleFocusId}
             />
           </div>

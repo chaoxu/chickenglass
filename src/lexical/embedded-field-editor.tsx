@@ -26,6 +26,7 @@ import {
   blockKeyboardEntryProps,
   type BlockKeyboardEntryPriority,
 } from "./block-keyboard-entry";
+import { readVisibleTextDomSelection } from "./dom-selection";
 import { useEmbeddedFieldDraftController } from "./embedded-field-draft-controller";
 import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
 import { useLexicalSurfaceEditable } from "./editability-context";
@@ -169,6 +170,21 @@ export function EmbeddedFieldEditor({
     setActive(true);
   }, [doc, draft]);
 
+  const readCurrentNestedMarkdown = useCallback(() =>
+    nestedEditorHandleRef.current?.peekDoc() ?? draft.pendingDraftRef.current ?? draft.draft,
+  [draft]);
+
+  const publishVisibleSelection = useCallback(() => {
+    if (spec.fieldKind !== "inline") {
+      return;
+    }
+    const visibleSelection = readVisibleTextDomSelection(nestedRoot);
+    if (!visibleSelection) {
+      return;
+    }
+    onSelectionChange?.(visibleSelection, readCurrentNestedMarkdown());
+  }, [nestedRoot, onSelectionChange, readCurrentNestedMarkdown]);
+
   const handleTextChange = useCallback((nextDoc: string) => {
     preserveFocusAfterPublishRef.current = true;
     clearPreserveFocusTimer();
@@ -177,11 +193,53 @@ export function EmbeddedFieldEditor({
       preserveFocusTimerRef.current = null;
     }, 250);
     draft.updateDraft(nextDoc);
-  }, [clearPreserveFocusTimer, draft]);
+    const publishNextVisibleSelection = () => {
+      if (spec.fieldKind !== "inline") {
+        return;
+      }
+      const visibleSelection = readVisibleTextDomSelection(nestedRoot);
+      if (visibleSelection) {
+        onSelectionChange?.(visibleSelection, nextDoc);
+      }
+    };
+    queueMicrotask(publishNextVisibleSelection);
+    requestAnimationFrame(publishNextVisibleSelection);
+    if (spec.fieldKind === "inline") {
+      setTimeout(publishNextVisibleSelection, 0);
+      setTimeout(publishNextVisibleSelection, 100);
+    }
+  }, [clearPreserveFocusTimer, draft, nestedRoot, onSelectionChange, spec.fieldKind]);
 
   const handleSelectionChange = useCallback((selection: MarkdownEditorSelection) => {
-    onSelectionChange?.(selection, draft.pendingDraftRef.current ?? draft.draft);
-  }, [draft, onSelectionChange]);
+    const visibleSelection = spec.fieldKind === "inline"
+      ? readVisibleTextDomSelection(nestedRoot)
+      : null;
+    onSelectionChange?.(
+      visibleSelection ?? selection,
+      readCurrentNestedMarkdown(),
+    );
+  }, [nestedRoot, onSelectionChange, readCurrentNestedMarkdown, spec.fieldKind]);
+
+  useEffect(() => {
+    if (!onSelectionChange || !nestedRoot) {
+      return;
+    }
+    requestAnimationFrame(publishVisibleSelection);
+    const handleSelectionChangeEvent = () => {
+      queueMicrotask(publishVisibleSelection);
+    };
+    nestedRoot.ownerDocument.addEventListener("selectionchange", handleSelectionChangeEvent);
+    return () => {
+      nestedRoot.ownerDocument.removeEventListener("selectionchange", handleSelectionChangeEvent);
+    };
+  }, [nestedRoot, onSelectionChange, publishVisibleSelection]);
+
+  useEffect(() => {
+    if (!onSelectionChange || spec.fieldKind !== "inline") {
+      return;
+    }
+    requestAnimationFrame(publishVisibleSelection);
+  }, [doc, onSelectionChange, publishVisibleSelection, spec.fieldKind]);
 
   const handleNestedEditorReady = useCallback((handle: MarkdownEditorHandle) => {
     nestedEditorHandleRef.current = handle;

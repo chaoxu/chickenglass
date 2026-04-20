@@ -19,6 +19,7 @@ import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { getInteractionLog, clearInteractionLog } from "../../lexical/interaction-trace";
 import { useDevSettings } from "../../state/dev-settings";
 import { applyMarkdownFormatAction } from "../editor-format-actions";
+import { readEmbeddedInlineDomSelection } from "../../lexical/markdown-editor-session";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -268,7 +269,10 @@ export function useAppDebug({
         currentEditorHandle().focus();
       },
       getDoc: () => current().getCurrentDocText(),
-      getSelection: () => currentEditorHandle().getSelection(),
+      getSelection: () => {
+        const handle = currentEditorHandle();
+        return readEmbeddedInlineDomSelection(handle.peekDoc()) ?? handle.getSelection();
+      },
       peekDoc: () => currentEditorHandle().peekDoc(),
       peekSelection: () => currentEditorHandle().peekSelection(),
       insertText: (text) => {

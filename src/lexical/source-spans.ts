@@ -9,7 +9,13 @@ import {
 } from "lexical";
 
 import { getInlineTextFormatSpecs } from "../lexical-next";
-import { findMatchingFormattedTextSource, findMatchingMarkdownLinkSource, serializeMarkdownLinkSource } from "./markdown/inline-source";
+import type { InlineTextFormatFamily } from "../lexical-next";
+import {
+  parseMarkdownSourceTokens,
+  type ParsedSourceRevealToken,
+  type ParsedSourceTextToken,
+  type ParsedSourceToken,
+} from "./markdown/source-tokenizer";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isHeadingAttributeNode } from "./nodes/heading-attribute-node";
 import { $isInlineImageNode } from "./nodes/inline-image-node";
@@ -66,18 +72,6 @@ export type SourceLocation =
       readonly span: SourceRevealSpan;
     };
 
-export interface FormattedTextSource {
-  readonly closeLength: number;
-  readonly openLength: number;
-  readonly source: string;
-}
-
-interface CollectContext {
-  readonly baseOffset: number;
-  readonly markdown: string;
-  searchFrom: number;
-}
-
 interface CollectResult {
   readonly range: SourceRange | null;
 }
@@ -92,37 +86,6 @@ function unionRange(a: SourceRange | null, b: SourceRange | null): SourceRange |
   return {
     from: Math.min(a.from, b.from),
     to: Math.max(a.to, b.to),
-  };
-}
-
-function findLiteralSource(
-  context: CollectContext,
-  source: string,
-): SourceRange | null {
-  if (source.length === 0) {
-    return null;
-  }
-  const from = context.markdown.indexOf(source, context.searchFrom);
-  if (from < 0) {
-    return null;
-  }
-  return {
-    from: context.baseOffset + from,
-    to: context.baseOffset + from + source.length,
-  };
-}
-
-export function getFormattedTextSourceForNode(node: TextNode): FormattedTextSource | null {
-  const specs = getInlineTextFormatSpecs().filter((spec) => node.hasFormat(spec.lexicalFormat));
-  if (specs.length === 0) {
-    return null;
-  }
-  const open = specs.map((spec) => spec.markdownOpen).join("");
-  const close = [...specs].reverse().map((spec) => spec.markdownClose).join("");
-  return {
-    closeLength: close.length,
-    openLength: open.length,
-    source: `${open}${node.getTextContent()}${close}`,
   };
 }
 
@@ -186,106 +149,212 @@ function addTextSpan(
   return span;
 }
 
-function collectTextNodeSpans(
-  node: TextNode,
-  context: CollectContext,
-  spans: SourceSpan[],
-): CollectResult {
-  const formatted = getFormattedTextSourceForNode(node);
-  if (formatted) {
-    const match = findMatchingFormattedTextSource(context.markdown, node, context.searchFrom);
-    const source = match?.source ?? formatted.source;
-    const range = match
-      ? {
-          from: context.baseOffset + match.from,
-          to: context.baseOffset + match.to,
-        }
-      : findLiteralSource(context, source);
-    if (!range) {
-      return { range: null };
+function textFormatsForNode(node: TextNode): readonly InlineTextFormatFamily[] {
+  return getInlineTextFormatSpecs()
+    .filter((spec) => node.hasFormat(spec.lexicalFormat))
+    .map((spec) => spec.family);
+}
+
+function sameFormats(
+  left: readonly InlineTextFormatFamily[],
+  right: readonly InlineTextFormatFamily[],
+): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+class ParsedSourceCursor {
+  private index = 0;
+  private readonly tokens: ParsedSourceToken[];
+
+  constructor(tokens: readonly ParsedSourceToken[]) {
+    this.tokens = [...tokens];
+  }
+
+  consumeText(
+    text: string,
+    formats: readonly InlineTextFormatFamily[],
+  ): ParsedSourceTextToken | null {
+    if (text.length === 0) {
+      return null;
     }
 
-    const openLength = match?.openLength ?? formatted.openLength;
-    const closeLength = match?.closeLength ?? formatted.closeLength;
-    addRevealSpan(spans, node, range, "text-format", source);
-    addTextSpan(spans, node, {
-      from: range.from + openLength,
-      to: range.to - closeLength,
-    }, node.getTextContent());
-    context.searchFrom = range.to - context.baseOffset;
-    return { range };
+    const token = this.tokens[this.index];
+    if (
+      !token
+      || token.kind !== "text"
+      || !sameFormats(token.formats, formats)
+      || !token.text.startsWith(text)
+    ) {
+      return null;
+    }
+
+    if (token.text === text) {
+      this.index += 1;
+      return token;
+    }
+
+    const consumedSourceLength = text.length;
+    const consumed: ParsedSourceTextToken = {
+      formats: token.formats,
+      from: token.from,
+      kind: "text",
+      source: token.source.slice(0, consumedSourceLength),
+      text,
+      to: token.from + consumedSourceLength,
+    };
+    this.tokens[this.index] = {
+      formats: token.formats,
+      from: consumed.to,
+      kind: "text",
+      source: token.source.slice(consumedSourceLength),
+      text: token.text.slice(text.length),
+      to: token.to,
+    };
+    return consumed;
   }
 
-  const source = node.getTextContent();
-  const range = findLiteralSource(context, source);
-  if (!range) {
+  consumeReveal(
+    adapterId: SourceRevealAdapterId,
+    source?: string,
+  ): ParsedSourceRevealToken | null {
+    const token = this.tokens[this.index];
+    if (
+      !token
+      || token.kind !== "reveal"
+      || token.adapterId !== adapterId
+      || (source !== undefined && token.source !== source)
+    ) {
+      return null;
+    }
+    this.index += 1;
+    return token;
+  }
+
+  consumeRevealSource(source: string): ParsedSourceRevealToken | ParsedSourceTextToken | null {
+    const token = this.tokens[this.index];
+    if (!token) {
+      return null;
+    }
+    if (token.kind === "reveal" && token.source === source) {
+      this.index += 1;
+      return token;
+    }
+    if (token.kind === "text" && token.formatSource?.source === source) {
+      this.index += 1;
+      return token;
+    }
+    return null;
+  }
+}
+
+function collectTextNodeSpans(
+  node: TextNode,
+  cursor: ParsedSourceCursor,
+  spans: SourceSpan[],
+): CollectResult {
+  if (isRevealSourceStyle(node.getStyle())) {
+    const source = node.getTextContent();
+    const revealToken = cursor.consumeRevealSource(source);
+    if (revealToken) {
+      const range = revealToken.kind === "text" && revealToken.formatSource
+        ? {
+            from: revealToken.formatSource.from,
+            to: revealToken.formatSource.to,
+          }
+        : {
+            from: revealToken.from,
+            to: revealToken.to,
+          };
+      addTextSpan(spans, node, range, source);
+      return { range };
+    }
+  }
+
+  const token = cursor.consumeText(node.getTextContent(), textFormatsForNode(node));
+  if (!token) {
     return { range: null };
   }
-  addTextSpan(spans, node, range, source);
-  context.searchFrom = range.to - context.baseOffset;
-  return { range };
+
+  const textRange = {
+    from: token.from,
+    to: token.to,
+  };
+  if (token.formatSource) {
+    addRevealSpan(
+      spans,
+      node,
+      {
+        from: token.formatSource.from,
+        to: token.formatSource.to,
+      },
+      "text-format",
+      token.formatSource.source,
+    );
+  }
+  addTextSpan(spans, node, textRange, node.getTextContent());
+  return {
+    range: token.formatSource
+      ? {
+          from: token.formatSource.from,
+          to: token.formatSource.to,
+        }
+      : textRange,
+  };
 }
 
 function collectLinkSpans(
   node: LinkNode,
-  context: CollectContext,
+  cursor: ParsedSourceCursor,
   spans: SourceSpan[],
   nodeRanges: Map<string, SourceRange>,
 ): CollectResult {
-  const match = findMatchingMarkdownLinkSource(context.markdown, node, context.searchFrom);
-  const source = match?.raw ?? serializeMarkdownLinkSource(node);
-  const range = match
-    ? {
-        from: context.baseOffset + match.from,
-        to: context.baseOffset + match.to,
-      }
-    : findLiteralSource(context, source);
-  if (!range) {
+  const parsedLink = cursor.consumeReveal("link");
+  if (!parsedLink) {
     return { range: null };
   }
 
-  addRevealSpan(spans, node, range, "link", source);
+  const range = {
+    from: parsedLink.from,
+    to: parsedLink.to,
+  };
+  addRevealSpan(spans, node, range, "link", parsedLink.source);
   nodeRanges.set(node.getKey(), range);
 
-  if (match) {
-    const labelContext: CollectContext = {
-      baseOffset: range.from + 1,
-      markdown: match.labelMarkdown,
-      searchFrom: 0,
-    };
-    let childRange: SourceRange | null = null;
-    for (const child of node.getChildren()) {
-      const result = collectNodeSpans(child, labelContext, spans, nodeRanges);
-      childRange = unionRange(childRange, result.range);
-    }
-    nodeRanges.set(node.getKey(), unionRange(range, childRange) ?? range);
+  const childCursor = new ParsedSourceCursor(parsedLink.children ?? []);
+  let childRange: SourceRange | null = null;
+  for (const child of node.getChildren()) {
+    const result = collectNodeSpans(child, childCursor, spans, nodeRanges);
+    childRange = unionRange(childRange, result.range);
   }
+  nodeRanges.set(node.getKey(), unionRange(range, childRange) ?? range);
 
-  context.searchFrom = range.to - context.baseOffset;
   return { range };
 }
 
 function collectRevealNodeSpans(
   node: LexicalNode,
-  context: CollectContext,
+  cursor: ParsedSourceCursor,
   spans: SourceSpan[],
 ): CollectResult {
   const reveal = revealSourceForNode(node);
   if (!reveal) {
     return { range: null };
   }
-  const range = findLiteralSource(context, reveal.source);
-  if (!range) {
+  const token = cursor.consumeReveal(reveal.adapterId, reveal.source);
+  if (!token) {
     return { range: null };
   }
+  const range = {
+    from: token.from,
+    to: token.to,
+  };
   addRevealSpan(spans, node, range, reveal.adapterId, reveal.source);
-  context.searchFrom = range.to - context.baseOffset;
   return { range };
 }
 
 function collectElementSpans(
   node: LexicalNode,
-  context: CollectContext,
+  cursor: ParsedSourceCursor,
   spans: SourceSpan[],
   nodeRanges: Map<string, SourceRange>,
 ): CollectResult {
@@ -295,7 +364,7 @@ function collectElementSpans(
 
   let range: SourceRange | null = null;
   for (const child of node.getChildren()) {
-    const childResult = collectNodeSpans(child, context, spans, nodeRanges);
+    const childResult = collectNodeSpans(child, cursor, spans, nodeRanges);
     range = unionRange(range, childResult.range);
   }
   if (range) {
@@ -306,28 +375,28 @@ function collectElementSpans(
 
 function collectNodeSpans(
   node: LexicalNode,
-  context: CollectContext,
+  cursor: ParsedSourceCursor,
   spans: SourceSpan[],
   nodeRanges: Map<string, SourceRange>,
 ): CollectResult {
   if ($isLinkNode(node)) {
-    return collectLinkSpans(node, context, spans, nodeRanges);
+    return collectLinkSpans(node, cursor, spans, nodeRanges);
   }
   if ($isTextNode(node)) {
-    const result = collectTextNodeSpans(node, context, spans);
+    const result = collectTextNodeSpans(node, cursor, spans);
     if (result.range) {
       nodeRanges.set(node.getKey(), result.range);
     }
     return result;
   }
 
-  const revealResult = collectRevealNodeSpans(node, context, spans);
+  const revealResult = collectRevealNodeSpans(node, cursor, spans);
   if (revealResult.range) {
     nodeRanges.set(node.getKey(), revealResult.range);
     return revealResult;
   }
 
-  return collectElementSpans(node, context, spans, nodeRanges);
+  return collectElementSpans(node, cursor, spans, nodeRanges);
 }
 
 function sourceLocationFromSpan(span: SourceSpan, offset: number): SourceLocation {
@@ -471,10 +540,7 @@ export class SourceSpanIndex {
 export function createSourceSpanIndex(markdown: string): SourceSpanIndex {
   const spans: SourceSpan[] = [];
   const nodeRanges = new Map<string, SourceRange>();
-  collectNodeSpans($getRoot(), {
-    baseOffset: 0,
-    markdown,
-    searchFrom: 0,
-  }, spans, nodeRanges);
+  const cursor = new ParsedSourceCursor(parseMarkdownSourceTokens(markdown));
+  collectNodeSpans($getRoot(), cursor, spans, nodeRanges);
   return new SourceSpanIndex(spans, nodeRanges);
 }
