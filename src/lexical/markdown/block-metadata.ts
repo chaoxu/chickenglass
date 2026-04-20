@@ -1,17 +1,17 @@
-import { BLOCK_MANIFEST_ENTRIES } from "../../constants/block-manifest";
+import {
+  BLOCK_MANIFEST_ENTRIES,
+  getBlockManifestEntry,
+  getManifestBlockTitle,
+  isKnownManifestBlockType,
+} from "../../constants/block-manifest";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 
 const BLOCK_LABELS = new Map<string, string>([
-  ["include", "Include"],
   ...BLOCK_MANIFEST_ENTRIES.map((entry) => [
     entry.name,
-    entry.title ?? `${entry.name.slice(0, 1).toUpperCase()}${entry.name.slice(1)}`,
+    getManifestBlockTitle(entry),
   ] as const),
 ]);
-
-const BLOCK_MANIFEST_BY_NAME = new Map(
-  BLOCK_MANIFEST_ENTRIES.map((entry) => [entry.name, entry] as const),
-);
 
 export function humanizeBlockType(blockType: string | undefined): string {
   if (!blockType) {
@@ -21,7 +21,7 @@ export function humanizeBlockType(blockType: string | undefined): string {
 }
 
 export function isKnownBlockType(blockType: string): boolean {
-  return blockType === "include" || BLOCK_MANIFEST_BY_NAME.has(blockType);
+  return isKnownManifestBlockType(blockType);
 }
 
 export function normalizeBlockType(blockType: string | undefined, title: string | undefined): string {
@@ -47,7 +47,7 @@ export function resolveBlockNumbering(
   blockType: string,
   config?: FrontmatterConfig,
 ): { readonly counterGroup?: string; readonly numbered: boolean } {
-  const manifestEntry = BLOCK_MANIFEST_BY_NAME.get(blockType);
+  const manifestEntry = getBlockManifestEntry(blockType);
   const override = config?.blocks?.[blockType];
   const disabled = override === false;
   const overrideConfig = override && typeof override === "object" ? override : null;

@@ -88,7 +88,7 @@ def latex_rewrite_block_classes(
     return tuple(
         entry.name
         for entry in entries
-        if entry.name not in excluded and entry.special_behavior not in {"embed", "blockquote"}
+        if entry.name not in excluded and entry.special_behavior not in {"embed", "blockquote", "include"}
     )
 
 

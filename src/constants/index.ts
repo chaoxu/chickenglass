@@ -7,12 +7,23 @@
 
 export {
   ALGORITHM_COUNTER,
+  BLOCK_MANIFEST_BY_NAME,
   BLOCK_MANIFEST,
   DEFINITION_COUNTER,
+  CROSS_REFERENCE_PREFIXES,
+  LATEX_ENVIRONMENT_BY_BLOCK,
   THEOREM_COUNTER,
+  getBlockManifestEntry,
+  getBlockPresentationKind,
+  getManifestBlockTitle,
+  isGenericFencedDivInsertBlock,
+  isKnownManifestBlockType,
+  isSearchIndexedBlock,
+  type BlockPresentationKind,
   type BlockManifestEntry,
   type BlockName,
   type BodyStyle,
+  type LatexExportKind,
   type SpecialBehavior,
 } from "./block-manifest";
 

@@ -4,9 +4,7 @@
 --   * YAML "math:" frontmatter -> \newcommand in header-includes.
 --   * [@thm:foo], [@sec:foo], etc. -> \cref; bare-id refs to known labels
 --     likewise; anything else -> \cite.
---   * ::: {.theorem|.lemma|.corollary|.proposition|.conjecture|.definition
---     |.problem|.example|.remark|.proof|.algorithm|.figure|.table|.blockquote
---     |.embed|.iframe|.youtube|.gist}
+--   * Manifest-backed fenced-div blocks
 --     divs -> matching LaTeX environments.
 --   * Embed-family divs -> omitted-content notice with URL footnote.
 --   * Multi-image figure divs -> subfigure wrappers.
@@ -18,10 +16,15 @@
 
 local stringify = pandoc.utils.stringify
 
-local xref_prefixes = {
-  sec = true, thm = true, lem = true, cor = true, prop = true,
-  def = true, eq  = true, fig = true, tbl = true, alg = true,
-}
+local function script_dir()
+  local source = debug.getinfo(1, "S").source
+  local path = source and source:match("^@(.+)$") or nil
+  if not path then return "./" end
+  return path:match("^(.*[/\\])") or "./"
+end
+
+local syntax = dofile(script_dir() .. "syntax-manifest.lua")
+local xref_prefixes = syntax.xref_prefixes
 
 local known_labels = {}
 
@@ -31,38 +34,12 @@ local function is_xref_id(id)
   return known_labels[id] == true
 end
 
-local theorem_envs = {
-  theorem = "theorem",
-  lemma = "lemma",
-  corollary = "corollary",
-  proposition = "proposition",
-  conjecture = "conjecture",
-  definition = "definition",
-  problem = "problem",
-  example = "example",
-  remark = "remark",
-  proof = "proof",
-}
-
-local embed_envs = {
-  embed = true,
-  iframe = true,
-  youtube = true,
-  gist = true,
-}
-
-local function first_theorem_class(classes)
+local function first_latex_class(classes)
   for _, c in ipairs(classes) do
-    if theorem_envs[c] then return c end
+    local kind = syntax.latex_kind_by_block[c]
+    if kind and kind ~= "none" then return c, kind end
   end
-  return nil
-end
-
-local function first_embed_class(classes)
-  for _, c in ipairs(classes) do
-    if embed_envs[c] then return c end
-  end
-  return nil
+  return nil, nil
 end
 
 local function label_for(id)
@@ -268,18 +245,15 @@ local function handle_embed(el, cls)
 end
 
 local function transform_div(el)
-  local cls = first_theorem_class(el.classes)
-  if cls then
-    return make_env(theorem_envs[cls], pop_title(el), el.identifier, el.content)
+  local cls, kind = first_latex_class(el.classes)
+  if kind == "environment" then
+    return make_env(syntax.latex_environment_by_block[cls], pop_title(el), el.identifier, el.content)
   end
-  local embed_cls = first_embed_class(el.classes)
-  if embed_cls then return handle_embed(el, embed_cls) end
-  for _, c in ipairs(el.classes) do
-    if c == "figure"     then return handle_figure(el) end
-    if c == "table"      then return handle_table_div(el) end
-    if c == "algorithm"  then return handle_algorithm(el) end
-    if c == "blockquote" then return handle_blockquote(el) end
-  end
+  if kind == "embed" then return handle_embed(el, cls) end
+  if kind == "figure" then return handle_figure(el) end
+  if kind == "table" then return handle_table_div(el) end
+  if kind == "algorithm" then return handle_algorithm(el) end
+  if kind == "blockquote" then return handle_blockquote(el) end
   return nil
 end
 

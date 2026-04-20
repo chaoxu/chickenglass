@@ -18,19 +18,21 @@ import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useSearchIndexer } from "../hooks/use-search-indexer";
-import { BLOCK_MANIFEST_ENTRIES } from "../../constants/block-manifest";
+import {
+  BLOCK_MANIFEST_ENTRIES,
+  isSearchIndexedBlock,
+} from "../../constants/block-manifest";
 
 /**
  * Block types for the search filter dropdown.
  *
- * Standard block types are derived from BLOCK_MANIFEST (excluding embed and
- * blockquote which aren't indexed as semantic blocks). "equation" and "heading"
- * are search-only index types not in the manifest.
+ * Standard block types are derived from BLOCK_MANIFEST. "equation" and
+ * "heading" are search-only index types not in the manifest.
  */
 const BLOCK_TYPES: readonly string[] = [
   ...BLOCK_MANIFEST_ENTRIES
-    .filter((e) => e.specialBehavior !== "embed" && e.specialBehavior !== "blockquote")
-    .map((e) => e.name),
+    .filter(isSearchIndexedBlock)
+    .map((entry) => entry.name),
   "equation",
   "heading",
 ];

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { BLOCK_MANIFEST } from "../constants/block-manifest";
+import {
+  BLOCK_MANIFEST,
+  isGenericFencedDivInsertBlock,
+} from "../constants/block-manifest";
 import {
   createFencedDivInsertSpec,
   createTableInsertSpec,
@@ -33,8 +36,11 @@ describe("block-insert-catalog", () => {
   });
 
   it("derives manifest-backed fenced-div insertion keywords from the block manifest", () => {
-    const manifestBlockNames = BLOCK_MANIFEST.map((entry) => entry.name);
+    const manifestBlockNames = BLOCK_MANIFEST
+      .filter(isGenericFencedDivInsertBlock)
+      .map((entry) => entry.name);
     expect(FENCED_DIV_INSERT_KEYWORDS).toEqual(expect.arrayContaining(manifestBlockNames));
+    expect(FENCED_DIV_INSERT_KEYWORDS).not.toContain("include");
 
     const fencedDivSpec = SLASH_INSERT_SPECS.find((spec) => spec.id === "fenced-div");
     expect(fencedDivSpec?.keywords).toBe(FENCED_DIV_INSERT_KEYWORDS);

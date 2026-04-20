@@ -28,6 +28,7 @@ class LatexToCoflatManifestTest(unittest.TestCase):
         self.assertIn("example", self.module.LATEX_REWRITE_BLOCK_CLASSES)
         self.assertIn("remark", self.module.LATEX_REWRITE_BLOCK_CLASSES)
         self.assertNotIn("youtube", self.module.LATEX_REWRITE_BLOCK_CLASSES)
+        self.assertNotIn("include", self.module.LATEX_REWRITE_BLOCK_CLASSES)
 
     def test_rewrites_manifest_backed_block_classes(self):
         markdown = "\n\n".join(

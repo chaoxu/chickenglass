@@ -1,5 +1,7 @@
 import {
   BLOCK_MANIFEST,
+  getBlockManifestEntry,
+  isGenericFencedDivInsertBlock,
   type BlockName,
 } from "../constants/block-manifest";
 import type { InsertFocusTarget } from "./block-insert-focus";
@@ -35,7 +37,9 @@ export interface BlockInsertSpec extends InsertCatalogSpec {
 }
 
 const DEFAULT_FENCED_DIV_CLASS: BlockName = "theorem";
-const MANIFEST_BLOCK_KEYWORDS = BLOCK_MANIFEST.map((entry) => entry.name);
+const MANIFEST_BLOCK_KEYWORDS = BLOCK_MANIFEST
+  .filter(isGenericFencedDivInsertBlock)
+  .map((entry) => entry.name);
 export const FENCED_DIV_INSERT_KEYWORDS = [
   ...MANIFEST_BLOCK_KEYWORDS,
   // UI category aliases: the inserted default remains a theorem block, but
@@ -123,7 +127,8 @@ export const DISPLAY_MATH_BRACKET_INSERT_SPEC: BlockInsertSpec = {
 
 export function createFencedDivInsertSpec(opener: string): BlockInsertSpec {
   const openingFence = opener.match(/^\s*(:{3,})/)?.[1] ?? ":::";
-  const focusTarget: InsertFocusTarget = /\{[^}]*\.include\b/.test(opener)
+  const blockClass = opener.match(/\{[^}]*\.([A-Za-z][\w-]*)/)?.[1];
+  const focusTarget: InsertFocusTarget = getBlockManifestEntry(blockClass)?.specialBehavior === "include"
     ? "include-path"
     : "block-body";
   return {
