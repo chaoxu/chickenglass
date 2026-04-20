@@ -45,6 +45,10 @@ import {
   fencedDivTitleMarkdownOffset,
   footnoteDefinitionBodyOffset,
 } from "./structure-source-offsets";
+import {
+  ACTIVATE_STRUCTURE_EDIT_COMMAND,
+  type ActivateStructureEditRequest,
+} from "./structure-edit-plugin";
 
 const SOURCE_SELECTION_MARKER = "\uE000coflat-source-selection\uE001";
 const SOURCE_NAVIGATION_MARKER = "\uE000coflat-source-navigation\uE001";
@@ -815,7 +819,7 @@ function clampedFieldOffset(offset: number, fieldStart: number, fieldLength: num
 function queueEmbeddedRawBlockFocus(
   editor: LexicalEditor,
   location: RawBlockSourceLocation,
-): boolean {
+): ActivateStructureEditRequest | boolean {
   if (!$isRawBlockNode(location.node)) {
     return false;
   }
@@ -824,6 +828,7 @@ function queueEmbeddedRawBlockFocus(
   const offset = Math.max(0, Math.min(location.offset, raw.length));
   let target: PendingEmbeddedSurfaceFocusTarget | null = null;
   let fieldOffset = 0;
+  let activateStructureEdit: ActivateStructureEditRequest | null = null;
 
   const footnote = parseFootnoteDefinition(raw);
   if (footnote) {
@@ -853,6 +858,14 @@ function queueEmbeddedRawBlockFocus(
         fieldOffset = clampedFieldOffset(offset, bodyStart, parsed.bodyMarkdown.length);
       }
     }
+  } else if (/^\s*(?:\$\$|\\\[)/.test(raw)) {
+    target = "structure-source";
+    fieldOffset = offset;
+    activateStructureEdit = {
+      blockKey: location.node.getKey(),
+      surface: "display-math-source",
+      variant: "display-math",
+    };
   }
 
   if (target === null) {
@@ -863,7 +876,7 @@ function queueEmbeddedRawBlockFocus(
     getPendingEmbeddedSurfaceFocusId(editor.getKey(), location.node.getKey(), target),
     { offset: fieldOffset },
   );
-  return true;
+  return activateStructureEdit ?? true;
 }
 
 export function selectSourceOffsetsInRichLexicalRoot(
@@ -880,6 +893,7 @@ export function selectSourceOffsetsInRichLexicalRoot(
 
   let didSelect = false;
   let pendingRevealRequest: CursorRevealOpenRequest | null = null;
+  let pendingStructureEditRequest: ActivateStructureEditRequest | null = null;
   editor.update(() => {
     const collapsed = anchor === focus;
     const directAnchorLocation = findNearestLiveSourceLocation(markdown, anchor);
@@ -897,20 +911,41 @@ export function selectSourceOffsetsInRichLexicalRoot(
     const queueEmbeddedFocus = (location: LiveSourceLocation | null): boolean => {
       if (
         !isRawBlockSourceLocation(location)
-        || !queueEmbeddedRawBlockFocus(editor, location)
       ) {
         return false;
+      }
+      const result = queueEmbeddedRawBlockFocus(editor, location);
+      if (!result) {
+        return false;
+      }
+      if (typeof result === "object") {
+        pendingStructureEditRequest = result;
       }
       didSelect = true;
       return true;
     };
+    const queueRevealOrEmbeddedFocus = (location: RevealSourceLocation): boolean => {
+      if (location.adapterId !== "raw-block") {
+        return queueReveal(createRevealRequestFromSourceLocation(location, options));
+      }
+      if (options.revealRawBlocks === false) {
+        return (
+          queueEmbeddedFocus(location)
+          || queueReveal(createRevealRequestFromSourceLocation(location, {
+            ...options,
+            revealRawBlocks: true,
+          }))
+        );
+      }
+      return (
+        queueReveal(createRevealRequestFromSourceLocation(location, options))
+        || queueEmbeddedFocus(location)
+      );
+    };
     if (
       collapsed
       && directAnchorLocation?.kind === "reveal"
-      && (
-        queueReveal(createRevealRequestFromSourceLocation(directAnchorLocation, options))
-        || queueEmbeddedFocus(directAnchorLocation)
-      )
+      && queueRevealOrEmbeddedFocus(directAnchorLocation)
     ) {
       return;
     }
@@ -945,12 +980,15 @@ export function selectSourceOffsetsInRichLexicalRoot(
     if (
       collapsed
       && anchorPathNode
-      && (
-        queueReveal(createRevealRequestFromNode(anchorPathNode, anchorLocation.offset, options))
-        || queueEmbeddedFocus(createRawBlockLocationFromNode(anchorPathNode, anchorLocation.offset))
-      )
     ) {
-      return;
+      const revealLocation = createRawBlockLocationFromNode(anchorPathNode, anchorLocation.offset);
+      if (
+        revealLocation
+          ? queueRevealOrEmbeddedFocus(revealLocation)
+          : queueReveal(createRevealRequestFromNode(anchorPathNode, anchorLocation.offset, options))
+      ) {
+        return;
+      }
     }
     const anchorLocationWithNode = $isTextNode(anchorPathNode)
       ? { node: anchorPathNode, offset: anchorLocation.offset }
@@ -981,6 +1019,9 @@ export function selectSourceOffsetsInRichLexicalRoot(
 
   if (pendingRevealRequest) {
     editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, pendingRevealRequest);
+  }
+  if (pendingStructureEditRequest) {
+    editor.dispatchCommand(ACTIVATE_STRUCTURE_EDIT_COMMAND, pendingStructureEditRequest);
   }
 
   return didSelect;

@@ -2,10 +2,7 @@ import { useState, useCallback, useMemo, useRef } from "react";
 
 import type { LexicalEditor } from "lexical";
 
-import type {
-  MarkdownEditorHandle,
-  MarkdownEditorSelection,
-} from "../../lexical/markdown-editor-types";
+import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
 import { createMinimalEditorDocumentChanges } from "../../lib/editor-doc-change";
 import { type DiagnosticEntry } from "../diagnostics";
@@ -26,7 +23,6 @@ interface PendingModeOverride {
 }
 
 interface PendingEditorFlushResult {
-  readonly selection: MarkdownEditorSelection | null;
   readonly shouldDeferModeSwitch: boolean;
 }
 
@@ -126,9 +122,6 @@ export function useAppEditorShell({
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
   const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
-  const currentPathRef = useRef<string | undefined>(currentPath);
-  const selectionRestoreRequestIdRef = useRef(0);
-  currentPathRef.current = currentPath;
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const diagnostics = useDiagnostics((s) => s.diagnostics);
 
@@ -136,14 +129,13 @@ export function useAppEditorShell({
     const handle = editorHandleRef.current;
     if (!handle || !currentPath) {
       return {
-        selection: null,
         shouldDeferModeSwitch: false,
       };
     }
 
     // Capture source-position intent before committing reveal/nested editors;
     // after commit the live Lexical selection may sit on the replacement node.
-    const selection = handle.getSelection();
+    handle.getSelection();
     handle.flushPendingEdits();
     const freshDoc = handle.peekDoc();
     const currentDoc = getSessionCurrentDocText();
@@ -151,12 +143,10 @@ export function useAppEditorShell({
     if (changes.length > 0) {
       session.handleDocChange(changes);
       return {
-        selection,
         shouldDeferModeSwitch: true,
       };
     }
     return {
-      selection,
       shouldDeferModeSwitch: freshDoc !== editorDoc,
     };
   }, [currentPath, editorDoc, getSessionCurrentDocText, session]);
@@ -234,8 +224,6 @@ export function useAppEditorShell({
     const flushResult = flushPendingEditorEdits();
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
     const path = currentPath;
-    const requestingHandle = editorHandleRef.current;
-    const restoreRequestId = ++selectionRestoreRequestIdRef.current;
     const applyModeOverride = () => {
       if (path) {
         setModeOverrides((previous) => ({
@@ -246,23 +234,6 @@ export function useAppEditorShell({
       setPendingModeOverride((previous) =>
         previous?.path === path ? null : previous,
       );
-      const selection = flushResult.selection;
-      if (selection) {
-        window.requestAnimationFrame(() => {
-          window.setTimeout(() => {
-            if (
-              currentPathRef.current !== path
-              || selectionRestoreRequestIdRef.current !== restoreRequestId
-              || editorHandleRef.current !== requestingHandle
-            ) {
-              return;
-            }
-            requestingHandle?.setSelection(selection.anchor, selection.focus, {
-              skipScrollIntoView: true,
-            });
-          }, 0);
-        });
-      }
     };
     if (flushResult.shouldDeferModeSwitch) {
       window.setTimeout(applyModeOverride, 0);

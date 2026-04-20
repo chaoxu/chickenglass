@@ -14,6 +14,10 @@ export type PendingEmbeddedSurfaceFocusTarget =
   | "structure-source";
 
 const pendingSurfaceFocus = new Map<string, PendingSurfaceFocusRequest>();
+const pendingSurfaceFocusListeners = new Map<
+  string,
+  Set<(request: PendingSurfaceFocusRequest) => void>
+>();
 
 export function getPendingEmbeddedSurfaceFocusId(
   editorKey: string,
@@ -27,6 +31,14 @@ export function queuePendingSurfaceFocus(
   focusId: string,
   request: PendingSurfaceFocusRequest = "current",
 ): void {
+  const listeners = pendingSurfaceFocusListeners.get(focusId);
+  if (listeners && listeners.size > 0) {
+    pendingSurfaceFocus.delete(focusId);
+    for (const listener of listeners) {
+      listener(request);
+    }
+    return;
+  }
   pendingSurfaceFocus.set(focusId, request);
 }
 
@@ -52,4 +64,20 @@ export function queueEmbeddedSurfaceFocus(
     getPendingEmbeddedSurfaceFocusId(editorKey, nodeKey, target),
     request,
   );
+}
+
+export function subscribePendingSurfaceFocus(
+  focusId: string,
+  listener: (request: PendingSurfaceFocusRequest) => void,
+): () => void {
+  const listeners = pendingSurfaceFocusListeners.get(focusId) ?? new Set();
+  listeners.add(listener);
+  pendingSurfaceFocusListeners.set(focusId, listeners);
+
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      pendingSurfaceFocusListeners.delete(focusId);
+    }
+  };
 }

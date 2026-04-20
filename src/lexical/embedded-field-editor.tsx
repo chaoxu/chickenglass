@@ -29,7 +29,10 @@ import {
 import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
 import { useLexicalSurfaceEditable } from "./editability-context";
 import { scheduleRegisteredSurfaceFocus, type FocusRequestEdge } from "./editor-focus-plugin";
-import { consumePendingSurfaceFocus } from "./pending-surface-focus";
+import {
+  consumePendingSurfaceFocus,
+  subscribePendingSurfaceFocus,
+} from "./pending-surface-focus";
 import type { PendingSurfaceFocusRequest } from "./pending-surface-focus";
 import { useLexicalRenderContext } from "./render-context";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
@@ -280,22 +283,26 @@ export function EmbeddedFieldEditor({
     });
   }, [active, focusRequestVersion, nestedRoot]);
 
+  const requestFocus = useCallback((edge: PendingSurfaceFocusRequest) => {
+    requestedFocusRef.current = edge;
+    setFocusRequestVersion((version) => version + 1);
+    if (activation === "focus") {
+      setActive(true);
+    }
+  }, [activation]);
+
   useEffect(() => {
     if (!pendingFocusId) {
       return;
     }
 
     const edge = consumePendingSurfaceFocus(pendingFocusId);
-    if (!edge) {
-      return;
+    if (edge) {
+      requestFocus(edge);
     }
 
-    requestedFocusRef.current = edge;
-    setFocusRequestVersion((version) => version + 1);
-    if (activation === "focus") {
-      setActive(true);
-    }
-  }, [activation, pendingFocusId]);
+    return subscribePendingSurfaceFocus(pendingFocusId, requestFocus);
+  }, [pendingFocusId, requestFocus]);
 
   return (
     <div

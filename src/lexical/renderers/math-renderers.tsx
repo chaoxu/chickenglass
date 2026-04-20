@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import { $createParagraphNode, $getNodeByKey, type NodeKey } from "lexical";
@@ -15,6 +15,7 @@ import { useStructureSourcePositionEntry } from "../structure-source-position-en
 import { useStructureSourceSelectionBridge } from "../structure-source-selection";
 import { displayMathSourceOffsetFromTarget } from "../math-source-position";
 import { EditorChromeBody, EditorChromePanel } from "../editor-chrome";
+import { useRegisterEmbeddedFieldFlush } from "../embedded-field-flush-registry";
 import { buildKatexOptions } from "../../lib/katex-options";
 import {
   preventKatexMouseDown,
@@ -55,16 +56,27 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
   const { config, renderIndex } = useLexicalRenderContext();
   const [editor] = useLexicalComposerContext();
   const surfaceEditable = useLexicalSurfaceEditable();
-  const parsed = useMemo(() => parseStructuredDisplayMathRaw(raw), [raw]);
   const updateRawInner = useRawBlockUpdater(nodeKey);
   const sourceEdit = useStructureEditToggle(
     nodeKey,
     "display-math",
     "display-math-source",
   );
-  const updateRaw = useCallback((nextRaw: string) => {
+  const [draftRaw, setDraftRaw] = useState(raw);
+  const activeRaw = sourceEdit.active ? draftRaw : raw;
+  const parsed = useMemo(() => parseStructuredDisplayMathRaw(activeRaw), [activeRaw]);
+
+  useEffect(() => {
+    if (sourceEdit.active) {
+      return;
+    }
+    setDraftRaw(raw);
+  }, [raw, sourceEdit.active]);
+
+  const handleSourceChange = useCallback((nextRaw: string) => {
     const trimmed = tryTrimOnDoubleClose(nextRaw);
     if (trimmed !== null) {
+      setDraftRaw(trimmed);
       updateRawInner(trimmed);
       sourceEdit.deactivate();
       editor.update(() => {
@@ -82,8 +94,21 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
       editor.focus();
       return;
     }
-    updateRawInner(nextRaw);
+    setDraftRaw(nextRaw);
   }, [updateRawInner, sourceEdit, editor, nodeKey]);
+
+  const commitDraft = useCallback(() => {
+    if (draftRaw !== raw) {
+      updateRawInner(draftRaw);
+    }
+  }, [draftRaw, raw, updateRawInner]);
+
+  useRegisterEmbeddedFieldFlush(commitDraft, sourceEdit.active);
+
+  const handleSourceClose = useCallback(() => {
+    commitDraft();
+    sourceEdit.deactivate();
+  }, [commitDraft, sourceEdit]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const sourceFocusId = getPendingEmbeddedSurfaceFocusId(editor.getKey(), nodeKey, "structure-source");
   const onSourceSelectionChange = useStructureSourceSelectionBridge(editor, nodeKey, 0);
@@ -157,11 +182,11 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
           <div className="cf-lexical-display-math-editor">
             <StructureSourceEditor
               className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--math"
-              doc={raw}
+              doc={draftRaw}
               multiline
               namespace={`coflat-display-math-${nodeKey}`}
-              onChange={updateRaw}
-              onClose={sourceEdit.deactivate}
+              onChange={handleSourceChange}
+              onClose={handleSourceClose}
               onSelectionChange={onSourceSelectionChange}
               pendingFocusId={sourceFocusId}
             />

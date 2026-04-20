@@ -92,8 +92,6 @@ import {
   type LexicalRenderContextValue,
 } from "./render-context";
 import {
-  $readSourcePositionFromLexicalSelection,
-  readSourcePositionFromLexicalSelection,
   readSourceSelectionFromLexicalSelection,
   readSourcePositionFromElement,
   selectSourceOffsetsInRichLexicalRoot,
@@ -183,12 +181,27 @@ function SourceSelectionPlugin({
       onSelectionChange?.(nextSelection);
     };
 
-    syncSelection(editor.getEditorState().read(() => $readSourceTextSelectionFromLexicalRoot()));
-    return editor.registerUpdateListener(({ editorState }) => {
+    let cancelled = false;
+    let ready = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      ready = true;
+      syncSelection(editor.getEditorState().read(() => $readSourceTextSelectionFromLexicalRoot()));
+    });
+    const unregister = editor.registerUpdateListener(({ editorState }) => {
+      if (!ready) {
+        return;
+      }
       editorState.read(() => {
         syncSelection($readSourceTextSelectionFromLexicalRoot());
       });
     });
+    return () => {
+      cancelled = true;
+      unregister();
+    };
   }, [editor, editorMode, onSelectionChange, selectionRef]);
 
   return null;
@@ -224,48 +237,52 @@ function RichSelectionPlugin({
       onSelectionChange?.(nextSelection);
     };
 
-    const selectionFromLivePosition = (
-      livePosition: number | null,
-    ): MarkdownEditorSelection | null => {
-      if (livePosition === null) {
-        return null;
-      }
-
-      return {
-        anchor: livePosition,
-        focus: livePosition,
-        from: livePosition,
-        to: livePosition,
-      };
-    };
-
-    const syncLiveSelection = (readLivePosition: () => number | null) => {
+    const syncLiveSelection = () => {
       if (!canReadLiveSelectionFromEditor(editor)) {
         return;
       }
-      syncSelection(selectionFromLivePosition(readLivePosition()));
+      const currentDoc = readEditorDocument(editor, editorMode);
+      syncSelection(readSourceSelectionFromLexicalSelection(editor, {
+        fallback: latestSelectionRef.current,
+        markdown: currentDoc,
+      }));
     };
+
+    let cancelled = false;
+    let ready = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      ready = true;
+      syncLiveSelection();
+    });
 
     return mergeRegister(
       editor.registerCommand(
         SELECTION_CHANGE_COMMAND,
         () => {
-          syncLiveSelection(() => readSourcePositionFromLexicalSelection(editor));
+          if (!ready) {
+            return false;
+          }
+          syncLiveSelection();
           return false;
         },
         COMMAND_PRIORITY_LOW,
       ),
-      editor.registerUpdateListener(({ editorState }) => {
+      editor.registerUpdateListener(() => {
+        if (!ready) {
+          return;
+        }
         if (!canReadLiveSelectionFromEditor(editor)) {
           return;
         }
 
-        editorState.read(() => {
-          syncSelection(selectionFromLivePosition(
-            $readSourcePositionFromLexicalSelection(editor),
-          ));
-        });
+        syncLiveSelection();
       }),
+      () => {
+        cancelled = true;
+      },
     );
   }, [editor, editorMode, onSelectionChange, selectionRef]);
 
@@ -827,6 +844,14 @@ export function LexicalMarkdownEditor({
                   selectionRef={sourceSelectionRef}
                   userEditPendingRef={userEditPendingRef}
                 />
+                <MarkdownModeSyncPlugin
+                  doc={doc}
+                  editorMode={editorMode}
+                  lastCommittedDocRef={lastCommittedDocRef}
+                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+                  selectionRef={sourceSelectionRef}
+                  userEditPendingRef={userEditPendingRef}
+                />
                 <SourceSelectionPlugin
                   editorMode={editorMode}
                   onSelectionChange={onSelectionChange}
@@ -844,14 +869,6 @@ export function LexicalMarkdownEditor({
                 />
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
                 {editable ? <InlineTokenBoundaryPlugin /> : null}
-                <MarkdownModeSyncPlugin
-                  doc={doc}
-                  editorMode={editorMode}
-                  lastCommittedDocRef={lastCommittedDocRef}
-                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
-                  selectionRef={sourceSelectionRef}
-                  userEditPendingRef={userEditPendingRef}
-                />
                 {isSourceMode ? (
                   <PlainTextPlugin
                     contentEditable={(

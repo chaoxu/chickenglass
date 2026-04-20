@@ -32,7 +32,7 @@ import {
   type StructureEditSurface,
 } from "../state/structure-edit";
 
-interface ActivateStructureEditRequest {
+export interface ActivateStructureEditRequest {
   readonly blockKey: NodeKey;
   readonly surface: StructureEditSurface;
   readonly variant: StructureBlockVariant;
@@ -79,12 +79,49 @@ export function StructureEditProvider({
   const [editor] = useLexicalComposerContext();
   const [state, setState] = useState<StructureEditState>(STRUCTURE_EDIT_IDLE);
   const stateRef = useRef(state);
+  const focusOutTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
   useEffect(() => {
+    const clearFocusOutTimer = () => {
+      if (focusOutTimerRef.current === null) {
+        return;
+      }
+      window.clearTimeout(focusOutTimerRef.current);
+      focusOutTimerRef.current = null;
+    };
+
+    const deactivateIfFocusStayedOutside = (
+      blockKey: NodeKey,
+      surface: StructureEditSurface,
+    ) => {
+      focusOutTimerRef.current = null;
+      const current = stateRef.current;
+      if (
+        current.status !== "editing"
+        || current.blockKey !== blockKey
+        || current.surface !== surface
+      ) {
+        return;
+      }
+
+      const blockElement = editor.getElementByKey(blockKey);
+      if (!(blockElement instanceof HTMLElement)) {
+        setState((value) => deactivateStructureEditIfMatch(value, blockKey, surface));
+        return;
+      }
+
+      const activeElement = blockElement.ownerDocument.activeElement;
+      if (activeElement instanceof Node && blockElement.contains(activeElement)) {
+        return;
+      }
+
+      setState((value) => deactivateStructureEditIfMatch(value, blockKey, surface));
+    };
+
     const handleRootFocusOut = (event: FocusEvent) => {
       const current = stateRef.current;
       if (!isStructureEditActive(current)) {
@@ -106,11 +143,11 @@ export function StructureEditProvider({
         return;
       }
 
-      setState((value) => deactivateStructureEditIfMatch(
-        value,
-        current.blockKey,
-        current.surface,
-      ));
+      clearFocusOutTimer();
+      focusOutTimerRef.current = window.setTimeout(
+        () => deactivateIfFocusStayedOutside(current.blockKey, current.surface),
+        50,
+      );
     };
 
     return mergeRegister(
@@ -135,6 +172,7 @@ export function StructureEditProvider({
       editor.registerCommand(
         DEACTIVATE_STRUCTURE_EDIT_COMMAND,
         (request) => {
+          clearFocusOutTimer();
           const current = stateRef.current;
           const shouldReleaseSelection = request?.blockKey && request.surface
             ? current.status === "editing"
@@ -191,6 +229,7 @@ export function StructureEditProvider({
           rootElement.removeEventListener("focusout", handleRootFocusOut, true);
         };
       }),
+      clearFocusOutTimer,
     );
   }, [editor]);
 

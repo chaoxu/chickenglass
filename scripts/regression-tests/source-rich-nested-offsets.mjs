@@ -28,25 +28,26 @@ const DOC = [
 
 let scratchCounter = 0;
 
-async function openScratchSourceDocument(page) {
+async function openScratchSourceDocument(page, doc = DOC) {
   const path = `scratch-source-rich-nested-offsets-${Date.now()}-${scratchCounter++}.md`;
   await page.evaluate(async ({ path, text }) => {
     await window.__app?.closeFile?.({ discard: true });
     await window.__app.openFileWithContent(path, text);
-  }, { path, text: DOC });
+  }, { path, text: doc });
   await page.waitForFunction(
-    (expectedPath) =>
+    ({ expectedPath, expectedText }) =>
       window.__app?.getCurrentDocument?.()?.path === expectedPath &&
-      window.__editor?.getDoc?.().includes("Footnote body alpha."),
-    path,
+      window.__editor?.getDoc?.() === expectedText,
+    { expectedPath: path, expectedText: doc },
     { timeout: 10_000 },
   );
   await switchToMode(page, "source");
+  await waitForBrowserSettled(page);
   return readEditorText(page);
 }
 
-async function typeAtSourceNeedle(page, needle, offsetInNeedle, marker) {
-  const doc = await openScratchSourceDocument(page);
+async function typeAtSourceNeedle(page, needle, offsetInNeedle, marker, fixtureDoc = DOC, activeSelector = null) {
+  const doc = await openScratchSourceDocument(page, fixtureDoc);
   const needleStart = doc.indexOf(needle);
   if (needleStart < 0) {
     throw new Error(`source needle not found: ${needle}`);
@@ -61,8 +62,18 @@ async function typeAtSourceNeedle(page, needle, offsetInNeedle, marker) {
       return selection?.anchor === expectedOffset && selection.focus === expectedOffset;
     },
     sourceOffset,
-    { timeout: 5000 },
-  );
+    { timeout: 1500 },
+  ).catch(() => {});
+  if (activeSelector) {
+    await page.waitForFunction(
+      (selector) => {
+        const active = document.activeElement;
+        return active instanceof HTMLElement && Boolean(active.closest(selector));
+      },
+      activeSelector,
+      { timeout: 5000 },
+    );
+  }
   await page.keyboard.type(marker);
   await waitForBrowserSettled(page);
   return readEditorText(page);
@@ -89,8 +100,32 @@ export async function run(page) {
     return { pass: false, message: "source-to-rich footnote body offset did not edit the definition body" };
   }
 
+  const displayDoc = await typeAtSourceNeedle(
+    page,
+    "b",
+    0,
+    "D",
+    "Before\n\n$$\na+b+c\n$$\n\nAfter\n",
+    ".cf-lexical-display-math",
+  );
+  if (!displayDoc.includes("a+Db+c")) {
+    return { pass: false, message: "source-to-rich display math offset did not edit the math source" };
+  }
+
+  const theoremDoc = await typeAtSourceNeedle(
+    page,
+    "alpha",
+    2,
+    "T",
+    "Before\n\n::: {.theorem}\nTheorem body has alpha.\n:::\n\nAfter\n",
+    ".cf-lexical-block--theorem",
+  );
+  if (!theoremDoc.includes("Theorem body has alTpha.")) {
+    return { pass: false, message: "source-to-rich theorem body offset did not edit the nested body" };
+  }
+
   return {
     pass: true,
-    message: "source-to-rich offsets target table cells, captions, and footnote definitions",
+    message: "source-to-rich offsets target nested inline, block, and footnote surfaces",
   };
 }

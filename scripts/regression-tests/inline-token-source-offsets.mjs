@@ -26,6 +26,7 @@ async function openScratch(page, doc, label) {
 async function typeFromSourceOffset(page, doc, needle, offsetInNeedle, marker) {
   await openScratch(page, doc, marker);
   await switchToMode(page, "source");
+  await waitForBrowserSettled(page);
   const source = await readEditorText(page);
   const needleStart = source.indexOf(needle);
   if (needleStart < 0) {
@@ -56,6 +57,23 @@ export async function run(page) {
     return {
       pass: false,
       message: `rich-to-source inline math selection lost internal offset: ${JSON.stringify(mathSelection)}`,
+    };
+  }
+
+  await openScratch(page, "A $x$ B.", "active-math");
+  await page.locator(".cf-lexical-inline-math .katex").first().click();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.type("2");
+  await waitForBrowserSettled(page);
+  await switchToMode(page, "source");
+  const activeMathState = await page.evaluate(() => ({
+    dirty: window.__app?.isDirty?.() ?? false,
+    doc: window.__editor?.getDoc?.() ?? "",
+  }));
+  if (!activeMathState.doc.includes("$x2$") || !activeMathState.dirty) {
+    return {
+      pass: false,
+      message: `active inline math reveal edit was not flushed to source mode: ${JSON.stringify(activeMathState)}`,
     };
   }
 
@@ -92,8 +110,30 @@ export async function run(page) {
     return { pass: false, message: `heading ID offset edited the wrong location: ${JSON.stringify(headingDoc)}` };
   }
 
+  const citationDoc = await typeFromSourceOffset(
+    page,
+    "Alpha [@cormen2009] omega.",
+    "cormen",
+    2,
+    "C",
+  );
+  if (!citationDoc.includes("[@coCrmen2009]")) {
+    return { pass: false, message: `citation offset edited the wrong location: ${JSON.stringify(citationDoc)}` };
+  }
+
+  const footnoteDoc = await typeFromSourceOffset(
+    page,
+    "Alpha [^note] omega.\n\n[^note]: Body.",
+    "^note",
+    2,
+    "F",
+  );
+  if (!footnoteDoc.includes("[^nFote] omega.")) {
+    return { pass: false, message: `footnote reference offset edited the wrong location: ${JSON.stringify(footnoteDoc)}` };
+  }
+
   return {
     pass: true,
-    message: "inline math, image, link, and heading metadata offsets preserve token-local editing",
+    message: "inline reveal edits and metadata offsets preserve token-local editing",
   };
 }

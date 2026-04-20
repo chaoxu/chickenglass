@@ -70,6 +70,7 @@ export function StructureSourceEditor({
   const [draft, setDraft] = useState(() => doc);
   const originalDocRef = useRef(doc);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
   // Resolve the requested initial caret position exactly once, at mount,
   // before any onEditorReady/onFocus callback fires. Subsequent focus events
   // fall back to the default end-of-draft snap.
@@ -88,6 +89,7 @@ export function StructureSourceEditor({
   const focusEditor = useCallback(() => {
     const handle = handleRef.current;
     if (!handle) {
+      rootRef.current?.focus({ preventScroll: true });
       return;
     }
 
@@ -101,6 +103,7 @@ export function StructureSourceEditor({
       initialCaretAppliedRef.current = true;
     }
     handle.focus();
+    rootRef.current?.focus({ preventScroll: true });
   }, [draft, multiline]);
 
   useEffect(() => {
@@ -155,10 +158,15 @@ export function StructureSourceEditor({
       }}
       onFocus={focusEditor}
       onKeyDown={handleKeyDown}
+      onRootElementChange={(root) => {
+        rootRef.current = root;
+      }}
       onSelectionChange={onSelectionChange}
       onTextChange={(nextValue) => {
         setDraft(nextValue);
         onChange(nextValue);
+        queueMicrotask(focusEditor);
+        window.setTimeout(focusEditor, 0);
       }}
       spellCheck={false}
       testId={null}
