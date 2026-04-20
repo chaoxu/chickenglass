@@ -4,7 +4,6 @@ import type { BackgroundIndexer } from "../../index";
 import { dispatchFormatEvent } from "../../constants/events";
 import type { DocumentLabelBacklinksResult } from "../markdown/labels";
 import { useDevSettings } from "../../state/dev-settings";
-import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
 import type { PaletteCommand } from "../components/command-palette";
@@ -71,42 +70,6 @@ export function useAppOverlays({
   const { indexer, searchVersion } = useAppSearchIndex(fs, dialogs, editor, workspace.fileTree);
   const labelCommands = useAppLabelCommands(editor);
 
-  const handleExportHtml = useCallback(() => {
-    const currentPath = editor.currentPath;
-    if (!currentPath) return;
-    const doc = editor.getCurrentDocText();
-    void (async () => {
-      try {
-        const outputPath = await exportDocument(doc, "html", currentPath, fs);
-        window.alert(`Exported to ${outputPath}`);
-      } catch (err: unknown) {
-        window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    })();
-  }, [editor.currentPath, editor.getCurrentDocText, fs]);
-
-  const handleBatchExportHtml = useCallback(() => {
-    if (!workspace.fileTree) return;
-    void (async () => {
-      // Fetch the full recursive tree at export time so that all nested
-      // markdown files are included, even when the sidebar tree is shallow.
-      const tree = await fs.listTree();
-      const results = await batchExport(tree, "html", fs);
-      const succeeded = results.filter((result) => result.outputPath);
-      const failed = results.filter((result) => result.error);
-      const summary = [`Batch export complete: ${succeeded.length} succeeded`];
-      if (failed.length > 0) {
-        summary.push(`${failed.length} failed`);
-        for (const failure of failed) {
-          summary.push(`  ${failure.path}: ${failure.error}`);
-        }
-      }
-      window.alert(summary.join("\n"));
-    })().catch((e: unknown) => {
-      window.alert(`Batch export failed: ${e instanceof Error ? e.message : String(e)}`);
-    });
-  }, [workspace.fileTree, fs]);
-
   const handleSaveAs = useCallback(() => {
     void editor.saveAs().catch((e: unknown) => {
       console.error("[overlays] save-as failed", e);
@@ -165,10 +128,6 @@ export function useAppOverlays({
     { id: "view.toggle-selection-always-on", label: "Toggle Selection Always On", category: "View", action: () => useDevSettings.getState().toggle("selectionAlwaysOn") },
     { id: "view.toggle-tree-view", label: "Toggle Tree View", category: "View", action: () => useDevSettings.getState().toggle("treeView") },
 
-    // ── Export ────────────────────────────────────────────────────────────
-    { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: TAURI_MENU_IDS.fileExport, action: handleExportHtml },
-    { id: "export.batch-html", label: "Export All Files to HTML", category: "Export", action: handleBatchExportHtml },
-
     // ── Help ──────────────────────────────────────────────────────────────
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: TAURI_MENU_IDS.helpShortcuts, action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
     { id: "help.about", label: "About Coflat", category: "Help", menuId: TAURI_MENU_IDS.helpAbout, action: () => dialogs.setAboutOpen(true) },
@@ -180,7 +139,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit, openSearch, toggleSearch]);
+  ], [dialogs, editor, workspace, sidebarLayout, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit, openSearch, toggleSearch]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);

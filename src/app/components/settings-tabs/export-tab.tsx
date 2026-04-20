@@ -8,6 +8,10 @@ interface ExportTabProps {
 }
 
 export function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
+  const defaultFormat = settings.defaultExportFormat === "html"
+    ? "pdf"
+    : settings.defaultExportFormat;
+
   return (
     <Section title="Export">
       <Field
@@ -15,7 +19,7 @@ export function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
         description="Pre-selected format in the export dialog. You can override per export."
       >
         <Select
-          value={settings.defaultExportFormat}
+          value={defaultFormat}
           onValueChange={(value) => {
             onUpdateSetting("defaultExportFormat", value as ExportFormat);
           }}
@@ -26,7 +30,6 @@ export function ExportTab({ settings, onUpdateSetting }: ExportTabProps) {
           <SelectContent>
             <SelectItem value="pdf">PDF</SelectItem>
             <SelectItem value="latex">LaTeX</SelectItem>
-            <SelectItem value="html">HTML</SelectItem>
           </SelectContent>
         </Select>
       </Field>
