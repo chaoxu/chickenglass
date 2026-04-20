@@ -1,7 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { repairBlankClickSelection } from "./editor-surface-shared";
+import { getViewportFromRichSurface, repairBlankClickSelection } from "./editor-surface-shared";
 
 function createMouseEvent(clientX = 0, clientY = 0): ReactMouseEvent {
   return { clientX, clientY } as ReactMouseEvent;
@@ -144,5 +144,40 @@ describe("repairBlankClickSelection", () => {
     repairBlankClickSelection(root, createMouseEvent(24, 10));
 
     expectSelectionToMatch(selectedRange);
+  });
+});
+
+describe("getViewportFromRichSurface", () => {
+  function stubRect(element: HTMLElement, top: number): void {
+    element.getBoundingClientRect = () => ({
+      bottom: top + 20,
+      height: 20,
+      left: 0,
+      right: 100,
+      toJSON: () => ({}),
+      top,
+      width: 100,
+      x: 0,
+      y: top,
+    });
+  }
+
+  it("uses the scroll surface as the viewport owner instead of the moving editor root", () => {
+    const surface = document.createElement("div");
+    const root = document.createElement("div");
+    const heading = document.createElement("h1");
+    heading.className = "cf-lexical-heading";
+    heading.dataset.coflatHeadingPos = "42";
+
+    root.append(heading);
+    surface.append(root);
+    document.body.append(surface);
+
+    stubRect(surface, 0);
+    stubRect(root, -300);
+    stubRect(heading, -65);
+
+    expect(getViewportFromRichSurface(root, surface)).toBe(42);
+    expect(getViewportFromRichSurface(root)).toBe(0);
   });
 });

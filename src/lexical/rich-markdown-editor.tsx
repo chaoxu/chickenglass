@@ -67,6 +67,7 @@ import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TabKeyPlugin } from "./tab-key-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { InteractionTracePlugin } from "./interaction-trace-plugin";
+import { DocumentChangeBridgeProvider } from "./document-change-bridge";
 
 import {
   CoflatClipboardPlugin,
@@ -139,6 +140,7 @@ export function LexicalRichMarkdownEditor({
   onViewportFromChange,
   preserveLocalHistory = false,
   repairBlankClickSelection: shouldRepairBlankClickSelection = false,
+  requireUserEditFlag = true,
   renderContextValue,
   revealPresentation,
   showBibliography = false,
@@ -175,6 +177,7 @@ export function LexicalRichMarkdownEditor({
     onDocChange,
     onSelectionChange,
     onTextChange,
+    requireUserEditFlag,
   });
 
   if (preserveLocalHistory && nestedHistoryStateRef.current === null) {
@@ -229,8 +232,14 @@ export function LexicalRichMarkdownEditor({
           ref={setSurfaceElement}
         >
           <EditorScrollSurfaceProvider surface={effectiveSurface}>
-            <LexicalComposer initialConfig={initialConfig}>
-              <StructureEditProvider>
+            <DocumentChangeBridgeProvider
+              lastCommittedDocRef={lastCommittedDocRef}
+              onDocChange={onDocChange}
+              onTextChange={onTextChange}
+              pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+            >
+              <LexicalComposer initialConfig={initialConfig}>
+                <StructureEditProvider>
                 <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
                 <EditableSyncPlugin editable={editable} />
                 {editable
@@ -238,8 +247,12 @@ export function LexicalRichMarkdownEditor({
                   : <ClickableLinkPlugin />}
                 <RichMarkdownEditorHandlePlugin
                   focusOwner={focusOwner}
+                  lastCommittedDocRef={lastCommittedDocRef}
                   onEditorReady={onEditorReady}
+                  onDocChange={onDocChange}
                   onSelectionChange={onSelectionChange}
+                  onTextChange={onTextChange}
+                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
                   selectionRef={sourceSelectionRef}
                   userEditPendingRef={userEditPendingRef}
                 />
@@ -264,6 +277,11 @@ export function LexicalRichMarkdownEditor({
                           }
                         : undefined}
                       onDrop={editable
+                        ? () => {
+                            userEditPendingRef.current = true;
+                          }
+                        : undefined}
+                      onCut={editable
                         ? () => {
                             userEditPendingRef.current = true;
                           }
@@ -331,8 +349,9 @@ export function LexicalRichMarkdownEditor({
                 <ActiveEditorPlugin />
                 <TreeViewPlugin />
                 <InteractionTracePlugin />
-              </StructureEditProvider>
-            </LexicalComposer>
+                </StructureEditProvider>
+              </LexicalComposer>
+            </DocumentChangeBridgeProvider>
           </EditorScrollSurfaceProvider>
         </div>
           </LexicalSurfaceEditableProvider>

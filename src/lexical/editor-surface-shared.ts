@@ -2,7 +2,12 @@ import { useEffect } from "react";
 import type { MouseEvent as ReactMouseEvent, MutableRefObject } from "react";
 
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { COMMAND_PRIORITY_LOW, FORMAT_TEXT_COMMAND } from "lexical";
+import {
+  $addUpdateTag,
+  $getSelection,
+  $isRangeSelection,
+  COMMAND_PRIORITY_LOW,
+} from "lexical";
 
 import { getInlineTextFormatSpec, useEditorScrollSurface } from "../lexical-next";
 import type { FormatEventDetail } from "../constants/events";
@@ -18,6 +23,7 @@ import {
   writeSourceTextToLexicalRoot,
 } from "./source-text";
 import { FORMAT_MARKDOWN_COMMAND } from "./editor-format-command";
+import { COFLAT_FORMAT_COMMIT_TAG } from "./update-tags";
 
 /**
  * Pure helpers and shared plugins for the rich/source markdown editor
@@ -26,13 +32,13 @@ import { FORMAT_MARKDOWN_COMMAND } from "./editor-format-command";
  * removes the drift hazard (issue #107).
  */
 
-export function getViewportFromRichSurface(root: HTMLElement): number {
+export function getViewportFromRichSurface(root: HTMLElement, viewportOwner: HTMLElement = root): number {
   const headings = [...root.querySelectorAll<HTMLElement>(HEADING_SOURCE_SELECTOR)];
   if (headings.length === 0) {
     return 0;
   }
 
-  const threshold = root.getBoundingClientRect().top + 24;
+  const threshold = viewportOwner.getBoundingClientRect().top + 24;
   let active = 0;
 
   for (const heading of headings) {
@@ -190,7 +196,7 @@ export function ViewportTrackingPlugin({
         if (!root) {
           return;
         }
-        onViewportFromChange(getViewportFromRichSurface(root));
+        onViewportFromChange(getViewportFromRichSurface(root, surface));
       });
     };
 
@@ -357,7 +363,13 @@ export function FormatEventPlugin(): null {
           applySourceFormat(detail, domSelection);
           return true;
         }
-        editor.dispatchCommand(FORMAT_TEXT_COMMAND, detail.type);
+        editor.update(() => {
+          $addUpdateTag(COFLAT_FORMAT_COMMIT_TAG);
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            selection.formatText(detail.type);
+          }
+        }, { discrete: true });
         return true;
       },
       COMMAND_PRIORITY_LOW,

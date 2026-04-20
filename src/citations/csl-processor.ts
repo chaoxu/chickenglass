@@ -92,6 +92,16 @@ function buildCitationItems(
   });
 }
 
+function hasRegisteredCitationItems(engine: CiteprocEngine, ids: readonly string[]): boolean {
+  const registry = (engine as {
+    readonly registry?: {
+      readonly registry?: Record<string, { readonly seq?: unknown }>;
+    };
+  }).registry?.registry;
+
+  return Boolean(registry && ids.every((id) => typeof registry[id]?.seq === "number"));
+}
+
 function clusterKey(cluster: CitationCluster): string {
   return cluster.ids
     .map((id, index) => `${id}\0${serializeKeyPart(cluster.locators?.[index])}`)
@@ -225,10 +235,20 @@ export class CslProcessor {
     if (cached !== undefined) {
       return cached;
     }
-    // Unregistered cluster (e.g., a per-id sub-render in a mixed cluster).
-    // previewCitationCluster reuses the engine's processed-cluster state
-    // without mutating it; unlike makeCitationCluster, it works for numeric
-    // styles that depend on the registry's per-item `seq` assignments.
+    // Unregistered sub-cluster (for example one hover target inside a registered
+    // multi-citation cluster). Once the document citations have been registered,
+    // makeCitationCluster reads the registry's per-item sequence numbers; CSL
+    // preview mode treats the sub-cluster as a new first citation and returns
+    // `[1]` for every first-use item in numeric styles.
+    if (hasRegisteredCitationItems(this.engine, ids)) {
+      try {
+        return this.engine.makeCitationCluster(buildCitationItems(ids, locators));
+      } catch (error) {
+        console.warn("[csl] cite() registered sub-cluster error", error);
+      }
+    }
+
+    // Before registration, preview is still the safest non-mutating fallback.
     try {
       const html = this.engine.previewCitationCluster(
         {

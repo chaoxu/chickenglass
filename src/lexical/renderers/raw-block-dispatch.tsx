@@ -3,12 +3,12 @@ import type { NodeKey } from "lexical";
 
 import { FigureMedia } from "../figure-media";
 import { parseMarkdownImage } from "../markdown/image-markdown";
-import { rawBlockSourceAttrs } from "../source-position-contract";
 import type { RawBlockVariant } from "../nodes/raw-block-node";
 import { FencedDivBlockRenderer } from "./fenced-div-renderers";
 import { FootnoteDefinitionBlockRenderer } from "./footnote-renderers";
 import { FrontmatterRenderer } from "./frontmatter-renderer";
 import { DisplayMathBlockRenderer } from "./math-renderers";
+import { RawBlockSourceRangeShell } from "./raw-block-source-range";
 
 interface RawBlockContentRendererProps {
   readonly nodeKey: NodeKey;
@@ -57,11 +57,12 @@ export const RawBlockRenderer = memo(function RawBlockRenderer({
   const ContentRenderer = RAW_BLOCK_CONTENT_RENDERERS[variant] ?? RawFallbackRenderer;
 
   return (
-    <section
+    <RawBlockSourceRangeShell
       className={`cf-lexical-raw-block-shell cf-lexical-raw-block-shell--${variant}`}
-      {...rawBlockSourceAttrs(variant)}
+      nodeKey={nodeKey}
+      variant={variant}
     >
       <ContentRenderer nodeKey={nodeKey} raw={raw} />
-    </section>
+    </RawBlockSourceRangeShell>
   );
 });

@@ -119,7 +119,16 @@ export function EmbeddedFieldEditor({
   }, []);
 
   const commitDraft = useCallback(() => {
-    nestedEditorHandleRef.current?.flushPendingEdits();
+    const focusedElement = document.activeElement;
+    const shouldFlushNestedEditor =
+      draft.pendingDraftRef.current !== null
+      || Boolean(
+        focusedElement instanceof Node
+        && shellRef.current?.contains(focusedElement),
+      );
+    if (shouldFlushNestedEditor) {
+      nestedEditorHandleRef.current?.flushPendingEdits();
+    }
     draft.commitDraft();
   }, [draft]);
 
@@ -317,8 +326,8 @@ export function EmbeddedFieldEditor({
         onSelectionChange={handleSelectionChange}
         onTextChange={handleTextChange}
         preserveLocalHistory
-        repairBlankClickSelection={spec.fieldKind !== "inline"}
         requireUserEditFlag={false}
+        repairBlankClickSelection={spec.fieldKind !== "inline"}
         renderContextValue={context}
         showCodeBlockChrome={false}
         showHeadingChrome={false}

@@ -90,6 +90,7 @@ import {
   writeSourceTextToLexicalRoot,
 } from "./source-text";
 import { ActiveEditorPlugin } from "./active-editor-plugin";
+import { DocumentChangeBridgeProvider } from "./document-change-bridge";
 import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import {
@@ -455,16 +456,26 @@ export function LexicalMarkdownEditor({
           ref={setSurfaceElement}
         >
           <EditorScrollSurfaceProvider surface={effectiveSurface}>
-            <LexicalComposer initialConfig={initialConfig}>
-              <StructureEditProvider>
+            <DocumentChangeBridgeProvider
+              lastCommittedDocRef={lastCommittedDocRef}
+              onDocChange={onDocChange}
+              onTextChange={onTextChange}
+              pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+            >
+              <LexicalComposer initialConfig={initialConfig}>
+                <StructureEditProvider>
                 <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
                 <EditableSyncPlugin editable={editable} />
                 {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
                 <MarkdownEditorHandlePlugin
                   editorModeRef={editorModeRef}
                   focusOwnerRef={focusOwnerRef}
+                  lastCommittedDocRef={lastCommittedDocRef}
                   onEditorReady={onEditorReady}
+                  onDocChange={onDocChange}
                   onSelectionChange={onSelectionChange}
+                  onTextChange={onTextChange}
+                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
                   selectionRef={sourceSelectionRef}
                   userEditPendingRef={userEditPendingRef}
                 />
@@ -593,8 +604,9 @@ export function LexicalMarkdownEditor({
                 {!isSourceMode ? <BibliographySection /> : null}
                 <ActiveEditorPlugin />
                 <TreeViewPlugin />
-              </StructureEditProvider>
-            </LexicalComposer>
+                </StructureEditProvider>
+              </LexicalComposer>
+            </DocumentChangeBridgeProvider>
           </EditorScrollSurfaceProvider>
         </div>
           </LexicalSurfaceEditableProvider>

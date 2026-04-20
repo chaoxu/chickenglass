@@ -12,7 +12,7 @@ import {
   UNDO_COMMAND,
 } from "lexical";
 import { createElement, type ComponentProps } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
@@ -177,6 +177,38 @@ describe("ClickableLinkPlugin in read-only mode", () => {
 });
 
 describe("LexicalRichMarkdownEditor nested history", () => {
+  it("does not publish mount-only markdown normalization as a document edit", async () => {
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: ":::: {.proof}\nBody text.\n::::",
+      onTextChange,
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(onTextChange).not.toHaveBeenCalled();
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("still publishes explicit handle writes when mount-only changes are guarded", async () => {
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "seed",
+      onTextChange,
+    });
+
+    try {
+      act(() => {
+        editor.handle.insertText("x");
+      });
+      await waitFor(() => expect(onTextChange).toHaveBeenCalledWith("xseed"));
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("preserves undo history across editable blur/focus toggles", async () => {
     const editor = await mountEditor();
 

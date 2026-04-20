@@ -7,9 +7,19 @@ import {
   type RefObject,
 } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getNodeByKey, type NodeKey } from "lexical";
+import {
+  $addUpdateTag,
+  $getNodeByKey,
+  type LexicalNode,
+  type NodeKey,
+} from "lexical";
 
-import { COFLAT_NESTED_EDIT_TAG } from "../update-tags";
+import { useDocumentChangeBridge } from "../document-change-bridge";
+import {
+  COFLAT_INCREMENTAL_DOC_CHANGE_TAG,
+  COFLAT_NESTED_EDIT_TAG,
+} from "../update-tags";
+import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import {
   surfaceActivationProps,
   type SurfaceActivationPropsOptions,
@@ -18,6 +28,13 @@ import {
   getPendingEmbeddedSurfaceFocusId,
   type PendingEmbeddedSurfaceFocusTarget,
 } from "../pending-surface-focus";
+import {
+  applyRawBlockSourceRangeChange,
+  findRawBlockSourceRangeElement,
+  readRawBlockSourceRangeFromElement,
+  useRawBlockSourceRange,
+  writeRawBlockSourceRangeToElement,
+} from "./raw-block-source-range";
 
 type RawUpdatableNode = {
   getRaw?: () => string;
@@ -41,10 +58,21 @@ export function structureToggleProps(
 
 export function useRawBlockUpdater(nodeKey: NodeKey): (raw: RawUpdate) => void {
   const [editor] = useLexicalComposerContext();
+  const documentChangeBridge = useDocumentChangeBridge();
+  const sourceRange = useRawBlockSourceRange();
 
   return useCallback((next: RawUpdate) => {
+    const pendingIncremental: {
+      change: EditorDocumentChange | null;
+      rangeElement: HTMLElement | null;
+      nextRawLength: number | null;
+    } = {
+      change: null,
+      rangeElement: null,
+      nextRawLength: null,
+    };
     editor.update(() => {
-      const node = $getNodeByKey(nodeKey) as RawUpdatableNode | null;
+      const node = $getNodeByKey(nodeKey) as (RawUpdatableNode & LexicalNode) | null;
       if (!node?.setRaw) {
         return;
       }
@@ -53,12 +81,51 @@ export function useRawBlockUpdater(nodeKey: NodeKey): (raw: RawUpdate) => void {
       if (currentRaw === nextRaw) {
         return;
       }
+      const rangeElement = findRawBlockSourceRangeElement(editor.getRootElement(), nodeKey);
+      const range = sourceRange?.readRange()
+        ?? (rangeElement ? readRawBlockSourceRangeFromElement(rangeElement) : null);
+      const rangeChange = range
+        ? documentChangeBridge?.createSourceReplacement(range, currentRaw, nextRaw) ?? null
+        : null;
+      pendingIncremental.change = rangeChange ?? documentChangeBridge?.createNodeSourceReplacement(
+          node,
+          currentRaw,
+          nextRaw,
+        ) ?? null;
+      pendingIncremental.rangeElement = rangeElement;
+      pendingIncremental.nextRawLength = nextRaw.length;
+      if (pendingIncremental.change) {
+        $addUpdateTag(COFLAT_INCREMENTAL_DOC_CHANGE_TAG);
+      }
       node.setRaw(nextRaw);
     }, {
       discrete: true,
       tag: COFLAT_NESTED_EDIT_TAG,
     });
-  }, [editor, nodeKey]);
+    if (pendingIncremental.change) {
+      if (pendingIncremental.nextRawLength !== null) {
+        if (sourceRange) {
+          sourceRange.writeRange(
+            pendingIncremental.change.from,
+            pendingIncremental.change.from + pendingIncremental.nextRawLength,
+          );
+        } else if (pendingIncremental.rangeElement) {
+          writeRawBlockSourceRangeToElement(
+            pendingIncremental.rangeElement,
+            pendingIncremental.change.from,
+            pendingIncremental.change.from + pendingIncremental.nextRawLength,
+          );
+        }
+        applyRawBlockSourceRangeChange(
+          editor.getRootElement(),
+          pendingIncremental.change.from,
+          pendingIncremental.change.to,
+          pendingIncremental.change.from + pendingIncremental.nextRawLength,
+        );
+      }
+      documentChangeBridge?.publishChanges([pendingIncremental.change]);
+    }
+  }, [documentChangeBridge, editor, nodeKey, sourceRange]);
 }
 
 export function usePendingEmbeddedSurfaceFocusId(

@@ -31,6 +31,12 @@ Use `pnpm dev:show:hmr` for show-mode behavior with Vite HMR during fast
 iteration. `pnpm preview` still requires rebuild/restart because it serves the
 compiled bundle.
 
+For held-key/auto-repeat coverage, do not use Playwright
+`keyboard.down(); wait(); keyboard.up()` as a physical key-repeat simulation.
+Playwright sends one keydown unless repeat events are dispatched explicitly.
+Use CDP `Input.dispatchKeyEvent` with repeated `keyDown` events and
+`autoRepeat: true`; see the `key-repeat-input` browser regression.
+
 ### Browser Repro Harness
 
 Capture, replay, and diff editor sessions:

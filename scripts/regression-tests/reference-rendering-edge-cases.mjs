@@ -115,6 +115,9 @@ export async function run(page) {
 
   const renderedState = await page.evaluate(() => {
     const citation = document.querySelector("[data-coflat-citation='true']");
+    const citationClusters = [...document.querySelectorAll("[data-coflat-citation='true']")];
+    const clusteredCitation = citationClusters.find((element) =>
+      element.querySelector("[data-coflat-ref-id='secondref']"));
     const citationStyle = citation ? getComputedStyle(citation) : null;
     const proofHeader = document.querySelector(".cf-lexical-block--proof .cf-lexical-block-header");
     const leftMargin = document.querySelector(".cf-bibliography-entry-content .csl-left-margin");
@@ -128,6 +131,9 @@ export async function run(page) {
       bibliographyNumberSameLine: !leftRect || !rightRect
         ? true
         : Math.abs(leftRect.top - rightRect.top) < 2,
+      clusteredCitationItemTexts: [...clusteredCitation?.querySelectorAll("[data-coflat-ref-id]") ?? []]
+        .map((element) => element.textContent ?? ""),
+      clusteredCitationText: clusteredCitation?.textContent ?? "",
       citationText: citation?.textContent ?? "",
       proofHeaderText: proofHeader?.textContent?.replace(/\s+/g, " ").trim() ?? "",
       referenceTextDecorationLine: citationStyle?.textDecorationLine ?? "",
@@ -137,6 +143,8 @@ export async function run(page) {
   if (
     renderedState.proofHeaderText !== "Proof"
     || !renderedState.citationText.includes("[1]")
+    || renderedState.clusteredCitationText !== "[1; 2]"
+    || renderedState.clusteredCitationItemTexts.join(",") !== "1,2"
     || renderedState.referenceTextDecorationLine !== "none"
     || !renderedState.bibliographyNumberSameLine
     || !renderedState.bibliographyHasMath

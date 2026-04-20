@@ -3,7 +3,10 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
   CLEAR_HISTORY_COMMAND,
   HISTORY_MERGE_TAG,
+  PASTE_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
+  $getSelection,
+  $isRangeSelection,
   type EditorUpdateOptions,
   type LexicalEditor,
 } from "lexical";
@@ -44,6 +47,9 @@ import {
 import { hasCursorRevealActive } from "./cursor-reveal-state";
 import {
   COFLAT_DOCUMENT_SYNC_TAG,
+  COFLAT_FORMAT_COMMIT_TAG,
+  COFLAT_INCREMENTAL_DOC_CHANGE_TAG,
+  COFLAT_NESTED_EDIT_TAG,
   COFLAT_REVEAL_COMMIT_TAG,
   COFLAT_REVEAL_UI_TAG,
 } from "./update-tags";
@@ -93,6 +99,9 @@ export function shouldIgnoreMarkdownEditorChange(
   if (tags.has(COFLAT_DOCUMENT_SYNC_TAG)) {
     return true;
   }
+  if (tags.has(COFLAT_INCREMENTAL_DOC_CHANGE_TAG)) {
+    return true;
+  }
   if (tags.has(COFLAT_REVEAL_UI_TAG) && !tags.has(COFLAT_REVEAL_COMMIT_TAG)) {
     return true;
   }
@@ -111,18 +120,33 @@ export interface MarkdownEditorSessionController {
   readonly syncSelectionToDocLength: (docLength: number) => void;
 }
 
+function isUserCommittedRichChange(
+  requireUserEditFlag: boolean,
+  userEditPending: boolean,
+  tags: Set<string>,
+): boolean {
+  return !requireUserEditFlag
+    || userEditPending
+    || tags.has(COFLAT_FORMAT_COMMIT_TAG)
+    || tags.has(COFLAT_NESTED_EDIT_TAG)
+    || tags.has(COFLAT_REVEAL_COMMIT_TAG)
+    || tags.has(PASTE_TAG);
+}
+
 export function useMarkdownEditorSessionController({
   doc,
   focusOwner,
   onDocChange,
   onSelectionChange,
   onTextChange,
+  requireUserEditFlag = true,
 }: {
   readonly doc: string;
   readonly focusOwner: SurfaceFocusOwner;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly onTextChange?: (text: string) => void;
+  readonly requireUserEditFlag?: boolean;
 }): MarkdownEditorSessionController {
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
@@ -138,6 +162,9 @@ export function useMarkdownEditorSessionController({
 
   const handleRichChange = useCallback((editor: LexicalEditor, tags: Set<string>) => {
     if (shouldIgnoreMarkdownEditorChange(editor, tags)) {
+      return;
+    }
+    if (!isUserCommittedRichChange(requireUserEditFlag, userEditPendingRef.current, tags)) {
       return;
     }
 
@@ -164,7 +191,7 @@ export function useMarkdownEditorSessionController({
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
-  }, [onDocChange, onSelectionChange, onTextChange]);
+  }, [onDocChange, onSelectionChange, onTextChange, requireUserEditFlag]);
 
   const syncSelectionToDocLength = useCallback((docLength: number) => {
     sourceSelectionRef.current = createMarkdownSelection(
@@ -321,8 +348,12 @@ export function MarkdownModeSyncPlugin({
 interface MarkdownEditorHandlePluginProps {
   readonly editorModeRef: MutableRefObject<EditorMode>;
   readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
+  readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
+  readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
+  readonly onTextChange?: (text: string) => void;
+  readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly readInactiveRichSelection?: boolean;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
   readonly storeSelectionOnNoopChange?: boolean;
@@ -332,8 +363,12 @@ interface MarkdownEditorHandlePluginProps {
 export function MarkdownEditorHandlePlugin({
   editorModeRef,
   focusOwnerRef,
+  lastCommittedDocRef,
   onEditorReady,
+  onDocChange,
   onSelectionChange,
+  onTextChange,
+  pendingLocalEchoDocRef,
   readInactiveRichSelection = false,
   selectionRef,
   storeSelectionOnNoopChange = false,
@@ -381,6 +416,54 @@ export function MarkdownEditorHandlePlugin({
     const readFreshDocument = () => {
       flushPendingEdits();
       return readDocumentSnapshot();
+    };
+
+    const insertTextIntoRichSelection = (
+      currentDoc: string,
+      text: string,
+    ): { readonly nextDoc: string; readonly nextSelection: MarkdownEditorSelection } | null => {
+      const desiredSelection = createMarkdownSelection(
+        selectionRef.current.anchor,
+        selectionRef.current.focus,
+        currentDoc.length,
+      );
+      const moved = selectSourceOffsetsInRichLexicalRoot(
+        editor,
+        currentDoc,
+        desiredSelection.anchor,
+        desiredSelection.focus,
+      );
+      if (!moved) {
+        return null;
+      }
+
+      const actualSelection = readSourceSelectionFromLexicalSelection(editor, {
+        fallback: desiredSelection,
+        markdown: currentDoc,
+      }) ?? desiredSelection;
+      let inserted = false;
+      editor.update(() => {
+        const lexicalSelection = $getSelection();
+        if (!$isRangeSelection(lexicalSelection)) {
+          return;
+        }
+        lexicalSelection.insertText(text);
+        inserted = true;
+      }, { discrete: true });
+      if (!inserted) {
+        return null;
+      }
+
+      const nextDoc = [
+        currentDoc.slice(0, actualSelection.from),
+        text,
+        currentDoc.slice(actualSelection.to),
+      ].join("");
+      const nextOffset = actualSelection.from + text.length;
+      return {
+        nextDoc,
+        nextSelection: createMarkdownSelection(nextOffset, nextOffset, nextDoc.length),
+      };
     };
 
     onEditorReady({
@@ -438,7 +521,9 @@ export function MarkdownEditorHandlePlugin({
       peekDoc: readDocumentSnapshot,
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {
-        const currentDoc = readFreshDocument();
+        const currentDoc = editorModeRef.current === "source"
+          ? readFreshDocument()
+          : lastCommittedDocRef.current;
         const selection = createMarkdownSelection(
           selectionRef.current.anchor,
           selectionRef.current.focus,
@@ -456,17 +541,41 @@ export function MarkdownEditorHandlePlugin({
           return;
         }
 
-        const nextSelection = storeSelection(
+        if (editorModeRef.current === "source") {
+          const nextSelection = storeSelection(
+            selectionRef,
+            nextDoc.length,
+            onSelectionChange,
+            nextOffset,
+          );
+          replaceSourceText(editor, nextDoc, nextSelection);
+          return;
+        }
+
+        const richInsert = insertTextIntoRichSelection(currentDoc, text);
+        if (richInsert) {
+          const changes = createMinimalEditorDocumentChanges(
+            lastCommittedDocRef.current,
+            richInsert.nextDoc,
+          );
+          selectionRef.current = richInsert.nextSelection;
+          onSelectionChange?.(richInsert.nextSelection);
+          if (changes.length > 0) {
+            pendingLocalEchoDocRef.current = richInsert.nextDoc;
+            lastCommittedDocRef.current = richInsert.nextDoc;
+            userEditPendingRef.current = false;
+            onTextChange?.(richInsert.nextDoc);
+            onDocChange?.(changes);
+          }
+          return;
+        }
+
+        storeSelection(
           selectionRef,
           nextDoc.length,
           onSelectionChange,
           nextOffset,
         );
-        if (editorModeRef.current === "source") {
-          replaceSourceText(editor, nextDoc, nextSelection);
-          return;
-        }
-
         userEditPendingRef.current = true;
         setLexicalMarkdown(editor, nextDoc);
       },
@@ -528,8 +637,12 @@ export function MarkdownEditorHandlePlugin({
     editorModeRef,
     embeddedFieldFlushRegistry,
     focusOwnerRef,
+    lastCommittedDocRef,
     onEditorReady,
+    onDocChange,
     onSelectionChange,
+    onTextChange,
+    pendingLocalEchoDocRef,
     readInactiveRichSelection,
     selectionRef,
     storeSelectionOnNoopChange,
@@ -541,16 +654,24 @@ export function MarkdownEditorHandlePlugin({
 
 interface RichMarkdownEditorHandlePluginProps {
   readonly focusOwner: SurfaceFocusOwner;
+  readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
+  readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
+  readonly onTextChange?: (text: string) => void;
+  readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
   readonly userEditPendingRef: MutableRefObject<boolean>;
 }
 
 export function RichMarkdownEditorHandlePlugin({
   focusOwner,
+  lastCommittedDocRef,
   onEditorReady,
+  onDocChange,
   onSelectionChange,
+  onTextChange,
+  pendingLocalEchoDocRef,
   selectionRef,
   userEditPendingRef,
 }: RichMarkdownEditorHandlePluginProps) {
@@ -562,8 +683,12 @@ export function RichMarkdownEditorHandlePlugin({
     <MarkdownEditorHandlePlugin
       editorModeRef={editorModeRef}
       focusOwnerRef={focusOwnerRef}
+      lastCommittedDocRef={lastCommittedDocRef}
       onEditorReady={onEditorReady}
+      onDocChange={onDocChange}
       onSelectionChange={onSelectionChange}
+      onTextChange={onTextChange}
+      pendingLocalEchoDocRef={pendingLocalEchoDocRef}
       readInactiveRichSelection
       selectionRef={selectionRef}
       storeSelectionOnNoopChange

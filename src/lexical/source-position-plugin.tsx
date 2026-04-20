@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createNodeSelection,
@@ -14,6 +14,7 @@ import {
   NAVIGATE_SOURCE_POSITION_EVENT,
   type NavigateSourcePositionEventDetail,
 } from "../constants/events";
+import { measureSync } from "../app/perf";
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { sourcePositionFromElement } from "./source-position-dom";
@@ -25,6 +26,8 @@ import {
   setSourceRange,
   SOURCE_BLOCK_SELECTOR,
 } from "./source-position-contract";
+import { consumeIncrementalSourcePositionSync } from "./source-position-incremental-sync";
+import { COFLAT_INCREMENTAL_DOC_CHANGE_TAG } from "./update-tags";
 
 export { readSourcePositionFromElement } from "./source-position-dom";
 export {
@@ -37,18 +40,33 @@ export function syncSourceBlockPositions(root: HTMLElement | null, doc: string):
     return;
   }
 
-  const ranges = collectSourceBlockRanges(doc);
   const elements = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)]
     .filter((element) => element.closest(".cf-lexical-root") === root);
+  if (elements.length === 0) {
+    return;
+  }
 
-  elements.forEach((element, index) => {
-    const range = ranges[index];
-    if (!range) {
-      clearSourceRange(element);
-      return;
-    }
-    setSourceRange(element, range.from, range.to);
+  measureSync("source.syncSourceBlockPositions", () => {
+    const ranges = collectSourceBlockRanges(doc);
+    elements.forEach((element, index) => {
+      const range = ranges[index];
+      if (!range) {
+        clearSourceRange(element);
+        return;
+      }
+      setSourceRange(element, range.from, range.to);
+    });
+  }, {
+    detail: root.className,
   });
+}
+
+function hasCompleteSourceBlockRanges(root: HTMLElement): boolean {
+  const elements = [...root.querySelectorAll<HTMLElement>(SOURCE_BLOCK_SELECTOR)]
+    .filter((element) => element.closest(".cf-lexical-root") === root);
+  return elements.length > 0 && elements.every((element) =>
+    readSourceFrom(element) !== null && readSourceTo(element) !== null
+  );
 }
 
 function selectNavigationTarget(
@@ -167,16 +185,41 @@ export function SourcePositionPlugin({
 }) {
   const [editor] = useLexicalComposerContext();
   const syncToken = useMemo(() => ({ doc }), [doc]);
+  const didScheduleInitialSyncRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
     const sync = () => {
-      syncSourceBlockPositions(editor.getRootElement(), syncToken.doc);
+      if (cancelled) {
+        return;
+      }
+      const root = editor.getRootElement();
+      if (
+        root
+        && consumeIncrementalSourcePositionSync(root)
+        && hasCompleteSourceBlockRanges(root)
+      ) {
+        return;
+      }
+      syncSourceBlockPositions(root, syncToken.doc);
     };
 
     sync();
-    return editor.registerUpdateListener(() => {
+    if (!didScheduleInitialSyncRef.current) {
+      didScheduleInitialSyncRef.current = true;
+      queueMicrotask(sync);
+      requestAnimationFrame(sync);
+    }
+    const unregister = editor.registerUpdateListener(({ tags }) => {
+      if (tags.has(COFLAT_INCREMENTAL_DOC_CHANGE_TAG)) {
+        return;
+      }
       sync();
     });
+    return () => {
+      cancelled = true;
+      unregister();
+    };
   }, [editor, syncToken]);
 
   useEffect(() => {
