@@ -4,7 +4,6 @@ import type { LexicalEditor } from "lexical";
 
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { dispatchNavigateSourcePositionEvent } from "../../constants/events";
-import { createMinimalEditorDocumentChanges } from "../../lib/editor-doc-change";
 import { type DiagnosticEntry } from "../diagnostics";
 import { useDiagnostics } from "../../state/diagnostics-store";
 import { type HeadingEntry } from "../heading-ancestry";
@@ -15,15 +14,12 @@ import type { FileSystem } from "../file-manager";
 import type { SearchNavigationTarget } from "../search";
 import { useEditorNavigation } from "./use-editor-navigation";
 import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";
+import { useEditorTransactions } from "./use-editor-transactions";
 
 interface PendingModeOverride {
   readonly path: string;
   readonly mode: EditorMode;
   readonly requestId: number;
-}
-
-interface PendingEditorFlushResult {
-  readonly shouldDeferModeSwitch: boolean;
 }
 
 async function pickImageAsDataUrl(): Promise<string | null> {
@@ -125,50 +121,35 @@ export function useAppEditorShell({
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const diagnostics = useDiagnostics((s) => s.diagnostics);
 
-  const flushPendingEditorEdits = useCallback((): PendingEditorFlushResult => {
-    const handle = editorHandleRef.current;
-    if (!handle || !currentPath) {
-      return {
-        shouldDeferModeSwitch: false,
-      };
-    }
+  const { runEditorTransaction } = useEditorTransactions({
+    currentPath,
+    editorDoc,
+    editorHandleRef,
+    getSessionCurrentDocText,
+    handleDocChange: session.handleDocChange,
+  });
 
-    // Capture source-position intent before committing reveal/nested editors;
-    // after commit the live Lexical selection may sit on the replacement node.
-    handle.getSelection();
-    handle.flushPendingEdits();
-    const freshDoc = handle.peekDoc();
-    const currentDoc = getSessionCurrentDocText();
-    const changes = createMinimalEditorDocumentChanges(currentDoc, freshDoc);
-    if (changes.length > 0) {
-      session.handleDocChange(changes);
-      return {
-        shouldDeferModeSwitch: true,
-      };
-    }
-    return {
-      shouldDeferModeSwitch: freshDoc !== editorDoc,
-    };
-  }, [currentPath, editorDoc, getSessionCurrentDocText, session]);
+  const getDebugCurrentDocText = useCallback(() => {
+    return runEditorTransaction("debug-read", getSessionCurrentDocText).value;
+  }, [getSessionCurrentDocText, runEditorTransaction]);
 
-  const getFreshCurrentDocText = useCallback(() => {
-    flushPendingEditorEdits();
-    return getSessionCurrentDocText();
-  }, [flushPendingEditorEdits, getSessionCurrentDocText]);
+  const getSourceSelectionDocText = useCallback(() => {
+    return runEditorTransaction("source-selection", getSessionCurrentDocText).value;
+  }, [getSessionCurrentDocText, runEditorTransaction]);
 
   const peekCurrentDocText = useCallback(() => getSessionCurrentDocText(), [getSessionCurrentDocText]);
 
   const saveFile = useCallback(async () => {
-    flushPendingEditorEdits();
+    runEditorTransaction("save", () => undefined);
     await Promise.resolve();
     await sessionSaveFile();
-  }, [flushPendingEditorEdits, sessionSaveFile]);
+  }, [runEditorTransaction, sessionSaveFile]);
 
   const navigation = useEditorNavigation({
     openFile,
     isPathOpen,
     currentPath,
-    getCurrentDocText: getFreshCurrentDocText,
+    getCurrentDocText: getSourceSelectionDocText,
   });
   const {
     handleOutlineSelect,
@@ -221,7 +202,7 @@ export function useAppEditorShell({
   }, [currentPath, isMarkdownFile, modeOverrides, pendingModeOverride, settings.editorMode]);
 
   const handleModeChange = useCallback((mode: EditorMode) => {
-    const flushResult = flushPendingEditorEdits();
+    const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
     const path = currentPath;
     const applyModeOverride = () => {
@@ -240,12 +221,13 @@ export function useAppEditorShell({
     } else {
       applyModeOverride();
     }
-  }, [currentPath, flushPendingEditorEdits, isMarkdownFile]);
+  }, [currentPath, isMarkdownFile, runEditorTransaction]);
 
   const handleSearchResult = useCallback((
     target: SearchNavigationTarget,
     onComplete?: () => void,
   ) => {
+    runEditorTransaction("search-navigation", () => undefined);
     const targetIsMarkdown = target.file.endsWith(".md");
     const normalizedMode = normalizeEditorMode(target.editorMode, targetIsMarkdown);
     const requestId = ++pendingModeRequestIdRef.current;
@@ -279,7 +261,7 @@ export function useAppEditorShell({
         }
       }, 0);
     });
-  }, [handleSearchResultNavigation]);
+  }, [handleSearchResultNavigation, runEditorTransaction]);
 
   const hasDirtyDocument = currentDocument?.dirty ?? false;
 
@@ -321,7 +303,7 @@ export function useAppEditorShell({
     handleModeChange,
     isMarkdownFile,
     activeDocumentSignal,
-    getCurrentDocText: getFreshCurrentDocText,
+    getCurrentDocText: getDebugCurrentDocText,
     hasDirtyDocument,
     handleDragOver,
     handleDrop,
