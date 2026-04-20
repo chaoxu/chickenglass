@@ -16,10 +16,7 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import type { LexicalEditor } from "lexical";
 
-import {
-  createMinimalEditorDocumentChanges,
-  type EditorDocumentChange,
-} from "../lib/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/editor-doc-change";
 import {
   focusSurface,
   type FocusOwner,
@@ -33,7 +30,6 @@ import {
 import { BibliographySection } from "./bibliography-section";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import {
-  createEmbeddedFieldFlushRegistry,
   EmbeddedFieldFlushProvider,
 } from "./embedded-field-flush-registry";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
@@ -53,7 +49,6 @@ import {
   coflatMarkdownNodes,
   coflatMarkdownTransformers,
   createLexicalInitialEditorState,
-  getLexicalMarkdown,
   lexicalMarkdownTheme,
 } from "./markdown";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
@@ -62,15 +57,7 @@ import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
-import {
-  readSourceSelectionFromLexicalSelection,
-  SourcePositionPlugin,
-} from "./source-position-plugin";
-import {
-  COFLAT_DOCUMENT_SYNC_TAG,
-  COFLAT_REVEAL_COMMIT_TAG,
-  COFLAT_REVEAL_UI_TAG,
-} from "./update-tags";
+import { SourcePositionPlugin } from "./source-position-plugin";
 import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
 import type {
   MarkdownEditorHandle,
@@ -80,24 +67,25 @@ import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { TabKeyPlugin } from "./tab-key-plugin";
 import { TreeViewPlugin } from "./tree-view-plugin";
 import { InteractionTracePlugin } from "./interaction-trace-plugin";
-import { hasCursorRevealActive } from "./cursor-reveal-state";
 
 import {
   CoflatClipboardPlugin,
   CodeFenceExitPlugin,
   CodeHighlightPlugin,
-  EditorHandlePlugin,
-  MarkdownSyncPlugin,
   SelectionAlwaysOnPlugin,
 } from "./rich-editor-plugins";
 import {
-  createMarkdownSelection,
   EditableSyncPlugin,
   FormatEventPlugin,
   repairBlankClickSelection,
   RootElementPlugin,
   ViewportTrackingPlugin,
 } from "./editor-surface-shared";
+import {
+  MarkdownSyncPlugin,
+  RichMarkdownEditorHandlePlugin,
+  useMarkdownEditorSessionController,
+} from "./markdown-editor-session";
 
 export type { LexicalRichMarkdownEditorProps };
 
@@ -166,18 +154,28 @@ export function LexicalRichMarkdownEditor({
   const inheritedRevealPresentation = useRevealPresentation();
   const resolvedRevealPresentation = revealPresentation ?? inheritedRevealPresentation;
   const inheritedSurface = useEditorScrollSurface();
-  const initialDocRef = useRef(doc);
-  const lastCommittedDocRef = useRef(doc);
   const nestedHistoryStateRef = useRef<HistoryState | null>(null);
-  const pendingLocalEchoDocRef = useRef<string | null>(null);
-  const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
-  const userEditPendingRef = useRef(false);
-  const embeddedFieldFlushRegistry = useMemo(createEmbeddedFieldFlushRegistry, []);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
   const focusOwner = useMemo(
     () => focusSurface(focusOwnerRole, namespace),
     [focusOwnerRole, namespace],
   );
+  const {
+    initialDocRef,
+    lastCommittedDocRef,
+    pendingLocalEchoDocRef,
+    sourceSelectionRef,
+    userEditPendingRef,
+    embeddedFieldFlushRegistry,
+    handleRichChange,
+    syncSelectionToDocLength,
+  } = useMarkdownEditorSessionController({
+    doc,
+    focusOwner,
+    onDocChange,
+    onSelectionChange,
+    onTextChange,
+  });
 
   if (preserveLocalHistory && nestedHistoryStateRef.current === null) {
     nestedHistoryStateRef.current = createEmptyHistoryState();
@@ -199,43 +197,8 @@ export function LexicalRichMarkdownEditor({
     editor: LexicalEditor,
     tags: Set<string>,
   ) => {
-    if (tags.has(COFLAT_DOCUMENT_SYNC_TAG)) {
-      return;
-    }
-    if (tags.has(COFLAT_REVEAL_UI_TAG) && !tags.has(COFLAT_REVEAL_COMMIT_TAG)) {
-      return;
-    }
-    if (!tags.has(COFLAT_REVEAL_COMMIT_TAG) && hasCursorRevealActive(editor)) {
-      return;
-    }
-
-    const nextDoc = getLexicalMarkdown(editor);
-
-    const changes = createMinimalEditorDocumentChanges(
-      lastCommittedDocRef.current,
-      nextDoc,
-    );
-    if (changes.length === 0) {
-      userEditPendingRef.current = false;
-      return;
-    }
-
-    userEditPendingRef.current = false;
-    const nextSelection = readSourceSelectionFromLexicalSelection(editor, {
-      fallback: sourceSelectionRef.current,
-      markdown: nextDoc,
-    });
-    if (nextSelection) {
-      sourceSelectionRef.current = nextSelection;
-    }
-    pendingLocalEchoDocRef.current = nextDoc;
-    lastCommittedDocRef.current = nextDoc;
-    onTextChange?.(nextDoc);
-    if (nextSelection) {
-      onSelectionChange?.(nextSelection);
-    }
-    onDocChange?.(changes);
-  }, [onDocChange, onSelectionChange, onTextChange]);
+    handleRichChange(editor, tags);
+  }, [handleRichChange]);
 
   const shellClassName = layoutMode === "inline"
     ? "cf-lexical-surface cf-lexical-surface--inline"
@@ -250,12 +213,8 @@ export function LexicalRichMarkdownEditor({
   const effectiveSurface = inheritedSurface ?? surfaceElement;
 
   useEffect(() => {
-    sourceSelectionRef.current = createMarkdownSelection(
-      sourceSelectionRef.current.anchor,
-      sourceSelectionRef.current.focus,
-      doc.length,
-    );
-  }, [doc]);
+    syncSelectionToDocLength(doc.length);
+  }, [doc.length, syncSelectionToDocLength]);
 
   return (
     <EmbeddedFieldFlushProvider registry={embeddedFieldFlushRegistry}>
@@ -277,7 +236,7 @@ export function LexicalRichMarkdownEditor({
                 {editable
                   ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
                   : <ClickableLinkPlugin />}
-                <EditorHandlePlugin
+                <RichMarkdownEditorHandlePlugin
                   focusOwner={focusOwner}
                   onEditorReady={onEditorReady}
                   onSelectionChange={onSelectionChange}

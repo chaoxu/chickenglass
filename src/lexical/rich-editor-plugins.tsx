@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import type { MutableRefObject } from "react";
 import { $isCodeNode, CodeNode, registerCodeHighlighting } from "@lexical/code";
 import { copyToClipboard } from "@lexical/clipboard";
 import { SelectionAlwaysOnDisplay } from "@lexical/react/LexicalSelectionAlwaysOnDisplay";
@@ -11,52 +10,25 @@ import {
   $isNodeSelection,
   $isRangeSelection,
   $nodesOfType,
-  CLEAR_HISTORY_COMMAND,
   COMMAND_PRIORITY_HIGH,
   COPY_COMMAND,
   CUT_COMMAND,
-  HISTORY_MERGE_TAG,
   KEY_ENTER_COMMAND,
   PASTE_COMMAND,
   PASTE_TAG,
-  type LexicalEditor,
   type LexicalNode,
   isDOMNode,
   isSelectionCapturedInDecoratorInput,
   mergeRegister,
 } from "lexical";
 
-import {
-  applyEditorDocumentChanges,
-} from "../lib/editor-doc-change";
-import type { SurfaceFocusOwner } from "../state/editor-focus";
-import { dispatchSurfaceFocusRequest } from "./editor-focus-plugin";
 import { useLexicalRenderContext } from "./render-context";
 import {
   getCoflatClipboardData,
   getCoflatMarkdownFromDataTransfer,
   insertCoflatMarkdownAtSelection,
 } from "./clipboard";
-import {
-  getLexicalMarkdown,
-  setLexicalMarkdown,
-} from "./markdown";
-import { useEmbeddedFieldFlushRegistry } from "./embedded-field-flush-registry";
-import {
-  readSourceSelectionFromLexicalSelection,
-  selectSourceOffsetsInRichLexicalRoot,
-  scrollSourcePositionIntoView,
-} from "./source-position-plugin";
 import { useDevSettings } from "../state/dev-settings";
-import type {
-  MarkdownEditorHandle,
-  MarkdownEditorSelection,
-} from "./markdown-editor-types";
-import {
-  createMarkdownSelection,
-  storeSelection,
-} from "./editor-surface-shared";
-import { COFLAT_DOCUMENT_SYNC_TAG } from "./update-tags";
 
 export function SelectionAlwaysOnPlugin() {
   const open = useDevSettings((s) => s.selectionAlwaysOn);
@@ -179,215 +151,6 @@ export function CodeFenceExitPlugin() {
       COMMAND_PRIORITY_HIGH,
     );
   }, [editor]);
-
-  return null;
-}
-
-export function MarkdownSyncPlugin({
-  doc,
-  lastCommittedDocRef,
-  pendingLocalEchoDocRef,
-  preserveLocalHistory,
-}: {
-  readonly doc: string;
-  readonly lastCommittedDocRef: MutableRefObject<string>;
-  readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
-  readonly preserveLocalHistory: boolean;
-}) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
-    if (doc === lastCommittedDocRef.current) {
-      if (pendingLocalEchoDoc === doc) {
-        pendingLocalEchoDocRef.current = null;
-      }
-      return;
-    }
-
-    const preservePendingLocalHistory =
-      preserveLocalHistory && pendingLocalEchoDoc !== null;
-    setLexicalMarkdown(
-      editor,
-      doc,
-      {
-        tag: preservePendingLocalHistory
-          ? [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG]
-          : COFLAT_DOCUMENT_SYNC_TAG,
-      },
-    );
-    if (!preservePendingLocalHistory) {
-      editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
-    }
-    pendingLocalEchoDocRef.current = null;
-    lastCommittedDocRef.current = doc;
-  }, [doc, editor, lastCommittedDocRef, pendingLocalEchoDocRef, preserveLocalHistory]);
-
-  return null;
-}
-
-interface EditorHandlePluginProps {
-  readonly focusOwner: SurfaceFocusOwner;
-  readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
-  readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
-  readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
-  readonly userEditPendingRef: MutableRefObject<boolean>;
-}
-
-export function EditorHandlePlugin({
-  focusOwner,
-  onEditorReady,
-  onSelectionChange,
-  selectionRef,
-  userEditPendingRef,
-}: EditorHandlePluginProps) {
-  const [editor] = useLexicalComposerContext();
-  const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
-
-  useEffect(() => {
-    if (!onEditorReady) {
-      return;
-    }
-
-    const readDocumentSnapshot = () => getLexicalMarkdown(editor);
-
-    const readSelectionSnapshot = () => {
-      const currentDoc = readDocumentSnapshot();
-      const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
-        fallback: selectionRef.current,
-        markdown: currentDoc,
-      });
-      if (!liveSelection) {
-        return selectionRef.current;
-      }
-      selectionRef.current = liveSelection;
-      return liveSelection;
-    };
-
-    const flushPendingEdits = () => {
-      const selection = readSelectionSnapshot();
-      embeddedFieldFlushRegistry?.flush();
-      selectionRef.current = selection;
-      onSelectionChange?.(selection);
-    };
-
-    const readFreshDocument = () => {
-      flushPendingEdits();
-      return readDocumentSnapshot();
-    };
-
-    onEditorReady({
-      applyChanges: (changes) => {
-        if (changes.length === 0) {
-          return;
-        }
-
-        const currentDoc = readFreshDocument();
-        const nextDoc = applyEditorDocumentChanges(currentDoc, changes);
-        if (nextDoc === currentDoc) {
-          storeSelection(
-            selectionRef,
-            currentDoc.length,
-            onSelectionChange,
-            selectionRef.current.anchor,
-            selectionRef.current.focus,
-          );
-          return;
-        }
-        userEditPendingRef.current = true;
-        storeSelection(
-          selectionRef,
-          nextDoc.length,
-          onSelectionChange,
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
-        );
-        setLexicalMarkdown(editor, nextDoc);
-      },
-      focus: () => {
-        scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
-        dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
-      },
-      flushPendingEdits,
-      getDoc: readFreshDocument,
-      getSelection: readSelectionSnapshot,
-      peekDoc: readDocumentSnapshot,
-      peekSelection: readSelectionSnapshot,
-      insertText: (text) => {
-        const currentDoc = readFreshDocument();
-        const selection = createMarkdownSelection(
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
-          currentDoc.length,
-        );
-        const nextDoc = [
-          currentDoc.slice(0, selection.from),
-          text,
-          currentDoc.slice(selection.to),
-        ].join("");
-        const nextOffset = selection.from + text.length;
-
-        if (nextDoc === currentDoc) {
-          storeSelection(selectionRef, currentDoc.length, onSelectionChange, nextOffset);
-          return;
-        }
-        userEditPendingRef.current = true;
-        storeSelection(selectionRef, nextDoc.length, onSelectionChange, nextOffset);
-        setLexicalMarkdown(editor, nextDoc);
-      },
-      setDoc: (doc) => {
-        const currentDoc = readFreshDocument();
-        if (doc === currentDoc) {
-          storeSelection(
-            selectionRef,
-            currentDoc.length,
-            onSelectionChange,
-            selectionRef.current.anchor,
-            selectionRef.current.focus,
-          );
-          return;
-        }
-        userEditPendingRef.current = true;
-        storeSelection(
-          selectionRef,
-          doc.length,
-          onSelectionChange,
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
-        );
-        setLexicalMarkdown(editor, doc);
-      },
-      setSelection: (anchor, focus = anchor) => {
-        flushPendingEdits();
-        const nextSelection = storeSelection(
-          selectionRef,
-          getLexicalMarkdown(editor).length,
-          onSelectionChange,
-          anchor,
-          focus,
-        );
-        const currentDoc = getLexicalMarkdown(editor);
-        const moved = selectSourceOffsetsInRichLexicalRoot(
-          editor,
-          currentDoc,
-          nextSelection.anchor,
-          nextSelection.focus,
-        );
-        if (!moved) {
-          scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
-        }
-        dispatchSurfaceFocusRequest(editor, { owner: focusOwner });
-      },
-    }, editor);
-  }, [
-    editor,
-    embeddedFieldFlushRegistry,
-    focusOwner,
-    onEditorReady,
-    onSelectionChange,
-    selectionRef,
-    userEditPendingRef,
-  ]);
 
   return null;
 }
