@@ -297,6 +297,25 @@ function collectChangedMathDirtyRanges(
   return mergeDirtyRanges(dirtyRanges);
 }
 
+function docChangeCanShiftMathDecorations(
+  tr: Transaction,
+  regionsBefore: readonly MathSemantics[],
+): boolean {
+  if (!tr.docChanged || regionsBefore.length === 0) return false;
+  let lastMathTo = 0;
+  for (const region of regionsBefore) {
+    lastMathTo = Math.max(lastMathTo, region.to);
+  }
+
+  let canShift = false;
+  tr.changes.iterChangedRanges((fromOld) => {
+    if (fromOld <= lastMathTo) {
+      canShift = true;
+    }
+  });
+  return canShift;
+}
+
 function sameViewportRanges(
   before: readonly { from: number; to: number }[],
   after: readonly { from: number; to: number }[],
@@ -408,14 +427,15 @@ const mathDecorationField = createDecorationStateField({
     const inlineViewportChanged =
       tr.effects.some((effect) => effect.is(setInlineMathViewportRangesEffect))
       && !sameViewportRanges(beforeInlineViewport, afterInlineViewport);
+    const mathPositionsMayShift = docChangeCanShiftMathDecorations(tr, regionsBefore);
 
     const updatePlan = planSemanticSensitiveUpdate(tr, {
       docChanged: (transaction) => transaction.docChanged,
-      semanticChanged: () => regionsBefore !== regionsAfter,
+      semanticChanged: () => regionsBefore !== regionsAfter || mathPositionsMayShift,
       contextChanged: () => inlineViewportChanged,
       contextUpdateMode: "dirty-ranges",
-      // Unchanged math slice identity means the edit stayed outside math, so
-      // preserving the existing DecorationSet matches the pre-refactor path.
+      // Edits after every math range cannot shift math decorations, so keep the
+      // DecorationSet stable for that common path.
       stableDocChangeMode: "keep",
       shouldRebuild: (_transaction, context) => {
         if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {

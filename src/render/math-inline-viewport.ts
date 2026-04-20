@@ -9,7 +9,11 @@ import {
   type ViewUpdate,
   ViewPlugin,
 } from "@codemirror/view";
-import { mapVisibleRanges, type VisibleRange } from "./viewport-diff";
+import {
+  mapVisibleRanges,
+  mergeRanges,
+  type VisibleRange,
+} from "./viewport-diff";
 
 function sameRanges(
   left: readonly VisibleRange[],
@@ -27,6 +31,19 @@ function sameRanges(
 
 function fullDocumentRange(state: EditorState): readonly VisibleRange[] {
   return [{ from: 0, to: state.doc.length }];
+}
+
+function clampVisibleRanges(
+  ranges: readonly VisibleRange[],
+  docLength: number,
+): readonly VisibleRange[] {
+  return mergeRanges(
+    ranges.map((range) => {
+      const from = Math.max(0, Math.min(range.from, docLength));
+      const to = Math.max(from, Math.min(range.to, docLength));
+      return { from, to };
+    }),
+  );
 }
 
 export function computeInlineMathViewportRanges(
@@ -51,7 +68,8 @@ export const inlineMathViewportRangesField =
     update(value, tr) {
       for (const effect of tr.effects) {
         if (effect.is(setInlineMathViewportRangesEffect)) {
-          return sameRanges(value, effect.value) ? value : effect.value;
+          const next = clampVisibleRanges(effect.value, tr.state.doc.length);
+          return sameRanges(value, next) ? value : next;
         }
       }
 
@@ -59,7 +77,10 @@ export const inlineMathViewportRangesField =
         return value;
       }
 
-      const next = mapVisibleRanges(value, tr.changes);
+      const next = clampVisibleRanges(
+        mapVisibleRanges(value, tr.changes),
+        tr.state.doc.length,
+      );
       return sameRanges(value, next) ? value : next;
     },
 
@@ -69,7 +90,10 @@ export const inlineMathViewportRangesField =
 export function getInlineMathViewportRanges(
   state: EditorState,
 ): readonly VisibleRange[] {
-  return state.field(inlineMathViewportRangesField, false) ?? fullDocumentRange(state);
+  return clampVisibleRanges(
+    state.field(inlineMathViewportRangesField, false) ?? fullDocumentRange(state),
+    state.doc.length,
+  );
 }
 
 function syncInlineMathViewportRanges(view: EditorView): void {
