@@ -221,6 +221,15 @@ describe("MemoryFileSystem.readFileBinary", () => {
     expect(result).toEqual(data);
   });
 
+  it("reads raw text assets as UTF-8 bytes for SVG previews", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+    const fs = new MemoryFileSystem({ "assets/figure.svg": svg });
+
+    const result = await fs.readFileBinary("assets/figure.svg");
+
+    expect(new TextDecoder().decode(result)).toBe(svg);
+  });
+
   it("throws on reading a non-existent file", async () => {
     const fs = new MemoryFileSystem();
     await expect(fs.readFileBinary("missing.png")).rejects.toThrow(

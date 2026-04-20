@@ -306,7 +306,11 @@ export class MemoryFileSystem implements FileSystem {
   async readFileBinary(path: string): Promise<Uint8Array> {
     const content = this.files.get(path);
     if (content !== undefined) {
-      return base64ToUint8Array(content);
+      try {
+        return base64ToUint8Array(content);
+      } catch {
+        return new TextEncoder().encode(content);
+      }
     }
     // Fallback: try fetching as a static asset (e.g., PDF files served by Vite
     // from the demo/ directory that weren't loaded into the in-memory filesystem).
