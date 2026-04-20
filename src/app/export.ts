@@ -1,10 +1,10 @@
 /**
- * PDF/LaTeX/HTML export.
+ * PDF/LaTeX export plus a hidden HTML source snapshot helper.
  *
  * - PDF and LaTeX: invoked via the Tauri `export_document` command
  *   (spawns Pandoc from the Rust backend; content passed via stdin).
- * - HTML: self-contained, generated directly in TypeScript with
- *   proper semantic HTML (headings, lists, math via KaTeX, fenced divs).
+ * - HTML: not a user-facing export surface. The helper below preserves the
+ *   old source-in-`pre` snapshot path for tests/future work only.
  */
 
 import { isTauri } from "../lib/tauri";
@@ -43,16 +43,10 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
 }
 
 /**
- * Build a self-contained HTML document from markdown content.
+ * Build a source snapshot HTML document from markdown content.
  *
- * Parses the markdown and renders proper semantic HTML:
- * - Headings, paragraphs, lists (ordered, unordered, task lists)
- * - Math via KaTeX (inline and display)
- * - Fenced divs as semantic `<div class="cf-block cf-block-theorem">` etc.
- * - Code blocks, blockquotes, tables, horizontal rules
- * - Inline formatting: bold, italic, strikethrough, highlight, code
- *
- * Includes a minimal stylesheet and links KaTeX CSS for math rendering.
+ * This intentionally does not claim semantic markdown rendering. HTML export
+ * is hidden from product UI until a real supported exporter exists.
  */
 function buildHtmlDocument(
   content: string,
@@ -160,11 +154,11 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Export a document to PDF, LaTeX, or HTML.
+ * Export a document to PDF, LaTeX, or the hidden HTML source snapshot.
  *
  * - PDF/LaTeX: requires Tauri desktop app and Pandoc.
- * - HTML: works in both browser and Tauri modes; produces a self-contained
- *   file that can be opened directly in a browser.
+ * - HTML: internal/hidden source snapshot path retained for tests and future
+ *   exporter work; it is not exposed as a supported product surface.
  *
  * @param content - The full markdown content to export (with includes expanded).
  * @param format - Target format: "pdf", "latex", or "html".
@@ -208,7 +202,7 @@ export async function exportDocument(
 }
 
 /**
- * Export markdown content to a self-contained HTML file.
+ * Export markdown content to a source-snapshot HTML file.
  *
  * In Tauri mode the file is written to disk via the filesystem backend.
  * In browser mode the file is offered as a download via the browser's
