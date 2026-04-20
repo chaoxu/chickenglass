@@ -15,11 +15,13 @@ interface AppMainShellProps {
     "sidenotesCollapsed" | "setSidenotesCollapsed" | "sidebarCollapsed" | "sidebarTab"
   >;
   onOpenPalette: () => void;
+  onOpenSettings: () => void;
 }
 
 export function AppMainShell({
   sidebarLayout,
   onOpenPalette,
+  onOpenSettings,
 }: AppMainShellProps) {
   const fs = useFileSystem();
   const workspace = useAppWorkspaceController();
@@ -87,6 +89,7 @@ export function AppMainShell({
         editorMode={editor.editorMode}
         onModeChange={editor.handleModeChange}
         onOpenPalette={onOpenPalette}
+        onOpenSettings={onOpenSettings}
         activeDocumentSignal={editor.activeDocumentSignal}
         getDocText={editor.getCurrentDocText}
         isMarkdown={editor.isMarkdownFile}

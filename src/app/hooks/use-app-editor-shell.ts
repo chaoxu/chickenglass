@@ -101,6 +101,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
   /** Called by the Lexical editor surface when its imperative handle is available. */
   handleLexicalEditorReady: (handle: MarkdownEditorHandle | null) => void;
+  /** Return the current Lexical editor handle without forcing app-shell rerenders. */
+  getLexicalEditorHandle: () => MarkdownEditorHandle | null;
 
   // --- Navigation ---
 
@@ -283,6 +285,7 @@ export function useAppEditorShell({
   const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
     lexicalEditorHandleRef.current = handle;
   }, []);
+  const getLexicalEditorHandle = useCallback(() => lexicalEditorHandleRef.current, []);
 
   const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
     setHeadings(h);
@@ -503,6 +506,7 @@ export function useAppEditorShell({
     handleDirtyChange: session.markCurrentDocumentDirty,
     handleEditorDocumentReady,
     handleLexicalEditorReady,
+    getLexicalEditorHandle,
     handleOutlineSelect,
     handleGotoLine,
     handleSearchResult,

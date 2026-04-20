@@ -1,8 +1,7 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { Bug } from "lucide-react";
 import { markdownEditorModes, type EditorMode } from "../../editor";
-import { computeDocStats, formatReadingTime, type DocStats } from "../writing-stats";
-import { subscribeFpsMeter, getFpsMeterSnapshot } from "../fps-meter";
+import { computeDocStats, type DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";
 import { buildInfo } from "../build-info";
@@ -17,7 +16,10 @@ import {
   unsubscribeNoop,
   type ActiveDocumentSignal,
 } from "../active-document-signal";
+import { ConfigButton } from "./status-bar-config";
 import { DebugButton } from "./status-bar-debug";
+import { FpsIndicator } from "./status-bar-fps";
+import { StatsPopover } from "./status-bar-stats";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,7 @@ export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
   onOpenPalette?: () => void;
+  onOpenSettings?: () => void;
   /** External signal used to refresh full stats without rerendering the shell. */
   activeDocumentSignal?: ActiveDocumentSignal;
   /** Returns the latest active-document text on demand. */
@@ -45,96 +48,6 @@ const MODE_LABELS: Record<EditorMode, string> = {
   source: "Source",
   read: "Read",
 };
-// ── StatsPopover ───────────────────────────────────────────────────────────────
-
-interface StatsPopoverProps {
-  stats: DocStats;
-  anchorRef: React.RefObject<HTMLElement | null>;
-  onClose: () => void;
-}
-
-const StatsPopover = memo(function StatsPopover({ stats, anchorRef, onClose }: StatsPopoverProps) {
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  // Position the panel above the anchor element.
-  // Manual positioning is sufficient here — the anchor is always at the bottom
-  // of the viewport so there is no collision risk. @floating-ui was evaluated
-  // (#180, #189) but rejected: only 2 manual positioning sites exist in the
-  // codebase, both are trivial, and the ~8KB gzipped cost is not justified.
-  useEffect(() => {
-    const anchor = anchorRef.current;
-    const panel = panelRef.current;
-    if (!anchor || !panel) return;
-    const rect = anchor.getBoundingClientRect();
-    panel.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-    panel.style.left = `${rect.left}px`;
-  }, [anchorRef]);
-
-  // Dismiss on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  const rows: Array<[string, string]> = [
-    ["Words", stats.words.toLocaleString()],
-    ["Characters", stats.chars.toLocaleString()],
-    ["Without spaces", stats.charsNoSpaces.toLocaleString()],
-    ["Sentences", stats.sentences.toLocaleString()],
-    ["Reading time", formatReadingTime(stats.readingMinutes)],
-  ];
-
-  return (
-    <>
-      {/* Transparent backdrop — click closes popover */}
-      <div
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-label="Writing statistics"
-        tabIndex={-1}
-        className="fixed z-50 min-w-[200px] rounded-md border border-[var(--cf-border)] bg-[var(--cf-bg)] p-3 text-xs text-[var(--cf-fg)]"
-      >
-        <div className="font-semibold text-sm mb-2 text-[var(--cf-fg)]">
-          Writing Statistics
-        </div>
-        <div className="flex flex-col gap-1">
-          {rows.map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-6">
-              <span className="text-[var(--cf-muted)]">{label}</span>
-              <span className="font-medium tabular-nums">{value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-});
-
-// ── FpsIndicator ──────────────────────────────────────────────────────────────
-
-const FpsIndicator = memo(function FpsIndicator() {
-  const { enabled, fps, frameTime } = useSyncExternalStore(subscribeFpsMeter, getFpsMeterSnapshot);
-  if (!enabled) return null;
-
-  return (
-    <span className="tabular-nums text-[var(--cf-muted)]" title={`${frameTime} ms/frame`}>
-      {fps} FPS
-    </span>
-  );
-});
 
 // ── StatusBar ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +62,7 @@ export function StatusBar({
   editorMode,
   onModeChange,
   onOpenPalette,
+  onOpenSettings,
   activeDocumentSignal,
   getDocText,
   isMarkdown = true,
@@ -252,6 +166,7 @@ export function StatusBar({
               {buildInfo.label}
             </span>
           )}
+          <ConfigButton onOpenSettings={onOpenSettings} />
           {showDebugControls && <DebugButton />}
           {onOpenPalette && (
             <button

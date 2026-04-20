@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { dispatchFormatEvent } from "../../constants/events";
+import {
+  dispatchFormatEvent,
+  type FormatEventDetail,
+  type HeadingFormatLevel,
+  type SimpleFormatEventType,
+} from "../../constants/events";
 import { BackgroundIndexer } from "../../index";
 import { activeCoflatProduct } from "../../product";
 import { documentAnalysisField } from "../../state/document-analysis";
@@ -22,6 +27,7 @@ import { collectSearchableMarkdownPaths } from "../search";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import { useAutoSave } from "./use-auto-save";
+import { applyMarkdownFormatAction } from "../editor-format-actions";
 import type { UseDialogsReturn } from "./use-dialogs";
 import { type HotkeyBinding, useHotkeys } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
@@ -42,7 +48,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -134,6 +140,14 @@ function renameValidationMessage(nextId: string): string {
     `Cannot rename label to "${nextId.trim()}".`,
     "Use a non-empty id with no spaces. Allowed characters: letters, numbers, _, ., :, and -.",
   ].join("\n\n");
+}
+
+function dispatchFormatDetail(detail: FormatEventDetail): void {
+  if (detail.type === "heading") {
+    dispatchFormatEvent("heading", { level: detail.level });
+    return;
+  }
+  dispatchFormatEvent(detail.type);
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -290,6 +304,24 @@ export function useAppOverlays({
     });
   }, [editor]);
 
+  const applyFormat = useCallback((detail: FormatEventDetail) => {
+    const handled = applyMarkdownFormatAction({
+      editorHandle: editor.getLexicalEditorHandle(),
+      getCurrentDocText: editor.getCurrentDocText,
+    }, detail);
+    if (!handled) {
+      dispatchFormatDetail(detail);
+    }
+  }, [editor]);
+
+  const applySimpleFormat = useCallback((type: SimpleFormatEventType) => {
+    applyFormat({ type });
+  }, [applyFormat]);
+
+  const applyHeading = useCallback((level: HeadingFormatLevel) => {
+    applyFormat({ type: "heading", level });
+  }, [applyFormat]);
+
   const handleShowLabelBacklinks = useCallback(() => {
     const view = editor.editorState?.view;
     if (!view || !editor.currentPath?.endsWith(".md")) {
@@ -389,11 +421,15 @@ export function useAppOverlays({
     { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: "file_quit", action: onQuit },
 
     // ── Format ────────────────────────────────────────────────────────────
-    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, action: () => dispatchFormatEvent("bold") },
-    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, action: () => dispatchFormatEvent("italic") },
-    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => dispatchFormatEvent("heading", { level: 1 }) },
-    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => dispatchFormatEvent("heading", { level: 2 }) },
-    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => dispatchFormatEvent("heading", { level: 3 }) },
+    { id: "format.bold", label: "Toggle Bold", category: "Format", shortcut: `${modKey}+B`, menuId: "format_bold", action: () => applySimpleFormat("bold") },
+    { id: "format.italic", label: "Toggle Italic", category: "Format", shortcut: `${modKey}+I`, menuId: "format_italic", action: () => applySimpleFormat("italic") },
+    { id: "format.code", label: "Toggle Code", category: "Format", menuId: "format_code", action: () => applySimpleFormat("code") },
+    { id: "format.strikethrough", label: "Toggle Strikethrough", category: "Format", menuId: "format_strikethrough", action: () => applySimpleFormat("strikethrough") },
+    { id: "format.highlight", label: "Toggle Highlight", category: "Format", menuId: "format_highlight", action: () => applySimpleFormat("highlight") },
+    { id: "format.link", label: "Insert Link", category: "Format", menuId: "format_link", action: () => applySimpleFormat("link") },
+    { id: "format.heading1", label: "Heading 1", category: "Format", action: () => applyHeading(1) },
+    { id: "format.heading2", label: "Heading 2", category: "Format", action: () => applyHeading(2) },
+    { id: "format.heading3", label: "Heading 3", category: "Format", action: () => applyHeading(3) },
 
     // ── Edit ──────────────────────────────────────────────────────────────
     { id: "edit.rename-local-label", label: "Rename Local Label", category: "Edit", action: handleRenameDocumentLabel },
@@ -436,7 +472,7 @@ export function useAppOverlays({
       category: "File",
       action: () => { void editor.openFile(path); },
     })),
-  ], [dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, handleShowLabelBacklinks, handleRenameDocumentLabel, onOpenFile, onQuit]);
+  ], [applyHeading, applySimpleFormat, dialogs, editor, workspace, sidebarLayout, handleExportHtml, handleBatchExportHtml, handleSaveAs, handleShowLabelBacklinks, handleRenameDocumentLabel, onOpenFile, onQuit]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
