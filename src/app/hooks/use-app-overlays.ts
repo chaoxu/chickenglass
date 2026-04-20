@@ -12,6 +12,7 @@ import type { UseDialogsReturn } from "./use-dialogs";
 import { useHotkeys } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
 import type { AppEditorShellController } from "./use-app-editor-shell";
+import type { AppPreferencesController } from "./use-app-preferences";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
 import { TAURI_MENU_IDS } from "../tauri-client/bridge-metadata";
@@ -33,7 +34,11 @@ interface AppOverlayDeps {
   suspendAutoSaveVersionRef: { current: number };
   workspace: Pick<
     AppWorkspaceSessionController,
-    "settings" | "theme" | "setTheme" | "resolvedTheme" | "recentFiles" | "fileTree" | "handleOpenFolder"
+    "fileTree"
+  >;
+  preferences: Pick<
+    AppPreferencesController,
+    "settings" | "setTheme" | "resolvedTheme" | "recentFiles"
   >;
   sidebarLayout: Pick<
     SidebarLayoutController,
@@ -41,9 +46,10 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "peekCurrentDocText" | "editorHandle" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "state" | "queries" | "files" | "editing" | "plugins"
   >;
   onOpenFile: () => void;
+  onOpenFolder: () => void;
   onQuit: () => void;
 }
 
@@ -63,36 +69,38 @@ export function useAppOverlays({
   suspendAutoSaveRef,
   suspendAutoSaveVersionRef,
   workspace,
+  preferences,
   sidebarLayout,
   editor,
   onOpenFile,
+  onOpenFolder,
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
   const { indexer, searchVersion } = useAppSearchIndex(fs, dialogs, editor, workspace.fileTree);
   const labelCommands = useAppLabelCommands(editor);
 
   const handleSaveAs = useCallback(() => {
-    void editor.saveAs().catch((e: unknown) => {
+    void editor.files.saveAs().catch((e: unknown) => {
       console.error("[overlays] save-as failed", e);
     });
   }, [editor]);
 
   const openSearch = useCallback(() => {
-    editor.getCurrentDocText();
+    editor.queries.getCurrentDocText();
     dialogs.setSearchOpen(true);
   }, [dialogs, editor]);
 
   const toggleSearch = useCallback(() => {
     if (!dialogs.searchOpen) {
-      editor.getCurrentDocText();
+      editor.queries.getCurrentDocText();
     }
     dialogs.setSearchOpen(!dialogs.searchOpen);
   }, [dialogs, editor]);
 
   const applyFormat = useCallback((detail: FormatEventDetail) => {
     applyMarkdownFormatAction({
-      editorHandle: editor.editorHandle,
-      getCurrentDocText: editor.getCurrentDocText,
+      editorHandle: editor.state.editorHandle,
+      getCurrentDocText: editor.queries.getCurrentDocText,
     }, detail);
   }, [editor]);
 
@@ -110,11 +118,11 @@ export function useAppOverlays({
 
   const commandDefs: CommandDef[] = useMemo(() => [
     // ── File ──────────────────────────────────────────────────────────────
-    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: TAURI_MENU_IDS.fileSave, action: () => { void editor.saveFile(); } },
+    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: TAURI_MENU_IDS.fileSave, action: () => { void editor.files.saveFile(); } },
     { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, menuId: TAURI_MENU_IDS.fileOpenFile, action: () => onOpenFile() },
     { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, hotkey: "mod+shift+s", menuId: TAURI_MENU_IDS.fileSaveAs, action: handleSaveAs },
-    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: TAURI_MENU_IDS.fileCloseTab, action: () => { void editor.closeCurrentFile(); } },
-    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: TAURI_MENU_IDS.fileOpenFolder, action: () => workspace.handleOpenFolder() },
+    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: TAURI_MENU_IDS.fileCloseTab, action: () => { void editor.files.closeCurrentFile(); } },
+    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: TAURI_MENU_IDS.fileOpenFolder, action: onOpenFolder },
     { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: TAURI_MENU_IDS.fileQuit, action: onQuit },
 
     // ── Format ────────────────────────────────────────────────────────────
@@ -143,7 +151,7 @@ export function useAppOverlays({
     // ── View ──────────────────────────────────────────────────────────────
     { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: TAURI_MENU_IDS.viewToggleSidebar, action: () => sidebarLayout.setSidebarCollapsed((value) => !value) },
     { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => sidebarLayout.setSidenotesCollapsed((value) => !value) },
-    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
+    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => preferences.setTheme(preferences.resolvedTheme === "dark" ? "light" : "dark") },
     { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => useDevSettings.getState().toggle("fpsCounter") },
     { id: "view.toggle-selection-always-on", label: "Toggle Selection Always On", category: "View", action: () => useDevSettings.getState().toggle("selectionAlwaysOn") },
     { id: "view.toggle-tree-view", label: "Toggle Tree View", category: "View", action: () => useDevSettings.getState().toggle("treeView") },
@@ -153,13 +161,13 @@ export function useAppOverlays({
     { id: "help.about", label: "About Coflat", category: "Help", menuId: TAURI_MENU_IDS.helpAbout, action: () => dialogs.setAboutOpen(true) },
 
     // ── Recent files (palette only) ──────────────────────────────────────
-    ...(workspace.recentFiles ?? []).map((path, i) => ({
+    ...(preferences.recentFiles ?? []).map((path, i) => ({
       id: `file.recent-${i}`,
       label: `Open Recent: ${basename(path)}`,
       category: "File",
-      action: () => { void editor.openFile(path); },
+      action: () => { void editor.files.openFile(path); },
     })),
-  ], [applyHeading, applySimpleFormat, dialogs, editor, workspace, sidebarLayout, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onQuit, openSearch, toggleSearch]);
+  ], [applyHeading, applySimpleFormat, dialogs, editor, workspace, preferences, sidebarLayout, handleSaveAs, labelCommands.handleShowLabelBacklinks, labelCommands.handleRenameDocumentLabel, onOpenFile, onOpenFolder, onQuit, openSearch, toggleSearch]);
 
   // ── Derive palette commands, hotkeys, and menu handlers ────────────────
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
@@ -173,9 +181,9 @@ export function useAppOverlays({
   const menuHandlers = useMemo(() => toMenuHandlers(commandDefs), [commandDefs]);
 
   useAutoSave(
-    editor.hasDirtyDocument,
-    editor.saveFile,
-    workspace.settings.autoSaveInterval,
+    editor.state.hasDirtyDocument,
+    editor.files.saveFile,
+    preferences.settings.autoSaveInterval,
     suspendAutoSave,
     suspendAutoSaveRef,
     suspendAutoSaveVersionRef,

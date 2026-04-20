@@ -10,7 +10,7 @@ export type SearchIndexDialogs = Pick<UseDialogsReturn, "searchOpen">;
 
 export type SearchIndexEditor = Pick<
   AppEditorShellController,
-  "currentPath" | "activeDocumentSignal" | "peekCurrentDocText"
+  "state" | "queries"
 >;
 
 export interface SearchIndexController {
@@ -30,11 +30,11 @@ export function useAppSearchIndex(
 
   const activeSearchDoc = useMemo(
     () => (
-      dialogs.searchOpen && editor.currentPath
-        ? editor.peekCurrentDocText()
+      dialogs.searchOpen && editor.state.currentPath
+        ? editor.queries.peekCurrentDocText()
         : ""
     ),
-    [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.peekCurrentDocText],
+    [dialogs.searchOpen, editor.state.currentPath, searchSyncRevision, editor.queries],
   );
 
   useEffect(() => {
@@ -42,10 +42,10 @@ export function useAppSearchIndex(
       return;
     }
 
-    return editor.activeDocumentSignal.subscribe(() => {
+    return editor.state.activeDocumentSignal.subscribe(() => {
       setSearchSyncRevision((revision) => revision + 1);
     });
-  }, [dialogs.searchOpen, editor.activeDocumentSignal]);
+  }, [dialogs.searchOpen, editor.state.activeDocumentSignal]);
 
   useEffect(() => {
     if (!dialogs.searchOpen) {
@@ -60,8 +60,8 @@ export function useAppSearchIndex(
           fs,
           signal: controller.signal,
         });
-        const overrides = editor.currentPath
-          ? new Map([[editor.currentPath, activeSearchDoc]])
+        const overrides = editor.state.currentPath
+          ? new Map([[editor.state.currentPath, activeSearchDoc]])
           : undefined;
         const files = await readProjectTextFiles(
           fs,
@@ -94,17 +94,17 @@ export function useAppSearchIndex(
   ]);
 
   useEffect(() => {
-    if (!dialogs.searchOpen || !editor.currentPath?.endsWith(".md")) {
+    if (!dialogs.searchOpen || !editor.state.currentPath?.endsWith(".md")) {
       return;
     }
 
     try {
-      indexer.updateFile(editor.currentPath, activeSearchDoc);
+      indexer.updateFile(editor.state.currentPath, activeSearchDoc);
       setSearchVersion((version) => version + 1);
     } catch (error: unknown) {
       console.error("[search] failed to sync active file into app search index", error);
     }
-  }, [dialogs.searchOpen, indexer, editor.currentPath, activeSearchDoc]);
+  }, [dialogs.searchOpen, indexer, editor.state.currentPath, activeSearchDoc]);
 
   return { indexer, searchVersion };
 }

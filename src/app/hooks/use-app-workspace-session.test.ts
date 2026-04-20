@@ -152,7 +152,10 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
   };
 
   const Harness: FC = () => {
-    const result = useAppWorkspaceSession(fs);
+    const result = useAppWorkspaceSession(fs, {
+      restoredProjectRoot: workspaceMockState.windowState.projectRoot,
+      saveWorkspaceWindowState: workspaceMockState.saveWindowState,
+    });
     ref.projectRoot = result.projectRoot;
     ref.fileTree = result.fileTree;
     ref.projectConfig = result.projectConfig;
@@ -372,6 +375,32 @@ describe("useAppWorkspaceSession", () => {
       projectRoot: null,
       currentDocument: null,
     });
+  });
+
+  it("does not rerun startup restore when persisted project root changes after startup", async () => {
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.startupComplete).toBe(true);
+    expect(workspaceMockState.openFolderAt).toHaveBeenCalledTimes(1);
+    workspaceMockState.openFolderAt.mockClear();
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: "/tmp/next-project",
+    };
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(workspaceMockState.openFolderAt).not.toHaveBeenCalled();
   });
 });
 

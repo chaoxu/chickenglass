@@ -35,7 +35,7 @@ function renameValidationMessage(nextId: string): string {
 
 export type LabelCommandEditor = Pick<
   AppEditorShellController,
-  "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorHandle"
+  "state" | "queries"
 >;
 
 export interface LabelCommandController {
@@ -50,28 +50,28 @@ export function useAppLabelCommands(editor: LabelCommandEditor): LabelCommandCon
 
   useEffect(() => {
     setLabelBacklinks(null);
-  }, [editor.currentPath]);
+  }, [editor.state.currentPath]);
 
   useEffect(() => {
     if (labelBacklinks === null) {
       return;
     }
 
-    return editor.activeDocumentSignal.subscribe(() => {
+    return editor.state.activeDocumentSignal.subscribe(() => {
       setLabelBacklinks(null);
     });
-  }, [editor.activeDocumentSignal, labelBacklinks]);
+  }, [editor.state.activeDocumentSignal, labelBacklinks]);
 
   const handleShowLabelBacklinks = useCallback(() => {
-    const handle = editor.editorHandle;
-    if (!handle || !editor.currentPath?.endsWith(".md")) {
+    const handle = editor.state.editorHandle;
+    if (!handle || !editor.state.currentPath?.endsWith(".md")) {
       window.alert(LABEL_ACTION_MESSAGE);
       return;
     }
 
     const selection = handle.getSelection();
     const lookup = resolveDocumentLabelBacklinks(
-      editor.getCurrentDocText(),
+      editor.queries.getCurrentDocText(),
       selection.from,
       selection.to,
     );
@@ -88,17 +88,17 @@ export function useAppLabelCommands(editor: LabelCommandEditor): LabelCommandCon
     }
 
     window.alert(LABEL_ACTION_MESSAGE);
-  }, [editor.currentPath, editor.editorHandle, editor.getCurrentDocText]);
+  }, [editor.state.currentPath, editor.state.editorHandle, editor.queries]);
 
   const handleRenameDocumentLabel = useCallback(() => {
-    const handle = editor.editorHandle;
-    if (!handle || !editor.currentPath?.endsWith(".md")) {
+    const handle = editor.state.editorHandle;
+    if (!handle || !editor.state.currentPath?.endsWith(".md")) {
       window.alert(LABEL_ACTION_MESSAGE);
       return;
     }
 
     const selection = handle.getSelection();
-    const currentDoc = editor.getCurrentDocText();
+    const currentDoc = editor.queries.getCurrentDocText();
     const graph = buildDocumentLabelGraph(currentDoc);
     const lookup = resolveDocumentLabelRenameTarget(
       currentDoc,
@@ -156,7 +156,7 @@ export function useAppLabelCommands(editor: LabelCommandEditor): LabelCommandCon
     }
 
     window.alert(LABEL_ACTION_MESSAGE);
-  }, [editor.currentPath, editor.editorHandle, editor.getCurrentDocText]);
+  }, [editor.state.currentPath, editor.state.editorHandle, editor.queries]);
 
   const closeLabelBacklinks = useCallback(() => setLabelBacklinks(null), []);
 

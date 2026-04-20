@@ -2,10 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { FileEntry, FileSystem } from "../file-manager";
 import { loadProjectConfig } from "../project-config";
 import type { ProjectConfig } from "../project-config";
-import { useRecentFiles } from "./use-recent-files";
-import { useSettings } from "./use-settings";
-import { useTheme } from "./use-theme";
-import { useWindowState } from "./use-window-state";
 import { measureAsync, withPerfOperation } from "../perf";
 import { isTauri } from "../../lib/tauri";
 import { isSameOrDescendantProjectPath } from "../../lib/project-paths";
@@ -95,19 +91,7 @@ export function mergeChildrenIntoTree(
 }
 
 export interface AppWorkspaceSessionController {
-  settings: ReturnType<typeof useSettings>["settings"];
-  updateSetting: ReturnType<typeof useSettings>["updateSetting"];
-  theme: ReturnType<typeof useTheme>["theme"];
-  setTheme: ReturnType<typeof useTheme>["setTheme"];
-  resolvedTheme: ReturnType<typeof useTheme>["resolvedTheme"];
   projectRoot: string | null;
-  recentFiles: ReturnType<typeof useRecentFiles>["recentFiles"];
-  recentFolders: ReturnType<typeof useRecentFiles>["recentFolders"];
-  addRecentFile: ReturnType<typeof useRecentFiles>["addRecentFile"];
-  addRecentFolder: ReturnType<typeof useRecentFiles>["addRecentFolder"];
-  removeRecentFile: ReturnType<typeof useRecentFiles>["removeRecentFile"];
-  windowState: ReturnType<typeof useWindowState>["windowState"];
-  saveWindowState: ReturnType<typeof useWindowState>["saveState"];
   fileTree: FileEntry | null;
   refreshTree: (changedPath?: string) => Promise<void>;
   /** Load children for a single directory and merge into the tree. */
@@ -115,44 +99,42 @@ export interface AppWorkspaceSessionController {
   projectConfig: ProjectConfig;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<FileEntry | null>;
-  handleOpenFolder: () => void;
   /** Generation counter — incremented before each project-root change. */
   workspaceRequestRef: { readonly current: number };
 }
 
-export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionController {
-  const { settings, updateSetting } = useSettings();
-  const { theme, setTheme, resolvedTheme } = useTheme(
-    settings.theme,
-    (next) => { updateSetting("theme", next); },
-    settings.themeName,
-    settings.customCss,
-    settings.writingTheme,
-  );
-  const { windowState, saveState: saveWindowState } = useWindowState();
-  const [projectRoot, setProjectRoot] = useState<string | null>(windowState.projectRoot);
-  const {
-    recentFiles,
-    recentFolders,
-    addRecentFile,
-    addRecentFolder,
-    removeRecentFile,
-  } = useRecentFiles(projectRoot);
+export interface AppWorkspaceSessionDeps {
+  readonly restoredProjectRoot: string | null;
+  readonly saveWorkspaceWindowState: (patch: {
+    projectRoot?: string | null;
+    currentDocument?: { path: string; name: string } | null;
+  }) => void;
+}
+
+export function useAppWorkspaceSession(
+  fs: FileSystem,
+  {
+    restoredProjectRoot,
+    saveWorkspaceWindowState,
+  }: AppWorkspaceSessionDeps,
+): AppWorkspaceSessionController {
+  const [projectRoot, setProjectRoot] = useState<string | null>(restoredProjectRoot);
 
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});
   const [startupComplete, setStartupComplete] = useState(false);
+  const didRunStartupRef = useRef(false);
   const workspaceRequestRef = useRef(0);
 
   const clearRestoredProjectState = useCallback(() => {
     setProjectRoot(null);
     setFileTree(null);
     setProjectConfig({});
-    saveWindowState({
+    saveWorkspaceWindowState({
       projectRoot: null,
       currentDocument: null,
     });
-  }, [saveWindowState]);
+  }, [saveWorkspaceWindowState]);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
     const listChildren = fs.listChildren;
@@ -294,17 +276,22 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
     if (!isTauri()) return null;
     return openTauriFolder(path, () => {
-      saveWindowState({ projectRoot: path, currentDocument: null });
+      saveWorkspaceWindowState({ projectRoot: path, currentDocument: null });
     });
-  }, [openTauriFolder, saveWindowState]);
+  }, [openTauriFolder, saveWorkspaceWindowState]);
 
   useEffect(() => {
+    if (didRunStartupRef.current) {
+      return;
+    }
+    didRunStartupRef.current = true;
+
     void withPerfOperation("startup.initial_session", async () => {
       try {
         if (isTauri()) {
-          if (windowState.projectRoot) {
+          if (restoredProjectRoot) {
             try {
-              await openTauriFolder(windowState.projectRoot);
+              await openTauriFolder(restoredProjectRoot);
             } catch (e: unknown) {
               console.error("[workspace] failed to restore saved project root", e);
               clearRestoredProjectState();
@@ -324,48 +311,16 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       console.error("[workspace] initial session startup failed", e);
       setStartupComplete(true);
     });
-  }, [clearRestoredProjectState, openTauriFolder, loadWorkspaceContents, windowState.projectRoot]);
-
-  const handleOpenFolder = useCallback(() => {
-    if (!isTauri()) return;
-    void (async () => {
-      try {
-        const { pickFolder } = await tauriFs();
-        const folderPath = await pickFolder();
-        if (folderPath) {
-          const tree = await openProjectRoot(folderPath);
-          if (!tree) {
-            return;
-          }
-          addRecentFolder(folderPath);
-        }
-      } catch (e: unknown) {
-        console.error("[workspace] handleOpenFolder failed", e);
-      }
-    })();
-  }, [addRecentFolder, openProjectRoot]);
+  }, [clearRestoredProjectState, openTauriFolder, loadWorkspaceContents, restoredProjectRoot]);
 
   return {
-    settings,
-    updateSetting,
-    theme,
-    setTheme,
-    resolvedTheme,
     projectRoot,
-    recentFiles,
-    recentFolders,
-    addRecentFile,
-    addRecentFolder,
-    removeRecentFile,
-    windowState,
-    saveWindowState,
     fileTree,
     refreshTree,
     loadChildren,
     projectConfig,
     startupComplete,
     openProjectRoot,
-    handleOpenFolder,
     workspaceRequestRef,
   };
 }

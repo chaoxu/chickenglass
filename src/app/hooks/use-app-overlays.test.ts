@@ -148,31 +148,61 @@ function createEditorHarness(
 
   return {
     editor: {
-      currentPath: options.currentPath ?? null,
-      activeDocumentSignal,
-      getCurrentDocText: vi.fn(() => currentDocText),
-      peekCurrentDocText: vi.fn(() => currentDocText),
-      editorHandle: {
-        applyChanges,
-        focus: vi.fn(),
-        getSelection: vi.fn(() => ({
-          anchor: selection.to,
-          focus: selection.to,
-          from: selection.from,
-          to: selection.to,
-        })),
-        insertText: vi.fn(),
-        setSelection: vi.fn(),
+      state: {
+        currentDocument: null,
+        currentPath: options.currentPath ?? null,
+        editorDoc: currentDocText,
+        activeDocumentSignal,
+        editorHandle: {
+          applyChanges,
+          focus: vi.fn(),
+          getSelection: vi.fn(() => ({
+            anchor: selection.to,
+            focus: selection.to,
+            from: selection.from,
+            to: selection.to,
+          })),
+          insertText: vi.fn(),
+          setSelection: vi.fn(),
+        },
+        lexicalEditor: null,
+        headings: [],
+        diagnostics: [],
+        editorMode: "lexical",
+        isMarkdownFile: true,
+        hasDirtyDocument: false,
       },
-      openFile: vi.fn(async () => {}),
-      saveFile: vi.fn(async () => {}),
-      saveAs: vi.fn(async () => {}),
-      closeCurrentFile: vi.fn(async () => true),
-      hasDirtyDocument: false,
-      pluginManager: {
-        getPlugins: vi.fn(() => []),
-      } as unknown as UseAppOverlaysProps["editor"]["pluginManager"],
-      handleInsertImage: vi.fn(),
+      queries: {
+        getCurrentDocText: vi.fn(() => currentDocText),
+        peekCurrentDocText: vi.fn(() => currentDocText),
+        getCurrentSourceMap: vi.fn(() => null),
+        isPathOpen: vi.fn(() => false),
+        isPathDirty: vi.fn(() => false),
+      },
+      files: {
+        cancelPendingOpenFile: vi.fn(),
+        openFile: vi.fn(async () => {}),
+        openFileWithContent: vi.fn(async () => {}),
+        reloadFile: vi.fn(async () => {}),
+        syncExternalChange: vi.fn(async () => ({ kind: "updated" })),
+        saveFile: vi.fn(async () => {}),
+        createFile: vi.fn(async () => {}),
+        createDirectory: vi.fn(async () => {}),
+        closeCurrentFile: vi.fn(async () => true),
+        handleRename: vi.fn(async () => {}),
+        handleDelete: vi.fn(async () => {}),
+        saveAs: vi.fn(async () => {}),
+        handleWindowCloseRequest: vi.fn(async () => true),
+      },
+      editing: {
+        handleInsertImage: vi.fn(),
+        handleModeChange: vi.fn(),
+      },
+      plugins: {
+        manager: {
+          getPlugins: vi.fn(() => []),
+        },
+      },
     },
     activeDocumentSignal,
     setCurrentDocText: (doc) => {
@@ -204,16 +234,17 @@ async function createHookProps(
     selection: options.selection,
   });
   const onOpenFile = vi.fn();
+  const onOpenFolder = vi.fn();
   const onQuit = vi.fn();
 
   const workspace: UseAppOverlaysProps["workspace"] = {
+    fileTree: await fs.listTree(),
+  };
+  const preferences: UseAppOverlaysProps["preferences"] = {
     settings: defaultSettings,
-    theme: "system",
     setTheme: vi.fn(),
     resolvedTheme: "light",
     recentFiles: options.recentFiles ?? [],
-    fileTree: await fs.listTree(),
-    handleOpenFolder: vi.fn(),
   };
 
   return {
@@ -224,9 +255,11 @@ async function createHookProps(
       suspendAutoSaveRef: { current: false },
       suspendAutoSaveVersionRef: { current: 0 },
       workspace,
+      preferences,
       sidebarLayout,
       editor: editorHarness.editor,
       onOpenFile,
+      onOpenFolder,
       onQuit,
     } satisfies UseAppOverlaysProps,
     fs,
@@ -302,7 +335,7 @@ describe("useAppOverlays", () => {
       expect(result.current.labelBacklinks?.definition.id).toBe("sec:intro");
     });
 
-    props.editor.currentPath = "notes/other.md";
+    props.editor.state.currentPath = "notes/other.md";
     act(() => {
       rerender({ ...props });
     });
@@ -311,7 +344,7 @@ describe("useAppOverlays", () => {
       expect(result.current.labelBacklinks).toBeNull();
     });
 
-    editorHarness.editor.currentPath = "notes/labels.md";
+    editorHarness.editor.state.currentPath = "notes/labels.md";
   });
 
   it("renames a local label through the overlay command flow", async () => {
@@ -341,7 +374,7 @@ describe("useAppOverlays", () => {
 
     expect(promptSpy).toHaveBeenCalledTimes(1);
     expect(editorHarness.applyChanges).toHaveBeenCalledTimes(1);
-    expect(props.editor.getCurrentDocText()).toContain("thm:renamed");
+    expect(props.editor.queries.getCurrentDocText()).toContain("thm:renamed");
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
@@ -398,8 +431,8 @@ describe("useAppOverlays", () => {
         to: 4,
         insert: "**bcd**",
       }]);
-      expect(props.editor.editorHandle?.setSelection).toHaveBeenCalledWith(3, 6);
-      expect(props.editor.editorHandle?.focus).toHaveBeenCalledTimes(1);
+      expect(props.editor.state.editorHandle?.setSelection).toHaveBeenCalledWith(3, 6);
+      expect(props.editor.state.editorHandle?.focus).toHaveBeenCalledTimes(1);
     } finally {
       activeRoot.remove();
     }

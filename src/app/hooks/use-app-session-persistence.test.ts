@@ -75,11 +75,9 @@ function createHarness(deps: {
       fileTree: deps.fileTree,
       listChildren: deps.listChildren,
       workspaceRequestRef: deps.workspaceRequestRef,
-      workspace: {
-        windowState: deps.windowState,
-        saveWindowState: vi.fn(),
-        startupComplete: true,
-      },
+      windowState: deps.windowState,
+      saveWindowState: vi.fn(),
+      startupComplete: true,
       sidebarLayout: {
         sidebarCollapsed: false,
         sidebarWidth: 224,
@@ -87,13 +85,17 @@ function createHarness(deps: {
         setSidebarWidth,
       },
       editor: {
-        currentDocument: null,
-        currentPath: null,
-        openFile: async (path: string) => {
-          ref.openFileCalls.push(path);
-          if (deps.openFileShouldReject) {
-            throw new Error("openFile failed");
-          }
+        state: {
+          currentDocument: null,
+          currentPath: null,
+        },
+        files: {
+          openFile: async (path: string) => {
+            ref.openFileCalls.push(path);
+            if (deps.openFileShouldReject) {
+              throw new Error("openFile failed");
+            }
+          },
         },
       },
     });

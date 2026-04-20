@@ -65,26 +65,82 @@ export interface AppEditorShellDeps {
   ) => Promise<import("../unsaved-changes").UnsavedChangesDecision>;
 }
 
-export interface AppEditorShellController extends UseEditorSessionReturn {
-  readonly pluginManager: EditorPluginManager;
+export interface AppEditorDocumentState {
+  readonly currentDocument: UseEditorSessionReturn["currentDocument"];
+  readonly currentPath: UseEditorSessionReturn["currentPath"];
+  readonly editorDoc: UseEditorSessionReturn["editorDoc"];
+  readonly activeDocumentSignal: UseEditorSessionReturn["activeDocumentSignal"];
   readonly editorHandle: MarkdownEditorHandle | null;
   readonly lexicalEditor: LexicalEditor | null;
   readonly headings: HeadingEntry[];
   readonly diagnostics: DiagnosticEntry[];
+  readonly editorMode: EditorMode;
+  readonly isMarkdownFile: boolean;
+  readonly hasDirtyDocument: boolean;
+}
+
+export interface AppEditorDocumentQueries {
+  readonly getCurrentDocText: UseEditorSessionReturn["getCurrentDocText"];
+  readonly peekCurrentDocText: () => string;
+  readonly getCurrentSourceMap: UseEditorSessionReturn["getCurrentSourceMap"];
+  readonly isPathOpen: UseEditorSessionReturn["isPathOpen"];
+  readonly isPathDirty: UseEditorSessionReturn["isPathDirty"];
+}
+
+export interface AppEditorFileCommands {
+  readonly cancelPendingOpenFile: UseEditorSessionReturn["cancelPendingOpenFile"];
+  readonly openFile: UseEditorSessionReturn["openFile"];
+  readonly openFileWithContent: UseEditorSessionReturn["openFileWithContent"];
+  readonly reloadFile: UseEditorSessionReturn["reloadFile"];
+  readonly syncExternalChange: UseEditorSessionReturn["syncExternalChange"];
+  readonly saveFile: UseEditorSessionReturn["saveFile"];
+  readonly createFile: UseEditorSessionReturn["createFile"];
+  readonly createDirectory: UseEditorSessionReturn["createDirectory"];
+  readonly closeCurrentFile: UseEditorSessionReturn["closeCurrentFile"];
+  readonly handleRename: UseEditorSessionReturn["handleRename"];
+  readonly handleDelete: UseEditorSessionReturn["handleDelete"];
+  readonly saveAs: UseEditorSessionReturn["saveAs"];
+  readonly handleWindowCloseRequest: UseEditorSessionReturn["handleWindowCloseRequest"];
+}
+
+export interface AppEditorSurfaceCommands {
+  readonly handleDocChange: UseEditorSessionReturn["handleDocChange"];
+  readonly handleProgrammaticDocChange: UseEditorSessionReturn["handleProgrammaticDocChange"];
+  readonly setDocumentSourceMap: UseEditorSessionReturn["setDocumentSourceMap"];
   readonly handleHeadingsChange: (headings: HeadingEntry[]) => void;
   readonly handleLexicalEditorReady: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly handleEditorDocumentReady: (docPath: string | undefined) => void;
+}
+
+export interface AppEditorNavigationCommands {
   readonly handleOutlineSelect: (from: number) => void;
   readonly handleGotoLine: (line: number, col?: number) => void;
   readonly handleSearchResult: (target: SearchNavigationTarget, onComplete?: () => void) => void;
+}
+
+export interface AppEditorEditingCommands {
   readonly handleInsertImage: () => void;
-  readonly editorMode: EditorMode;
-  readonly peekCurrentDocText: () => string;
   readonly handleModeChange: (mode: EditorMode) => void;
-  readonly isMarkdownFile: boolean;
-  readonly hasDirtyDocument: boolean;
+}
+
+export interface AppEditorImportCommands {
   readonly handleDragOver: (event: React.DragEvent) => void;
   readonly handleDrop: (event: React.DragEvent) => void;
+}
+
+export interface AppEditorPluginController {
+  readonly manager: EditorPluginManager;
+}
+
+export interface AppEditorShellController {
+  readonly state: AppEditorDocumentState;
+  readonly queries: AppEditorDocumentQueries;
+  readonly files: AppEditorFileCommands;
+  readonly surface: AppEditorSurfaceCommands;
+  readonly navigation: AppEditorNavigationCommands;
+  readonly editing: AppEditorEditingCommands;
+  readonly imports: AppEditorImportCommands;
+  readonly plugins: AppEditorPluginController;
 }
 
 export function useAppEditorShell({
@@ -284,28 +340,64 @@ export function useAppEditorShell({
   }, [openFileWithContent]);
 
   return {
-    ...session,
-    pluginManager,
-    saveFile,
-    editorHandle,
-    lexicalEditor: lexicalEditorRef.current,
-    headings,
-    diagnostics,
-    handleHeadingsChange,
-    handleLexicalEditorReady,
-    handleEditorDocumentReady,
-    handleOutlineSelect,
-    handleGotoLine,
-    handleSearchResult,
-    handleInsertImage,
-    editorMode,
-    peekCurrentDocText,
-    handleModeChange,
-    isMarkdownFile,
-    activeDocumentSignal,
-    getCurrentDocText: getDebugCurrentDocText,
-    hasDirtyDocument,
-    handleDragOver,
-    handleDrop,
+    state: {
+      currentDocument,
+      currentPath,
+      editorDoc,
+      activeDocumentSignal,
+      editorHandle,
+      lexicalEditor: lexicalEditorRef.current,
+      headings,
+      diagnostics,
+      editorMode,
+      isMarkdownFile,
+      hasDirtyDocument,
+    },
+    queries: {
+      getCurrentDocText: getDebugCurrentDocText,
+      peekCurrentDocText,
+      getCurrentSourceMap: session.getCurrentSourceMap,
+      isPathOpen: session.isPathOpen,
+      isPathDirty: session.isPathDirty,
+    },
+    files: {
+      cancelPendingOpenFile: session.cancelPendingOpenFile,
+      openFile,
+      openFileWithContent,
+      reloadFile: session.reloadFile,
+      syncExternalChange: session.syncExternalChange,
+      saveFile,
+      createFile: session.createFile,
+      createDirectory: session.createDirectory,
+      closeCurrentFile: session.closeCurrentFile,
+      handleRename: session.handleRename,
+      handleDelete: session.handleDelete,
+      saveAs: session.saveAs,
+      handleWindowCloseRequest: session.handleWindowCloseRequest,
+    },
+    surface: {
+      handleDocChange: session.handleDocChange,
+      handleProgrammaticDocChange: session.handleProgrammaticDocChange,
+      setDocumentSourceMap: session.setDocumentSourceMap,
+      handleHeadingsChange,
+      handleLexicalEditorReady,
+      handleEditorDocumentReady,
+    },
+    navigation: {
+      handleOutlineSelect,
+      handleGotoLine,
+      handleSearchResult,
+    },
+    editing: {
+      handleInsertImage,
+      handleModeChange,
+    },
+    imports: {
+      handleDragOver,
+      handleDrop,
+    },
+    plugins: {
+      manager: pluginManager,
+    },
   };
 }

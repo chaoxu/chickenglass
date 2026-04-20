@@ -57,22 +57,22 @@ export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
             <TabsContent value="files" className="min-h-full">
               <FileTree
                 root={workspace.fileTree}
-                activePath={editor.currentPath}
-                onSelect={(path) => { void editor.openFile(path); }}
-                onDoubleClick={(path) => { void editor.openFile(path); }}
-                onRename={editor.handleRename}
-                onDelete={editor.handleDelete}
-                onCreateFile={(path) => { void editor.createFile(path); }}
-                onCreateDir={(path) => { void editor.createDirectory(path); }}
+                activePath={editor.state.currentPath}
+                onSelect={(path) => { void editor.files.openFile(path); }}
+                onDoubleClick={(path) => { void editor.files.openFile(path); }}
+                onRename={editor.files.handleRename}
+                onDelete={editor.files.handleDelete}
+                onCreateFile={(path) => { void editor.files.createFile(path); }}
+                onCreateDir={(path) => { void editor.files.createDirectory(path); }}
                 persistRef={fileTreePersistRef}
                 onLoadChildren={(dirPath) => { void workspace.loadChildren(dirPath); }}
               />
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">
-              <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
+              <Outline headings={editor.state.headings} onSelect={editor.navigation.handleOutlineSelect} />
             </TabsContent>
             <TabsContent value="diagnostics" className="min-h-full">
-              <Diagnostics diagnostics={editor.diagnostics} onSelect={editor.handleOutlineSelect} />
+              <Diagnostics diagnostics={editor.state.diagnostics} onSelect={editor.navigation.handleOutlineSelect} />
             </TabsContent>
             {showRuntimeLogs ? (
               <TabsContent value="runtime" className="min-h-full">

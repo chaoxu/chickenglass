@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 import type { FileEntry } from "../file-manager";
 import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
-import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
+import type { UseWindowStateReturn } from "./use-window-state";
 
 interface AppSessionPersistenceDeps {
   fileTree: FileEntry | null;
@@ -12,17 +12,16 @@ interface AppSessionPersistenceDeps {
   /** Generation counter from the workspace session — incremented before
    *  each project-root change so async restore can detect stale searches. */
   workspaceRequestRef: { readonly current: number };
-  workspace: Pick<
-    AppWorkspaceSessionController,
-    "windowState" | "saveWindowState" | "startupComplete"
-  >;
+  windowState: UseWindowStateReturn["windowState"];
+  saveWindowState: UseWindowStateReturn["saveState"];
+  startupComplete: boolean;
   sidebarLayout: Pick<
     SidebarLayoutController,
     "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth"
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentDocument" | "currentPath" | "openFile"
+    "state" | "files"
   >;
 }
 
@@ -30,17 +29,14 @@ export function useAppSessionPersistence({
   fileTree,
   listChildren,
   workspaceRequestRef,
-  workspace,
+  windowState,
+  saveWindowState,
+  startupComplete,
   sidebarLayout,
   editor,
 }: AppSessionPersistenceDeps): void {
   const didInitRef = useRef(false);
   const restorePromiseRef = useRef<Promise<void> | null>(null);
-  const {
-    windowState,
-    saveWindowState,
-    startupComplete,
-  } = workspace;
   const {
     sidebarCollapsed,
     sidebarWidth,
@@ -50,8 +46,8 @@ export function useAppSessionPersistence({
   const {
     currentDocument,
     currentPath,
-    openFile,
-  } = editor;
+  } = editor.state;
+  const { openFile } = editor.files;
 
   useEffect(() => {
     if (!didInitRef.current) return;

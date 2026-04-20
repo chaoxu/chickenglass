@@ -85,7 +85,7 @@ function replaceCurrentDoc(
   ref: HarnessRef,
   nextDoc: string,
 ): readonly EditorDocumentChange[] {
-  const currentDoc = ref.result.getCurrentDocText();
+  const currentDoc = ref.result.queries.getCurrentDocText();
   return [{ from: 0, to: currentDoc.length, insert: nextDoc }];
 }
 
@@ -124,10 +124,10 @@ describe("useAppEditorShell", () => {
 
     act(() => root.render(createElement(Harness)));
 
-    expect(ref.result.handleOutlineSelect).toBeTypeOf("function");
-    expect(ref.result.handleGotoLine).toBeTypeOf("function");
-    expect(ref.result.handleSearchResult).toBeTypeOf("function");
-    expect(ref.result.handleEditorDocumentReady).toBeTypeOf("function");
+    expect(ref.result.navigation.handleOutlineSelect).toBeTypeOf("function");
+    expect(ref.result.navigation.handleGotoLine).toBeTypeOf("function");
+    expect(ref.result.navigation.handleSearchResult).toBeTypeOf("function");
+    expect(ref.result.surface.handleEditorDocumentReady).toBeTypeOf("function");
   });
 
   it("preserves the current file mode when search navigation fails", async () => {
@@ -141,17 +141,17 @@ describe("useAppEditorShell", () => {
     act(() => root.render(createElement(Harness)));
 
     await act(async () => {
-      await ref.result.openFile("notes.md");
+      await ref.result.files.openFile("notes.md");
     });
 
     act(() => {
-      ref.result.handleModeChange("source");
+      ref.result.editing.handleModeChange("source");
     });
 
-    expect(ref.result.editorMode).toBe("source");
+    expect(ref.result.state.editorMode).toBe("source");
 
     act(() => {
-      ref.result.handleSearchResult({
+      ref.result.navigation.handleSearchResult({
         file: "missing.md",
         pos: 0,
         editorMode: "source",
@@ -162,8 +162,8 @@ describe("useAppEditorShell", () => {
       await Promise.resolve();
     });
 
-    expect(ref.result.currentPath).toBe("notes.md");
-    expect(ref.result.editorMode).toBe("source");
+    expect(ref.result.state.currentPath).toBe("notes.md");
+    expect(ref.result.state.editorMode).toBe("source");
 
     errorSpy.mockRestore();
   });
@@ -179,16 +179,16 @@ describe("useAppEditorShell", () => {
     act(() => root.render(createElement(Harness)));
 
     await act(async () => {
-      await ref.result.openFile("a.md");
+      await ref.result.files.openFile("a.md");
     });
 
     act(() => {
-      ref.result.handleLexicalEditorReady(createHandle(), {} as never);
-      ref.result.handleEditorDocumentReady("a.md");
+      ref.result.surface.handleLexicalEditorReady(createHandle(), {} as never);
+      ref.result.surface.handleEditorDocumentReady("a.md");
     });
 
     act(() => {
-      ref.result.handleSearchResult({
+      ref.result.navigation.handleSearchResult({
         file: "b.md",
         pos: 0,
         editorMode: "source",
@@ -196,12 +196,12 @@ describe("useAppEditorShell", () => {
     });
 
     act(() => {
-      ref.result.handleEditorDocumentReady("b.md");
+      ref.result.surface.handleEditorDocumentReady("b.md");
     });
 
     await vi.waitFor(() => {
-      expect(ref.result.currentPath).toBe("b.md");
-      expect(ref.result.editorMode).toBe("source");
+      expect(ref.result.state.currentPath).toBe("b.md");
+      expect(ref.result.state.editorMode).toBe("source");
     });
   });
 
@@ -220,23 +220,23 @@ describe("useAppEditorShell", () => {
     act(() => root.render(createElement(Harness)));
 
     await act(async () => {
-      await ref.result.openFile("a.md");
+      await ref.result.files.openFile("a.md");
     });
 
     act(() => {
-      ref.result.handleLexicalEditorReady(createHandle(), {} as never);
-      ref.result.handleEditorDocumentReady("a.md");
+      ref.result.surface.handleLexicalEditorReady(createHandle(), {} as never);
+      ref.result.surface.handleEditorDocumentReady("a.md");
     });
 
     act(() => {
-      ref.result.handleModeChange("source");
-      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
+      ref.result.editing.handleModeChange("source");
+      ref.result.surface.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
     });
 
     requestUnsavedChangesDecision.mockResolvedValueOnce("cancel");
 
     act(() => {
-      ref.result.handleSearchResult({
+      ref.result.navigation.handleSearchResult({
         file: "b.md",
         pos: 0,
         editorMode: "source",
@@ -244,17 +244,17 @@ describe("useAppEditorShell", () => {
     });
 
     await vi.waitFor(() => {
-      expect(ref.result.currentPath).toBe("a.md");
-      expect(ref.result.editorMode).toBe("source");
+      expect(ref.result.state.currentPath).toBe("a.md");
+      expect(ref.result.state.editorMode).toBe("source");
     });
 
     requestUnsavedChangesDecision.mockResolvedValueOnce("discard");
 
     await act(async () => {
-      await ref.result.openFile("b.md");
+      await ref.result.files.openFile("b.md");
     });
 
-    expect(ref.result.currentPath).toBe("b.md");
-    expect(ref.result.editorMode).toBe("lexical");
+    expect(ref.result.state.currentPath).toBe("b.md");
+    expect(ref.result.state.editorMode).toBe("lexical");
   });
 });

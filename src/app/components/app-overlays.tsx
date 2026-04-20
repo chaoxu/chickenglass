@@ -7,7 +7,7 @@ import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { useAppEditorController } from "../contexts/app-editor-context";
-import { useAppWorkspaceController } from "../contexts/app-workspace-context";
+import { useAppPreferencesController } from "../contexts/app-preferences-context";
 import type { UseDialogsReturn } from "../hooks/use-dialogs";
 import { useEditorTelemetry } from "../../state/editor-telemetry-store";
 import type { AppOverlayController } from "../hooks/use-app-overlays";
@@ -25,7 +25,7 @@ export function AppOverlays({
   overlays,
   unsavedChanges,
 }: AppOverlaysProps) {
-  const workspace = useAppWorkspaceController();
+  const preferences = useAppPreferencesController();
   const editor = useAppEditorController();
   const currentLine = useEditorTelemetry((s) => s.cursorLine);
 
@@ -44,7 +44,7 @@ export function AppOverlays({
           }
         }}
         onSelect={(item) => {
-          editor.handleOutlineSelect(item.from);
+          editor.navigation.handleOutlineSelect(item.from);
           overlays.closeLabelBacklinks();
         }}
       />
@@ -52,24 +52,24 @@ export function AppOverlays({
         open={dialogs.searchOpen}
         onOpenChange={dialogs.setSearchOpen}
         onResultSelect={(entry) => {
-          editor.handleSearchResult({
+          editor.navigation.handleSearchResult({
             file: entry.file,
             pos: entry.position.from,
-            editorMode: editor.editorMode,
+            editorMode: editor.state.editorMode,
           }, () => dialogs.setSearchOpen(false));
         }}
-        searchMode={getAppSearchMode(editor.editorMode)}
+        searchMode={getAppSearchMode(editor.state.editorMode)}
         searchVersion={overlays.searchVersion}
         indexer={overlays.indexer}
       />
       <SettingsDialog
         open={dialogs.settingsOpen}
         onOpenChange={dialogs.setSettingsOpen}
-        settings={workspace.settings}
-        onUpdateSetting={workspace.updateSetting}
-        theme={workspace.theme}
-        onSetTheme={workspace.setTheme}
-        plugins={editor.pluginManager.getPlugins()}
+        settings={preferences.settings}
+        onUpdateSetting={preferences.updateSetting}
+        theme={preferences.theme}
+        onSetTheme={preferences.setTheme}
+        plugins={editor.plugins.manager.getPlugins()}
       />
       <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
       <ShortcutsDialog
@@ -80,7 +80,7 @@ export function AppOverlays({
         open={dialogs.gotoLineOpen}
         onOpenChange={dialogs.setGotoLineOpen}
         onGoto={(line, col) => {
-          editor.handleGotoLine(line, col);
+          editor.navigation.handleGotoLine(line, col);
           dialogs.setGotoLineOpen(false);
         }}
         currentLine={currentLine}

@@ -34,16 +34,21 @@ describe("AppSidebarShell", () => {
       loadChildren: async () => {},
     };
     const editor = {
-      currentPath: null,
-      openFile: async () => {},
-      handleRename: async () => {},
-      handleDelete: async () => {},
-      createFile: async () => {},
-      createDirectory: async () => {},
-      headings: [],
-      diagnostics: [],
-      handleOutlineSelect: vi.fn(),
-      editorState: null,
+      state: {
+        currentPath: null,
+        headings: [],
+        diagnostics: [],
+      },
+      files: {
+        openFile: async () => {},
+        handleRename: async () => {},
+        handleDelete: async () => {},
+        createFile: async () => {},
+        createDirectory: async () => {},
+      },
+      navigation: {
+        handleOutlineSelect: vi.fn(),
+      },
     };
     const sidebarLayout = {
       sidebarTab: "runtime" as const,

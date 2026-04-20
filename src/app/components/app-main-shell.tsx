@@ -3,7 +3,7 @@ import { EditorPane } from "./editor-pane";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
-import { useAppWorkspaceController } from "../contexts/app-workspace-context";
+import { useAppPreferencesController } from "../contexts/app-preferences-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 import { isPluginEnabled } from "../plugin-manager";
 
@@ -21,25 +21,25 @@ export function AppMainShell({
   onOpenPalette,
   onOpenSettings,
 }: AppMainShellProps) {
-  const workspace = useAppWorkspaceController();
+  const preferences = useAppPreferencesController();
   const editor = useAppEditorController();
-  const currentPath = editor.currentPath;
+  const currentPath = editor.state.currentPath;
 
   return (
     <SidebarInset>
       <DebugSidebarProvider>
         {currentPath ? (
           <EditorPane
-            doc={editor.editorDoc}
+            doc={editor.state.editorDoc}
             docPath={currentPath}
-            onDocChange={editor.handleDocChange}
-            onHeadingsChange={editor.handleHeadingsChange}
-            onDocumentReady={editor.handleEditorDocumentReady}
-            onLexicalEditorReady={editor.handleLexicalEditorReady}
-            onOutlineSelect={editor.handleOutlineSelect}
-            editorMode={editor.editorMode}
-            spellCheck={isPluginEnabled(workspace.settings, "spellcheck")}
-            revealPresentation={workspace.settings.revealPresentation}
+            onDocChange={editor.surface.handleDocChange}
+            onHeadingsChange={editor.surface.handleHeadingsChange}
+            onDocumentReady={editor.surface.handleEditorDocumentReady}
+            onLexicalEditorReady={editor.surface.handleLexicalEditorReady}
+            onOutlineSelect={editor.navigation.handleOutlineSelect}
+            editorMode={editor.state.editorMode}
+            spellCheck={isPluginEnabled(preferences.settings, "spellcheck")}
+            revealPresentation={preferences.settings.revealPresentation}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
@@ -49,13 +49,13 @@ export function AppMainShell({
       </DebugSidebarProvider>
 
       <StatusBar
-        editorMode={editor.editorMode}
-        onModeChange={editor.handleModeChange}
+        editorMode={editor.state.editorMode}
+        onModeChange={editor.editing.handleModeChange}
         onOpenPalette={onOpenPalette}
         onOpenSettings={onOpenSettings}
-        activeDocumentSignal={editor.activeDocumentSignal}
-        getDocText={editor.peekCurrentDocText}
-        isMarkdown={editor.isMarkdownFile}
+        activeDocumentSignal={editor.state.activeDocumentSignal}
+        getDocText={editor.queries.peekCurrentDocText}
+        isMarkdown={editor.state.isMarkdownFile}
       />
     </SidebarInset>
   );

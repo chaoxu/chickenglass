@@ -15,16 +15,18 @@ import { isTauri } from "../../lib/tauri";
 import type { FileEntry } from "../file-manager";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
+import type { AppPreferencesController } from "./use-app-preferences";
 
 export interface AppFileDialogsDeps {
   editor: Pick<
     AppEditorShellController,
-    "cancelPendingOpenFile" | "closeCurrentFile" | "openFile"
+    "files"
   >;
   workspace: Pick<
     AppWorkspaceSessionController,
     "projectRoot" | "openProjectRoot"
   >;
+  preferences: Pick<AppPreferencesController, "addRecentFolder">;
   /** Stable lazy-loader for subdirectories; passed through to default-doc search. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
 }
@@ -39,6 +41,7 @@ export interface AppFileDialogsReturn {
 export function useAppFileDialogs({
   editor,
   workspace,
+  preferences,
   listChildren,
 }: AppFileDialogsDeps): AppFileDialogsReturn {
   const openProjectRequestRef = useRef(0);
@@ -52,20 +55,24 @@ export function useAppFileDialogs({
     const controller = new AbortController();
     searchAbortRef.current = controller;
 
-    return openProjectInCurrentWindowFlow({
+    const opened = await openProjectInCurrentWindowFlow({
       projectRoot,
       initialPath,
       currentProjectRoot: workspace.projectRoot,
       nextRequestId: () => ++openProjectRequestRef.current,
       isRequestCurrent: (requestId) => requestId === openProjectRequestRef.current,
-      cancelPendingOpenFile: editor.cancelPendingOpenFile,
-      closeCurrentFile: editor.closeCurrentFile,
+      cancelPendingOpenFile: editor.files.cancelPendingOpenFile,
+      closeCurrentFile: editor.files.closeCurrentFile,
       openProjectRoot: workspace.openProjectRoot,
-      openFile: editor.openFile,
+      openFile: editor.files.openFile,
       listChildren,
       signal: controller.signal,
     });
-  }, [editor, workspace, listChildren]);
+    if (opened) {
+      preferences.addRecentFolder(projectRoot);
+    }
+    return opened;
+  }, [editor, workspace, preferences, listChildren]);
 
   const handleOpenFolderRequest = useCallback(() => {
     if (!isTauri()) return;
@@ -113,7 +120,7 @@ export function useAppFileDialogs({
           return;
         }
 
-        await editor.openFile(relativePath);
+        await editor.files.openFile(relativePath);
       } catch (e: unknown) {
         console.error("[app] open file request failed", e);
       }
