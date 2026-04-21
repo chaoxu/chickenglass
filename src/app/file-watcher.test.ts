@@ -262,13 +262,20 @@ describe("FileWatcher", () => {
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
 
-    expect(container.textContent).toContain("\"a.md\" changed externally. Reload?");
+    expect(container.textContent).toContain(
+      "\"a.md\" changed externally while you have local edits.",
+    );
+    expect(container.textContent).toContain("Keep edits");
+    expect(container.textContent).toContain("Reload from disk");
 
-    const noButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-no");
-    expect(noButton).not.toBeNull();
-    noButton?.click();
+    const keepButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-no");
+    expect(keepButton).not.toBeNull();
+    expect(keepButton?.textContent).toBe("Keep edits");
+    keepButton?.click();
 
-    expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
+    expect(container.textContent).toContain(
+      "\"b.md\" changed externally while you have local edits.",
+    );
   });
 
   it("suppresses duplicate notifications while a file is already pending", async () => {
@@ -294,14 +301,17 @@ describe("FileWatcher", () => {
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
 
-    const yesButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
-    expect(yesButton).not.toBeNull();
-    yesButton?.click();
+    const reloadButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
+    expect(reloadButton).not.toBeNull();
+    expect(reloadButton?.textContent).toBe("Reload from disk");
+    reloadButton?.click();
     await Promise.resolve();
     await Promise.resolve();
 
     expect(reloadFile).toHaveBeenCalledWith("a.md");
-    expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
+    expect(container.textContent).toContain(
+      "\"b.md\" changed externally while you have local edits.",
+    );
   });
 
   it("catches synchronous reload handler failures and still advances the queue", async () => {
@@ -317,9 +327,9 @@ describe("FileWatcher", () => {
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
 
-    const yesButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
-    expect(yesButton).not.toBeNull();
-    yesButton?.click();
+    const reloadButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
+    expect(reloadButton).not.toBeNull();
+    reloadButton?.click();
     await Promise.resolve();
 
     expect(consoleError).toHaveBeenCalledWith(
@@ -327,7 +337,9 @@ describe("FileWatcher", () => {
       "a.md",
       expect.any(Error),
     );
-    expect(container.textContent).toContain("\"b.md\" changed externally. Reload?");
+    expect(container.textContent).toContain(
+      "\"b.md\" changed externally while you have local edits.",
+    );
     consoleError.mockRestore();
   });
 

@@ -254,13 +254,28 @@ export class FileWatcher {
     const message = document.createElement("span");
     message.className = "file-watcher-message";
     const displayName = basename(path);
-    message.textContent = `"${displayName}" changed externally. Reload?`;
+    message.textContent =
+      `"${displayName}" changed externally while you have local edits.`;
     bar.appendChild(message);
 
-    const yesBtn = document.createElement("button");
-    yesBtn.className = "file-watcher-btn file-watcher-btn-yes";
-    yesBtn.textContent = "Yes";
-    yesBtn.addEventListener("click", () => {
+    const keepBtn = document.createElement("button");
+    keepBtn.className = "file-watcher-btn file-watcher-btn-no";
+    keepBtn.textContent = "Keep edits";
+    keepBtn.title = "Keep the editor contents and leave the disk change unresolved.";
+    keepBtn.addEventListener("click", () => {
+      try {
+        this.resolveNotification(path);
+      } catch (e: unknown) {
+        logCatchError("[file-watcher] dismiss button handler failed", path)(e);
+      }
+    });
+    bar.appendChild(keepBtn);
+
+    const reloadBtn = document.createElement("button");
+    reloadBtn.className = "file-watcher-btn file-watcher-btn-yes";
+    reloadBtn.textContent = "Reload from disk";
+    reloadBtn.title = "Discard local edits and replace the editor contents with the disk version.";
+    reloadBtn.addEventListener("click", () => {
       try {
         void this.config.reloadFile(path)
           .catch(logCatchError("[file-watcher] reloadFile failed", path))
@@ -272,19 +287,7 @@ export class FileWatcher {
         this.resolveNotification(path);
       }
     });
-    bar.appendChild(yesBtn);
-
-    const noBtn = document.createElement("button");
-    noBtn.className = "file-watcher-btn file-watcher-btn-no";
-    noBtn.textContent = "No";
-    noBtn.addEventListener("click", () => {
-      try {
-        this.resolveNotification(path);
-      } catch (e: unknown) {
-        logCatchError("[file-watcher] dismiss button handler failed", path)(e);
-      }
-    });
-    bar.appendChild(noBtn);
+    bar.appendChild(reloadBtn);
 
     this.notificationBar = bar;
     this.config.container.prepend(bar);
