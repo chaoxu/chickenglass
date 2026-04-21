@@ -364,9 +364,9 @@ describe("mergeChildrenIntoTree", () => {
     ];
 
     const result = mergeChildrenIntoTree(tree, "docs", children);
-    expect(result.children![0].children).toEqual(children);
+    expect(result.children?.[0].children).toEqual(children);
     // Other children unchanged
-    expect(result.children![1]).toBe(tree.children![1]);
+    expect(result.children?.[1]).toBe(tree.children?.[1]);
   });
 
   it("merges children into a nested directory", () => {
@@ -391,7 +391,7 @@ describe("mergeChildrenIntoTree", () => {
     ];
 
     const result = mergeChildrenIntoTree(tree, "docs/deep", children);
-    expect(result.children![0].children![0].children).toEqual(children);
+    expect(result.children?.[0].children?.[0].children).toEqual(children);
   });
 
   it("replaces children at the root level", () => {

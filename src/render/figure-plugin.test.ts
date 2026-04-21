@@ -1,17 +1,25 @@
-import { describe, expect, it } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
-import { fencedDiv } from "../parser/fenced-div";
+import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
-import { documentSemanticsField } from "../state/document-analysis";
-import { blockCounterField } from "../state/block-counter";
-import { createPluginRegistryField } from "../state/plugin-registry";
-import { blockRenderPlugin, _blockDecorationFieldForTest } from "./plugin-render";
+import { fencedDiv } from "../parser/fenced-div";
 import { defaultPlugins } from "../plugins/default-plugins";
+import { blockCounterField } from "../state/block-counter";
+import { documentSemanticsField } from "../state/document-analysis";
 import { mathMacrosField } from "../state/math-macros";
+import { createPluginRegistryField } from "../state/plugin-registry";
 import { createTestView, getDecorationSpecs } from "../test-utils";
+import { _blockDecorationFieldForTest, blockRenderPlugin } from "./plugin-render";
 
-const figurePlugin = defaultPlugins.find((p) => p.name === "figure")!;
-const tableBlockPlugin = defaultPlugins.find((p) => p.name === "table")!;
+function requireDefaultPlugin(name: string) {
+  const plugin = defaultPlugins.find((p) => p.name === name);
+  if (!plugin) {
+    throw new Error(`Missing default plugin: ${name}`);
+  }
+  return plugin;
+}
+
+const figurePlugin = requireDefaultPlugin("figure");
+const tableBlockPlugin = requireDefaultPlugin("table");
 const testPlugins = [figurePlugin, tableBlockPlugin];
 
 function createView(doc: string, cursorPos?: number) {

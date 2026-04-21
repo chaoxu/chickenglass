@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EditorState } from "@codemirror/state";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileSystem } from "../lib/types";
 import { documentPathFacet, fileSystemFacet } from "../lib/types";
 import { imageUrlEffect, imageUrlField } from "../state/image-url";
@@ -87,18 +87,18 @@ describe("resolveLocalMediaPreview", () => {
       const view = createMockView(createMockFs());
       const result = resolveLocalMediaPreview(view, "diagram.png");
       expect(result).not.toBeNull();
-      expect(result!.kind).toBe("loading");
-      expect(result!.resolvedPath).toBe("posts/diagram.png");
-      if (result!.kind === "loading") expect(result!.isPdf).toBe(false);
+      expect(result?.kind).toBe("loading");
+      expect(result?.resolvedPath).toBe("posts/diagram.png");
+      if (result?.kind === "loading") expect(result?.isPdf).toBe(false);
     });
 
     it("returns a loading result for a fresh relative PDF", () => {
       const view = createMockView(createMockFs());
       const result = resolveLocalMediaPreview(view, "diagram.pdf");
       expect(result).not.toBeNull();
-      expect(result!.kind).toBe("loading");
-      expect(result!.resolvedPath).toBe("posts/diagram.pdf");
-      if (result!.kind === "loading") expect(result!.isPdf).toBe(true);
+      expect(result?.kind).toBe("loading");
+      expect(result?.resolvedPath).toBe("posts/diagram.pdf");
+      if (result?.kind === "loading") expect(result?.isPdf).toBe(true);
     });
   });
 
@@ -113,10 +113,10 @@ describe("resolveLocalMediaPreview", () => {
 
       const result = resolveLocalMediaPreview(view, "diagram.png");
       expect(result).not.toBeNull();
-      expect(result!.kind).toBe("image");
-      expect(result!.resolvedPath).toBe("posts/diagram.png");
-      if (result!.kind === "image") {
-        expect(result!.dataUrl).toContain("data:image/png;base64,");
+      expect(result?.kind).toBe("image");
+      expect(result?.resolvedPath).toBe("posts/diagram.png");
+      if (result?.kind === "image") {
+        expect(result?.dataUrl).toContain("data:image/png;base64,");
       }
     });
 
@@ -133,9 +133,9 @@ describe("resolveLocalMediaPreview", () => {
 
       const result = resolveLocalMediaPreview(view, "broken.png");
       expect(result).not.toBeNull();
-      expect(result!.kind).toBe("error");
-      if (result!.kind === "error") {
-        expect(result!.fallbackSrc).toBe("broken.png");
+      expect(result?.kind).toBe("error");
+      if (result?.kind === "error") {
+        expect(result?.fallbackSrc).toBe("broken.png");
       }
     });
   });
@@ -153,9 +153,9 @@ describe("resolveLocalMediaPreview", () => {
 
       const result = resolveLocalMediaPreview(view, "broken.pdf");
       expect(result).not.toBeNull();
-      expect(result!.kind).toBe("error");
-      if (result!.kind === "error") {
-        expect(result!.fallbackSrc).toBe("broken.pdf");
+      expect(result?.kind).toBe("error");
+      if (result?.kind === "error") {
+        expect(result?.fallbackSrc).toBe("broken.pdf");
       }
     });
   });
@@ -165,7 +165,7 @@ describe("resolveLocalMediaPreview", () => {
       const view = createMockView(createMockFs());
       const result = resolveLocalMediaPreview(view, "../assets/fig.png");
       expect(result).not.toBeNull();
-      expect(result!.resolvedPath).toBe("assets/fig.png");
+      expect(result?.resolvedPath).toBe("assets/fig.png");
     });
 
     it("produces distinct paths for same filename from different documents", () => {
@@ -210,8 +210,8 @@ describe("resolveLocalMediaPreview", () => {
       const r1 = resolveLocalMediaPreview(view1, "diagram.png");
       const r2 = resolveLocalMediaPreview(view2, "diagram.png");
 
-      expect(r1!.resolvedPath).toBe("posts/diagram.png");
-      expect(r2!.resolvedPath).toBe("notes/diagram.png");
+      expect(r1?.resolvedPath).toBe("posts/diagram.png");
+      expect(r2?.resolvedPath).toBe("notes/diagram.png");
     });
   });
 });

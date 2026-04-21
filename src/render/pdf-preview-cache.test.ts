@@ -14,8 +14,9 @@
  *        returned early on any `existing` entry, so errors were permanent.
  *        The fix adds an errorTime timestamp and retries after ERROR_COOLDOWN_MS.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { EditorState } from "@codemirror/state";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileSystem } from "../lib/types";
 import {
   ERROR_COOLDOWN_MS,
@@ -33,9 +34,9 @@ vi.mock("./pdf-rasterizer", () => ({
 }));
 
 import {
-  requestPdfPreview,
-  getPdfCanvas,
   _resetPendingPaths,
+  getPdfCanvas,
+  requestPdfPreview,
 } from "./pdf-preview-cache";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -233,7 +234,10 @@ describe("requestPdfPreview", () => {
       const entry = view.state.field(pdfPreviewField).get("bad.pdf");
       expect(entry?.status).toBe("error");
       expect(entry?.errorTime).toBeTypeOf("number");
-      expect(entry!.errorTime!).toBeGreaterThan(0);
+      if (typeof entry?.errorTime !== "number") {
+        throw new Error("Expected PDF error entry to record errorTime");
+      }
+      expect(entry.errorTime).toBeGreaterThan(0);
     });
 
     it("blocks retry before cooldown expires", async () => {

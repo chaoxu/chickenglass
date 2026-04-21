@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { ChangeSet } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
 import { analyzeMarkdownSemantics } from "./markdown-analysis";
 import {
   buildDocumentReferenceCatalog,
@@ -43,19 +43,20 @@ describe("buildDocumentReferenceCatalog", () => {
     const analysis = analyzeMarkdownSemantics(doc);
     const theorem = analysis.fencedDivs.find((div) => div.id === "dup");
     expect(theorem).toBeDefined();
+    if (!theorem) {
+      throw new Error("Expected theorem block for duplicate id");
+    }
 
     const catalog = buildDocumentReferenceCatalog(analysis, {
-      blocks: theorem
-        ? [{
-          from: theorem.from,
-          to: theorem.to,
-          id: theorem.id,
-          blockType: theorem.primaryClass ?? "div",
-          title: theorem.title,
-          displayTitle: "Theorem",
-          number: 1,
-        }]
-        : [],
+      blocks: [{
+        from: theorem.from,
+        to: theorem.to,
+        id: theorem.id,
+        blockType: theorem.primaryClass ?? "div",
+        title: theorem.title,
+        displayTitle: "Theorem",
+        number: 1,
+      }],
     });
 
     expect(catalog.duplicatesById.get("dup")).toHaveLength(2);
@@ -82,19 +83,20 @@ describe("buildDocumentReferenceCatalog", () => {
     const analysis = analyzeMarkdownSemantics(doc);
     const theorem = analysis.fencedDivs.find((div) => div.id === "dup");
     expect(theorem).toBeDefined();
+    if (!theorem) {
+      throw new Error("Expected theorem block for duplicate id");
+    }
 
     const catalog = buildDocumentReferenceCatalog(analysis, {
-      blocks: theorem
-        ? [{
-          from: theorem.from,
-          to: theorem.to,
-          id: theorem.id,
-          blockType: theorem.primaryClass ?? "div",
-          title: theorem.title,
-          displayTitle: "Theorem",
-          number: 1,
-        }]
-        : [],
+      blocks: [{
+        from: theorem.from,
+        to: theorem.to,
+        id: theorem.id,
+        blockType: theorem.primaryClass ?? "div",
+        title: theorem.title,
+        displayTitle: "Theorem",
+        number: 1,
+      }],
     });
 
     const changes = ChangeSet.of([{ from: 0, insert: "Intro.\n\n" }], doc.length);
@@ -104,7 +106,7 @@ describe("buildDocumentReferenceCatalog", () => {
     expect(getPreferredDocumentReferenceTarget(mapped, "dup")).toMatchObject({
       kind: "block",
       displayLabel: "Theorem 1",
-      from: theorem!.from + 8,
+      from: theorem.from + 8,
     });
     expect(getPreferredDocumentReferenceTarget(mapped, "eq:main")).toMatchObject({
       kind: "equation",

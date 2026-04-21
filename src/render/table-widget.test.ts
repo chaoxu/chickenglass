@@ -1,20 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
-import type { EditorView } from "@codemirror/view";
-import type { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import type { EditorState } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
+import { describe, expect, it, vi } from "vitest";
+import { frontmatterField } from "../editor/frontmatter-state";
+import { markdownExtensions } from "../parser";
+import { mathMacrosField } from "../state/math-macros";
+import { tableDiscoveryField } from "../state/table-discovery";
+import { createEditorState, createMockEditorView, getDecorationSpecs } from "../test-utils";
+import { editorFocusField } from "./render-utils";
+import { _tableDecorationFieldForTest as tableDecorationField } from "./table-render";
+import type { ParsedTable } from "./table-utils";
 import {
-  TableWidget,
   cellEditAnnotation,
   shouldCommitBlurredInlineEditor,
+  TableWidget,
 } from "./table-widget";
-import { _tableDecorationFieldForTest as tableDecorationField } from "./table-render";
-import { editorFocusField } from "./render-utils";
-import { mathMacrosField } from "../state/math-macros";
-import { frontmatterField } from "../editor/frontmatter-state";
-import { tableDiscoveryField } from "../state/table-discovery";
-import { markdownExtensions } from "../parser";
-import type { ParsedTable } from "./table-utils";
-import { createMockEditorView, createEditorState, getDecorationSpecs } from "../test-utils";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.
 class ResizeObserverStub {
@@ -429,7 +429,7 @@ describe("tableDecorationField commit rebuild (#404)", () => {
     // Grab the stale widget reference from the mapped decoration set.
     const staleDecoIter = afterEdit.field(tableDecorationField).iter();
     expect(staleDecoIter.value).not.toBeNull();
-    const staleWidget = staleDecoIter.value!.spec.widget;
+    const staleWidget = staleDecoIter.value?.spec.widget;
 
     // Step 2: commit with NO doc change — just the annotation.
     // This is what syncToRoot now dispatches when newText === currentText.
@@ -440,7 +440,7 @@ describe("tableDecorationField commit rebuild (#404)", () => {
     // The StateField must have rebuilt (not just mapped).
     const freshDecoIter = afterCommit.field(tableDecorationField).iter();
     expect(freshDecoIter.value).not.toBeNull();
-    const freshWidget = freshDecoIter.value!.spec.widget;
+    const freshWidget = freshDecoIter.value?.spec.widget;
 
     // The rebuilt widget must be a different object — CM6 calls eq() against
     // the old one. Since tableText differs (old was mapped, new is from doc),

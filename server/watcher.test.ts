@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // vi.hoisted lets us define values that are available inside vi.mock factories
 const { mockWatcher, MockWebSocketServer } = vi.hoisted(() => {
@@ -27,8 +27,8 @@ vi.mock("ws", () => ({
   WebSocketServer: MockWebSocketServer,
 }));
 
-import { FileWatcher } from "./watcher.js";
 import { watch } from "chokidar";
+import { FileWatcher } from "./watcher.js";
 
 describe("FileWatcher with chokidar", () => {
   let fakeServer: { on: ReturnType<typeof vi.fn> };
@@ -110,7 +110,7 @@ describe("FileWatcher with chokidar", () => {
 
   it("ignores dotfiles, node_modules, and dist via the ignored option", () => {
     const watchCall = vi.mocked(watch).mock.calls[0];
-    const ignoredFn = watchCall[1]!.ignored as (path: string) => boolean;
+    const ignoredFn = watchCall[1]?.ignored as (path: string) => boolean;
 
     // Root dir itself is not ignored
     expect(ignoredFn("/project")).toBe(false);

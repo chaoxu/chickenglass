@@ -9,23 +9,23 @@
  * Visual rendering is out of scope — that belongs in the CDP suite.
  */
 
-import { describe, expect, it } from "vitest";
-import { EditorState } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
-import { markdownExtensions } from "../parser";
-import { frontmatterField } from "./frontmatter-state";
-import { documentSemanticsField } from "../state/document-analysis";
-import { blockCounterField } from "../state/block-counter";
-import { createPluginRegistryField } from "../state/plugin-registry";
-import { editorFocusField } from "../render/render-core";
-import { mathMacrosField } from "../state/math-macros";
+import { syntaxTree } from "@codemirror/language";
+import { EditorState } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
 import {
-  resolveCrossref,
   collectEquationLabels,
+  resolveCrossref,
 } from "../index/crossref-resolver";
-import { createEditorState, makeBlockPlugin } from "../test-utils";
+import { markdownExtensions } from "../parser";
 import type { BlockPlugin } from "../plugins/plugin-types";
+import { editorFocusField } from "../render/render-core";
+import { blockCounterField } from "../state/block-counter";
+import { documentSemanticsField } from "../state/document-analysis";
+import { mathMacrosField } from "../state/math-macros";
+import { createPluginRegistryField } from "../state/plugin-registry";
+import { createEditorState, makeBlockPlugin } from "../test-utils";
+import { frontmatterField } from "./frontmatter-state";
 
 // ── Test plugins (matching FORMAT.md built-in types) ─────────────────────────
 
@@ -224,7 +224,7 @@ describe("FORMAT.md coverage: Frontmatter", () => {
   it("parses math macros", () => {
     const fm = masterState.field(frontmatterField);
     expect(fm.config.math).toBeDefined();
-    expect(fm.config.math!["\\R"]).toBe("\\mathbb{R}");
+    expect(fm.config.math?.["\\R"]).toBe("\\mathbb{R}");
   });
 
   it("populates mathMacrosField from frontmatter", () => {
@@ -235,7 +235,7 @@ describe("FORMAT.md coverage: Frontmatter", () => {
   it("parses custom block definitions", () => {
     const fm = masterState.field(frontmatterField);
     expect(fm.config.blocks).toBeDefined();
-    expect(fm.config.blocks!["claim"]).toMatchObject({
+    expect(fm.config.blocks?.["claim"]).toMatchObject({
       title: "Claim",
       counter: "theorem",
     });
@@ -294,14 +294,14 @@ describe("FORMAT.md coverage: Headings", () => {
     const semantics = masterState.field(documentSemanticsField);
     const bg = semantics.headings.find((h) => h.text === "Background");
     expect(bg).toBeDefined();
-    expect(bg!.unnumbered).toBe(true);
+    expect(bg?.unnumbered).toBe(true);
   });
 
   it("assigns numbers to numbered headings", () => {
     const semantics = masterState.field(documentSemanticsField);
     const intro = semantics.headings.find((h) => h.text === "Introduction");
     expect(intro).toBeDefined();
-    expect(intro!.number).not.toBe("");
+    expect(intro?.number).not.toBe("");
   });
 
   it("handles {.unnumbered} attribute form", () => {
@@ -373,23 +373,23 @@ describe("FORMAT.md coverage: Equation Labels", () => {
     const semantics = masterState.field(documentSemanticsField);
     const eq = semantics.equationById.get("eq:einstein");
     expect(eq).toBeDefined();
-    expect(eq!.number).toBe(1);
-    expect(eq!.id).toBe("eq:einstein");
+    expect(eq?.number).toBe(1);
+    expect(eq?.id).toBe("eq:einstein");
   });
 
   it("collects equation labels via collectEquationLabels", () => {
     const labels = collectEquationLabels(masterState);
     expect(labels.has("eq:einstein")).toBe(true);
-    expect(labels.get("eq:einstein")!.number).toBe(1);
+    expect(labels.get("eq:einstein")?.number).toBe(1);
   });
 
   it("assigns sequential numbers to multiple equations", () => {
     const doc = "$$a$$ {#eq:first}\n\n$$b$$ {#eq:second}\n\n$$c$$ {#eq:third}";
     const state = createTestState(doc);
     const labels = collectEquationLabels(state);
-    expect(labels.get("eq:first")!.number).toBe(1);
-    expect(labels.get("eq:second")!.number).toBe(2);
-    expect(labels.get("eq:third")!.number).toBe(3);
+    expect(labels.get("eq:first")?.number).toBe(1);
+    expect(labels.get("eq:second")?.number).toBe(2);
+    expect(labels.get("eq:third")?.number).toBe(3);
   });
 });
 
@@ -420,21 +420,21 @@ describe("FORMAT.md coverage: Fenced Divs", () => {
     const semantics = masterState.field(documentSemanticsField);
     const mainThm = semantics.fencedDivs.find((d) => d.id === "thm:main");
     expect(mainThm).toBeDefined();
-    expect(mainThm!.primaryClass).toBe("theorem");
+    expect(mainThm?.primaryClass).toBe("theorem");
   });
 
   it("extracts fenced div title", () => {
     const semantics = masterState.field(documentSemanticsField);
     const mainThm = semantics.fencedDivs.find((d) => d.id === "thm:main");
     expect(mainThm).toBeDefined();
-    expect(mainThm!.title).toBe("Main Result");
+    expect(mainThm?.title).toBe("Main Result");
   });
 
   it("detects self-closing fenced divs", () => {
     const semantics = masterState.field(documentSemanticsField);
     const selfClosing = semantics.fencedDivs.find((d) => d.isSelfClosing);
     expect(selfClosing).toBeDefined();
-    expect(selfClosing!.primaryClass).toBe("theorem");
+    expect(selfClosing?.primaryClass).toBe("theorem");
   });
 
   it("handles nested fenced divs (more colons for outer)", () => {
@@ -486,7 +486,7 @@ describe("FORMAT.md coverage: Block Numbering", () => {
     const counter = masterState.field(blockCounterField);
     const mainThm = counter.byId.get("thm:main");
     expect(mainThm).toBeDefined();
-    expect(mainThm!.type).toBe("theorem");
+    expect(mainThm?.type).toBe("theorem");
   });
 });
 
@@ -608,7 +608,7 @@ describe("FORMAT.md coverage: Cross-References", () => {
     expect(semantics.references.length).toBeGreaterThanOrEqual(1);
     const ref = semantics.references.find((r) => r.ids.includes("thm:main"));
     expect(ref).toBeDefined();
-    expect(ref!.bracketed).toBe(true);
+    expect(ref?.bracketed).toBe(true);
   });
 });
 
@@ -631,7 +631,7 @@ describe("FORMAT.md coverage: Footnotes", () => {
     const semantics = masterState.field(documentSemanticsField);
     const def = semantics.footnotes.defs.get("1");
     expect(def).toBeDefined();
-    expect(def!.content).toContain("$x^2$");
+    expect(def?.content).toContain("$x^2$");
   });
 
   it("supports string footnote ids", () => {

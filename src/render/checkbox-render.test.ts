@@ -1,19 +1,19 @@
-import { describe, it, expect, afterEach } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
 import {
-  EditorView,
   type DecorationSet,
+  EditorView,
   type ViewPlugin,
 } from "@codemirror/view";
-import {
-  CheckboxWidget,
-  checkboxRenderPlugin,
-} from "./checkbox-render";
+import { afterEach, describe, expect, it } from "vitest";
+import { markdownExtensions } from "../parser";
 import {
   createTestView,
   getDecorationSpecs,
 } from "../test-utils";
-import { markdownExtensions } from "../parser";
+import {
+  CheckboxWidget,
+  checkboxRenderPlugin,
+} from "./checkbox-render";
 
 let view: EditorView | undefined;
 
@@ -141,7 +141,7 @@ describe("checkboxRenderPlugin stable task markers", () => {
     const plugin = createCheckboxView(doc, prosePos);
     const before = getDecorationSpecs(plugin.decorations);
 
-    view!.dispatch({
+    view?.dispatch({
       changes: { from: prosePos, to: prosePos, insert: "ZZ" },
       selection: { anchor: prosePos + 2 },
     });
@@ -159,7 +159,7 @@ describe("checkboxRenderPlugin stable task markers", () => {
     const plugin = createCheckboxView(doc, prosePos);
     const before = plugin.decorations;
 
-    view!.dispatch({ selection: { anchor: prosePos + 2 } });
+    view?.dispatch({ selection: { anchor: prosePos + 2 } });
 
     expect(plugin.decorations).toBe(before);
     expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
@@ -167,7 +167,7 @@ describe("checkboxRenderPlugin stable task markers", () => {
 
   it("keeps the checkbox widget rendered when the cursor enters the marker", () => {
     const plugin = createCheckboxView("- [ ] task", 3);
-    view!.dispatch({ selection: { anchor: 6 } });
+    view?.dispatch({ selection: { anchor: 6 } });
 
     expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
   });
@@ -177,7 +177,7 @@ describe("checkboxRenderPlugin stable task markers", () => {
     const secondMarkerPos = doc.lastIndexOf("[") + 1;
     const plugin = createCheckboxView(doc, 3);
 
-    view!.dispatch({ selection: { anchor: secondMarkerPos } });
+    view?.dispatch({ selection: { anchor: secondMarkerPos } });
 
     expect(getDecorationSpecs(plugin.decorations)).toHaveLength(2);
   });

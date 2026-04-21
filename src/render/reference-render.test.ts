@@ -1,34 +1,34 @@
-import { describe, expect, it, afterEach, vi } from "vitest";
+import { markdown } from "@codemirror/lang-markdown";
 import type { ChangeSpec, EditorState } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { markdown } from "@codemirror/lang-markdown";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { markdownToHtml } from "../app/markdown-to-html";
+import type { CslJsonItem } from "../citations/bibtex-parser";
+import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { CslProcessor } from "../citations/csl-processor";
+import { CSS } from "../constants/css-classes";
+import { frontmatterField } from "../editor/frontmatter-state";
+import {
+  activeStructureEditField,
+} from "../editor/structure-edit-state";
+import { equationLabelExtension } from "../parser/equation-label";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
-import { equationLabelExtension } from "../parser/equation-label";
-import { frontmatterField } from "../editor/frontmatter-state";
+import type { BlockPlugin } from "../plugins/plugin-types";
 import { blockCounterField } from "../state/block-counter";
+import { documentSemanticsField } from "../state/document-analysis";
 import {
   createPluginRegistryField,
   pluginRegistryField,
 } from "../state/plugin-registry";
-import { documentSemanticsField } from "../state/document-analysis";
-import type { BlockPlugin } from "../plugins/plugin-types";
-import type { CslJsonItem } from "../citations/bibtex-parser";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
-import { CslProcessor } from "../citations/csl-processor";
-import { markdownToHtml } from "../app/markdown-to-html";
-import { CSS } from "../constants/css-classes";
-import { createTestView, makeBlockPlugin, makeBibStore } from "../test-utils";
-import {
-  activeStructureEditField,
-} from "../editor/structure-edit-state";
+import { createTestView, makeBibStore, makeBlockPlugin } from "../test-utils";
 import {
   collectReferenceRanges,
   _computeReferenceDirtyRangesForTest as computeReferenceDirtyRanges,
   planReferenceRendering,
+  type ReferenceRenderItem,
   referenceRenderDependenciesChanged,
   referenceRenderPlugin,
-  type ReferenceRenderItem,
 } from "./reference-render";
 
 const testPlugins: readonly BlockPlugin[] = [
@@ -101,6 +101,13 @@ function widgetClass(range: { value: { spec: { widget?: { constructor: { name: s
   return range.value.spec.widget?.constructor.name;
 }
 
+function expectPresent<T>(value: T | null | undefined, label: string): asserts value is T {
+  expect(value).toBeDefined();
+  if (value == null) {
+    throw new Error(`Expected ${label} to be defined`);
+  }
+}
+
 function revealReferenceAt(view: EditorView, pos: number): void {
   view.dispatch({ selection: { anchor: pos } });
 }
@@ -145,8 +152,8 @@ describe("collectReferenceRanges", () => {
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CrossrefWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CrossrefWidget");
   });
 
   it("routes bracketed equation reference to CrossrefWidget", () => {
@@ -161,8 +168,8 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:energy]",
     );
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CrossrefWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CrossrefWidget");
   });
 
   it("routes bracketed citation to CitationWidget", () => {
@@ -173,8 +180,8 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
     );
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CitationWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CitationWidget");
   });
 
   it("reveals reference source when the focused cursor touches it", () => {
@@ -184,9 +191,9 @@ describe("collectReferenceRanges", () => {
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
-    expect(ref).toBeDefined();
-    expect(ref!.value.spec.widget).toBeUndefined();
-    expect(ref!.value.spec.class).toBe(CSS.referenceSource);
+    expectPresent(ref, "reference range");
+    expect(ref?.value.spec.widget).toBeUndefined();
+    expect(ref?.value.spec.class).toBe(CSS.referenceSource);
   });
 
   it("reveals reference source when the focused selection touches it", () => {
@@ -202,9 +209,9 @@ describe("collectReferenceRanges", () => {
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
-    expect(ref).toBeDefined();
-    expect(ref!.value.spec.widget).toBeUndefined();
-    expect(ref!.value.spec.class).toBe(CSS.referenceSource);
+    expectPresent(ref, "reference range");
+    expect(ref?.value.spec.widget).toBeUndefined();
+    expect(ref?.value.spec.class).toBe(CSS.referenceSource);
   });
 
   it("keeps rendered references when unfocused even if the cursor is inside", () => {
@@ -214,8 +221,8 @@ describe("collectReferenceRanges", () => {
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CitationWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CitationWidget");
   });
 
   it("routes unknown bracketed id to UnresolvedRefWidget", () => {
@@ -226,8 +233,8 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@unknown-thing]",
     );
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("UnresolvedRefWidget");
   });
 
   it("applies source mark when the focused cursor enters a reference", () => {
@@ -244,10 +251,10 @@ describe("collectReferenceRanges", () => {
     const ranges = collectReferenceRanges(view, store);
 
     const ref = ranges.find((r) => r.from === refStart);
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     // Should be a mark decoration (source styling), not a widget
-    expect(ref!.value.spec.widget).toBeUndefined();
-    expect(ref!.value.spec.class).toBe(CSS.referenceSource);
+    expect(ref?.value.spec.widget).toBeUndefined();
+    expect(ref?.value.spec.class).toBe(CSS.referenceSource);
   });
 
   it("collects other references when one reference is revealed by the focused cursor", () => {
@@ -272,7 +279,7 @@ describe("collectReferenceRanges", () => {
     // The revealed ref gets a source mark (not a widget)
     const thmRef = ranges.find((r) => r.from === thmStart);
     expect(thmRef).toBeDefined();
-    expect(thmRef!.value.spec.class).toBe(CSS.referenceSource);
+    expect(thmRef?.value.spec.class).toBe(CSS.referenceSource);
     // The other ref still gets a widget
     expect(ranges.find((r) => r.from === defStart)).toBeDefined();
   });
@@ -291,8 +298,8 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "@thm-main",
     );
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CrossrefWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CrossrefWidget");
   });
 
   it("routes narrative @id to CitationWidget for bib entries", () => {
@@ -303,8 +310,8 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "@karger2000",
     );
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CitationWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CitationWidget");
   });
 
   it("returns empty array for document with no references", () => {
@@ -327,8 +334,8 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000; @stein2001]",
     );
-    expect(ref).toBeDefined();
-    expect(widgetClass(ref!)).toBe("CitationWidget");
+    expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("CitationWidget");
   });
 
   // Regression: clustered equation references ([@eq:a; @eq:b]) where all ids
@@ -348,7 +355,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @eq:beta]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
   });
@@ -369,7 +376,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @eq:beta]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     const widget = ref.value.spec.widget;
     expect(widget).toBeDefined();
@@ -403,7 +410,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@thm-a; @thm-b]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
     const widget = ref.value.spec.widget;
@@ -427,7 +434,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@unknown-a; @unknown-b]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     expect(widgetClass(ref)).toBe("UnresolvedRefWidget");
   });
@@ -446,7 +453,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@thm-a; @missing]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
     const widget = ref.value.spec.widget;
@@ -475,7 +482,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @karger2000]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     expect(widgetClass(ref)).toBe("MixedClusterWidget");
   });
@@ -523,7 +530,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @karger2000]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     const widget = ref.value.spec.widget;
     expect(widget).toBeDefined();
@@ -556,7 +563,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@thm-main; @karger2000]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     expect(widgetClass(ref)).toBe("MixedClusterWidget");
     const widget = ref.value.spec.widget;
@@ -574,7 +581,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000; @stein2001]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     // Should be CitationWidget, not MixedClusterWidget
     expect(widgetClass(ref)).toBe("CitationWidget");
@@ -594,7 +601,7 @@ describe("collectReferenceRanges", () => {
     const ref = ranges.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@eq:alpha; @eq:beta]",
     );
-    expect(ref).toBeDefined();
+    expectPresent(ref, "reference range");
     if (!ref) return;
     // Should be ClusteredCrossrefWidget, not MixedClusterWidget
     expect(widgetClass(ref)).toBe("ClusteredCrossrefWidget");
@@ -614,8 +621,8 @@ describe("collectReferenceRanges", () => {
       const ref = ranges.find(
         (r) => view.state.sliceDoc(r.from, r.to) === "[@totally-unknown]",
       );
-      expect(ref).toBeDefined();
-      expect(widgetClass(ref!)).toBe("UnresolvedRefWidget");
+      expectPresent(ref, "reference range");
+    expect(widgetClass(ref)).toBe("UnresolvedRefWidget");
     });
 
     it("applies source mark when focused cursor reveal starts at the token boundary", () => {
@@ -625,8 +632,8 @@ describe("collectReferenceRanges", () => {
       revealReferenceAt(view, refStart);
       const ranges = collectReferenceRanges(view, store);
       const ref = ranges.find((r) => r.from === refStart);
-      expect(ref).toBeDefined();
-      expect(ref!.value.spec.class).toBe(CSS.referenceSource);
+      expectPresent(ref, "reference range");
+      expect(ref?.value.spec.class).toBe(CSS.referenceSource);
     });
 
     it("handles document with only blank lines", () => {
@@ -1053,7 +1060,8 @@ describe("collectReferenceRanges", () => {
     const citBefore = before.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
     );
-    expect(widgetClass(citBefore!)).toBe("CitationWidget");
+    expectPresent(citBefore, "citation range before clearing processor");
+    expect(widgetClass(citBefore)).toBe("CitationWidget");
 
     // Simulate file-switch: keep the old store for routing, only replace
     // the processor with an empty one so the stale engine can't throw.
@@ -1070,8 +1078,8 @@ describe("collectReferenceRanges", () => {
     const citAfter = after.find(
       (r) => view.state.sliceDoc(r.from, r.to) === "[@karger2000]",
     );
-    expect(citAfter).toBeDefined();
-    expect(widgetClass(citAfter!)).toBe("CitationWidget");
+    expectPresent(citAfter, "citation range after clearing processor");
+    expect(widgetClass(citAfter)).toBe("CitationWidget");
   });
 });
 
@@ -1103,7 +1111,7 @@ describe("planReferenceRendering", () => {
     const items = plan(doc);
     const item = findPlan(items, "[@thm-main]");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("crossref");
+    expect(item?.kind).toBe("crossref");
   });
 
   it("routes bracketed local target before same-id citation", () => {
@@ -1117,9 +1125,9 @@ describe("planReferenceRendering", () => {
     const items = plan(doc);
     const item = findPlan(items, "[@karger2000]");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("crossref");
-    if (item!.kind === "crossref") {
-      expect(item!.resolved.label).toBe("Theorem 1");
+    expect(item?.kind).toBe("crossref");
+    if (item?.kind === "crossref") {
+      expect(item?.resolved.label).toBe("Theorem 1");
     }
   });
 
@@ -1127,9 +1135,9 @@ describe("planReferenceRendering", () => {
     const items = plan("See [@karger2000] for details.");
     const item = findPlan(items, "[@karger2000]");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("citation");
-    if (item!.kind === "citation") {
-      expect(item!.narrative).toBe(false);
+    expect(item?.kind).toBe("citation");
+    if (item?.kind === "citation") {
+      expect(item?.narrative).toBe(false);
     }
   });
 
@@ -1137,9 +1145,9 @@ describe("planReferenceRendering", () => {
     const items = plan("As @karger2000 showed.");
     const item = findPlan(items, "@karger2000");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("citation");
-    if (item!.kind === "citation") {
-      expect(item!.narrative).toBe(true);
+    expect(item?.kind).toBe("citation");
+    if (item?.kind === "citation") {
+      expect(item?.narrative).toBe(true);
     }
   });
 
@@ -1147,7 +1155,7 @@ describe("planReferenceRendering", () => {
     const items = plan("See [@unknown-thing].");
     const item = findPlan(items, "[@unknown-thing]");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("unresolved");
+    expect(item?.kind).toBe("unresolved");
   });
 
   it("routes focused cursor reveal to source-mark plan", () => {
@@ -1162,7 +1170,7 @@ describe("planReferenceRendering", () => {
     const items = plan(doc, refStart + 3);
     const item = items.find((i) => i.from === refStart);
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("source-mark");
+    expect(item?.kind).toBe("source-mark");
   });
 
   it("routes mixed crossref+citation to mixed-cluster plan", () => {
@@ -1174,7 +1182,7 @@ describe("planReferenceRendering", () => {
     const items = plan(doc);
     const item = findPlan(items, "[@eq:alpha; @karger2000]");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("mixed-cluster");
+    expect(item?.kind).toBe("mixed-cluster");
   });
 
   it("routes clustered equation crossrefs to clustered-crossref plan", () => {
@@ -1188,7 +1196,7 @@ describe("planReferenceRendering", () => {
     const items = plan(doc);
     const item = findPlan(items, "[@eq:alpha; @eq:beta]");
     expect(item).toBeDefined();
-    expect(item!.kind).toBe("clustered-crossref");
+    expect(item?.kind).toBe("clustered-crossref");
   });
 
   it("keeps unresolved items inside clustered-crossref plans", () => {
