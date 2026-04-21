@@ -2,7 +2,6 @@ import { execSync } from "node:child_process";
 import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { OutputBundle } from "rollup";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
@@ -17,6 +16,19 @@ interface DebugEventPayload {
   readonly sessionKind?: "human" | "webdriver";
   readonly events: unknown[];
 }
+
+type BundleChunkLike = {
+  readonly type: "chunk";
+  readonly code: string;
+  readonly imports: readonly string[];
+  readonly isEntry?: boolean;
+};
+
+type BundleOutputLike =
+  | BundleChunkLike
+  | {
+      readonly type: string;
+    };
 
 function readGitBuildInfo(): {
   readonly hash: string;
@@ -112,7 +124,7 @@ function readAppStartupBundleLimitKb(): number {
 }
 
 function collectStaticChunkNames(
-  bundle: OutputBundle,
+  bundle: Record<string, BundleOutputLike>,
   names: readonly string[],
 ): Set<string> {
   const visited = new Set<string>();
