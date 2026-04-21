@@ -9,9 +9,10 @@ rendered, degraded, or disallowed.
 
 ### `document-body`
 
-Full document rendering. Used by the main editor viewport (CM6 rich mode) and
-the HTML export path (`markdownToHtml`). All inline and block constructs are
-rendered at full fidelity.
+Full document rendering. Used by Coflat's CM6 rich-mode viewport and the HTML
+export path (`markdownToHtml`). Coflat 2 has its own Lexical renderers, but
+shared chrome/export callers should follow the same surface policy. All inline
+and block constructs are rendered at full fidelity.
 
 **Consumers:** `markdownToHtml()` block-level walker, CM6 ViewPlugins for
 paragraphs and list items.

@@ -37,6 +37,10 @@ selection happens through `VITE_COFLAT_PRODUCT`.
 - Added `pnpm test:browser:coflat2`, a Coflat 2 browser smoke covering Lexical
   mount, formatting, source-mode serialization, heavy typing, save/reopen, and
   debug-bridge health.
+- Audited docs and visible demo/about copy for single-editor assumptions:
+  docs now describe Coflat and Coflat 2 separately, browser-debug guidance
+  prefers the product-neutral `__editor` bridge, demo prose describes the
+  shared format, and the About dialog shows the active editor engine.
 
 ## Coflat 2 Parity Audit
 
@@ -96,5 +100,4 @@ which Coflat 2-only files still fit the merged architecture.
 
 ## Remaining Cleanup
 
-- Audit docs and UI copy for single-editor assumptions.
 - Run a final Tauri desktop smoke for Coflat 2 before distributing builds.

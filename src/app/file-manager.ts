@@ -372,7 +372,7 @@ math:
 title: Coflat Demo
 ---
 
-A semantic document editor for **mathematical writing**. It supports *Typora-style* inline rendering, ~~strikethrough~~, ==highlights==, and \`inline code\`.
+A semantic document editor for **mathematical writing**. It supports rich editing, ~~strikethrough~~, ==highlights==, and \`inline code\`.
 
 This document demonstrates theorem environments, cross-references, citations, images, math, sidenotes, and blockquotes in a single Pandoc-flavored markdown file.
 
@@ -552,9 +552,9 @@ This file exercises document-relative image resolution from a nested path.
 `,
     "chapters/introduction.md": `# Introduction
 
-This document demonstrates the features of Coflat, a semantic editor for mathematical writing. The editor provides:
+This document demonstrates the shared Coflats format for mathematical writing. The editor provides:
 
-- **Typora-style rendering**: source revealed only where you click
+- **Rich editing**: Coflat reveals markdown source on focus; Coflat 2 edits WYSIWYG and saves markdown
 - **KaTeX math**: inline $x^2$ and display mode with equation labels
 - **Theorem environments**: fenced divs with automatic numbering
 - **Cross-references**: click-to-navigate between theorems, equations, and citations

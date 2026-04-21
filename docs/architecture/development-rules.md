@@ -18,6 +18,14 @@
 - Do a self-review/simplification pass before commit.
 - If the architecture is wrong, say so and fix that instead of preserving a bad shape.
 
+## Dual-editor ownership
+
+- Coflat uses the CM6 markdown-native editor. Coflat 2 uses the Lexical WYSIWYG editor.
+- App-shell features should be shared unless they truly depend on one editor engine.
+- Prefer product-neutral bridges and types (`__editor`, app hooks, shared semantic stores) when code or tests need to work in both products.
+- Keep CM6-only rules in `src/editor`, `src/render`, CM6 state modules, and CM6 regression scripts. Keep Lexical-only rules in `src/lexical` and Coflat 2 smoke/regression paths.
+- Do not describe markdown as the only in-memory source of truth for Coflat 2. In Coflat 2, markdown is the load/save serialization boundary.
+
 ### Rigor prompt patterns
 
 - `Be rigorous. Don't stop at the first fix.`
@@ -29,7 +37,7 @@
 - `Check for adjacent cases and duplicates in the codebase.`
 - `If the architecture is wrong, say so and fix that instead.`
 
-## Typora-style editing
+## CM6 Typora-style editing
 
 - Content keeps its natural font when editing (code stays monospace, prose stays serif).
 - Opening fence shows as source when cursor is on it; closing fence is always hidden (zero height, protected by transaction filter, cursor skips via atomicRanges).
@@ -70,7 +78,7 @@
 
 ## Testing
 
-- ALWAYS test before claiming fixed. Use `npm run dev` + `npm run chrome` + `__cmDebug.dump()` to verify. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
+- ALWAYS test before claiming fixed. Use the managed browser harness when possible. For product-neutral checks, use `__editor` and `__app`; for CM6-only investigations, use `pnpm dev` + `pnpm chrome` + `__cmDebug.dump()`; for Coflat 2 checks, use `pnpm dev:coflat2` + `pnpm test:browser:coflat2`. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
 - Always open `index.md` in the browser to verify rendering. It opens by default on startup. If a feature you changed is not covered by `index.md`, add a test case to it.
 - **Visual changes require browser verification before closing an issue.** Any change that affects CSS, rendering, decorations, themes, or layout MUST be verified in the live browser (via CDP) before closing the issue or claiming it's fixed. If browser verification is not possible, explicitly alert the user that visual verification was not done. Never close a visual issue based only on "build passes" or "tests pass."
 - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.

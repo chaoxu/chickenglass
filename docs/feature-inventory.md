@@ -1,10 +1,10 @@
-# Coflat Feature Inventory
+# Coflats Feature Inventory
 
-This document is the rebuild-oriented product spec for Coflat as it exists
-today. It answers a simple question:
+This document is the rebuild-oriented product spec for the Coflats product
+family as it exists today. It answers a simple question:
 
 What does a replacement implementation need to do before it can honestly claim
-to be "Coflat"?
+to be "Coflats-compatible"?
 
 Use this alongside:
 
@@ -18,13 +18,20 @@ that a rebuild must preserve.
 
 ## 1. Product Shape
 
-Coflat is a semantic markdown editor for mathematical writing.
+Coflats are semantic document editors for mathematical writing. This repo
+builds two products from the same app shell:
+
+- Coflat: CM6 markdown-native editing.
+- Coflat 2: Lexical WYSIWYG editing.
 
 The defining product qualities are:
 
-- Plain-text source of truth. Documents stay as markdown files on disk.
-- Typora-style editing. Rich rendering is the default; source is revealed only
-  where the user is actively editing.
+- Shared Pandoc-flavored markdown boundary. Documents load from and save to
+  markdown files on disk.
+- Product-specific editor truth. Coflat treats markdown as the live editing
+  source. Coflat 2 treats markdown as serialization for a rich editor model.
+- Rich editing as the primary workflow. Coflat rich mode is Typora-style source
+  backed editing; Coflat 2 rich mode is WYSIWYG editing.
 - Semantics-first authoring. The editor understands equations, theorem-like
   blocks, citations, cross-references, figures, tables, and
   frontmatter as structured document concepts.
@@ -34,12 +41,12 @@ The defining product qualities are:
 
 ## 2. Runtime Modes
 
-Coflat runs in two main environments:
+Coflats run in two main environments:
 
 - Browser dev mode via Vite, with the demo project loaded by default.
 - Desktop app mode via Tauri, with real filesystem/project access.
 
-The editor itself currently exposes these document modes:
+Both app products currently expose these document modes:
 
 - `rich`: the primary mode and the main focus of the product
 - `source`: raw markdown editing
@@ -50,8 +57,8 @@ A rebuild must preserve the fact that `rich` mode is the center of gravity.
 
 ## 3. Canonical Document Model
 
-The canonical document format is Pandoc-flavored markdown with Coflat-specific
-editor support.
+The canonical boundary format is Pandoc-flavored markdown with Coflat-specific
+semantic editor support.
 
 ### 3.1 Frontmatter
 
@@ -144,7 +151,7 @@ Footnotes are supported as semantic markdown features, including:
 
 ## 4. Semantic Block System
 
-This is one of Coflat's defining features.
+This is one of the Coflats product family's defining features.
 
 The editor treats fenced divs as semantic blocks with plugin-defined behavior.
 
@@ -199,13 +206,14 @@ Users can define or override block types in frontmatter:
 
 Any rebuild that hardcodes only the default block list is incomplete.
 
-## 5. Rich Editing Model
+## 5. Rich Editing Models
 
-The rebuild must preserve the editing model, not just the syntax support.
+The rebuild must preserve the product-specific editing models, not just syntax
+support.
 
-### 5.1 Rich mode behavior
+### 5.1 Coflat rich mode behavior
 
-Rich mode means:
+Coflat rich mode means:
 
 - markdown source stays authoritative
 - rendered output is shown by default
@@ -213,7 +221,19 @@ Rich mode means:
 - cursor movement, click mapping, and selection behavior respect the rendered
   surface rather than acting like a plain textarea
 
-### 5.2 Structure editing
+### 5.2 Coflat 2 rich mode behavior
+
+Coflat 2 rich mode means:
+
+- the live editor is a Lexical WYSIWYG document model
+- markdown is respected as the load/save serialization format, not as the
+  in-memory source of truth
+- formatting commands update the rich document and round-trip through canonical
+  markdown at the boundary
+- semantic constructs such as math, fenced-div blocks, citations, and
+  references remain structured editor concepts
+
+### 5.3 Structure editing
 
 Certain block-level and shell-like constructs support explicit structure edit
 targets rather than naive text exposure.
@@ -226,9 +246,9 @@ Current structure-aware areas include at least:
 - footnote labels
 - display math
 
-### 5.3 Source-to-render mapping
+### 5.4 Source-to-render mapping
 
-The editor must map between source positions and rendered surfaces for:
+Editor surfaces must map between source positions and rendered surfaces for:
 
 - clicking rendered math
 - clicking block headers/titles
@@ -372,13 +392,14 @@ Important native-facing behavior includes:
 
 ## 11. Debug, Inspection, and Regression Surfaces
 
-These are rebuild requirements too, because they are how Coflat is debugged and
-kept stable.
+These are rebuild requirements too, because they are how the Coflats products
+are debugged and kept stable.
 
 ### 11.1 In-browser debug bridge
 
 The dev build exposes runtime globals such as:
 
+- `__editor`
 - `__cmView`
 - `__cmDebug`
 - `__app`
@@ -389,6 +410,7 @@ These are used for:
 
 - state inspection
 - deterministic file opening
+- product-neutral document reads, writes, selections, and formatting
 - structure activation
 - geometry and selection snapshots
 - performance and scroll-guard telemetry
@@ -432,9 +454,11 @@ least include:
 
 - [demo/index.md](/Users/chaoxu/playground/coflat/demo/index.md) renders correctly in rich mode
 - the syntax in [FORMAT.md](/Users/chaoxu/playground/coflat/FORMAT.md) is accepted and behaves as documented
-- the browser regression harness passes on the public showcase
-- the editor still feels like Typora-style source-backed editing rather than a
-  separate rich-text editor
+- the Coflat browser regression harness passes on the public showcase
+- the Coflat 2 browser smoke passes on a generated heavy document
+- Coflat still feels like Typora-style source-backed editing
+- Coflat 2 behaves like WYSIWYG editing while preserving the shared markdown
+  boundary format
 
 ## 13. What Is Explicitly Not the Core Product
 
@@ -449,9 +473,12 @@ These are currently outside the core definition of Coflat:
 
 A serious rebuild should be able to answer "yes" to all of these:
 
-- Can it open plain markdown files and keep them as the source of truth?
-- Does it support Coflat's document format, not just generic markdown?
-- Does rich mode preserve source-backed Typora-style editing?
+- Can it open and save plain markdown files as the shared boundary format?
+- Does Coflat keep markdown as the live source of truth?
+- Does Coflat 2 keep WYSIWYG editing separate from markdown serialization?
+- Does it support the shared Coflats document format, not just generic markdown?
+- Does Coflat rich mode preserve source-backed Typora-style editing?
+- Does Coflat 2 rich mode preserve WYSIWYG editing with correct markdown round-trip behavior?
 - Are semantic blocks plugin-driven rather than hardcoded one-offs?
 - Do equations, figures, tables, citations, and cross-references behave like
   semantic objects?
@@ -460,5 +487,5 @@ A serious rebuild should be able to answer "yes" to all of these:
 - Does the dev build expose enough runtime/debug tooling to trace regressions?
 - Can the public showcase and browser regressions be used as acceptance tests?
 
-If the answer to any of those is "no", the rebuild is missing part of Coflat's
-current feature surface.
+If the answer to any of those is "no", the rebuild is missing part of the
+current Coflats feature surface.

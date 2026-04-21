@@ -107,14 +107,18 @@ blocks:
 ┌─────────────────────────────────────────────┐
 │  Tauri Window (WebView)                      │
 │  ┌─────────────────────────────────────────┐ │
-│  │            Editor (CM6)                 │ │
+│  │            Shared App Shell             │ │
 │  │                                         │ │
-│  │  Markdown text ←→ Lezer parser → AST    │ │
-│  │       ↑                          ↓      │ │
-│  │       │                  CM6 Decorations │ │
-│  │       │                          ↓      │ │
-│  │  Source on focus ←──→ Rendered otherwise │ │
-│  │                        (KaTeX, blocks)  │ │
+│  │  File IO ←→ markdown boundary ←→ editor │ │
+│  │                                  adapter│ │
+│  │       │                          │      │ │
+│  │       │           ┌──────────────┴────┐ │ │
+│  │       │           │ CM6 markdown      │ │
+│  │       │           │ Lexical WYSIWYG   │ │
+│  │       │           └──────────────┬────┘ │ │
+│  │       ↓                          ↓      │ │
+│  │  Lezer semantics        KaTeX, blocks,  │ │
+│  │  index/export           references      │ │
 │  └──────────────┬──────────────────────────┘ │
 │                 │ invoke()                    │
 │  ┌──────────────▼──────────────────────────┐ │
@@ -130,11 +134,13 @@ blocks:
         Pandoc → PDF, LaTeX, DOCX
 ```
 
-### AST nodes
+### Source positions
 
-Every AST node tracks its source position (Lezer does this by default). This enables:
+Markdown-derived semantic nodes track source positions whenever they come from
+the boundary document. This enables:
 
-- Precise source ↔ rendered mapping for Typora-style editing
+- Precise source <-> rendered mapping for Coflat's Typora-style editing
+- Stable markdown serialization for Coflat 2's WYSIWYG model
 - Structural edits in v3 that patch only affected source regions
 - Semantic indexing for search
 
@@ -150,12 +156,14 @@ Extends `@lezer/markdown` with:
 
 Block plugins register additional Lezer extensions for custom body parsers.
 
-### Rendering (CM6 ViewPlugins)
+### Editor rendering surfaces
 
-- **Math**: KaTeX renders `$...$` and `$$...$$` inline. Source reveals on cursor focus.
-- **Semantic blocks**: Rendered with type label, number, optional title. Source (`::: {.theorem ...}`) reveals on cursor focus at the fence lines.
-- **Cross-references**: Rendered as "Theorem 1" / "Eq. (3)" etc. Source `[@thm-label]` reveals on focus.
-- **Citations**: Rendered as "(Karger, 2000)" or "Karger (2000)". Source `[@karger2000]` reveals on focus. Bibliography loaded from `.bib` file specified in frontmatter.
+- **Coflat (CM6)**: ViewPlugins and decorations render markdown syntax in place. Source reveals on cursor focus.
+- **Coflat 2 (Lexical)**: Lexical nodes render the document directly and serialize back to Pandoc-flavored markdown at the boundary.
+- **Math**: KaTeX renders `$...$` and `$$...$$` inline.
+- **Semantic blocks**: Rendered with type label, number, optional title.
+- **Cross-references**: Rendered as "Theorem 1" / "Eq. (3)" etc.
+- **Citations**: Rendered as "(Karger, 2000)" or "Karger (2000)". Bibliography loaded from `.bib` file specified in frontmatter.
 
 ### Indexer
 
@@ -169,14 +177,14 @@ A background process (or web worker) that:
 
 ## Versioning roadmap
 
-### v2 (this version)
+### Current product family
 
-- CodeMirror 6 editor with Lezer markdown parser extensions
-- Typora-style rendering (source on focus)
+- Coflat: CodeMirror 6 editor with Lezer markdown parser extensions
+- Coflat 2: Lexical WYSIWYG editor with markdown load/save serialization
+- Shared Pandoc-flavored markdown format
 - Block plugin system with default math environments
 - KaTeX math rendering
 - Cross-references and citations
-- File inclusion with continuous numbering
 - Semantic search/indexing
 - Desktop app via Tauri v2 (replaced Electron)
 - Git integration: none (use externally)

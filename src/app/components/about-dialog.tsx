@@ -34,9 +34,11 @@ interface Credit {
   url: string;
 }
 
-const CREDITS: Credit[] = [
+const PREFIX_CREDITS: Credit[] = [
   { name: "Tauri", url: "https://tauri.app" },
-  { name: "CodeMirror", url: "https://codemirror.net" },
+];
+
+const SUFFIX_CREDITS: Credit[] = [
   { name: "KaTeX", url: "https://katex.org" },
   { name: "Lezer", url: "https://lezer.codemirror.net" },
   { name: "Pandoc", url: "https://pandoc.org" },
@@ -52,9 +54,10 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
   const [logDirectoryLoading, setLogDirectoryLoading] = useState(false);
   const desktopRuntime = isTauri();
   const product = activeCoflatProduct;
-  const credits = product.editorEngine === "lexical-wysiwyg"
-    ? [...CREDITS, { name: "Lexical", url: "https://lexical.dev" }]
-    : CREDITS;
+  const editorCredit = product.editorEngine === "lexical-wysiwyg"
+    ? { name: "Lexical", url: "https://lexical.dev" }
+    : { name: "CodeMirror", url: "https://codemirror.net" };
+  const credits = [...PREFIX_CREDITS, editorCredit, ...SUFFIX_CREDITS];
 
   useEffect(() => {
     if (!open || !desktopRuntime) return;

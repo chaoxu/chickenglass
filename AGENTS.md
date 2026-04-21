@@ -126,6 +126,10 @@ Workflow at `.gitea/workflows/ci.yml`. Runs on push/PR to `main`.
 
 Debug globals are exposed on `window` for console and Playwright testing:
 
+Prefer the product-neutral `__editor` bridge when a helper can work in both
+Coflat and Coflat 2. Use `__cmView` / `__cmDebug` only for Coflat's CM6-specific
+rendering, parser, geometry, and scroll investigations.
+
 ```
 __cmView                     — CM6 EditorView (dispatch, state, focus)
 __cmDebug.tree()             — FencedDiv nodes from the Lezer syntax tree
@@ -173,7 +177,7 @@ __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emi
 __fencedDivDebug = true      — toggle fenced div parser tracing
 ```
 
-Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `getRenderState()`, `captureDebugState()`, `dump()`, `setCursor()`, `jumpToTextAnchor()`, `scrollTo()`.
+Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `waitForDebugBridge()`, `readEditorText()`, `formatSelection()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `getRenderState()`, `captureDebugState()`, `dump()`, `setCursor()`, `jumpToTextAnchor()`, `scrollTo()`.
 
 ## Dev mode
 
@@ -187,14 +191,14 @@ When asked to start the preview server, prefer `pnpm build && pnpm preview`. The
 Prefer the managed Playwright harness for automated verification. The manual CDP/app-mode lane is still useful for visual debugging, but it is not the default regression path anymore.
 
 Managed harness:
-1. Start: `pnpm dev`
-2. Run scripts like `pnpm test:browser`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`
+1. Start `pnpm dev` for Coflat, or `pnpm dev:coflat2` for Coflat 2.
+2. Run scripts like `pnpm test:browser`, `pnpm test:browser:coflat2`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
 
 Manual CDP lane:
-1. Start: `pnpm dev`, then `pnpm chrome` (CDP on port 9322)
+1. Start `pnpm dev` or `pnpm dev:coflat2`, then `pnpm chrome` (CDP on port 9322).
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
-3. Use `page.evaluate()` + `__cmView`/`__cmDebug`/`__app`. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
+3. Use `page.evaluate()` + `__editor`/`__app` for product-neutral actions. Use `__cmView`/`__cmDebug` only when investigating Coflat's CM6 surface. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
 4. Screenshots: use the `screenshot()` helper from `scripts/test-helpers.mjs`, or `node scripts/screenshot.mjs [file] --output path.png`. **Do not call `page.screenshot()` directly** — headed Chrome CDP can hang there.
 5. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 
@@ -287,7 +291,7 @@ Every performance issue and PR must include a **before/after measurement** on a 
 
 Detailed rules and architecture decisions are in reference files -- loaded on demand, not always in context:
 
-- **[Development rules](docs/architecture/development-rules.md)** — rigor mode, Typora-style editing, CM6 decorations, Lezer parser rules, testing policy, workflow gates, shell safety. Error handling policy: Never use bare `catch {}` without an explicit reason.
+- **[Development rules](docs/architecture/development-rules.md)** — rigor mode, dual-editor ownership, CM6 Typora-style rules, Lezer parser rules, testing policy, workflow gates, shell safety. Error handling policy: Never use bare `catch {}` without an explicit reason.
 - **[Architecture decisions](docs/architecture/architecture-decisions.md)** — Pandoc-free editing, plugin system, FileSystem abstraction, Lezer-everywhere philosophy, library preferences
 - **[Subsystem pattern](docs/architecture/subsystem-pattern.md)** — model/controller/render-adapter seam pattern for non-trivial features. One concept should have one clear owner.
 - **[Inline rendering policy](docs/design/inline-rendering-policy.md)** — how inline math, bold, italic rendering works
