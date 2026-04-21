@@ -27,7 +27,7 @@ import {
   type EditorSessionRuntime,
 } from "./editor-session-runtime";
 
-export type ExternalDocumentSyncResult = "ignore" | "notify" | "reloaded";
+export type ExternalDocumentSyncResult = "ignore" | "notify" | "reloaded" | "self-change";
 
 export interface EditorSessionService {
   getCurrentDocText: () => string;
@@ -368,7 +368,7 @@ export function createEditorSessionService({
     }
 
     if (runtime.pipeline.isSelfChange(path, content)) {
-      return "ignore";
+      return "self-change";
     }
 
     const currentDocument = runtime.getCurrentDocument();

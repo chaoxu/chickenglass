@@ -347,7 +347,56 @@ describe("FileWatcher", () => {
 
     await handleFileChanged({ path: "docs/new-subdir", treeChanged: true });
 
-    expect(refreshTreeSpy).toHaveBeenCalledWith("docs/new-subdir");
+    await vi.waitFor(() => {
+      expect(refreshTreeSpy).toHaveBeenCalledWith("docs/new-subdir");
+    });
+  });
+
+  it("coalesces structural refreshes by parent directory", async () => {
+    const refreshTree = vi.fn(async (_path?: string) => {});
+    const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
+      refreshTree,
+      syncExternalChange: async () => "ignore",
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await Promise.all([
+      handleFileChanged({ path: "docs/a.md", treeChanged: true }),
+      handleFileChanged({ path: "docs/b.md", treeChanged: true }),
+      handleFileChanged({ path: "notes/c.md", treeChanged: true }),
+    ]);
+
+    await vi.waitFor(() => {
+      expect(refreshTreeSpy).toHaveBeenCalledTimes(2);
+    });
+    expect(refreshTreeSpy).toHaveBeenCalledWith("docs/a.md");
+    expect(refreshTreeSpy).toHaveBeenCalledWith("notes/c.md");
+  });
+
+  it("skips structural refreshes for self-originated save events", async () => {
+    const refreshTree = vi.fn(async (_path?: string) => {});
+    const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
+      refreshTree,
+      syncExternalChange: async () => "self-change",
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await handleFileChanged({ path: "docs/a.md", treeChanged: true });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    expect(refreshTreeSpy).not.toHaveBeenCalled();
   });
 
   it("does not refresh the tree for non-structural file modifications", async () => {

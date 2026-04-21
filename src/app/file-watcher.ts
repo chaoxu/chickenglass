@@ -64,6 +64,11 @@ function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEven
   return payload;
 }
 
+function parentDir(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.substring(0, i);
+}
+
 /**
  * Watches for external file changes in Tauri mode.
  *
@@ -82,6 +87,9 @@ export class FileWatcher {
   private readonly pendingNotifications: string[] = [];
   /** Path currently shown in the notification bar. */
   private activeNotificationPath: string | null = null;
+  private readonly pendingTreeRefreshes = new Map<string, string>();
+  private treeRefreshTimer: number | null = null;
+  private treeRefreshGeneration = 0;
 
   constructor(config: FileWatcherConfig) {
     this.config = config;
@@ -96,6 +104,7 @@ export class FileWatcher {
     this.watchToken = watchToken;
     this.unlisten = null;
     this.watchRoot = null;
+    this.clearPendingTreeRefreshes();
 
     // Listen for file-changed events from the backend.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
@@ -177,6 +186,7 @@ export class FileWatcher {
     this.watchToken = null;
     this.unlisten = null;
     this.watchRoot = null;
+    this.clearPendingTreeRefreshes();
 
     unlisten?.();
     if (watchToken !== null) {
@@ -204,13 +214,6 @@ export class FileWatcher {
 
     const { path: relativePath, treeChanged } = event;
 
-    if (treeChanged) {
-      void measureAsync("watch.refresh_tree", () => this.config.refreshTree(relativePath), {
-        category: "watch",
-        detail: relativePath,
-      }).catch(logCatchError("[file-watcher] tree refresh failed", relativePath));
-    }
-
     if (this.config.handleWatchedPathChange) {
       void Promise.resolve(this.config.handleWatchedPathChange(relativePath)).catch(
         logCatchError("[file-watcher] watched-path handler failed", relativePath),
@@ -218,7 +221,11 @@ export class FileWatcher {
     }
 
     const syncResult = await this.config.syncExternalChange(relativePath);
-    if (syncResult === "ignore" || syncResult === "reloaded") {
+    if (treeChanged && syncResult !== "self-change") {
+      this.enqueueTreeRefresh(relativePath);
+    }
+
+    if (syncResult === "ignore" || syncResult === "reloaded" || syncResult === "self-change") {
       return;
     }
 
@@ -302,6 +309,44 @@ export class FileWatcher {
       this.notificationBar.remove();
       this.notificationBar = null;
     }
+  }
+
+  private enqueueTreeRefresh(relativePath: string): void {
+    const dir = parentDir(relativePath);
+    if (!this.pendingTreeRefreshes.has(dir)) {
+      this.pendingTreeRefreshes.set(dir, relativePath);
+    }
+    if (this.treeRefreshTimer !== null) return;
+
+    const generation = this.treeRefreshGeneration;
+    this.treeRefreshTimer = window.setTimeout(() => {
+      this.treeRefreshTimer = null;
+      void this.flushPendingTreeRefreshes(generation);
+    }, 0);
+  }
+
+  private clearPendingTreeRefreshes(): void {
+    this.treeRefreshGeneration += 1;
+    this.pendingTreeRefreshes.clear();
+    if (this.treeRefreshTimer !== null) {
+      window.clearTimeout(this.treeRefreshTimer);
+      this.treeRefreshTimer = null;
+    }
+  }
+
+  private async flushPendingTreeRefreshes(generation: number): Promise<void> {
+    if (generation !== this.treeRefreshGeneration) {
+      return;
+    }
+    const changedPaths = [...this.pendingTreeRefreshes.values()];
+    this.pendingTreeRefreshes.clear();
+
+    await Promise.all(changedPaths.map((changedPath) =>
+      measureAsync("watch.refresh_tree", () => this.config.refreshTree(changedPath), {
+        category: "watch",
+        detail: changedPath,
+      }).catch(logCatchError("[file-watcher] tree refresh failed", changedPath)),
+    ));
   }
 
   private isCurrentWatcherEvent(

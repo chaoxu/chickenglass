@@ -414,7 +414,7 @@ describe("useEditorSession", () => {
     });
 
     await act(async () => {
-      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("ignore");
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("self-change");
     });
     expect(ref.result.editorDoc).toBe("hello!");
     expect(ref.result.currentDocument?.dirty).toBe(false);

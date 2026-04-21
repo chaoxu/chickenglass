@@ -52,6 +52,9 @@ function createHarness(deps: {
   listChildren?: (path: string) => Promise<FileEntry[]>;
   workspaceRequestRef: { current: number };
   windowState: WindowState;
+  saveWindowState?: (patch: Partial<WindowState>) => void;
+  sidebarCollapsed?: boolean;
+  sidebarWidth?: number;
   openFileShouldReject?: boolean;
 }): { Harness: FC; ref: TestRef } {
   const ref: TestRef = {
@@ -77,12 +80,12 @@ function createHarness(deps: {
       workspaceRequestRef: deps.workspaceRequestRef,
       workspace: {
         windowState: deps.windowState,
-        saveWindowState: vi.fn(),
+        saveWindowState: deps.saveWindowState ?? vi.fn(),
         startupComplete: true,
       },
       sidebarLayout: {
-        sidebarCollapsed: false,
-        sidebarWidth: 224,
+        sidebarCollapsed: deps.sidebarCollapsed ?? false,
+        sidebarWidth: deps.sidebarWidth ?? 224,
         setSidebarCollapsed,
         setSidebarWidth,
       },
@@ -116,6 +119,7 @@ describe("useAppSessionPersistence", () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.useRealTimers();
   });
 
   it("restores the previously saved document path on startup", async () => {
@@ -173,6 +177,52 @@ describe("useAppSessionPersistence", () => {
     });
 
     expect(ref.setSidebarCollapsedCalls).toContain(true);
+  });
+
+  it("debounces sidebar width persistence", async () => {
+    vi.useFakeTimers();
+    const saveWindowState = vi.fn();
+    const deps = {
+      fileTree: createFileTree("main.md"),
+      workspaceRequestRef: { current: 0 },
+      windowState: createMockWindowState({
+        currentDocument: null,
+        sidebarWidth: 220,
+      }),
+      saveWindowState,
+      sidebarWidth: 224,
+    };
+    const { Harness } = createHarness(deps);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    saveWindowState.mockClear();
+    vi.clearAllTimers();
+
+    deps.sidebarWidth = 260;
+    act(() => {
+      root.render(createElement(Harness));
+    });
+    deps.sidebarWidth = 280;
+    act(() => {
+      root.render(createElement(Harness));
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(199);
+    });
+    expect(saveWindowState).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(saveWindowState).toHaveBeenCalledTimes(1);
+    expect(saveWindowState).toHaveBeenCalledWith({ sidebarWidth: 280 });
+
+    vi.useRealTimers();
   });
 
   it("discards stale restore result when project switches during lazy search", async () => {

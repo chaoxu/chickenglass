@@ -1,5 +1,9 @@
 import type { FileEntry } from "./file-manager";
 
+type LazyChildrenResult =
+  | { status: "fulfilled"; children: FileEntry[] }
+  | { status: "rejected"; reason: unknown };
+
 /**
  * Find the default document to open for a project.
  *
@@ -22,15 +26,40 @@ export async function findDefaultDocumentPath(
     ?? rootFiles.find((entry) => entry.path.endsWith(".md"));
   if (preferred) return preferred.path;
 
-  const findFirst = async (entry: FileEntry): Promise<string | null> => {
+  const preloadUnloadedDirectoryChildren = async (
+    children: FileEntry[],
+  ): Promise<Map<string, Promise<LazyChildrenResult>>> => {
+    if (!listChildren || signal) return new Map();
+    const unloadedDirectories = children.filter((child) =>
+      child.isDirectory && child.children === undefined
+    );
+    const loaded = unloadedDirectories.map((child) => [
+      child.path,
+      listChildren(child.path).then<LazyChildrenResult, LazyChildrenResult>(
+        (childEntries) => ({ status: "fulfilled", children: childEntries }),
+        (reason: unknown) => ({ status: "rejected", reason }),
+      ),
+    ] as const);
+    return new Map(loaded);
+  };
+
+  const findFirst = async (
+    entry: FileEntry,
+    preloadedChildren?: FileEntry[],
+  ): Promise<string | null> => {
     if (signal?.aborted) return null;
     if (!entry.isDirectory) return entry.path;
-    const children = listChildren
-      ? (entry.children ?? await listChildren(entry.path))
-      : (entry.children ?? []);
+    const children = preloadedChildren
+      ?? (listChildren ? (entry.children ?? await listChildren(entry.path)) : (entry.children ?? []));
+    if (signal?.aborted) return null;
+    const childPreloads = await preloadUnloadedDirectoryChildren(children);
     if (signal?.aborted) return null;
     for (const child of children) {
-      const found = await findFirst(child);
+      const preloaded = await childPreloads.get(child.path);
+      if (preloaded?.status === "rejected") {
+        throw preloaded.reason;
+      }
+      const found = await findFirst(child, preloaded?.children);
       if (found) return found;
     }
     return null;

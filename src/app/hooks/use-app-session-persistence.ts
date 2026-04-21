@@ -5,6 +5,8 @@ import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
 
+const SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS = 200;
+
 interface AppSessionPersistenceDeps {
   fileTree: FileEntry | null;
   /** When provided, default-doc search loads subdirectories lazily. */
@@ -80,9 +82,14 @@ export function useAppSessionPersistence({
 
   useEffect(() => {
     if (restoreState.status !== "completed") return;
-    saveWindowState({
-      sidebarWidth: sidebarCollapsed ? 0 : sidebarWidth,
-    });
+    const timeout = window.setTimeout(() => {
+      saveWindowState({
+        sidebarWidth: sidebarCollapsed ? 0 : sidebarWidth,
+      });
+    }, SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timeout);
+    };
   }, [restoreState.status, saveWindowState, sidebarCollapsed, sidebarWidth]);
 
   useEffect(() => {
