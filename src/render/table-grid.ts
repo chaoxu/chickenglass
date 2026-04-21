@@ -38,30 +38,17 @@ import {
 import {
   findTablesInState,
   findTableAtCursor,
-  findCellBounds,
   findPipePositions,
-  getCursorColIndex,
-  getCursorRowIndex,
   type TableRange,
 } from "./table-discovery";
 import { tableDiscoveryField } from "../state/table-discovery";
 import { createSimpleTextWidget } from "./render-core";
-import { ContextMenu } from "../lib/context-menu";
-import type { ContextMenuItem } from "../lib/context-menu";
 import {
-  containsPos,
   containsPosExclusiveEnd,
   rangesIntersect,
 } from "../lib/range-helpers";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import {
-  addRow,
-  addColumn,
-  deleteRow,
-  deleteColumn,
-  setAlignment,
-  moveRow,
-  moveColumn,
   formatTable,
   type ParsedTable,
 } from "./table-utils";
@@ -70,11 +57,10 @@ import {
   normalizeDirtyRange,
   type VisibleRange,
 } from "./viewport-diff";
-import {
-  findCellAtPos,
-  getCellBounds,
-} from "./table-cell-geometry";
+import { findCellAtPos, getCellBounds } from "./table-cell-geometry";
 import { tableClipboardHandlers } from "./table-clipboard";
+import { tableGridClickGuard } from "./table-grid-click-guard";
+import { createTableGridContextMenuHandler } from "./table-grid-context-menu";
 import { createTableGridKeyBindings } from "./table-grid-navigation";
 
 // ---------------------------------------------------------------------------
@@ -510,220 +496,9 @@ function dispatchDeleteRange(view: EditorView, from: number, to: number): void {
   });
 }
 
-/**
- * Get the cursor's row index (0-based data row, -1 for header) and column
- * index within a table. Returns null if the cursor is not in the table.
- */
-function getCursorPosition(
-  view: EditorView,
-  table: TableRange,
-): { rowIndex: number | null; colIndex: number | null } {
-  const rowIndex = getCursorRowIndex(view, table);
-  const colIndex = getCursorColIndex(view, table);
-  return { rowIndex, colIndex };
-}
-
-// ---------------------------------------------------------------------------
-// Context menu
-// ---------------------------------------------------------------------------
-
-function buildGridContextMenuItems(
-  view: EditorView,
-  table: TableRange,
-): ContextMenuItem[] {
-  const { rowIndex, colIndex } = getCursorPosition(view, table);
-
-  return [
-    {
-      label: "Insert Row Above",
-      disabled: rowIndex === null,
-      action: () => {
-        dispatchTableMutation(view, table, (parsed) =>
-          addRow(parsed, rowIndex ?? 0),
-        );
-      },
-    },
-    {
-      label: "Insert Row Below",
-      action: () => {
-        dispatchTableMutation(view, table, (parsed) =>
-          addRow(parsed, rowIndex !== null ? rowIndex + 1 : undefined),
-        );
-      },
-    },
-    {
-      label: "Insert Column Left",
-      action: () => {
-        dispatchTableMutation(view, table, (parsed) =>
-          addColumn(parsed, colIndex ?? 0),
-        );
-      },
-    },
-    {
-      label: "Insert Column Right",
-      action: () => {
-        dispatchTableMutation(view, table, (parsed) =>
-          addColumn(parsed, colIndex !== null ? colIndex + 1 : undefined),
-        );
-      },
-    },
-    { label: "-" },
-    {
-      label: "Delete Row",
-      disabled: rowIndex === null || table.parsed.rows.length === 0,
-      action: () => {
-        if (rowIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => deleteRow(parsed, rowIndex));
-      },
-    },
-    {
-      label: "Delete Column",
-      disabled: colIndex === null || table.parsed.header.cells.length <= 1,
-      action: () => {
-        if (colIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => deleteColumn(parsed, colIndex));
-      },
-    },
-    { label: "-" },
-    {
-      label: "Align Left",
-      disabled: colIndex === null,
-      action: () => {
-        if (colIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => setAlignment(parsed, colIndex, "left"));
-      },
-    },
-    {
-      label: "Align Center",
-      disabled: colIndex === null,
-      action: () => {
-        if (colIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => setAlignment(parsed, colIndex, "center"));
-      },
-    },
-    {
-      label: "Align Right",
-      disabled: colIndex === null,
-      action: () => {
-        if (colIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => setAlignment(parsed, colIndex, "right"));
-      },
-    },
-    { label: "-" },
-    {
-      label: "Move Row Up",
-      disabled: rowIndex === null || rowIndex <= 0,
-      action: () => {
-        if (rowIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => moveRow(parsed, rowIndex, rowIndex - 1));
-      },
-    },
-    {
-      label: "Move Row Down",
-      disabled: rowIndex === null || rowIndex >= table.parsed.rows.length - 1,
-      action: () => {
-        if (rowIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => moveRow(parsed, rowIndex, rowIndex + 1));
-      },
-    },
-    {
-      label: "Move Column Left",
-      disabled: colIndex === null || colIndex <= 0,
-      action: () => {
-        if (colIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => moveColumn(parsed, colIndex, colIndex - 1));
-      },
-    },
-    {
-      label: "Move Column Right",
-      disabled: colIndex === null || colIndex >= table.parsed.header.cells.length - 1,
-      action: () => {
-        if (colIndex === null) return;
-        dispatchTableMutation(view, table, (parsed) => moveColumn(parsed, colIndex, colIndex + 1));
-      },
-    },
-    { label: "-" },
-    {
-      label: "Delete Table",
-      action: () => dispatchDeleteTable(view, table),
-    },
-  ];
-}
-
-// ---------------------------------------------------------------------------
-// Click guard — clamp click position to cell content bounds (#617)
-//
-// In CSS grid table rows, `posAtCoords` (via caretPositionFromPoint) can
-// return positions outside the clicked cell's content: it may land on the
-// wrong row entirely (cross-row drift in the last column) or in the
-// leading/trailing atomic-range whitespace, which renders visually at the
-// start of the next row. We use posAtDOM on the `.cf-grid-cell` element to
-// identify the correct cell, then clamp the result to the trimmed content
-// bounds [cell.from, cell.to].
-// ---------------------------------------------------------------------------
-
-/**
- * If the click lands outside the cell's content bounds — either on a
- * different row (browser caretPositionFromPoint cross-row misresolution,
- * common in the last column of CSS-grid tables) or in the leading/trailing
- * whitespace area that maps to an atomic range — return the clamped position
- * at the end of the cell's trimmed content. Returns `null` when `posAtCoords`
- * already resolved within the cell content bounds.
- */
-function guardCrossRowPos(
-  view: EditorView,
-  event: MouseEvent,
-): number | null {
-  const target = event.target;
-  if (!(target instanceof HTMLElement || target instanceof Text)) return null;
-  const el = target instanceof HTMLElement ? target : target.parentElement;
-  if (!el) return null;
-  const gridCell = el.closest(".cf-grid-cell");
-  if (!gridCell) return null;
-
-  const cellLine = view.state.doc.lineAt(view.posAtDOM(gridCell, 0));
-  const col = parseInt((gridCell as HTMLElement).getAttribute("data-col") ?? "0", 10);
-  const cell = findCellBounds(cellLine.text, cellLine.from, col);
-  if (!cell) return null;
-
-  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-  if (pos !== null && containsPos(cell, pos)) return null;
-
-  return cell.to;
-}
-
-const gridClickGuard = EditorView.domEventHandlers({
-  mousedown(event: MouseEvent, view: EditorView) {
-    if (event.button !== 0 || event.detail > 1 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
-
-    const corrected = guardCrossRowPos(view, event);
-    if (corrected === null) return false;
-
-    event.preventDefault();
-    view.dispatch({
-      selection: { anchor: corrected },
-      scrollIntoView: false,
-    });
-    view.focus();
-    return true;
-  },
-});
-
-const gridContextMenuHandler = EditorView.domEventHandlers({
-  contextmenu(event: MouseEvent, view: EditorView) {
-    const tables = findTablesInState(view.state);
-    const corrected = guardCrossRowPos(view, event);
-    const pos = corrected ?? view.posAtCoords({ x: event.clientX, y: event.clientY });
-    if (pos === null) return false;
-    const table = findTableAtCursor(tables, pos);
-    if (!table) return false;
-
-    event.preventDefault();
-    // Move cursor to the right-clicked position so getCursorPosition works
-    view.dispatch({ selection: { anchor: pos }, scrollIntoView: false });
-    new ContextMenu(buildGridContextMenuItems(view, table), event.clientX, event.clientY);
-    return true;
-  },
+const gridContextMenuHandler = createTableGridContextMenuHandler({
+  mutateTable: dispatchTableMutation,
+  deleteTable: dispatchDeleteTable,
 });
 
 // ---------------------------------------------------------------------------
@@ -928,7 +703,7 @@ export const tableGridExtension = [
   tableGridPlugin,
   tableGridTheme,
   tableClipboardHandlers,
-  gridClickGuard,
+  tableGridClickGuard,
   gridContextMenuHandler,
   keymap.of(createTableGridKeyBindings(deleteSelectedTableSelection)),
   pipeProtectionFilter,
