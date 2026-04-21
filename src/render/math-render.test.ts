@@ -808,6 +808,41 @@ describe("math decoration invalidation", () => {
     expect(after.size).toBe(before.size);
   });
 
+  it("keeps decorations when delimiter-free prose changes after all math", () => {
+    const equations = Array.from(
+      { length: 80 },
+      (_, index) => `$x_{${index}}$`,
+    ).join(" ");
+    const doc = `${equations}\n\nplain tail`;
+    const state = createMathRenderState(doc, 0);
+    const before = state.field(mathDecorationField);
+    const tailText = doc.indexOf("plain");
+
+    const after = state.update({
+      changes: { from: tailText, to: tailText + 5, insert: "quiet" },
+    }).state.field(mathDecorationField);
+
+    expect(after).toBe(before);
+  });
+
+  it("maps many math decorations when delimiter-free prose before math shifts positions", () => {
+    const equations = Array.from(
+      { length: 80 },
+      (_, index) => `$x_{${index}}$`,
+    ).join(" ");
+    const doc = `intro ${equations}`;
+    const state = createMathRenderState(doc, 0);
+    const before = state.field(mathDecorationField);
+
+    const after = state.update({
+      changes: { from: 0, to: 0, insert: "quiet " },
+    }).state.field(mathDecorationField);
+
+    expect(after).not.toBe(before);
+    expect(after.size).toBe(before.size);
+    expect(getDecorationSpecs(after)[0].from).toBe(getDecorationSpecs(before)[0].from + 6);
+  });
+
   it("drops inline math widgets when deleting the opening delimiter", () => {
     const doc = "before $x$ after";
     const state = createMathRenderState(doc, 0);

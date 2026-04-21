@@ -49,7 +49,6 @@ import {
   mergeDirtyRanges,
   rangeIntersectsDirtyRanges,
 } from "./incremental-dirty-ranges";
-import { rangesIntersect } from "../lib/range-helpers";
 import { serializeMacros } from "./source-widget";
 import { getActiveStructureEditTarget } from "../state/cm-structure-edit";
 import {
@@ -243,22 +242,81 @@ function collectDirtyMathRegions(
 ): MathSemantics[] {
   if (dirtyRanges.length === 0) return [];
   const dirty: MathSemantics[] = [];
-  for (const region of regions) {
-    if (rangeIntersectsDirtyRanges(region.from, region.to, dirtyRanges)) {
+  let lastDirtyRegion: MathSemantics | undefined;
+  for (const range of dirtyRanges) {
+    forEachMathRegionIntersectingRange(regions, range, (region) => {
+      if (region === lastDirtyRegion) return;
       dirty.push(region);
-    }
+      lastDirtyRegion = region;
+    });
   }
   return dirty;
 }
 
-function rangeTouchesChange(
-  range: Pick<MathSemantics, "from" | "to">,
-  change: DirtyRange,
-): boolean {
-  if (change.from === change.to) {
-    return range.from <= change.from && change.from <= range.to;
+function firstMathRegionWithToAfter(
+  regions: readonly MathSemantics[],
+  pos: number,
+): number {
+  let low = 0;
+  let high = regions.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (regions[mid].to <= pos) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
   }
-  return rangesIntersect(range, change);
+  return low;
+}
+
+function firstMathRegionWithToAtLeast(
+  regions: readonly MathSemantics[],
+  pos: number,
+): number {
+  let low = 0;
+  let high = regions.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (regions[mid].to < pos) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+function forEachMathRegionIntersectingRange(
+  regions: readonly MathSemantics[],
+  range: DirtyRange,
+  visit: (region: MathSemantics) => void,
+): void {
+  if (range.from === range.to) return;
+  const startIndex = firstMathRegionWithToAfter(regions, range.from);
+  for (let index = startIndex; index < regions.length; index += 1) {
+    const region = regions[index];
+    if (region.from >= range.to) break;
+    visit(region);
+  }
+}
+
+function forEachMathRegionTouchingChange(
+  regions: readonly MathSemantics[],
+  change: DirtyRange,
+  visit: (region: MathSemantics) => void,
+): void {
+  if (change.from === change.to) {
+    const startIndex = firstMathRegionWithToAtLeast(regions, change.from);
+    for (let index = startIndex; index < regions.length; index += 1) {
+      const region = regions[index];
+      if (region.from > change.from) break;
+      visit(region);
+    }
+    return;
+  }
+
+  forEachMathRegionIntersectingRange(regions, change, visit);
 }
 
 function mapMathRegionDirtyRange(
@@ -272,29 +330,66 @@ function mapMathRegionDirtyRange(
   };
 }
 
-function collectChangedMathDirtyRanges(
+interface MathChangeSummary {
+  readonly changedMathDirtyRanges: readonly DirtyRange[];
+  readonly hasMathSyntaxEdit: boolean;
+  readonly touchesExistingMath: boolean;
+}
+
+function containsMathSyntaxEdit(text: string): boolean {
+  return /[$\\()[\]{}#\r\n]/.test(text);
+}
+
+function sliceChangeContext(
+  state: EditorState,
+  from: number,
+  to: number,
+): string {
+  return state.sliceDoc(
+    Math.max(0, from - 1),
+    Math.min(state.doc.length, Math.max(from, to) + 1),
+  );
+}
+
+function summarizeMathChanges(
   tr: Transaction,
   regionsBefore: readonly MathSemantics[],
   regionsAfter: readonly MathSemantics[],
-): DirtyRange[] {
+): MathChangeSummary {
   const dirtyRanges: DirtyRange[] = [];
+  let hasMathSyntaxEdit = false;
+  let touchesExistingMath = false;
 
-  tr.changes.iterChangedRanges((fromOld, toOld, fromNew, toNew) => {
+  tr.changes.iterChanges((fromOld, toOld, fromNew, toNew, inserted) => {
+    if (
+      !hasMathSyntaxEdit
+      && (
+        containsMathSyntaxEdit(inserted.toString())
+        || containsMathSyntaxEdit(sliceChangeContext(tr.startState, fromOld, toOld))
+        || containsMathSyntaxEdit(sliceChangeContext(tr.state, fromNew, toNew))
+      )
+    ) {
+      hasMathSyntaxEdit = true;
+    }
+
     const oldChange = { from: fromOld, to: Math.max(fromOld, toOld) };
     const newChange = { from: fromNew, to: Math.max(fromNew, toNew) };
 
-    for (const region of regionsBefore) {
-      if (!rangeTouchesChange(region, oldChange)) continue;
+    forEachMathRegionTouchingChange(regionsBefore, oldChange, (region) => {
+      touchesExistingMath = true;
       dirtyRanges.push(mapMathRegionDirtyRange(region, tr.changes));
-    }
+    });
 
-    for (const region of regionsAfter) {
-      if (!rangeTouchesChange(region, newChange)) continue;
+    forEachMathRegionTouchingChange(regionsAfter, newChange, (region) => {
       dirtyRanges.push({ from: region.from, to: region.to });
-    }
+    });
   }, true);
 
-  return mergeDirtyRanges(dirtyRanges);
+  return {
+    changedMathDirtyRanges: mergeDirtyRanges(dirtyRanges),
+    hasMathSyntaxEdit,
+    touchesExistingMath,
+  };
 }
 
 function docChangeCanShiftMathDecorations(
@@ -302,10 +397,7 @@ function docChangeCanShiftMathDecorations(
   regionsBefore: readonly MathSemantics[],
 ): boolean {
   if (!tr.docChanged || regionsBefore.length === 0) return false;
-  let lastMathTo = 0;
-  for (const region of regionsBefore) {
-    lastMathTo = Math.max(lastMathTo, region.to);
-  }
+  const lastMathTo = regionsBefore[regionsBefore.length - 1].to;
 
   let canShift = false;
   tr.changes.iterChangedRanges((fromOld) => {
@@ -370,29 +462,6 @@ function buildMathRangesForRegions(
   );
 }
 
-function mathContentUnchanged(
-  before: readonly MathSemantics[],
-  after: readonly MathSemantics[],
-  beforeEquationNumbersByFrom: ReadonlyMap<number, number>,
-  afterEquationNumbersByFrom: ReadonlyMap<number, number>,
-): boolean {
-  if (before.length !== after.length) return false;
-  for (let i = 0; i < before.length; i++) {
-    const prev = before[i];
-    const next = after[i];
-    if (
-      prev.latex !== next.latex
-      || prev.isDisplay !== next.isDisplay
-      || (prev.to - prev.from) !== (next.to - next.from)
-      || getDisplayEquationNumber(prev, beforeEquationNumbersByFrom)
-        !== getDisplayEquationNumber(next, afterEquationNumbersByFrom)
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function rebuildMathDecorations(state: EditorState): DecorationSet {
   return buildMathDecorationsFromState(state);
 }
@@ -428,10 +497,24 @@ const mathDecorationField = createDecorationStateField({
       tr.effects.some((effect) => effect.is(setInlineMathViewportRangesEffect))
       && !sameViewportRanges(beforeInlineViewport, afterInlineViewport);
     const mathPositionsMayShift = docChangeCanShiftMathDecorations(tr, regionsBefore);
+    const mathChangeSummary = tr.docChanged
+      ? summarizeMathChanges(tr, regionsBefore, regionsAfter)
+      : {
+          changedMathDirtyRanges: [],
+          hasMathSyntaxEdit: false,
+          touchesExistingMath: false,
+        };
+    const docChangeOnlyShiftsMath =
+      tr.docChanged
+      && !mathChangeSummary.hasMathSyntaxEdit
+      && !mathChangeSummary.touchesExistingMath;
 
     const updatePlan = planSemanticSensitiveUpdate(tr, {
       docChanged: (transaction) => transaction.docChanged,
-      semanticChanged: () => regionsBefore !== regionsAfter || mathPositionsMayShift,
+      semanticChanged: () => {
+        if (docChangeOnlyShiftsMath && !mathPositionsMayShift) return false;
+        return regionsBefore !== regionsAfter || mathPositionsMayShift;
+      },
       contextChanged: () => inlineViewportChanged,
       contextUpdateMode: "dirty-ranges",
       // Edits after every math range cannot shift math decorations, so keep the
@@ -443,6 +526,9 @@ const mathDecorationField = createDecorationStateField({
         }
         if (mathMacrosChanged(tr) || activeMathChanged) {
           return true;
+        }
+        if (docChangeOnlyShiftsMath) {
+          return false;
         }
         if (
           context.docChanged
@@ -468,22 +554,13 @@ const mathDecorationField = createDecorationStateField({
           return [];
         }
 
-        const equationNumbersBefore = buildEquationNumbersByFrom(analysisBefore.equationById);
-        const equationNumbersAfter = buildEquationNumbersByFrom(analysisAfter.equationById);
-        if (
-          mathContentUnchanged(
-            regionsBefore,
-            regionsAfter,
-            equationNumbersBefore,
-            equationNumbersAfter,
-          )
-        ) {
+        if (docChangeOnlyShiftsMath || mathChangeSummary.changedMathDirtyRanges.length === 0) {
           return [];
         }
 
         return mergeDirtyRanges([
           ...dirtyRangesFromChanges(tr.changes, expandChangeRange),
-          ...collectChangedMathDirtyRanges(tr, regionsBefore, regionsAfter),
+          ...mathChangeSummary.changedMathDirtyRanges,
         ]);
       },
     });
