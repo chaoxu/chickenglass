@@ -7,7 +7,7 @@ import type {
   Element,
 } from "@lezer/markdown";
 import { OPEN_BRACE, CLOSE_BRACE, skipSpaceTab } from "./char-utils";
-import { isClosingFence } from "./fenced-div";
+import { isClosingFenceLine } from "./fenced-div";
 import { parseBracedId } from "./label-utils";
 
 /**
@@ -64,6 +64,7 @@ interface MultilineScanResult {
   endPos: number;
   closingLineText: string;
   closingLineStart: number;
+  stoppedBeforeFence: boolean;
 }
 
 /**
@@ -77,15 +78,28 @@ function scanMultilineClose(
 ): MultilineScanResult {
   const closeLen = closeDelimiter.length;
   let currentLineEnd = cx.lineStart + line.text.length;
-  while (cx.nextLine()) {
-    const currentText = line.text;
-    // Stop at fenced div closing fences — update currentLineEnd BEFORE
-    // breaking so the unclosed math block ends at the previous line,
-    // not at a stale position from an earlier iteration.
-    if (isClosingFence(currentText, line.pos) >= 3) {
-      currentLineEnd = cx.lineStart;
-      break;
+  while (true) {
+    if (isClosingFenceLine(cx.peekLine()) >= 3) {
+      return {
+        found: false,
+        endPos: currentLineEnd,
+        closingLineText: "",
+        closingLineStart: -1,
+        stoppedBeforeFence: true,
+      };
     }
+
+    if (!cx.nextLine()) {
+      return {
+        found: false,
+        endPos: currentLineEnd,
+        closingLineText: "",
+        closingLineStart: -1,
+        stoppedBeforeFence: false,
+      };
+    }
+
+    const currentText = line.text;
     const closeInLine = currentText.indexOf(closeDelimiter);
     if (closeInLine >= 0) {
       return {
@@ -93,11 +107,11 @@ function scanMultilineClose(
         endPos: cx.lineStart + closeInLine + closeLen,
         closingLineText: currentText,
         closingLineStart: cx.lineStart,
+        stoppedBeforeFence: false,
       };
     }
     currentLineEnd = cx.lineStart + currentText.length;
   }
-  return { found: false, endPos: currentLineEnd, closingLineText: "", closingLineStart: -1 };
 }
 
 /**
@@ -156,6 +170,10 @@ function makeDisplayMathParser(
         : scan.endPos;
 
       cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
+      if (scan.stoppedBeforeFence) {
+        cx.nextLine();
+        return true;
+      }
       cx.nextLine();
       return true;
     },

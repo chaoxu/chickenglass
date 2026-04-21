@@ -35,6 +35,18 @@ describe("LaTeX filter custom blocks", () => {
     expect(latex).toContain("Body content");
     expect(latex).not.toContain("content omitted");
   });
+
+  it.skipIf(!hasPandoc)("escapes plain theorem title attributes", () => {
+    const latex = runPandoc('::: {.theorem #thm:main title="A & B_#%$"}\nBody\n:::\n');
+
+    expect(latex).toContain("\\begin{theorem}[A \\& B\\_\\#\\%\\$]\\label{thm:main}");
+  });
+
+  it.skipIf(!hasPandoc)("escapes plain figure caption attributes", () => {
+    const latex = runPandoc('::: {.figure #fig:main title="A & B_#%$"}\n![Alt](image.png)\n:::\n');
+
+    expect(latex).toContain("\\caption{A \\& B\\_\\#\\%\\$}\\label{fig:main}");
+  });
 });
 
 describe("LaTeX filter inline mappings", () => {
@@ -42,5 +54,17 @@ describe("LaTeX filter inline mappings", () => {
     const latex = runPandoc("A ==highlighted **term**==.\n");
 
     expect(latex).toContain("\\hl{highlighted \\textbf{term}}");
+  });
+
+  it.skipIf(!hasPandoc)("renders mixed xref and citation clusters in order", () => {
+    const latex = runPandoc([
+      "::: {.theorem #thm:main}",
+      "Body",
+      ":::",
+      "",
+      "See [@thm:main; @karger2000].",
+    ].join("\n"));
+
+    expect(latex).toContain("\\cref{thm:main}; \\cite{karger2000}");
   });
 });

@@ -311,6 +311,16 @@ describe("equation label edge cases", () => {
     expect(labels).toHaveLength(0);
   });
 
+  it("keeps trailing equation title text outside the display math node", () => {
+    const text = "$$x$$ {#eq:foo} Energy identity";
+    const labels = findNodes(text, "EquationLabel");
+    expect(labels).toHaveLength(0);
+
+    const display = findNodes(text, "DisplayMath");
+    expect(display).toHaveLength(1);
+    expect(nodeText(text, display[0])).toBe("$$x$$");
+  });
+
   it("does not create label when the local id contains another colon", () => {
     const text = "$$x$$ {#eq:eq:system}";
     const labels = findNodes(text, "EquationLabel");

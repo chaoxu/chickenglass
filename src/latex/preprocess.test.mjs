@@ -106,6 +106,16 @@ describe("promoteLabeledDisplayMath", () => {
     expect(out).toContain("\\label{eq:a}");
     expect(out).toContain("\\label{eq:b}");
   });
+
+  it("does not promote display math when title text follows the label", () => {
+    const src = "$$\nx\n$$ {#eq:a} Energy identity\n";
+    expect(promoteLabeledDisplayMath(src)).toBe(src);
+  });
+
+  it("leaves canonical raw LaTeX labeled equations untouched", () => {
+    const src = "\\begin{equation}\\label{eq:a}\nx\n\\end{equation}\n";
+    expect(promoteLabeledDisplayMath(src)).toBe(src);
+  });
 });
 
 describe("preprocess", () => {

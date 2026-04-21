@@ -1106,6 +1106,23 @@ describe("planReferenceRendering", () => {
     expect(item!.kind).toBe("crossref");
   });
 
+  it("routes bracketed local target before same-id citation", () => {
+    const doc = [
+      "::: {.theorem #karger2000}",
+      "Statement.",
+      ":::",
+      "",
+      "See [@karger2000].",
+    ].join("\n");
+    const items = plan(doc);
+    const item = findPlan(items, "[@karger2000]");
+    expect(item).toBeDefined();
+    expect(item!.kind).toBe("crossref");
+    if (item!.kind === "crossref") {
+      expect(item!.resolved.label).toBe("Theorem 1");
+    }
+  });
+
   it("routes bracketed citation to citation plan", () => {
     const items = plan("See [@karger2000] for details.");
     const item = findPlan(items, "[@karger2000]");

@@ -468,6 +468,32 @@ describe("fenced div parser", () => {
       expect(divs.length, `expected 2 divs but got ${divs.length}`).toBe(2);
     });
 
+    it("unclosed display math inside a fenced div does not consume the closing fence", () => {
+      const fullParser = parser.configure(markdownExtensions);
+      const text = [
+        "::: {.theorem}",
+        "$$",
+        "x^2",
+        ":::",
+        "",
+        "::: {.proof}",
+        "Proof content",
+        ":::",
+      ].join("\n");
+      const tree = fullParser.parse(text);
+      const divs: NodeInfo[] = [];
+      tree.iterate({
+        enter(node) {
+          if (node.name === "FencedDiv") {
+            divs.push({ name: node.name, from: node.from, to: node.to, text: text.slice(node.from, node.to) });
+          }
+        },
+      });
+      expect(divs.length, `expected 2 divs but got ${divs.length}`).toBe(2);
+      expect(divs[0].text).toBe("::: {.theorem}\n$$\nx^2\n:::");
+      expect(divs[1].text).toBe("::: {.proof}\nProof content\n:::");
+    });
+
     it("sequential divs with display math before closing fence", () => {
       const fullParser = parser.configure(markdownExtensions);
       const text = [
@@ -500,6 +526,13 @@ describe("fenced div parser", () => {
       const paragraphs = infos.filter((n) => n.name === "Paragraph");
       // One inside, one outside
       expect(paragraphs.length).toBe(2);
+    });
+
+    it("preserves an unmatched closing fence as paragraph source", () => {
+      const text = "Before.\n:::\nAfter.";
+      const infos = nodeInfos(text);
+      expect(infos.filter((n) => n.name === "FencedDivFence")).toHaveLength(0);
+      expect(infos.some((n) => n.name === "Paragraph" && n.text.includes(":::"))).toBe(true);
     });
 
     /**

@@ -261,7 +261,7 @@ describe("resolveCrossref", () => {
 });
 
 describe("classifyReference", () => {
-  it("prefers citations for bracketed refs when a local target shares the same id", () => {
+  it("prefers local crossrefs for bracketed refs when a citation shares the same id", () => {
     const doc = [
       "::: {.theorem #karger2000}",
       "A theorem with a citation-like id.",
@@ -276,7 +276,11 @@ describe("classifyReference", () => {
       preferCitation: true,
     });
 
-    expect(result.kind).toBe("citation");
+    expect(result.kind).toBe("crossref");
+    if (result.kind !== "crossref") {
+      throw new Error("expected a crossref result");
+    }
+    expect(result.resolved.label).toBe("Theorem 1");
   });
 
   it("prefers local crossrefs for narrative refs when a citation shares the same id", () => {

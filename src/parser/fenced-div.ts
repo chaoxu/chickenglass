@@ -6,7 +6,7 @@ import type {
   NodeSpec,
 } from "@lezer/markdown";
 import { tags, styleTags } from "@lezer/highlight";
-import { COLON, OPEN_BRACE, findMatchingBrace, isSpaceTab } from "./char-utils";
+import { COLON, OPEN_BRACE, findMatchingBrace, isSpaceTab, skipSpaceTab } from "./char-utils";
 
 /**
  * Lezer markdown extension for Pandoc-style fenced divs.
@@ -80,6 +80,11 @@ function closingFenceColonCount(
  */
 export function isClosingFence(text: string, pos: number): number {
   return closingFenceColonCount(text, readFencePrefix(text, pos));
+}
+
+/** Check a raw line of source for a standalone closing fence. */
+export function isClosingFenceLine(text: string): number {
+  return isClosingFence(text, skipSpaceTab(text, 0));
 }
 
 /**
@@ -274,6 +279,22 @@ function unpackColonCount(value: number): number {
   return value & PACKED_COLON_MASK;
 }
 
+type LineMarkerRange = { readonly from: number; readonly to: number };
+
+function lineMarkers(line: Line): readonly LineMarkerRange[] {
+  return (line as Line & { readonly markers: readonly LineMarkerRange[] }).markers;
+}
+
+function hasMatchedClosingFenceMarker(
+  cx: BlockContext,
+  line: Line,
+  closingColons: number,
+): boolean {
+  const from = cx.lineStart + line.pos;
+  const to = from + closingColons;
+  return lineMarkers(line).some((marker) => marker.from === from && marker.to === to);
+}
+
 /**
  * Composite callback for FencedDiv. Called on each new line to decide
  * if the block continues. Returns `true` to continue, `false` to end.
@@ -324,9 +345,10 @@ const fencedDivBlockParser: BlockParser = {
 
     // Check for closing fence that was rejected by composite callback.
     // After the composite finishes, the closing fence line is re-processed
-    // by block parsers. We consume it here so it doesn't become a paragraph.
+    // by block parsers. Consume only closers already matched by the composite;
+    // a stray `:::` must remain visible source instead of disappearing.
     const closingColons = closingFenceColonCount(line.text, prefix);
-    if (closingColons >= 3) {
+    if (closingColons >= 3 && hasMatchedClosingFenceMarker(cx, line, closingColons)) {
       cx.nextLine();
       return true;
     }
@@ -398,9 +420,13 @@ const fencedDivBlockParser: BlockParser = {
 
   endLeaf(_cx: BlockContext, line: Line) {
     const prefix = readFencePrefix(line.text, line.pos);
+    const closingColons = closingFenceColonCount(line.text, prefix);
 
-    // Both opening and closing fences should interrupt paragraphs
-    if (closingFenceColonCount(line.text, prefix) >= 3) return true;
+    // Matched closing fences and opening fences should interrupt paragraphs.
+    // Unmatched closing fences stay paragraph source for diagnostics.
+    if (closingColons >= 3 && hasMatchedClosingFenceMarker(_cx, line, closingColons)) {
+      return true;
+    }
     return parseOpeningFence(line.text, prefix) !== undefined;
   },
 };

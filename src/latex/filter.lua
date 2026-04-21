@@ -45,12 +45,30 @@ end
 
 local function raw(s) return pandoc.RawBlock("latex", s) end
 
+local latex_text_escapes = {
+  ["\\"] = "\\textbackslash{}",
+  ["{"] = "\\{",
+  ["}"] = "\\}",
+  ["$"] = "\\$",
+  ["&"] = "\\&",
+  ["#"] = "\\#",
+  ["_"] = "\\_",
+  ["%"] = "\\%",
+  ["~"] = "\\textasciitilde{}",
+  ["^"] = "\\textasciicircum{}",
+}
+
+local function escape_latex_text(s)
+  if not s or s == "" then return "" end
+  return (s:gsub(".", function(ch) return latex_text_escapes[ch] or ch end))
+end
+
 local function pop_title(el)
   return el.attributes and el.attributes.title or nil
 end
 
 local function make_env(name, title, id, content)
-  local opt = (title and title ~= "") and ("[" .. title .. "]") or ""
+  local opt = (title and title ~= "") and ("[" .. escape_latex_text(title) .. "]") or ""
   local out = { raw("\\begin{" .. name .. "}" .. opt .. label_for(id)) }
   for _, b in ipairs(content) do table.insert(out, b) end
   table.insert(out, raw("\\end{" .. name .. "}"))
@@ -63,7 +81,7 @@ local function inlines_to_latex(inlines)
 end
 
 local function handle_figure(el)
-  local title = pop_title(el) or ""
+  local title = escape_latex_text(pop_title(el) or "")
   local id = el.identifier
   local images = {}
 
@@ -167,7 +185,7 @@ local function colspec_of(colspecs)
 end
 
 local function handle_table_div(el)
-  local title = pop_title(el) or ""
+  local title = escape_latex_text(pop_title(el) or "")
   local id = el.identifier
   for _, b in ipairs(el.content) do
     if b.t == "Table" then
@@ -199,7 +217,7 @@ local function handle_table_div(el)
 end
 
 local function handle_algorithm(el)
-  local title = pop_title(el) or ""
+  local title = escape_latex_text(pop_title(el) or "")
   local id = el.identifier
   local out = { raw("\\begin{algorithm}[ht]\\caption{" .. title .. "}" .. label_for(id)) }
   for _, b in ipairs(el.content) do table.insert(out, b) end
@@ -227,18 +245,29 @@ local function transform_div(el)
 end
 
 local function transform_cite(el)
-  local xref_ids, bib_ids = {}, {}
+  local segments = {}
+
+  local function append_segment(kind, id)
+    local last = segments[#segments]
+    if last and last.kind == kind then
+      table.insert(last.ids, id)
+    else
+      table.insert(segments, { kind = kind, ids = { id } })
+    end
+  end
+
   for _, c in ipairs(el.citations) do
-    if is_xref_id(c.id) then table.insert(xref_ids, c.id)
-    else                     table.insert(bib_ids, c.id) end
+    if is_xref_id(c.id) then append_segment("xref", c.id)
+    else                     append_segment("bib", c.id) end
   end
-  if #xref_ids > 0 and #bib_ids == 0 then
-    return pandoc.RawInline("latex", "\\cref{" .. table.concat(xref_ids, ",") .. "}")
+
+  local pieces = {}
+  for _, segment in ipairs(segments) do
+    local macro = segment.kind == "xref" and "\\cref" or "\\cite"
+    table.insert(pieces, macro .. "{" .. table.concat(segment.ids, ",") .. "}")
   end
-  if #bib_ids > 0 and #xref_ids == 0 then
-    return pandoc.RawInline("latex", "\\cite{" .. table.concat(bib_ids, ",") .. "}")
-  end
-  return nil
+
+  return pandoc.RawInline("latex", table.concat(pieces, "; "))
 end
 
 -- The Pandoc reader profile enables the `mark` extension, so ==text== reaches

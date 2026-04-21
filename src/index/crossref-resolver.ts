@@ -45,8 +45,8 @@ export interface ReferenceClassificationOptions {
   /** Precomputed equation labels to avoid redundant analysis work. */
   readonly equationLabels?: ReadonlyMap<string, EquationEntry>;
   /**
-   * Bracketed refs prefer bibliography hits before local crossrefs; narrative
-   * refs do the opposite.
+   * Kept for callers that still distinguish bracketed refs. Local document
+   * targets always take precedence over bibliography ids.
    */
   readonly preferCitation?: boolean;
 }
@@ -156,13 +156,8 @@ export function classifyReference(
   const {
     bibliography,
     equationLabels,
-    preferCitation = false,
   } = options;
   const hasCitation = bibliography?.has(id) ?? false;
-
-  if (preferCitation && hasCitation) {
-    return { kind: "citation", id };
-  }
 
   const resolved = resolveCrossref(state, id, equationLabels);
   if (resolved.kind === "block" || resolved.kind === "equation") {
