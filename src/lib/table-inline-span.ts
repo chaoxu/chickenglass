@@ -25,6 +25,11 @@ const PIPE = 124;
 const SPACE = 32;
 const TAB = 9;
 
+export interface TableCellSpan {
+  readonly from: number;
+  readonly to: number;
+}
+
 function isSpaceTab(ch: number): boolean {
   return ch === SPACE || ch === TAB;
 }
@@ -65,6 +70,34 @@ function collectPipePositions(
 
 export function findTablePipePositions(text: string): number[] {
   return collectPipePositions(text);
+}
+
+export function findTableCellSpans(text: string): readonly TableCellSpan[] {
+  const pipes = findTablePipePositions(text);
+  if (pipes.length === 0) {
+    return [];
+  }
+
+  const firstPipe = pipes[0] ?? -1;
+  const lastPipe = pipes[pipes.length - 1] ?? -1;
+  const startsWithDelimiter = text.slice(0, firstPipe).trim().length === 0;
+  const endsWithDelimiter = text.slice(lastPipe + 1).trim().length === 0;
+  const spans: TableCellSpan[] = [];
+  let cellFrom = startsWithDelimiter ? firstPipe + 1 : 0;
+
+  for (const pipe of pipes) {
+    if (pipe < cellFrom) {
+      continue;
+    }
+    spans.push({ from: cellFrom, to: pipe });
+    cellFrom = pipe + 1;
+  }
+
+  if (!endsWithDelimiter) {
+    spans.push({ from: cellFrom, to: text.length });
+  }
+
+  return spans;
 }
 
 export function scanTableInlineSpan(

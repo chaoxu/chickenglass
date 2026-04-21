@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { scanTableInlineSpan } from "./table-inline-span";
+import {
+  findTableCellSpans,
+  findTablePipePositions,
+  scanTableInlineSpan,
+} from "./table-inline-span";
 
 describe("scanTableInlineSpan", () => {
   it("never returns past text.length for incomplete trailing spans", () => {
@@ -25,5 +29,27 @@ describe("scanTableInlineSpan", () => {
 
   it("returns null for starts at EOF", () => {
     expect(scanTableInlineSpan("$", 1)).toBeNull();
+  });
+
+  it("finds only table separator pipes outside math and code spans", () => {
+    const line = "| $a | b$ | \\(a \\| b\\) | `a | b` | literal \\| pipe |";
+
+    expect(findTablePipePositions(line)).toEqual([
+      0,
+      10,
+      23,
+      33,
+      51,
+    ]);
+  });
+
+  it("returns row cell spans from only separator pipes", () => {
+    const line = "| $a | b$ | \\(a \\| b\\) | `a | b` |";
+
+    expect(findTableCellSpans(line)).toEqual([
+      { from: 1, to: 10 },
+      { from: 11, to: 23 },
+      { from: 24, to: 33 },
+    ]);
   });
 });

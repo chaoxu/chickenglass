@@ -1,3 +1,5 @@
+import { findTableCellSpans, scanTableInlineSpan } from "../../lib/table-inline-span";
+
 export interface MarkdownTable {
   readonly alignments: ReadonlyArray<"center" | "left" | "right" | null>;
   readonly dividerCells?: ReadonlyArray<string>;
@@ -5,9 +7,41 @@ export interface MarkdownTable {
   readonly rows: ReadonlyArray<ReadonlyArray<string>>;
 }
 
+function unescapeLiteralSeparatorPipes(markdown: string): string {
+  let result = "";
+  let index = 0;
+
+  while (index < markdown.length) {
+    if (markdown.startsWith("\\|", index)) {
+      result += "|";
+      index += 2;
+      continue;
+    }
+
+    const spanEnd = scanTableInlineSpan(markdown, index);
+    if (spanEnd !== null) {
+      result += markdown.slice(index, spanEnd);
+      index = spanEnd;
+      continue;
+    }
+
+    result += markdown[index] ?? "";
+    index += 1;
+  }
+
+  return result;
+}
+
 function splitTableCells(line: string): string[] {
-  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
-  return trimmed.split(/(?<!\\)\|/).map((cell) => cell.trim().replaceAll("\\|", "|"));
+  const trimmed = line.trim();
+  const spans = findTableCellSpans(trimmed);
+  if (spans.length === 0) {
+    return [unescapeLiteralSeparatorPipes(trimmed)];
+  }
+
+  return spans.map((span) =>
+    unescapeLiteralSeparatorPipes(trimmed.slice(span.from, span.to).trim())
+  );
 }
 
 function parseAlignment(cell: string): "center" | "left" | "right" | null {
@@ -40,7 +74,23 @@ function formatAlignment(align: "center" | "left" | "right" | null): string {
 }
 
 function serializeTableCell(cell: string): string {
-  return cell.replaceAll("|", "\\|");
+  let result = "";
+  let index = 0;
+
+  while (index < cell.length) {
+    const spanEnd = scanTableInlineSpan(cell, index);
+    if (spanEnd !== null) {
+      result += cell.slice(index, spanEnd);
+      index = spanEnd;
+      continue;
+    }
+
+    const ch = cell[index] ?? "";
+    result += ch === "|" ? "\\|" : ch;
+    index += 1;
+  }
+
+  return result;
 }
 
 function serializeTableRow(cells: readonly string[]): string {

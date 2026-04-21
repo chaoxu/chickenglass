@@ -221,6 +221,16 @@ describe("coflat lexical markdown", () => {
     expect(getLexicalMarkdown(editor)).toBe(markdown);
   });
 
+  it("round-trips table cells with pipes inside math and code spans", () => {
+    const markdown = [
+      "| Dollar | Paren | Code |",
+      "|---|---|---|",
+      "| $a | b$ | \\(a \\| b\\) | `a | b` |",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
   it("preserves pandoc grid tables as source-owned table blocks", () => {
     const editor = createHeadlessCoflatEditor();
     const markdown = [

@@ -5,6 +5,7 @@ import {
   BRACKETED_REFERENCE_IMPORT_RE,
   NARRATIVE_REFERENCE_IMPORT_RE,
 } from "../../lib/reference-tokens";
+import { findTableCellSpans } from "../../lib/table-inline-span";
 import {
   getInlineTextFormatSpecs,
   type InlineTextFormatFamily,
@@ -547,21 +548,9 @@ function trimCellRange(line: string, from: number, to: number, lineOffset: numbe
 }
 
 function tableCellRanges(line: string, lineOffset: number): readonly TableCellRange[] {
-  const firstPipe = line.indexOf("|");
-  const lastPipe = line.lastIndexOf("|");
-  if (firstPipe < 0 || lastPipe <= firstPipe) {
-    return [];
-  }
-
-  const ranges: TableCellRange[] = [];
-  let cellFrom = firstPipe + 1;
-  for (let cursor = cellFrom; cursor <= lastPipe; cursor += 1) {
-    if (cursor === lastPipe || (line[cursor] === "|" && !isEscaped(line, cursor))) {
-      ranges.push(trimCellRange(line, cellFrom, cursor, lineOffset));
-      cellFrom = cursor + 1;
-    }
-  }
-  return ranges;
+  return findTableCellSpans(line).map((span) =>
+    trimCellRange(line, span.from, span.to, lineOffset)
+  );
 }
 
 function parseTableTokens(

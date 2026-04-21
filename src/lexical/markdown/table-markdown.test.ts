@@ -50,6 +50,31 @@ describe("table-markdown", () => {
     ].join("\n"));
   });
 
+  it("parses pipes inside math and code spans as cell content", () => {
+    expect(parseMarkdownTable([
+      "| Dollar | Paren | Code |",
+      "|---|---|---|",
+      "| $a | b$ | \\(a \\| b\\) | `a | b` |",
+    ].join("\n"))).toEqual({
+      alignments: [null, null, null],
+      dividerCells: ["---", "---", "---"],
+      headers: ["Dollar", "Paren", "Code"],
+      rows: [["$a | b$", "\\(a \\| b\\)", "`a | b`"]],
+    });
+  });
+
+  it("serializes only literal separator pipes outside math and code spans", () => {
+    expect(serializeMarkdownTable({
+      alignments: [null, null, null, null],
+      headers: ["Literal", "Dollar", "Paren", "Code"],
+      rows: [["a | b", "$a | b$", "\\(a \\| b\\)", "`a | b`"]],
+    })).toBe([
+      "| Literal | Dollar | Paren | Code |",
+      "|---|---|---|---|",
+      "| a \\| b | $a | b$ | \\(a \\| b\\) | `a | b` |",
+    ].join("\n"));
+  });
+
   it("decodes HTML breaks as markdown hard breaks outside code and math", () => {
     expect(decodePipeTableCellMarkdown("a<br>b")).toBe("a  \nb");
     expect(decodePipeTableCellMarkdown("`a<br>b`")).toBe("`a<br>b`");
