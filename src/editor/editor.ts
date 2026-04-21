@@ -3,7 +3,7 @@ import { Compartment, EditorState, type Extension, StateEffect, StateField } fro
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import { classHighlighter } from "@lezer/highlight";
-import { bibliographyPlugin } from "../citations";
+import { bibliographyPlugin } from "../citations/bibliography";
 import {
   blockRenderPlugin,
   checkboxRenderPlugin,

@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   normalizeConnectEditorOptions,
   resolveTextAnchorInDocument,
+  buildViteDevArgs,
+  isLoopbackAppUrl,
   waitForAppUrl,
 } from "./test-helpers.mjs";
 
@@ -42,6 +44,21 @@ describe("test helpers browser harness", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("recognizes loopback app urls and builds strict Vite dev args", () => {
+    expect(isLoopbackAppUrl("http://localhost:5173")).toBe(true);
+    expect(isLoopbackAppUrl("https://127.0.0.1:4443")).toBe(true);
+    expect(isLoopbackAppUrl("https://example.com")).toBe(false);
+    expect(buildViteDevArgs("http://localhost:5174")).toEqual([
+      "dev",
+      "--",
+      "--host",
+      "localhost",
+      "--port",
+      "5174",
+      "--strictPort",
+    ]);
   });
 });
 

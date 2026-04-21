@@ -6,8 +6,7 @@
  */
 
 import { useRef, useCallback } from "react";
-import { EditorView } from "@codemirror/view";
-import { parseBibTeX } from "../../citations/bibtex-parser";
+import type { EditorView } from "@codemirror/view";
 import type { CslJsonItem } from "../../citations/bibtex-parser";
 import { bibDataEffect, type BibStore } from "../../citations/citation-render";
 import { CslProcessor } from "../../citations/csl-processor";
@@ -30,6 +29,11 @@ interface BootstrapCacheEntry {
 }
 
 let bootstrapCache: BootstrapCacheEntry | null = null;
+
+async function parseBibTeXLazy(content: string): Promise<CslJsonItem[]> {
+  const { parseBibTeX } = await import("../../citations/bibtex-parser");
+  return parseBibTeX(content);
+}
 
 /** Clear the bootstrap cache (exposed for testing). */
 export function clearBootstrapCache(): void {
@@ -94,7 +98,7 @@ export async function loadBibliography(
         return;
       }
 
-      const items = operation.measureSync("citations.parse_bib", () => parseBibTeX(bibText), {
+      const items = await operation.measureAsync("citations.parse_bib", () => parseBibTeXLazy(bibText), {
         category: "citations",
         detail: bibPath,
       });

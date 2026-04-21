@@ -16,19 +16,17 @@
  */
 
 import console from "node:console";
-import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
-import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
+  ensureAppServer,
   resetEditorState,
-  waitForAppUrl,
   waitForDebugBridge,
 } from "./test-helpers.mjs";
 
@@ -56,118 +54,6 @@ function resolveFilter({ filterArg, scenarioArg }) {
   throw new Error(
     `Unknown browser regression scenario "${scenarioArg}". Available scenarios: smoke`,
   );
-}
-
-function isLoopbackAppUrl(url) {
-  try {
-    const parsed = new URL(url);
-    return (parsed.protocol === "http:" || parsed.protocol === "https:")
-      && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
-  } catch {
-    return false;
-  }
-}
-
-function buildViteDevArgs(url) {
-  const parsed = new URL(url);
-  const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
-  const host = parsed.hostname === "[::1]" ? "::1" : parsed.hostname;
-  return ["dev", "--", "--host", host, "--port", port, "--strictPort"];
-}
-
-async function isAppServerReachable(url) {
-  try {
-    await waitForAppUrl(url, { timeout: 750, intervalMs: 150 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function collectChildOutput(child) {
-  const lines = [];
-  const append = (chunk) => {
-    for (const line of chunk.toString("utf8").split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      lines.push(line);
-      if (lines.length > 30) lines.shift();
-    }
-  };
-
-  child.stdout?.on("data", append);
-  child.stderr?.on("data", append);
-
-  return () => lines.join("\n");
-}
-
-function waitForExit(child) {
-  return new Promise((resolve) => {
-    child.once("exit", (code, signal) => {
-      resolve({ code, signal });
-    });
-  });
-}
-
-async function startAppServer(url) {
-  const child = spawn(
-    process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-    buildViteDevArgs(url),
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  const getOutput = collectChildOutput(child);
-  const exitPromise = waitForExit(child);
-  let exited = false;
-  void exitPromise.then(() => {
-    exited = true;
-  });
-
-  try {
-    await Promise.race([
-      waitForAppUrl(url, { timeout: 30_000, intervalMs: 250 }),
-      exitPromise.then(({ code, signal }) => {
-        throw new Error(
-          `Vite dev server exited before ${url} became reachable (code=${code}, signal=${signal}).\n${getOutput()}`,
-        );
-      }),
-    ]);
-  } catch (error) {
-    if (!exited) {
-      child.kill("SIGTERM");
-    }
-    throw error;
-  }
-
-  return async () => {
-    if (exited) return;
-    child.kill("SIGTERM");
-    await Promise.race([
-      exitPromise,
-      sleep(2000),
-    ]);
-    if (!exited) {
-      child.kill("SIGKILL");
-      await Promise.race([
-        exitPromise,
-        sleep(500),
-      ]);
-    }
-  };
-}
-
-async function ensureAppServer(url, { autoStart }) {
-  if (await isAppServerReachable(url)) {
-    return null;
-  }
-  if (!autoStart || !isLoopbackAppUrl(url)) {
-    return null;
-  }
-
-  console.log(`Starting Vite dev server for ${url}...\n`);
-  return startAppServer(url);
 }
 
 /** Dynamically import all test modules from the regression-tests directory. */

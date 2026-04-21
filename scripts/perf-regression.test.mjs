@@ -44,6 +44,8 @@ describe("perf regression scenarios", () => {
       meanDispatchMs: 1.2,
       maxDispatchMs: 4.8,
       settleMs: 16,
+      idleMs: 8,
+      inputToIdleMs: 144,
     });
 
     expect(metrics).toEqual([
@@ -51,6 +53,8 @@ describe("perf regression scenarios", () => {
       { name: "typing.dispatch_mean_ms.index.after_frontmatter", unit: "ms", value: 1.2 },
       { name: "typing.dispatch_max_ms.index.after_frontmatter", unit: "ms", value: 4.8 },
       { name: "typing.settle_ms.index.after_frontmatter", unit: "ms", value: 16 },
+      { name: "typing.idle_ms.index.after_frontmatter", unit: "ms", value: 8 },
+      { name: "typing.input_to_idle_ms.index.after_frontmatter", unit: "ms", value: 144 },
     ]);
     expect(metrics.map((entry) => entry.name.split(".").slice(0, 2).join("."))).toEqual(
       TYPING_BURST_REQUIRED_METRICS,

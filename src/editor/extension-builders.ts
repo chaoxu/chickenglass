@@ -1,6 +1,6 @@
 import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { bibDataField } from "../citations";
+import { bibDataField } from "../state/bib-data";
 import { defaultPlugins } from "../plugins";
 import { referencePresentationField } from "../references/presentation";
 import {

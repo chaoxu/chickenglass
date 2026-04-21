@@ -2,12 +2,15 @@ import { execSync } from "node:child_process";
 import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { OutputBundle } from "rollup";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
+import { visualizer } from "rollup-plugin-visualizer";
 
 const DEBUG_EVENT_ENDPOINT = "/__coflat/debug-event";
 const DEBUG_EVENT_DIR = path.join(tmpdir(), "coflat-debug");
+const DEFAULT_APP_STARTUP_BUNDLE_LIMIT_KB = 1500;
 
 interface DebugEventPayload {
   readonly sessionId: string;
@@ -93,6 +96,74 @@ function debugSessionSinkPlugin(): Plugin {
   };
 }
 
+function readAppStartupBundleLimitKb(): number {
+  const rawLimit = process.env.COFLAT_APP_STARTUP_BUNDLE_LIMIT_KB;
+  if (!rawLimit) {
+    return DEFAULT_APP_STARTUP_BUNDLE_LIMIT_KB;
+  }
+  const parsed = Number(rawLimit);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(
+      `[vite] ignoring invalid COFLAT_APP_STARTUP_BUNDLE_LIMIT_KB=${rawLimit}`,
+    );
+    return DEFAULT_APP_STARTUP_BUNDLE_LIMIT_KB;
+  }
+  return parsed;
+}
+
+function collectStaticChunkNames(
+  bundle: OutputBundle,
+  names: readonly string[],
+): Set<string> {
+  const visited = new Set<string>();
+  const visit = (name: string) => {
+    if (visited.has(name)) return;
+    const output = bundle[name];
+    if (!output || output.type !== "chunk") return;
+    visited.add(name);
+    for (const importedName of output.imports) {
+      visit(importedName);
+    }
+  };
+
+  for (const name of names) {
+    visit(name);
+  }
+  return visited;
+}
+
+function appStartupBundleBudgetPlugin(limitKb: number): Plugin {
+  return {
+    name: "coflat-app-startup-bundle-budget",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      const entryNames = Object.entries(bundle)
+        .filter(([, output]) => output.type === "chunk" && output.isEntry)
+        .map(([name]) => name);
+      const startupNames = collectStaticChunkNames(bundle, entryNames);
+      let startupBytes = 0;
+      for (const name of startupNames) {
+        const output = bundle[name];
+        if (output?.type === "chunk") {
+          startupBytes += Buffer.byteLength(output.code, "utf8");
+        }
+      }
+
+      const startupKb = startupBytes / 1024;
+      const message = `[vite] app startup JS ${startupKb.toFixed(1)} kB (${startupNames.size} chunks, budget ${limitKb} kB)`;
+      if (startupKb <= limitKb) {
+        console.log(message);
+        return;
+      }
+      if (process.env.COFLAT_APP_BUNDLE_BUDGET_STRICT === "1") {
+        this.error(message);
+        return;
+      }
+      console.warn(message);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const gitBuildInfo = readGitBuildInfo();
   const linkedNodeModulesRoot = realpathSync(path.join(__dirname, "node_modules"));
@@ -107,7 +178,19 @@ export default defineConfig(({ mode }) => {
     },
   });
   return {
-    plugins: [reactPlugin, tailwindcss(), debugSessionSinkPlugin()],
+    plugins: [
+      reactPlugin,
+      tailwindcss(),
+      debugSessionSinkPlugin(),
+      appStartupBundleBudgetPlugin(readAppStartupBundleLimitKb()),
+      mode === "analyze" &&
+        visualizer({
+          filename: "dist/app-stats.html",
+          open: true,
+          gzipSize: true,
+          brotliSize: true,
+        }),
+    ],
     define: {
       GIT_COMMIT_HASH: JSON.stringify(gitBuildInfo.hash),
       GIT_COMMIT_TIME: JSON.stringify(gitBuildInfo.time),
@@ -118,9 +201,6 @@ export default defineConfig(({ mode }) => {
         "react/jsx-dev-runtime",
         "katex",
         "pdfjs-dist",
-        "@citation-js/core",
-        "@citation-js/plugin-bibtex",
-        "@citation-js/plugin-csl",
       ],
     },
     build: {

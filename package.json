@@ -56,6 +56,7 @@
     "publint": "publint",
     "size": "size-limit",
     "build:analyze": "vite build --config vite.editor.config.ts --mode analyze",
+    "build:app:analyze": "vite build --mode analyze",
     "prepare": "lefthook install",
     "prepack": "pnpm build:editor"
   },

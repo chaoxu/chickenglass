@@ -24,6 +24,7 @@ import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { type SidebarLayoutController, useSidebarLayout } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
+import { useDevSettings } from "../state/dev-settings";
 
 interface FixtureProjectFileSystem extends FileSystem {
   replaceAll(entries: readonly MemoryFileSystemEntry[]): void;
@@ -61,6 +62,7 @@ function ConnectedAppOverlays({
   const fs = useFileSystem();
   const workspace = useAppWorkspaceController();
   const editor = useAppEditorController();
+  const perfPanelOpen = useDevSettings((state) => state.perfPanel);
   const overlays = useAppOverlays({
     fs,
     dialogs,
@@ -75,6 +77,20 @@ function ConnectedAppOverlays({
     onOpenFile,
     onQuit,
   });
+  const shouldLoadOverlays =
+    dialogs.paletteOpen ||
+    dialogs.searchOpen ||
+    dialogs.settingsOpen ||
+    dialogs.aboutOpen ||
+    dialogs.shortcutsOpen ||
+    dialogs.gotoLineOpen ||
+    unsavedChanges.status === "pending" ||
+    overlays.labelBacklinks !== null ||
+    perfPanelOpen;
+
+  if (!shouldLoadOverlays) {
+    return null;
+  }
 
   return (
     <Suspense fallback={null}>

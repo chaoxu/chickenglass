@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DocumentLabelReference } from "../app/markdown/label-parser";
 import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
 import { buildCitationBacklinkMap } from "./bibliography";
-import { type BibStore, type CslJsonItem, parseBibTeX } from "./bibtex-parser";
+import type { BibStore, CslJsonItem } from "./csl-json";
 import {
   collectCitationBacklinksFromReferences,
   collectCitationClusters,
@@ -30,6 +30,11 @@ export interface LoadedBibliography {
 
 const EMPTY_STORE: BibStore = new Map<string, CslJsonItem>();
 
+async function parseBibTeXLazy(content: string): Promise<CslJsonItem[]> {
+  const { parseBibTeX } = await import("./bibtex-parser");
+  return parseBibTeX(content);
+}
+
 export const EMPTY_BIBLIOGRAPHY: LoadedBibliography = {
   store: EMPTY_STORE,
 };
@@ -54,7 +59,7 @@ export async function loadBibliographyResource(
     return EMPTY_BIBLIOGRAPHY;
   }
 
-  const items = parseBibTeX(bibText);
+  const items = await parseBibTeXLazy(bibText);
   const store: BibStore = new Map(items.map((item) => [item.id, item]));
   const cslPath = config.csl?.trim();
   const cslXml = cslPath

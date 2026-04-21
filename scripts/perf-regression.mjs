@@ -17,6 +17,7 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
+  ensureAppServer,
   EXTERNAL_DEMO_ROOT,
   EXTERNAL_FIXTURE_ROOT,
   hasFixtureDocument,
@@ -101,6 +102,8 @@ export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.dispatch_mean_ms",
   "typing.dispatch_max_ms",
   "typing.settle_ms",
+  "typing.idle_ms",
+  "typing.input_to_idle_ms",
 ];
 
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
@@ -362,6 +365,14 @@ async function measureTypingBurst(page, anchor, insertCount) {
   return evaluateStep(page, "measureTypingBurst", async ({ nextAnchor, count }) => {
     const mean = (values) =>
       values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+    const waitForIdle = () =>
+      new Promise((resolve) => {
+        if (typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+          return;
+        }
+        setTimeout(resolve, 0);
+      });
 
     const view = window.__cmView;
     view.dispatch({ selection: { anchor: nextAnchor }, scrollIntoView: true });
@@ -383,12 +394,17 @@ async function measureTypingBurst(page, anchor, insertCount) {
     const settleStart = performance.now();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const settleMs = performance.now() - settleStart;
+    const idleStart = performance.now();
+    await waitForIdle();
+    const idleMs = performance.now() - idleStart;
 
     return {
       wallMs,
       meanDispatchMs: mean(timings),
       maxDispatchMs: Math.max(...timings, 0),
       settleMs,
+      idleMs,
+      inputToIdleMs: wallMs + settleMs + idleMs,
     };
   }, { nextAnchor: anchor, count: insertCount });
 }
@@ -408,6 +424,12 @@ export function typingBurstMetrics(caseKey, positionKey, result) {
       value: result.maxDispatchMs,
     },
     { name: withContext("typing.settle_ms"), unit: "ms", value: result.settleMs },
+    { name: withContext("typing.idle_ms"), unit: "ms", value: result.idleMs },
+    {
+      name: withContext("typing.input_to_idle_ms"),
+      unit: "ms",
+      value: result.inputToIdleMs,
+    },
   ];
 }
 
@@ -669,6 +691,7 @@ Options:
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
+  --no-start-server        Do not auto-start Vite for managed localhost runs
 `);
 }
 
@@ -822,17 +845,24 @@ export async function main(argv = process.argv.slice(2)) {
   });
 
   let page;
+  let stopAppServer = null;
   let shuttingDown = false;
   const cleanup = async () => {
-    if (shuttingDown || !page) {
+    if (shuttingDown) {
       return;
     }
     shuttingDown = true;
-    try {
-      await discardDirtyPerfState(page);
-    } finally {
-      await disconnectBrowser(page);
-      page = null;
+    if (page) {
+      try {
+        await discardDirtyPerfState(page);
+      } finally {
+        await disconnectBrowser(page);
+        page = null;
+      }
+    }
+    if (stopAppServer) {
+      await stopAppServer();
+      stopAppServer = null;
     }
   };
   const onSigint = () => {
@@ -844,14 +874,17 @@ export async function main(argv = process.argv.slice(2)) {
   process.once("SIGINT", onSigint);
   process.once("SIGTERM", onSigterm);
 
-  page = await connectEditor({
-    browser: chromeArgs.browser,
-    headless: chromeArgs.headless,
-    port: chromeArgs.port,
-    timeout: runtimeOptions.debugBridgeTimeoutMs,
-    url: chromeArgs.url,
-  });
   try {
+    stopAppServer = await ensureAppServer(chromeArgs.url, {
+      autoStart: !options.includes("--no-start-server"),
+    });
+    page = await connectEditor({
+      browser: chromeArgs.browser,
+      headless: chromeArgs.headless,
+      port: chromeArgs.port,
+      timeout: runtimeOptions.debugBridgeTimeoutMs,
+      url: chromeArgs.url,
+    });
     const appUrl = getFlag("--url") ?? page.url();
     const snapshots = await runScenarioSamples(
       page,

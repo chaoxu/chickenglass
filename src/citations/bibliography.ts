@@ -11,7 +11,7 @@ import {
   EditorView,
 } from "@codemirror/view";
 import { type EditorState, type Extension, type Transaction } from "@codemirror/state";
-import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./bibtex-parser";
+import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors } from "./csl-json";
 import { ensureCitationsRegistered } from "./citation-registration";
 import {
   type CitationBacklink,

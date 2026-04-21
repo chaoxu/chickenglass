@@ -12,6 +12,7 @@
  *   console.log(await dump(page));
  */
 
+import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
 import process from "node:process";
@@ -66,6 +67,7 @@ const TEXT_FIXTURE_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
 ]);
+const fixtureProjectPayloadCache = new Map();
 
 function formatInspectablePages(pages) {
   if (pages.length === 0) return "<none>";
@@ -139,6 +141,118 @@ export async function waitForAppUrl(
   }
 
   throw new Error(`Timed out waiting for app URL ${url}`);
+}
+
+export function isLoopbackAppUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function buildViteDevArgs(url) {
+  const parsed = new URL(url);
+  const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+  const host = parsed.hostname === "[::1]" ? "::1" : parsed.hostname;
+  return ["dev", "--", "--host", host, "--port", port, "--strictPort"];
+}
+
+async function isAppServerReachable(url) {
+  try {
+    await waitForAppUrl(url, { timeout: 750, intervalMs: 150 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function collectChildOutput(child) {
+  const lines = [];
+  const append = (chunk) => {
+    for (const line of chunk.toString("utf8").split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      lines.push(line);
+      if (lines.length > 30) lines.shift();
+    }
+  };
+
+  child.stdout?.on("data", append);
+  child.stderr?.on("data", append);
+
+  return () => lines.join("\n");
+}
+
+function waitForExit(child) {
+  return new Promise((resolve) => {
+    child.once("exit", (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
+}
+
+export async function startAppServer(url) {
+  const child = spawn(
+    process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+    buildViteDevArgs(url),
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const getOutput = collectChildOutput(child);
+  const exitPromise = waitForExit(child);
+  let exited = false;
+  void exitPromise.then(() => {
+    exited = true;
+  });
+
+  try {
+    await Promise.race([
+      waitForAppUrl(url, { timeout: 30_000, intervalMs: 250 }),
+      exitPromise.then(({ code, signal }) => {
+        throw new Error(
+          `Vite dev server exited before ${url} became reachable (code=${code}, signal=${signal}).\n${getOutput()}`,
+        );
+      }),
+    ]);
+  } catch (error) {
+    if (!exited) {
+      child.kill("SIGTERM");
+    }
+    throw error;
+  }
+
+  return async () => {
+    if (exited) return;
+    child.kill("SIGTERM");
+    await Promise.race([
+      exitPromise,
+      sleep(2000),
+    ]);
+    if (!exited) {
+      child.kill("SIGKILL");
+      await Promise.race([
+        exitPromise,
+        sleep(500),
+      ]);
+    }
+  };
+}
+
+export async function ensureAppServer(url, { autoStart = true, log = console.log } = {}) {
+  if (await isAppServerReachable(url)) {
+    return null;
+  }
+  if (!autoStart || !isLoopbackAppUrl(url)) {
+    return null;
+  }
+
+  log(`Starting Vite dev server for ${url}...\n`);
+  return startAppServer(url);
 }
 
 /**
@@ -337,7 +451,7 @@ function inferFixtureProjectPrefix(virtualPath) {
   return slashIndex >= 0 ? virtualPath.slice(0, slashIndex) : null;
 }
 
-function buildFixtureProjectFiles(virtualPath, resolvedPath) {
+function buildFixtureProjectPayload(virtualPath, resolvedPath) {
   const root = fixtureRootForResolvedPath(resolvedPath);
   const projectPrefix = inferFixtureProjectPrefix(virtualPath);
   if (!root) {
@@ -349,11 +463,18 @@ function buildFixtureProjectFiles(virtualPath, resolvedPath) {
     return null;
   }
 
+  const cacheKey = `${projectRoot}:${projectPrefix ?? ""}`;
+  const cached = fixtureProjectPayloadCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   /** @type {Array<
    *   { path: string, kind: "text", content: string } |
    *   { path: string, kind: "binary", base64: string }
    * >} */
   const files = [];
+  const fingerprintParts = [];
 
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -364,6 +485,8 @@ function buildFixtureProjectFiles(virtualPath, resolvedPath) {
       }
 
       const repoRelativePath = relative(root, absolutePath).replace(/\\/g, "/");
+      const stat = statSync(absolutePath);
+      fingerprintParts.push(`${repoRelativePath}:${stat.size}:${stat.mtimeMs}`);
       const extension = extname(entry.name).toLowerCase();
       if (TEXT_FIXTURE_EXTENSIONS.has(extension)) {
         files.push({
@@ -383,7 +506,12 @@ function buildFixtureProjectFiles(virtualPath, resolvedPath) {
   };
 
   visit(projectRoot);
-  return files;
+  const payload = {
+    key: `${cacheKey}:${fingerprintParts.sort().join("|")}`,
+    files,
+  };
+  fixtureProjectPayloadCache.set(cacheKey, payload);
+  return payload;
 }
 
 function isMissingFixtureError(error) {
@@ -499,8 +627,8 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   const preferOpenFile = Boolean(
     resolved.resolvedPath?.startsWith(resolve(REPO_ROOT, "demo")),
   );
-  const projectFiles = project === "full-project" && resolved.resolvedPath
-    ? buildFixtureProjectFiles(resolved.virtualPath, resolved.resolvedPath)
+  const projectPayload = project === "full-project" && resolved.resolvedPath
+    ? buildFixtureProjectPayload(resolved.virtualPath, resolved.resolvedPath)
     : null;
   const verificationWindow = 200;
 
@@ -509,14 +637,41 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   }
 
   const result = await page.evaluate(
-    async ({ path, expectedContent, tryOpenFileFirst, fixtureProjectFiles }) => {
+    async ({
+      path,
+      expectedContent,
+      expectedLength,
+      expectedPrefix,
+      expectedSuffix,
+      tryOpenFileFirst,
+      fixtureProjectPayload,
+    }) => {
       const app = window.__app;
       if (!app?.openFile) {
         throw new Error("window.__app.openFile is unavailable.");
       }
 
-      if (fixtureProjectFiles && app.loadFixtureProject) {
-        await app.loadFixtureProject(fixtureProjectFiles, path);
+      const currentDocumentMatches = () => {
+        const text = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString();
+        return typeof text === "string" &&
+          text.length === expectedLength &&
+          text.startsWith(expectedPrefix) &&
+          text.endsWith(expectedSuffix);
+      };
+
+      if (fixtureProjectPayload && app.loadFixtureProject) {
+        const cachedProject = window.__coflatFixtureProject;
+        const hasCachedFile = cachedProject?.key === fixtureProjectPayload.key &&
+          (app.hasFile ? await app.hasFile(path) : false);
+        if (hasCachedFile) {
+          await app.openFile(path);
+          if (currentDocumentMatches()) {
+            return { method: "openFileCachedProject" };
+          }
+        }
+
+        await app.loadFixtureProject(fixtureProjectPayload.files, path);
+        window.__coflatFixtureProject = { key: fixtureProjectPayload.key };
         return { method: "loadFixtureProject" };
       }
 
@@ -544,8 +699,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
     {
       path: resolved.virtualPath,
       expectedContent: resolved.content,
+      expectedLength: resolved.content.length,
+      expectedPrefix: resolved.content.slice(0, verificationWindow),
+      expectedSuffix: resolved.content.slice(-verificationWindow),
       tryOpenFileFirst: preferOpenFile,
-      fixtureProjectFiles: projectFiles,
+      fixtureProjectPayload: projectPayload,
     },
   );
 
@@ -558,7 +716,11 @@ export async function openFixtureDocument(page, fixture, options = {}) {
           return false;
         }
 
-        if (method === "openFileWithContent") {
+        if (
+          method === "openFileWithContent" ||
+          method === "loadFixtureProject" ||
+          method === "openFileCachedProject"
+        ) {
           return text.length === expectedLength &&
             text.startsWith(expectedPrefix) &&
             text.endsWith(expectedSuffix);
