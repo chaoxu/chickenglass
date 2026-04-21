@@ -20,6 +20,7 @@ function createState(
 ): SearchState {
   return {
     query: "",
+    replacement: "",
     options,
     matches: [],
     activeIndex: null,

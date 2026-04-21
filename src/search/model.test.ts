@@ -11,6 +11,7 @@ describe("SearchState", () => {
     };
     const emptyState: SearchState = {
       query: "",
+      replacement: "",
       options: emptyOptions,
       matches: [],
       activeIndex: null,
@@ -21,6 +22,7 @@ describe("SearchState", () => {
     ];
     const populatedState: SearchState = {
       query: "alpha",
+      replacement: "beta",
       options: {
         caseSensitive: true,
         wholeWord: true,
@@ -32,6 +34,7 @@ describe("SearchState", () => {
 
     expect(emptyState).toEqual({
       query: "",
+      replacement: "",
       options: {
         caseSensitive: false,
         wholeWord: false,

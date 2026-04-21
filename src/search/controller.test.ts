@@ -5,6 +5,7 @@ import {
   prevMatch,
   replaceAll,
   replaceOne,
+  reduceSearch,
   setQuery,
 } from "./controller";
 import type { SearchOptions, SearchState } from "./model";
@@ -20,6 +21,7 @@ function createState(
 ): SearchState {
   return {
     query: "",
+    replacement: "",
     options,
     matches: [],
     activeIndex: null,
@@ -31,6 +33,7 @@ describe("search controller", () => {
     const zeroResults = setQuery(createState(), "omega", "alpha beta");
     expect(zeroResults).toEqual({
       query: "omega",
+      replacement: "",
       options: DEFAULT_OPTIONS,
       matches: [],
       activeIndex: null,
@@ -39,6 +42,7 @@ describe("search controller", () => {
     const oneResult = setQuery(createState(), "beta", "alpha beta");
     expect(oneResult).toEqual({
       query: "beta",
+      replacement: "",
       options: DEFAULT_OPTIONS,
       matches: [{ from: 6, to: 10, lineNumber: 1 }],
       activeIndex: 0,
@@ -51,6 +55,7 @@ describe("search controller", () => {
     );
     expect(manyResults).toEqual({
       query: "alpha",
+      replacement: "",
       options: DEFAULT_OPTIONS,
       matches: [
         { from: 0, to: 5, lineNumber: 1 },
@@ -70,6 +75,7 @@ describe("search controller", () => {
 
     expect(setQuery(regexState, "(", "alpha")).toEqual({
       query: "(",
+      replacement: "",
       options: regexState.options,
       matches: [],
       activeIndex: null,
@@ -85,6 +91,7 @@ describe("search controller", () => {
 
     expect(setQuery(state, "ana", "banana ana Ana")).toEqual({
       query: "ana",
+      replacement: "",
       options: state.options,
       matches: [{ from: 7, to: 10, lineNumber: 1 }],
       activeIndex: 0,
@@ -100,6 +107,7 @@ describe("search controller", () => {
 
     expect(setQuery(state, "ana", "𝒜ana ana")).toEqual({
       query: "ana",
+      replacement: "",
       options: state.options,
       matches: [{ from: 6, to: 9, lineNumber: 1 }],
       activeIndex: 0,
@@ -183,9 +191,39 @@ describe("search controller", () => {
     ]);
     expect(result.state).toEqual({
       query: "ana",
+      replacement: "X",
       options: DEFAULT_OPTIONS,
       matches: [],
       activeIndex: null,
     });
+  });
+
+  it("supports reducer-style query, option, navigation, and replacement transitions", () => {
+    const doc = "alpha beta Alpha";
+    const initial = createState();
+
+    const queried = reduceSearch(initial, { type: "set-query", query: "alpha" }, doc);
+    expect(queried.activeIndex).toBe(0);
+    expect(queried.matches).toHaveLength(2);
+
+    const caseSensitive = reduceSearch(
+      queried,
+      { type: "set-options", options: { caseSensitive: true } },
+      doc,
+    );
+    expect(caseSensitive.matches).toEqual([{ from: 0, to: 5, lineNumber: 1 }]);
+
+    const withReplacement = reduceSearch(
+      caseSensitive,
+      { type: "set-replacement", replacement: "z" },
+      doc,
+    );
+    expect(withReplacement.replacement).toBe("z");
+
+    const replaced = reduceSearch(withReplacement, { type: "replace-current" }, doc);
+    expect(replaced.query).toBe("alpha");
+    expect(replaced.replacement).toBe("z");
+    expect(replaced.matches).toEqual([]);
+    expect(replaced.activeIndex).toBeNull();
   });
 });

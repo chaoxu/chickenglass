@@ -13,7 +13,6 @@
 
 import { type Extension } from "@codemirror/state";
 import { type EditorView, ViewPlugin } from "@codemirror/view";
-import { autoUpdate, computePosition, flip, shift, offset } from "@floating-ui/dom";
 import { CSS, HOVER_DELAY_MS } from "../constants";
 import {
   classifyReference,
@@ -34,7 +33,6 @@ import {
   createPreviewSurfaceBody,
   createPreviewSurfaceContent,
   createPreviewSurfaceHeader,
-  createPreviewSurfaceShell,
 } from "../preview-surface";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../state/document-analysis";
@@ -59,10 +57,20 @@ import {
   findReferenceWidgetContainer,
   REFERENCE_WIDGET_SELECTOR,
 } from "./reference-widget";
+import {
+  destroyFloatingTooltip,
+  floatingTooltipContains,
+  hideFloatingTooltip,
+  isFloatingTooltipVisible,
+  showFloatingTooltip,
+  type TooltipPlan,
+} from "./hover-tooltip";
+export {
+  destroyHoverPreviewTooltipForTest,
+  ensureHoverPreviewTooltipForTest,
+  getCachedTooltipContentForTest,
+} from "./hover-tooltip";
 
-// ── Singleton tooltip element ───────────────────────────────────────────────
-
-let tooltipEl: HTMLDivElement | null = null;
 let hoverPreviewInstanceCount = 0;
 const HOVER_PREVIEW_TABLE_SCROLL_CLASS = "cf-hover-preview-table-scroll";
 const HOVER_PREVIEW_CODE_BLOCK_CLASS = "cf-hover-preview-code-block";
@@ -87,186 +95,8 @@ interface BlockPreviewPlan {
   readonly mediaDependencies: LocalMediaDependencies;
 }
 
-interface TooltipPlan {
-  readonly buildContent: () => HTMLElement;
-  readonly cacheScope: object;
-  readonly dependsOnBibliography: boolean;
-  readonly dependsOnMacros: boolean;
-  readonly key: string;
-  readonly mediaDependencies: LocalMediaDependencies;
-}
-
 type CrossrefPreviewVariant = "completion" | "hover";
 const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
-const TOOLTIP_CONTENT_CACHE_LIMIT = 8;
-// Reuse preview DOM within the same immutable state/dependency object without
-// carrying stale content across later editor updates.
-const tooltipContentCache = new WeakMap<object, Map<string, HTMLElement>>();
-
-function getTooltipContentCache(cacheScope: object): Map<string, HTMLElement> {
-  let cache = tooltipContentCache.get(cacheScope);
-  if (!cache) {
-    cache = new Map<string, HTMLElement>();
-    tooltipContentCache.set(cacheScope, cache);
-  }
-  return cache;
-}
-
-function getTooltipContent(plan: TooltipPlan): HTMLElement {
-  const cache = getTooltipContentCache(plan.cacheScope);
-  const cached = cache.get(plan.key);
-  if (cached) {
-    cache.delete(plan.key);
-    cache.set(plan.key, cached);
-    return cached;
-  }
-
-  const content = plan.buildContent();
-  cache.set(plan.key, content);
-  if (cache.size > TOOLTIP_CONTENT_CACHE_LIMIT) {
-    const oldestKey = cache.keys().next().value as string;
-    cache.delete(oldestKey);
-  }
-  return content;
-}
-
-export function getCachedTooltipContentForTest(
-  cacheScope: object,
-  key: string,
-  buildContent: () => HTMLElement,
-): HTMLElement {
-  return getTooltipContent({
-    buildContent,
-    cacheScope,
-    dependsOnBibliography: false,
-    dependsOnMacros: false,
-    key,
-    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
-  });
-}
-
-function getTooltipEl(): HTMLDivElement {
-  if (!tooltipEl) {
-    tooltipEl = createPreviewSurfaceShell(CSS.hoverPreviewTooltip);
-    tooltipEl.style.display = "none";
-    document.body.appendChild(tooltipEl);
-  }
-  return tooltipEl;
-}
-
-/**
- * Cleanup function returned by `autoUpdate` — stops the scroll/resize
- * listeners that keep the tooltip anchored. Stored so `hideFloatingTooltip`
- * can tear it down.
- */
-let cleanupAutoUpdate: (() => void) | null = null;
-let currentFloatingAnchor: HTMLElement | null = null;
-let refreshFloatingPosition: (() => void) | null = null;
-
-/**
- * Monotonic generation counter. Incremented on every `showFloatingTooltip`
- * call so that a late-resolving `computePosition` promise from an older
- * show cycle is silently discarded. (#474)
- */
-let showGeneration = 0;
-
-/**
- * Position and show the singleton tooltip near an anchor element using
- * @floating-ui/dom's `computePosition` with flip+shift middleware.
- *
- * Uses `autoUpdate` so the tooltip tracks the anchor on scroll, resize,
- * and layout shift — preventing the drift reported in #474.
- */
-function showFloatingTooltip(anchor: HTMLElement, plan: TooltipPlan): void {
-  const el = getTooltipEl();
-  const content = getTooltipContent(plan);
-  const anchorChanged = anchor !== currentFloatingAnchor;
-
-  if (anchorChanged) {
-    if (cleanupAutoUpdate) {
-      cleanupAutoUpdate();
-      cleanupAutoUpdate = null;
-    }
-
-    currentFloatingAnchor = anchor;
-    const gen = ++showGeneration;
-
-    const updatePosition = () => {
-      void computePosition(anchor, el, {
-        placement: "top",
-        middleware: [offset(6), flip(), shift({ padding: 5 })],
-      }).then(({ x, y }) => {
-        // Stale guard: if a newer show cycle started before this promise
-        // resolved, discard the result so we don't overwrite the new
-        // tooltip's position with coordinates for the old anchor. (#474)
-        if (gen !== showGeneration) return;
-
-        Object.assign(el.style, {
-          left: `${x}px`,
-          top: `${y}px`,
-        });
-      });
-    };
-
-    refreshFloatingPosition = updatePosition;
-
-    // `autoUpdate` calls `updatePosition` immediately, then again whenever
-    // the anchor or floating element moves (scroll, resize, layout shift).
-    cleanupAutoUpdate = autoUpdate(anchor, el, updatePosition);
-  }
-
-  if (el.firstElementChild !== content) {
-    el.replaceChildren(content);
-  }
-
-  const wasHidden = el.style.display === "none";
-  el.style.display = "";
-  if (wasHidden) {
-    el.setAttribute("data-visible", "false");
-  }
-
-  refreshFloatingPosition?.();
-
-  if (wasHidden) {
-    const visibleGeneration = showGeneration;
-    requestAnimationFrame(() => {
-      if (visibleGeneration === showGeneration) {
-        el.setAttribute("data-visible", "true");
-      }
-    });
-  } else {
-    el.setAttribute("data-visible", "true");
-  }
-}
-
-/** Hide and clear the singleton tooltip. */
-function hideFloatingTooltip(): void {
-  if (cleanupAutoUpdate) {
-    cleanupAutoUpdate();
-    cleanupAutoUpdate = null;
-  }
-  currentFloatingAnchor = null;
-  refreshFloatingPosition = null;
-  showGeneration += 1;
-  if (tooltipEl) {
-    tooltipEl.setAttribute("data-visible", "false");
-    tooltipEl.style.display = "none";
-  }
-}
-
-function destroyFloatingTooltip(): void {
-  hideFloatingTooltip();
-  tooltipEl?.remove();
-  tooltipEl = null;
-}
-
-export function ensureHoverPreviewTooltipForTest(): HTMLDivElement {
-  return getTooltipEl();
-}
-
-export function destroyHoverPreviewTooltipForTest(): void {
-  destroyFloatingTooltip();
-}
 
 // ── Content extraction helpers ──────────────────────────────────────────────
 
@@ -984,7 +814,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
     const relatedTarget = me.relatedTarget as HTMLElement | null;
 
     // Check if mouse moved to the tooltip itself — keep it visible
-    if (relatedTarget && tooltipEl?.contains(relatedTarget)) return;
+    if (floatingTooltipContains(relatedTarget)) return;
 
     // Check if mouse moved to another widget item/container
     if (relatedTarget) {
@@ -1008,7 +838,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       hideFloatingTooltip();
       return;
     }
-    if (!tooltipEl || tooltipEl.style.display === "none") return;
+    if (!isFloatingTooltipVisible()) return;
 
     const nextPlan = buildTooltipPlanForElement(view, currentTarget);
     if (!nextPlan) {

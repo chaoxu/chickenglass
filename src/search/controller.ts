@@ -20,6 +20,38 @@ export interface SearchReplaceAllResult {
   readonly edits: ReadonlyArray<SearchEdit>;
 }
 
+export type SearchIntent =
+  | { readonly type: "set-query"; readonly query: string }
+  | { readonly type: "set-replacement"; readonly replacement: string }
+  | { readonly type: "set-options"; readonly options: Partial<SearchOptions> }
+  | { readonly type: "next-match" }
+  | { readonly type: "previous-match" }
+  | { readonly type: "replace-current" }
+  | { readonly type: "replace-all" };
+
+export function reduceSearch(
+  state: SearchState,
+  intent: SearchIntent,
+  doc: string,
+): SearchState {
+  switch (intent.type) {
+    case "set-query":
+      return setQuery(state, intent.query, doc);
+    case "set-replacement":
+      return setReplacement(state, intent.replacement);
+    case "set-options":
+      return setOptions(state, intent.options, doc);
+    case "next-match":
+      return nextMatch(state);
+    case "previous-match":
+      return prevMatch(state);
+    case "replace-current":
+      return replaceOne(state, state.replacement, doc).state;
+    case "replace-all":
+      return replaceAll(state, state.replacement, doc).state;
+  }
+}
+
 export function setQuery(
   state: SearchState,
   query: string,
@@ -28,10 +60,33 @@ export function setQuery(
   const matches = collectMatches(doc, query, state.options);
   return {
     query,
+    replacement: state.replacement,
     options: state.options,
     matches,
     activeIndex: matches.length > 0 ? 0 : null,
   };
+}
+
+export function setReplacement(
+  state: SearchState,
+  replacement: string,
+): SearchState {
+  return { ...state, replacement };
+}
+
+export function setOptions(
+  state: SearchState,
+  options: Partial<SearchOptions>,
+  doc: string,
+): SearchState {
+  return setQuery(
+    {
+      ...state,
+      options: { ...state.options, ...options },
+    },
+    state.query,
+    doc,
+  );
 }
 
 export function nextMatch(state: SearchState): SearchState {
@@ -79,6 +134,7 @@ export function replaceOne(
     edit,
     state: {
       ...refreshedState,
+      replacement,
       activeIndex: findNextActiveIndex(refreshedState.matches, edit.from + edit.insert.length),
     },
   };
@@ -103,7 +159,10 @@ export function replaceAll(
 
   return {
     edits,
-    state: setQuery(currentState, currentState.query, nextDoc),
+    state: {
+      ...setQuery(currentState, currentState.query, nextDoc),
+      replacement,
+    },
   };
 }
 

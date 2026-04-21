@@ -19,8 +19,12 @@ import { cursorInRange } from "./node-collection";
 import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { containsRange } from "../lib/range-helpers";
-import { isSafeUrl } from "../lib/url-utils";
-import { openExternalUrl } from "../lib/open-link";
+import {
+  clearLinkDecorationCacheForTest,
+  getLinkDecoration,
+  linkDecorationCacheSizeForTest,
+  openRenderedLinkAtEvent,
+} from "./link-handler";
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
@@ -57,30 +61,6 @@ const boldDecoration = Decoration.mark({ class: "cf-bold" });
 const italicDecoration = Decoration.mark({ class: "cf-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
 const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
-const maxLinkDecorationCacheSize = 256;
-const linkDecorationCache = new Map<string, Decoration>();
-
-function getLinkDecoration(url: string): Decoration {
-  const cached = linkDecorationCache.get(url);
-  if (cached) {
-    linkDecorationCache.delete(url);
-    linkDecorationCache.set(url, cached);
-    return cached;
-  }
-
-  const linkDeco = Decoration.mark({
-    class: "cf-link-rendered",
-    attributes: { "data-url": url },
-  });
-  linkDecorationCache.set(url, linkDeco);
-  if (linkDecorationCache.size > maxLinkDecorationCacheSize) {
-    const oldestUrl = linkDecorationCache.keys().next().value;
-    if (oldestUrl !== undefined) {
-      linkDecorationCache.delete(oldestUrl);
-    }
-  }
-  return linkDeco;
-}
 
 /** Source-delimiter decoration: reduced-size metrics so visible delimiters
  *  don't push the line box taller than surrounding content (#789). */
@@ -609,10 +589,10 @@ function collectMarkdownItems(
 export { collectMarkdownItems as _collectMarkdownItemsForTest };
 export { markdownDocChangeNeedsContextMerge as _markdownDocChangeNeedsContextMergeForTest };
 export function _clearLinkDecorationCacheForTest(): void {
-  linkDecorationCache.clear();
+  clearLinkDecorationCacheForTest();
 }
 export function _linkDecorationCacheSizeForTest(): number {
-  return linkDecorationCache.size;
+  return linkDecorationCacheSizeForTest();
 }
 
 /** CM6 extension that provides Typora-style rendering for standard markdown. */
@@ -624,22 +604,7 @@ export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
     onViewportOnly: "incremental",
     pluginSpec: {
       eventHandlers: {
-        click(event: MouseEvent, _view: EditorView) {
-          // Cmd+click (Mac) or Ctrl+click (Win/Linux) on rendered links
-          if (!(event.metaKey || event.ctrlKey)) return false;
-          const target = event.target;
-          if (!(target instanceof HTMLElement)) return false;
-          // Walk up to find the element with data-url (the mark decoration span)
-          const linkEl = target.closest("[data-url]");
-          if (!linkEl) return false;
-          const url = linkEl.getAttribute("data-url");
-          if (url && isSafeUrl(url)) {
-            void openExternalUrl(url);
-            event.preventDefault();
-            return true;
-          }
-          return false;
-        },
+        click: openRenderedLinkAtEvent,
       },
     },
   },

@@ -12,6 +12,7 @@ export interface SearchMatch {
 
 export interface SearchState {
   readonly query: string;
+  readonly replacement: string;
   readonly options: SearchOptions;
   readonly matches: ReadonlyArray<SearchMatch>;
   readonly activeIndex: number | null;

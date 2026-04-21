@@ -23,7 +23,6 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
-  type KeyBinding,
   ViewPlugin,
   type ViewUpdate,
   keymap,
@@ -71,6 +70,12 @@ import {
   normalizeDirtyRange,
   type VisibleRange,
 } from "./viewport-diff";
+import {
+  findCellAtPos,
+  getCellBounds,
+} from "./table-cell-geometry";
+import { tableClipboardHandlers } from "./table-clipboard";
+import { createTableGridKeyBindings } from "./table-grid-navigation";
 
 // ---------------------------------------------------------------------------
 // Bypass annotation — table operations dispatch with this so the
@@ -120,74 +125,6 @@ function gridRowLine(columns: number, isHeader: boolean, isLast: boolean): Decor
       style: `display: grid; grid-template-columns: repeat(${columns}, 1fr);`,
     },
   });
-}
-
-// ---------------------------------------------------------------------------
-// Cell bounds — editable content zones within table rows
-// ---------------------------------------------------------------------------
-
-interface CellBounds {
-  from: number;
-  to: number;
-  col: number;
-}
-
-/** Compute editable bounds for all cells on a table line. */
-function getCellBounds(line: { from: number; text: string }, pipes: number[]): CellBounds[] {
-  const cells: CellBounds[] = [];
-  for (let i = 0; i < pipes.length - 1; i++) {
-    const rawStart = pipes[i] + 1;
-    const rawEnd = pipes[i + 1];
-    let start = rawStart;
-    while (start < rawEnd && line.text[start] === " ") start++;
-    let end = rawEnd;
-    while (end > start && line.text[end - 1] === " ") end--;
-    if (start >= rawEnd) { start = rawStart + 1; end = start; }
-    cells.push({ from: line.from + start, to: line.from + end, col: i });
-  }
-  return cells;
-}
-
-/** Find which cell a document position falls in. Returns the cell and full cells array. */
-function findCellAtPos(
-  pos: number,
-  line: { from: number; text: string },
-  pipes: number[],
-): { cell: CellBounds; cells: CellBounds[] } | null {
-  const cells = getCellBounds(line, pipes);
-  const posInLine = pos - line.from;
-  for (const cell of cells) {
-    const rawStart = pipes[cell.col] + 1;
-    const rawEnd = pipes[cell.col + 1];
-    if (posInLine >= rawStart && posInLine <= rawEnd) return { cell, cells };
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Table lookup helpers
-// ---------------------------------------------------------------------------
-
-const SEPARATOR_RE = /^\s*\|[\s:-]+\|/;
-
-function isSeparatorRow(text: string): boolean {
-  return SEPARATOR_RE.test(text);
-}
-
-function adjacentTableLine(
-  doc: { lines: number; line(n: number): { from: number; to: number; text: string; number: number } },
-  lineNum: number,
-  direction: 1 | -1,
-): { from: number; to: number; text: string; number: number } | null {
-  const target = lineNum + direction;
-  if (target < 1 || target > doc.lines) return null;
-  const line = doc.line(target);
-  if (isSeparatorRow(line.text)) {
-    const skip = target + direction;
-    if (skip < 1 || skip > doc.lines) return null;
-    return doc.line(skip);
-  }
-  return line;
 }
 
 /** Check if pos is in a structural zone. Uses pre-computed tables to avoid tree walks. */
@@ -493,149 +430,6 @@ function tableDiscoveryChanged(update: ViewUpdate): boolean {
     !== update.startState.field(tableDiscoveryField, false)
   );
 }
-
-// ---------------------------------------------------------------------------
-// Clipboard
-// ---------------------------------------------------------------------------
-
-function handleCopy(event: ClipboardEvent, view: EditorView): boolean {
-  const tables = findTablesInState(view.state);
-  const pos = view.state.selection.main.head;
-  if (!findTableAtCursor(tables, pos)) return false;
-
-  const { from, to } = view.state.selection.main;
-  if (from === to) return false;
-
-  let text = view.state.sliceDoc(from, to);
-  text = text.replace(/(?<!\\)\|/g, "");
-  text = text.replace(/ {2,}/g, " ").trim();
-
-  event.clipboardData?.setData("text/plain", text);
-  event.preventDefault();
-  return true;
-}
-
-function handlePaste(event: ClipboardEvent, view: EditorView): boolean {
-  const tables = findTablesInState(view.state);
-  const pos = view.state.selection.main.head;
-  if (!findTableAtCursor(tables, pos)) return false;
-
-  const raw = event.clipboardData?.getData("text/plain");
-  if (!raw) return false;
-
-  // Strip block syntax per-line, then flatten
-  const text = raw
-    .split("\n")
-    .map((line) =>
-      line
-        .replace(/^#{1,6}\s+/, "")
-        .replace(/^>{1,}\s*/, "")
-        .replace(/^[-*+]\s+/, "")
-        .replace(/^\d+\.\s+/, "")
-        .replace(/^:::.*/, "")
-        .replace(/^```.*$/, ""),
-    )
-    .join(" ")
-    .replace(/\|/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (text) view.dispatch(view.state.replaceSelection(text));
-  event.preventDefault();
-  return true;
-}
-
-const tableClipboardHandlers = EditorView.domEventHandlers({
-  copy(event, view) { return handleCopy(event, view); },
-  cut(event, view) {
-    if (handleCopy(event, view)) {
-      view.dispatch(view.state.replaceSelection(""));
-      return true;
-    }
-    return false;
-  },
-  paste(event, view) { return handlePaste(event, view); },
-});
-
-// ---------------------------------------------------------------------------
-// Navigation
-// ---------------------------------------------------------------------------
-
-function moveVertical(view: EditorView, direction: 1 | -1): boolean {
-  const pos = view.state.selection.main.head;
-  const tables = findTablesInState(view.state);
-  if (!findTableAtCursor(tables, pos)) return false;
-
-  const line = view.state.doc.lineAt(pos);
-  const pipes = findPipePositions(line.text);
-  const result = findCellAtPos(pos, line, pipes);
-  if (!result) return false;
-
-  const offsetInCell = Math.max(0, pos - result.cell.from);
-  const targetLine = adjacentTableLine(view.state.doc, line.number, direction);
-  if (!targetLine || !findTableAtCursor(tables, targetLine.from)) return false;
-
-  const targetPipes = findPipePositions(targetLine.text);
-  const targetCells = getCellBounds(targetLine, targetPipes);
-  const targetCell = targetCells.find(c => c.col === result.cell.col);
-  if (!targetCell) return false;
-
-  const offset = Math.min(offsetInCell, targetCell.to - targetCell.from);
-  view.dispatch({ selection: { anchor: targetCell.from + offset } });
-  return true;
-}
-
-function findNextCell(view: EditorView, forward: boolean): number | null {
-  const pos = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(pos);
-  const pipes = findPipePositions(line.text);
-  const result = findCellAtPos(pos, line, pipes);
-  if (!result) return null;
-
-  const dir = forward ? 1 : -1;
-  const adjacent = result.cells.find(c => c.col === result.cell.col + dir);
-  if (adjacent) return adjacent.from;
-
-  const targetLine = adjacentTableLine(view.state.doc, line.number, dir as 1 | -1);
-  if (targetLine) {
-    const targetPipes = findPipePositions(targetLine.text);
-    const targetCells = getCellBounds(targetLine, targetPipes);
-    if (targetCells.length > 0) {
-      return forward ? targetCells[0].from : targetCells[targetCells.length - 1].from;
-    }
-  }
-  return null;
-}
-
-function cursorInTableCheck(view: EditorView): boolean {
-  return findTableAtCursor(findTablesInState(view.state), view.state.selection.main.head) !== null;
-}
-
-const tableKeyBindings: KeyBinding[] = [
-  { key: "Enter", run: cursorInTableCheck },
-  {
-    key: "Tab",
-    run(view) {
-      if (!cursorInTableCheck(view)) return false;
-      const next = findNextCell(view, true);
-      if (next !== null) { view.dispatch({ selection: { anchor: next } }); return true; }
-      return false;
-    },
-  },
-  {
-    key: "Shift-Tab",
-    run(view) {
-      if (!cursorInTableCheck(view)) return false;
-      const prev = findNextCell(view, false);
-      if (prev !== null) { view.dispatch({ selection: { anchor: prev } }); return true; }
-      return false;
-    },
-  },
-  { key: "ArrowUp", run: (view) => moveVertical(view, -1) },
-  { key: "ArrowDown", run: (view) => moveVertical(view, 1) },
-  { key: "Backspace", run: deleteSelectedTableSelection },
-  { key: "Delete", run: deleteSelectedTableSelection },
-];
 
 // ---------------------------------------------------------------------------
 // Structure protection
@@ -1136,6 +930,6 @@ export const tableGridExtension = [
   tableClipboardHandlers,
   gridClickGuard,
   gridContextMenuHandler,
-  keymap.of(tableKeyBindings),
+  keymap.of(createTableGridKeyBindings(deleteSelectedTableSelection)),
   pipeProtectionFilter,
 ];
