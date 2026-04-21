@@ -86,6 +86,16 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
+  it("round-trips canonical pandoc-crossref equation labels", () => {
+    const markdown = [
+      "$$",
+      "\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}",
+      "$$ {#eq:gaussian}",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
   it("round-trips fenced div blocks verbatim", () => {
     const markdown = [
       '::::: {#thm:main .theorem title="Main Result"}',

@@ -33,6 +33,19 @@ export interface ParsedDisplayMathBlock extends DisplayMathInfo {
   readonly openingDelimiter: "\\[" | "$$" | "\\begin{equation}" | "\\begin{equation*}";
 }
 
+const DISPLAY_MATH_LABEL_SUFFIX_RE = /^\s*(\{#([A-Za-z][\w.:-]*)\})\s*$/;
+
+function parseDisplayMathLabelSuffix(text: string): { readonly id: string; readonly labelSuffix: string } | null {
+  const match = text.match(DISPLAY_MATH_LABEL_SUFFIX_RE);
+  if (!match?.[1] || !match[2]) {
+    return null;
+  }
+  return {
+    id: match[2],
+    labelSuffix: match[1],
+  };
+}
+
 export type SpecialBlockRange = SourceBlockRange & {
   readonly variant: "display-math" | "fenced-div";
 };
@@ -213,19 +226,30 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
   const sameLineClosingIndex = lines.length === 1
     ? raw.indexOf("$$", openingIndex + 2)
     : -1;
-  const bodyMarkdown = sameLineClosingIndex >= 0
-    ? raw.slice(openingIndex + 2, sameLineClosingIndex)
-    : lines.slice(1, -1).join("\n");
-  const labelSuffix = sameLineClosingIndex >= 0
-    ? ""
-    : "";
+  if (sameLineClosingIndex >= 0) {
+    const label = parseDisplayMathLabelSuffix(raw.slice(sameLineClosingIndex + 2));
+    const bodyMarkdown = raw.slice(openingIndex + 2, sameLineClosingIndex);
+
+    return {
+      body: bodyMarkdown.trim(),
+      bodyMarkdown,
+      closingDelimiter: "$$",
+      id: label?.id,
+      labelSuffix: label?.labelSuffix ?? "",
+      openingDelimiter: "$$",
+    };
+  }
+
+  const closingLine = lines[lines.length - 1] ?? "";
+  const label = parseDisplayMathLabelSuffix(closingLine.replace(/^\s*\$\$/, ""));
+  const bodyMarkdown = lines.slice(1, -1).join("\n");
 
   return {
     body: bodyMarkdown.trim(),
     bodyMarkdown,
     closingDelimiter: "$$",
-    id: undefined,
-    labelSuffix,
+    id: label?.id,
+    labelSuffix: label?.labelSuffix ?? "",
     openingDelimiter: "$$",
   };
 }

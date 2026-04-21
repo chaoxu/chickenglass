@@ -30,9 +30,9 @@ $$
 \\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}
 $$
 
-\\begin{equation}\\label{eq:einstein}
+$$
 E = mc^2
-\\end{equation}
+$$ {#eq:einstein}
 
 \\[
 \\sum_{k=0}^n \\binom{n}{k} = 2^n
@@ -78,9 +78,9 @@ const FORMAT_SEMANTIC_FIXTURE = [
   "",
   "Intro cites [@thm:format], [@claim:format], [@eq:format], [@tbl:format], and [@sec:format].",
   "",
-  "\\begin{equation}\\label{eq:format}",
+  "$$",
   "x + y",
-  "\\end{equation}",
+  "$$ {#eq:format}",
   "",
   '::: {#thm:format .theorem title="Attribute Title"}',
   "Statement with $x$ and a footnote[^fmt].",

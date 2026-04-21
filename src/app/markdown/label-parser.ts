@@ -101,17 +101,24 @@ export function extractMarkdownEquations(doc: string, scanDoc = doc): MarkdownEq
     }
     const raw = doc.slice(range.from, range.to);
     const parsed = parseStructuredDisplayMathRaw(raw);
-    const labelToken = parsed.id ? `\\label{${parsed.id}}` : undefined;
+    const labelToken = parsed.id
+      ? parsed.openingDelimiter.startsWith("\\begin{equation")
+        ? `\\label{${parsed.id}}`
+        : `#${parsed.id}`
+      : undefined;
+    const labelTokenPrefixLength = parsed.openingDelimiter.startsWith("\\begin{equation")
+      ? "\\label{".length
+      : "#".length;
     const labelTokenIndex = labelToken ? raw.indexOf(labelToken) : -1;
     equations.push({
       from: range.from,
       to: range.to,
       id: parsed.id,
       labelFrom: parsed.id && labelTokenIndex >= 0
-        ? range.from + labelTokenIndex + "\\label{".length
+        ? range.from + labelTokenIndex + labelTokenPrefixLength
         : undefined,
       labelTo: parsed.id && labelTokenIndex >= 0
-        ? range.from + labelTokenIndex + "\\label{".length + parsed.id.length
+        ? range.from + labelTokenIndex + labelTokenPrefixLength + parsed.id.length
         : undefined,
       text: parsed.body,
     });

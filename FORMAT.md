@@ -1,14 +1,16 @@
 # Coflat Document Format
 
-Pandoc Markdown with a fixed set of Pandoc extensions for mathematical writing. This document specifies the canonical input format the editor expects.
+Pandoc Markdown with a fixed set of Pandoc extensions and pandoc-crossref conventions for mathematical writing. This document specifies the canonical input format the editor expects.
 
-Canonical documents must be parseable by Pandoc. Coflat semantics are encoded with Pandoc-native constructs such as YAML metadata, fenced divs, attributes, citations, raw LaTeX, and tables. Non-Pandoc authoring sugar is not part of the canonical format.
+Canonical documents must be parseable by Pandoc. Coflat semantics are encoded with Pandoc-native constructs such as YAML metadata, fenced divs, attributes, citations, raw LaTeX, and tables, plus pandoc-crossref-style labels for equations and cross-references. Non-Pandoc authoring sugar is not part of the canonical format.
 
 The canonical reader profile is:
 
 ```text
 markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark
 ```
+
+The canonical filter profile runs `pandoc-crossref` before `citeproc` when exporting through Pandoc, because equation, figure, table, and block references use citation-like syntax.
 
 ## Frontmatter
 
@@ -148,15 +150,15 @@ Display math can interrupt a paragraph (no blank line required before `$$` or `\
 
 ### Labeled equations
 
-Unlabeled display math uses `$$...$$` or `\[...\]`. Labeled equations use Pandoc raw LaTeX:
+Unlabeled display math uses `$$...$$` or `\[...\]`. Labeled equations use the pandoc-crossref display-math label convention:
 
-```latex
-\begin{equation}\label{eq:einstein}
+```markdown
+$$
 E = mc^2
-\end{equation}
+$$ {#eq:einstein}
 ```
 
-Pandoc does not attach attributes to math blocks, so `$$ ... $$ {#eq:einstein}` and `\[ ... \] {#eq:einstein}` are not canonical Coflat syntax. Equations are numbered by LaTeX/export output and can be referenced with `[@eq:einstein]`.
+The label must use the `eq:` prefix. Pandoc core parses `{#eq:einstein}` as ordinary text after the math block; Coflat treats this as canonical because pandoc-crossref recognizes it and resolves `[@eq:einstein]` when the filter runs before citeproc. Raw LaTeX `\begin{equation}\label{eq:...}...\end{equation}` is allowed as raw TeX, but it is not the canonical Coflat equation-label syntax.
 
 ### Custom macros
 
@@ -341,7 +343,7 @@ blocks:
 
 ## Cross-References
 
-Reference fenced blocks and headings by their `#id` attribute. Reference raw LaTeX equations by their `\label{eq:...}` command.
+Reference fenced blocks and headings by their `#id` attribute. Reference labeled equations by their pandoc-crossref `{#eq:...}` display-math label.
 
 ### ID prefixes
 
@@ -385,7 +387,7 @@ Multiple references can be clustered with `;`. Each item is resolved independent
 [@eq:einstein; @karger2000]
 ```
 
-Resolution order: fenced blocks (by fenced div `#id`) -> equations (by `\label{eq:id}`) -> headings (by heading `#id`) -> citations (by bib key). If an ID matches a fenced block, it takes priority over a citation with the same key.
+Resolution order: fenced blocks (by fenced div `#id`) -> equations (by display-math `{#eq:id}`) -> headings (by heading `#id`) -> citations (by bib key). If an ID matches a fenced block, it takes priority over a citation with the same key.
 
 ## Citations
 
@@ -555,7 +557,7 @@ Each built-in block maps to a LaTeX environment. Unknown classes are passed thro
 | `$...$` | `\(...\)` |
 | `\(...\)` | `\(...\)` (passthrough) |
 | `$$...$$` (unlabeled) | `\[...\]` |
-| raw `\begin{equation}\label{eq:id}...\end{equation}` | labeled equation |
+| `$$...$$ {#eq:id}` | labeled equation via pandoc-crossref |
 | `==highlight==` | `\hl{highlight}` (requires `\usepackage{soul}`) |
 | `[@id]` where `id` begins with an xref prefix | `\cref{id}` |
 | `[@id]` otherwise | `\cite{id}` |

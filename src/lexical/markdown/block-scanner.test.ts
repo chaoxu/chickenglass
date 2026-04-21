@@ -18,9 +18,9 @@ describe("block-scanner", () => {
       "Body",
       ":::",
       "",
-      "\\begin{equation}\\label{eq:x}",
+      "$$",
       "x",
-      "\\end{equation}",
+      "$$ {#eq:x}",
       "",
       "![Alt](figure.png)",
       "",
@@ -83,12 +83,12 @@ describe("block-scanner", () => {
   });
 
   it("recognizes single-line dollar display math consistently with import", () => {
-    expect(collectSourceBlockRanges("Before\n\n$$x + y$$\n\nAfter").map((range) => ({
+    expect(collectSourceBlockRanges("Before\n\n$$x + y$$ {#eq:sum}\n\nAfter").map((range) => ({
       raw: range.raw,
       variant: range.variant,
     }))).toEqual([
       {
-        raw: "$$x + y$$",
+        raw: "$$x + y$$ {#eq:sum}",
         variant: "display-math",
       },
     ]);
