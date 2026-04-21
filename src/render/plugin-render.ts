@@ -26,7 +26,6 @@ import {
 } from "../editor/structure-edit-state";
 import { createChangeChecker } from "../state/change-detection";
 import { collectFencedDivs, docChangeTouchesFencedDivStructure } from "../fenced-block/model";
-import { pluginRenderAdapter } from "../lib/plugin-render-adapter";
 import { mathMacrosField } from "../state/math-macros";
 import {
   addSingleLineClosingFence,
@@ -51,6 +50,7 @@ import {
   addHeaderWidgetDecoration,
   addInlineHeaderDecoration,
   addInlineTitleParenDecorations,
+  codeMirrorPluginRenderAdapter as pluginRenderAdapter,
 } from "./plugin-adapters/chrome";
 import type { BlockAttrs } from "../plugins/plugin-types";
 import { applySpecialBehavior } from "../plugins/special-behavior-handlers";

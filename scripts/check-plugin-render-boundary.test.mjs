@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,7 +7,15 @@ import {
   findPluginRenderBoundaryViolations,
 } from "./check-plugin-render-boundary.mjs";
 
+const packageJson = JSON.parse(
+  readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+);
+
 describe("plugin/render boundary checker", () => {
+  it("runs from the standard lint script used by CI", () => {
+    expect(packageJson.scripts.lint).toContain("pnpm lint:boundaries");
+  });
+
   it("collects import, export, and dynamic import specifiers", () => {
     expect(
       collectModuleSpecifiers(

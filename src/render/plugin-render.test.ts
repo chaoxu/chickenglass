@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { Compartment, EditorState } from "@codemirror/state";
+import { Decoration } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { markdownExtensions } from "../parser";
 import {
@@ -17,7 +18,7 @@ import {
 import {
   BlockCaptionWidget,
   BlockHeaderWidget,
-} from "./plugin-render-adapter";
+} from "./plugin-adapters/chrome";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
@@ -627,6 +628,29 @@ describe("disabled blocks show raw fences (issue #356)", () => {
 
     expect(widget.sourceFrom).toBe(openLine.from);
     expect(widget.sourceTo).toBe(openLine.to);
+  });
+
+  it("dispatches plugin-owned body decoration hooks without renderer special-cases", () => {
+    const doc = `::: {.callout}\nBody\n:::`;
+    const state = createTestStateWithPlugins(
+      doc,
+      [
+        makeBlockPlugin({
+          name: "callout",
+          numbered: false,
+          title: "Callout",
+          renderDecorations: {
+            addBodyDecorations({ items, state }) {
+              items.push(
+                Decoration.line({ class: "cf-callout-body" }).range(state.doc.line(2).from),
+              );
+            },
+          },
+        }),
+      ],
+    );
+
+    expect(hasLineClassAt(getDecoSpecs(state), state.doc.line(2).from, "cf-callout-body")).toBe(true);
   });
 });
 

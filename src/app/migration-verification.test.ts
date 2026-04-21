@@ -947,19 +947,17 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     const pluginRender = fileText("src/render/plugin-render.ts");
     const chrome = fileText("src/render/plugin-adapters/chrome.ts");
     const decorationBuilder = fileText("src/plugins/decoration-builder.ts");
-    const bridge = fileText("src/lib/plugin-render-adapter.ts");
-    const renderAdapter = fileText("src/render/plugin-render-adapter.ts");
     const renderIndex = fileText("src/render/index.ts");
     const pluginsIndex = fileText("src/plugins/index.ts");
 
     expect(fileExists("src/render/plugin-render.ts")).toBe(true);
     expect(fileExists("src/plugins/plugin-render.ts")).toBe(false);
     expect(fileExists("src/render/plugin-adapters/chrome.ts")).toBe(true);
+    expect(fileExists("src/render/plugin-render-adapter.ts")).toBe(false);
+    expect(fileExists("src/lib/plugin-render-adapter.ts")).toBe(false);
     expect(fileExists("src/plugins/plugin-render-chrome.ts")).toBe(false);
-    expect(renderAdapter).toContain("const codeMirrorPluginRenderAdapter: PluginRenderAdapter");
-    expect(renderAdapter).toContain("createHeaderWidget");
-    expect(bridge).toContain('import type { PluginRenderAdapter }');
-    expect(bridge).toContain("codeMirrorPluginRenderAdapter");
+    expect(chrome).toContain("const codeMirrorPluginRenderAdapter: PluginRenderAdapter");
+    expect(chrome).toContain("createHeaderWidget");
     expect(renderIndex).toContain("blockRenderPlugin");
     expect(pluginsIndex).not.toContain("blockRenderPlugin");
     expect(pluginRender).toContain("pluginRenderAdapter");
@@ -975,6 +973,26 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(decorationBuilder).not.toContain("./plugin-render-embed");
     expect(chrome).toContain("../../plugins/plugin-render-adapter");
     expect(chrome).not.toContain("../plugin-render-adapter");
+  });
+});
+
+describe("#1074 — plugin/render import direction", () => {
+  it("documents and enforces the plugin render contract", () => {
+    const contractDoc = fileText("docs/architecture/plugin-render-contract.md");
+    const packageJson = fileText("package.json");
+
+    expect(contractDoc).toContain("src/plugins/* must not import src/render/*");
+    expect(contractDoc).toContain("renderDecorations");
+    expect(contractDoc).toContain("src/render/plugin-adapters/");
+    expect(packageJson).toContain('"lint": "pnpm lint:boundaries && biome lint ."');
+  });
+
+  it("keeps generic plugin rendering free of embed special-cases", () => {
+    const pluginRender = fileText("src/render/plugin-render.ts");
+
+    expect(pluginRender).not.toContain('specialBehavior === "embed"');
+    expect(pluginRender).not.toContain("specialBehavior === 'embed'");
+    expect(pluginRender).toContain("renderDecorations?.addBodyDecorations");
   });
 });
 

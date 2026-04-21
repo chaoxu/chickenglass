@@ -6,7 +6,7 @@
 - **Editor surfaces are runtime-selected**: Coflats has one app shell, file IO layer, semantics pipeline, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 or Lexical editor surfaces, not in duplicated app flows.
 - **No in-app read mode**: The app exposes CM6 rich, Lexical WYSIWYG, and source modes. Do not implement, fix, or test a separate read-mode surface.
 - **HTML export is separate from editing modes**: `markdown-to-html.ts` is a standalone Lezer tree walker with no CM6 dependency. Keep it CM6-free -- pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
-- **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem."
+- **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem." Render-specific behavior follows the [Plugin Render Contract](./plugin-render-contract.md).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
 
 ## App architecture

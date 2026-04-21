@@ -336,3 +336,15 @@ export function addCaptionDecoration(
     }).range(lastBodyLineTo),
   );
 }
+
+export const codeMirrorPluginRenderAdapter: PluginRenderAdapter = {
+  createHeaderWidget(header, macros) {
+    return new BlockHeaderWidget(header, macros);
+  },
+  createCaptionWidget(header, title, macros, active) {
+    return new BlockCaptionWidget(header, title, macros, active);
+  },
+  createAttributeTitleWidget(title, macros) {
+    return new AttributeTitleWidget(title, macros);
+  },
+};
