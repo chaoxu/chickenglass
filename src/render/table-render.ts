@@ -142,15 +142,52 @@ function mapTableRangeForDecorations(
   };
 }
 
-function sameTableRenderContent(
-  before: TableRange,
-  after: TableRange,
+function tableRenderContentKey(table: TableRange): string {
+  return table.lines.join("\u0000");
+}
+
+function mappedTableRangeKey(
+  table: Pick<TableRange, "from" | "to">,
+): string {
+  return `${table.from}:${table.to}`;
+}
+
+function mappedTableRenderKey(
+  table: TableRange,
+  tr: Transaction,
+): string {
+  const mapped = mapTableRangeForDecorations(table, tr);
+  return `${mappedTableRangeKey(mapped)}:${tableRenderContentKey(table)}`;
+}
+
+function tableMayRenderReferences(
+  state: EditorState,
+  table: Pick<TableRange, "from" | "to">,
 ): boolean {
-  if (before.lines.length !== after.lines.length) return false;
-  for (let index = 0; index < before.lines.length; index += 1) {
-    if (before.lines[index] !== after.lines[index]) return false;
+  return state.sliceDoc(table.from, table.to).includes("@");
+}
+
+function filterAffectedTableDecorations(
+  decorations: DecorationSet,
+  affectedTables: readonly Pick<TableRange, "from" | "to">[],
+): DecorationSet {
+  if (affectedTables.length === 0) {
+    return decorations;
   }
-  return true;
+
+  const sortedTables = [...affectedTables].sort(
+    (left, right) => left.from - right.from,
+  );
+
+  return decorations.update({
+    filter(from, to) {
+      for (const table of sortedTables) {
+        if (table.from > to) break;
+        if (rangeTouchesTable(from, to, table)) return false;
+      }
+      return true;
+    },
+  });
 }
 
 function updateTableDecorationsForDiscoveryChange(
@@ -160,27 +197,35 @@ function updateTableDecorationsForDiscoveryChange(
   const { startState, state } = tr;
   const beforeTables = findTablesInState(startState);
   const afterTables = findTablesInState(state);
-  const usedBeforeTables = new Set<TableRange>();
   const unchangedAfterTables = new Set<TableRange>();
   const mappedValue = tr.docChanged ? value.map(tr.changes) : value;
+  const availableBeforeTablesByKey = new Map<string, TableRange[]>();
 
-  for (const afterTable of afterTables) {
-    const unchangedBeforeTable = beforeTables.find((beforeTable) => {
-      if (usedBeforeTables.has(beforeTable)) return false;
-      const mappedBefore = mapTableRangeForDecorations(beforeTable, tr);
-      return mappedBefore.from === afterTable.from
-        && mappedBefore.to === afterTable.to
-        && sameTableRenderContent(beforeTable, afterTable);
-    });
-
-    if (unchangedBeforeTable) {
-      usedBeforeTables.add(unchangedBeforeTable);
-      unchangedAfterTables.add(afterTable);
+  for (const beforeTable of beforeTables) {
+    const key = mappedTableRenderKey(beforeTable, tr);
+    const tables = availableBeforeTablesByKey.get(key);
+    if (tables) {
+      tables.push(beforeTable);
+    } else {
+      availableBeforeTablesByKey.set(key, [beforeTable]);
     }
   }
 
-  const removedOrChangedTables = beforeTables
-    .filter((table) => !usedBeforeTables.has(table))
+  for (const afterTable of afterTables) {
+    const key = `${mappedTableRangeKey(afterTable)}:${tableRenderContentKey(afterTable)}`;
+    const unchangedBeforeTables = availableBeforeTablesByKey.get(key);
+    const unchangedBeforeTable = unchangedBeforeTables?.pop();
+
+    if (unchangedBeforeTable && unchangedBeforeTables) {
+      unchangedAfterTables.add(afterTable);
+      if (unchangedBeforeTables.length === 0) {
+        availableBeforeTablesByKey.delete(key);
+      }
+    }
+  }
+
+  const removedOrChangedTables = [...availableBeforeTablesByKey.values()]
+    .flat()
     .map((table) => mapTableRangeForDecorations(table, tr));
   const addedOrChangedTables = afterTables
     .filter((table) => !unchangedAfterTables.has(table));
@@ -193,11 +238,30 @@ function updateTableDecorationsForDiscoveryChange(
   const macros = state.field(mathMacrosField);
   const renderSignature = getTableReferenceRenderDependencySignature(state);
 
-  return mappedValue.update({
-    filter(from, to) {
-      return !affectedTables.some((table) => rangeTouchesTable(from, to, table));
-    },
+  return filterAffectedTableDecorations(mappedValue, affectedTables).update({
     add: addedOrChangedTables.map((table) =>
+      buildTableDecorationRange(state, table, macros, renderSignature)
+    ),
+    sort: true,
+  });
+}
+
+function updateTableDecorationsForReferenceChange(
+  value: DecorationSet,
+  state: EditorState,
+): DecorationSet {
+  const tables = findTablesInState(state).filter((table) =>
+    tableMayRenderReferences(state, table)
+  );
+  if (tables.length === 0) {
+    return value;
+  }
+
+  const macros = state.field(mathMacrosField);
+  const renderSignature = getTableReferenceRenderDependencySignature(state);
+
+  return filterAffectedTableDecorations(value, tables).update({
+    add: tables.map((table) =>
       buildTableDecorationRange(state, table, macros, renderSignature)
     ),
     sort: true,
@@ -238,6 +302,9 @@ const tableDecorationField = createDecorationStateField({
     ) {
       if (!referenceDepsChanged && tableDiscoveryChanged && cellEdit !== "commit") {
         return updateTableDecorationsForDiscoveryChange(value, tr);
+      }
+      if (referenceDepsChanged && !tableDiscoveryChanged && cellEdit !== "commit") {
+        return updateTableDecorationsForReferenceChange(value, tr.state);
       }
       return buildTableDecorationsFromState(tr.state);
     }

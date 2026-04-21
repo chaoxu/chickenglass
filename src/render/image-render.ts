@@ -1,4 +1,5 @@
 import {
+  type ChangeSet,
   type EditorState,
   type Extension,
   type Range,
@@ -38,7 +39,6 @@ import {
   collectChangedLocalMediaPaths,
   getLocalMediaPreviewDependency,
   resolveLocalMediaPreview,
-  resolveLocalMediaPathFromState,
   resolveLocalMediaPreviewFromState,
   type LocalMediaDependencies,
   type LocalMediaPreviewDependency,
@@ -309,10 +309,13 @@ interface LocalMediaDependencyCounts {
   readonly pdfPaths: Map<string, number>;
 }
 
+type ImageInfosByResolvedPath = ReadonlyMap<string, readonly ImageNodeInfo[]>;
+
 interface ImageDecorationState {
   readonly decorations: DecorationSet;
   readonly mediaDependencies: LocalMediaDependencies;
   readonly dependencyCounts: LocalMediaDependencyCounts;
+  readonly infosByResolvedPath: ImageInfosByResolvedPath;
 }
 
 function createDependencyCounts(): LocalMediaDependencyCounts {
@@ -373,6 +376,101 @@ function getImageDependency(
     : null;
 }
 
+function imageInfoKey(info: ImageNodeInfo): string {
+  return `${info.from}:${info.to}`;
+}
+
+function addImageInfoToPathIndex(
+  index: Map<string, ImageNodeInfo[]>,
+  info: ImageNodeInfo,
+): void {
+  const dependency = getImageDependency(info);
+  if (!dependency) return;
+  const infos = index.get(dependency.resolvedPath);
+  if (infos) {
+    infos.push(info);
+    return;
+  }
+  index.set(dependency.resolvedPath, [info]);
+}
+
+function buildImageInfoPathIndex(
+  infos: readonly ImageNodeInfo[],
+): ImageInfosByResolvedPath {
+  const index = new Map<string, ImageNodeInfo[]>();
+  for (const info of infos) {
+    addImageInfoToPathIndex(index, info);
+  }
+  return index;
+}
+
+function mapImageInfoThroughChanges(
+  info: ImageNodeInfo,
+  state: EditorState,
+  changes: ChangeSet,
+): ImageNodeInfo {
+  const from = Math.max(
+    0,
+    Math.min(changes.mapPos(info.from, 1), state.doc.length),
+  );
+  const to = Math.max(
+    0,
+    Math.min(changes.mapPos(info.to, -1), state.doc.length),
+  );
+  return {
+    ...info,
+    from,
+    to: Math.max(from, to),
+  };
+}
+
+function mapImageInfoPathIndexThroughChanges(
+  index: ImageInfosByResolvedPath,
+  state: EditorState,
+  changes: ChangeSet,
+  removedInfoKeys: ReadonlySet<string>,
+): Map<string, ImageNodeInfo[]> {
+  const next = new Map<string, ImageNodeInfo[]>();
+  for (const infos of index.values()) {
+    for (const info of infos) {
+      if (removedInfoKeys.has(imageInfoKey(info))) continue;
+      addImageInfoToPathIndex(
+        next,
+        mapImageInfoThroughChanges(info, state, changes),
+      );
+    }
+  }
+  return next;
+}
+
+function collectImageNodeInfosForResolvedPathsFromIndex(
+  index: ImageInfosByResolvedPath,
+  resolvedPaths: ReadonlySet<string>,
+): ImageNodeInfo[] {
+  if (resolvedPaths.size === 0) return [];
+  const infos: ImageNodeInfo[] = [];
+  const seen = new Set<string>();
+  for (const path of resolvedPaths) {
+    for (const info of index.get(path) ?? []) {
+      const key = imageInfoKey(info);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      infos.push(info);
+    }
+  }
+  return infos;
+}
+
+function refreshImageNodeInfoPreview(
+  state: EditorState,
+  info: ImageNodeInfo,
+): ImageNodeInfo {
+  return {
+    ...info,
+    preview: resolveLocalMediaPreviewFromState(state, info.src),
+  };
+}
+
 function buildImageNodeInfo(
   state: EditorState,
   node: SyntaxNode,
@@ -422,27 +520,6 @@ function collectAllImageNodeInfos(state: EditorState): ImageNodeInfo[] {
   return collectImageNodeInfosInRanges(state, [{ from: 0, to: state.doc.length }]);
 }
 
-function collectImageNodeInfosForResolvedPaths(
-  state: EditorState,
-  resolvedPaths: ReadonlySet<string>,
-): ImageNodeInfo[] {
-  if (resolvedPaths.size === 0) return [];
-  const infos: ImageNodeInfo[] = [];
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (node.name !== "Image") return;
-      const info = buildImageNodeInfo(state, node.node);
-      if (!info) return false;
-      const resolvedPath = resolveLocalMediaPathFromState(state, info.src);
-      if (resolvedPath && resolvedPaths.has(resolvedPath)) {
-        infos.push(info);
-      }
-      return false;
-    },
-  });
-  return infos;
-}
-
 function buildImageItemsFromInfos(
   infos: readonly ImageNodeInfo[],
 ): Range<Decoration>[] {
@@ -482,13 +559,14 @@ function buildImageDecorationState(state: EditorState): ImageDecorationState {
     decorations: buildDecorations(buildImageItemsFromInfos(infos)),
     mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
     dependencyCounts,
+    infosByResolvedPath: buildImageInfoPathIndex(infos),
   };
 }
 
 function mapInfoRangeToDirtyRange(
   info: ImageNodeInfo,
   state: EditorState,
-  changes: Parameters<DecorationSet["map"]>[0],
+  changes: ChangeSet,
 ): DirtyRange {
   const mappedFrom = changes.mapPos(info.from, 1);
   const mappedTo = changes.mapPos(info.to, -1);
@@ -545,6 +623,13 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
       );
       const oldInfos = collectImageNodeInfosInRanges(tr.startState, oldDirtyRanges);
       const newInfos = collectImageNodeInfosInRanges(tr.state, newDirtyRanges);
+      const removedInfoKeys = new Set(oldInfos.map(imageInfoKey));
+      const infosByResolvedPath = mapImageInfoPathIndexThroughChanges(
+        value.infosByResolvedPath,
+        tr.state,
+        tr.changes,
+        removedInfoKeys,
+      );
       const dirtyRanges = [
         ...newDirtyRanges,
         ...oldInfos.map((info) => mapInfoRangeToDirtyRange(info, tr.state, tr.changes)),
@@ -555,6 +640,7 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
       }
       for (const info of newInfos) {
         applyDependencyDelta(dependencyCounts, getImageDependency(info), 1);
+        addImageInfoToPathIndex(infosByResolvedPath, info);
       }
       return {
         decorations: replaceImageDecorationsInRanges(
@@ -564,6 +650,7 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
         ),
         mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
         dependencyCounts,
+        infosByResolvedPath,
       };
     }
 
@@ -575,7 +662,10 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
       tr.state.field(imageUrlField, false) || new Map<string, unknown>(),
     );
     if (changedPaths.size > 0) {
-      const infos = collectImageNodeInfosForResolvedPaths(tr.state, changedPaths);
+      const infos = collectImageNodeInfosForResolvedPathsFromIndex(
+        value.infosByResolvedPath,
+        changedPaths,
+      ).map((info) => refreshImageNodeInfoPreview(tr.state, info));
       return {
         decorations: replaceImageDecorationsInRanges(
           value.decorations,
@@ -584,6 +674,7 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
         ),
         mediaDependencies: value.mediaDependencies,
         dependencyCounts: value.dependencyCounts,
+        infosByResolvedPath: value.infosByResolvedPath,
       };
     }
 
