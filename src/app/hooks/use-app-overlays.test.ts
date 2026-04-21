@@ -30,6 +30,17 @@ const overlayHookState = vi.hoisted(() => ({
   },
 }));
 
+const exportModuleState = vi.hoisted(() => ({
+  exportDocument: vi.fn(async () => "notes/current.html"),
+  batchExport: vi.fn(async () => []),
+  reset() {
+    exportModuleState.exportDocument.mockReset();
+    exportModuleState.exportDocument.mockResolvedValue("notes/current.html");
+    exportModuleState.batchExport.mockReset();
+    exportModuleState.batchExport.mockResolvedValue([]);
+  },
+}));
+
 vi.mock("./use-auto-save", () => ({
   useAutoSave: (...args: unknown[]) => {
     overlayHookState.autoSaveArgs = args;
@@ -46,6 +57,11 @@ vi.mock("./use-menu-events", () => ({
   useMenuEvents: (handlers: Record<string, () => void>) => {
     overlayHookState.menuHandlers = handlers;
   },
+}));
+
+vi.mock("../export", () => ({
+  exportDocument: exportModuleState.exportDocument,
+  batchExport: exportModuleState.batchExport,
 }));
 
 const { useAppOverlays } = await import("./use-app-overlays");
@@ -285,6 +301,7 @@ function getHotkeyHandler(key: string): () => void {
 describe("useAppOverlays", () => {
   beforeEach(() => {
     overlayHookState.reset();
+    exportModuleState.reset();
   });
 
   afterEach(() => {
@@ -507,6 +524,34 @@ describe("useAppOverlays", () => {
     expect(editor.openFile).toHaveBeenCalledWith("notes/recent.md");
     expect(Object.values(overlayHookState.menuHandlers)).not.toContain(recentCommand.action);
     expect(overlayHookState.hotkeys.map((binding) => binding.handler)).not.toContain(recentCommand.action);
+  });
+
+  it("loads export implementation from export command actions", async () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { props, fs } = await createHookProps({
+      currentPath: "notes/current.md",
+      currentDocText: "# Current\n",
+    });
+
+    const { result } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: props,
+    });
+
+    expect(exportModuleState.exportDocument).not.toHaveBeenCalled();
+
+    act(() => {
+      getCommand(result.current.commands, "export.html").action();
+    });
+
+    await vi.waitFor(() => {
+      expect(exportModuleState.exportDocument).toHaveBeenCalledWith(
+        "# Current\n",
+        "html",
+        "notes/current.md",
+        fs,
+      );
+    });
+    expect(alertSpy).toHaveBeenCalledWith("Exported to notes/current.html");
   });
 
   it("applies format commands through the Lexical editor handle", async () => {

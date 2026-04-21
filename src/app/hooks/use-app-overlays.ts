@@ -18,7 +18,6 @@ import {
   resolveDocumentLabelRenameTarget,
 } from "../../semantics/document-label-rename";
 import type { PaletteCommand } from "../components/command-palette";
-import { batchExport, exportDocument } from "../export";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
 import { dispatchIfConnected } from "../lib/view-dispatch";
@@ -346,6 +345,7 @@ export function useAppOverlays({
     const doc = editor.getCurrentDocText();
     void (async () => {
       try {
+        const { exportDocument } = await import("../export");
         const outputPath = await exportDocument(doc, "html", currentPath, fs);
         window.alert(`Exported to ${outputPath}`);
       } catch (err: unknown) {
@@ -357,6 +357,7 @@ export function useAppOverlays({
   const handleBatchExportHtml = useCallback(() => {
     if (!workspace.fileTree) return;
     void (async () => {
+      const { batchExport } = await import("../export");
       // Fetch the full recursive tree at export time so that all nested
       // markdown files are included, even when the sidebar tree is shallow.
       const tree = await fs.listTree();

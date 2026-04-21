@@ -1,6 +1,6 @@
+import { lazy, Suspense, useEffect } from "react";
 import { DebugSidebarProvider } from "./debug-sidebar";
 import { EditorPane } from "./editor-pane";
-import { LexicalEditorPane } from "./lexical-editor-pane";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
@@ -9,6 +9,12 @@ import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 import { isLexicalEditorMode } from "../../editor-display-mode";
 
+const LexicalEditorPane = lazy(() =>
+  import("./lexical-editor-pane").then((module) => ({
+    default: module.LexicalEditorPane,
+  })),
+);
+
 interface AppMainShellProps {
   sidebarLayout: Pick<
     SidebarLayoutController,
@@ -16,6 +22,23 @@ interface AppMainShellProps {
   >;
   onOpenPalette: () => void;
   onOpenSettings: () => void;
+}
+
+interface LexicalEditorPaneFallbackProps {
+  onLexicalEditorReady: (handle: null) => void;
+  onSurfaceReady: () => void;
+}
+
+function LexicalEditorPaneFallback({
+  onLexicalEditorReady,
+  onSurfaceReady,
+}: LexicalEditorPaneFallbackProps) {
+  useEffect(() => {
+    onLexicalEditorReady(null);
+    onSurfaceReady();
+  }, [onLexicalEditorReady, onSurfaceReady]);
+
+  return <div className="flex-1 bg-[var(--cf-bg)]" />;
 }
 
 export function AppMainShell({
@@ -36,25 +59,34 @@ export function AppMainShell({
     <SidebarInset>
       <DebugSidebarProvider>
         {currentPath && useLexicalEditor ? (
-          <LexicalEditorPane
-            doc={editor.editorDoc}
-            docPath={currentPath}
-            projectConfig={workspace.projectConfig}
-            theme={workspace.resolvedTheme}
-            fs={fs}
-            sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
-            onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
-            onDocChange={editor.handleDocChange}
-            onDirtyChange={editor.handleDirtyChange}
-            onProgrammaticDocChange={(doc) => {
-              editor.handleProgrammaticDocChange(currentPath, doc);
-            }}
-            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-            onLexicalEditorReady={editor.handleLexicalEditorReady}
-            onSurfaceReady={editor.handleLexicalSurfaceReady}
-            editorMode={editor.editorMode}
-          />
+          <Suspense
+            fallback={
+              <LexicalEditorPaneFallback
+                onLexicalEditorReady={editor.handleLexicalEditorReady}
+                onSurfaceReady={editor.handleLexicalSurfaceReady}
+              />
+            }
+          >
+            <LexicalEditorPane
+              doc={editor.editorDoc}
+              docPath={currentPath}
+              projectConfig={workspace.projectConfig}
+              theme={workspace.resolvedTheme}
+              fs={fs}
+              sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+              onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
+              onDocChange={editor.handleDocChange}
+              onDirtyChange={editor.handleDirtyChange}
+              onProgrammaticDocChange={(doc) => {
+                editor.handleProgrammaticDocChange(currentPath, doc);
+              }}
+              onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+              onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+              onLexicalEditorReady={editor.handleLexicalEditorReady}
+              onSurfaceReady={editor.handleLexicalSurfaceReady}
+              editorMode={editor.editorMode}
+            />
+          </Suspense>
         ) : currentPath ? (
           <EditorPane
             doc={editor.editorDoc}
