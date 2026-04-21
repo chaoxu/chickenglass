@@ -62,7 +62,8 @@ pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
 pnpm typecheck       # typecheck only
 pnpm tauri:dev       # launch Coflats Tauri desktop app
-pnpm tauri:build     # build Coflats production desktop binary
+pnpm tauri:build     # build Coflats production desktop app bundle
+pnpm tauri:build:dmg # build Coflats macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
 pnpm perf:capture:heavy -- --scenario typing-rich-burst
                      # heavy-doc perf lane with longer open/debug budgets

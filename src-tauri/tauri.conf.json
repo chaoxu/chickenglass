@@ -1,7 +1,7 @@
 {
   "productName": "Coflats",
   "version": "2.0.0",
-  "identifier": "com.coflat.app",
+  "identifier": "com.coflats.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",

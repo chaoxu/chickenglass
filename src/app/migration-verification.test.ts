@@ -1128,7 +1128,7 @@ describe("#291 — project rename to Coflats", () => {
 
     expect(pkg).toContain('"name": "coflat"');
     expect(tauri).toContain('"productName": "Coflats"');
-    expect(tauri).toContain('"identifier": "com.coflat.app"');
+    expect(tauri).toContain('"identifier": "com.coflats.desktop"');
     expect(html).toContain("<title>Coflats</title>");
   });
 
