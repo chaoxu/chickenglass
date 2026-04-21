@@ -444,6 +444,13 @@ const mathDecorationField = createDecorationStateField({
         if (mathMacrosChanged(tr) || activeMathChanged) {
           return true;
         }
+        if (
+          context.docChanged
+          && context.semanticChanged
+          && regionsBefore.length !== regionsAfter.length
+        ) {
+          return true;
+        }
         return context.docChanged
           && context.semanticChanged
           && equationNumberingChanged(analysisBefore, analysisAfter);

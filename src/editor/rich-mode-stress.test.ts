@@ -14,7 +14,7 @@
 import { describe, it, afterEach } from "vitest";
 import fc from "fast-check";
 import { syntaxTree } from "@codemirror/language";
-import { EditorView } from "@codemirror/view";
+import { type DecorationSet, EditorView } from "@codemirror/view";
 import { createEditor, editorModeField, setEditorMode, type EditorMode } from "./editor";
 import { documentSemanticsField } from "../state/document-analysis";
 
@@ -187,6 +187,30 @@ const arbShortOps: fc.Arbitrary<EditOp[]> = fc.array(arbOp, { minLength: 5, maxL
 
 const arbSeedIndex: fc.Arbitrary<number> = fc.nat({ max: SEED_DOCUMENTS.length - 1 });
 
+const tableModeSwitchRegressionOps: readonly EditOp[] = [
+  { type: "move", pos: 66 },
+  { type: "move", pos: 4456 },
+  { type: "move", pos: 3878 },
+  { type: "move", pos: 3017 },
+  { type: "delete", count: 5 },
+  { type: "move", pos: 1328 },
+  { type: "insert", text: "N0" },
+  { type: "snippet", snippet: "$$\n  y = mx + b\n$$\n" },
+  { type: "move", pos: 1431 },
+  { type: "newline" },
+  { type: "move", pos: 1531 },
+  { type: "delete", count: 3 },
+  { type: "delete", count: 7 },
+  { type: "mode", mode: "rich" },
+  { type: "delete", count: 10 },
+  { type: "snippet", snippet: "| A | B |\n|---|---|\n| 1 | 2 |\n" },
+  { type: "mode", mode: "source" },
+  { type: "delete", count: 3 },
+  { type: "newline" },
+  { type: "move", pos: 2006 },
+  { type: "mode", mode: "rich" },
+];
+
 // ── Apply + invariant checking ───────────────────────────────────────────────
 
 /** Apply an operation. Throws on dispatch failure — no exceptions are swallowed. */
@@ -219,6 +243,25 @@ function applyOp(view: EditorView, op: EditOp): void {
     case "snippet":
       view.dispatch({ changes: { from: head, insert: op.snippet } });
       break;
+  }
+}
+
+function assertDecorationSetInBounds(
+  decorations: DecorationSet,
+  docLen: number,
+  stepIndex: number,
+  op: EditOp,
+  providerIndex: number,
+): void {
+  const cursor = decorations.iter();
+  while (cursor.value) {
+    if (cursor.from < 0 || cursor.to > docLen) {
+      throw new Error(
+        `Step ${stepIndex} (${op.type}): decoration provider ${providerIndex} range `
+        + `[${cursor.from}, ${cursor.to}] outside [0, ${docLen}]`,
+      );
+    }
+    cursor.next();
   }
 }
 
@@ -274,6 +317,13 @@ function checkInvariants(view: EditorView, stepIndex: number, op: EditOp): void 
 
   // Document text is retrievable
   state.doc.toString();
+
+  const decorationProviders = state.facet(EditorView.decorations);
+  for (let providerIndex = 0; providerIndex < decorationProviders.length; providerIndex++) {
+    const provider = decorationProviders[providerIndex];
+    const decorations = typeof provider === "function" ? provider(view) : provider;
+    assertDecorationSetInBounds(decorations, docLen, stepIndex, op, providerIndex);
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -300,6 +350,22 @@ describe("rich-mode stress", { timeout: 60_000 }, () => {
     if (activeView && activeParent) {
       cleanupEditor(activeView, activeParent);
     }
+    activeView = undefined;
+    activeParent = undefined;
+  });
+
+  it("handles table insertion after repeated rich-mode reconfiguration", () => {
+    const { view, parent } = createMountedEditor(SEED_DOCUMENTS[4]);
+    activeView = view;
+    activeParent = parent;
+
+    for (let i = 0; i < tableModeSwitchRegressionOps.length; i++) {
+      const op = tableModeSwitchRegressionOps[i];
+      applyOp(view, op);
+      checkInvariants(view, i, op);
+    }
+
+    cleanupEditor(view, parent);
     activeView = undefined;
     activeParent = undefined;
   });
