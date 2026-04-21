@@ -5,7 +5,7 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
+import type { SyntaxNodeRef } from "@lezer/common";
 import {
   normalizeDirtyRange,
   type VisibleRange,
@@ -25,6 +25,7 @@ import {
   linkDecorationCacheSizeForTest,
   openRenderedLinkAtEvent,
 } from "./link-handler";
+import { addInlineRevealSourceMetricsInSubtree } from "./markdown-inline-source";
 import { CSS } from "../constants/css-classes";
 
 /** Heading mark decorations (font-weight, text styling on spans). */
@@ -62,36 +63,6 @@ const boldDecoration = Decoration.mark({ class: CSS.bold });
 const italicDecoration = Decoration.mark({ class: CSS.italic });
 const strikethroughDecoration = Decoration.mark({ class: CSS.strikethrough });
 const inlineCodeDecoration = Decoration.mark({ class: CSS.inlineCode });
-
-/** Source-delimiter decoration: reduced-size metrics so visible delimiters
- *  don't push the line box taller than surrounding content (#789). */
-const sourceDelimiterDecoration = Decoration.mark({ class: CSS.sourceDelimiter });
-const inlineSourceDecoration = Decoration.mark({ class: CSS.inlineSource });
-
-/** Mark node types whose visible delimiters need source-delimiter styling.
- *  CodeMark is excluded — cf-inline-code already wraps the entire InlineCode range. */
-const SOURCE_DELIMITER_MARKS = new Set(["EmphasisMark", "StrikethroughMark", "HighlightMark", "LinkMark"]);
-const INLINE_SOURCE_MARKS = new Set(["URL"]);
-
-/**
- * Recursively walk a subtree and add compact source metrics to visible raw
- * tokens. Handles nested inline elements (e.g. `***x***` where Emphasis wraps
- * StrongEmphasis) that the main tree walk won't visit because the outer
- * handler returns false (#789).
- */
-function addInlineRevealSourceMetricsInSubtree(node: SyntaxNode, items: Range<Decoration>[]): void {
-  let child = node.firstChild;
-  while (child) {
-    if (SOURCE_DELIMITER_MARKS.has(child.name)) {
-      items.push(sourceDelimiterDecoration.range(child.from, child.to));
-    }
-    if (INLINE_SOURCE_MARKS.has(child.name)) {
-      items.push(inlineSourceDecoration.range(child.from, child.to));
-    }
-    addInlineRevealSourceMetricsInSubtree(child, items);
-    child = child.nextSibling;
-  }
-}
 
 /** Decoration to style bullet list markers. */
 const bulletListDecoration = Decoration.mark({ class: CSS.listBullet });
