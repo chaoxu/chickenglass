@@ -79,6 +79,11 @@ async function apiFetch(
   return fetch(`${baseUrl}${requestPath}`, init);
 }
 
+async function atomicTempFiles(dirPath: string): Promise<string[]> {
+  const entries = await fs.readdir(dirPath);
+  return entries.filter((entry) => entry.startsWith(".coflat-write-"));
+}
+
 describe("handleFileApi", () => {
   it("rejects cross-origin requests", async () => {
     const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
@@ -162,5 +167,48 @@ describe("handleFileApi", () => {
     await expect(fs.access(path.join(outsideDir, "pwned.md"))).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("updates existing files through an atomic same-directory temp file", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    const notePath = path.join(rootDir, "note.md");
+    await fs.writeFile(notePath, "old", "utf-8");
+
+    const response = await apiFetch(baseUrl, "/api/files/note.md", {
+      method: "PUT",
+      headers: {
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "new" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true });
+    await expect(fs.readFile(notePath, "utf-8")).resolves.toBe("new");
+    await expect(atomicTempFiles(rootDir)).resolves.toEqual([]);
+  });
+
+  it("preserves in-root symlink entries when atomically updating their targets", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    const targetPath = path.join(rootDir, "target.md");
+    const linkPath = path.join(rootDir, "link.md");
+    await fs.writeFile(targetPath, "old", "utf-8");
+    await fs.symlink(targetPath, linkPath);
+
+    const response = await apiFetch(baseUrl, "/api/files/link.md", {
+      method: "PUT",
+      headers: {
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "new" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(fs.readFile(targetPath, "utf-8")).resolves.toBe("new");
+    const linkStat = await fs.lstat(linkPath);
+    expect(linkStat.isSymbolicLink()).toBe(true);
+    await expect(atomicTempFiles(rootDir)).resolves.toEqual([]);
   });
 });

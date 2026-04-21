@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use base64::Engine;
 use same_file::Handle as FileHandle;
@@ -10,6 +11,8 @@ use serde::Serialize;
 use super::path_filter::should_ignore_path_segment;
 use crate::commands::state::ProjectRootEntry;
 use crate::services::path::file_name_to_frontend_string;
+
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// A file or directory entry for the sidebar tree.
 #[derive(Serialize, Clone)]
@@ -177,19 +180,88 @@ fn write_existing_file_bytes_with_handle(
     expected: &FileHandle,
     content: &[u8],
 ) -> std::io::Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create(false)
-        .open(path)?;
-    let actual = FileHandle::from_file(file.try_clone()?)?;
+    let temp_path = write_same_directory_temp_file(path, content)?;
+    let actual = match FileHandle::from_path(path) {
+        Ok(actual) => actual,
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            return Err(error);
+        }
+    };
     if &actual != expected {
+        let _ = fs::remove_file(&temp_path);
         return Err(std::io::Error::other(format!(
             "File changed before write: {}",
             path.display()
         )));
     }
-    file.set_len(0)?;
-    file.write_all(content)
+
+    match fs::rename(&temp_path, path) {
+        Ok(()) => sync_parent_directory(path),
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            Err(error)
+        }
+    }
+}
+
+fn write_same_directory_temp_file(path: &Path, content: &[u8]) -> std::io::Result<PathBuf> {
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Path has no parent: {}", path.display()),
+        )
+    })?;
+    let mut last_error = None;
+
+    for _ in 0..100 {
+        let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let temp_path = parent.join(format!(
+            ".coflat-write-{}-{}.tmp",
+            std::process::id(),
+            counter
+        ));
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                last_error = Some(error);
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+
+        if let Err(error) = file.write_all(content).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = fs::remove_file(&temp_path);
+            return Err(error);
+        }
+        drop(file);
+        return Ok(temp_path);
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "Failed to create atomic write temp file",
+        )
+    }))
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
@@ -302,6 +374,17 @@ mod tests {
         let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
         fs::create_dir_all(&path).expect("create temp dir");
         path.canonicalize().expect("canonicalize temp dir")
+    }
+
+    fn atomic_temp_paths(dir: &std::path::Path) -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .expect("read temp dir")
+            .filter_map(|entry| {
+                let path = entry.expect("read temp entry").path();
+                let name = path.file_name()?.to_str()?;
+                name.starts_with(".coflat-write-").then_some(path)
+            })
+            .collect()
     }
 
     #[test]
@@ -452,6 +535,7 @@ mod tests {
         write_existing_file(&file, "new").unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), "new");
+        assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -469,6 +553,7 @@ mod tests {
             .expect_err("should fail for deleted file");
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
         assert!(!file.exists(), "deleted file must not be recreated");
+        assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -487,6 +572,7 @@ mod tests {
             .expect_err("should fail for replaced file");
         assert_eq!(err.kind(), std::io::ErrorKind::Other);
         assert_eq!(fs::read_to_string(&file).unwrap(), "replacement");
+        assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -514,6 +600,21 @@ mod tests {
         write_binary_file(&file, "image.bin", &encoded).unwrap();
 
         assert_eq!(fs::read(&file).unwrap(), vec![4, 5, 6]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_binary_file_atomically_overwrites_existing_file() {
+        let dir = create_temp_dir("write-binary-existing");
+        let file = dir.join("image.bin");
+        fs::write(&file, [1, 2, 3]).unwrap();
+        let encoded = base64::engine::general_purpose::STANDARD.encode([4, 5, 6, 7]);
+
+        write_binary_file(&file, "image.bin", &encoded).unwrap();
+
+        assert_eq!(fs::read(&file).unwrap(), vec![4, 5, 6, 7]);
+        assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);
     }

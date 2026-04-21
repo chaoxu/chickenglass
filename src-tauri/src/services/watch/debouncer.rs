@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::path::PathBuf;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -30,7 +30,7 @@ struct DebouncedEventDispatcher {
     attached: bool,
     debounce_window: Duration,
     buffered: VecDeque<QueuedFileChangedEvent>,
-    last_events: HashMap<PathBuf, Instant>,
+    pending: HashMap<PathBuf, QueuedFileChangedEvent>,
 }
 
 impl DebouncedEventDispatcher {
@@ -39,24 +39,21 @@ impl DebouncedEventDispatcher {
             attached: false,
             debounce_window,
             buffered: VecDeque::new(),
-            last_events: HashMap::new(),
+            pending: HashMap::new(),
         }
     }
 
-    fn handle_message<F>(&mut self, message: WatchEventMessage, emit: &mut F)
-    where
-        F: FnMut(&FileChangedEvent),
-    {
+    fn handle_message(&mut self, message: WatchEventMessage) {
         match message {
             WatchEventMessage::Attached => {
                 self.attached = true;
                 while let Some(event) = self.buffered.pop_front() {
-                    self.emit_if_ready(event, emit);
+                    self.queue_pending(event);
                 }
             }
             WatchEventMessage::FileChanged(event) => {
                 if self.attached {
-                    self.emit_if_ready(event, emit);
+                    self.queue_pending(event);
                 } else {
                     self.buffered.push_back(event);
                 }
@@ -64,20 +61,43 @@ impl DebouncedEventDispatcher {
         }
     }
 
-    fn emit_if_ready<F>(&mut self, event: QueuedFileChangedEvent, emit: &mut F)
+    fn flush_due<F>(&mut self, now: Instant, emit: &mut F)
     where
         F: FnMut(&FileChangedEvent),
     {
-        if !should_emit_debounced_event(
-            &mut self.last_events,
-            &event.absolute_path,
-            event.observed_at,
-            self.debounce_window,
-        ) {
-            return;
-        }
+        let mut due_paths: Vec<PathBuf> = self
+            .pending
+            .iter()
+            .filter(|(_, event)| event_is_due(event, now, self.debounce_window))
+            .map(|(path, _)| path.clone())
+            .collect();
+        due_paths.sort_by_key(|path| {
+            self.pending
+                .get(path)
+                .map(|event| (event.observed_at, path.clone()))
+        });
 
-        emit(&event.payload);
+        for path in due_paths {
+            if let Some(event) = self.pending.remove(&path) {
+                emit(&event.payload);
+            }
+        }
+    }
+
+    fn next_deadline(&self) -> Option<Instant> {
+        self.pending
+            .values()
+            .map(|event| event.observed_at + self.debounce_window)
+            .min()
+    }
+
+    fn queue_pending(&mut self, mut event: QueuedFileChangedEvent) {
+        let path = event.absolute_path.clone();
+        if let Some(previous) = self.pending.remove(&path) {
+            event.payload.tree_changed =
+                previous.payload.tree_changed || event.payload.tree_changed;
+        }
+        self.pending.insert(path, event);
     }
 }
 
@@ -92,10 +112,30 @@ pub(crate) fn spawn_debounced_event_worker(
         .name("file-watcher-debounce".to_string())
         .spawn(move || {
             let mut dispatcher = DebouncedEventDispatcher::new(debounce_window);
-            while let Ok(message) = receiver.recv() {
-                dispatcher.handle_message(message, &mut |payload| {
-                    let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
-                });
+            let mut emit = |payload: &FileChangedEvent| {
+                let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
+            };
+
+            loop {
+                let now = Instant::now();
+                dispatcher.flush_due(now, &mut emit);
+
+                let message = match dispatcher.next_deadline() {
+                    Some(deadline) => {
+                        match receiver.recv_timeout(deadline.saturating_duration_since(now)) {
+                            Ok(message) => message,
+                            Err(RecvTimeoutError::Timeout) => continue,
+                            Err(RecvTimeoutError::Disconnected) => break,
+                        }
+                    }
+                    None => match receiver.recv() {
+                        Ok(message) => message,
+                        Err(_) => break,
+                    },
+                };
+
+                dispatcher.handle_message(message);
+                dispatcher.flush_due(Instant::now(), &mut emit);
             }
         })
         .map_err(|e| format!("Failed to start file watcher debounce worker: {}", e))?;
@@ -103,73 +143,74 @@ pub(crate) fn spawn_debounced_event_worker(
     Ok(sender)
 }
 
-fn should_emit_debounced_event(
-    last_events: &mut HashMap<PathBuf, Instant>,
-    path: &Path,
-    now: Instant,
-    debounce_window: Duration,
-) -> bool {
-    last_events.retain(|_, last_seen| now.duration_since(*last_seen) < debounce_window);
-
-    if let Some(last_seen) = last_events.get(path) {
-        if now.duration_since(*last_seen) < debounce_window {
-            return false;
-        }
-    }
-
-    last_events.insert(path.to_path_buf(), now);
-    true
+fn event_is_due(event: &QueuedFileChangedEvent, now: Instant, debounce_window: Duration) -> bool {
+    now.checked_duration_since(event.observed_at)
+        .is_some_and(|elapsed| elapsed >= debounce_window)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
-        should_emit_debounced_event,
     };
-    use std::collections::HashMap;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::time::{Duration, Instant};
 
-    #[test]
-    fn prunes_stale_entries_before_recording_new_paths() {
-        let debounce_window = Duration::from_millis(500);
-        let now = Instant::now();
-        let stale_instant = now - Duration::from_secs(5);
-        let mut last_events = HashMap::from([(PathBuf::from("old.md"), stale_instant)]);
-
-        let should_emit = should_emit_debounced_event(
-            &mut last_events,
-            Path::new("new.md"),
-            now,
-            debounce_window,
-        );
-
-        assert!(should_emit);
-        assert_eq!(last_events.len(), 1);
-        assert!(last_events.contains_key(Path::new("new.md")));
-        assert!(!last_events.contains_key(Path::new("old.md")));
+    fn queued_event(
+        path: &str,
+        observed_at: Instant,
+        tree_changed: bool,
+        generation: u64,
+    ) -> QueuedFileChangedEvent {
+        QueuedFileChangedEvent {
+            absolute_path: PathBuf::from(path),
+            observed_at,
+            payload: FileChangedEvent {
+                path: path.to_string(),
+                tree_changed,
+                generation,
+                root: "/tmp/project".to_string(),
+            },
+        }
     }
 
     #[test]
-    fn suppresses_duplicate_events_within_the_debounce_window() {
-        let debounce_window = Duration::from_millis(500);
+    fn emits_latest_event_after_the_quiet_window() {
         let now = Instant::now();
-        let mut last_events = HashMap::new();
-        let path = Path::new("notes/index.md");
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
 
-        assert!(should_emit_debounced_event(
-            &mut last_events,
-            path,
+        dispatcher.handle_message(WatchEventMessage::Attached);
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
             now,
-            debounce_window
-        ));
-        assert!(!should_emit_debounced_event(
-            &mut last_events,
-            path,
+            false,
+            1,
+        )));
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
             now + Duration::from_millis(200),
-            debounce_window,
-        ));
+            false,
+            2,
+        )));
+
+        dispatcher.flush_due(now + Duration::from_millis(699), &mut |payload| {
+            emitted.push(payload.clone())
+        });
+        assert!(emitted.is_empty());
+
+        dispatcher.flush_due(now + Duration::from_millis(700), &mut |payload| {
+            emitted.push(payload.clone())
+        });
+        assert_eq!(
+            emitted,
+            vec![FileChangedEvent {
+                path: "notes/index.md".to_string(),
+                tree_changed: false,
+                generation: 2,
+                root: "/tmp/project".to_string(),
+            }],
+        );
     }
 
     #[test]
@@ -178,23 +219,22 @@ mod tests {
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(
-            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
-                absolute_path: PathBuf::from("notes/index.md"),
-                observed_at: now,
-                payload: FileChangedEvent {
-                    path: "notes/index.md".to_string(),
-                    tree_changed: false,
-                    generation: 1,
-                    root: "/tmp/project".to_string(),
-                },
-            }),
-            &mut |payload| emitted.push(payload.clone()),
-        );
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
+            now,
+            false,
+            1,
+        )));
 
         assert!(emitted.is_empty());
 
-        dispatcher.handle_message(WatchEventMessage::Attached, &mut |payload| {
+        dispatcher.handle_message(WatchEventMessage::Attached);
+        dispatcher.flush_due(now + Duration::from_millis(499), &mut |payload| {
+            emitted.push(payload.clone())
+        });
+        assert!(emitted.is_empty());
+
+        dispatcher.flush_due(now + Duration::from_millis(500), &mut |payload| {
             emitted.push(payload.clone())
         });
 
@@ -210,39 +250,26 @@ mod tests {
     }
 
     #[test]
-    fn suppresses_buffered_duplicates_when_attachment_flushes_them() {
+    fn coalesces_buffered_duplicates_to_the_latest_event() {
         let now = Instant::now();
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(
-            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
-                absolute_path: PathBuf::from("notes/index.md"),
-                observed_at: now,
-                payload: FileChangedEvent {
-                    path: "notes/index.md".to_string(),
-                    tree_changed: false,
-                    generation: 1,
-                    root: "/tmp/project".to_string(),
-                },
-            }),
-            &mut |payload| emitted.push(payload.clone()),
-        );
-        dispatcher.handle_message(
-            WatchEventMessage::FileChanged(QueuedFileChangedEvent {
-                absolute_path: PathBuf::from("notes/index.md"),
-                observed_at: now + Duration::from_millis(200),
-                payload: FileChangedEvent {
-                    path: "notes/index.md".to_string(),
-                    tree_changed: false,
-                    generation: 1,
-                    root: "/tmp/project".to_string(),
-                },
-            }),
-            &mut |payload| emitted.push(payload.clone()),
-        );
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
+            now,
+            false,
+            1,
+        )));
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
+            now + Duration::from_millis(200),
+            false,
+            2,
+        )));
 
-        dispatcher.handle_message(WatchEventMessage::Attached, &mut |payload| {
+        dispatcher.handle_message(WatchEventMessage::Attached);
+        dispatcher.flush_due(now + Duration::from_millis(700), &mut |payload| {
             emitted.push(payload.clone())
         });
 
@@ -251,30 +278,90 @@ mod tests {
             vec![FileChangedEvent {
                 path: "notes/index.md".to_string(),
                 tree_changed: false,
-                generation: 1,
+                generation: 2,
                 root: "/tmp/project".to_string(),
             }],
         );
     }
 
     #[test]
-    fn re_emits_paths_after_the_debounce_window_expires() {
-        let debounce_window = Duration::from_millis(500);
+    fn preserves_tree_changed_when_structural_events_are_coalesced() {
         let now = Instant::now();
-        let mut last_events = HashMap::new();
-        let path = Path::new("notes/index.md");
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
 
-        assert!(should_emit_debounced_event(
-            &mut last_events,
-            path,
+        dispatcher.handle_message(WatchEventMessage::Attached);
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
             now,
-            debounce_window
-        ));
-        assert!(should_emit_debounced_event(
-            &mut last_events,
-            path,
+            true,
+            1,
+        )));
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
+            now + Duration::from_millis(100),
+            false,
+            2,
+        )));
+
+        dispatcher.flush_due(now + Duration::from_millis(600), &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        assert_eq!(
+            emitted,
+            vec![FileChangedEvent {
+                path: "notes/index.md".to_string(),
+                tree_changed: true,
+                generation: 2,
+                root: "/tmp/project".to_string(),
+            }],
+        );
+    }
+
+    #[test]
+    fn re_emits_paths_after_each_quiet_window() {
+        let now = Instant::now();
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut emitted = Vec::new();
+
+        dispatcher.handle_message(WatchEventMessage::Attached);
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
+            now,
+            false,
+            1,
+        )));
+        dispatcher.flush_due(now + Duration::from_millis(500), &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
+            "notes/index.md",
             now + Duration::from_millis(750),
-            debounce_window,
-        ));
+            false,
+            2,
+        )));
+        dispatcher.flush_due(now + Duration::from_millis(1250), &mut |payload| {
+            emitted.push(payload.clone())
+        });
+
+        assert_eq!(
+            emitted,
+            vec![
+                FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                    generation: 1,
+                    root: "/tmp/project".to_string(),
+                },
+                FileChangedEvent {
+                    path: "notes/index.md".to_string(),
+                    tree_changed: false,
+                    generation: 2,
+                    root: "/tmp/project".to_string(),
+                },
+            ],
+        );
     }
 }

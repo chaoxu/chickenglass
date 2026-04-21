@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import fs from "node:fs/promises";
+import type { Stats } from "node:fs";
+import fs, { type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 /** File entry matching the client-side FileEntry interface. */
@@ -28,12 +29,28 @@ function fileSystemErrorCode(error: unknown): string | undefined {
     : undefined;
 }
 
+class FileChangedBeforeWriteError extends Error {
+  readonly code = "ESTALE";
+
+  constructor(filePath: string) {
+    super(`File changed before write: ${filePath}`);
+  }
+}
+
+class PathEscapedRootError extends Error {
+  readonly code = "EESCAPE";
+}
+
 function sendFileSystemError(
   res: ServerResponse,
   error: unknown,
   decodedPath: string,
 ): boolean {
   const code = fileSystemErrorCode(error);
+  if (code === "EESCAPE") {
+    sendError(res, 403, "Path traversal not allowed");
+    return true;
+  }
   if (code === "ENOENT" || code === "ENOTDIR") {
     sendError(res, 404, `File not found: ${decodedPath}`);
     return true;
@@ -48,6 +65,10 @@ function sendFileSystemError(
   }
   if (code === "EISDIR") {
     sendError(res, 409, `Expected a file: ${decodedPath}`);
+    return true;
+  }
+  if (code === "ESTALE") {
+    sendError(res, 409, `File changed before write: ${decodedPath}`);
     return true;
   }
   return false;
@@ -192,6 +213,104 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+let atomicWriteCounter = 0;
+
+function sameFileStats(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+async function createAtomicWriteTempFile(parentDir: string): Promise<{
+  tempPath: string;
+  handle: FileHandle;
+}> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    atomicWriteCounter += 1;
+    const tempPath = path.join(
+      parentDir,
+      `.coflat-write-${process.pid}-${Date.now()}-${atomicWriteCounter}.tmp`,
+    );
+
+    try {
+      const handle = await fs.open(tempPath, "wx");
+      return { tempPath, handle };
+    } catch (error: unknown) {
+      if (fileSystemErrorCode(error) !== "EEXIST") {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error("Failed to create atomic write temp file");
+}
+
+async function writeTempFile(
+  parentDir: string,
+  content: string | Uint8Array,
+): Promise<string> {
+  const { tempPath, handle } = await createAtomicWriteTempFile(parentDir);
+  let closed = false;
+
+  try {
+    if (typeof content === "string") {
+      await handle.writeFile(content, "utf-8");
+    } else {
+      await handle.writeFile(content);
+    }
+    await handle.sync();
+    await handle.close();
+    closed = true;
+  } catch (error: unknown) {
+    if (!closed) {
+      try {
+        await handle.close();
+      } catch (_closeError: unknown) {
+        // Preserve the original write/sync/close error while still cleaning up the temp path.
+      }
+    }
+    await fs.rm(tempPath, { force: true });
+    throw error;
+  }
+
+  return tempPath;
+}
+
+async function writeAtomicExistingFile(
+  rootDir: string,
+  safePath: string,
+  content: string | Uint8Array,
+): Promise<void> {
+  const targetPath = await fs.realpath(safePath);
+  if (!isWithinRoot(rootDir, targetPath)) {
+    throw new PathEscapedRootError();
+  }
+
+  const expectedStats = await fs.stat(targetPath);
+  const tempPath = await writeTempFile(path.dirname(targetPath), content);
+
+  try {
+    const requestPathBeforeRename = await fs.realpath(safePath);
+    if (!isWithinRoot(rootDir, requestPathBeforeRename)) {
+      throw new PathEscapedRootError();
+    }
+    if (requestPathBeforeRename !== targetPath) {
+      throw new FileChangedBeforeWriteError(safePath);
+    }
+
+    const actualStats = await fs.stat(targetPath);
+    if (!sameFileStats(expectedStats, actualStats)) {
+      throw new FileChangedBeforeWriteError(targetPath);
+    }
+
+    await fs.rename(tempPath, targetPath);
+  } catch (error: unknown) {
+    await fs.rm(tempPath, { force: true });
+    throw error;
+  }
+}
+
 /**
  * Handle file API requests.
  * Returns true if the request was handled, false otherwise.
@@ -259,16 +378,7 @@ export async function handleFileApi(
       const { content } = JSON.parse(body) as { content: string };
 
       try {
-        await fs.access(safePath);
-      } catch (error: unknown) {
-        if (!sendFileSystemError(res, error, decodedPath)) {
-          throw error;
-        }
-        return true;
-      }
-
-      try {
-        await fs.writeFile(safePath, content, "utf-8");
+        await writeAtomicExistingFile(rootDir, safePath, content);
       } catch (error: unknown) {
         if (!sendFileSystemError(res, error, decodedPath)) {
           throw error;
