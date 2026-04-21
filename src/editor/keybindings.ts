@@ -13,7 +13,7 @@ import { getClosingFenceRanges } from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, markdownEditorModes, setEditorMode } from "./editor";
-import { clearStructureEditTarget } from "./structure-edit-state";
+import { clearStructureEditTarget } from "../state/cm-structure-edit";
 import { moveVerticallyInRichView } from "./vertical-motion";
 
 /** Cycle to the next editor mode. */

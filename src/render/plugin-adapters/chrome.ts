@@ -16,7 +16,7 @@ import { syncActiveFenceGuideClasses } from "../source-widget";
 import {
   addPluginMarkerReplacement,
   type PluginRenderAdapter,
-} from "../../plugins/plugin-render-adapter";
+} from "../../state/plugin-render-adapter";
 
 class SimpleTextWidget extends WidgetType {
   constructor(

@@ -1,6 +1,13 @@
 import { create } from "zustand";
 
-import type { DiagnosticEntry } from "../app/diagnostics";
+export type DiagnosticSeverity = "error" | "warning";
+
+export interface DiagnosticEntry {
+  readonly severity: DiagnosticSeverity;
+  readonly message: string;
+  readonly from: number;
+  readonly to: number;
+}
 
 export interface DiagnosticsState {
   readonly diagnostics: DiagnosticEntry[];

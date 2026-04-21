@@ -13,7 +13,7 @@ import {
   createStructureEditTargetAt,
   getActiveStructureEditTarget,
   structureEditTargetContainsPos,
-} from "./structure-edit-state";
+} from "../state/cm-structure-edit";
 
 const FALLBACK_LINE_HEIGHT_PX = 24;
 const REVERSE_SCROLL_JITTER_PX = 8;

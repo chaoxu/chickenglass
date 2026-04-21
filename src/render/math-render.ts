@@ -51,7 +51,7 @@ import {
 } from "./incremental-dirty-ranges";
 import { rangesIntersect } from "../lib/range-helpers";
 import { serializeMacros } from "./source-widget";
-import { getActiveStructureEditTarget } from "../editor/structure-edit-state";
+import { getActiveStructureEditTarget } from "../state/cm-structure-edit";
 import {
   findFocusedInlineRevealTarget,
   inlineRevealTargetChanged,

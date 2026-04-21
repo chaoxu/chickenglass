@@ -18,7 +18,7 @@ import {
   activeStructureEditField,
   createStructureEditTargetAt,
   setStructureEditTargetEffect,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import { setInlineMathViewportRangesEffect } from "./math-inline-viewport";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */

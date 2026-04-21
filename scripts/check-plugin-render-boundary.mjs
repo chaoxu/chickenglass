@@ -85,17 +85,27 @@ export function collectModuleSpecifiers(sourceText, filePath) {
   return specifiers;
 }
 
-function resolvesIntoRender(specifier, importerPath, repoRoot) {
-  const renderRoot = path.join(repoRoot, "src", "render");
+function resolvesIntoSourceDirectory(specifier, importerPath, repoRoot, directoryName) {
+  const targetRoot = path.join(repoRoot, "src", directoryName);
   if (specifier.startsWith(".")) {
     const resolved = path.resolve(path.dirname(importerPath), specifier);
-    const relativeToRender = path.relative(renderRoot, resolved);
-    return relativeToRender === ""
-      || (!relativeToRender.startsWith("..") && !path.isAbsolute(relativeToRender));
+    const relativeToTarget = path.relative(targetRoot, resolved);
+    return relativeToTarget === ""
+      || (!relativeToTarget.startsWith("..") && !path.isAbsolute(relativeToTarget));
   }
 
   const normalized = specifier.replace(/\\/g, "/").replace(/\/+$/, "");
-  return normalized === "src/render" || normalized.startsWith("src/render/");
+  return normalized === `src/${directoryName}` || normalized.startsWith(`src/${directoryName}/`);
+}
+
+function resolvesIntoRender(specifier, importerPath, repoRoot) {
+  return resolvesIntoSourceDirectory(specifier, importerPath, repoRoot, "render");
+}
+
+function resolvesIntoStateUpstream(specifier, importerPath, repoRoot) {
+  return ["app", "editor", "index", "plugins", "render"].some((directoryName) =>
+    resolvesIntoSourceDirectory(specifier, importerPath, repoRoot, directoryName)
+  );
 }
 
 export function findPluginRenderBoundaryViolations(
@@ -108,6 +118,30 @@ export function findPluginRenderBoundaryViolations(
     const sourceText = entry.sourceText ?? fs.readFileSync(entry.filePath, "utf8");
     for (const importEntry of collectModuleSpecifiers(sourceText, entry.filePath)) {
       if (!resolvesIntoRender(importEntry.specifier, entry.filePath, repoRoot)) {
+        continue;
+      }
+
+      violations.push({
+        filePath: entry.filePath,
+        line: importEntry.line,
+        specifier: importEntry.specifier,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findStateUpstreamBoundaryViolations(
+  entries,
+  repoRoot,
+) {
+  const violations = [];
+
+  for (const entry of entries) {
+    const sourceText = entry.sourceText ?? fs.readFileSync(entry.filePath, "utf8");
+    for (const importEntry of collectModuleSpecifiers(sourceText, entry.filePath)) {
+      if (!resolvesIntoStateUpstream(importEntry.specifier, entry.filePath, repoRoot)) {
         continue;
       }
 
@@ -136,15 +170,28 @@ export function main(argv = process.argv.slice(2)) {
   const repoRoot = process.cwd();
   const pluginRoot = path.join(repoRoot, "src", "plugins");
   const pluginFiles = walkDirectory(pluginRoot).map((filePath) => ({ filePath }));
-  const violations = findPluginRenderBoundaryViolations(pluginFiles, repoRoot);
+  const pluginViolations = findPluginRenderBoundaryViolations(pluginFiles, repoRoot);
 
-  if (violations.length === 0) {
+  const stateRoot = path.join(repoRoot, "src", "state");
+  const stateFiles = walkDirectory(stateRoot).map((filePath) => ({ filePath }));
+  const stateViolations = findStateUpstreamBoundaryViolations(stateFiles, repoRoot);
+
+  if (pluginViolations.length === 0 && stateViolations.length === 0) {
     return 0;
   }
 
-  console.error("Disallowed src/plugins -> src/render import(s) found:");
-  for (const violation of violations) {
-    console.error(`- ${formatViolation(violation, repoRoot)}`);
+  if (pluginViolations.length > 0) {
+    console.error("Disallowed src/plugins -> src/render import(s) found:");
+    for (const violation of pluginViolations) {
+      console.error(`- ${formatViolation(violation, repoRoot)}`);
+    }
+  }
+
+  if (stateViolations.length > 0) {
+    console.error("Disallowed src/state -> upstream subsystem import(s) found:");
+    for (const violation of stateViolations) {
+      console.error(`- ${formatViolation(violation, repoRoot)}`);
+    }
   }
   return 1;
 }

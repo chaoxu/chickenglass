@@ -14,13 +14,13 @@ import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.j
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
 import { COPY_RESET_MS } from "../constants";
 import { CSS } from "../constants/css-classes";
-import { activeCodeBlockOpenFenceStarts } from "../editor/shell-ownership";
+import { activeCodeBlockOpenFenceStarts } from "../state/shell-ownership";
 import { isFencedCode } from "../lib/syntax-tree-helpers";
 import {
   activateStructureEditAt,
   hasStructureEditEffect,
   isCodeFenceStructureEditActive,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import {
   type CodeBlockInfo,
   collectCodeBlocks,

@@ -22,7 +22,7 @@ import {
   wordWrapCompartment,
 } from "./compartments";
 import { frontmatterField } from "./frontmatter-state";
-import { activeStructureEditField } from "./structure-edit-state";
+import { activeStructureEditField } from "../state/cm-structure-edit";
 
 export function coreDocumentStateExtensions(): Extension[] {
   return [

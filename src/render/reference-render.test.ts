@@ -10,7 +10,7 @@ import { CSS } from "../constants/css-classes";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
   activeStructureEditField,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import { equationLabelExtension } from "../parser/equation-label";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";

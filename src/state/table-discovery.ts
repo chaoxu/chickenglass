@@ -8,9 +8,8 @@ import {
   syntaxTree,
   syntaxTreeAvailable,
 } from "@codemirror/language";
-import { rangesOverlap } from "../lib/range-helpers";
-import { mergeRanges } from "../render/viewport-diff";
-import { parseTable, type ParsedTable } from "../render/table-utils";
+import { mergeRanges, rangesOverlap } from "../lib/range-helpers";
+import { parseTable, type ParsedTable } from "./table-utils";
 
 /** A table found in the document with its source range. */
 export interface TableRange {

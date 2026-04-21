@@ -68,7 +68,10 @@ export {
   footnoteInlineToggleEffect,
   footnoteInlineExpandedField,
 } from "./sidenote-render";
-export { searchHighlightPlugin } from "./search-highlight";
+export {
+  searchHighlightPlugin,
+  shouldUpdateSearchHighlights,
+} from "./search-highlight";
 export {
   parseTable,
   formatTable,

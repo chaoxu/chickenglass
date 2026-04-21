@@ -7,11 +7,11 @@ import {
   computeBlockNumbers,
   mapBlockCounterState,
   type BlockCounterState,
-} from "../plugins/block-counter";
+} from "./block-counter-core";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,
-} from "../state/document-analysis";
+} from "./document-analysis";
 import { createChangeChecker } from "./change-detection";
 import { frontmatterField } from "./frontmatter-state";
 import { pluginRegistryField } from "./plugin-registry";
@@ -19,7 +19,7 @@ import { pluginRegistryField } from "./plugin-registry";
 export type {
   BlockCounterState,
   NumberedBlock,
-} from "../plugins/block-counter";
+} from "./block-counter-core";
 
 /** Read the effective numbering scheme from frontmatter state. */
 function getEffectiveNumbering(state: EditorState): NumberingScheme {

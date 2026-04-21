@@ -19,11 +19,11 @@ import {
   type DecorationSet,
 } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { activeFencedOpenFenceStarts } from "../editor/shell-ownership";
+import { activeFencedOpenFenceStarts } from "../state/shell-ownership";
 import {
   hasStructureEditEffect,
   isFencedStructureEditActive,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import { createChangeChecker } from "../state/change-detection";
 import { collectFencedDivs, docChangeTouchesFencedDivStructure } from "../fenced-block/model";
 import { mathMacrosField } from "../state/math-macros";
@@ -43,7 +43,7 @@ import { type BlockCounterState, blockCounterField } from "../state/block-counte
 import { pluginRegistryField } from "../state/plugin-registry";
 import { DecorationBuilder } from "../plugins/decoration-builder";
 import { fenceProtectionExtension } from "../plugins/fence-protection";
-import { getPluginOrFallback } from "../plugins/plugin-registry";
+import { getPluginOrFallback } from "../state/plugin-registry-core";
 import {
   addAttributeTitleDecoration,
   addCaptionDecoration,
@@ -52,7 +52,7 @@ import {
   addInlineTitleParenDecorations,
   codeMirrorPluginRenderAdapter as pluginRenderAdapter,
 } from "./plugin-adapters/chrome";
-import type { BlockAttrs } from "../plugins/plugin-types";
+import type { BlockAttrs } from "../state/block-plugin";
 import { applySpecialBehavior } from "../plugins/special-behavior-handlers";
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {

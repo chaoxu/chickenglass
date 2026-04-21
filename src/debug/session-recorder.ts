@@ -3,7 +3,7 @@ import type {
   DebugRenderState,
   SelectionInfo,
 } from "../editor/debug-helpers";
-import type { StructureEditTarget } from "../editor/structure-edit-state";
+import type { StructureEditTarget } from "../state/cm-structure-edit";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
 const DEBUG_SESSION_EVENTS_STORAGE_KEY = "coflat-debug-session-events";

@@ -1,6 +1,6 @@
 import { type Extension, Facet, StateField } from "@codemirror/state";
-import type { BlockPlugin } from "../plugins/plugin-types";
-import { type PluginRegistryState, buildRegistry } from "../plugins/plugin-registry";
+import type { BlockPlugin } from "./block-plugin";
+import { type PluginRegistryState, buildRegistry } from "./plugin-registry-core";
 import { frontmatterField } from "./frontmatter-state";
 
 /**

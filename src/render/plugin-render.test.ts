@@ -30,7 +30,7 @@ import {
   activeStructureEditField,
   createFencedStructureEditTarget,
   setStructureEditTargetEffect,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import {
   applyStateEffects,
   createEditorState,

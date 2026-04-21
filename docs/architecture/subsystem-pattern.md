@@ -164,6 +164,9 @@ Concrete Epic 2 moves already in the repo:
 - `src/state/plugin-registry.ts` made plugin registry state consumable from
   editor, render, semantics, and plugins without leaving CM6 ownership inside
   `src/plugins/`
+- `src/state/cm-structure-edit.ts` and `src/state/shell-ownership.ts` keep
+  shared editor/render structure-edit and active-shell selectors out of either
+  peer subsystem
 
 See [Document State Module](./document-state-module.md) for the canonical
 selector, composition, and registry rules.

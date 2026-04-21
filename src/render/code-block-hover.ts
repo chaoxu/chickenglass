@@ -4,7 +4,7 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
-import { isCodeFenceStructureEditActive } from "../editor/structure-edit-state";
+import { isCodeFenceStructureEditActive } from "../state/cm-structure-edit";
 import { findFencedBlockAt } from "../fenced-block/model";
 import {
   type CodeBlockInfo,

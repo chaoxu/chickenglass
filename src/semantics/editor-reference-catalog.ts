@@ -6,8 +6,8 @@ import {
   type EditorState,
 } from "@codemirror/state";
 import type { NumberingScheme } from "../parser/frontmatter";
-import { computeBlockNumbersFromFencedDivs } from "../plugins/block-counter";
-import { getPluginOrFallback } from "../plugins/plugin-registry";
+import { computeBlockNumbersFromFencedDivs } from "../state/block-counter-core";
+import { getPluginOrFallback } from "../state/plugin-registry-core";
 import { docChangeTouchesFencedDivStructure } from "../fenced-block/model";
 import { blockCounterField } from "../state/block-counter";
 import { frontmatterField } from "../state/frontmatter-state";

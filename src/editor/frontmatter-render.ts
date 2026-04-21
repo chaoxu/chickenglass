@@ -22,8 +22,8 @@ import {
   activateFrontmatterStructureEdit,
   hasStructureEditEffect,
   isFrontmatterStructureEditActive,
-} from "./structure-edit-state";
-import { isFrontmatterActive } from "./shell-ownership";
+} from "../state/cm-structure-edit";
+import { isFrontmatterActive } from "../state/shell-ownership";
 
 /** Widget that renders the document title from frontmatter. */
 class TitleWidget extends ShellMacroAwareWidget {

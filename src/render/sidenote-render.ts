@@ -74,7 +74,7 @@ import { CSS } from "../constants/css-classes";
 import {
   getActiveStructureEditTarget,
   isFootnoteLabelStructureEditActive,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import { createChangeChecker } from "../state/change-detection";
 
 /** StateEffect to toggle sidenote margin visibility. */

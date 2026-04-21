@@ -5,11 +5,11 @@ import { EditorView } from "@codemirror/view";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "./document-analysis";
 import { blockCounterField } from "./block-counter";
 import { createPluginRegistryField } from "./plugin-registry";
-import type { BlockPlugin } from "../plugins/plugin-types";
+import type { BlockPlugin } from "./block-plugin";
 import { bibDataEffect, bibDataField } from "../citations/citation-render";
 import { CslProcessor } from "../citations/csl-processor";
 import {

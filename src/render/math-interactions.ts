@@ -4,7 +4,7 @@ import { CSS } from "../constants/css-classes";
 import {
   buildPointerSelection,
   isPlainPrimaryMouseEvent,
-} from "../editor/mouse-selection-core";
+} from "../state/mouse-selection";
 import { documentAnalysisField } from "../state/document-analysis";
 import { rangesIntersect } from "../lib/range-helpers";
 import { _snapToTokenBoundary } from "./math-source";

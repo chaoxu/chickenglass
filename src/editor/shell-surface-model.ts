@@ -4,7 +4,7 @@ import { frontmatterField } from "./frontmatter-state";
 import {
   activeShellPath,
   isFrontmatterActive,
-} from "./shell-ownership";
+} from "../state/shell-ownership";
 
 export interface ShellSurfaceRect {
   readonly left: number;

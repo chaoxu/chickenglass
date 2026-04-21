@@ -26,6 +26,13 @@ several owner modules for one consumer. Consumers should import the
 composition module when they need a stable multi-field snapshot or shared
 invalidation logic.
 
+## Boundary Enforcement
+
+`pnpm lint:boundaries` enforces that files under `src/state/` do not import
+back up into `src/app/`, `src/editor/`, `src/index/`, `src/plugins/`, or
+`src/render/`. Shared CM6 fields and primitives must move to neutral state
+owners instead of relying on consumer re-export shims.
+
 ## Registry Rule
 
 Do not add a broad `src/state/index.ts` barrel that re-exports every
@@ -91,5 +98,9 @@ That module exposes:
 - shared dependency comparison helpers for rebuild/signature decisions
 
 `src/render/reference-render.ts` then imports one state composition module
-instead of reaching into four separate state owners. That is the preferred
-shape for future "render X" or "index X" consumers.
+instead of reaching into four separate state owners. Shared editor/render
+primitives follow the same rule: CM6 focus state lives in
+`src/state/editor-focus.ts`, structure-edit targets live in
+`src/state/cm-structure-edit.ts`, and shell ownership selectors live in
+`src/state/shell-ownership.ts`. That is the preferred shape for future
+"render X" or "index X" consumers.

@@ -2,7 +2,7 @@ import type { EditorState } from "@codemirror/state";
 import { type EditorView, WidgetType } from "@codemirror/view";
 import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
-import { isPlainPrimaryMouseEvent } from "../editor/mouse-selection-core";
+import { isPlainPrimaryMouseEvent } from "../state/mouse-selection";
 import { documentAnalysisField } from "../state/document-analysis";
 import type { MathSemantics } from "../semantics/document";
 import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
@@ -17,7 +17,7 @@ import {
 import {
   activateStructureEditTarget,
   createStructureEditTargetAt,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import {
   clearBlockWidgetHeightBinding,
   estimatedBlockWidgetHeight,

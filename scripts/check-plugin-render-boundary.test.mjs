@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectModuleSpecifiers,
   findPluginRenderBoundaryViolations,
+  findStateUpstreamBoundaryViolations,
 } from "./check-plugin-render-boundary.mjs";
 
 const packageJson = JSON.parse(
@@ -82,6 +83,76 @@ describe("plugin/render boundary checker", () => {
               'import { x } from "../state/document-analysis";',
               'import { y } from "./plugin-render-adapter";',
               'const z = import("../constants/css-classes");',
+            ].join("\n"),
+          },
+        ],
+        repoRoot,
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags src/state imports that resolve into upstream subsystems", () => {
+    const repoRoot = "/repo";
+    const stateFile = path.join(repoRoot, "src", "state", "shared-field.ts");
+
+    expect(
+      findStateUpstreamBoundaryViolations(
+        [
+          {
+            filePath: stateFile,
+            sourceText: [
+              'import { x } from "../editor/structure-edit-state";',
+              'export { y } from "../render/render-core";',
+              'import type { z } from "../plugins/plugin-types";',
+              'const app = import("../app/diagnostics");',
+              'import { classify } from "../index/crossref-resolver";',
+            ].join("\n"),
+          },
+        ],
+        repoRoot,
+      ),
+    ).toEqual([
+      {
+        filePath: stateFile,
+        line: 1,
+        specifier: "../editor/structure-edit-state",
+      },
+      {
+        filePath: stateFile,
+        line: 2,
+        specifier: "../render/render-core",
+      },
+      {
+        filePath: stateFile,
+        line: 3,
+        specifier: "../plugins/plugin-types",
+      },
+      {
+        filePath: stateFile,
+        line: 4,
+        specifier: "../app/diagnostics",
+      },
+      {
+        filePath: stateFile,
+        line: 5,
+        specifier: "../index/crossref-resolver",
+      },
+    ]);
+  });
+
+  it("allows src/state imports from lower-level domain modules", () => {
+    const repoRoot = "/repo";
+
+    expect(
+      findStateUpstreamBoundaryViolations(
+        [
+          {
+            filePath: path.join(repoRoot, "src", "state", "shared-field.ts"),
+            sourceText: [
+              'import { x } from "../semantics/document";',
+              'import { y } from "../fenced-block/model";',
+              'import { z } from "../lib/range-helpers";',
+              'import { local } from "./document-analysis";',
             ].join("\n"),
           },
         ],

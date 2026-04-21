@@ -13,7 +13,7 @@ import {
   createStructureEditTargetAt,
   getActiveStructureEditTarget,
   setStructureEditTargetEffect,
-} from "./structure-edit-state";
+} from "../state/cm-structure-edit";
 
 function createState(doc: string): EditorState {
   return EditorState.create({

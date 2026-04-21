@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import type { HeadingEntry } from "../app/heading-ancestry";
+import type { HeadingEntry } from "../semantics/heading-ancestry";
 
 export interface HeadingIndexState {
   readonly headings: HeadingEntry[];

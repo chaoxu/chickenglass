@@ -33,7 +33,7 @@ import {
   activeStructureEditField,
   createStructureEditTargetAt,
   setStructureEditTargetEffect,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import { createMockEditorView, createTestView, getDecorationSpecs } from "../test-utils";
 
 /** Create an EditorState with footnote parsing and all fields needed by sidenote decorations. */

@@ -1,7 +1,7 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { activeFencedDepthAtRange } from "../editor/shell-ownership";
-import { activateStructureEditAt } from "../editor/structure-edit-state";
+import { activeFencedDepthAtRange } from "../state/shell-ownership";
+import { activateStructureEditAt } from "../state/cm-structure-edit";
 import {
   BaseRenderWidget,
   makeTextElement,

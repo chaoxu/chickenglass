@@ -2,10 +2,10 @@ import { Transaction, type Extension, type Text } from "@codemirror/state";
 import { type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import type { FencedDivInfo } from "../fenced-block/model";
 import { frontmatterField } from "./frontmatter-state";
-import { getActiveStructureEditTarget } from "./structure-edit-state";
+import { getActiveStructureEditTarget } from "../state/cm-structure-edit";
 import { getVerticalMotionGuardEvents } from "./vertical-motion";
 import { getDebugSessionRecorderStatus } from "../debug/session-recorder";
-import { activeShellPath, type CodeShellInfo } from "./shell-ownership";
+import { activeShellPath, type CodeShellInfo } from "../state/shell-ownership";
 import {
   getShellSurfaceSnapshot,
   shellSurfaceUpdateEvent,

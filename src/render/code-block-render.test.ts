@@ -11,7 +11,7 @@ import {
   activeStructureEditField,
   createStructureEditTargetAt,
   setStructureEditTargetEffect,
-} from "../editor/structure-edit-state";
+} from "../state/cm-structure-edit";
 import {
   collectCodeBlocks,
   codeBlockRenderPlugin,

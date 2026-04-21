@@ -6,7 +6,7 @@ import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
-import { activeStructureEditField } from "../editor/structure-edit-state";
+import { activeStructureEditField } from "../state/cm-structure-edit";
 import { createMockEditorView } from "../test-utils";
 import { mathRenderPlugin, _mathDecorationFieldForTest as mathDecorationField } from "./math-render";
 import { _docChangeAffectsVisibleMathWidgetsForTest as docChangeAffectsVisibleMathWidgets } from "./math-metadata";

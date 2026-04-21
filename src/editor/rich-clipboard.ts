@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { EXCLUDED_FROM_FALLBACK } from "../constants/block-manifest";
 import { collectFencedDivs, getFencedDivStructuralOpenTo } from "../fenced-block/model";
 import { collectCodeBlocks } from "../render/code-block-render";
-import { getPluginOrFallback } from "../plugins/plugin-registry";
+import { getPluginOrFallback } from "../state/plugin-registry-core";
 import { pluginRegistryField } from "../state/plugin-registry";
 
 interface ClipboardRange {

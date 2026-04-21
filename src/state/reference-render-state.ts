@@ -1,13 +1,11 @@
 import type { EditorState } from "@codemirror/state";
 
-import type { DocumentLabelGraph } from "../app/markdown/labels";
 import {
   collectCitationMatches,
   getCitationRegistrationKey,
   type CslProcessor,
 } from "../citations/csl-processor";
 import type { CitationRenderData } from "../citations/citation-render-data";
-import type { RenderIndex } from "../lexical/markdown/reference-index";
 import type { BibStore } from "./bib-data";
 import { bibDataField } from "./bib-data";
 import type { BlockCounterState } from "./block-counter";
@@ -24,7 +22,7 @@ import {
   type DocumentAnalysis,
   type ReferenceSemantics,
 } from "../semantics/document";
-import type { PluginRegistryState } from "../plugins/plugin-registry";
+import type { PluginRegistryState } from "./plugin-registry-core";
 
 /**
  * Canonical document-state bundle for the reference renderer.
@@ -47,11 +45,48 @@ export interface ReferenceRenderBibliographyState {
   readonly processorRevision: number;
 }
 
+export interface ReferenceRenderIndexEntry {
+  readonly blockType?: string;
+  readonly kind: "block" | "citation" | "equation" | "footnote" | "heading";
+  readonly label: string;
+  readonly shortLabel?: string;
+}
+
+export interface ReferenceRenderIndex {
+  readonly footnotes: ReadonlyMap<string, number>;
+  readonly references: ReadonlyMap<string, ReferenceRenderIndexEntry>;
+}
+
+export interface ReferenceRenderLabelDefinition {
+  readonly blockType?: string;
+  readonly content?: string;
+  readonly displayLabel?: string;
+  readonly from?: number;
+  readonly id: string;
+  readonly kind: "block" | "equation" | "heading";
+  readonly labelFrom?: number;
+  readonly labelTo?: number;
+  readonly text?: string;
+  readonly title?: string;
+  readonly to?: number;
+  readonly tokenFrom?: number;
+  readonly tokenTo?: number;
+}
+
+export interface ReferenceRenderLabelGraph {
+  readonly definitions?: readonly ReferenceRenderLabelDefinition[];
+  readonly definitionsById?: ReadonlyMap<string, readonly ReferenceRenderLabelDefinition[]>;
+  readonly duplicatesById?: ReadonlyMap<string, readonly ReferenceRenderLabelDefinition[]>;
+  readonly references?: readonly unknown[];
+  readonly referencesByTarget?: ReadonlyMap<string, readonly unknown[]>;
+  readonly uniqueDefinitionById: ReadonlyMap<string, ReferenceRenderLabelDefinition>;
+}
+
 export interface ReferenceRenderDependencies {
-  readonly renderIndex: RenderIndex;
+  readonly renderIndex: ReferenceRenderIndex;
   readonly footnoteDefinitions: ReadonlyMap<string, string>;
   readonly citations: CitationRenderData;
-  readonly labelGraph: DocumentLabelGraph;
+  readonly labelGraph: ReferenceRenderLabelGraph;
 }
 
 interface OptionalReferenceRenderState {

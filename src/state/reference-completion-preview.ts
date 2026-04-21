@@ -1,5 +1,5 @@
 import type { CslJsonItem } from "../citations/bibtex-parser";
-import { formatCitationPreview } from "../lexical/markdown/reference-display";
+import { formatBibEntry } from "../citations/bibliography";
 import type { ReferenceRenderDependencies } from "./reference-render-state";
 
 export type ReferenceCompletionDependencies = Pick<
@@ -120,7 +120,7 @@ export function collectReferenceCompletionCandidates(
       continue;
     }
 
-    const previewText = formatCitationPreview(item.id, dependencies.citations) ?? undefined;
+    const previewText = formatBibEntry(item);
     candidates.set(item.id, {
       detail: formatCitationDetail(item),
       id: item.id,

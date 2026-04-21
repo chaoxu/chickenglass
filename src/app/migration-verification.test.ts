@@ -932,8 +932,9 @@ describe("#299 — centralized block manifest and CSS registry", () => {
 
 describe("#1092 — plugin-owned render adapter seam", () => {
   it("defines the plugin render contract without reverse imports", async () => {
-    const contract = await import("../plugins/plugin-render-adapter");
-    const contractFile = fileText("src/plugins/plugin-render-adapter.ts");
+    const contract = await import("../state/plugin-render-adapter");
+    const contractFile = fileText("src/state/plugin-render-adapter.ts");
+    const compatibilityShim = fileText("src/plugins/plugin-render-adapter.ts");
 
     expect(contract.addPluginMarkerReplacement).toBeDefined();
     expect(contract.pushPluginHiddenDecoration).toBeDefined();
@@ -941,6 +942,7 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(contractFile).toContain("export interface PluginRenderAdapter");
     expect(contractFile).toContain("export interface PluginRenderWidget");
     expect(contractFile).not.toMatch(/from "\.\.\/render\//);
+    expect(compatibilityShim).toContain("../state/plugin-render-adapter");
   });
 
   it("routes block chrome through the render adapter", () => {
@@ -971,7 +973,7 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(pluginRender).not.toContain("./plugin-render-chrome");
     expect(decorationBuilder).not.toContain("./plugin-render-chrome");
     expect(decorationBuilder).not.toContain("./plugin-render-embed");
-    expect(chrome).toContain("../../plugins/plugin-render-adapter");
+    expect(chrome).toContain("../../state/plugin-render-adapter");
     expect(chrome).not.toContain("../plugin-render-adapter");
   });
 });

@@ -50,7 +50,7 @@ import {
 import { getPdfCanvas } from "./pdf-preview-cache";
 import { type BibStore, bibDataField } from "../state/bib-data";
 import { pluginRegistryField } from "../state/plugin-registry";
-import { getPlugin } from "../plugins/plugin-registry";
+import { getPlugin } from "../state/plugin-registry-core";
 import { getReferencePresentationModel } from "../references/presentation";
 import { findRenderedReference } from "./reference-targeting";
 import {
