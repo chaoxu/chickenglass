@@ -1,7 +1,8 @@
 import { expect, vi } from "vitest";
+import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorState, type Extension, type StateEffect } from "@codemirror/state";
 import { EditorView, type DecorationSet } from "@codemirror/view";
-import type { Parser } from "@lezer/common";
+import type { Parser, Tree } from "@lezer/common";
 import type { BlockPlugin } from "./plugins/plugin-types";
 import type { CslJsonItem } from "./citations/bibtex-parser";
 import type { BibStore } from "./citations/citation-render";
@@ -138,6 +139,19 @@ export function createEditorState(
     selection: { anchor: cursorPos },
     extensions,
   });
+}
+
+export function ensureFullSyntaxTree(
+  state: EditorState,
+  timeout = 5000,
+): Tree {
+  const tree = ensureSyntaxTree(state, state.doc.length, timeout);
+  if (!tree) {
+    throw new Error(
+      `failed to fully parse test document (${state.doc.length} characters)`,
+    );
+  }
+  return tree;
 }
 
 export function applyStateEffects(

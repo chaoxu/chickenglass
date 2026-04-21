@@ -1,9 +1,9 @@
 import { markdown } from "@codemirror/lang-markdown";
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { EditorState, type ChangeSpec } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
 import { markdownExtensions } from "../../../parser";
+import { ensureFullSyntaxTree } from "../../../test-utils";
 import { editorStateTextSource } from "../../../state/document-analysis";
 import { buildSemanticDelta } from "../semantic-delta";
 import type { DirtyWindow } from "../types";
@@ -17,17 +17,14 @@ import {
 } from "./equation-slice";
 
 function createState(doc: string): EditorState {
-  const state = EditorState.create({
+  return EditorState.create({
     doc,
     extensions: [markdown({ extensions: markdownExtensions })],
   });
-  ensureSyntaxTree(state, state.doc.length, 5000);
-  return state;
 }
 
 function fullTree(state: EditorState) {
-  ensureSyntaxTree(state, state.doc.length, 5000);
-  return syntaxTree(state);
+  return ensureFullSyntaxTree(state);
 }
 
 function analyzeEquationSlice(state: EditorState): EquationSlice {
