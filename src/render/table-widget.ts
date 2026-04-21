@@ -50,6 +50,10 @@ import {
   type TableCellNavigationIntent,
 } from "./table-widget-navigation";
 import { TableWidgetShellAdapter } from "./table-widget-shell-adapter";
+import {
+  WIDGET_KEYBOARD_ENTRY_EVENT,
+  type WidgetKeyboardEntryDetail,
+} from "../state/widget-keyboard-entry";
 import { bibDataField } from "../state/bib-data";
 import { ensureCitationsRegistered } from "../citations/citation-registration";
 import { classifyReference } from "../index/crossref-resolver";
@@ -57,6 +61,8 @@ import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference
 import { getOptionalReferenceRenderState } from "../state/reference-render-state";
 
 export { cellEditAnnotation, shouldCommitBlurredInlineEditor };
+
+const tableKeyboardEntryHandlers = new WeakMap<HTMLElement, EventListener>();
 
 export function serializeTableWidgetMacros(macros: Record<string, string>): string {
   return JSON.stringify(
@@ -193,6 +199,54 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     );
   }
 
+  private commitActiveInlineEditorForKeyboardEntry(): boolean {
+    const activeInlineEditor = getActiveInlineEditor();
+    if (!activeInlineEditor) return true;
+    const destroyed = destroyActiveInlineEditor();
+    if (!destroyed) return false;
+
+    if (destroyed.owner === this) {
+      destroyed.owner.applyLocalCellEdit(destroyed.cell, destroyed.text);
+    } else {
+      destroyed.owner.commitRenderedCell(destroyed.cell, destroyed.text);
+    }
+    return true;
+  }
+
+  private enterPreviewCellFromKeyboard(
+    container: HTMLElement,
+    direction: "up" | "down",
+  ): boolean {
+    const cells = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-section][data-row][data-col]"),
+    );
+    const target = direction === "up" ? cells[cells.length - 1] : cells[0];
+    if (!target) return false;
+    if (!this.commitActiveInlineEditorForKeyboardEntry()) return false;
+
+    setActivePreviewCell(target, this);
+    return true;
+  }
+
+  private bindKeyboardEntry(container: HTMLElement): void {
+    const previousHandler = tableKeyboardEntryHandlers.get(container);
+    if (previousHandler) {
+      container.removeEventListener(WIDGET_KEYBOARD_ENTRY_EVENT, previousHandler);
+    }
+
+    const handler = (event: Event): void => {
+      const customEvent = event as CustomEvent<WidgetKeyboardEntryDetail>;
+      const direction = customEvent.detail?.direction;
+      if (direction !== "up" && direction !== "down") return;
+      if (!this.enterPreviewCellFromKeyboard(container, direction)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    container.addEventListener(WIDGET_KEYBOARD_ENTRY_EVENT, handler);
+    tableKeyboardEntryHandlers.set(container, handler);
+  }
   private currentTableRange(): TableRange | null {
     return this.controller.currentTableRange();
   }
@@ -633,18 +687,6 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         event.preventDefault();
         event.stopPropagation();
 
-        if (cell.dataset.keyboardPreviewEntry === "true") {
-          delete cell.dataset.keyboardPreviewEntry;
-          if (getActiveInlineEditor()) {
-            const destroyed = destroyActiveInlineEditor();
-            if (destroyed) {
-              restoreDestroyedInlineEditorLocally(destroyed, this);
-            }
-          }
-          setActivePreviewCell(cell, this);
-          return;
-        }
-
         const clickX = event.clientX;
         const clickY = event.clientY;
         const placeAtEnd = cell.dataset.placeAtEnd === "true";
@@ -748,6 +790,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     this.editorView = view;
     this.syncContainerAttrs(container);
     container.appendChild(this.buildTableDOM(view));
+    this.bindKeyboardEntry(container);
     this.shellAdapter.observeContainer(container, view);
     return container;
   }
@@ -764,6 +807,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
 
       this.editorView = view;
       this.syncContainerAttrs(dom);
+      this.bindKeyboardEntry(dom);
       this.shellAdapter.observeContainer(dom, view);
       return true;
     }
@@ -776,6 +820,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     this.editorView = view;
     this.syncContainerAttrs(dom);
     dom.replaceChildren(this.buildTableDOM(view));
+    this.bindKeyboardEntry(dom);
     this.shellAdapter.observeContainer(dom, view);
     return true;
   }

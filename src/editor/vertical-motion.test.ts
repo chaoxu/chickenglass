@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boundedDirectionalScrollTop,
   correctedReverseVerticalScrollTop,
   sumTraversedLineHeights,
 } from "./vertical-motion";
@@ -59,5 +60,20 @@ describe("correctedReverseVerticalScrollTop", () => {
       { head: 100, line: 20, scrollTop: 1194 },
       24,
     )).toBeNull();
+  });
+});
+
+describe("boundedDirectionalScrollTop", () => {
+  it("bounds downward reveal scroll to a local step", () => {
+    expect(boundedDirectionalScrollTop(1400, 1000, "down", 800)).toBe(1144);
+  });
+
+  it("bounds upward reveal scroll to a local step", () => {
+    expect(boundedDirectionalScrollTop(600, 1000, "up", 800)).toBe(856);
+  });
+
+  it("keeps directional reveal monotonic around the baseline", () => {
+    expect(boundedDirectionalScrollTop(900, 1000, "down", 800)).toBe(1000);
+    expect(boundedDirectionalScrollTop(1100, 1000, "up", 800)).toBe(1000);
   });
 });
