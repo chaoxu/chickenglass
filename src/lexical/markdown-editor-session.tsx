@@ -11,7 +11,7 @@ import {
   type LexicalEditor,
 } from "lexical";
 
-import { EDITOR_MODE, type EditorMode } from "../app/editor-mode";
+import { REVEAL_MODE, type RevealMode } from "./reveal-mode";
 import {
   applyEditorDocumentChanges,
   createMinimalEditorDocumentChanges,
@@ -148,7 +148,7 @@ export function replaceSourceText(
   });
 }
 
-export function readEditorDocument(editor: LexicalEditor, editorMode: EditorMode): string {
+export function readEditorDocument(editor: LexicalEditor, editorMode: RevealMode): string {
   return editorMode === "source"
     ? getSourceText(editor)
     : getLexicalMarkdown(editor);
@@ -347,7 +347,7 @@ export function MarkdownModeSyncPlugin({
   userEditPendingRef,
 }: {
   readonly doc: string;
-  readonly editorMode: EditorMode;
+  readonly editorMode: RevealMode;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
@@ -427,7 +427,7 @@ export function MarkdownModeSyncPlugin({
 }
 
 interface MarkdownEditorHandlePluginProps {
-  readonly editorModeRef: MutableRefObject<EditorMode>;
+  readonly editorModeRef: MutableRefObject<RevealMode>;
   readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
@@ -837,7 +837,7 @@ export function RichMarkdownEditorHandlePlugin({
   selectionRef,
   userEditPendingRef,
 }: RichMarkdownEditorHandlePluginProps) {
-  const editorModeRef = useRef<EditorMode>(EDITOR_MODE.LEXICAL);
+  const editorModeRef = useRef<RevealMode>(REVEAL_MODE.LEXICAL);
   const focusOwnerRef = useRef<SurfaceFocusOwner>(focusOwner);
   focusOwnerRef.current = focusOwner;
 

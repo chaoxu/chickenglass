@@ -3,12 +3,12 @@ import {
   type DocumentScan,
   type DocumentLabelGraph,
   scanDocument,
-} from "../../app/markdown/labels";
-import type { FrontmatterConfig } from "../../lib/frontmatter";
-import { parseFrontmatter } from "../../lib/frontmatter";
-import { type ProjectConfig, mergeConfigs } from "../../project-config";
-import { buildFootnoteDefinitionMap } from "../../lexical/markdown/footnotes";
-import { buildRenderIndex, type RenderIndex } from "../../lexical/markdown/reference-index";
+} from "../../../app/markdown/labels";
+import type { FrontmatterConfig } from "../../../lib/frontmatter";
+import { parseFrontmatter } from "../../../lib/frontmatter";
+import { type ProjectConfig, mergeConfigs } from "../../../project-config";
+import { buildFootnoteDefinitionMap } from "../../markdown/footnotes";
+import { buildRenderIndex, type RenderIndex } from "../../markdown/reference-index";
 import type { LexicalRenderResourceResolver } from "./resource-resolver";
 
 export interface LexicalDocumentRuntime {

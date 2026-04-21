@@ -49,7 +49,7 @@ import {
   NARRATIVE_REFERENCE_IMPORT_RE,
   NARRATIVE_REFERENCE_SHORTCUT_RE,
 } from "../lib/reference-tokens";
-import { getInlineTextFormatSpecs } from "../lexical-next";
+import { getInlineTextFormatSpecs } from "./runtime";
 import {
   $createInlineImageNode,
   $isInlineImageNode,

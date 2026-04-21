@@ -36,6 +36,32 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
+  # ── Coflat 2: browser smoke for the Lexical WYSIWYG product ───────────────
+  coflat2-smoke:
+    name: Coflat 2 browser smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Run Coflat 2 smoke
+        run: |
+          VITE_COFLAT_PRODUCT=coflat2 pnpm exec vite --host 127.0.0.1 --port 5173 --strictPort > /tmp/coflat2-vite.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid' EXIT
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5173 >/dev/null
+          pnpm test:browser:coflat2 -- --url http://127.0.0.1:5173 --browser managed --timeout 30000
+
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:
     name: Editor package

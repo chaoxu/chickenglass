@@ -19,7 +19,7 @@ import {
   type SurfaceOverlaySync,
   type SurfaceOverlaySyncContext,
   type SurfaceScrollPosition,
-} from "../lexical-next";
+} from "./runtime";
 
 const ID_ATTR = "data-coflat-codeblock-id";
 const LANGUAGE_ATTR = "data-coflat-codeblock-language";

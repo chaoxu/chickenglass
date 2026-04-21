@@ -8,7 +8,7 @@ import {
 import {
   getInlineTextFormatSpecs,
   type InlineTextFormatFamily,
-} from "../../lexical-next";
+} from "../runtime";
 import {
   collectSourceBlockRanges,
   type SourceBlockRange,

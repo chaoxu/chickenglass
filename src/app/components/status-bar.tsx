@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { Bug } from "lucide-react";
-import { markdownEditorModes, type EditorMode } from "../../editor";
+import { markdownEditorModes, type EditorMode } from "../../editor-display-mode";
 import { computeDocStats, type DocStats } from "../writing-stats";
 import { cn } from "../lib/utils";
 import { useEditorTelemetry } from "../stores/editor-telemetry-store";

@@ -8,8 +8,8 @@ import {
   type TextNode,
 } from "lexical";
 
-import { getInlineTextFormatSpecs } from "../lexical-next";
-import type { InlineTextFormatFamily } from "../lexical-next";
+import { getInlineTextFormatSpecs } from "./runtime";
+import type { InlineTextFormatFamily } from "./runtime";
 import {
   parseMarkdownSourceTokens,
   type ParsedSourceRevealToken,

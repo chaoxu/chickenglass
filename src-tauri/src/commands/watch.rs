@@ -4,10 +4,7 @@ use std::time::Duration;
 use tauri::{command, AppHandle, State, WebviewWindow};
 
 use super::state::{FileWatcherState, PerfState};
-use super::{
-    context::{run_command, CommandSpec},
-    map_err_str,
-};
+use super::context::{run_command, CommandSpec};
 use crate::services::watch::{
     attach_watcher, create_directory_watcher, remove_watcher_generation, reserve_watcher_slot,
     spawn_debounced_event_worker, WatchEventMessage,

@@ -1,22 +1,22 @@
-export const EDITOR_MODE: {
+export const REVEAL_MODE: {
   readonly LEXICAL: "lexical";
   readonly PARAGRAPH: "paragraph";
   readonly SOURCE: "source";
 };
 
-export type EditorMode = (typeof EDITOR_MODE)[keyof typeof EDITOR_MODE];
+export type RevealMode = (typeof REVEAL_MODE)[keyof typeof REVEAL_MODE];
 
 export const LEGACY_EDITOR_MODE_READ: "read";
 
-export const markdownEditorModes: readonly [
-  typeof EDITOR_MODE.LEXICAL,
-  typeof EDITOR_MODE.PARAGRAPH,
-  typeof EDITOR_MODE.SOURCE,
+export const revealModes: readonly [
+  typeof REVEAL_MODE.LEXICAL,
+  typeof REVEAL_MODE.PARAGRAPH,
+  typeof REVEAL_MODE.SOURCE,
 ];
 
-export const EDITOR_MODE_LABELS: Readonly<Record<EditorMode, string>>;
+export const REVEAL_MODE_LABELS: Readonly<Record<RevealMode, string>>;
 
-export const LEGACY_EDITOR_MODE_ALIASES: Readonly<Record<typeof LEGACY_EDITOR_MODE_READ, EditorMode>>;
+export const LEGACY_EDITOR_MODE_ALIASES: Readonly<Record<typeof LEGACY_EDITOR_MODE_READ, RevealMode>>;
 
 export const REVEAL_PRESENTATION: {
   readonly INLINE: "inline";
@@ -33,5 +33,4 @@ export const revealPresentations: readonly [
 
 export const REVEAL_PRESENTATION_LABELS: Readonly<Record<RevealPresentation, string>>;
 
-export function normalizeEditorModeInput(mode: string): EditorMode | null;
-
+export function normalizeRevealModeInput(mode: string): RevealMode | null;

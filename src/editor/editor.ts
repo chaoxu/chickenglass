@@ -51,6 +51,8 @@ import { richClipboardOutputFilter } from "./rich-clipboard";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
 import { coflatDarkTheme, coflatTheme } from "./theme";
+import type { EditorMode } from "../editor-display-mode";
+import { markdownEditorModes, normalizeEditorMode } from "../editor-display-mode";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -58,22 +60,8 @@ const fallbackDocument = "# Untitled\n";
 const debugLaneCompartment = new Compartment();
 const defaultDebugLaneExtensions: Extension[] = [];
 
-/** Editor display modes. */
-export type EditorMode = "rich" | "source" | "read";
-
-/** Markdown editor modes currently exposed in the UI. */
-export const markdownEditorModes: readonly EditorMode[] = ["rich", "source"];
-
-/**
- * Clamp a requested mode to one currently supported by the app shell.
- *
- * Read mode is intentionally disabled for now, so markdown files fall back to
- * rich mode when a caller requests `"read"`.
- */
-export function normalizeEditorMode(mode: EditorMode, isMarkdown: boolean): EditorMode {
-  if (!isMarkdown) return "source";
-  return mode === "read" ? "rich" : mode;
-}
+export { markdownEditorModes, normalizeEditorMode };
+export type { EditorMode };
 
 /** StateEffect used to update the tracked editor mode. */
 export const setEditorModeEffect = StateEffect.define<EditorMode>();

@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use tauri::{State, WebviewWindow, command};
 
 use super::state::{PerfState, ProjectRoot};
-use super::{
-    context::{CommandSpec, WindowCommandContext, run_command},
-    map_err_str,
-};
+use super::context::{run_command, CommandSpec, WindowCommandContext};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{filesystem, path::ProjectPathResolver};
 

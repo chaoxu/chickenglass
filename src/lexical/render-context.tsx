@@ -8,12 +8,12 @@ import {
 import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
 import { useFileSystem } from "../app/contexts/file-system-context";
 import type { FileSystem } from "../app/file-manager";
-import { type CitationRenderData, useCitationRenderData } from "../lexical-next/controller/citation-runtime";
-import { buildDocumentRuntime, type LexicalDocumentRuntime } from "../lexical-next/controller/document-runtime";
+import { type CitationRenderData, useCitationRenderData } from "../citations/citation-render-data";
+import { buildDocumentRuntime, type LexicalDocumentRuntime } from "./runtime/controller/document-runtime";
 import {
   useLexicalRenderResourceResolver,
   useProjectConfigResource,
-} from "../lexical-next/controller/resource-resolver";
+} from "./runtime/controller/resource-resolver";
 
 /**
  * Two contexts to cut per-keystroke fan-out (issue #172):

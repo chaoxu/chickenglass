@@ -27,8 +27,8 @@ import {
   type LexicalEditor,
 } from "lexical";
 
-import type { EditorMode, RevealPresentation } from "../app/editor-mode";
-import { REVEAL_PRESENTATION } from "../app/editor-mode";
+import type { RevealMode, RevealPresentation } from "./reveal-mode";
+import { REVEAL_PRESENTATION } from "./reveal-mode";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
 import {
   createMinimalEditorDocumentChanges,
@@ -39,7 +39,7 @@ import {
   type FocusOwner,
   type FocusOwnerRole,
 } from "../state/editor-focus";
-import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
+import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
 import { BibliographySection } from "./bibliography-section";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
@@ -106,7 +106,7 @@ function SourceSelectionPlugin({
   onSelectionChange,
   selectionRef,
 }: {
-  readonly editorMode: EditorMode;
+  readonly editorMode: RevealMode;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
 }) {
@@ -162,7 +162,7 @@ function ExplicitSourceSelectionPlugin({
   onSelectionChange,
   selectionRef,
 }: {
-  readonly editorMode: EditorMode;
+  readonly editorMode: RevealMode;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
 }) {
@@ -201,7 +201,7 @@ function ExplicitSourceSelectionPlugin({
 export interface LexicalMarkdownEditorProps {
   readonly doc: string;
   readonly docPath?: string;
-  readonly editorMode: EditorMode;
+  readonly editorMode: RevealMode;
   readonly editable?: boolean;
   readonly editorClassName?: string;
   readonly focusOwnerRole?: FocusOwnerRole;

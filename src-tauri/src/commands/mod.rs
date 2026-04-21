@@ -4,8 +4,6 @@ macro_rules! map_err_str {
     };
 }
 
-pub(crate) use map_err_str;
-
 pub mod context;
 pub mod debug;
 pub mod export;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getNodeByKey, type NodeKey } from "lexical";
 
-import { SurfaceFloatingPortal } from "../lexical-next";
+import { SurfaceFloatingPortal } from "./runtime";
 import { $isTableNode, type TableNode } from "./nodes/table-node";
 import { $isTableRowNode } from "./nodes/table-row-node";
 import {

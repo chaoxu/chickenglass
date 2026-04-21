@@ -41,7 +41,6 @@ export function AppMainShell({
             projectConfig={workspace.projectConfig}
             theme={workspace.resolvedTheme}
             fs={fs}
-            pluginManager={editor.pluginManager}
             sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
             onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
             onDocChange={editor.handleDocChange}
@@ -49,10 +48,8 @@ export function AppMainShell({
             onProgrammaticDocChange={(doc) => {
               editor.handleProgrammaticDocChange(currentPath, doc);
             }}
-            onStateChange={editor.handleEditorStateChange}
             onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
             onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-            onDocumentReady={editor.handleEditorDocumentReady}
             onLexicalEditorReady={editor.handleLexicalEditorReady}
             editorMode={editor.editorMode}
             activeDocumentSignal={editor.activeDocumentSignal}

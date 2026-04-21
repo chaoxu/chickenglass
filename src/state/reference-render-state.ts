@@ -6,7 +6,7 @@ import {
   getCitationRegistrationKey,
   type CslProcessor,
 } from "../citations/csl-processor";
-import type { CitationRenderData } from "../lexical-next/controller/citation-runtime";
+import type { CitationRenderData } from "../citations/citation-render-data";
 import type { RenderIndex } from "../lexical/markdown/reference-index";
 import type { BibStore } from "./bib-data";
 import { bibDataField } from "./bib-data";

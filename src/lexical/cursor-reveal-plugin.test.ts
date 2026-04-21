@@ -5,8 +5,8 @@
  */
 import { describe, it, expect } from "vitest";
 
-import type { InlineTextFormatSpec } from "../lexical-next/model/inline-text-format-family";
-import { getInlineTextFormatSpecs } from "../lexical-next/model/inline-text-format-family";
+import type { InlineTextFormatSpec } from "./runtime/model/inline-text-format-family";
+import { getInlineTextFormatSpecs } from "./runtime/model/inline-text-format-family";
 import * as Reveal from "./cursor-reveal-plugin";
 
 describe("cursor-reveal: wrap/unwrap helpers", () => {

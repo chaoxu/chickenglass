@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { loadProjectConfig } from "../../app/project-config";
-import type { ProjectConfig } from "../../project-config";
-import type { FileSystem } from "../../app/file-manager";
+import { loadProjectConfig } from "../../../app/project-config";
+import type { ProjectConfig } from "../../../project-config";
+import type { FileSystem } from "../../../app/file-manager";
 import {
   createLexicalRenderResourceResolver,
   type LexicalRenderResourceResolver,

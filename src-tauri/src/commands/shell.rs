@@ -3,10 +3,7 @@ use std::process::Command;
 use tauri::{State, WebviewWindow, command};
 
 use super::state::{PerfState, ProjectRoot};
-use super::{
-    context::{CommandSpec, WindowCommandContext, run_command},
-    map_err_str,
-};
+use super::context::{run_command, CommandSpec, WindowCommandContext};
 use crate::services::path::ProjectPathResolver;
 
 const OPEN_URL: CommandSpec = CommandSpec::new("tauri.open_url", "tauri.shell.open_url", "tauri");

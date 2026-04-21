@@ -1,8 +1,8 @@
 import { $isLinkNode, type LinkNode } from "@lexical/link";
 import { $isElementNode, $isTextNode, type LexicalNode, type TextNode } from "lexical";
 
-import { getInlineTextFormatSpecs } from "../../lexical-next";
-import type { InlineTextFormatSpec } from "../../lexical-next";
+import { getInlineTextFormatSpecs } from "../runtime";
+import type { InlineTextFormatSpec } from "../runtime";
 import { $isFootnoteReferenceNode } from "../nodes/footnote-reference-node";
 import { $isHeadingAttributeNode } from "../nodes/heading-attribute-node";
 import { $isInlineImageNode } from "../nodes/inline-image-node";

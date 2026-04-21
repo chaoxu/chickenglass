@@ -1,6 +1,6 @@
 import { useMemo, type JSX, type PointerEventHandler, type ReactNode } from "react";
 
-import { SurfaceFloatingPortal } from "../lexical-next";
+import { SurfaceFloatingPortal } from "./runtime";
 import { useLexicalRenderContext, type LexicalRenderContextValue } from "./render-context";
 import { FigurePreviewBlock } from "./figure-preview-block";
 import {

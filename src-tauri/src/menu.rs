@@ -4,6 +4,8 @@ use tauri::{App, AppHandle, Emitter, Manager, Wry};
 
 /// Build the application menu bar with File, Edit, View, Format, and Help menus.
 pub fn build_menu(app: &App<Wry>) -> Result<tauri::menu::Menu<Wry>, tauri::Error> {
+    let about_label = format!("About {}", app_display_name(app));
+
     let file_menu = SubmenuBuilder::new(app, "File")
         .item(
             &MenuItemBuilder::with_id("file_new", "New")
@@ -137,7 +139,7 @@ pub fn build_menu(app: &App<Wry>) -> Result<tauri::menu::Menu<Wry>, tauri::Error
         .build()?;
 
     let help_menu = SubmenuBuilder::new(app, "Help")
-        .item(&MenuItemBuilder::with_id("help_about", "About Coflat").build(app)?)
+        .item(&MenuItemBuilder::with_id("help_about", about_label).build(app)?)
         .item(
             &MenuItemBuilder::with_id("help_shortcuts", "Keyboard Shortcuts")
                 .accelerator("CmdOrCtrl+/")
@@ -148,6 +150,10 @@ pub fn build_menu(app: &App<Wry>) -> Result<tauri::menu::Menu<Wry>, tauri::Error
     MenuBuilder::new(app)
         .items(&[&file_menu, &edit_menu, &view_menu, &format_menu, &help_menu])
         .build()
+}
+
+fn app_display_name(app: &App<Wry>) -> &str {
+    app.config().product_name.as_deref().unwrap_or("Coflat")
 }
 
 /// Register the menu event handler that emits events to the frontend.

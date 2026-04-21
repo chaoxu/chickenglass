@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { DocumentLabelReference } from "../../app/markdown/label-parser";
-import { buildDocumentLabelParseSnapshot } from "../../app/markdown/label-parser";
-import { buildCitationBacklinkMap } from "../../citations/bibliography";
-import { type BibStore, type CslJsonItem, parseBibTeX } from "../../citations/bibtex-parser";
+import type { DocumentLabelReference } from "../app/markdown/label-parser";
+import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
+import { buildCitationBacklinkMap } from "./bibliography";
+import { type BibStore, type CslJsonItem, parseBibTeX } from "./bibtex-parser";
 import {
   collectCitationBacklinksFromReferences,
   collectCitationClusters,
   collectCitedIdsFromClusters,
-} from "../../citations/markdown-citations";
-import { CslProcessor, getCitationRegistrationKey, type CitationBacklink } from "../../citations/csl-processor";
-import type { FrontmatterConfig } from "../../lib/frontmatter";
-import type { LexicalRenderResourceResolver } from "./resource-resolver";
+} from "./markdown-citations";
+import { CslProcessor, getCitationRegistrationKey, type CitationBacklink } from "./csl-processor";
+import type { FrontmatterConfig } from "../lib/frontmatter";
+
+export interface CitationTextResourceResolver {
+  readonly readProjectTextFile: (path: string) => Promise<string | null>;
+}
 
 export interface CitationRenderData {
   readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>;
@@ -39,7 +42,7 @@ export const EMPTY_CITATIONS: CitationRenderData = {
 
 export async function loadBibliographyResource(
   config: FrontmatterConfig,
-  resolver: Pick<LexicalRenderResourceResolver, "readProjectTextFile">,
+  resolver: CitationTextResourceResolver,
 ): Promise<LoadedBibliography> {
   const bibliographyPath = config.bibliography?.trim();
   if (!bibliographyPath) {
@@ -106,7 +109,7 @@ export function buildCitationRenderDataFromReferences(
 export function useCitationRenderData(
   references: readonly DocumentLabelReference[],
   config: FrontmatterConfig,
-  resolver: Pick<LexicalRenderResourceResolver, "readProjectTextFile">,
+  resolver: CitationTextResourceResolver,
 ): CitationRenderData {
   const [loadedBibliography, setLoadedBibliography] = useState<LoadedBibliography>(EMPTY_BIBLIOGRAPHY);
 

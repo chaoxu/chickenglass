@@ -1,4 +1,4 @@
-export const EDITOR_MODE = {
+export const REVEAL_MODE = {
   LEXICAL: "lexical",
   PARAGRAPH: "paragraph",
   SOURCE: "source",
@@ -6,20 +6,20 @@ export const EDITOR_MODE = {
 
 export const LEGACY_EDITOR_MODE_READ = "read";
 
-export const markdownEditorModes = [
-  EDITOR_MODE.LEXICAL,
-  EDITOR_MODE.PARAGRAPH,
-  EDITOR_MODE.SOURCE,
+export const revealModes = [
+  REVEAL_MODE.LEXICAL,
+  REVEAL_MODE.PARAGRAPH,
+  REVEAL_MODE.SOURCE,
 ];
 
-export const EDITOR_MODE_LABELS = {
-  [EDITOR_MODE.LEXICAL]: "Cursor reveal",
-  [EDITOR_MODE.PARAGRAPH]: "Paragraph reveal",
-  [EDITOR_MODE.SOURCE]: "Complete reveal",
+export const REVEAL_MODE_LABELS = {
+  [REVEAL_MODE.LEXICAL]: "Cursor reveal",
+  [REVEAL_MODE.PARAGRAPH]: "Paragraph reveal",
+  [REVEAL_MODE.SOURCE]: "Complete reveal",
 };
 
 export const LEGACY_EDITOR_MODE_ALIASES = {
-  [LEGACY_EDITOR_MODE_READ]: EDITOR_MODE.LEXICAL,
+  [LEGACY_EDITOR_MODE_READ]: REVEAL_MODE.LEXICAL,
 };
 
 export const REVEAL_PRESENTATION = {
@@ -37,12 +37,11 @@ export const REVEAL_PRESENTATION_LABELS = {
   [REVEAL_PRESENTATION.FLOATING]: "Floating",
 };
 
-const MARKDOWN_EDITOR_MODE_SET = new Set(markdownEditorModes);
+const REVEAL_MODE_SET = new Set(revealModes);
 
-export function normalizeEditorModeInput(mode) {
+export function normalizeRevealModeInput(mode) {
   const normalized = String(mode).toLowerCase();
   return LEGACY_EDITOR_MODE_ALIASES[normalized] ?? (
-    MARKDOWN_EDITOR_MODE_SET.has(normalized) ? normalized : null
+    REVEAL_MODE_SET.has(normalized) ? normalized : null
   );
 }
-

@@ -113,7 +113,7 @@ async function main() {
       }
       await waitForDebugBridge(page);
     } catch {
-      console.error("Timed out waiting for debug bridge (__app, __cmView, __cmDebug, __cfDebug).");
+      console.error("Timed out waiting for debug bridge (__app, __editor, and product-specific debug globals).");
       console.error("The dev server may not have finished loading.");
       process.exitCode = 1;
       return;

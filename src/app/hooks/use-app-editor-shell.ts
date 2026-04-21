@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   insertImageFromPicker,
-  normalizeEditorMode,
   setEditorMode,
   wordWrapCompartment,
   lineNumbersCompartment,
@@ -9,8 +8,8 @@ import {
   tabSizeExtension,
   defaultEditorPlugins,
   EditorPluginManager,
-  type EditorMode,
 } from "../../editor";
+import { normalizeEditorMode, type EditorMode } from "../../editor-display-mode";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
 import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";

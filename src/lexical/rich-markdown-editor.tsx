@@ -38,7 +38,7 @@ import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
 import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
-import { EDITOR_MODE, type RevealPresentation } from "../app/editor-mode";
+import { REVEAL_MODE, type RevealPresentation } from "./reveal-mode";
 import {
   RevealPresentationProvider,
   useRevealPresentation,
@@ -57,7 +57,7 @@ import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
 import { TableActionMenuPlugin } from "./table-action-menu-plugin";
 import { SlashPickerPlugin } from "./slash-picker-plugin";
 import { SourcePositionPlugin } from "./source-position-plugin";
-import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "../lexical-next";
+import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
 import type {
   MarkdownEditorHandle,
   MarkdownEditorSelection,
@@ -241,7 +241,7 @@ export function LexicalRichMarkdownEditor({
                 <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
                 <EditableSyncPlugin editable={editable} />
                 {editable
-                  ? <CursorRevealPlugin editorMode={EDITOR_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
+                  ? <CursorRevealPlugin editorMode={REVEAL_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
                   : <ClickableLinkPlugin />}
                 <RichMarkdownEditorHandlePlugin
                   focusOwner={focusOwner}

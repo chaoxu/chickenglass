@@ -1,22 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorPluginManager } from "../../editor";
 import { computeLiveStats } from "../writing-stats";
 import { Breadcrumbs } from "./breadcrumbs";
-import type { EditorPaneProps } from "./editor-pane";
 import { extractDiagnosticsFromMarkdown } from "../markdown/diagnostics";
 import { extractHeadingsFromMarkdown } from "../markdown/headings";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import { EDITOR_MODE, type EditorMode as LexicalEditorMode } from "../editor-mode";
+import type { ActiveDocumentSignal } from "../active-document-signal";
+import type { DiagnosticEntry } from "../diagnostics";
+import type { HeadingEntry } from "../heading-ancestry";
+import type { FileSystem } from "../file-manager";
+import type { ResolvedTheme } from "../theme-dom";
+import type { EditorMode } from "../../editor-display-mode";
+import type { EditorDocumentChange } from "../../lib/editor-doc-change";
+import { REVEAL_MODE, type RevealMode } from "../../lexical/reveal-mode";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
+import type { ProjectConfig } from "../../project-config";
 
-interface LexicalEditorPaneProps extends EditorPaneProps {
+interface LexicalEditorPaneProps {
+  readonly activeDocumentSignal?: ActiveDocumentSignal;
+  readonly doc: string;
+  readonly docPath?: string;
+  readonly editorMode?: EditorMode;
+  readonly fs?: FileSystem;
   readonly onDirtyChange?: () => void;
+  readonly onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
+  readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
+  readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle | null) => void;
+  readonly onProgrammaticDocChange?: (doc: string) => void;
+  readonly onSidenotesCollapsedChange?: (collapsed: boolean) => void;
+  readonly projectConfig?: ProjectConfig;
+  readonly sidenotesCollapsed?: boolean;
+  readonly theme?: ResolvedTheme;
 }
 
-function toLexicalEditorMode(mode: EditorPaneProps["editorMode"]): LexicalEditorMode {
-  return mode === "source" ? EDITOR_MODE.SOURCE : EDITOR_MODE.LEXICAL;
+function toRevealMode(mode: EditorMode | undefined): RevealMode {
+  return mode === "source" ? REVEAL_MODE.SOURCE : REVEAL_MODE.LEXICAL;
 }
 
 export function LexicalEditorPane({
@@ -24,20 +43,15 @@ export function LexicalEditorPane({
   editorMode,
   onDiagnosticsChange,
   onDirtyChange,
-  onDocumentReady: _onDocumentReady,
   onHeadingsChange,
   onLexicalEditorReady,
   onProgrammaticDocChange: _onProgrammaticDocChange,
   onSidenotesCollapsedChange: _onSidenotesCollapsedChange,
-  onStateChange,
-  pluginManager,
   projectConfig: _projectConfig,
   sidenotesCollapsed: _sidenotesCollapsed,
   theme: _theme,
   ...editorOptions
 }: LexicalEditorPaneProps) {
-  const fallbackPluginManager = useMemo(() => new EditorPluginManager(), []);
-  const statePluginManager = pluginManager ?? fallbackPluginManager;
   const [handle, setHandle] = useState<MarkdownEditorHandle | null>(null);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
   const [selection, setSelection] = useState<MarkdownEditorSelection>({
@@ -46,7 +60,7 @@ export function LexicalEditorPane({
     from: 0,
     to: 0,
   });
-  const lexicalMode = toLexicalEditorMode(editorMode);
+  const lexicalMode = toRevealMode(editorMode);
   const editable = editorMode !== "read";
 
   const syncDocumentDerivedState = useCallback((doc: string) => {
@@ -55,14 +69,6 @@ export function LexicalEditorPane({
     onHeadingsChange?.(extractHeadingsFromMarkdown(doc));
     onDiagnosticsChange?.(extractDiagnosticsFromMarkdown(doc));
   }, [onDiagnosticsChange, onHeadingsChange]);
-
-  useEffect(() => {
-    onStateChange?.({
-      imageSaver: null,
-      pluginManager: statePluginManager,
-      view: null,
-    });
-  }, [onStateChange, statePluginManager]);
 
   useEffect(() => {
     syncDocumentDerivedState(editorOptions.doc);
@@ -104,7 +110,7 @@ export function LexicalEditorPane({
 
   return (
     <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-      {lexicalMode !== EDITOR_MODE.SOURCE && (
+      {lexicalMode !== REVEAL_MODE.SOURCE && (
         <Breadcrumbs
           headings={headings}
           onSelect={(from) => {

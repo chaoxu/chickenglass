@@ -20,7 +20,7 @@ import { flushSync } from "react-dom";
 import {
   type EmbeddedFieldFamily,
   getEmbeddedFieldFamilySpec,
-} from "../lexical-next";
+} from "./runtime";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import {
   blockKeyboardEntryProps,

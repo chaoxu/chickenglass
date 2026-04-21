@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildDocumentRuntime } from "./document-runtime";
 import { createLexicalRenderResourceResolver } from "./resource-resolver";
-import { MemoryFileSystem } from "../../app/file-manager";
+import { MemoryFileSystem } from "../../../app/file-manager";
 
 describe("buildDocumentRuntime", () => {
   it("builds pure document-derived render state outside React", () => {

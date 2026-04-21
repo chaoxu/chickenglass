@@ -6,10 +6,7 @@ use std::process::{Command, Stdio};
 use tauri::{command, State, WebviewWindow};
 
 use super::state::{PerfState, ProjectRoot};
-use super::{
-    context::{run_command, CommandSpec, WindowCommandContext},
-    map_err_str,
-};
+use super::context::{run_command, CommandSpec, WindowCommandContext};
 use crate::services::path::ProjectPathResolver;
 
 const CHECK_PANDOC: CommandSpec =

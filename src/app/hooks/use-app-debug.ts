@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { FormatEventDetail } from "../../constants/events";
-import type { EditorMode } from "../../editor";
+import type { EditorMode } from "../../editor-display-mode";
 import { isTauri } from "../../lib/tauri";
 import {
   captureDebugSessionState,

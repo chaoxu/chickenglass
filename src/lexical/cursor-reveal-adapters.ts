@@ -31,7 +31,7 @@ import {
 import {
   getInlineTextFormatSpecs,
   type InlineTextFormatSpec,
-} from "../lexical-next/model/inline-text-format-family";
+} from "./runtime/model/inline-text-format-family";
 import {
   $exportLexicalNodeToJSON,
   parseMarkdownFragmentToJSON,

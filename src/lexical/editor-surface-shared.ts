@@ -16,7 +16,7 @@ import {
   type TextNode,
 } from "lexical";
 
-import { getInlineTextFormatSpec, useEditorScrollSurface } from "../lexical-next";
+import { getInlineTextFormatSpec, useEditorScrollSurface } from "./runtime";
 import type { FormatEventDetail } from "../constants/events";
 import type { MarkdownEditorSelection } from "./markdown-editor-types";
 import {

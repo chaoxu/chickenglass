@@ -15,7 +15,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { $getNearestNodeFromDOMNode, type LexicalEditor } from "lexical";
 
 import { useDevSettings } from "../state/dev-settings";
-import { useEditorScrollSurface } from "../lexical-next";
+import { useEditorScrollSurface } from "./runtime";
 import { recordDebugSessionEvent } from "../debug/session-recorder";
 import { pushTraceEntry, type InteractionTraceEntry } from "./interaction-trace";
 

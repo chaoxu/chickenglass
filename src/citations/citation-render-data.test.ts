@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { MemoryFileSystem } from "../../app/file-manager";
-import { buildCitationRenderData, loadBibliographyResource } from "./citation-runtime";
-import { createLexicalRenderResourceResolver } from "./resource-resolver";
+import { MemoryFileSystem } from "../app/file-manager";
+import { createLexicalRenderResourceResolver } from "../lexical/runtime/controller/resource-resolver";
+import { buildCitationRenderData, loadBibliographyResource } from "./citation-render-data";
 
 describe("loadBibliographyResource", () => {
   it("loads bibliography entries through the shared resource resolver", async () => {

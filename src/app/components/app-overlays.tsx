@@ -15,6 +15,7 @@ import type { AppOverlayController } from "../hooks/use-app-overlays";
 import { useSearchPanelController } from "../hooks/use-search-panel-controller";
 import type { UseUnsavedChangesDialogReturn } from "../hooks/use-unsaved-changes-dialog";
 import { getAppSearchMode } from "../search";
+import { activeCoflatProduct } from "../../product";
 
 interface AppOverlaysProps {
   dialogs: UseDialogsReturn;
@@ -80,7 +81,9 @@ export function AppOverlays({
         onUpdateSetting={workspace.updateSetting}
         theme={workspace.theme}
         onSetTheme={workspace.setTheme}
-        plugins={editor.pluginManager.getPlugins()}
+        plugins={activeCoflatProduct.editorEngine === "cm6-markdown"
+          ? editor.pluginManager.getPlugins()
+          : []}
       />
       <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
       <ShortcutsDialog

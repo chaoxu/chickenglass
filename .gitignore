@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-server/
+.vite/
 src-tauri/target/
 src-tauri/gen/schemas/
 .DS_Store

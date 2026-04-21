@@ -1,6 +1,6 @@
-import type { FileSystem } from "../../app/file-manager";
-import { normalizeProjectPath, projectPathCandidatesFromDocument } from "../../lib/project-paths";
-import { buildStaticAssetUrl } from "../../lexical/markdown/asset-resolution";
+import type { FileSystem } from "../../../app/file-manager";
+import { normalizeProjectPath, projectPathCandidatesFromDocument } from "../../../lib/project-paths";
+import { buildStaticAssetUrl } from "../../markdown/asset-resolution";
 
 export interface LexicalRenderResourceResolver {
   readonly docPath?: string;

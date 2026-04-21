@@ -18,7 +18,8 @@ import {
 import { blockCounterField } from "../../state/block-counter";
 import { mathMacrosField } from "../../state/math-macros";
 import { bibDataField } from "../../citations/citation-render";
-import { frontmatterField, type EditorMode } from "../../editor";
+import { frontmatterField } from "../../editor";
+import type { EditorMode } from "../../editor-display-mode";
 import { serializeMacros } from "../../render/render-core";
 import {
   EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,

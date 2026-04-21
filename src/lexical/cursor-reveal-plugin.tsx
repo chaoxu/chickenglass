@@ -41,11 +41,11 @@ import {
 } from "lexical";
 
 import {
-  EDITOR_MODE,
   REVEAL_PRESENTATION,
-  type EditorMode,
+  REVEAL_MODE,
   type RevealPresentation,
-} from "../app/editor-mode";
+  type RevealMode,
+} from "./reveal-mode";
 import {
   PARAGRAPH_REVEAL_ADAPTERS,
   REVEAL_ADAPTERS,
@@ -116,7 +116,7 @@ export function CursorRevealPlugin({
   editorMode,
   presentation,
 }: {
-  editorMode: EditorMode;
+  editorMode: RevealMode;
   presentation: RevealPresentation;
 }) {
   // Mode picks the *scope* (which subtree the cursor surfaces); presentation
@@ -124,10 +124,10 @@ export function CursorRevealPlugin({
   // per-element adapters for a single paragraph adapter so the whole block
   // opens as one source surface instead of just the inline token under the
   // caret. SOURCE mode never reaches this plugin (it mounts PlainTextPlugin).
-  const adapters = editorMode === EDITOR_MODE.PARAGRAPH
+  const adapters = editorMode === REVEAL_MODE.PARAGRAPH
     ? PARAGRAPH_REVEAL_ADAPTERS
     : REVEAL_ADAPTERS;
-  if (editorMode === EDITOR_MODE.PARAGRAPH || presentation === REVEAL_PRESENTATION.INLINE) {
+  if (editorMode === REVEAL_MODE.PARAGRAPH || presentation === REVEAL_PRESENTATION.INLINE) {
     return <InlineCursorReveal adapters={adapters} />;
   }
   return <FloatingCursorReveal adapters={adapters} />;

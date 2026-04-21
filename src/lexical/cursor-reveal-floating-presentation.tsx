@@ -1,7 +1,7 @@
 import { type RefObject } from "react";
 import type { NodeKey } from "lexical";
 
-import { SurfaceFloatingPortal } from "../lexical-next";
+import { SurfaceFloatingPortal } from "./runtime";
 import type { RevealAdapter } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
 

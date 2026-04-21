@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import katex from "katex";
 
-import { SurfaceFloatingPortal } from "../lexical-next";
+import { SurfaceFloatingPortal } from "./runtime";
 import { buildKatexOptions } from "../lib/katex-options";
 import { EditorChromeBody, EditorChromePanel } from "./editor-chrome";
 import { stripInlineMathDelimiters } from "./inline-math-source";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MemoryFileSystem } from "../../app/file-manager";
+import { MemoryFileSystem } from "../../../app/file-manager";
 import { createLexicalRenderResourceResolver } from "./resource-resolver";
 
 describe("createLexicalRenderResourceResolver", () => {

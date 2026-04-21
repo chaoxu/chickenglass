@@ -1,5 +1,5 @@
 /**
- * Editor modes model the "reveal scope" concept: every mode reveals a subtree
+ * Reveal modes model the "reveal scope" concept: every mode reveals a subtree
  * of the document AST as raw markdown. The difference is how big that subtree
  * is.
  *
@@ -11,37 +11,37 @@
  * reveal vocabulary; internal code keeps the existing keys.
  */
 import {
-  EDITOR_MODE,
-  markdownEditorModes,
-} from "./editor-mode-contract.js";
-import type { EditorMode } from "./editor-mode-contract.js";
+  REVEAL_MODE,
+  revealModes,
+} from "./reveal-mode-contract.js";
+import type { RevealMode } from "./reveal-mode-contract.js";
 
 export {
-  EDITOR_MODE,
-  EDITOR_MODE_LABELS,
   LEGACY_EDITOR_MODE_ALIASES,
   LEGACY_EDITOR_MODE_READ,
-  markdownEditorModes,
-  normalizeEditorModeInput,
   REVEAL_PRESENTATION,
   REVEAL_PRESENTATION_LABELS,
+  REVEAL_MODE,
+  REVEAL_MODE_LABELS,
+  normalizeRevealModeInput,
   revealPresentations,
-} from "./editor-mode-contract.js";
+  revealModes,
+} from "./reveal-mode-contract.js";
 export type {
-  EditorMode,
   RevealPresentation,
-} from "./editor-mode-contract.js";
+  RevealMode,
+} from "./reveal-mode-contract.js";
 
-const MARKDOWN_EDITOR_MODE_SET = new Set<string>(markdownEditorModes);
+const REVEAL_MODE_SET = new Set<string>(revealModes);
 
-export function normalizeEditorMode(mode: EditorMode, isMarkdown: boolean): EditorMode {
+export function normalizeRevealMode(mode: RevealMode, isMarkdown: boolean): RevealMode {
   if (!isMarkdown) {
-    return EDITOR_MODE.SOURCE;
+    return REVEAL_MODE.SOURCE;
   }
-  if (MARKDOWN_EDITOR_MODE_SET.has(mode)) {
+  if (REVEAL_MODE_SET.has(mode)) {
     return mode;
   }
-  return EDITOR_MODE.LEXICAL;
+  return REVEAL_MODE.LEXICAL;
 }
 
 /**
@@ -49,6 +49,6 @@ export function normalizeEditorMode(mode: EditorMode, isMarkdown: boolean): Edit
  * LEXICAL and PARAGRAPH share the same rich-surface + reveal plugin;
  * SOURCE mounts PlainTextPlugin instead.
  */
-export function isRichEditorMode(mode: EditorMode): boolean {
-  return mode === EDITOR_MODE.LEXICAL || mode === EDITOR_MODE.PARAGRAPH;
+export function isRichRevealMode(mode: RevealMode): boolean {
+  return mode === REVEAL_MODE.LEXICAL || mode === REVEAL_MODE.PARAGRAPH;
 }
