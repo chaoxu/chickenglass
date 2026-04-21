@@ -21,19 +21,12 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { blockCounterField, type NumberedBlock } from "../state/block-counter";
-import {
-  buildCitationPreviewContent,
-} from "../citations/citation-preview";
 import { imageUrlField } from "../state/image-url";
 import { mathMacrosField } from "../state/math-macros";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { renderKatex } from "./math-widget";
-import { renderBlockContentToDom, renderDocumentFragmentToDom, type BlockContentOptions } from "../document-surfaces";
-import {
-  createPreviewSurfaceBody,
-  createPreviewSurfaceContent,
-  createPreviewSurfaceHeader,
-} from "../preview-surface";
+import { renderBlockContentToDom, type BlockContentOptions } from "../document-surfaces";
+import { createPreviewSurfaceBody } from "../preview-surface";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../state/document-analysis";
 import { collectImageTargets } from "../app/pdf-image-previews";
@@ -51,12 +44,19 @@ import { getPdfCanvas } from "./pdf-preview-cache";
 import { type BibStore, bibDataField } from "../state/bib-data";
 import { pluginRegistryField } from "../state/plugin-registry";
 import { getPlugin } from "../state/plugin-registry-core";
-import { getReferencePresentationModel } from "../references/presentation";
 import { findRenderedReference } from "./reference-targeting";
 import {
   findReferenceWidgetContainer,
   REFERENCE_WIDGET_SELECTOR,
 } from "./reference-widget";
+import {
+  buildCitationItemTooltipPlan,
+  buildCitationTooltipPlan,
+} from "./hover-citation-preview";
+import {
+  createHoverPreviewContent,
+  createHoverPreviewHeader,
+} from "./hover-preview-elements";
 import {
   destroyFloatingTooltip,
   floatingTooltipContains,
@@ -134,26 +134,10 @@ function extractBlockSource(
   return view.state.doc.sliceString(block.from, block.to).trim();
 }
 
-/** Create a header div for the tooltip. */
-function createHeader(
-  text: string,
-  macros: Record<string, string> = {},
-  extraClass?: string,
-): HTMLElement {
-  const header = createPreviewSurfaceHeader(CSS.hoverPreviewHeader, extraClass);
-  renderDocumentFragmentToDom(header, {
-    kind: "title",
-    text,
-    macros,
-  });
-  return header;
-}
-
 function createCrossrefPreviewContainer(
   variant: CrossrefPreviewVariant,
 ): HTMLElement {
-  return createPreviewSurfaceContent(
-    CSS.hoverPreview,
+  return createHoverPreviewContent(
     variant === "completion" ? CSS.referenceCompletionContent : null,
   );
 }
@@ -453,12 +437,12 @@ function buildCrossrefTooltipPlan(
         if (variant === "completion" && body) {
           container.appendChild(body);
           container.appendChild(
-            createHeader(headerText, macros, CSS.referenceCompletionMeta),
+            createHoverPreviewHeader(headerText, macros, CSS.referenceCompletionMeta),
           );
           return container;
         }
 
-        container.appendChild(createHeader(headerText, macros));
+        container.appendChild(createHoverPreviewHeader(headerText, macros));
         if (body) {
           container.appendChild(body);
         }
@@ -488,12 +472,12 @@ function buildCrossrefTooltipPlan(
         if (variant === "completion" && body) {
           container.appendChild(body);
           container.appendChild(
-            createHeader(resolved.label, macros, CSS.referenceCompletionMeta),
+            createHoverPreviewHeader(resolved.label, macros, CSS.referenceCompletionMeta),
           );
           return container;
         }
 
-        container.appendChild(createHeader(resolved.label, macros));
+        container.appendChild(createHoverPreviewHeader(resolved.label, macros));
         if (body) {
           container.appendChild(body);
         }
@@ -511,7 +495,7 @@ function buildCrossrefTooltipPlan(
     buildContent: () => {
       const container = createCrossrefPreviewContainer(variant);
       container.appendChild(
-        createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
+        createHoverPreviewHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
       );
       return container;
     },
@@ -550,49 +534,6 @@ export function buildCrossrefCompletionPreviewContent(
 }
 
 /**
- * Build the tooltip plan for a citation hover preview.
- */
-function buildCitationTooltipPlan(
-  view: EditorView,
-  ids: readonly string[],
-  store: BibStore,
-): TooltipPlan {
-  const presentation = getReferencePresentationModel(view.state);
-  const previews = ids
-    .map((id) => {
-      const preview = presentation.getPreviewText(id);
-      if (!preview) return null;
-      return { id, preview };
-    })
-    .filter((item): item is { id: string; preview: string } => item !== null);
-
-  return {
-    buildContent: () => {
-      const container = createPreviewSurfaceContent(CSS.hoverPreview);
-
-      for (const itemPreview of previews) {
-        const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
-        item.appendChild(buildCitationPreviewContent(itemPreview.preview));
-        container.appendChild(item);
-      }
-
-      if (container.children.length === 0) {
-        container.appendChild(
-          createHeader(`Unknown citation: ${ids.join(", ")}`, {}, CSS.hoverPreviewUnresolved),
-        );
-      }
-
-      return container;
-    },
-    cacheScope: store,
-    dependsOnBibliography: true,
-    dependsOnMacros: false,
-    key: `citation:cluster\0${ids.join("\0")}\0${previews.map((item) => `${item.id}:${item.preview}`).join("\0")}`,
-    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
-  };
-}
-
-/**
  * Build the tooltip plan for a specific id within a mixed cluster.
  */
 function buildSingleItemTooltipPlan(
@@ -601,52 +542,20 @@ function buildSingleItemTooltipPlan(
   resolved: ReferenceClassification,
   store: BibStore,
 ): TooltipPlan {
-  const macros = view.state.field(mathMacrosField, false) ?? {};
-
   if (resolved.kind === "citation") {
-    const preview = getReferencePresentationModel(view.state).getPreviewText(id);
-    if (preview) {
-      return {
-        buildContent: () => {
-          const container = createPreviewSurfaceContent(CSS.hoverPreview);
-          const item = createPreviewSurfaceBody(CSS.hoverPreviewCitation);
-          item.appendChild(buildCitationPreviewContent(preview));
-          container.appendChild(item);
-          return container;
-        },
-        cacheScope: store,
-        dependsOnBibliography: true,
-        dependsOnMacros: false,
-        key: `citation:item\0${id}\0${preview}`,
-        mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
-      };
-    }
-
-    return {
-      buildContent: () => {
-        const container = createPreviewSurfaceContent(CSS.hoverPreview);
-        container.appendChild(
-          createHeader(`Unknown: @${id}`, macros, CSS.hoverPreviewUnresolved),
-        );
-        return container;
-      },
-      cacheScope: store,
-      dependsOnBibliography: true,
-      dependsOnMacros: false,
-      key: `citation:item\0${id}\0unknown`,
-      mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
-    };
+    return buildCitationItemTooltipPlan(view, id, store);
   }
 
   if (resolved.kind === "crossref") {
     return buildCrossrefTooltipPlan(view, id, resolved.resolved);
   }
 
+  const macros = view.state.field(mathMacrosField, false) ?? {};
   return {
     buildContent: () => {
-      const container = createPreviewSurfaceContent(CSS.hoverPreview);
+      const container = createHoverPreviewContent();
       container.appendChild(
-        createHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
+        createHoverPreviewHeader(`Unresolved: ${id}`, macros, CSS.hoverPreviewUnresolved),
       );
       return container;
     },
