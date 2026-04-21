@@ -1,3 +1,9 @@
+import {
+  isBackslashEscaped,
+  isPandocDollarMathCloser,
+  isPandocDollarMathOpener,
+} from "./pandoc-dollar-math";
+
 export type InlineMathDelimiter = "dollar" | "paren";
 
 export interface ParsedInlineMathSource {
@@ -10,30 +16,53 @@ export interface ParsedInlineMathSource {
   readonly to: number;
 }
 
-export const INLINE_MATH_DOLLAR_IMPORT_RE = /\$(?:[^$\n\\]|\\.)+\$/;
-export const INLINE_MATH_DOLLAR_SHORTCUT_RE = /\$(?:[^$\n\\]|\\.)+\$$/;
+export const INLINE_MATH_DOLLAR_IMPORT_RE =
+  /(?<!\\)\$(?![\s$])(?:[^$\n\\]|\\.)*(?<!\s)\$(?!\d)/;
+export const INLINE_MATH_DOLLAR_SHORTCUT_RE =
+  /(?<!\\)\$(?![\s$])(?:[^$\n\\]|\\.)*(?<!\s)\$(?!\d)$/;
 export const INLINE_MATH_PAREN_IMPORT_RE = /\\\((?:[^\\\n]|\\.)+\\\)/;
 export const INLINE_MATH_PAREN_SHORTCUT_RE = /\\\((?:[^\\\n]|\\.)+\\\)$/;
 
-const INLINE_MATH_DOLLAR_EXACT_RE = /^\$((?:[^$\n\\]|\\.)+)\$$/;
 const INLINE_MATH_PAREN_EXACT_RE = /^\\\(((?:[^\\\n]|\\.)+)\\\)$/;
+
+function charCodeAt(text: string, index: number): number {
+  return index >= 0 && index < text.length ? text.charCodeAt(index) : -1;
+}
+
+function parseDollarInlineMathSource(
+  raw: string,
+  from: number,
+): ParsedInlineMathSource | null {
+  if (raw[0] !== "$") {
+    return null;
+  }
+  if (!isPandocDollarMathOpener(charCodeAt(raw, 1))) {
+    return null;
+  }
+
+  const close = findClosingDollar(raw, 1);
+  if (close !== raw.length - 1) {
+    return null;
+  }
+
+  const body = raw.slice(1, -1);
+  return {
+    body,
+    bodyFrom: from + 1,
+    bodyTo: from + raw.length - 1,
+    delimiter: "dollar",
+    from,
+    raw,
+    to: from + raw.length,
+  };
+}
 
 export function parseInlineMathSource(
   raw: string,
   from = 0,
 ): ParsedInlineMathSource | null {
-  const dollar = raw.match(INLINE_MATH_DOLLAR_EXACT_RE);
-  if (dollar?.[1] && dollar[1].trim().length > 0) {
-    return {
-      body: dollar[1],
-      bodyFrom: from + 1,
-      bodyTo: from + raw.length - 1,
-      delimiter: "dollar",
-      from,
-      raw,
-      to: from + raw.length,
-    };
-  }
+  const dollar = parseDollarInlineMathSource(raw, from);
+  if (dollar) return dollar;
 
   const paren = raw.match(INLINE_MATH_PAREN_EXACT_RE);
   if (paren?.[1] && paren[1].trim().length > 0) {
@@ -58,7 +87,14 @@ function findClosingDollar(text: string, start: number): number {
       index += 2;
       continue;
     }
-    if (text[index] === "$") {
+    if (
+      text[index] === "$"
+      && !isBackslashEscaped(text, index)
+      && isPandocDollarMathCloser(
+        charCodeAt(text, index - 1),
+        charCodeAt(text, index + 1),
+      )
+    ) {
       return index;
     }
     index += 1;
@@ -81,7 +117,11 @@ export function findNextInlineMathSource(
       }
     }
 
-    if (text[index] !== "$" || text[index - 1] === "\\") {
+    if (
+      text[index] !== "$"
+      || isBackslashEscaped(text, index)
+      || !isPandocDollarMathOpener(charCodeAt(text, index + 1))
+    ) {
       continue;
     }
 

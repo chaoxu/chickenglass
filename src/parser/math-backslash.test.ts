@@ -76,6 +76,26 @@ describe("inline math with $", () => {
     expect(nodes[0].from).toBe(0);
     expect(nodes[0].to).toBe(6);
   });
+
+  it("does not parse currency-like dollars as inline math", () => {
+    expect(findNodes("Costs are $20 and $30 today.", "InlineMath")).toHaveLength(0);
+  });
+
+  it("requires tight opener and closer delimiters", () => {
+    expect(findNodes("$ x$", "InlineMath")).toHaveLength(0);
+    expect(findNodes("$x $", "InlineMath")).toHaveLength(0);
+  });
+
+  it("does not close dollar math before a digit", () => {
+    expect(findNodes("$x$2", "InlineMath")).toHaveLength(0);
+  });
+
+  it("keeps escaped opening dollars literal", () => {
+    const nodes = findNodes("Cost \\$x$ and valid $y$.", "InlineMath");
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].from).toBe(20);
+    expect(nodes[0].to).toBe(23);
+  });
 });
 
 describe("both inline syntaxes produce the same node type", () => {

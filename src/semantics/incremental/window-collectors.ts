@@ -378,9 +378,7 @@ export function collectMath(
     }
   }
 
-  if (!isDisplay) {
-    result.excludedRanges.push({ from: node.from, to: node.to });
-  }
+  result.excludedRanges.push({ from: node.from, to: node.to });
 }
 
 export function collectLink(

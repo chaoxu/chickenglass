@@ -34,6 +34,7 @@ import {
 import { measureSync } from "../app/perf";
 import { HEADING_TRAILING_ATTRIBUTES_RE } from "../app/markdown/heading-syntax";
 import {
+  findNextInlineMathSource,
   INLINE_MATH_DOLLAR_IMPORT_RE,
   INLINE_MATH_DOLLAR_SHORTCUT_RE,
   INLINE_MATH_PAREN_IMPORT_RE,
@@ -593,12 +594,45 @@ interface SerializedNodeRecord {
   readonly children?: unknown;
   readonly format?: unknown;
   readonly raw?: unknown;
+  readonly text?: unknown;
   readonly type?: unknown;
   readonly [key: string]: unknown;
 }
 
 function isSerializedNodeRecord(value: unknown): value is SerializedNodeRecord {
   return typeof value === "object" && value !== null;
+}
+
+function sourceReplacementPlaceholder(index: number): string {
+  return `\uE000coflat-source-${index}\uE001`;
+}
+
+function replaceLiteralDollarMathText(
+  text: string,
+  replacements: string[],
+): {
+  readonly changed: boolean;
+  readonly text: string;
+} {
+  let cursor = 0;
+  let next = "";
+  let changed = false;
+
+  for (;;) {
+    const parsed = findNextInlineMathSource(text, cursor);
+    if (!parsed) break;
+
+    next += text.slice(cursor, parsed.from);
+    const placeholder = sourceReplacementPlaceholder(replacements.length);
+    replacements.push(`\\${parsed.raw}`);
+    next += placeholder;
+    cursor = parsed.to;
+    changed = true;
+  }
+
+  return changed
+    ? { changed, text: next + text.slice(cursor) }
+    : { changed, text };
 }
 
 function transformFormattedInlineSourceNodes(
@@ -612,6 +646,19 @@ function transformFormattedInlineSourceNodes(
     return { changed: false, node };
   }
 
+  if (node.type === "text" && typeof node.text === "string") {
+    const escaped = replaceLiteralDollarMathText(node.text, replacements);
+    return escaped.changed
+      ? {
+          changed: true,
+          node: {
+            ...node,
+            text: escaped.text,
+          },
+        }
+      : { changed: false, node };
+  }
+
   if (
     typeof node.type === "string"
     && FORMATTED_INLINE_SOURCE_NODE_TYPES.has(node.type)
@@ -619,7 +666,7 @@ function transformFormattedInlineSourceNodes(
     && typeof node.format === "number"
     && node.format !== 0
   ) {
-    const placeholder = `\uE000coflat-source-${replacements.length}\uE001`;
+    const placeholder = sourceReplacementPlaceholder(replacements.length);
     replacements.push(node.raw);
     return {
       changed: true,
@@ -670,7 +717,7 @@ export function exportMarkdownFromSerializedState(
   );
   return sourceReplacements.reduce(
     (current, source, index) =>
-      current.replaceAll(`\uE000coflat-source-${index}\uE001`, source),
+      current.replaceAll(sourceReplacementPlaceholder(index), source),
     markdown,
   );
 }

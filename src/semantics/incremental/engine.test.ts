@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../../parser";
 import { ensureFullSyntaxTree } from "../../test-utils";
 import { editorStateTextSource } from "../../state/document-analysis";
-import { getEquationNumbersCacheKey } from "../document";
+import { getEquationNumbersCacheKey, type DocumentAnalysis } from "../document";
 import { buildSemanticDelta } from "./semantic-delta";
 import {
   createDocumentAnalysis,
@@ -33,6 +33,21 @@ function analyze(state: EditorState) {
 
 function analyzeArtifacts(state: EditorState) {
   return createDocumentArtifacts(editorStateTextSource(state), fullTree(state));
+}
+
+function expectAnalysisMatchesRebuild(
+  after: DocumentAnalysis,
+  rebuilt: DocumentAnalysis,
+): void {
+  expect(after.headings).toEqual(rebuilt.headings);
+  expect(after.footnotes).toEqual(rebuilt.footnotes);
+  expect(after.fencedDivs).toEqual(rebuilt.fencedDivs);
+  expect(after.equations).toEqual(rebuilt.equations);
+  expect(after.mathRegions).toEqual(rebuilt.mathRegions);
+  expect(after.references).toEqual(rebuilt.references);
+  expect(Array.from(after.referenceIndex.entries())).toEqual(
+    Array.from(rebuilt.referenceIndex.entries()),
+  );
 }
 
 describe("incremental document analysis engine", () => {
@@ -176,6 +191,63 @@ describe("incremental document analysis engine", () => {
     expect(after.equations).toEqual(rebuilt.equations);
     expect(after.mathRegions).toEqual(rebuilt.mathRegions);
     expect(after.references).toEqual(rebuilt.references);
+  });
+
+  it.each([
+    {
+      label: "outer id",
+      target: "#thm:outer",
+      replacement: "#thm:outer-updated",
+    },
+    {
+      label: "outer title",
+      target: "Outer Title",
+      replacement: "Outer Result",
+    },
+    {
+      label: "inner id",
+      target: "#def:inner",
+      replacement: "#def:inner-updated",
+    },
+    {
+      label: "inner title",
+      target: "Inner Title",
+      replacement: "Inner Result",
+    },
+  ])("matches a full rebuild after editing nested fenced-div $label", ({
+    target,
+    replacement,
+  }) => {
+    const doc = [
+      ":::: {.theorem #thm:outer} Outer Title",
+      "Outer body.",
+      "::: {.definition #def:inner} Inner Title",
+      "Inner body.",
+      ":::",
+      "::::",
+      "",
+      "See [@thm:outer] and [@def:inner].",
+    ].join("\n");
+    const state = createState(doc);
+    const before = analyze(state);
+    const from = doc.indexOf(target);
+    const tr = state.update({
+      changes: {
+        from,
+        to: from + target.length,
+        insert: replacement,
+      },
+    });
+
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+    const rebuilt = analyze(tr.state);
+
+    expectAnalysisMatchesRebuild(after, rebuilt);
   });
 
   it("matches a full rebuild for plain prose inserts before later inline refs in the same paragraph", () => {
@@ -406,6 +478,39 @@ describe("incremental document analysis engine", () => {
     }
   });
 
+  it("keeps narrative references inside display math excluded after incremental edits", () => {
+    const doc = [
+      "$$",
+      "@hidden",
+      "$$",
+      "",
+      "See @visible.",
+    ].join("\n");
+    const state = createState(doc);
+    const before = analyze(state);
+
+    expect(before.references.map((reference) => reference.ids[0])).toEqual([
+      "visible",
+    ]);
+
+    const insertPos = doc.indexOf("hidden") + "hidden".length;
+    const tr = state.update({
+      changes: { from: insertPos, insert: "2" },
+    });
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+
+    const rebuilt = analyze(tr.state);
+    expect(after.references.map((reference) => reference.ids[0])).toEqual([
+      "visible",
+    ]);
+    expectAnalysisMatchesRebuild(after, rebuilt);
+  });
+
   it("exposes a narrative ref when a delimiter edit reclassifies excluded regions", () => {
     // Repro from PR #693 review (round 3): insert a backtick before "h" in
     // "Math $@skip$ and `@code`." so the line becomes
@@ -467,14 +572,14 @@ describe("incremental document analysis engine", () => {
 
   it("exposes a narrative ref when a delimiter edit shrinks a multi-line exclusion", () => {
     // Repro from PR #693 review (round 5): insert "$" at offset 1 in
-    // "foo $bar\n@baz\n$ qux".  The old 3-line InlineMath shrinks to a
-    // short span on line 1 ("$oo $"), exposing @baz on line 2.
+    // "foo$bar\n@baz\nqux$ tail".  The old 3-line InlineMath shrinks to a
+    // short span on line 1 ("$oo$"), exposing @baz on line 2.
     // Without paragraph-scope expansion, the narrative extraction covers
     // only line 1 and never re-scans @baz.
     const state = createState([
-      "foo $bar",
+      "foo$bar",
       "@baz",
-      "$ qux",
+      "qux$ tail",
     ].join("\n"));
     const before = analyze(state);
     expect(before.references.length).toBe(0);

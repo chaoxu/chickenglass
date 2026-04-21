@@ -66,6 +66,19 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
+  it("round-trips Pandoc dollar math delimiter edge cases", () => {
+    const cases = [
+      "Costs are $20 and $30 today.",
+      "Spaced dollars stay literal: $ x$ and $x $.",
+      "Escaped dollars stay literal: \\$x$.",
+      "Valid tight math stays math: $x_1 + y$.",
+    ];
+
+    for (const markdown of cases) {
+      expect(roundTripMarkdown(markdown)).toBe(markdown);
+    }
+  });
+
   it("round-trips inline math inside formatted text spans", () => {
     const markdown = "A **$k$-hitting set** and *\\(x\\)-axis*.";
     expect(roundTripMarkdown(markdown)).toBe(markdown);

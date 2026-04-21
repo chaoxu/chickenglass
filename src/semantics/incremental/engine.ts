@@ -5,6 +5,7 @@ import {
   classifyReferenceIndex,
   mapReferenceIndex,
 } from "../../references/classifier";
+import { compareRangesByToThenFrom } from "../../lib/range-order";
 import type { ReferenceIndexModel } from "../../references/model";
 import type {
   DocumentAnalysis,
@@ -567,7 +568,7 @@ function collectFencedDivStructureRanges(
       ranges.push({ from: div.closeFenceFrom, to: div.closeFenceTo });
     }
   }
-  return ranges;
+  return ranges.sort(compareRangesByToThenFrom);
 }
 
 function windowTouchesRange(

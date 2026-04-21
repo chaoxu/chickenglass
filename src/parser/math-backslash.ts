@@ -10,6 +10,10 @@ import {
   DOLLAR,
   OPEN_PAREN,
 } from "./char-utils";
+import {
+  isPandocDollarMathCloser,
+  isPandocDollarMathOpener,
+} from "../lib/pandoc-dollar-math";
 
 function addInlineMathElement(
   cx: InlineContext,
@@ -23,6 +27,15 @@ function addInlineMathElement(
   return cx.addElement(
     cx.elt("InlineMath", openStart, closeEnd, [openMark, closeMark]),
   );
+}
+
+function isEscapedByBackslash(cx: InlineContext, pos: number): boolean {
+  let slashCount = 0;
+  for (let cursor = pos - 1; cursor >= 0; cursor -= 1) {
+    if (cx.char(cursor) !== BACKSLASH) break;
+    slashCount++;
+  }
+  return slashCount % 2 === 1;
 }
 
 /**
@@ -61,14 +74,17 @@ const dollarInlineMathParser: InlineParser = {
   name: "DollarInlineMath",
   parse(cx: InlineContext, next: number, pos: number): number {
     if (next !== DOLLAR) return -1;
-    // $$ is display math, not inline
-    if (cx.char(pos + 1) === DOLLAR) return -1;
+    if (isEscapedByBackslash(cx, pos)) return -1;
+    if (!isPandocDollarMathOpener(cx.char(pos + 1))) return -1;
 
     // Scan forward for closing $
     let i = pos + 1;
     while (i < cx.end) {
       const ch = cx.char(i);
-      if (ch === DOLLAR) {
+      if (
+        ch === DOLLAR
+        && isPandocDollarMathCloser(cx.char(i - 1), cx.char(i + 1))
+      ) {
         return addInlineMathElement(cx, pos, pos + 1, i, i + 1);
       }
       // Backslash escapes inside $ math: skip next char

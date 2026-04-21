@@ -173,6 +173,7 @@ export function computeNarrativeExtractionRange(
       switch (c.name) {
         case NODE.InlineCode:
         case NODE.InlineMath:
+        case NODE.DisplayMath:
         case NODE.Link:
           excludedRanges.push({ from: c.from, to: c.to });
           break;

@@ -1,5 +1,6 @@
 import type { ChangeDesc, EditorState } from "@codemirror/state";
 import type { FencedDivSemantics } from "../semantics/document";
+import { compareRangesByFromThenTo } from "../lib/range-order";
 import { containsPos } from "../lib/range-helpers";
 import { documentSemanticsField } from "../state/document-analysis";
 
@@ -108,6 +109,7 @@ export function collectFencedDivStructureRanges(
       ranges.push({ from: div.closeFenceFrom, to: div.closeFenceTo });
     }
   }
+  ranges.sort(compareRangesByFromThenTo);
   fencedDivStructureRangeCache.set(semantics as object, ranges);
   return ranges;
 }
