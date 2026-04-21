@@ -20,6 +20,7 @@ const REVERSE_SCROLL_JITTER_PX = 8;
 const SUSPICIOUS_STRUCTURE_EXIT_LINE_DELTA = 25;
 const MAX_GUARD_EVENTS = 20;
 const REVERSE_SCROLL_CORRECTION_ATTEMPTS = 4;
+const REVERSE_SCROLL_CORRECTION_DELAYS_MS = [0, 10, 24, 48, 96] as const;
 const activeReverseScrollGuards = new WeakMap<EditorView, ReverseScrollGuard>();
 const verticalMotionGuardEvents = new WeakMap<EditorView, VerticalMotionGuardEvent[]>();
 let nextReverseScrollGuardId = 0;
@@ -708,10 +709,7 @@ function scheduleReverseScrollGuard(
   }, 200);
 
   const guardId = guard.id;
-  const enforceCorrectedScrollTop = (
-    correctedScrollTop: number,
-    attemptsRemaining: number,
-  ): void => {
+  const enforceCorrectedScrollTop = (correctedScrollTop: number): void => {
     if (!view.dom.isConnected) return;
     const currentGuard = activeReverseScrollGuards.get(view);
     if (currentGuard?.id !== guardId) return;
@@ -724,17 +722,31 @@ function scheduleReverseScrollGuard(
     if (needsCorrection) {
       view.scrollDOM.scrollTop = correctedScrollTop;
     }
-
-    if (attemptsRemaining <= 1) return;
-    requestAnimationFrame(() => {
-      enforceCorrectedScrollTop(correctedScrollTop, attemptsRemaining - 1);
-    });
   };
 
-  enforceCorrectedScrollTop(
-    guard.enforcedScrollTop,
-    REVERSE_SCROLL_CORRECTION_ATTEMPTS,
-  );
+  const scheduleCorrectedScrollTopAttempts = (correctedScrollTop: number): void => {
+    enforceCorrectedScrollTop(correctedScrollTop);
+
+    let frameAttemptsRemaining = REVERSE_SCROLL_CORRECTION_ATTEMPTS;
+    const enforceOnFrame = (): void => {
+      enforceCorrectedScrollTop(correctedScrollTop);
+      frameAttemptsRemaining -= 1;
+      if (frameAttemptsRemaining > 0) {
+        requestAnimationFrame(enforceOnFrame);
+      }
+    };
+    requestAnimationFrame(() => {
+      enforceOnFrame();
+    });
+
+    for (const delay of REVERSE_SCROLL_CORRECTION_DELAYS_MS) {
+      window.setTimeout(() => {
+        enforceCorrectedScrollTop(correctedScrollTop);
+      }, delay);
+    }
+  };
+
+  scheduleCorrectedScrollTopAttempts(guard.enforcedScrollTop);
 
   requestAnimationFrame(() => {
     if (!view.dom.isConnected) return;
@@ -757,10 +769,7 @@ function scheduleReverseScrollGuard(
         ? Math.max(currentGuard.enforcedScrollTop, correctedScrollTop)
         : Math.min(currentGuard.enforcedScrollTop, correctedScrollTop);
       view.scrollDOM.scrollTop = currentGuard.enforcedScrollTop;
-      enforceCorrectedScrollTop(
-        currentGuard.enforcedScrollTop,
-        REVERSE_SCROLL_CORRECTION_ATTEMPTS,
-      );
+      scheduleCorrectedScrollTopAttempts(currentGuard.enforcedScrollTop);
       recordVerticalMotionGuardEvent(view, {
         kind: "reverse-scroll",
         direction: forward ? "down" : "up",
