@@ -103,7 +103,7 @@ describe("spellcheckExtension", () => {
     expect(texts).not.toContain("[@one; @two]");
   });
 
-  it("rebuilds decorations for doc and viewport changes, but not plain selection moves", () => {
+  it("rebuilds decorations for doc changes, but not plain selection or viewport-only updates", () => {
     const doc = "Math $x$ and [@solo].";
     const v = createSpellcheckView(doc, doc.length);
     const beforeSelection = getSpellcheckPlugin(v).decorations;
@@ -130,6 +130,6 @@ describe("spellcheckExtension", () => {
       viewportChanged: true,
     } as ViewUpdate);
 
-    expect(getSpellcheckPlugin(v).decorations).not.toBe(afterDocChange);
+    expect(getSpellcheckPlugin(v).decorations).toBe(afterDocChange);
   });
 });

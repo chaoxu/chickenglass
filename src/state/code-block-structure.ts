@@ -17,7 +17,7 @@ export interface CodeBlockInfo extends FencedBlockInfo {
   readonly openFenceMarker: string;
 }
 
-interface CodeBlockStructureCache {
+export interface CodeBlockStructureCache {
   readonly blocks: readonly CodeBlockInfo[];
   readonly structureRevision: number;
 }
@@ -301,6 +301,29 @@ function incrementalCodeBlockStructureUpdate(
   return buildCodeBlockStructureCache(nextBlocks, value.structureRevision + 1);
 }
 
+function updateCodeBlockStructureCache(
+  value: CodeBlockStructureCache,
+  tr: Transaction,
+  treeAvailable = syntaxTreeAvailable(tr.state, tr.state.doc.length),
+): CodeBlockStructureCache {
+  if (tr.docChanged) {
+    if (!treeAvailable) {
+      const mappedBlocks = sanitizeCodeBlocks(tr.state, mapCodeBlocks(value.blocks, tr));
+      return buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
+    }
+    return incrementalCodeBlockStructureUpdate(value, tr);
+  }
+  if (
+    syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+    treeAvailable
+  ) {
+    const blocks = scanCodeBlocks(tr.state);
+    if (sameCodeBlockLists(blocks, value.blocks)) return value;
+    return buildCodeBlockStructureCache(blocks, value.structureRevision + 1);
+  }
+  return value;
+}
+
 function getCodeBlockStructureCache(
   state: EditorState,
 ): CodeBlockStructureCache | null {
@@ -319,28 +342,11 @@ export const codeBlockStructureField = StateField.define<CodeBlockStructureCache
   },
 
   update(value, tr) {
-    if (tr.docChanged) {
-      if (!syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
-        const mappedBlocks = sanitizeCodeBlocks(tr.state, mapCodeBlocks(value.blocks, tr));
-        const blocks = scanCodeBlocks(tr.state);
-        if (sameCodeBlockLists(blocks, mappedBlocks)) {
-          return buildCodeBlockStructureCache(mappedBlocks, value.structureRevision);
-        }
-        return buildCodeBlockStructureCache(blocks, value.structureRevision + 1);
-      }
-      return incrementalCodeBlockStructureUpdate(value, tr);
-    }
-    if (
-      syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
-      syntaxTreeAvailable(tr.state, tr.state.doc.length)
-    ) {
-      const blocks = scanCodeBlocks(tr.state);
-      if (sameCodeBlockLists(blocks, value.blocks)) return value;
-      return buildCodeBlockStructureCache(blocks, value.structureRevision + 1);
-    }
-    return value;
+    return updateCodeBlockStructureCache(value, tr);
   },
 });
+
+export { updateCodeBlockStructureCache as _updateCodeBlockStructureCacheForTest };
 
 export function getCodeBlockStructureRevision(state: EditorState): number {
   return getCodeBlockStructureCache(state)?.structureRevision ?? 0;

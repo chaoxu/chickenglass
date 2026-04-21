@@ -28,6 +28,7 @@ import {
   getDecorationSpecs,
   hasLineClassAt,
 } from "../test-utils";
+import { _updateCodeBlockStructureCacheForTest as updateCodeBlockStructureCache } from "../state/code-block-structure";
 
 function createTestState(doc: string, cursorPos = 0, focused = false) {
   const state = createEditorState(doc, {
@@ -188,6 +189,28 @@ describe("codeBlockDecorationField", () => {
     expect(nextStructure.blocks).not.toBe(initialStructure.blocks);
     expect(nextStructure.blocks[0]?.openFenceMarker).toBe("```");
     expect(nextStructure.blocks[0]?.language).toBe("js");
+  });
+
+  it("keeps the mapped structure cache while the syntax tree is partial", () => {
+    const doc = "```js\nconsole.log('x')\n```";
+    const state = createEditorState(doc, {
+      extensions: [
+        markdown({ extensions: markdownExtensions }),
+        codeBlockStructureField,
+      ],
+    });
+    const initialStructure = state.field(codeBlockStructureField);
+    const tr = state.update({
+      changes: { from: 0, to: 3, insert: "~~~" },
+    });
+    const nextStructure = updateCodeBlockStructureCache(
+      initialStructure,
+      tr,
+      false,
+    );
+
+    expect(nextStructure.structureRevision).toBe(initialStructure.structureRevision);
+    expect(nextStructure.blocks[0]?.openFenceMarker).toBe("```");
   });
 
   it("invalidates structure when the opening fence marker changes without moving positions", () => {

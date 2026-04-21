@@ -520,6 +520,35 @@ describe("tableDecorationField discovery updates", () => {
     const [firstWidgetAfter, secondWidgetAfter] = getWidgets(afterState);
 
     expect(firstWidgetAfter).toBe(firstWidgetBefore);
-    expect(secondWidgetAfter).not.toBe(secondWidgetBefore);
+    expect(secondWidgetAfter).toBe(secondWidgetBefore);
+  });
+
+  it("rebuilds only the table whose source content changed", () => {
+    const doc = [
+      "| A |",
+      "| --- |",
+      "| 1 |",
+      "",
+      "Between tables.",
+      "",
+      "| B |",
+      "| --- |",
+      "| 2 |",
+    ].join("\n");
+
+    const state = createTwoTableState(doc);
+    const [firstWidgetBefore, secondWidgetBefore] = getWidgets(state);
+    const editAt = doc.indexOf("| 1 |") + 2;
+    const afterState = state.update({
+      changes: {
+        from: editAt,
+        to: editAt + 1,
+        insert: "10",
+      },
+    }).state;
+    const [firstWidgetAfter, secondWidgetAfter] = getWidgets(afterState);
+
+    expect(firstWidgetAfter).not.toBe(firstWidgetBefore);
+    expect(secondWidgetAfter).toBe(secondWidgetBefore);
   });
 });

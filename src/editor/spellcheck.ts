@@ -74,7 +74,7 @@ class SpellcheckPlugin implements PluginValue {
   }
 
   update(update: ViewUpdate): void {
-    if (update.docChanged || update.viewportChanged) {
+    if (update.docChanged) {
       this.decorations = buildSpellcheckDecorations(update.view);
     }
   }

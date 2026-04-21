@@ -95,16 +95,17 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       const regions = update.state.field(documentAnalysisField).mathRegions;
       const macros = update.state.field(mathMacrosField);
       const macrosKey = serializeMacros(macros);
+      const macrosChanged = macrosKey !== this.lastMacrosKey;
       const mathContentTouched = docChangeTouchesMathContent(update);
 
       if (
-        macrosKey !== this.lastMacrosKey ||
+        macrosChanged ||
         (
           (!update.docChanged || mathContentTouched)
           && prewarmMathRegionsChanged(this.lastRegions, regions)
         )
       ) {
-        this.schedulePrewarm(update.state);
+        this.schedulePrewarm(update.state, macrosChanged);
       }
     }
 
@@ -112,7 +113,7 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       this.generation++;
     }
 
-    private schedulePrewarm(state: EditorState) {
+    private schedulePrewarm(state: EditorState, clearCache = false) {
       this.generation++;
       const generation = this.generation;
 
@@ -122,7 +123,9 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       this.lastRegions = regions;
       this.lastMacrosKey = serializeMacros(macros);
 
-      clearKatexHtmlCache();
+      if (clearCache) {
+        clearKatexHtmlCache();
+      }
 
       if (regions.length === 0) return;
 

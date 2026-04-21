@@ -20,6 +20,7 @@ import {
   type EditorState,
   type Extension,
   type Range,
+  type Transaction,
 } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
 import { createDecorationStateField } from "./decoration-field";
@@ -122,35 +123,76 @@ function rangeTouchesTable(
   return table.from < to && from < table.to;
 }
 
+function mapTableRangeForDecorations(
+  table: Pick<TableRange, "from" | "to">,
+  tr: Transaction,
+): Pick<TableRange, "from" | "to"> {
+  return {
+    from: tr.changes.mapPos(table.from),
+    to: tr.changes.mapPos(table.to),
+  };
+}
+
+function sameTableRenderContent(
+  before: TableRange,
+  after: TableRange,
+): boolean {
+  if (before.lines.length !== after.lines.length) return false;
+  for (let index = 0; index < before.lines.length; index += 1) {
+    if (before.lines[index] !== after.lines[index]) return false;
+  }
+  return true;
+}
+
 function updateTableDecorationsForDiscoveryChange(
   value: DecorationSet,
-  startState: EditorState,
-  state: EditorState,
+  tr: Transaction,
 ): DecorationSet {
+  const { startState, state } = tr;
   const beforeTables = findTablesInState(startState);
   const afterTables = findTablesInState(state);
-  const afterSet = new Set(afterTables);
-  const beforeSet = new Set(beforeTables);
-  const removedTables = beforeTables.filter((table) => !afterSet.has(table));
-  const addedTables = afterTables.filter((table) => !beforeSet.has(table));
+  const usedBeforeTables = new Set<TableRange>();
+  const unchangedAfterTables = new Set<TableRange>();
+  const mappedValue = tr.docChanged ? value.map(tr.changes) : value;
 
-  if (removedTables.length === 0 && addedTables.length === 0) {
-    return value;
+  for (const afterTable of afterTables) {
+    const unchangedBeforeTable = beforeTables.find((beforeTable) => {
+      if (usedBeforeTables.has(beforeTable)) return false;
+      const mappedBefore = mapTableRangeForDecorations(beforeTable, tr);
+      return mappedBefore.from === afterTable.from
+        && mappedBefore.to === afterTable.to
+        && sameTableRenderContent(beforeTable, afterTable);
+    });
+
+    if (unchangedBeforeTable) {
+      usedBeforeTables.add(unchangedBeforeTable);
+      unchangedAfterTables.add(afterTable);
+    }
   }
 
-  const affectedTables = [...removedTables, ...addedTables];
+  const removedOrChangedTables = beforeTables
+    .filter((table) => !usedBeforeTables.has(table))
+    .map((table) => mapTableRangeForDecorations(table, tr));
+  const addedOrChangedTables = afterTables
+    .filter((table) => !unchangedAfterTables.has(table));
+  const affectedTables = [...removedOrChangedTables, ...addedOrChangedTables];
+
+  if (affectedTables.length === 0) {
+    return mappedValue;
+  }
+
   const filterFrom = Math.min(...affectedTables.map((table) => table.from));
   const filterTo = Math.max(...affectedTables.map((table) => table.to));
   const macros = state.field(mathMacrosField);
   const renderSignature = getTableReferenceRenderDependencySignature(state);
 
-  return value.update({
+  return mappedValue.update({
     filterFrom,
     filterTo,
     filter(from, to) {
       return !affectedTables.some((table) => rangeTouchesTable(from, to, table));
     },
-    add: addedTables.map((table) =>
+    add: addedOrChangedTables.map((table) =>
       buildTableDecorationRange(state, table, macros, renderSignature)
     ),
     sort: true,
@@ -190,7 +232,7 @@ const tableDecorationField = createDecorationStateField({
       tableDiscoveryChanged
     ) {
       if (!referenceDepsChanged && tableDiscoveryChanged && cellEdit !== "commit") {
-        return updateTableDecorationsForDiscoveryChange(value, tr.startState, tr.state);
+        return updateTableDecorationsForDiscoveryChange(value, tr);
       }
       return buildTableDecorationsFromState(tr.state);
     }
