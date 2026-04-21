@@ -30,6 +30,7 @@ import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-c
 import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import type { ActiveDocumentSignal } from "../active-document-signal";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 
 interface PendingModeOverride {
   path: string;
@@ -53,6 +54,11 @@ export interface AppEditorShellDeps {
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
+  /** Flush a pending autosave before replacing, closing, or shutting down the active document. */
+  flushPendingAutoSave?: (
+    reason: AutoSaveFlushReason,
+    options?: AutoSaveFlushOptions,
+  ) => Promise<void>;
   /** Ask the user how to handle unsaved changes before replacing the current document. */
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
@@ -187,6 +193,7 @@ export function useAppEditorShell({
   refreshTree,
   addRecentFile,
   onAfterSave,
+  flushPendingAutoSave,
   requestUnsavedChangesDecision,
 }: AppEditorShellDeps): AppEditorShellController {
   const [pluginManager] = useState(() => {
@@ -210,6 +217,7 @@ export function useAppEditorShell({
     getCurrentDocText: getSessionCurrentDocText,
     openFile: sessionOpenFile,
     isPathOpen,
+    isPathDirty,
     openFileWithContent: sessionOpenFileWithContent,
     saveFile: sessionSaveFile,
     handleDocumentSnapshot: sessionHandleDocumentSnapshot,
@@ -243,22 +251,36 @@ export function useAppEditorShell({
     await sessionSaveFile();
   }, [runEditorTransaction, sessionSaveFile]);
 
+  const flushDirtyCurrentDocument = useCallback(async (
+    reason: AutoSaveFlushReason,
+  ) => {
+    if (!currentPath || !isPathDirty(currentPath)) {
+      return;
+    }
+    await flushPendingAutoSave?.(reason, { force: true });
+  }, [currentPath, flushPendingAutoSave, isPathDirty]);
+
   const openFile = useCallback(async (path: string) => {
     if (path !== currentPath) {
       runEditorTransaction("search-navigation", () => undefined);
+      await flushDirtyCurrentDocument("navigation");
     }
     await sessionOpenFile(path);
-  }, [currentPath, runEditorTransaction, sessionOpenFile]);
+  }, [currentPath, flushDirtyCurrentDocument, runEditorTransaction, sessionOpenFile]);
 
   const openFileWithContent = useCallback(async (name: string, content: string) => {
     runEditorTransaction("search-navigation", () => undefined);
+    await flushDirtyCurrentDocument("navigation");
     await sessionOpenFileWithContent(name, content);
-  }, [runEditorTransaction, sessionOpenFileWithContent]);
+  }, [flushDirtyCurrentDocument, runEditorTransaction, sessionOpenFileWithContent]);
 
   const closeCurrentFile = useCallback(async (options?: { discard?: boolean }) => {
     runEditorTransaction("save", () => undefined);
+    if (!options?.discard) {
+      await flushDirtyCurrentDocument("navigation");
+    }
     return session.closeCurrentFile(options);
-  }, [runEditorTransaction, session]);
+  }, [flushDirtyCurrentDocument, runEditorTransaction, session]);
 
   const saveAs = useCallback(async () => {
     runEditorTransaction("save", () => undefined);
@@ -267,8 +289,9 @@ export function useAppEditorShell({
 
   const handleWindowCloseRequest = useCallback(async () => {
     runEditorTransaction("save", () => undefined);
+    await flushDirtyCurrentDocument("shutdown");
     return session.handleWindowCloseRequest();
-  }, [runEditorTransaction, session]);
+  }, [flushDirtyCurrentDocument, runEditorTransaction, session]);
 
   const navigation = useEditorNavigation({ openFile, isPathOpen, currentPath });
   const {

@@ -7,6 +7,7 @@ import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
@@ -36,6 +37,10 @@ interface HarnessRef {
 
 interface HarnessOptions {
   files?: Record<string, string>;
+  flushPendingAutoSave?: (
+    reason: AutoSaveFlushReason,
+    options?: AutoSaveFlushOptions,
+  ) => Promise<void>;
   requestUnsavedChangesDecision?: () => Promise<"save" | "discard" | "cancel">;
 }
 
@@ -72,6 +77,7 @@ function createHarness(
       settings,
       refreshTree: async () => {},
       addRecentFile: () => {},
+      flushPendingAutoSave: options.flushPendingAutoSave,
       requestUnsavedChangesDecision:
         options.requestUnsavedChangesDecision ?? (async () => "discard"),
     });
@@ -257,6 +263,34 @@ describe("useAppEditorShell", () => {
 
     expect(ref.result.editorMode).toBe("lexical");
     expect(ref.result.editorDoc).toBe("# A changed in CM6\n");
+  });
+
+  it("flushes pending autosave before switching files", async () => {
+    const flushPendingAutoSave = vi.fn(async () => {});
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+        "b.md": "# B\n",
+      },
+      flushPendingAutoSave,
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
+    });
+
+    await act(async () => {
+      await ref.result.openFile("b.md");
+    });
+
+    expect(flushPendingAutoSave).toHaveBeenCalledWith("navigation", { force: true });
+    expect(ref.result.currentPath).toBe("b.md");
   });
 
   it("does not persist a target mode override when search navigation is canceled", async () => {

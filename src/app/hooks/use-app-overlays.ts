@@ -24,7 +24,6 @@ import { dispatchIfConnected } from "../lib/view-dispatch";
 import { collectSearchableMarkdownPaths } from "../search";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
-import { useAutoSave } from "./use-auto-save";
 import { applyMarkdownFormatAction } from "../editor-format-actions";
 import { measureAsync } from "../perf";
 import type { UseDialogsReturn } from "./use-dialogs";
@@ -35,8 +34,6 @@ import type { SidebarLayoutController } from "./use-sidebar-layout";
 interface AppOverlayDeps {
   fs: FileSystem;
   dialogs: UseDialogsReturn;
-  suspendAutoSave: boolean;
-  suspendAutoSaveVersion: number;
   workspace: Pick<
     AppWorkspaceSessionController,
     "settings" | "theme" | "setTheme" | "resolvedTheme" | "recentFiles" | "fileTree" | "handleOpenFolder"
@@ -194,8 +191,6 @@ function dispatchFormatDetail(detail: FormatEventDetail): void {
 export function useAppOverlays({
   fs,
   dialogs,
-  suspendAutoSave,
-  suspendAutoSaveVersion,
   workspace,
   sidebarLayout,
   editor,
@@ -563,14 +558,6 @@ export function useAppOverlays({
   ], [commandDefs, dialogs]);
 
   const menuHandlers = useMemo(() => toMenuHandlers(commandDefs), [commandDefs]);
-
-  useAutoSave(
-    editor.hasDirtyDocument,
-    editor.saveFile,
-    workspace.settings.autoSaveInterval,
-    suspendAutoSave,
-    suspendAutoSaveVersion,
-  );
 
   useHotkeys(hotkeys);
   useMenuEvents(menuHandlers);

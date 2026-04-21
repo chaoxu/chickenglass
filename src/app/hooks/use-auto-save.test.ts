@@ -1,12 +1,16 @@
 import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ActiveDocumentSignal } from "../active-document-signal";
+import { createActiveDocumentSignal } from "../active-document-signal";
 import { useAutoSave } from "./use-auto-save";
 
 interface HarnessProps {
   isDirty: boolean;
   onSave: () => Promise<void>;
   interval?: number;
+  activeDocumentSignal?: ActiveDocumentSignal;
+  currentPath?: string | null;
   suspended?: boolean;
   suspensionVersion?: number;
 }
@@ -15,10 +19,15 @@ const Harness: FC<HarnessProps> = ({
   isDirty,
   onSave,
   interval = 30_000,
+  activeDocumentSignal,
+  currentPath = "notes.md",
   suspended = false,
   suspensionVersion = 0,
 }) => {
-  useAutoSave(isDirty, onSave, interval, suspended, suspensionVersion);
+  useAutoSave(isDirty, onSave, interval, suspended, suspensionVersion, {
+    activeDocumentSignal,
+    currentPath,
+  });
   return null;
 };
 
@@ -64,6 +73,77 @@ describe("useAutoSave", () => {
 
     await act(async () => {
       window.dispatchEvent(new Event("blur"));
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("debounces dirty edits until the configured idle delay", async () => {
+    const onSave = vi.fn(async () => {});
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 1_000,
+      }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(onSave).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets the idle debounce when the active document changes again", async () => {
+    const onSave = vi.fn(async () => {});
+    const activeDocumentSignal = createActiveDocumentSignal();
+
+    act(() => {
+      root.render(createElement(Harness, {
+        activeDocumentSignal,
+        isDirty: true,
+        onSave,
+        interval: 1_000,
+      }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+      activeDocumentSignal.publish("notes.md");
+      vi.advanceTimersByTime(299);
+    });
+    expect(onSave).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(701);
+      await Promise.resolve();
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes a pending debounce on page hide", async () => {
+    const onSave = vi.fn(async () => {});
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 30_000,
+      }));
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event("pagehide"));
+      await Promise.resolve();
     });
 
     expect(onSave).toHaveBeenCalledTimes(1);

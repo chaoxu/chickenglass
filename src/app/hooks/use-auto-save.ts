@@ -1,114 +1,211 @@
-/**
- * useAutoSave — React hook for periodic and event-driven auto-save.
- *
- * Saves whenever:
- *  - the interval fires (if isDirty)
- *  - the window loses focus (blur)
- *  - the document becomes hidden (tab switch / minimize)
- *
- * The timer resets whenever a save fires so we never double-save immediately
- * after an event-driven save.
- *
- * Implementation note: rather than using refs synced via separate useEffects,
- * the effect re-registers event listeners and the timer whenever isDirty or
- * onSave change. The savingRef guard (outside the effect) prevents concurrent
- * overlapping saves across re-registrations.
- */
-
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { isTauri } from "../../lib/tauri";
+import type { ActiveDocumentSignal } from "../active-document-signal";
 import { logCatchError } from "../lib/log-catch-error";
 
 const TAURI_EVENT_SAVE_DELAY_MS = 250;
 
-/**
- * @param isDirty  - True when there are unsaved changes to persist.
- * @param onSave   - Async callback that performs the actual save.
- * @param interval - Milliseconds between auto-save attempts. Defaults to 30 000 (30 s).
- *                   Pass 0 or a negative number to disable the timer entirely.
- */
+export type AutoSaveFlushReason =
+  | "blur"
+  | "hidden"
+  | "idle"
+  | "navigation"
+  | "pagehide"
+  | "shutdown";
+
+export interface UseAutoSaveOptions {
+  activeDocumentSignal?: ActiveDocumentSignal;
+  currentPath?: string | null;
+}
+
+export interface AutoSaveFlushOptions {
+  force?: boolean;
+}
+
+export interface UseAutoSaveReturn {
+  flushPendingAutoSave: (
+    reason: AutoSaveFlushReason,
+    options?: AutoSaveFlushOptions,
+  ) => Promise<void>;
+}
+
 export function useAutoSave(
   isDirty: boolean,
   onSave: () => Promise<void>,
-  interval = 30_000,
+  delayMs = 30_000,
   suspended = false,
   suspensionVersion = 0,
-): void {
-  // savingRef lives outside the effect so the guard persists across
-  // re-registrations that happen when isDirty or onSave change.
+  options: UseAutoSaveOptions = {},
+): UseAutoSaveReturn {
+  const currentPath = options.currentPath ?? null;
+  const stateRef = useRef({
+    currentPath,
+    delayMs,
+    isDirty,
+    onSave,
+    suspended,
+  });
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+  const saveAgainAfterCurrentRef = useRef<AutoSaveFlushOptions | null>(null);
   const pendingEventSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const clearPendingEventSave = () => {
-      if (pendingEventSaveRef.current !== null) {
-        clearTimeout(pendingEventSaveRef.current);
-        pendingEventSaveRef.current = null;
-      }
-    };
+  stateRef.current = {
+    currentPath,
+    delayMs,
+    isDirty,
+    onSave,
+    suspended,
+  };
 
-    if (suspended) {
-      clearPendingEventSave();
-      return clearPendingEventSave;
+  const clearDebounceTimer = useCallback(() => {
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  }, []);
+
+  const clearPendingEventSave = useCallback(() => {
+    if (pendingEventSaveRef.current !== null) {
+      clearTimeout(pendingEventSaveRef.current);
+      pendingEventSaveRef.current = null;
+    }
+  }, []);
+
+  const flushPendingAutoSave = useCallback(async (
+    _reason: AutoSaveFlushReason,
+    flushOptions?: AutoSaveFlushOptions,
+  ) => {
+    clearDebounceTimer();
+    clearPendingEventSave();
+    const state = stateRef.current;
+    if (state.suspended || (!state.isDirty && flushOptions?.force !== true)) {
+      return;
+    }
+    if (savingRef.current) {
+      saveAgainAfterCurrentRef.current =
+        flushOptions?.force === true ? { force: true } : {};
+      return;
     }
 
-    /** Save if dirty; guard against concurrent overlapping saves. */
-    const trySave = () => {
-      clearPendingEventSave();
-      if (suspended) return;
-      if (!isDirty || savingRef.current) return;
-      savingRef.current = true;
-      Promise.resolve()
-        .then(onSave)
-        .catch(logCatchError("[auto-save] save failed"))
-        .finally(() => {
-          savingRef.current = false;
-        });
-    };
+    savingRef.current = true;
+    try {
+      await state.onSave();
+    } catch (error: unknown) {
+      logCatchError("[auto-save] save failed")(error);
+    } finally {
+      savingRef.current = false;
+      const nextFlushOptions = saveAgainAfterCurrentRef.current;
+      if (nextFlushOptions !== null) {
+        saveAgainAfterCurrentRef.current = null;
+        await flushPendingAutoSave("idle", nextFlushOptions);
+      }
+    }
+  }, [clearDebounceTimer, clearPendingEventSave]);
 
+  const scheduleDebouncedSave = useCallback(() => {
+    clearDebounceTimer();
+    const state = stateRef.current;
+    if (
+      state.suspended ||
+      !state.isDirty ||
+      !state.currentPath ||
+      state.delayMs <= 0
+    ) {
+      return;
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      void flushPendingAutoSave("idle");
+    }, state.delayMs);
+  }, [clearDebounceTimer, flushPendingAutoSave]);
+
+  useEffect(() => {
+    if (suspended) {
+      clearDebounceTimer();
+      clearPendingEventSave();
+      return;
+    }
+    scheduleDebouncedSave();
+  }, [
+    clearDebounceTimer,
+    clearPendingEventSave,
+    currentPath,
+    delayMs,
+    isDirty,
+    scheduleDebouncedSave,
+    suspended,
+    suspensionVersion,
+  ]);
+
+  useEffect(() => {
+    const signal = options.activeDocumentSignal;
+    if (!signal) {
+      return;
+    }
+    return signal.subscribe(() => {
+      const snapshot = signal.getSnapshot();
+      const currentPath = stateRef.current.currentPath;
+      if (snapshot.path === currentPath) {
+        scheduleDebouncedSave();
+      }
+    });
+  }, [options.activeDocumentSignal, scheduleDebouncedSave]);
+
+  useEffect(() => {
     const scheduleEventSave = (reason: "blur" | "hidden") => {
       if (!isTauri()) {
-        trySave();
+        void flushPendingAutoSave(reason);
         return;
       }
 
       clearPendingEventSave();
       pendingEventSaveRef.current = setTimeout(() => {
         pendingEventSaveRef.current = null;
-        if (suspended) return;
         if (reason === "blur" && document.hasFocus()) return;
         if (reason === "hidden" && !document.hidden) return;
-        trySave();
+        void flushPendingAutoSave(reason);
       }, TAURI_EVENT_SAVE_DELAY_MS);
     };
 
     const handleBlur = () => scheduleEventSave("blur");
     const handleFocus = () => clearPendingEventSave();
+    const handlePageHide = () => {
+      void flushPendingAutoSave("pagehide");
+    };
+    const handleBeforeUnload = () => {
+      void flushPendingAutoSave("shutdown");
+    };
     const handleVisibility = () => {
       if (document.hidden) {
         scheduleEventSave("hidden");
-        return;
+      } else {
+        clearPendingEventSave();
       }
-
-      clearPendingEventSave();
     };
 
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handleBeforeUnload);
     document.addEventListener("visibilitychange", handleVisibility);
-
-    // Periodic timer. Disabled when interval <= 0.
-    let timerId: ReturnType<typeof setInterval> | null = null;
-    if (interval > 0) {
-      timerId = setInterval(trySave, interval);
-    }
-
     return () => {
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibility);
       clearPendingEventSave();
-      if (timerId !== null) clearInterval(timerId);
     };
-  }, [interval, isDirty, onSave, suspended, suspensionVersion]);
+  }, [clearPendingEventSave, flushPendingAutoSave]);
+
+  useEffect(() => {
+    return () => {
+      clearDebounceTimer();
+      clearPendingEventSave();
+    };
+  }, [clearDebounceTimer, clearPendingEventSave]);
+
+  return { flushPendingAutoSave };
 }

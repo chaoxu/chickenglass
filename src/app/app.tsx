@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
 import { AppMainShell } from "./components/app-main-shell";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
 import { ErrorBoundary } from "./components/error-boundary";
@@ -19,6 +19,12 @@ import { useAppFileDialogs } from "./hooks/use-app-file-dialogs";
 import { useAppOverlays } from "./hooks/use-app-overlays";
 import { useAppSessionPersistence } from "./hooks/use-app-session-persistence";
 import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
+import type {
+  AutoSaveFlushOptions,
+  AutoSaveFlushReason,
+  UseAutoSaveReturn,
+} from "./hooks/use-auto-save";
+import { useAutoSave } from "./hooks/use-auto-save";
 import { useDialogs } from "./hooks/use-dialogs";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { type SidebarLayoutController, useSidebarLayout } from "./hooks/use-sidebar-layout";
@@ -66,8 +72,6 @@ function ConnectedAppOverlays({
   const overlays = useAppOverlays({
     fs,
     dialogs,
-    suspendAutoSave: unsavedChanges.status === "pending",
-    suspendAutoSaveVersion: unsavedChanges.suspensionVersion,
     workspace: {
       ...workspace,
       handleOpenFolder: onOpenFolder,
@@ -110,14 +114,35 @@ function AppInner() {
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
   const sidebarLayout = useSidebarLayout();
+  const autoSaveFlushRef = useRef<UseAutoSaveReturn["flushPendingAutoSave"] | null>(null);
+  const flushPendingAutoSave = useCallback(async (
+    reason: AutoSaveFlushReason,
+    options?: AutoSaveFlushOptions,
+  ) => {
+    await autoSaveFlushRef.current?.(reason, options);
+  }, []);
 
   const editor = useAppEditorShell({
     fs,
     settings: workspace.settings,
     refreshTree: workspace.refreshTree,
     addRecentFile: workspace.addRecentFile,
+    flushPendingAutoSave,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
   });
+
+  const autoSave = useAutoSave(
+    editor.hasDirtyDocument,
+    editor.saveFile,
+    workspace.settings.autoSaveInterval,
+    unsavedChanges.status === "pending",
+    unsavedChanges.suspensionVersion,
+    {
+      activeDocumentSignal: editor.activeDocumentSignal,
+      currentPath: editor.currentPath,
+    },
+  );
+  autoSaveFlushRef.current = autoSave.flushPendingAutoSave;
 
   // Stable reference for lazy child loading — used by default-doc search
   // and session persistence so their effects don't re-fire unnecessarily.

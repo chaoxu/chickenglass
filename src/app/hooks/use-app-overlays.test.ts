@@ -22,11 +22,9 @@ import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 const overlayHookState = vi.hoisted(() => ({
   hotkeys: [] as Array<{ key: string; handler: () => void }>,
   menuHandlers: {} as Record<string, () => void>,
-  autoSaveArgs: null as unknown[] | null,
   reset() {
     overlayHookState.hotkeys = [];
     overlayHookState.menuHandlers = {};
-    overlayHookState.autoSaveArgs = null;
   },
 }));
 
@@ -38,12 +36,6 @@ const exportModuleState = vi.hoisted(() => ({
     exportModuleState.exportDocument.mockResolvedValue("notes/current.html");
     exportModuleState.batchExport.mockReset();
     exportModuleState.batchExport.mockResolvedValue([]);
-  },
-}));
-
-vi.mock("./use-auto-save", () => ({
-  useAutoSave: (...args: unknown[]) => {
-    overlayHookState.autoSaveArgs = args;
   },
 }));
 
@@ -229,8 +221,6 @@ async function createHookProps(
     props: {
       fs,
       dialogs,
-      suspendAutoSave: false,
-      suspendAutoSaveVersion: 0,
       workspace,
       sidebarLayout,
       editor,
