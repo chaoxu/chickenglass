@@ -58,7 +58,8 @@ export function useAutoSave(
       if (suspended) return;
       if (!isDirty || savingRef.current) return;
       savingRef.current = true;
-      onSave()
+      Promise.resolve()
+        .then(onSave)
         .catch(logCatchError("[auto-save] save failed"))
         .finally(() => {
           savingRef.current = false;

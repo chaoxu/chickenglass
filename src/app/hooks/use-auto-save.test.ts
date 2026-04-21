@@ -93,6 +93,45 @@ describe("useAutoSave", () => {
     }
   });
 
+  it("clears the in-flight guard after synchronous save failures", async () => {
+    const error = new Error("sync save failure");
+    const onSave = vi.fn(() => {
+      throw error;
+    }) as unknown as () => Promise<void>;
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const flushAutoSave = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+
+    try {
+      act(() => {
+        root.render(createElement(Harness, {
+          isDirty: true,
+          onSave,
+          interval: 0,
+        }));
+      });
+
+      await act(async () => {
+        window.dispatchEvent(new Event("blur"));
+        await flushAutoSave();
+      });
+
+      await act(async () => {
+        window.dispatchEvent(new Event("blur"));
+        await flushAutoSave();
+      });
+
+      expect(onSave).toHaveBeenCalledTimes(2);
+      expect(consoleError).toHaveBeenCalledWith("[auto-save] save failed", error);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it("delays Tauri blur saves so a suspended close flow can cancel them", async () => {
     const onSave = vi.fn(async () => {});
     (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;

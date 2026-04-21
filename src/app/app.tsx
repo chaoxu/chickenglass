@@ -12,7 +12,7 @@ import {
   useAppWorkspaceController,
 } from "./contexts/app-workspace-context";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
-import { type FileEntry, type FileSystem, MemoryFileSystem } from "./file-manager";
+import type { FileEntry, FileSystem, MemoryFileSystemEntry } from "./file-manager";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
 import { useAppFileDialogs } from "./hooks/use-app-file-dialogs";
@@ -24,6 +24,14 @@ import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { type SidebarLayoutController, useSidebarLayout } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
+
+interface FixtureProjectFileSystem extends FileSystem {
+  replaceAll(entries: readonly MemoryFileSystemEntry[]): void;
+}
+
+function canLoadFixtureProject(fs: FileSystem): fs is FixtureProjectFileSystem {
+  return typeof (fs as { replaceAll?: unknown }).replaceAll === "function";
+}
 
 /** Lazy-loaded overlay dialogs — not needed until the user opens one. */
 const AppOverlays = lazy(() =>
@@ -105,7 +113,7 @@ function AppInner() {
   }, [fs]);
 
   const loadFixtureProject = useMemo(() => {
-    if (!(fs instanceof MemoryFileSystem)) {
+    if (!canLoadFixtureProject(fs)) {
       return undefined;
     }
 

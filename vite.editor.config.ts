@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => ({
       formats: ["es"],
       fileName: () => "editor.mjs",
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: (id) =>
         !id.includes("?inline") &&
         !id.endsWith(".css") &&
@@ -52,7 +52,7 @@ export default defineConfig(({ mode }) => ({
           id === dependency || id.startsWith(`${dependency}/`),
         ),
       output: {
-        inlineDynamicImports: true,
+        codeSplitting: false,
       },
     },
   },

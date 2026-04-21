@@ -6,18 +6,21 @@
  * optional CDP mode for debugging against a manually managed app window.
  *
  * Prerequisites:
- *   1. pnpm dev       — start the Vite dev server
- *   2. Optional: pnpm chrome -- --browser cdp
+ *   - managed mode starts the Vite dev server automatically when needed
+ *   - cdp mode still needs a browser from `pnpm chrome`
  *
  * Usage:
  *   pnpm test:browser
  *   node scripts/test-regression.mjs [--browser managed|cdp] [--headed] [--filter headings,math]
+ *   node scripts/test-regression.mjs --scenario smoke
  */
 
 import console from "node:console";
+import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import {
@@ -25,11 +28,147 @@ import {
   createArgParser,
   disconnectBrowser,
   resetEditorState,
+  waitForAppUrl,
   waitForDebugBridge,
 } from "./test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
+const SMOKE_FILTER = ["mode-switch", "index-open-rich-render", "headings", "math-render"];
+
+function normalizeCliArgs(args) {
+  return args.filter((arg) => arg !== "--");
+}
+
+function resolveFilter({ filterArg, scenarioArg }) {
+  if (filterArg) {
+    return filterArg.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  if (!scenarioArg) {
+    return [];
+  }
+
+  if (scenarioArg === "smoke") {
+    return SMOKE_FILTER;
+  }
+
+  throw new Error(
+    `Unknown browser regression scenario "${scenarioArg}". Available scenarios: smoke`,
+  );
+}
+
+function isLoopbackAppUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function buildViteDevArgs(url) {
+  const parsed = new URL(url);
+  const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+  const host = parsed.hostname === "[::1]" ? "::1" : parsed.hostname;
+  return ["dev", "--", "--host", host, "--port", port, "--strictPort"];
+}
+
+async function isAppServerReachable(url) {
+  try {
+    await waitForAppUrl(url, { timeout: 750, intervalMs: 150 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function collectChildOutput(child) {
+  const lines = [];
+  const append = (chunk) => {
+    for (const line of chunk.toString("utf8").split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      lines.push(line);
+      if (lines.length > 30) lines.shift();
+    }
+  };
+
+  child.stdout?.on("data", append);
+  child.stderr?.on("data", append);
+
+  return () => lines.join("\n");
+}
+
+function waitForExit(child) {
+  return new Promise((resolve) => {
+    child.once("exit", (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
+}
+
+async function startAppServer(url) {
+  const child = spawn(
+    process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+    buildViteDevArgs(url),
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const getOutput = collectChildOutput(child);
+  const exitPromise = waitForExit(child);
+  let exited = false;
+  void exitPromise.then(() => {
+    exited = true;
+  });
+
+  try {
+    await Promise.race([
+      waitForAppUrl(url, { timeout: 30_000, intervalMs: 250 }),
+      exitPromise.then(({ code, signal }) => {
+        throw new Error(
+          `Vite dev server exited before ${url} became reachable (code=${code}, signal=${signal}).\n${getOutput()}`,
+        );
+      }),
+    ]);
+  } catch (error) {
+    if (!exited) {
+      child.kill("SIGTERM");
+    }
+    throw error;
+  }
+
+  return async () => {
+    if (exited) return;
+    child.kill("SIGTERM");
+    await Promise.race([
+      exitPromise,
+      sleep(2000),
+    ]);
+    if (!exited) {
+      child.kill("SIGKILL");
+      await Promise.race([
+        exitPromise,
+        sleep(500),
+      ]);
+    }
+  };
+}
+
+async function ensureAppServer(url, { autoStart }) {
+  if (await isAppServerReachable(url)) {
+    return null;
+  }
+  if (!autoStart || !isLoopbackAppUrl(url)) {
+    return null;
+  }
+
+  console.log(`Starting Vite dev server for ${url}...\n`);
+  return startAppServer(url);
+}
 
 /** Dynamically import all test modules from the regression-tests directory. */
 async function loadTests(filter) {
@@ -59,18 +198,23 @@ async function loadTests(filter) {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  const args = normalizeCliArgs(process.argv.slice(2));
   const chromeArgs = parseChromeArgs(args, { browser: "managed" });
-  const { getFlag } = createArgParser(args);
+  const { getFlag, hasFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
-  const filter = filterArg ? filterArg.split(",").map((s) => s.trim()) : [];
+  const scenarioArg = getFlag("--scenario", "");
+  const filter = resolveFilter({ filterArg, scenarioArg });
 
   console.log("Browser Regression Tests");
   console.log("========================\n");
 
   // Connect to the browser harness
   let page;
+  let stopAppServer = null;
   try {
+    stopAppServer = await ensureAppServer(chromeArgs.url, {
+      autoStart: !hasFlag("--no-start-server"),
+    });
     page = await connectEditor({
       browser: chromeArgs.browser,
       headless: chromeArgs.headless,
@@ -79,22 +223,32 @@ async function main() {
     });
   } catch (err) {
     console.error("Failed to open the browser regression harness.");
-    console.error("Make sure the app server is running:");
-    console.error("  1. pnpm dev");
+    console.error("Managed mode starts the app server automatically for localhost URLs.");
+    console.error("To start it manually, run:");
+    console.error("  pnpm dev");
     console.error("Optional manual browser lane:");
-    console.error("  2. pnpm chrome");
+    console.error("  pnpm chrome");
     console.error(`\nError: ${err.message}`);
+    if (stopAppServer) {
+      await stopAppServer();
+    }
     process.exit(1);
   }
 
   let shuttingDown = false;
   const cleanup = async () => {
-    if (shuttingDown || !page) {
+    if (shuttingDown) {
       return;
     }
     shuttingDown = true;
-    await disconnectBrowser(page);
-    page = null;
+    if (page) {
+      await disconnectBrowser(page);
+      page = null;
+    }
+    if (stopAppServer) {
+      await stopAppServer();
+      stopAppServer = null;
+    }
   };
   const onSigint = () => {
     cleanup().finally(() => process.exit(130));
