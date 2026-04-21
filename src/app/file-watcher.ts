@@ -11,7 +11,11 @@ import type { ExternalDocumentSyncResult } from "./editor-session-service";
 import { logCatchError } from "./lib/log-catch-error";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
-import { watchDirectoryCommand, unwatchDirectoryCommand } from "./tauri-client/watch";
+import {
+  type WatchDirectoryResult,
+  watchDirectoryCommand,
+  unwatchDirectoryCommand,
+} from "./tauri-client/watch";
 
 let latestFileWatcherToken = 0;
 const DEFAULT_WATCH_DEBOUNCE_MS = 500;
@@ -47,6 +51,8 @@ export interface FileWatcherConfig {
 export interface FileChangedEvent {
   path: string;
   treeChanged: boolean;
+  generation?: number;
+  root?: string;
 }
 
 type FileChangedPayload = FileChangedEvent | string;
@@ -70,6 +76,7 @@ export class FileWatcher {
   private readonly config: FileWatcherConfig;
   private unlisten: UnlistenFn | null = null;
   private watchToken: number | null = null;
+  private watchRoot: string | null = null;
   private notificationBar: HTMLElement | null = null;
   /** Tracks dirty files waiting for user action. */
   private readonly pendingNotifications: string[] = [];
@@ -88,35 +95,13 @@ export class FileWatcher {
 
     this.watchToken = watchToken;
     this.unlisten = null;
-
-    previousUnlisten?.();
-    if (previousWatchToken !== null) {
-      try {
-        await unwatchDirectoryCommand(previousWatchToken);
-      } catch (error: unknown) {
-        console.warn("[file-watcher] failed to unwatch previous backend watcher during handoff", previousWatchToken, error);
-      }
-    }
-
-    const watchApplied = await watchDirectoryCommand(
-      directoryPath,
-      watchToken,
-      DEFAULT_WATCH_DEBOUNCE_MS,
-    );
-    if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
-      try {
-        await unwatchDirectoryCommand(watchToken);
-      } catch (error: unknown) {
-        console.warn("[file-watcher] failed to clean up stale backend watcher after watch handoff", watchToken, error);
-      }
-      return;
-    }
+    this.watchRoot = null;
 
     // Listen for file-changed events from the backend.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
     const unlisten = await listen<FileChangedPayload>("file-changed", (event) => {
-      void this.handleFileChanged(event.payload).catch(
+      void this.handleFileChanged(event.payload, watchToken).catch(
         logCatchError("[file-watcher] handleFileChanged failed", event.payload),
       );
     });
@@ -132,6 +117,56 @@ export class FileWatcher {
     }
 
     this.unlisten = unlisten;
+
+    previousUnlisten?.();
+    if (previousWatchToken !== null) {
+      try {
+        await unwatchDirectoryCommand(previousWatchToken);
+      } catch (error: unknown) {
+        console.warn("[file-watcher] failed to unwatch previous backend watcher during handoff", previousWatchToken, error);
+      }
+    }
+
+    let watchResult: WatchDirectoryResult | boolean;
+    try {
+      watchResult = await watchDirectoryCommand(
+        directoryPath,
+        watchToken,
+        DEFAULT_WATCH_DEBOUNCE_MS,
+      );
+    } catch (error: unknown) {
+      if (this.unlisten === unlisten) {
+        this.unlisten = null;
+        unlisten();
+      }
+      if (this.watchToken === watchToken) {
+        this.watchToken = null;
+        this.watchRoot = null;
+      }
+      throw error;
+    }
+    const { applied: watchApplied, root: watchRoot } = normalizeWatchDirectoryResult(
+      watchResult,
+      directoryPath,
+    );
+    if (!watchApplied || this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
+      if (this.unlisten === unlisten) {
+        this.unlisten = null;
+        unlisten();
+      }
+      if (this.watchToken === watchToken) {
+        this.watchToken = null;
+        this.watchRoot = null;
+      }
+      try {
+        await unwatchDirectoryCommand(watchToken);
+      } catch (error: unknown) {
+        console.warn("[file-watcher] failed to clean up stale backend watcher after watch handoff", watchToken, error);
+      }
+      return;
+    }
+
+    this.watchRoot = watchRoot;
   }
 
   /** Stop watching and clean up. */
@@ -141,6 +176,7 @@ export class FileWatcher {
 
     this.watchToken = null;
     this.unlisten = null;
+    this.watchRoot = null;
 
     unlisten?.();
     if (watchToken !== null) {
@@ -157,8 +193,16 @@ export class FileWatcher {
   }
 
   /** Handle a file-changed event from the backend. */
-  private async handleFileChanged(payload: FileChangedPayload): Promise<void> {
-    const { path: relativePath, treeChanged } = normalizeFileChangedEvent(payload);
+  private async handleFileChanged(
+    payload: FileChangedPayload,
+    subscriptionToken: number | null = this.watchToken,
+  ): Promise<void> {
+    const event = normalizeFileChangedEvent(payload);
+    if (!this.isCurrentWatcherEvent(event, subscriptionToken)) {
+      return;
+    }
+
+    const { path: relativePath, treeChanged } = event;
 
     if (treeChanged) {
       void measureAsync("watch.refresh_tree", () => this.config.refreshTree(relativePath), {
@@ -259,4 +303,30 @@ export class FileWatcher {
       this.notificationBar = null;
     }
   }
+
+  private isCurrentWatcherEvent(
+    event: FileChangedEvent,
+    subscriptionToken: number | null,
+  ): boolean {
+    if (subscriptionToken !== null && this.watchToken !== subscriptionToken) {
+      return false;
+    }
+    if (event.generation !== undefined && event.generation !== this.watchToken) {
+      return false;
+    }
+    if (event.root !== undefined && this.watchRoot !== null && event.root !== this.watchRoot) {
+      return false;
+    }
+    return true;
+  }
+}
+
+function normalizeWatchDirectoryResult(
+  result: WatchDirectoryResult | boolean,
+  requestedRoot: string,
+): WatchDirectoryResult {
+  if (typeof result === "boolean") {
+    return { applied: result, root: requestedRoot };
+  }
+  return result;
 }

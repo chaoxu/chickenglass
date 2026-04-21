@@ -4,7 +4,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use notify::{
-    event::ModifyKind, Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind,
 };
 
 use self::debouncer::{FileChangedEvent, QueuedFileChangedEvent};
@@ -14,13 +14,15 @@ use crate::services::path::path_to_frontend_string;
 
 mod debouncer;
 
-pub(crate) use self::debouncer::{spawn_debounced_event_worker, WatchEventMessage};
+pub(crate) use self::debouncer::{WatchEventMessage, spawn_debounced_event_worker};
 
 pub fn create_directory_watcher(
     root: PathBuf,
+    generation: u64,
     event_sender: mpsc::Sender<WatchEventMessage>,
 ) -> Result<RecommendedWatcher, String> {
     let root_for_closure = root.clone();
+    let event_root = path_to_frontend_string(&root, "Watch root path")?;
     let event_sender_for_closure = event_sender.clone();
 
     let mut watcher = RecommendedWatcher::new(
@@ -49,6 +51,8 @@ pub fn create_directory_watcher(
                 let payload = FileChangedEvent {
                     path: relative,
                     tree_changed,
+                    generation,
+                    root: event_root.clone(),
                 };
 
                 let _ = event_sender_for_closure.send(WatchEventMessage::FileChanged(
@@ -164,8 +168,8 @@ mod tests {
     };
     use crate::commands::state::FileWatcherEntry;
     use notify::{
-        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
         EventKind,
+        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
     };
     use std::collections::HashMap;
     use std::ffi::OsString;

@@ -58,22 +58,25 @@ pub fn create_text_file(
     relative_path: &str,
     content: Option<&str>,
 ) -> Result<(), String> {
-    if path.exists() {
-        return Err(format!("File already exists: {}", relative_path));
-    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
     }
-    fs::write(path, content.unwrap_or_default())
-        .map_err(|e| format!("Failed to create '{}': {}", relative_path, e))
+    write_new_file(path, content.unwrap_or_default().as_bytes()).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => format!("File already exists: {}", relative_path),
+        _ => format!("Failed to create '{}': {}", relative_path, e),
+    })
 }
 
 pub fn create_directory(path: &Path, relative_path: &str) -> Result<(), String> {
-    if path.exists() {
-        return Err(format!("Directory already exists: {}", relative_path));
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
     }
-    fs::create_dir_all(path)
-        .map_err(|e| format!("Failed to create directory '{}': {}", relative_path, e))
+    fs::create_dir(path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => {
+            format!("Directory already exists: {}", relative_path)
+        }
+        _ => format!("Failed to create directory '{}': {}", relative_path, e),
+    })
 }
 
 pub fn rename_path(
@@ -82,7 +85,7 @@ pub fn rename_path(
     new_path: &Path,
     new_relative_path: &str,
 ) -> Result<(), String> {
-    if new_path.exists() {
+    if new_path.symlink_metadata().is_ok() {
         return Err(format!("File already exists: {}", new_relative_path));
     }
     fs::rename(old_path, new_path).map_err(|e| {
@@ -94,7 +97,9 @@ pub fn rename_path(
 }
 
 pub fn delete_path(path: &Path, relative_path: &str) -> Result<(), String> {
-    if path.is_dir() {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|e| format!("Failed to inspect '{}': {}", relative_path, e))?;
+    if metadata.file_type().is_dir() {
         fs::remove_dir_all(path)
             .map_err(|e| format!("Failed to delete directory '{}': {}", relative_path, e))
     } else {
@@ -107,18 +112,15 @@ pub fn write_binary_file(
     relative_path: &str,
     data_base64: &str,
 ) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directories: {}", e))?;
-        }
-    }
-
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64)
         .map_err(|e| format!("Invalid base64 data: {}", e))?;
 
-    fs::write(path, &bytes)
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+
+    write_binary_bytes(path, &bytes)
         .map_err(|e| format!("Failed to write binary file '{}': {}", relative_path, e))
 }
 
@@ -146,10 +148,34 @@ fn write_existing_file(path: &Path, content: &str) -> std::io::Result<()> {
     write_existing_file_with_handle(path, &expected, content)
 }
 
+fn write_new_file(path: &Path, content: &[u8]) -> std::io::Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(content)
+}
+
+fn write_binary_bytes(path: &Path, content: &[u8]) -> std::io::Result<()> {
+    match FileHandle::from_path(path) {
+        Ok(expected) => write_existing_file_bytes_with_handle(path, &expected, content),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => write_new_file(path, content),
+        Err(error) => Err(error),
+    }
+}
+
 fn write_existing_file_with_handle(
     path: &Path,
     expected: &FileHandle,
     content: &str,
+) -> std::io::Result<()> {
+    write_existing_file_bytes_with_handle(path, expected, content.as_bytes())
+}
+
+fn write_existing_file_bytes_with_handle(
+    path: &Path,
+    expected: &FileHandle,
+    content: &[u8],
 ) -> std::io::Result<()> {
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -163,7 +189,7 @@ fn write_existing_file_with_handle(
         )));
     }
     file.set_len(0)?;
-    file.write_all(content.as_bytes())
+    file.write_all(content)
 }
 
 fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
@@ -257,10 +283,11 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 #[cfg(test)]
 mod tests {
     use super::{
-        install_project_root, list_children, write_existing_file, write_existing_file_with_handle,
-        FileEntry,
+        FileEntry, create_text_file, delete_path, install_project_root, list_children, rename_path,
+        write_binary_file, write_existing_file, write_existing_file_with_handle,
     };
     use crate::commands::state::ProjectRootEntry;
+    use base64::Engine;
     use same_file::Handle as FileHandle;
     use std::collections::HashMap;
     use std::fs;
@@ -462,5 +489,98 @@ mod tests {
         assert_eq!(fs::read_to_string(&file).unwrap(), "replacement");
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_text_file_does_not_overwrite_existing_file() {
+        let dir = create_temp_dir("create-existing");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+
+        let err = create_text_file(&file, "note.md", Some("new")).expect_err("should fail");
+
+        assert!(err.contains("File already exists"));
+        assert_eq!(fs::read_to_string(&file).unwrap(), "old");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_binary_file_creates_missing_file() {
+        let dir = create_temp_dir("write-binary-missing");
+        let file = dir.join("image.bin");
+        let encoded = base64::engine::general_purpose::STANDARD.encode([4, 5, 6]);
+
+        write_binary_file(&file, "image.bin", &encoded).unwrap();
+
+        assert_eq!(fs::read(&file).unwrap(), vec![4, 5, 6]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_path_removes_symlink_entry_not_target_directory() {
+        let root = create_temp_dir("delete-symlink-root");
+        let outside = create_temp_dir("delete-symlink-outside");
+        let target_file = outside.join("target.md");
+        let link = root.join("linked-dir");
+        fs::write(&target_file, "target").unwrap();
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+
+        delete_path(&link, "linked-dir").unwrap();
+
+        assert!(!link.exists());
+        assert!(target_file.exists());
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_path_moves_symlink_entry_not_target() {
+        let root = create_temp_dir("rename-symlink-root");
+        let outside = create_temp_dir("rename-symlink-outside");
+        let target_file = outside.join("target.md");
+        let old_link = root.join("old-link.md");
+        let new_link = root.join("new-link.md");
+        fs::write(&target_file, "target").unwrap();
+        std::os::unix::fs::symlink(&target_file, &old_link).unwrap();
+
+        rename_path(&old_link, "old-link.md", &new_link, "new-link.md").unwrap();
+
+        assert!(!old_link.exists());
+        assert!(
+            new_link
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(target_file.exists());
+        assert_eq!(fs::read_to_string(&target_file).unwrap(), "target");
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_path_treats_dangling_destination_symlink_as_existing() {
+        let root = create_temp_dir("rename-dangling-dest");
+        let source = root.join("source.md");
+        let destination = root.join("dest.md");
+        fs::write(&source, "source").unwrap();
+        std::os::unix::fs::symlink(root.join("missing.md"), &destination).unwrap();
+
+        let err = rename_path(&source, "source.md", &destination, "dest.md")
+            .expect_err("dangling symlink destination should block rename");
+
+        assert!(err.contains("File already exists"));
+        assert!(source.exists());
+        assert!(destination.symlink_metadata().is_ok());
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

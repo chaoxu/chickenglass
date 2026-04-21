@@ -35,6 +35,28 @@ impl ProjectPathResolver {
         Ok(full)
     }
 
+    pub fn resolve_project_entry_path(&self, relative: &str) -> Result<PathBuf, String> {
+        let full = self.canonical_root.join(relative);
+        let entry = canonicalize_parent_maybe_missing(&full)
+            .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
+        if !entry.starts_with(&self.canonical_root) {
+            return Err(format!("Path '{}' escapes project root", relative));
+        }
+        Ok(entry)
+    }
+
+    pub fn resolve_existing_entry_path(&self, relative: &str) -> Result<PathBuf, String> {
+        let full = self.resolve_project_entry_path(relative)?;
+        match std::fs::symlink_metadata(&full) {
+            Ok(_) => Ok(full),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(format!(
+                "Cannot resolve path '{}': No such file or directory",
+                relative
+            )),
+            Err(error) => Err(format!("Cannot resolve path '{}': {}", relative, error)),
+        }
+    }
+
     pub fn project_relative_path(&self, candidate: &Path) -> Result<String, String> {
         let canonical_candidate = canonicalize_maybe_missing(candidate)
             .map_err(|_| format!("Path '{}' escapes project root", candidate.display()))?;
@@ -45,6 +67,16 @@ impl ProjectPathResolver {
 
         path_to_frontend_string(relative, "Project-relative path")
     }
+}
+
+fn canonicalize_parent_maybe_missing(path: &Path) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("Path '{}' has no parent", path.display()))?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| format!("Path '{}' has no file name", path.display()))?;
+    Ok(canonicalize_maybe_missing(parent)?.join(name))
 }
 
 pub fn file_name_to_frontend_string(name: &OsStr, label: &str) -> Result<String, String> {
@@ -374,6 +406,48 @@ mod tests {
             "got: {}",
             err
         );
+
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn resolve_existing_entry_path_preserves_symlink_leaf() {
+        let root = create_temp_dir("entry-symlink-root");
+        let outside = create_temp_dir("entry-symlink-outside");
+        let target = outside.join("target.md");
+        let link = root.join("link.md");
+        fs::write(&target, "target").unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(&target, &link).unwrap();
+
+        let result = resolver.resolve_existing_entry_path("link.md").unwrap();
+        assert_eq!(result, link);
+
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn resolve_project_entry_path_rejects_symlink_ancestor_escape() {
+        let root = create_temp_dir("entry-ancestor-root");
+        let outside = create_temp_dir("entry-ancestor-outside");
+        let link = root.join("outside");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&outside, &link).unwrap();
+
+        let err = resolver
+            .resolve_project_entry_path("outside/file.md")
+            .expect_err("symlink ancestor should be rejected");
+        assert!(err.contains("escapes project root"), "got: {}", err);
 
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(&outside).unwrap();

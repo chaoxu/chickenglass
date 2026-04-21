@@ -1,13 +1,15 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use tauri::{command, AppHandle, State, WebviewWindow};
+use serde::Serialize;
+use tauri::{AppHandle, State, WebviewWindow, command};
 
+use super::context::{CommandSpec, run_command};
 use super::state::{FileWatcherState, PerfState};
-use super::context::{run_command, CommandSpec};
+use crate::services::path::path_to_frontend_string;
 use crate::services::watch::{
-    attach_watcher, create_directory_watcher, remove_watcher_generation, reserve_watcher_slot,
-    spawn_debounced_event_worker, WatchEventMessage,
+    WatchEventMessage, attach_watcher, create_directory_watcher, remove_watcher_generation,
+    reserve_watcher_slot, spawn_debounced_event_worker,
 };
 
 const WATCH_DIRECTORY: CommandSpec = CommandSpec::new(
@@ -22,6 +24,13 @@ const UNWATCH_DIRECTORY: CommandSpec = CommandSpec::new(
 );
 const DEFAULT_WATCH_DEBOUNCE_MS: u64 = 500;
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchDirectoryResult {
+    pub applied: bool,
+    pub root: String,
+}
+
 #[command]
 pub fn watch_directory(
     app: AppHandle,
@@ -31,7 +40,7 @@ pub fn watch_directory(
     path: String,
     generation: u64,
     debounce_ms: Option<u64>,
-) -> Result<bool, String> {
+) -> Result<WatchDirectoryResult, String> {
     run_command(&perf, WATCH_DIRECTORY, Some(&path), || {
         let watch_path = map_err_str!(
             PathBuf::from(&path).canonicalize(),
@@ -42,19 +51,23 @@ pub fn watch_directory(
         if !watch_path.is_dir() {
             return Err(format!("Not a directory: {}", watch_path.display()));
         }
+        let watch_root = path_to_frontend_string(&watch_path, "Watch root path")?;
 
         let window_label = window.label().to_string();
         {
             let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
             if !reserve_watcher_slot(&mut lock, &window_label, watch_path.clone(), generation) {
-                return Ok(false);
+                return Ok(WatchDirectoryResult {
+                    applied: false,
+                    root: watch_root,
+                });
             }
         }
 
         let debounce_ms = Duration::from_millis(debounce_ms.unwrap_or(DEFAULT_WATCH_DEBOUNCE_MS));
         let event_sender =
             spawn_debounced_event_worker(app.clone(), window_label.clone(), debounce_ms)?;
-        let watcher = create_directory_watcher(watch_path, event_sender.clone())?;
+        let watcher = create_directory_watcher(watch_path, generation, event_sender.clone())?;
 
         let mut lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
         let attached = attach_watcher(&mut lock, &window_label, generation, watcher);
@@ -64,7 +77,10 @@ pub fn watch_directory(
             let _ = event_sender.send(WatchEventMessage::Attached);
         }
 
-        Ok(attached)
+        Ok(WatchDirectoryResult {
+            applied: attached,
+            root: watch_root,
+        })
     })
 }
 

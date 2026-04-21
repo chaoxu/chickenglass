@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use tauri::{State, WebviewWindow, command};
 
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
-use super::context::{run_command, CommandSpec, WindowCommandContext};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{filesystem, path::ProjectPathResolver};
 
@@ -102,7 +102,7 @@ pub fn create_file(
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(CREATE_FILE, Some(&path), |project_root| {
         let paths = ProjectPathResolver::new(project_root)?;
-        let full = paths.resolve_project_path(&path)?;
+        let full = paths.resolve_project_entry_path(&path)?;
         filesystem::create_text_file(&full, &path, content.as_deref())
     })
 }
@@ -119,7 +119,7 @@ pub fn create_directory(
         Some(&path),
         |project_root| {
             let paths = ProjectPathResolver::new(project_root)?;
-            let full = paths.resolve_project_path(&path)?;
+            let full = paths.resolve_project_entry_path(&path)?;
             filesystem::create_directory(&full, &path)
         },
     )
@@ -152,8 +152,8 @@ pub fn rename_file(
         Some(&old_path),
         |project_root| {
             let paths = ProjectPathResolver::new(project_root)?;
-            let old_resolved = paths.resolve_existing_path(&old_path)?;
-            let new_full = paths.resolve_project_path(&new_path)?;
+            let old_resolved = paths.resolve_existing_entry_path(&old_path)?;
+            let new_full = paths.resolve_project_entry_path(&new_path)?;
             filesystem::rename_path(&old_resolved, &old_path, &new_full, &new_path)
         },
     )
@@ -177,7 +177,7 @@ pub fn delete_file(
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(DELETE_FILE, Some(&path), |project_root| {
         let paths = ProjectPathResolver::new(project_root)?;
-        let resolved = paths.resolve_existing_path(&path)?;
+        let resolved = paths.resolve_existing_entry_path(&path)?;
         filesystem::delete_path(&resolved, &path)
     })
 }

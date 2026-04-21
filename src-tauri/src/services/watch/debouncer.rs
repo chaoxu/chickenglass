@@ -11,6 +11,8 @@ use tauri::{AppHandle, Emitter};
 pub(super) struct FileChangedEvent {
     pub(super) path: String,
     pub(super) tree_changed: bool,
+    pub(super) generation: u64,
+    pub(super) root: String,
 }
 
 pub(crate) enum WatchEventMessage {
@@ -122,8 +124,8 @@ fn should_emit_debounced_event(
 #[cfg(test)]
 mod tests {
     use super::{
-        should_emit_debounced_event, DebouncedEventDispatcher, FileChangedEvent,
-        QueuedFileChangedEvent, WatchEventMessage,
+        DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
+        should_emit_debounced_event,
     };
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
@@ -183,6 +185,8 @@ mod tests {
                 payload: FileChangedEvent {
                     path: "notes/index.md".to_string(),
                     tree_changed: false,
+                    generation: 1,
+                    root: "/tmp/project".to_string(),
                 },
             }),
             &mut |payload| emitted.push(payload.clone()),
@@ -199,6 +203,8 @@ mod tests {
             vec![FileChangedEvent {
                 path: "notes/index.md".to_string(),
                 tree_changed: false,
+                generation: 1,
+                root: "/tmp/project".to_string(),
             }],
         );
     }
@@ -216,6 +222,8 @@ mod tests {
                 payload: FileChangedEvent {
                     path: "notes/index.md".to_string(),
                     tree_changed: false,
+                    generation: 1,
+                    root: "/tmp/project".to_string(),
                 },
             }),
             &mut |payload| emitted.push(payload.clone()),
@@ -227,6 +235,8 @@ mod tests {
                 payload: FileChangedEvent {
                     path: "notes/index.md".to_string(),
                     tree_changed: false,
+                    generation: 1,
+                    root: "/tmp/project".to_string(),
                 },
             }),
             &mut |payload| emitted.push(payload.clone()),
@@ -241,6 +251,8 @@ mod tests {
             vec![FileChangedEvent {
                 path: "notes/index.md".to_string(),
                 tree_changed: false,
+                generation: 1,
+                root: "/tmp/project".to_string(),
             }],
         );
     }
