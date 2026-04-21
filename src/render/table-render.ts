@@ -120,6 +120,15 @@ function rangeTouchesTable(
   to: number,
   table: Pick<TableRange, "from" | "to">,
 ): boolean {
+  if (from === to && table.from === table.to) {
+    return from === table.from;
+  }
+  if (from === to) {
+    return table.from <= from && from <= table.to;
+  }
+  if (table.from === table.to) {
+    return from <= table.from && table.from <= to;
+  }
   return table.from < to && from < table.to;
 }
 
@@ -181,14 +190,10 @@ function updateTableDecorationsForDiscoveryChange(
     return mappedValue;
   }
 
-  const filterFrom = Math.min(...affectedTables.map((table) => table.from));
-  const filterTo = Math.max(...affectedTables.map((table) => table.to));
   const macros = state.field(mathMacrosField);
   const renderSignature = getTableReferenceRenderDependencySignature(state);
 
   return mappedValue.update({
-    filterFrom,
-    filterTo,
     filter(from, to) {
       return !affectedTables.some((table) => rangeTouchesTable(from, to, table));
     },

@@ -504,15 +504,17 @@ function expandDirtyWindows(
     // and fromOld can only decrease during expansion, so the `to` half of
     // the overlap condition stays satisfied.  Stop once range.from exceeds
     // the (growing) toOld.
-    while (i < previousRanges.length && previousRanges[i].from <= toOld) {
+    while (i < previousRanges.length) {
       const range = previousRanges[i];
-      const mappedFrom = mapOldToNew(range.from, -1);
-      const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
-      fromOld = Math.min(fromOld, range.from);
-      toOld = Math.max(toOld, range.to);
-      fromNew = Math.min(fromNew, mappedFrom);
-      toNew = Math.max(toNew, mappedTo);
-      expanded = true;
+      if (range.from <= toOld) {
+        const mappedFrom = mapOldToNew(range.from, -1);
+        const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
+        fromOld = Math.min(fromOld, range.from);
+        toOld = Math.max(toOld, range.to);
+        fromNew = Math.min(fromNew, mappedFrom);
+        toNew = Math.max(toNew, mappedTo);
+        expanded = true;
+      }
       i++;
     }
 
@@ -589,15 +591,16 @@ function windowTouchesSortedRanges(
     return false;
   }
 
-  if (window.fromOld === window.toOld) {
-    const index = lowerBoundByTo(ranges, window.fromOld);
-    const range = ranges[index];
-    return range !== undefined && windowTouchesRange(range, window);
+  const index = lowerBoundByTo(
+    ranges,
+    window.fromOld === window.toOld ? window.fromOld : window.fromOld + 1,
+  );
+  for (let current = index; current < ranges.length; current += 1) {
+    if (windowTouchesRange(ranges[current], window)) {
+      return true;
+    }
   }
-
-  const index = lowerBoundByTo(ranges, window.fromOld + 1);
-  const range = ranges[index];
-  return range !== undefined && windowTouchesRange(range, window);
+  return false;
 }
 
 function windowsTouchSortedRanges(

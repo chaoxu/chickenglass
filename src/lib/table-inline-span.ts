@@ -22,16 +22,14 @@ const BACKTICK = 96;
 const OPEN_PAREN = 40;
 const CLOSE_PAREN = 41;
 const PIPE = 124;
-const SPACE = 32;
-const TAB = 9;
 
 export interface TableCellSpan {
   readonly from: number;
   readonly to: number;
 }
 
-function isSpaceTab(ch: number): boolean {
-  return ch === SPACE || ch === TAB;
+function charCodeAt(text: string, index: number): number {
+  return index >= 0 && index < text.length ? text.charCodeAt(index) : -1;
 }
 
 function clampSpanEnd(text: string, end: number): number {
@@ -39,14 +37,14 @@ function clampSpanEnd(text: string, end: number): number {
 }
 
 function canOpenDollarMath(text: string, start: number): boolean {
-  if (start + 1 >= text.length) return false;
-  const next = text.charCodeAt(start + 1);
-  return next !== DOLLAR && !isSpaceTab(next);
+  return isPandocDollarMathOpener(charCodeAt(text, start + 1));
 }
 
 function canCloseDollarMath(text: string, pos: number): boolean {
-  if (pos <= 0) return false;
-  return !isSpaceTab(text.charCodeAt(pos - 1));
+  return isPandocDollarMathCloser(
+    charCodeAt(text, pos - 1),
+    charCodeAt(text, pos + 1),
+  );
 }
 
 function collectPipePositions(
@@ -178,3 +176,7 @@ export function scanTableInlineSpan(
 
   return null;
 }
+import {
+  isPandocDollarMathCloser,
+  isPandocDollarMathOpener,
+} from "./pandoc-dollar-math";

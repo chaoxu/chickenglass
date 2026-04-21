@@ -194,4 +194,20 @@ describe("editor session lower-layer invariants", () => {
     expect(runtime.getEditorDoc()).toBe("Nested text");
     expect(service.getCurrentDocText()).toBe("Nested text");
   });
+
+  it("ignores ancestor watcher reads when the clean active descendant still exists", async () => {
+    const fs = new MemoryFileSystem({ "notes/draft.md": "Nested text" });
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFile("notes/draft.md");
+
+    await expect(service.syncExternalChange("notes")).resolves.toBe("ignore");
+
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "notes/draft.md",
+      name: "draft.md",
+      dirty: false,
+    });
+    expect(runtime.getEditorDoc()).toBe("Nested text");
+  });
 });

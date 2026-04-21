@@ -551,4 +551,25 @@ describe("tableDecorationField discovery updates", () => {
     expect(firstWidgetAfter).not.toBe(firstWidgetBefore);
     expect(secondWidgetAfter).toBe(secondWidgetBefore);
   });
+
+  it("removes the mapped table widget when an entire table is deleted", () => {
+    const doc = [
+      "| A |",
+      "| --- |",
+      "| 1 |",
+    ].join("\n");
+
+    const state = createTwoTableState(doc);
+    expect(getWidgets(state)).toHaveLength(1);
+
+    const afterState = state.update({
+      changes: {
+        from: 0,
+        to: doc.length,
+        insert: "",
+      },
+    }).state;
+
+    expect(getWidgets(afterState)).toHaveLength(0);
+  });
 });

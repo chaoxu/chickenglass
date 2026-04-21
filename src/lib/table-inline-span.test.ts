@@ -43,6 +43,12 @@ describe("scanTableInlineSpan", () => {
     ]);
   });
 
+  it("does not suppress pipes for dollar spans that Pandoc will not close before a digit", () => {
+    const line = "| $a | b$2 | c |";
+
+    expect(findTablePipePositions(line)).toEqual([0, 5, 11, 15]);
+  });
+
   it("returns row cell spans from only separator pipes", () => {
     const line = "| $a | b$ | \\(a \\| b\\) | `a | b` |";
 

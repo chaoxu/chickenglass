@@ -17,7 +17,7 @@ export interface ParsedInlineMathSource {
 }
 
 export const INLINE_MATH_DOLLAR_IMPORT_RE =
-  /(?<!\\)\$(?![\s$])(?:[^$\n\\]|\\.)*(?<!\s)\$(?!\d)/;
+  /\$(?![\s$])(?:[^$\n\\]|\\.)*(?<!\s)\$(?!\d)/;
 export const INLINE_MATH_DOLLAR_SHORTCUT_RE =
   /(?<!\\)\$(?![\s$])(?:[^$\n\\]|\\.)*(?<!\s)\$(?!\d)$/;
 export const INLINE_MATH_PAREN_IMPORT_RE = /\\\((?:[^\\\n]|\\.)+\\\)/;

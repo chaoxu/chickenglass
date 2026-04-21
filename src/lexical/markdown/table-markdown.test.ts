@@ -63,6 +63,19 @@ describe("table-markdown", () => {
     });
   });
 
+  it("splits pipes inside dollar spans that Pandoc will not close before a digit", () => {
+    expect(parseMarkdownTable([
+      "| Left | Middle | Right |",
+      "|---|---|---|",
+      "| $a | b$2 | c |",
+    ].join("\n"))).toEqual({
+      alignments: [null, null, null],
+      dividerCells: ["---", "---", "---"],
+      headers: ["Left", "Middle", "Right"],
+      rows: [["$a", "b$2", "c"]],
+    });
+  });
+
   it("serializes only literal separator pipes outside math and code spans", () => {
     expect(serializeMarkdownTable({
       alignments: [null, null, null, null],

@@ -71,6 +71,7 @@ describe("coflat lexical markdown", () => {
       "Costs are $20 and $30 today.",
       "Spaced dollars stay literal: $ x$ and $x $.",
       "Escaped dollars stay literal: \\$x$.",
+      "Even escaped backslashes still allow math: \\\\$x$.",
       "Valid tight math stays math: $x_1 + y$.",
     ];
 

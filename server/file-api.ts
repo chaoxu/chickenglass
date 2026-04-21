@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { constants as fsConstants } from "node:fs";
 import type { Stats } from "node:fs";
 import fs, { type FileHandle } from "node:fs/promises";
 import path from "node:path";
@@ -219,7 +220,7 @@ function sameFileStats(left: Stats, right: Stats): boolean {
   return left.dev === right.dev && left.ino === right.ino;
 }
 
-async function createAtomicWriteTempFile(parentDir: string): Promise<{
+async function createAtomicWriteTempFile(parentDir: string, mode?: number): Promise<{
   tempPath: string;
   handle: FileHandle;
 }> {
@@ -233,7 +234,7 @@ async function createAtomicWriteTempFile(parentDir: string): Promise<{
     );
 
     try {
-      const handle = await fs.open(tempPath, "wx");
+      const handle = await fs.open(tempPath, "wx", mode);
       return { tempPath, handle };
     } catch (error: unknown) {
       if (fileSystemErrorCode(error) !== "EEXIST") {
@@ -249,8 +250,9 @@ async function createAtomicWriteTempFile(parentDir: string): Promise<{
 async function writeTempFile(
   parentDir: string,
   content: string | Uint8Array,
+  mode?: number,
 ): Promise<string> {
-  const { tempPath, handle } = await createAtomicWriteTempFile(parentDir);
+  const { tempPath, handle } = await createAtomicWriteTempFile(parentDir, mode);
   let closed = false;
 
   try {
@@ -258,6 +260,9 @@ async function writeTempFile(
       await handle.writeFile(content, "utf-8");
     } else {
       await handle.writeFile(content);
+    }
+    if (mode !== undefined) {
+      await handle.chmod(mode);
     }
     await handle.sync();
     await handle.close();
@@ -277,6 +282,33 @@ async function writeTempFile(
   return tempPath;
 }
 
+async function verifyExistingTargetWritable(targetPath: string): Promise<void> {
+  const handle = await fs.open(targetPath, fsConstants.O_WRONLY);
+  await handle.close();
+}
+
+async function syncDirectory(dirPath: string): Promise<void> {
+  if (process.platform === "win32") {
+    return;
+  }
+
+  let handle: FileHandle | null = null;
+  try {
+    handle = await fs.open(dirPath, "r");
+    await handle.sync();
+  } catch (error: unknown) {
+    const code = fileSystemErrorCode(error);
+    if (code === "EINVAL" || code === "EISDIR" || code === "ENOSYS" || code === "ENOTSUP") {
+      return;
+    }
+    throw error;
+  } finally {
+    if (handle) {
+      await handle.close();
+    }
+  }
+}
+
 async function writeAtomicExistingFile(
   rootDir: string,
   safePath: string,
@@ -288,7 +320,10 @@ async function writeAtomicExistingFile(
   }
 
   const expectedStats = await fs.stat(targetPath);
-  const tempPath = await writeTempFile(path.dirname(targetPath), content);
+  await verifyExistingTargetWritable(targetPath);
+  const targetMode = expectedStats.mode & 0o7777;
+  const targetDir = path.dirname(targetPath);
+  const tempPath = await writeTempFile(targetDir, content, targetMode);
 
   try {
     const requestPathBeforeRename = await fs.realpath(safePath);
@@ -304,7 +339,9 @@ async function writeAtomicExistingFile(
       throw new FileChangedBeforeWriteError(targetPath);
     }
 
+    await verifyExistingTargetWritable(targetPath);
     await fs.rename(tempPath, targetPath);
+    await syncDirectory(targetDir);
   } catch (error: unknown) {
     await fs.rm(tempPath, { force: true });
     throw error;

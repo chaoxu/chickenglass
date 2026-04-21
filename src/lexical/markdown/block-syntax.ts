@@ -4,6 +4,7 @@ import {
   FENCED_DIV_START_RE,
   type SourceBlockRange,
 } from "./block-scanner";
+import { parseBracedId } from "../../parser/label-utils";
 
 export interface FencedDivInfo {
   readonly blockType: string;
@@ -29,20 +30,34 @@ export interface DisplayMathInfo {
 export interface ParsedDisplayMathBlock extends DisplayMathInfo {
   readonly bodyMarkdown: string;
   readonly closingDelimiter: "\\]" | "$$" | "\\end{equation}" | "\\end{equation*}";
+  readonly labelFrom?: number;
   readonly labelSuffix: string;
+  readonly labelTo?: number;
   readonly openingDelimiter: "\\[" | "$$" | "\\begin{equation}" | "\\begin{equation*}";
 }
 
-const DISPLAY_MATH_LABEL_SUFFIX_RE = /^\s*(\{#([A-Za-z][\w.:-]*)\})\s*$/;
+const DISPLAY_MATH_LABEL_SUFFIX_RE = /^\s*(\{#[^}\s]+\})\s*$/;
 
-function parseDisplayMathLabelSuffix(text: string): { readonly id: string; readonly labelSuffix: string } | null {
+function parseDisplayMathLabelSuffix(
+  text: string,
+  offset: number,
+): {
+  readonly id?: string;
+  readonly labelFrom?: number;
+  readonly labelSuffix: string;
+  readonly labelTo?: number;
+} | null {
   const match = text.match(DISPLAY_MATH_LABEL_SUFFIX_RE);
-  if (!match?.[1] || !match[2]) {
+  if (!match?.[1]) {
     return null;
   }
+  const id = parseBracedId(match[1], "eq:") ?? undefined;
+  const braceIndex = text.indexOf(match[1]);
   return {
-    id: match[2],
+    id,
+    labelFrom: id ? offset + braceIndex + "{#".length : undefined,
     labelSuffix: match[1],
+    labelTo: id ? offset + braceIndex + "{#".length + id.length : undefined,
   };
 }
 
@@ -200,13 +215,22 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
   const equationMatch = firstLine.match(/^\\begin\{(equation\*?)\}(?:\s*\\label\{([A-Za-z][\w.:-]*)\})?\s*$/);
   if (equationMatch) {
     const environment = equationMatch[1] as "equation" | "equation*";
+    const id = equationMatch[2];
+    const labelToken = id ? `\\label{${id}}` : undefined;
+    const labelTokenIndex = labelToken ? firstLine.indexOf(labelToken) : -1;
     const bodyMarkdown = lines.slice(1, -1).join("\n");
     return {
       body: bodyMarkdown.trim(),
       bodyMarkdown,
       closingDelimiter: `\\end{${environment}}`,
-      id: equationMatch[2],
-      labelSuffix: equationMatch[2] ? `\\label{${equationMatch[2]}}` : "",
+      id,
+      labelFrom: id && labelTokenIndex >= 0
+        ? labelTokenIndex + "\\label{".length
+        : undefined,
+      labelSuffix: id ? `\\label{${id}}` : "",
+      labelTo: id && labelTokenIndex >= 0
+        ? labelTokenIndex + "\\label{".length + id.length
+        : undefined,
       openingDelimiter: `\\begin{${environment}}`,
     };
   }
@@ -227,7 +251,10 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
     ? raw.indexOf("$$", openingIndex + 2)
     : -1;
   if (sameLineClosingIndex >= 0) {
-    const label = parseDisplayMathLabelSuffix(raw.slice(sameLineClosingIndex + 2));
+    const label = parseDisplayMathLabelSuffix(
+      raw.slice(sameLineClosingIndex + 2),
+      sameLineClosingIndex + 2,
+    );
     const bodyMarkdown = raw.slice(openingIndex + 2, sameLineClosingIndex);
 
     return {
@@ -235,13 +262,21 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
       bodyMarkdown,
       closingDelimiter: "$$",
       id: label?.id,
+      labelFrom: label?.labelFrom,
       labelSuffix: label?.labelSuffix ?? "",
+      labelTo: label?.labelTo,
       openingDelimiter: "$$",
     };
   }
 
   const closingLine = lines[lines.length - 1] ?? "";
-  const label = parseDisplayMathLabelSuffix(closingLine.replace(/^\s*\$\$/, ""));
+  const closingLineOffset = raw.length - closingLine.length;
+  const closingDelimiterMatch = closingLine.match(/^\s*\$\$/);
+  const labelOffset = closingLineOffset + (closingDelimiterMatch?.[0].length ?? 0);
+  const label = parseDisplayMathLabelSuffix(
+    closingLine.slice(closingDelimiterMatch?.[0].length ?? 0),
+    labelOffset,
+  );
   const bodyMarkdown = lines.slice(1, -1).join("\n");
 
   return {
@@ -249,7 +284,9 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
     bodyMarkdown,
     closingDelimiter: "$$",
     id: label?.id,
+    labelFrom: label?.labelFrom,
     labelSuffix: label?.labelSuffix ?? "",
+    labelTo: label?.labelTo,
     openingDelimiter: "$$",
   };
 }

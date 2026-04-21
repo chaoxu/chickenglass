@@ -180,7 +180,8 @@ fn write_existing_file_bytes_with_handle(
     expected: &FileHandle,
     content: &[u8],
 ) -> std::io::Result<()> {
-    let temp_path = write_same_directory_temp_file(path, content)?;
+    let permissions = existing_file_permissions_for_atomic_write(path)?;
+    let temp_path = write_same_directory_temp_file(path, content, Some(permissions))?;
     let actual = match FileHandle::from_path(path) {
         Ok(actual) => actual,
         Err(error) => {
@@ -196,6 +197,11 @@ fn write_existing_file_bytes_with_handle(
         )));
     }
 
+    if let Err(error) = verify_existing_file_writable(path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
     match fs::rename(&temp_path, path) {
         Ok(()) => sync_parent_directory(path),
         Err(error) => {
@@ -205,7 +211,22 @@ fn write_existing_file_bytes_with_handle(
     }
 }
 
-fn write_same_directory_temp_file(path: &Path, content: &[u8]) -> std::io::Result<PathBuf> {
+fn existing_file_permissions_for_atomic_write(path: &Path) -> std::io::Result<fs::Permissions> {
+    verify_existing_file_writable(path)?;
+    fs::metadata(path).map(|metadata| metadata.permissions())
+}
+
+fn verify_existing_file_writable(path: &Path) -> std::io::Result<()> {
+    let write_probe = fs::OpenOptions::new().write(true).open(path)?;
+    drop(write_probe);
+    Ok(())
+}
+
+fn write_same_directory_temp_file(
+    path: &Path,
+    content: &[u8],
+    permissions: Option<fs::Permissions>,
+) -> std::io::Result<PathBuf> {
     let parent = path.parent().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -233,6 +254,14 @@ fn write_same_directory_temp_file(path: &Path, content: &[u8]) -> std::io::Resul
             }
             Err(error) => return Err(error),
         };
+
+        if let Some(permissions) = permissions.clone() {
+            if let Err(error) = file.set_permissions(permissions) {
+                drop(file);
+                let _ = fs::remove_file(&temp_path);
+                return Err(error);
+            }
+        }
 
         if let Err(error) = file.write_all(content).and_then(|()| file.sync_all()) {
             drop(file);
@@ -535,6 +564,45 @@ mod tests {
         write_existing_file(&file, "new").unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), "new");
+        assert!(atomic_temp_paths(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_existing_file_preserves_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = create_temp_dir("write-existing-mode");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+
+        write_existing_file(&file, "new").unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), "new");
+        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(atomic_temp_paths(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_existing_file_rejects_read_only_targets() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = create_temp_dir("write-existing-readonly");
+        let file = dir.join("note.md");
+        fs::write(&file, "old").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o400)).unwrap();
+
+        let err = write_existing_file(&file, "new").expect_err("read-only target should fail");
+
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "old");
+        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o400);
         assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);

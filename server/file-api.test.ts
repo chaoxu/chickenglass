@@ -189,6 +189,55 @@ describe("handleFileApi", () => {
     await expect(atomicTempFiles(rootDir)).resolves.toEqual([]);
   });
 
+  it.skipIf(process.platform === "win32")("preserves existing file mode when atomically updating", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    const notePath = path.join(rootDir, "note.md");
+    await fs.writeFile(notePath, "old", "utf-8");
+    await fs.chmod(notePath, 0o600);
+
+    const response = await apiFetch(baseUrl, "/api/files/note.md", {
+      method: "PUT",
+      headers: {
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "new" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(fs.readFile(notePath, "utf-8")).resolves.toBe("new");
+    expect((await fs.stat(notePath)).mode & 0o777).toBe(0o600);
+    await expect(atomicTempFiles(rootDir)).resolves.toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32")("rejects atomic updates to read-only existing files", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    const notePath = path.join(rootDir, "note.md");
+    await fs.writeFile(notePath, "old", "utf-8");
+    await fs.chmod(notePath, 0o400);
+
+    try {
+      const response = await apiFetch(baseUrl, "/api/files/note.md", {
+        method: "PUT",
+        headers: {
+          Origin: baseUrl,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: "new" }),
+      });
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: "Permission denied: note.md",
+      });
+      await expect(fs.readFile(notePath, "utf-8")).resolves.toBe("old");
+      expect((await fs.stat(notePath)).mode & 0o777).toBe(0o400);
+      await expect(atomicTempFiles(rootDir)).resolves.toEqual([]);
+    } finally {
+      await fs.chmod(notePath, 0o600);
+    }
+  });
+
   it("preserves in-root symlink entries when atomically updating their targets", async () => {
     const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
     const targetPath = path.join(rootDir, "target.md");

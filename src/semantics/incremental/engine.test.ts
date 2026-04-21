@@ -250,6 +250,35 @@ describe("incremental document analysis engine", () => {
     expectAnalysisMatchesRebuild(after, rebuilt);
   });
 
+  it("matches a full rebuild after editing before a fenced-div opener attribute", () => {
+    const doc = [
+      "::: {.theorem #thm:one} Title",
+      "Body.",
+      ":::",
+      "",
+      "See [@thm:one].",
+    ].join("\n");
+    const state = createState(doc);
+    const before = analyze(state);
+    const from = doc.indexOf("{.theorem") - 1;
+    const tr = state.update({
+      changes: {
+        from,
+        insert: "x",
+      },
+    });
+
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(tr.state),
+      fullTree(tr.state),
+      buildSemanticDelta(tr),
+    );
+    const rebuilt = analyze(tr.state);
+
+    expectAnalysisMatchesRebuild(after, rebuilt);
+  });
+
   it("matches a full rebuild for plain prose inserts before later inline refs in the same paragraph", () => {
     const state = createState(
       "Lead prose here before [@sec:one] and $x$ later in the same paragraph.",

@@ -73,6 +73,48 @@ describe("extractMarkdownEquations", () => {
     ]);
   });
 
+  it("ignores non-equation display-math attributes", () => {
+    expect(extractMarkdownEquations("$$x + y$$ {#fig:plot}")).toEqual([
+      {
+        from: 0,
+        id: undefined,
+        labelFrom: undefined,
+        labelTo: undefined,
+        text: "x + y",
+        to: 21,
+      },
+    ]);
+    expect(extractMarkdownEquations("$$x + y$$ {#eq:eq:bad}")).toEqual([
+      {
+        from: 0,
+        id: undefined,
+        labelFrom: undefined,
+        labelTo: undefined,
+        text: "x + y",
+        to: 22,
+      },
+    ]);
+  });
+
+  it("uses the trailing label span even when the equation body contains the same text", () => {
+    const doc = [
+      "$$",
+      "\\text{#eq:sum}",
+      "$$ {#eq:sum}",
+    ].join("\n");
+
+    expect(extractMarkdownEquations(doc)).toEqual([
+      {
+        from: 0,
+        id: "eq:sum",
+        labelFrom: 23,
+        labelTo: 29,
+        text: "\\text{#eq:sum}",
+        to: 30,
+      },
+    ]);
+  });
+
   it("ignores malformed raw equations that the block scanner rejects", () => {
     expect(extractMarkdownEquations("\\begin{equation}\\label{eq:nope}\nx + y")).toEqual([]);
   });

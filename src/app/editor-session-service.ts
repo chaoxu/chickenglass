@@ -342,6 +342,16 @@ export function createEditorSessionService({
         return "ignore";
       }
 
+      if (path !== currentDocument.path) {
+        try {
+          await fs.readFile(currentDocument.path);
+          return "ignore";
+        } catch (_currentPathError: unknown) {
+          // The ancestor event affects the active document only when the
+          // active path itself has disappeared or become unreadable.
+        }
+      }
+
       if (!currentDocument.dirty) {
         runtime.activeDocumentSignal.publish(currentDocument.path);
         runtime.commit(

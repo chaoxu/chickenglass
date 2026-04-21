@@ -44,6 +44,7 @@ import {
   MARKDOWN_IMAGE_IMPORT_RE,
   MARKDOWN_IMAGE_SHORTCUT_RE,
 } from "../lib/markdown-image";
+import { isBackslashEscaped } from "../lib/pandoc-dollar-math";
 import {
   BRACKETED_REFERENCE_IMPORT_RE,
   BRACKETED_REFERENCE_SHORTCUT_RE,
@@ -234,6 +235,7 @@ function createInlineMathTransformer(
   importRegExp: RegExp,
   regExp: RegExp,
   trigger: "$" | ")",
+  getEndIndex?: TextMatchTransformer["getEndIndex"],
 ): TextMatchTransformer {
   return {
     dependencies: [InlineMathNode],
@@ -244,6 +246,7 @@ function createInlineMathTransformer(
       return null;
     },
     importRegExp,
+    getEndIndex,
     regExp,
     replace(node) {
       if (isRevealSourceTextNode(node)) {
@@ -262,11 +265,22 @@ function createInlineMathTransformer(
   };
 }
 
+function getDollarMathImportEndIndex(
+  node: TextNode,
+  match: RegExpMatchArray,
+): number | false {
+  const startIndex = match.index ?? 0;
+  return isBackslashEscaped(node.getTextContent(), startIndex)
+    ? false
+    : startIndex + match[0].length;
+}
+
 const inlineMathDollarTransformer = createInlineMathTransformer(
   "dollar",
   INLINE_MATH_DOLLAR_IMPORT_RE,
   INLINE_MATH_DOLLAR_SHORTCUT_RE,
   "$",
+  getDollarMathImportEndIndex,
 );
 
 const inlineMathParenTransformer = createInlineMathTransformer(
