@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 export type SidebarTab = "files" | "outline" | "diagnostics" | "runtime";
 
@@ -14,10 +14,29 @@ export interface SidebarLayoutController {
 }
 
 export function useSidebarLayout(): SidebarLayoutController {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 640px)").matches
+      : false
+  );
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 640px)");
+    const collapseForNarrowViewport = () => {
+      if (media.matches) {
+        setSidebarCollapsed(true);
+      }
+    };
+
+    collapseForNarrowViewport();
+    media.addEventListener("change", collapseForNarrowViewport);
+    return () => {
+      media.removeEventListener("change", collapseForNarrowViewport);
+    };
+  }, []);
 
   return {
     sidebarCollapsed,

@@ -46,11 +46,25 @@ export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
           }}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <TabsList className="flex shrink-0 border-b border-[var(--cf-border)]">
+          <TabsList className="flex w-full min-w-0 shrink-0 border-b border-[var(--cf-border)]">
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="outline">Outline</TabsTrigger>
-            <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
-            {showRuntimeLogs ? <TabsTrigger value="runtime">Runtime</TabsTrigger> : null}
+            <TabsTrigger
+              value="diagnostics"
+              aria-label="Diagnostics"
+              title="Diagnostics"
+            >
+              Issues
+            </TabsTrigger>
+            {showRuntimeLogs ? (
+              <TabsTrigger
+                value="runtime"
+                aria-label="Runtime"
+                title="Runtime"
+              >
+                Logs
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
           <SidebarContent>

@@ -166,7 +166,9 @@ const Sidebar = React.forwardRef<
       inert={open ? undefined : true}
       className={cn(
         "flex min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--cf-bg)]",
-        open ? "w-[var(--cf-sidebar-width)] border-r border-[var(--cf-border)]" : "w-0 border-r-0 pointer-events-none",
+        open
+          ? "w-[var(--cf-sidebar-width)] border-r border-[var(--cf-border)] max-sm:fixed max-sm:inset-y-0 max-sm:left-0 max-sm:z-40 max-sm:max-w-[85vw] max-sm:shadow-lg"
+          : "w-0 border-r-0 pointer-events-none",
         !isDragging && "transition-[width] duration-[var(--cf-transition,0.15s)] ease-in-out",
         className,
       )}

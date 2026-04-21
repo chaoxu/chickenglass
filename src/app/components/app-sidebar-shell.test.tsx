@@ -77,7 +77,7 @@ describe("AppSidebarShell", () => {
       );
     });
 
-    expect(container.textContent).toContain("Runtime");
+    expect(container.textContent).toContain("Logs");
     expect(container.textContent).toContain("No runtime errors yet");
   });
 });

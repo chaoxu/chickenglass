@@ -28,6 +28,10 @@ const MODE_SWITCH_FIXTURE = {
     "x^2 + y^2 = z^2",
     "$$ {#eq:mode-switch}",
     "",
+    "::: {.theorem #thm:mode-switch} Stable renderer",
+    "The lexical renderer should show this block after a mode switch.",
+    ":::",
+    "",
     "Final line for canonical text checks.",
     "",
   ].join("\n"),
@@ -58,6 +62,12 @@ async function captureModeState(page) {
     const richWidgetCount = cmRoot?.querySelectorAll(
       ".cf-block-header, .cf-math-inline, .cf-math-display",
     ).length ?? 0;
+    const lexicalDisplayMathCount = lexicalRoot
+      ?.querySelectorAll(".cf-lexical-display-math").length ?? 0;
+    const lexicalBlockCount = lexicalRoot
+      ?.querySelectorAll(".cf-lexical-block--theorem").length ?? 0;
+    const lexicalFallbackCount = lexicalRoot
+      ?.querySelectorAll("[data-coflat-raw-block-fallback='true']").length ?? 0;
 
     return {
       mode: window.__app?.getMode?.() ?? null,
@@ -74,6 +84,9 @@ async function captureModeState(page) {
         : null,
       cmKatexCount,
       richWidgetCount,
+      lexicalDisplayMathCount,
+      lexicalBlockCount,
+      lexicalFallbackCount,
     };
   }, DEBUG_EDITOR_SELECTOR);
 }
@@ -126,6 +139,15 @@ function validateState(state, expectedMode, expectedDoc, expectedDirty) {
   }
   if (expectedMode === "lexical" && state.lexicalSurfaceIdentity !== "lexical-editor") {
     return `lexical mode mounted unexpected surface identity ${state.lexicalSurfaceIdentity}`;
+  }
+  if (expectedMode === "lexical" && state.lexicalFallbackCount > 0) {
+    return `lexical mode rendered ${state.lexicalFallbackCount} fallback raw block shells`;
+  }
+  if (expectedMode === "lexical" && state.lexicalDisplayMathCount < 1) {
+    return "lexical mode did not render display math";
+  }
+  if (expectedMode === "lexical" && state.lexicalBlockCount < 1) {
+    return "lexical mode did not render theorem blocks";
   }
   if (expectedSurface === "cm6" && state.cmSurfaceIdentity !== "cm6") {
     return `CM6 mode mounted unexpected surface identity ${state.cmSurfaceIdentity}`;

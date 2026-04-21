@@ -212,6 +212,7 @@ export function useAppEditorShell({
     isPathOpen,
     openFileWithContent: sessionOpenFileWithContent,
     saveFile: sessionSaveFile,
+    handleDocumentSnapshot: sessionHandleDocumentSnapshot,
   } = session;
 
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
@@ -393,6 +394,15 @@ export function useAppEditorShell({
     const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
     const applyModeOverride = () => {
+      if (
+        isLexicalEditorMode(normalizedMode) &&
+        !isLexicalEditorMode(editorMode)
+      ) {
+        const liveDoc = getSessionCurrentDocText();
+        if (liveDoc !== editorDoc) {
+          sessionHandleDocumentSnapshot(liveDoc);
+        }
+      }
       if (currentPath) {
         setModeOverrides((previous) => ({
           ...previous,
@@ -413,7 +423,16 @@ export function useAppEditorShell({
     } else {
       applyModeOverride();
     }
-  }, [currentPath, editorState?.view, isMarkdownFile, runEditorTransaction]);
+  }, [
+    currentPath,
+    editorDoc,
+    editorMode,
+    editorState?.view,
+    getSessionCurrentDocText,
+    isMarkdownFile,
+    runEditorTransaction,
+    sessionHandleDocumentSnapshot,
+  ]);
 
   const handleOutlineSelect = useCallback((from: number) => {
     const lexicalHandle = lexicalEditorHandleRef.current;

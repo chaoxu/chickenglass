@@ -76,3 +76,11 @@ export function getFootnoteReferenceRenderer(): FootnoteReferenceRendererCompone
 export function getRawBlockRenderer(): RawBlockRendererComponent {
   return registered.rawBlock;
 }
+
+export function _hasRegisteredRenderersForTest(): boolean {
+  return registered !== fallback;
+}
+
+export function _resetRenderersForTest(): void {
+  registered = fallback;
+}

@@ -231,6 +231,34 @@ describe("useAppEditorShell", () => {
     });
   });
 
+  it("publishes unsaved CM6 edits before switching to Lexical", async () => {
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed in CM6\n"));
+    });
+
+    expect(ref.result.editorDoc).toBe("# A\n");
+    expect(ref.result.getCurrentDocText()).toBe("# A changed in CM6\n");
+
+    act(() => {
+      ref.result.handleModeChange("lexical");
+    });
+
+    expect(ref.result.editorMode).toBe("lexical");
+    expect(ref.result.editorDoc).toBe("# A changed in CM6\n");
+  });
+
   it("does not persist a target mode override when search navigation is canceled", async () => {
     const requestUnsavedChangesDecision = vi
       .fn<() => Promise<"save" | "discard" | "cancel">>()
