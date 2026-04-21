@@ -1,6 +1,9 @@
 import { $isCodeHighlightNode, $isCodeNode, registerCodeHighlighting } from "@lexical/code";
+import type { ElementTransformer } from "@lexical/markdown";
+import { QuoteNode } from "@lexical/rich-text";
 import {
   $createLineBreakNode,
+  $createParagraphNode,
   $createTextNode,
   $getRoot,
   $isElementNode,
@@ -8,6 +11,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  coflatMarkdownTransformers,
   createHeadlessCoflatEditor,
   getLexicalMarkdown,
   roundTripMarkdown,
@@ -205,6 +209,55 @@ describe("coflat lexical markdown", () => {
     });
 
     expect(getLexicalMarkdown(editor)).toBe(markdown);
+  });
+
+  it("preserves pandoc grid tables as source-owned table blocks", () => {
+    const editor = createHeadlessCoflatEditor();
+    const markdown = [
+      "+-------+------------------+",
+      "| Input | Output           |",
+      "+=======+==================+",
+      "| graph | first paragraph  |",
+      "|       |                  |",
+      "|       | second paragraph |",
+      "+-------+------------------+",
+    ].join("\n");
+
+    setLexicalMarkdown(editor, markdown);
+
+    editor.getEditorState().read(() => {
+      const firstChild = $getRoot().getFirstChild();
+      expect($isRawBlockNode(firstChild)).toBe(true);
+      if (!$isRawBlockNode(firstChild)) {
+        return;
+      }
+      expect(firstChild.getVariant()).toBe("grid-table");
+    });
+
+    expect(getLexicalMarkdown(editor)).toBe(markdown);
+  });
+
+  it("imports legacy line blockquotes but exports canonical fenced blockquotes", () => {
+    expect(roundTripMarkdown("> Quoted $x$ and [@sec:intro].")).toBe([
+      "::: {.blockquote}",
+      "Quoted $x$ and [@sec:intro].",
+      ":::",
+    ].join("\n"));
+  });
+
+  it("keeps the legacy line blockquote transformer import-only for shortcuts", () => {
+    const quoteTransformer = coflatMarkdownTransformers.find(
+      (transformer): transformer is ElementTransformer =>
+        transformer.type === "element"
+        && transformer.dependencies.includes(QuoteNode)
+        && transformer.regExp.test("> "),
+    );
+    expect(quoteTransformer).toBeDefined();
+
+    const editor = createHeadlessCoflatEditor();
+    editor.update(() => {
+      expect(quoteTransformer?.replace($createParagraphNode(), [], ["> "], false)).toBe(false);
+    }, { discrete: true });
   });
 
   it("serializes visible table-cell line breaks as pipe-table br markers", () => {

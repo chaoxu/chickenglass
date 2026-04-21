@@ -53,6 +53,7 @@ export function LexicalEditorPane({
 }: LexicalEditorPaneProps) {
   const [handle, setHandle] = useState<MarkdownEditorHandle | null>(null);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
+  const currentDocRef = useRef(editorOptions.doc);
   const [selection, setSelection] = useState<MarkdownEditorSelection>({
     anchor: 0,
     focus: 0,
@@ -69,14 +70,21 @@ export function LexicalEditorPane({
   }, [onDiagnosticsChange, onHeadingsChange]);
 
   useEffect(() => {
+    currentDocRef.current = editorOptions.doc;
     syncDocumentDerivedState(editorOptions.doc);
     useEditorTelemetryStore.getState().setTelemetry({
-      cursorPos: selection.focus,
       doc: editorOptions.doc,
     });
-  }, [editorOptions.doc, selection.focus, syncDocumentDerivedState]);
+  }, [editorOptions.doc, syncDocumentDerivedState]);
+
+  useEffect(() => {
+    useEditorTelemetryStore.getState().setTelemetry({
+      cursorPos: selection.focus,
+    });
+  }, [selection.focus]);
 
   const handleTextChange = useCallback((text: string) => {
+    currentDocRef.current = text;
     syncDocumentDerivedState(text);
   }, [syncDocumentDerivedState]);
 
@@ -84,9 +92,9 @@ export function LexicalEditorPane({
     setSelection(nextSelection);
     useEditorTelemetryStore.getState().setTelemetry({
       cursorPos: nextSelection.focus,
-      doc: handleRef.current?.peekDoc() ?? editorOptions.doc,
+      doc: currentDocRef.current,
     });
-  }, [editorOptions.doc]);
+  }, []);
 
   const handleEditorReady = useCallback((nextHandle: MarkdownEditorHandle) => {
     handleRef.current = nextHandle;

@@ -37,6 +37,7 @@ const RAW_BLOCK_CONTENT_RENDERERS = {
   "fenced-div": FencedDivBlockRenderer,
   "footnote-definition": FootnoteDefinitionBlockRenderer,
   frontmatter: FrontmatterRenderer,
+  "grid-table": RawFallbackRenderer,
   image: ImageBlockRenderer,
 } satisfies Record<RawBlockVariant, ComponentType<RawBlockContentRendererProps>>;
 

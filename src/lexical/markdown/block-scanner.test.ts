@@ -27,6 +27,12 @@ describe("block-scanner", () => {
       "[^1]: footnote",
       "  continuation",
       "",
+      "+-------+-------+",
+      "| Left  | Right |",
+      "+=======+=======+",
+      "| $x$   | y     |",
+      "+-------+-------+",
+      "",
       "| A | B |",
       "| --- | --- |",
       "| 1 | 2 |",
@@ -40,7 +46,39 @@ describe("block-scanner", () => {
       "display-math",
       "image",
       "footnote-definition",
+      "grid-table",
       "table",
+    ]);
+  });
+
+  it("collects pandoc grid tables as source-backed blocks", () => {
+    const markdown = [
+      "Before",
+      "",
+      "+-------+------------------+",
+      "| Input | Output           |",
+      "+=======+==================+",
+      "| graph | first paragraph  |",
+      "|       |                  |",
+      "|       | second paragraph |",
+      "+-------+------------------+",
+      "",
+      "After",
+    ].join("\n");
+
+    expect(collectSourceBlockRanges(markdown)).toMatchObject([
+      {
+        raw: [
+          "+-------+------------------+",
+          "| Input | Output           |",
+          "+=======+==================+",
+          "| graph | first paragraph  |",
+          "|       |                  |",
+          "|       | second paragraph |",
+          "+-------+------------------+",
+        ].join("\n"),
+        variant: "grid-table",
+      },
     ]);
   });
 

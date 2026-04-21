@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import type { LexicalEditor } from "lexical";
 import {
@@ -98,6 +98,78 @@ describe("LexicalMarkdownEditor history", () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 250));
       expect(onDirtyChange).not.toHaveBeenCalled();
+      expect(onDocChange).not.toHaveBeenCalled();
+      expect(onTextChange).not.toHaveBeenCalled();
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("publishes a debounced markdown snapshot after rich text edits", async () => {
+    const onDocChange = vi.fn();
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "Alpha",
+      editorMode: "lexical",
+      onDocChange,
+      onTextChange,
+    });
+
+    try {
+      const rootElement = editor.editor.getRootElement();
+      if (!rootElement) {
+        throw new Error("expected editor root");
+      }
+
+      act(() => {
+        fireEvent.keyDown(rootElement, { key: "Backspace" });
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected text");
+          }
+          text.select(text.getTextContentSize(), text.getTextContentSize());
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) {
+            throw new Error("expected range selection");
+          }
+          selection.insertText(" Beta");
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(onTextChange).toHaveBeenCalledWith("Alpha Beta");
+      });
+      expect(onDocChange).toHaveBeenCalledWith([{
+        from: 5,
+        insert: " Beta",
+        to: 5,
+      }]);
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("does not publish document snapshots for selection-only rich cursor movement", async () => {
+    const onDocChange = vi.fn();
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "Alpha **Beta** Gamma",
+      editorMode: "lexical",
+      onDocChange,
+      onTextChange,
+    });
+
+    try {
+      act(() => {
+        editor.handle.setSelection(0, 5);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
       expect(onDocChange).not.toHaveBeenCalled();
       expect(onTextChange).not.toHaveBeenCalled();
     } finally {

@@ -14,12 +14,15 @@ export const RAW_EQUATION_END_RE = /^\s*\\end\{equation\*?\}\s*$/;
 export const IMAGE_BLOCK_START_RE = MARKDOWN_IMAGE_LINE_RE;
 export const FOOTNOTE_DEFINITION_START_RE = /^\[\^[^\]]+\]:\s*(.*)$/;
 export const TABLE_DIVIDER_RE = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/;
+export const GRID_TABLE_SEPARATOR_RE = /^\s*\+(?:[=-]+\+)+\s*$/;
+export const GRID_TABLE_ROW_RE = /^\s*\|.*\|\s*$/;
 
 export type SourceBlockVariant =
   | "display-math"
   | "fenced-div"
   | "footnote-definition"
   | "frontmatter"
+  | "grid-table"
   | "image"
   | "table";
 
@@ -230,6 +233,34 @@ export function matchTableEndLine(
   return endLineIndex;
 }
 
+export function matchGridTableEndLine(
+  lines: readonly string[],
+  startLineIndex: number,
+): number {
+  if (!GRID_TABLE_SEPARATOR_RE.test(lines[startLineIndex] ?? "")) {
+    return -1;
+  }
+
+  let endLineIndex = -1;
+  let sawRow = false;
+  for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex] ?? "";
+    if (GRID_TABLE_ROW_RE.test(line)) {
+      sawRow = true;
+      continue;
+    }
+    if (GRID_TABLE_SEPARATOR_RE.test(line)) {
+      if (sawRow) {
+        endLineIndex = lineIndex;
+      }
+      continue;
+    }
+    break;
+  }
+
+  return endLineIndex;
+}
+
 export function collectSourceBlockRanges(markdown: string): SourceBlockRange[] {
   const lines = markdown.split("\n");
   const lineOffsets = computeLineOffsets(lines);
@@ -278,6 +309,13 @@ export function collectSourceBlockRanges(markdown: string): SourceBlockRange[] {
 
     if (isMarkdownImageLine(line)) {
       ranges.push(rangeFromLines(markdown, lines, lineOffsets, lineIndex, lineIndex, "image"));
+      continue;
+    }
+
+    const gridTableEndLine = matchGridTableEndLine(lines, lineIndex);
+    if (gridTableEndLine >= 0) {
+      ranges.push(rangeFromLines(markdown, lines, lineOffsets, lineIndex, gridTableEndLine, "grid-table"));
+      lineIndex = gridTableEndLine;
       continue;
     }
 

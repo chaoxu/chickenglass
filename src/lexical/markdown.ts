@@ -19,7 +19,7 @@ import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
 } from "@lexical/markdown";
-import { $isHeadingNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
+import { $isHeadingNode, $isQuoteNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
   type EditorUpdateOptions,
   type EditorThemeClasses,
@@ -81,11 +81,13 @@ import {
   FENCED_DIV_START_RE,
   FOOTNOTE_DEFINITION_START_RE,
   FRONTMATTER_DELIMITER_RE,
+  GRID_TABLE_SEPARATOR_RE,
   IMAGE_BLOCK_START_RE,
   RAW_EQUATION_START_RE,
   matchDisplayMathEndLine,
   matchFencedDivEndLine,
   matchFootnoteDefinitionEndLine,
+  matchGridTableEndLine,
   matchRawEquationEndLine,
 } from "./markdown/block-scanner";
 import { isRevealSourceStyle } from "./reveal-source-style";
@@ -219,6 +221,12 @@ const footnoteDefinitionTransformer = createRawBlockTransformer(
     }),
 );
 footnoteDefinitionTransformer.regExpStart = FOOTNOTE_DEFINITION_START_RE;
+
+const gridTableTransformer = createRawBlockTransformer(
+  "grid-table",
+  (lines, startLineIndex) => matchGridTableEndLine(lines, startLineIndex),
+);
+gridTableTransformer.regExpStart = GRID_TABLE_SEPARATOR_RE;
 
 function createInlineMathTransformer(
   delimiter: "dollar" | "paren",
@@ -417,6 +425,25 @@ const unorderedListTransformer = withListExportSeparator(UNORDERED_LIST);
 const orderedListTransformer = withListExportSeparator(ORDERED_LIST);
 const checkListTransformer = withListExportSeparator(CHECK_LIST);
 
+const blockquoteImportTransformer: ElementTransformer = {
+  ...QUOTE,
+  export(node, traverseChildren) {
+    if (!$isQuoteNode(node)) {
+      return null;
+    }
+    const body = traverseChildren(node).replace(/\n+$/, "");
+    return body.length > 0
+      ? `::: {.blockquote}\n${body}\n:::`
+      : "::: {.blockquote}\n:::";
+  },
+  replace(parentNode, children, match, isImport) {
+    if (!isImport) {
+      return false;
+    }
+    return QUOTE.replace(parentNode, children, match, isImport);
+  },
+};
+
 export const createTableNodeFromMarkdown = (raw: string) =>
   createTableNodeFromMarkdownInner(raw, tableCellMarkdownTransformers);
 
@@ -478,6 +505,7 @@ export const coflatMarkdownTransformers = [
   displayMathDollarTransformer,
   displayMathBracketTransformer,
   imageBlockTransformer,
+  gridTableTransformer,
   tableBlockTransformer,
   footnoteDefinitionTransformer,
   inlineMathDollarTransformer,
@@ -487,7 +515,7 @@ export const coflatMarkdownTransformers = [
   narrativeReferenceTransformer,
   headingAttributeTransformer,
   HEADING,
-  QUOTE,
+  blockquoteImportTransformer,
   unorderedListTransformer,
   orderedListTransformer,
   checkListTransformer,

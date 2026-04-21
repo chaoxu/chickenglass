@@ -63,6 +63,8 @@ import {
   COFLAT_REVEAL_UI_TAG,
 } from "./update-tags";
 
+const RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
+
 export function sameSelection(
   left: MarkdownEditorSelection,
   right: MarkdownEditorSelection,
@@ -222,11 +224,46 @@ export function useMarkdownEditorSessionController({
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
   const focusOwnerRef = useRef(focusOwner);
+  const richSnapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const embeddedFieldFlushRegistry = useMemo(createEmbeddedFieldFlushRegistry, []);
 
   useEffect(() => {
     focusOwnerRef.current = focusOwner;
   }, [focusOwner]);
+
+  const clearRichSnapshotTimer = useCallback(() => {
+    const timer = richSnapshotTimerRef.current;
+    if (timer !== null) {
+      clearTimeout(timer);
+      richSnapshotTimerRef.current = null;
+    }
+  }, []);
+
+  const publishRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
+    const nextDoc = getLexicalMarkdown(editor);
+    const changes = createMinimalEditorDocumentChanges(
+      lastCommittedDocRef.current,
+      nextDoc,
+    );
+    if (changes.length === 0) {
+      return;
+    }
+
+    pendingLocalEchoDocRef.current = nextDoc;
+    lastCommittedDocRef.current = nextDoc;
+    onTextChange?.(nextDoc);
+    onDocChange?.(changes);
+  }, [lastCommittedDocRef, onDocChange, onTextChange, pendingLocalEchoDocRef]);
+
+  const scheduleRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
+    clearRichSnapshotTimer();
+    richSnapshotTimerRef.current = setTimeout(() => {
+      richSnapshotTimerRef.current = null;
+      publishRichDocumentSnapshot(editor);
+    }, RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS);
+  }, [clearRichSnapshotTimer, publishRichDocumentSnapshot]);
+
+  useEffect(() => clearRichSnapshotTimer, [clearRichSnapshotTimer]);
 
   const handleRichChange = useCallback((editor: LexicalEditor, tags: Set<string>) => {
     if (shouldIgnoreMarkdownEditorChange(editor, tags)) {
@@ -239,6 +276,7 @@ export function useMarkdownEditorSessionController({
     if (richChangePolicy === "dirty") {
       userEditPendingRef.current = false;
       onDirtyChange?.();
+      scheduleRichDocumentSnapshot(editor);
       return;
     }
 
@@ -272,6 +310,7 @@ export function useMarkdownEditorSessionController({
     onTextChange,
     requireUserEditFlag,
     richChangePolicy,
+    scheduleRichDocumentSnapshot,
   ]);
 
   const syncSelectionToDocLength = useCallback((docLength: number) => {
@@ -465,6 +504,10 @@ export function MarkdownEditorHandlePlugin({
     }
 
     const readDocumentSnapshot = () => readEditorDocument(editor, editorModeRef.current);
+    const readSelectionDocumentSnapshot = () =>
+      editorModeRef.current === "source"
+        ? getSourceText(editor)
+        : pendingLocalEchoDocRef.current ?? lastCommittedDocRef.current;
 
     const stageDocumentSnapshot = (nextDoc: string) => {
       if (nextDoc !== lastCommittedDocRef.current) {
@@ -764,9 +807,10 @@ export function MarkdownEditorHandlePlugin({
       },
       setSelection: (anchor, focus = anchor, options) => {
         flushPendingEdits();
+        const currentDoc = readSelectionDocumentSnapshot();
         const nextSelection = storeSelection(
           selectionRef,
-          readEditorDocument(editor, editorModeRef.current).length,
+          currentDoc.length,
           onSelectionChange,
           anchor,
           focus,
@@ -780,7 +824,6 @@ export function MarkdownEditorHandlePlugin({
             selectSourceOffsetsInLexicalRoot(nextSelection.anchor, nextSelection.focus);
           }, { discrete: true, tag: tags });
         } else {
-          const currentDoc = readEditorDocument(editor, editorModeRef.current);
           const moved = selectSourceOffsetsInRichLexicalRoot(
             editor,
             currentDoc,

@@ -64,10 +64,14 @@ describe("serializeBlockToMarkdown", () => {
     expect(markdown.trim()).toBe("## A heading {#sec:a-heading}");
   });
 
-  it("round-trips a quote", () => {
+  it("exports imported quotes as canonical fenced blockquotes", () => {
     const [block] = parseMarkdownFragmentToJSON("> a quote");
     expect(block).toBeDefined();
     const markdown = serializeBlockToMarkdown(block);
-    expect(markdown.trim()).toBe("> a quote");
+    expect(markdown.trim()).toBe([
+      "::: {.blockquote}",
+      "a quote",
+      ":::",
+    ].join("\n"));
   });
 });

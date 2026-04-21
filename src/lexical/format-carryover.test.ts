@@ -215,15 +215,8 @@ describe("FORMAT.md carryover", () => {
         "| $x$      | [@ref]   |",
         "+----------+----------+",
       ].join("\n"),
-      expected: [
-        "+----------+----------+",
-        "| Left     | Right    |",
-        "+==+==+",
-        "| $x$      | [@ref]   |",
-        "+----------+----------+",
-      ].join("\n"),
     },
-  ])("round-trips $name", ({ markdown, expected }) => {
-    expect(roundTripMarkdown(markdown)).toBe(expected ?? markdown);
+  ])("round-trips $name", ({ markdown }) => {
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 });

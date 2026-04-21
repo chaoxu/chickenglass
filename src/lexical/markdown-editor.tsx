@@ -94,7 +94,6 @@ import { TreeViewPlugin } from "./tree-view-plugin";
 import {
   MarkdownEditorHandlePlugin,
   MarkdownModeSyncPlugin,
-  readEditorDocument,
   sameSelection,
   shouldIgnoreMarkdownEditorChange,
   useMarkdownEditorSessionController,
@@ -159,10 +158,12 @@ function SourceSelectionPlugin({
 
 function ExplicitSourceSelectionPlugin({
   editorMode,
+  lastCommittedDocRef,
   onSelectionChange,
   selectionRef,
 }: {
   readonly editorMode: RevealMode;
+  readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
 }) {
@@ -184,7 +185,7 @@ function ExplicitSourceSelectionPlugin({
           : sourcePosition.focus;
         storeSelection(
           selectionRef,
-          readEditorDocument(editor, editorMode).length,
+          lastCommittedDocRef.current.length,
           onSelectionChange,
           anchor,
           focus,
@@ -193,7 +194,7 @@ function ExplicitSourceSelectionPlugin({
       },
       COMMAND_PRIORITY_LOW,
     );
-  }, [editor, editorMode, onSelectionChange, selectionRef]);
+  }, [editor, editorMode, lastCommittedDocRef, onSelectionChange, selectionRef]);
 
   return null;
 }
@@ -413,6 +414,7 @@ export function LexicalMarkdownEditor({
                 />
                 <ExplicitSourceSelectionPlugin
                   editorMode={editorMode}
+                  lastCommittedDocRef={lastCommittedDocRef}
                   onSelectionChange={onSelectionChange}
                   selectionRef={sourceSelectionRef}
                 />

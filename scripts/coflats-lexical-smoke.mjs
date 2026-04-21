@@ -69,6 +69,18 @@ function createHeavySmokeDoc() {
     "",
     "# Coflats Lexical Smoke {#sec:intro}",
     "",
+    "::: {.blockquote}",
+    "Canonical blockquote smoke content with $x + y$.",
+    ":::",
+    "",
+    "+-------+------------------+",
+    "| Input | Output           |",
+    "+=======+==================+",
+    "| graph | first paragraph  |",
+    "|       |                  |",
+    "|       | second paragraph |",
+    "+-------+------------------+",
+    "",
     ...sections,
   ].join("\n");
 }

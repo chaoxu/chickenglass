@@ -9,4 +9,5 @@ export type RawBlockVariant =
   | "fenced-div"
   | "footnote-definition"
   | "frontmatter"
+  | "grid-table"
   | "image";
