@@ -57,7 +57,30 @@ const boldDecoration = Decoration.mark({ class: "cf-bold" });
 const italicDecoration = Decoration.mark({ class: "cf-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
 const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
+const maxLinkDecorationCacheSize = 256;
 const linkDecorationCache = new Map<string, Decoration>();
+
+function getLinkDecoration(url: string): Decoration {
+  const cached = linkDecorationCache.get(url);
+  if (cached) {
+    linkDecorationCache.delete(url);
+    linkDecorationCache.set(url, cached);
+    return cached;
+  }
+
+  const linkDeco = Decoration.mark({
+    class: "cf-link-rendered",
+    attributes: { "data-url": url },
+  });
+  linkDecorationCache.set(url, linkDeco);
+  if (linkDecorationCache.size > maxLinkDecorationCacheSize) {
+    const oldestUrl = linkDecorationCache.keys().next().value;
+    if (oldestUrl !== undefined) {
+      linkDecorationCache.delete(oldestUrl);
+    }
+  }
+  return linkDeco;
+}
 
 /** Source-delimiter decoration: reduced-size metrics so visible delimiters
  *  don't push the line box taller than surrounding content (#789). */
@@ -213,14 +236,7 @@ function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
     const textFrom = marks[0].to;
     const textTo = marks[1].from;
     if (textFrom < textTo) {
-      let linkDeco = linkDecorationCache.get(url);
-      if (!linkDeco) {
-        linkDeco = Decoration.mark({
-          class: "cf-link-rendered",
-          attributes: { "data-url": url },
-        });
-        linkDecorationCache.set(url, linkDeco);
-      }
+      const linkDeco = getLinkDecoration(url);
       items.push(linkDeco.range(textFrom, textTo));
     }
   }
@@ -592,6 +608,12 @@ function collectMarkdownItems(
 
 export { collectMarkdownItems as _collectMarkdownItemsForTest };
 export { markdownDocChangeNeedsContextMerge as _markdownDocChangeNeedsContextMergeForTest };
+export function _clearLinkDecorationCacheForTest(): void {
+  linkDecorationCache.clear();
+}
+export function _linkDecorationCacheSizeForTest(): number {
+  return linkDecorationCache.size;
+}
 
 /** CM6 extension that provides Typora-style rendering for standard markdown. */
 export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(

@@ -9,6 +9,8 @@ import {
   cursorContextKey,
   markdownShouldUpdate,
   _collectMarkdownItemsForTest as collectMarkdownItems,
+  _clearLinkDecorationCacheForTest as clearLinkDecorationCache,
+  _linkDecorationCacheSizeForTest as linkDecorationCacheSize,
 } from "./markdown-render";
 import {
   createCursorSensitiveViewPlugin,
@@ -259,6 +261,7 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     });
 
     it("reuses link decorations for identical URLs", () => {
+      clearLinkDecorationCache();
       const doc = "[one](https://example.com) [two](https://example.com) tail";
       view = createView(doc, doc.length);
 
@@ -271,6 +274,23 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
 
       expect(linkItems).toHaveLength(2);
       expect(linkItems[0].value).toBe(linkItems[1].value);
+    });
+
+    it("bounds cached rendered-link decorations for unique URLs", () => {
+      clearLinkDecorationCache();
+      const doc = Array.from(
+        { length: 300 },
+        (_, index) => `[${index}](https://example.com/${index})`,
+      ).join(" ");
+      view = createView(doc, doc.length);
+
+      collectMarkdownItems(
+        view,
+        [{ from: 0, to: doc.length }],
+        () => false,
+      );
+
+      expect(linkDecorationCacheSize()).toBeLessThanOrEqual(256);
     });
   });
 

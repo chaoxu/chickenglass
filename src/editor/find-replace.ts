@@ -59,6 +59,11 @@ export interface SearchControllerState extends SearchUiState {
   readonly total: number;
 }
 
+export interface SearchMatchSpan {
+  readonly from: number;
+  readonly to: number;
+}
+
 const DEFAULT_SEARCH_UI_STATE: SearchUiState = {
   replaceVisible: false,
   caseSensitive: false,
@@ -92,22 +97,59 @@ export const searchControllerExtensions: Extension = [searchUiStateField];
 export function countSearchMatches(
   view: EditorView,
 ): { current: number; total: number } {
+  return collectSearchMatchSummary(view);
+}
+
+function collectSearchMatchSummary(
+  view: EditorView,
+): { current: number; total: number; ranges: readonly SearchMatchSpan[] } {
   const query = getSearchQuery(view.state);
-  if (!query.valid) return { current: 0, total: 0 };
+  if (!query.valid) return { current: 0, total: 0, ranges: [] };
 
   const cursor = query.getCursor(view.state);
   const sel = view.state.selection.main;
+  const ranges: SearchMatchSpan[] = [];
   let total = 0;
   let current = 0;
 
   for (let result = cursor.next(); !result.done; result = cursor.next()) {
     total++;
+    ranges.push({ from: result.value.from, to: result.value.to });
     if (result.value.from === sel.from && result.value.to === sel.to) {
       current = total;
     }
   }
 
-  return { current, total };
+  return { current, total, ranges };
+}
+
+function findMatchOrdinal(
+  ranges: readonly SearchMatchSpan[],
+  selected: SearchMatchSpan,
+): number {
+  let low = 0;
+  let high = ranges.length - 1;
+  let firstCandidate = ranges.length;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (ranges[mid].from >= selected.from) {
+      firstCandidate = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  for (
+    let index = firstCandidate;
+    index < ranges.length && ranges[index].from === selected.from;
+    index += 1
+  ) {
+    if (ranges[index].to === selected.to) return index + 1;
+  }
+
+  return 0;
 }
 
 export function getSearchControllerState(view: EditorView): SearchControllerState {
@@ -265,7 +307,7 @@ interface SearchPanelContext {
   toggleWord?: HTMLButtonElement;
   replaceRow?: HTMLDivElement;
   toggleReplaceBtn?: HTMLButtonElement;
-  matchCache: MatchCache | null;
+  matchCache: SearchMatchCacheSnapshot | null;
   getToggles(): { caseSensitive: boolean; isRegexp: boolean; wholeWord: boolean };
   commitQuery(): void;
   updateMatchInfo(): void;
@@ -273,19 +315,71 @@ interface SearchPanelContext {
 }
 
 /** Reference-identity cache to avoid rescanning on every ViewUpdate. */
-interface MatchCache {
+export interface SearchMatchCacheSnapshot {
   /** CM6 Text object from state.doc — used for reference equality. */
-  doc: object;
-  selFrom: number;
-  selTo: number;
-  queryKey: string;
-  current: number;
-  total: number;
+  readonly doc: object;
+  readonly selFrom: number;
+  readonly selTo: number;
+  readonly query: SearchQuery;
+  readonly current: number;
+  readonly total: number;
+  readonly ranges: readonly SearchMatchSpan[];
 }
 
-function serializeQuery(q: ReturnType<typeof getSearchQuery>): string {
-  if (!q.valid) return "";
-  return `${q.search}\0${String(q.caseSensitive)}\0${String(q.regexp)}\0${String(q.wholeWord)}`;
+function searchQueriesMatchEqual(left: SearchQuery, right: SearchQuery): boolean {
+  return left.search === right.search &&
+    left.caseSensitive === right.caseSensitive &&
+    left.literal === right.literal &&
+    left.regexp === right.regexp &&
+    left.wholeWord === right.wholeWord &&
+    left.test === right.test;
+}
+
+function updateMatchCache(
+  view: EditorView,
+  cache: SearchMatchCacheSnapshot | null,
+): SearchMatchCacheSnapshot {
+  const state = view.state;
+  const q = getSearchQuery(state);
+  const sel = state.selection.main;
+
+  if (
+    cache === null ||
+    cache.doc !== state.doc ||
+    !searchQueriesMatchEqual(cache.query, q)
+  ) {
+    const { current, total, ranges } = collectSearchMatchSummary(view);
+    return {
+      doc: state.doc,
+      selFrom: sel.from,
+      selTo: sel.to,
+      query: q,
+      current,
+      total,
+      ranges,
+    };
+  }
+
+  if (cache.selFrom === sel.from && cache.selTo === sel.to) {
+    return cache;
+  }
+
+  return {
+    ...cache,
+    selFrom: sel.from,
+    selTo: sel.to,
+    current: findMatchOrdinal(cache.ranges, {
+      from: sel.from,
+      to: sel.to,
+    }),
+  };
+}
+
+export function _updateSearchMatchCacheForTest(
+  view: EditorView,
+  cache: SearchMatchCacheSnapshot | null,
+): SearchMatchCacheSnapshot {
+  return updateMatchCache(view, cache);
 }
 
 function getSearchPanelControls(ctx: SearchPanelContext): {
@@ -490,22 +584,9 @@ function buildSearchPanelContext(
     },
 
     updateMatchInfo() {
-      const state = view.state;
-      const q = getSearchQuery(state);
-      const sel = state.selection.main;
-      const queryKey = serializeQuery(q);
-
-      // Recompute only when doc, selection, or query changes.
-      if (
-        ctx.matchCache === null ||
-        ctx.matchCache.doc !== state.doc ||
-        ctx.matchCache.selFrom !== sel.from ||
-        ctx.matchCache.selTo !== sel.to ||
-        ctx.matchCache.queryKey !== queryKey
-      ) {
-        const { current, total } = countSearchMatches(view);
-        ctx.matchCache = { doc: state.doc, selFrom: sel.from, selTo: sel.to, queryKey, current, total };
-      }
+      // Recompute match ranges only when doc or query changes. Selection-only
+      // updates use the cached sorted ranges to find the current ordinal.
+      ctx.matchCache = updateMatchCache(view, ctx.matchCache);
 
       const { current, total } = ctx.matchCache;
       if (total === 0) {

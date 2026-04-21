@@ -391,7 +391,7 @@ describe("table range helpers", () => {
     });
 
     expect(computePendingTableParse(initialTables, transaction, false)).toBe(true);
-    expect(updateDiscoveredTables(initialTables, transaction, false)).toHaveLength(1);
+    expect(updateDiscoveredTables(initialTables, transaction, false)).toBe(initialTables);
   });
 
   it("marks a pending parse when the tree is unavailable for table-structure edits", () => {
@@ -406,6 +406,49 @@ describe("table range helpers", () => {
     });
 
     expect(computePendingTableParse(state.field(tableDiscoveryField), transaction, false)).toBe(true);
+  });
+
+  it("defers table rebuilding while the syntax tree is incomplete", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "after",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const transaction = state.update({
+      changes: { from: state.doc.line(3).from + 2, insert: "9" },
+    });
+    const changedTables = updateDiscoveredTables(initialTables, transaction, false);
+
+    expect(changedTables).not.toBe(initialTables);
+    expect(changedTables[0]?.parsed).toBe(initialTables[0]?.parsed);
+    expect(changedTables[0]?.lines).toBe(initialTables[0]?.lines);
+    expect(computePendingTableParse(initialTables, transaction, false)).toBe(true);
+  });
+
+  it("keeps mapped stale tables within document bounds while parsing is pending", () => {
+    const state = makeDiscoveryState([
+      "intro",
+      "",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "tail",
+    ].join("\n"));
+
+    const initialTables = state.field(tableDiscoveryField);
+    const transaction = state.update({
+      changes: { from: state.doc.line(4).from, to: state.doc.length },
+    });
+    const [mapped] = updateDiscoveredTables(initialTables, transaction, false);
+
+    expect(mapped.to).toBeLessThanOrEqual(transaction.state.doc.length);
+    expect(mapped.separatorTo).toBeLessThanOrEqual(transaction.state.doc.length);
+    expect(computePendingTableParse(initialTables, transaction, false)).toBe(true);
   });
 
 });

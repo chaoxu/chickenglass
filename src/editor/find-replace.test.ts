@@ -12,6 +12,7 @@ import {
   openReplaceSearch,
   searchControllerExtensions,
   setSearchControllerQuery,
+  _updateSearchMatchCacheForTest as updateSearchMatchCache,
 } from "./find-replace";
 
 const views: EditorView[] = [];
@@ -119,5 +120,26 @@ describe("searchController", () => {
     // Counts must be stable across repeated calls with the same state.
     expect(state1.total).toBe(state2.total);
     expect(state1.total).toBe(3);
+  });
+
+  it("reuses cached match ranges for selection-only panel updates", () => {
+    const view = createView("alpha beta alpha gamma alpha");
+
+    openFindSearch(view);
+    setSearchControllerQuery(view, {
+      search: "alpha",
+      replace: "",
+      caseSensitive: false,
+      regexp: false,
+      wholeWord: false,
+    });
+
+    const initial = updateSearchMatchCache(view, null);
+    view.dispatch({ selection: { anchor: 11, head: 16 } });
+    const moved = updateSearchMatchCache(view, initial);
+
+    expect(moved.ranges).toBe(initial.ranges);
+    expect(moved.total).toBe(3);
+    expect(moved.current).toBe(2);
   });
 });

@@ -108,11 +108,13 @@ function collectTables(
 }
 
 function mapTableRange(table: TableRange, tr: Transaction): TableRange {
-  const from = tr.changes.mapPos(table.from);
-  const to = tr.changes.mapPos(table.to);
-  const separatorFrom = tr.changes.mapPos(table.separatorFrom);
-  const separatorTo = tr.changes.mapPos(table.separatorTo);
-  const startLineNumber = tr.state.doc.lineAt(Math.min(from, tr.state.doc.length)).number;
+  const docLength = tr.state.doc.length;
+  const clamp = (pos: number) => Math.max(0, Math.min(pos, docLength));
+  const from = clamp(tr.changes.mapPos(table.from));
+  const to = Math.max(from, clamp(tr.changes.mapPos(table.to)));
+  const separatorFrom = clamp(tr.changes.mapPos(table.separatorFrom));
+  const separatorTo = Math.max(separatorFrom, clamp(tr.changes.mapPos(table.separatorTo)));
+  const startLineNumber = tr.state.doc.lineAt(from).number;
 
   if (
     from === table.from &&
@@ -328,9 +330,7 @@ export function updateDiscoveredTables(
   }
 
   if (!treeAvailable) {
-    return finish(canSkipLocalTableRebuild(tables, tr)
-      ? mapTableRanges(tables, tr)
-      : collectTables(tr.state));
+    return finish(mapTableRanges(tables, tr));
   }
 
   return finish(incrementalTableDiscoveryUpdate(tables, tr));
@@ -397,12 +397,24 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
 });
 
 export const tableDiscoveryPendingParseField = StateField.define<boolean>({
-  create() {
-    return false;
+  create(state) {
+    return !syntaxTreeAvailable(state, state.doc.length);
   },
 
-  update(_value, tr) {
-    const tables = tr.startState.field(tableDiscoveryField, false) ?? collectTables(tr.startState);
+  update(value, tr) {
+    if (syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
+      return false;
+    }
+    if (value) {
+      return true;
+    }
+    if (!tr.docChanged) {
+      return false;
+    }
+    const tables = tr.startState.field(tableDiscoveryField, false) ??
+      (syntaxTreeAvailable(tr.startState, tr.startState.doc.length)
+        ? collectTables(tr.startState)
+        : []);
     return computePendingTableParse(tables, tr);
   },
 });
