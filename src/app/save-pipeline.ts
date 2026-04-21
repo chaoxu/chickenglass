@@ -19,14 +19,22 @@ export function fnv1aHash(str: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+export class SaveWriteConflictError extends Error {
+  constructor(path: string) {
+    super(`File changed before save: ${path}`);
+    this.name = "SaveWriteConflictError";
+  }
+}
+
 export interface SaveSnapshot {
   content: string;
+  expectedBaselineHash?: string;
 }
 
 /** The write function called by the pipeline. */
 export type WriteFn = (
   path: string,
-  content: string,
+  snapshot: SaveSnapshot,
 ) => Promise<string>;
 
 export interface SaveResult {
@@ -183,7 +191,7 @@ export class SavePipeline {
         const snapshot = currentGetSnapshot();
 
         try {
-          const diskContent = await this.writeFn(path, snapshot.content);
+          const diskContent = await this.writeFn(path, snapshot);
 
           if (isInvalidated()) break;
 
@@ -197,7 +205,9 @@ export class SavePipeline {
             savedContent: diskContent,
           };
         } catch (e: unknown) {
-          console.error("[save-pipeline] write failed:", path, e);
+          if (!(e instanceof SaveWriteConflictError)) {
+            console.error("[save-pipeline] write failed:", path, e);
+          }
           lastResult = { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
           break;
         }

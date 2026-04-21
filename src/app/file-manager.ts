@@ -6,13 +6,14 @@ import {
 } from "./lib/utils";
 import { getDemoFiles } from "./demo-files";
 import { normalizeProjectPath } from "../lib/project-paths";
+import { fnv1aHash } from "./save-pipeline";
 
 // Re-export canonical types from src/lib/types.ts so that existing
 // `from "./file-manager"` / `from "../file-manager"` imports keep working.
-export type { FileEntry, FileSystem } from "../lib/types";
+export type { ConditionalWriteResult, FileEntry, FileSystem } from "../lib/types";
 
 // Local import for use in this file's implementation.
-import type { FileEntry, FileSystem } from "../lib/types";
+import type { ConditionalWriteResult, FileEntry, FileSystem } from "../lib/types";
 
 export type MemoryFileSystemEntry =
   | { path: string; kind: "text"; content: string }
@@ -206,6 +207,23 @@ export class MemoryFileSystem implements FileSystem {
     }
     this.files.set(path, content);
     this.binaryPaths.delete(path);
+  }
+
+  async writeFileIfUnchanged(
+    path: string,
+    content: string,
+    expectedHash: string,
+  ): Promise<ConditionalWriteResult> {
+    const currentContent = this.files.get(path);
+    if (currentContent === undefined) {
+      return { written: false, missing: true };
+    }
+    if (fnv1aHash(currentContent) !== expectedHash) {
+      return { written: false, currentContent };
+    }
+    this.files.set(path, content);
+    this.binaryPaths.delete(path);
+    return { written: true, currentContent: content };
   }
 
   async createFile(path: string, content?: string): Promise<void> {

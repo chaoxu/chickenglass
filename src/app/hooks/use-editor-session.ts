@@ -1,6 +1,9 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { FileSystem } from "../file-manager";
-import { type SessionDocument } from "../editor-session-model";
+import {
+  type ExternalDocumentConflict,
+  type SessionDocument,
+} from "../editor-session-model";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -29,6 +32,7 @@ export interface UseEditorSessionReturn {
   currentDocument: SessionDocument | null;
   currentPath: string | null;
   editorDoc: string;
+  externalConflict: ExternalDocumentConflict | null;
   activeDocumentSignal: ActiveDocumentSignal;
   getCurrentDocText: () => string;
   isPathOpen: (path: string) => boolean;
@@ -42,6 +46,8 @@ export interface UseEditorSessionReturn {
   openFileWithContent: (name: string, content: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
+  keepExternalConflict: (path: string) => Promise<void>;
+  hasUnresolvedExternalConflict: boolean;
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
@@ -81,8 +87,10 @@ export function useEditorSession({
     runtime,
   ]);
 
-  runtime.setWriteDocumentSnapshot((path, content) =>
-    sessionPersistence.writeDocumentSnapshot(path, content),
+  runtime.setWriteDocumentSnapshot((path, snapshot) =>
+    sessionPersistence.writeDocumentSnapshot(path, snapshot.content, {
+      expectedBaselineHash: snapshot.expectedBaselineHash,
+    }),
   );
   const sessionService = useMemo(() => createEditorSessionService({
     fs,
@@ -104,6 +112,7 @@ export function useEditorSession({
     currentDocument: snapshot.currentDocument,
     currentPath: snapshot.currentPath,
     editorDoc: snapshot.editorDoc,
+    externalConflict: snapshot.externalConflict,
     activeDocumentSignal: runtime.activeDocumentSignal,
     getCurrentDocText: sessionService.getCurrentDocText,
     isPathOpen: sessionService.isPathOpen,
@@ -117,6 +126,9 @@ export function useEditorSession({
     openFileWithContent: sessionService.openFileWithContent,
     reloadFile: sessionService.reloadFile,
     syncExternalChange: sessionService.syncExternalChange,
+    keepExternalConflict: sessionService.keepExternalConflict,
+    hasUnresolvedExternalConflict:
+      snapshot.externalConflict?.path === snapshot.currentPath,
     saveFile: sessionPersistence.saveFile,
     createFile: sessionService.createFile,
     createDirectory: sessionService.createDirectory,

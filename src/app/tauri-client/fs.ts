@@ -1,4 +1,4 @@
-import type { FileEntry } from "../file-manager";
+import type { ConditionalWriteResult, FileEntry } from "../file-manager";
 import { tauriCommand, tauriArgs } from "./make-command";
 
 export const openFolderCommand = tauriArgs<boolean>("open_folder")((path: string, generation: number) => ({ path, generation }));
@@ -7,6 +7,7 @@ export const listTreeCommand = tauriCommand<FileEntry>("list_tree");
 export const listChildrenCommand = tauriArgs<FileEntry[]>("list_children")((path: string) => ({ path }));
 export const readFileCommand = tauriArgs<string>("read_file")((path: string) => ({ path }));
 export const writeFileCommand = tauriArgs<undefined>("write_file")((path: string, content: string) => ({ path, content }));
+export const writeFileIfUnchangedCommand = tauriArgs<ConditionalWriteResult>("write_file_if_hash")((path: string, content: string, expectedHash: string) => ({ path, content, expectedHash }));
 export const createFileCommand = tauriArgs<undefined>("create_file")((path: string, content: string) => ({ path, content }));
 export const fileExistsCommand = tauriArgs<boolean>("file_exists")((path: string) => ({ path }));
 export const renameFileCommand = tauriArgs<undefined>("rename_file")((oldPath: string, newPath: string) => ({ oldPath, newPath }));

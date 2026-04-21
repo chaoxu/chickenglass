@@ -2,14 +2,23 @@ import type { Tab } from "./tab-bar";
 
 export type SessionDocument = Pick<Tab, "path" | "name" | "dirty">;
 
+export type ExternalDocumentConflictKind = "deleted" | "modified";
+
+export interface ExternalDocumentConflict {
+  kind: ExternalDocumentConflictKind;
+  path: string;
+}
+
 export interface EditorSessionState {
   currentDocument: SessionDocument | null;
+  externalConflict: ExternalDocumentConflict | null;
 }
 
 export function createEditorSessionState(
   currentDocument: SessionDocument | null = null,
+  externalConflict: ExternalDocumentConflict | null = null,
 ): EditorSessionState {
-  return { currentDocument };
+  return { currentDocument, externalConflict };
 }
 
 export function getCurrentSessionDocument(

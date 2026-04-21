@@ -1,4 +1,4 @@
-import { act, createElement, useRef, type FC } from "react";
+import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,19 +61,15 @@ interface HarnessProps {
 }
 
 const refreshTree = async () => {};
-const reloadFile = async () => {};
 const syncExternalChange = async () => "ignore" as const;
 
 const Harness: FC<HarnessProps> = ({ projectRoot }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   useProjectFileWatcher({
     projectRoot,
-    containerRef,
     refreshTree,
-    reloadFile,
     syncExternalChange,
   });
-  return createElement("div", { ref: containerRef });
+  return createElement("div");
 };
 
 describe("useProjectFileWatcher", () => {

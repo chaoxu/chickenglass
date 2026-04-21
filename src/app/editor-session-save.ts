@@ -1,6 +1,7 @@
 import { basename } from "./lib/utils";
 import type { EditorDocumentText } from "./editor-doc-change";
 import {
+  clearExternalDocumentConflict,
   markSessionDocumentDirty,
   renameSessionDocument,
 } from "./editor-session-actions";
@@ -39,14 +40,20 @@ export function applySaveAsResult({
     }
     liveDocs.set(newPath, doc);
 
-    return markSessionDocumentDirty(
-      renameSessionDocument(state, oldPath, newPath, basename(newPath)),
-      newPath,
-      false,
+    return clearExternalDocumentConflict(
+      markSessionDocumentDirty(
+        renameSessionDocument(state, oldPath, newPath, basename(newPath)),
+        newPath,
+        false,
+      ),
+      oldPath,
     );
   }
 
   buffers.set(newPath, doc);
   liveDocs.set(newPath, doc);
-  return markSessionDocumentDirty(state, newPath, false);
+  return clearExternalDocumentConflict(
+    markSessionDocumentDirty(state, newPath, false),
+    oldPath,
+  );
 }

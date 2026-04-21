@@ -458,6 +458,127 @@ describe("useEditorSession", () => {
     expect(ref.result.editorDoc).toBe("hello");
     expect(ref.result.getCurrentDocText()).toBe("local edit");
     expect(ref.result.currentDocument?.dirty).toBe(true);
+    expect(ref.result.externalConflict).toEqual({
+      kind: "modified",
+      path: "draft.md",
+    });
+    expect(ref.result.hasUnresolvedExternalConflict).toBe(true);
+  });
+
+  it("blocks saves for dirty external conflicts until the user keeps local edits", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+      await fs.writeFile("draft.md", "updated on disk");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local edit"));
+    });
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("notify");
+      await ref.result.saveFile();
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("updated on disk");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+    expect(ref.result.hasUnresolvedExternalConflict).toBe(true);
+
+    await act(async () => {
+      await ref.result.keepExternalConflict("draft.md");
+    });
+
+    expect(ref.result.hasUnresolvedExternalConflict).toBe(false);
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("local edit");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("restores a deleted conflicted file when the user keeps local edits", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local edit"));
+    });
+    await fs.deleteFile("draft.md");
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("notify");
+    });
+    expect(ref.result.externalConflict).toEqual({
+      kind: "deleted",
+      path: "draft.md",
+    });
+
+    await act(async () => {
+      await ref.result.keepExternalConflict("draft.md");
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("local edit");
+    expect(ref.result.hasUnresolvedExternalConflict).toBe(false);
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("preserves newer edits made while restoring a deleted conflicted file", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const createGate = createDeferred<void>();
+    const createFile = fs.createFile.bind(fs);
+    vi.spyOn(fs, "createFile").mockImplementation(async (path, content) => {
+      await createGate.promise;
+      await createFile(path, content);
+    });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local edit"));
+    });
+    await fs.deleteFile("draft.md");
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("notify");
+    });
+
+    const keepPromise = ref.result.keepExternalConflict("draft.md");
+    await Promise.resolve();
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "newer edit"));
+    });
+    createGate.resolve();
+
+    await act(async () => {
+      await keepPromise;
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("local edit");
+    expect(ref.result.getCurrentDocText()).toBe("newer edit");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+    expect(ref.result.hasUnresolvedExternalConflict).toBe(false);
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+    await expect(fs.readFile("draft.md")).resolves.toBe("newer edit");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
   });
 
   it("cancels file switching when the unsaved-changes prompt says cancel", async () => {

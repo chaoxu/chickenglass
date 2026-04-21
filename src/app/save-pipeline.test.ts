@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { fnv1aHash, SavePipeline } from "./save-pipeline";
+import { fnv1aHash, SavePipeline, type SaveSnapshot } from "./save-pipeline";
 
 function createDeferred<T = void>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((r) => { resolve = r; });
   return { promise, resolve };
+}
+
+function createEchoWrite() {
+  return vi.fn(async (_path: string, snapshot: SaveSnapshot) => snapshot.content);
 }
 
 describe("SavePipeline", () => {
@@ -13,7 +17,7 @@ describe("SavePipeline", () => {
   // ---------------------------------------------------------------------------
 
   it("starts revision at 0 and increments monotonically", () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
     expect(pipeline.getRevision("a.md")).toBe(0);
     expect(pipeline.bumpRevision("a.md")).toBe(1);
     expect(pipeline.bumpRevision("a.md")).toBe(2);
@@ -21,7 +25,7 @@ describe("SavePipeline", () => {
   });
 
   it("tracks revisions per path independently", () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
     pipeline.bumpRevision("a.md");
     pipeline.bumpRevision("a.md");
     pipeline.bumpRevision("b.md");
@@ -34,7 +38,7 @@ describe("SavePipeline", () => {
   // ---------------------------------------------------------------------------
 
   it("writes content and records saved revision and hash", async () => {
-    const writeFn = vi.fn(async (_p: string, c: string) => c);
+    const writeFn = createEchoWrite();
     const pipeline = new SavePipeline(writeFn);
     pipeline.bumpRevision("a.md");
 
@@ -46,7 +50,7 @@ describe("SavePipeline", () => {
     expect(result.lastSavedRevision).toBe(1);
     expect(pipeline.getLastSavedRevision("a.md")).toBe(1);
     expect(pipeline.getLastSavedHash("a.md")).toBe(fnv1aHash("hello"));
-    expect(writeFn).toHaveBeenCalledWith("a.md", "hello");
+    expect(writeFn).toHaveBeenCalledWith("a.md", { content: "hello" });
   });
 
   it("returns saved: false when the write throws", async () => {
@@ -69,12 +73,12 @@ describe("SavePipeline", () => {
   it("coalesces concurrent saves: only two writes for three requests", async () => {
     const gate = createDeferred<string>();
     let callCount = 0;
-    const writeFn = vi.fn(async (_p: string, c: string) => {
+    const writeFn = vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
       callCount++;
       if (callCount === 1) {
         await gate.promise;
       }
-      return c;
+      return snapshot.content;
     });
     const pipeline = new SavePipeline(writeFn);
     pipeline.bumpRevision("a.md");
@@ -103,20 +107,20 @@ describe("SavePipeline", () => {
 
     // Only 2 writes: v1 (first) and v3 (coalesced)
     expect(writeFn).toHaveBeenCalledTimes(2);
-    expect(writeFn).toHaveBeenNthCalledWith(1, "a.md", "v1");
-    expect(writeFn).toHaveBeenNthCalledWith(2, "a.md", "v3");
+    expect(writeFn).toHaveBeenNthCalledWith(1, "a.md", { content: "v1" });
+    expect(writeFn).toHaveBeenNthCalledWith(2, "a.md", { content: "v3" });
     expect(pipeline.getLastSavedHash("a.md")).toBe(fnv1aHash("v3"));
   });
 
   it("does not re-save when revision did not advance during in-flight write", async () => {
     const gate = createDeferred<string>();
     let callCount = 0;
-    const writeFn = vi.fn(async (_p: string, c: string) => {
+    const writeFn = vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
       callCount++;
       if (callCount === 1) {
         await gate.promise;
       }
-      return c;
+      return snapshot.content;
     });
     const pipeline = new SavePipeline(writeFn);
     pipeline.bumpRevision("a.md");
@@ -141,12 +145,12 @@ describe("SavePipeline", () => {
   it("persists content when user edits back to clean state during in-flight save", async () => {
     const gate = createDeferred<string>();
     let callCount = 0;
-    const writeFn = vi.fn(async (_p: string, c: string) => {
+    const writeFn = vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
       callCount++;
       if (callCount === 1) {
         await gate.promise;
       }
-      return c;
+      return snapshot.content;
     });
     const pipeline = new SavePipeline(writeFn);
     pipeline.bumpRevision("a.md");
@@ -175,7 +179,7 @@ describe("SavePipeline", () => {
   // ---------------------------------------------------------------------------
 
   it("marks recent saves as self-changes when disk content matches", async () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
     pipeline.bumpRevision("a.md");
 
     await pipeline.save("a.md", () => ({ content: "saved" }));
@@ -184,7 +188,7 @@ describe("SavePipeline", () => {
   });
 
   it("detects external rewrite within suppression window", async () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
     pipeline.bumpRevision("a.md");
 
     await pipeline.save("a.md", () => ({ content: "saved" }));
@@ -194,7 +198,7 @@ describe("SavePipeline", () => {
   });
 
   it("self-change flag expires after the window", async () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
 
     await pipeline.save("a.md", () => ({ content: "hello" }));
 
@@ -204,7 +208,7 @@ describe("SavePipeline", () => {
 
   it("hashes disk content returned from writeFn, not the requested editor content", async () => {
     const rawDisk = "# Main\n\nNormalized on disk\n\n# End";
-    const writeFn = vi.fn(async (_p: string, _c: string) => rawDisk);
+    const writeFn = vi.fn(async (_p: string, _snapshot: SaveSnapshot) => rawDisk);
     const pipeline = new SavePipeline(writeFn);
     pipeline.initPath("main.md", rawDisk);
     pipeline.bumpRevision("main.md");
@@ -229,7 +233,7 @@ describe("SavePipeline", () => {
   // ---------------------------------------------------------------------------
 
   it("initPath resets revision and records content hash", () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
     pipeline.bumpRevision("a.md");
     pipeline.bumpRevision("a.md");
 
@@ -241,7 +245,7 @@ describe("SavePipeline", () => {
   });
 
   it("clear removes all state for a path", async () => {
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => c));
+    const pipeline = new SavePipeline(createEchoWrite());
     pipeline.initPath("a.md", "hello");
     pipeline.bumpRevision("a.md");
     await pipeline.save("a.md", () => ({ content: "saved" }));
@@ -256,7 +260,10 @@ describe("SavePipeline", () => {
 
   it("clear during in-flight save invalidates the result", async () => {
     const gate = createDeferred<string>();
-    const writeFn = vi.fn(async (_p: string, c: string) => { await gate.promise; return c; });
+    const writeFn = vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
+      await gate.promise;
+      return snapshot.content;
+    });
     const pipeline = new SavePipeline(writeFn);
     pipeline.initPath("a.md", "A");
     pipeline.bumpRevision("a.md");
@@ -284,7 +291,10 @@ describe("SavePipeline", () => {
 
   it("initPath during in-flight save invalidates the result", async () => {
     const gate = createDeferred<string>();
-    const writeFn = vi.fn(async (_p: string, c: string) => { await gate.promise; return c; });
+    const writeFn = vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
+      await gate.promise;
+      return snapshot.content;
+    });
     const pipeline = new SavePipeline(writeFn);
     pipeline.initPath("a.md", "A");
     pipeline.bumpRevision("a.md");
@@ -311,7 +321,10 @@ describe("SavePipeline", () => {
 
   it("isSaving reflects in-flight state", async () => {
     const gate = createDeferred();
-    const pipeline = new SavePipeline(vi.fn(async (_p: string, c: string) => { await gate.promise; return c; }));
+    const pipeline = new SavePipeline(vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
+      await gate.promise;
+      return snapshot.content;
+    }));
 
     expect(pipeline.isSaving("a.md")).toBe(false);
 

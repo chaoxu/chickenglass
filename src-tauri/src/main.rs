@@ -41,6 +41,7 @@ fn main() {
             commands::fs::open_folder,
             commands::fs::read_file,
             commands::fs::write_file,
+            commands::fs::write_file_if_hash,
             commands::fs::create_file,
             commands::fs::create_directory,
             commands::fs::file_exists,

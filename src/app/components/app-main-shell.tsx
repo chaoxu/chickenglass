@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { DebugSidebarProvider } from "./debug-sidebar";
 import { EditorPane } from "./editor-pane";
+import { ExternalConflictBanner } from "./external-conflict-banner";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
@@ -57,6 +58,13 @@ export function AppMainShell({
 
   return (
     <SidebarInset>
+      <ExternalConflictBanner
+        conflict={editor.externalConflict}
+        currentPath={currentPath}
+        keepExternalConflict={editor.keepExternalConflict}
+        reloadFile={editor.reloadFile}
+        closeCurrentFile={editor.closeCurrentFile}
+      />
       <DebugSidebarProvider>
         {currentPath && useLexicalEditor ? (
           <Suspense

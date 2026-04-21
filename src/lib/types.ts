@@ -58,6 +58,12 @@ export interface FileEntry {
   children?: FileEntry[];
 }
 
+export interface ConditionalWriteResult {
+  written: boolean;
+  missing?: boolean;
+  currentContent?: string;
+}
+
 /**
  * Plain-data block counter entry for cross-reference resolution.
  *
@@ -91,6 +97,16 @@ export interface FileSystem {
   readFile(path: string): Promise<string>;
   /** Write content to a file at the given path. */
   writeFile(path: string, content: string): Promise<void>;
+  /**
+   * Write text only when the current disk content still matches the expected
+   * baseline hash. Implementations that cannot provide a conditional write may
+   * omit this method; callers must then use a less strict fallback.
+   */
+  writeFileIfUnchanged?(
+    path: string,
+    content: string,
+    expectedHash: string,
+  ): Promise<ConditionalWriteResult>;
   /** Create a new file with optional initial content. */
   createFile(path: string, content?: string): Promise<void>;
   /** Check whether a file exists at the given path. */

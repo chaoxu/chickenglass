@@ -91,8 +91,10 @@ function createHarness({
   }
 
   let result!: EditorSessionPersistence;
-  runtime.setWriteDocumentSnapshot((path, content) =>
-    result.writeDocumentSnapshot(path, content),
+  runtime.setWriteDocumentSnapshot((path, snapshot) =>
+    result.writeDocumentSnapshot(path, snapshot.content, {
+      expectedBaselineHash: snapshot.expectedBaselineHash,
+    }),
   );
 
   result = createEditorSessionPersistence({
@@ -230,14 +232,100 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.liveDocs.get("main.md") ?? emptyEditorDocument)).toBe(edited);
   });
 
+  it("blocks saving when disk changed after the editor baseline", async () => {
+    const fs = new MemoryFileSystem({ "main.md": "saved" });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: true,
+      },
+      editorDoc: "local edit",
+      buffers: createDocumentMap({ "main.md": "saved" }),
+      liveDocs: createDocumentMap({ "main.md": "local edit" }),
+    });
+    await fs.writeFile("main.md", "external edit");
+
+    await expect(ref.result.saveCurrentDocument()).resolves.toBe(false);
+
+    await expect(fs.readFile("main.md")).resolves.toBe("external edit");
+    expect(ref.runtime.getCurrentDocument()?.dirty).toBe(true);
+    expect(ref.runtime.getState().externalConflict).toEqual({
+      kind: "modified",
+      path: "main.md",
+    });
+  });
+
+  it("blocks saving when disk changes during the conditional write", async () => {
+    const fs = new MemoryFileSystem({ "main.md": "saved" });
+    const writeIfUnchanged = fs.writeFileIfUnchanged.bind(fs);
+    vi.spyOn(fs, "writeFileIfUnchanged").mockImplementationOnce(
+      async (path, content, expectedHash) => {
+        await fs.writeFile(path, "external after save started");
+        return writeIfUnchanged(path, content, expectedHash);
+      },
+    );
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: true,
+      },
+      editorDoc: "local edit",
+      buffers: createDocumentMap({ "main.md": "saved" }),
+      liveDocs: createDocumentMap({ "main.md": "local edit" }),
+    });
+
+    await expect(ref.result.saveCurrentDocument()).resolves.toBe(false);
+
+    await expect(fs.readFile("main.md")).resolves.toBe("external after save started");
+    expect(ref.runtime.getCurrentDocument()?.dirty).toBe(true);
+    expect(ref.runtime.getState().externalConflict).toEqual({
+      kind: "modified",
+      path: "main.md",
+    });
+  });
+
+  it("blocks saving when the active disk file disappeared", async () => {
+    const fs = new MemoryFileSystem({ "main.md": "saved" });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: true,
+      },
+      editorDoc: "local edit",
+      buffers: createDocumentMap({ "main.md": "saved" }),
+      liveDocs: createDocumentMap({ "main.md": "local edit" }),
+    });
+    await fs.deleteFile("main.md");
+
+    await expect(ref.result.saveCurrentDocument()).resolves.toBe(false);
+
+    await expect(fs.exists("main.md")).resolves.toBe(false);
+    expect(ref.runtime.getCurrentDocument()?.dirty).toBe(true);
+    expect(ref.runtime.getState().externalConflict).toEqual({
+      kind: "deleted",
+      path: "main.md",
+    });
+  });
+
   it("keeps newer edits dirty when they happen during an in-flight save", async () => {
     const writeGate = createDeferred<void>();
     const writeStarted = createDeferred<void>();
     const fs = new MemoryFileSystem({ "main.md": "old" });
-    const writeSpy = vi.spyOn(fs, "writeFile").mockImplementation(async (path, content) => {
+    const writeIfUnchanged = fs.writeFileIfUnchanged.bind(fs);
+    const writeSpy = vi.spyOn(fs, "writeFileIfUnchanged").mockImplementation(async (
+      path,
+      content,
+      expectedHash,
+    ) => {
       writeStarted.resolve();
       await writeGate.promise;
-      await MemoryFileSystem.prototype.writeFile.call(fs, path, content);
+      return writeIfUnchanged(path, content, expectedHash);
     });
     const ref = createHarness({
       fs,
@@ -266,7 +354,7 @@ describe("createEditorSessionPersistence", () => {
     writeGate.resolve();
     await expect(savePromise).resolves.toBe(false);
 
-    expect(writeSpy).toHaveBeenCalledWith("main.md", "first edit");
+    expect(writeSpy).toHaveBeenCalledWith("main.md", "first edit", expect.any(String));
     await expect(fs.readFile("main.md")).resolves.toBe("first edit");
     expect(ref.runtime.getCurrentDocument()?.dirty).toBe(true);
     expect(ref.runtime.getEditorDoc()).toBe("second edit");

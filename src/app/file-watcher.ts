@@ -2,14 +2,13 @@
  * File watcher for detecting external changes in Tauri mode.
  *
  * Listens for `file-changed` events emitted by the Rust backend, refreshes
- * the sidebar tree for structural changes, and either silently reloads clean
- * open files or shows a notification bar for dirty ones.
+ * the sidebar tree for structural changes, and asks the session layer to
+ * reload clean files or mark dirty files as externally conflicted.
  */
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { ExternalDocumentSyncResult } from "./editor-session-service";
 import { logCatchError } from "./lib/log-catch-error";
-import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
 import {
   type WatchDirectoryResult,
@@ -19,9 +18,6 @@ import {
 
 let latestFileWatcherToken = 0;
 const DEFAULT_WATCH_DEBOUNCE_MS = 500;
-
-/** Callback to reload a file's content from disk. */
-export type ReloadFileFn = (path: string) => Promise<void>;
 
 /** Callback to refresh the sidebar tree after structural filesystem changes. */
 export type RefreshTreeFn = (changedPath?: string) => Promise<void>;
@@ -38,14 +34,10 @@ export type SyncExternalChangeFn = (
 export interface FileWatcherConfig {
   /** Refresh the sidebar tree after structural changes. */
   refreshTree: RefreshTreeFn;
-  /** Reload a file from disk into the editor. */
-  reloadFile: ReloadFileFn;
   /** Handle non-document side effects for any changed watched path. */
   handleWatchedPathChange?: HandleWatchedPathChangeFn;
   /** Ask the session layer how this watched change should be handled. */
   syncExternalChange: SyncExternalChangeFn;
-  /** Container element for the notification bar. */
-  container: HTMLElement;
 }
 
 export interface FileChangedEvent {
@@ -74,19 +66,14 @@ function parentDir(path: string): string {
  *
  * When a watched file changes:
  * - If the change can affect directory contents: refresh the sidebar tree
- * - Ask the session layer whether to ignore, reload, or prompt
- * - Show a notification bar only when the session says the file is dirty
+ * - Ask the session layer whether to ignore, reload, or mark a conflict
+ * - Leave conflict presentation to the React app shell
  */
 export class FileWatcher {
   private readonly config: FileWatcherConfig;
   private unlisten: UnlistenFn | null = null;
   private watchToken: number | null = null;
   private watchRoot: string | null = null;
-  private notificationBar: HTMLElement | null = null;
-  /** Tracks dirty files waiting for user action. */
-  private readonly pendingNotifications: string[] = [];
-  /** Path currently shown in the notification bar. */
-  private activeNotificationPath: string | null = null;
   private readonly pendingTreeRefreshes = new Map<string, string>();
   private treeRefreshTimer: number | null = null;
   private treeRefreshGeneration = 0;
@@ -196,10 +183,6 @@ export class FileWatcher {
         console.warn("[file-watcher] failed to stop backend watcher during teardown", watchToken, error);
       }
     }
-
-    this.dismissNotification();
-    this.pendingNotifications.length = 0;
-    this.activeNotificationPath = null;
   }
 
   /** Handle a file-changed event from the backend. */
@@ -225,93 +208,6 @@ export class FileWatcher {
       this.enqueueTreeRefresh(relativePath);
     }
 
-    if (syncResult === "ignore" || syncResult === "reloaded" || syncResult === "self-change") {
-      return;
-    }
-
-    // File is dirty — show notification bar
-    if (
-      this.activeNotificationPath !== relativePath &&
-      !this.pendingNotifications.includes(relativePath)
-    ) {
-      this.pendingNotifications.push(relativePath);
-      this.showNextNotification();
-    }
-  }
-
-  /** Show the next pending notification, if no file is currently active. */
-  private showNextNotification(): void {
-    if (this.activeNotificationPath !== null) return;
-    const path = this.pendingNotifications[0];
-    if (!path) return;
-
-    this.activeNotificationPath = path;
-    this.dismissNotification();
-
-    const bar = document.createElement("div");
-    bar.className = "file-watcher-notification";
-
-    const message = document.createElement("span");
-    message.className = "file-watcher-message";
-    const displayName = basename(path);
-    message.textContent =
-      `"${displayName}" changed externally while you have local edits.`;
-    bar.appendChild(message);
-
-    const keepBtn = document.createElement("button");
-    keepBtn.className = "file-watcher-btn file-watcher-btn-no";
-    keepBtn.textContent = "Keep edits";
-    keepBtn.title = "Keep the editor contents and leave the disk change unresolved.";
-    keepBtn.addEventListener("click", () => {
-      try {
-        this.resolveNotification(path);
-      } catch (e: unknown) {
-        logCatchError("[file-watcher] dismiss button handler failed", path)(e);
-      }
-    });
-    bar.appendChild(keepBtn);
-
-    const reloadBtn = document.createElement("button");
-    reloadBtn.className = "file-watcher-btn file-watcher-btn-yes";
-    reloadBtn.textContent = "Reload from disk";
-    reloadBtn.title = "Discard local edits and replace the editor contents with the disk version.";
-    reloadBtn.addEventListener("click", () => {
-      try {
-        void this.config.reloadFile(path)
-          .catch(logCatchError("[file-watcher] reloadFile failed", path))
-          .finally(() => {
-            this.resolveNotification(path);
-          });
-      } catch (e: unknown) {
-        logCatchError("[file-watcher] reload button handler failed", path)(e);
-        this.resolveNotification(path);
-      }
-    });
-    bar.appendChild(reloadBtn);
-
-    this.notificationBar = bar;
-    this.config.container.prepend(bar);
-  }
-
-  private resolveNotification(path: string): void {
-    if (this.activeNotificationPath !== path) return;
-    this.dismissNotification();
-    this.activeNotificationPath = null;
-    if (this.pendingNotifications[0] === path) {
-      this.pendingNotifications.shift();
-    } else {
-      const index = this.pendingNotifications.indexOf(path);
-      if (index >= 0) this.pendingNotifications.splice(index, 1);
-    }
-    this.showNextNotification();
-  }
-
-  /** Dismiss the current notification bar. */
-  private dismissNotification(): void {
-    if (this.notificationBar) {
-      this.notificationBar.remove();
-      this.notificationBar = null;
-    }
   }
 
   private enqueueTreeRefresh(relativePath: string): void {

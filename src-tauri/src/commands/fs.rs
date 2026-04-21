@@ -1,17 +1,26 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
-use crate::services::{filesystem, path::ProjectPathResolver};
+use crate::services::{
+    filesystem::{self, ConditionalTextWriteResult},
+    path::ProjectPathResolver,
+};
 
 const OPEN_FOLDER: CommandSpec =
     CommandSpec::new("tauri.open_folder", "tauri.fs.open_folder", "tauri");
 const READ_FILE: CommandSpec = CommandSpec::new("tauri.read_file", "tauri.fs.read_file", "tauri");
 const WRITE_FILE: CommandSpec =
     CommandSpec::new("tauri.write_file", "tauri.fs.write_file", "tauri");
+const WRITE_FILE_IF_HASH: CommandSpec = CommandSpec::new(
+    "tauri.write_file_if_hash",
+    "tauri.fs.write_file_if_hash",
+    "tauri",
+);
 const CREATE_FILE: CommandSpec =
     CommandSpec::new("tauri.create_file", "tauri.fs.create_file", "tauri");
 const CREATE_DIRECTORY: CommandSpec = CommandSpec::new(
@@ -38,6 +47,25 @@ const READ_FILE_BINARY: CommandSpec = CommandSpec::new(
 );
 const LIST_CHILDREN: CommandSpec =
     CommandSpec::new("tauri.list_children", "tauri.fs.list_children", "tauri");
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConditionalWriteResult {
+    pub written: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_content: Option<String>,
+}
+
+fn fnv1a_hash(content: &str) -> String {
+    let mut hash: u32 = 0x811c9dc5;
+    for unit in content.encode_utf16() {
+        hash ^= u32::from(unit);
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    format!("{hash:08x}")
+}
 
 #[command]
 pub fn open_folder(
@@ -90,6 +118,48 @@ pub fn write_file(
         let resolved = paths.resolve_existing_path(&path)?;
         filesystem::write_text_file(&resolved, &path, &content)
     })
+}
+
+#[command]
+pub fn write_file_if_hash(
+    window: WebviewWindow,
+    root: State<'_, ProjectRoot>,
+    perf: State<'_, PerfState>,
+    path: String,
+    content: String,
+    expected_hash: String,
+) -> Result<ConditionalWriteResult, String> {
+    WindowCommandContext::new(&window, &root, &perf).run(
+        WRITE_FILE_IF_HASH,
+        Some(&path),
+        |project_root| {
+            let paths = ProjectPathResolver::new(project_root)?;
+            let resolved = paths.resolve_project_path(&path)?;
+            match filesystem::write_text_file_if_hash(
+                &resolved,
+                &path,
+                &content,
+                &expected_hash,
+                fnv1a_hash,
+            )? {
+                ConditionalTextWriteResult::Written => Ok(ConditionalWriteResult {
+                    written: true,
+                    missing: None,
+                    current_content: Some(content),
+                }),
+                ConditionalTextWriteResult::Modified(current) => Ok(ConditionalWriteResult {
+                    written: false,
+                    missing: None,
+                    current_content: Some(current),
+                }),
+                ConditionalTextWriteResult::Missing => Ok(ConditionalWriteResult {
+                    written: false,
+                    missing: Some(true),
+                    current_content: None,
+                }),
+            }
+        },
+    )
 }
 
 #[command]
@@ -261,7 +331,7 @@ fn write_binary_file_at_project_root(
 mod tests {
     use super::{
         create_directory_at_project_root, create_file_at_project_root,
-        write_binary_file_at_project_root,
+        fnv1a_hash, write_binary_file_at_project_root,
     };
     use base64::Engine;
     use std::fs;
@@ -290,6 +360,12 @@ mod tests {
             .expect("temp root should have parent")
             .join(&sibling_name);
         (format!("a/../../{sibling_name}"), escaped)
+    }
+
+    #[test]
+    fn fnv1a_hash_matches_frontend_utf16_hash() {
+        assert_eq!(fnv1a_hash("hello"), "4f9f2cab");
+        assert_eq!(fnv1a_hash("café🙂"), "1e63ecc3");
     }
 
     #[test]

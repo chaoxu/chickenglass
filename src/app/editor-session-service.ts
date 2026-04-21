@@ -1,8 +1,10 @@
 import { basename } from "./lib/utils";
 import {
+  clearExternalDocumentConflict,
   clearSessionDocument,
   markSessionDocumentDirty,
   setCurrentSessionDocument,
+  setExternalDocumentConflict,
 } from "./editor-session-actions";
 import {
   type SessionDocument,
@@ -42,6 +44,7 @@ export interface EditorSessionService {
   openFileWithContent: (name: string, content: string) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
+  keepExternalConflict: (path: string) => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
   closeCurrentFile: (options?: { discard?: boolean }) => Promise<boolean>;
@@ -92,6 +95,8 @@ export function createEditorSessionService({
     runtime.pipeline.clear(path);
     runtime.buffers.delete(path);
     runtime.liveDocs.delete(path);
+    runtime.externalConflictBaselines.delete(path);
+    runtime.commit(clearExternalDocumentConflict(runtime.getState(), path));
   };
 
   const applyReloadedDocument = (path: string, content: string) => {
@@ -105,7 +110,10 @@ export function createEditorSessionService({
     runtime.liveDocs.set(path, documentText);
     runtime.pipeline.initPath(path, content);
     runtime.commit(
-      markSessionDocumentDirty(runtime.getState(), path, false),
+      clearExternalDocumentConflict(
+        markSessionDocumentDirty(runtime.getState(), path, false),
+        path,
+      ),
       runtime.getCurrentPath() === path
         ? { editorDoc: content }
         : undefined,
@@ -155,6 +163,79 @@ export function createEditorSessionService({
   const isPathOpen = (path: string): boolean => runtime.hasPath(path);
 
   const isPathDirty = (path: string): boolean => runtime.isPathDirty(path);
+
+  const keepExternalConflict = async (path: string): Promise<void> => {
+    const conflict = runtime.getState().externalConflict;
+    if (conflict?.path !== path) {
+      return;
+    }
+
+    if (conflict.kind === "modified") {
+      try {
+        const diskDoc = runtime.externalConflictBaselines.get(path)
+          ?? createEditorDocumentText(await fs.readFile(path));
+        const diskContent = editorDocumentToString(diskDoc);
+        const liveDoc = runtime.liveDocs.get(path) ?? diskDoc;
+        runtime.buffers.set(path, diskDoc);
+        runtime.externalConflictBaselines.delete(path);
+        runtime.pipeline.initPath(path, diskContent);
+        runtime.commit(
+          clearExternalDocumentConflict(
+            markSessionDocumentDirty(runtime.getState(), path, !liveDoc.eq(diskDoc)),
+            path,
+          ),
+        );
+        return;
+      } catch (_error: unknown) {
+        runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+          kind: "deleted",
+          path,
+        }));
+        return;
+      }
+    }
+
+    const startRevision = runtime.pipeline.getRevision(path);
+    const liveDoc = runtime.liveDocs.get(path) ?? emptyEditorDocument;
+    const content = editorDocumentToString(liveDoc);
+    try {
+      if (await fs.exists(path)) {
+        const diskContent = await fs.readFile(path);
+        runtime.externalConflictBaselines.set(path, createEditorDocumentText(diskContent));
+        runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+          kind: "modified",
+          path,
+        }));
+        return;
+      }
+      await fs.createFile(path, content);
+      const savedDoc = createEditorDocumentText(content);
+      const revisionAdvanced = runtime.pipeline.getRevision(path) !== startRevision;
+      runtime.buffers.set(path, savedDoc);
+      if (!revisionAdvanced) {
+        runtime.liveDocs.set(path, savedDoc);
+      }
+      runtime.externalConflictBaselines.delete(path);
+      runtime.pipeline.initPath(path, content);
+      if (revisionAdvanced) {
+        runtime.pipeline.bumpRevision(path);
+      }
+      runtime.commit(
+        clearExternalDocumentConflict(
+          markSessionDocumentDirty(runtime.getState(), path, revisionAdvanced),
+          path,
+        ),
+        !revisionAdvanced && runtime.getCurrentPath() === path ? { editorDoc: content } : undefined,
+      );
+      await refreshTree(path);
+    } catch (error: unknown) {
+      console.error("[session] failed to restore deleted conflicted file:", path, error);
+      runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+        kind: "deleted",
+        path,
+      }));
+    }
+  };
 
   const cancelPendingOpenFile = () => runtime.cancelPendingOpenFile();
 
@@ -354,13 +435,18 @@ export function createEditorSessionService({
 
       if (!currentDocument.dirty) {
         runtime.activeDocumentSignal.publish(currentDocument.path);
-        runtime.commit(
-          markSessionDocumentDirty(runtime.getState(), currentDocument.path, true),
-        );
+        runtime.commit(markSessionDocumentDirty(runtime.getState(), currentDocument.path, true));
         return "ignore";
       }
 
-      return currentDocument.path === path ? "notify" : "ignore";
+      if (currentDocument.path === path) {
+        runtime.commit(setExternalDocumentConflict(
+          runtime.getState(),
+          { kind: "deleted", path: currentDocument.path },
+        ));
+        return "notify";
+      }
+      return "ignore";
     }
 
     if (!runtime.hasPath(path)) {
@@ -376,6 +462,11 @@ export function createEditorSessionService({
       return "ignore";
     }
     if (currentDocument.dirty) {
+      runtime.externalConflictBaselines.set(path, createEditorDocumentText(content));
+      runtime.commit(setExternalDocumentConflict(
+        runtime.getState(),
+        { kind: "modified", path },
+      ));
       return "notify";
     }
 
@@ -443,6 +534,7 @@ export function createEditorSessionService({
     openFileWithContent,
     reloadFile,
     syncExternalChange,
+    keepExternalConflict,
     createFile,
     createDirectory,
     closeCurrentFile,

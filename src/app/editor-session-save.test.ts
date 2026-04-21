@@ -38,6 +38,35 @@ describe("applySaveAsResult", () => {
     expect(editorDocumentToString(liveDocs.get("notes/final.md") ?? emptyEditorDocument)).toBe("new content");
   });
 
+  it("clears an external conflict on the old path when saving as a new path", () => {
+    const buffers = new Map([["draft.md", createEditorDocumentText("new content")]]);
+    const liveDocs = new Map([["draft.md", createEditorDocumentText("new content")]]);
+    const state = createEditorSessionState(
+      {
+        path: "draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      { kind: "modified", path: "draft.md" },
+    );
+
+    const next = applySaveAsResult({
+      state,
+      buffers,
+      liveDocs,
+      oldPath: "draft.md",
+      newPath: "notes/final.md",
+      doc: createEditorDocumentText("new content"),
+    });
+
+    expect(next.currentDocument).toEqual({
+      path: "notes/final.md",
+      name: "final.md",
+      dirty: false,
+    });
+    expect(next.externalConflict).toBeNull();
+  });
+
   it("clears dirty state when saving in place", () => {
     const buffers = new Map([["notes/final.md", createEditorDocumentText("new content")]]);
     const liveDocs = new Map([["notes/final.md", createEditorDocumentText("new content")]]);
@@ -59,5 +88,30 @@ describe("applySaveAsResult", () => {
     expect(next.currentDocument?.dirty).toBe(false);
     expect(editorDocumentToString(buffers.get("notes/final.md") ?? emptyEditorDocument)).toBe("new content");
     expect(editorDocumentToString(liveDocs.get("notes/final.md") ?? emptyEditorDocument)).toBe("new content");
+  });
+
+  it("clears an external conflict when saving in place", () => {
+    const buffers = new Map([["notes/final.md", createEditorDocumentText("new content")]]);
+    const liveDocs = new Map([["notes/final.md", createEditorDocumentText("new content")]]);
+    const state = createEditorSessionState(
+      {
+        path: "notes/final.md",
+        name: "final.md",
+        dirty: true,
+      },
+      { kind: "modified", path: "notes/final.md" },
+    );
+
+    const next = applySaveAsResult({
+      state,
+      buffers,
+      liveDocs,
+      oldPath: "notes/final.md",
+      newPath: "notes/final.md",
+      doc: createEditorDocumentText("new content"),
+    });
+
+    expect(next.currentDocument?.dirty).toBe(false);
+    expect(next.externalConflict).toBeNull();
   });
 });

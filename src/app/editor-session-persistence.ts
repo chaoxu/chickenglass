@@ -6,8 +6,10 @@ import {
   emptyEditorDocument,
 } from "./editor-doc-change";
 import {
+  clearExternalDocumentConflict,
   clearSessionDocument,
   markSessionDocumentDirty,
+  setExternalDocumentConflict,
 } from "./editor-session-actions";
 import { getCurrentSessionDocument } from "./editor-session-model";
 import {
@@ -17,6 +19,7 @@ import { applySaveAsResult } from "./editor-session-save";
 import type { FileSystem } from "./file-manager";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
+import { fnv1aHash, SaveWriteConflictError } from "./save-pipeline";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -40,7 +43,7 @@ export interface EditorSessionPersistence {
   writeDocumentSnapshot: (
     targetPath: string,
     doc: string,
-    options?: { createTargetIfMissing?: boolean },
+    options?: { createTargetIfMissing?: boolean; expectedBaselineHash?: string },
   ) => Promise<string>;
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
@@ -78,12 +81,80 @@ export function createEditorSessionPersistence({
   const writeDocumentSnapshot = async (
     targetPath: string,
     doc: string,
-    options?: { createTargetIfMissing?: boolean },
+    options?: { createTargetIfMissing?: boolean; expectedBaselineHash?: string },
   ): Promise<string> => {
     const targetExists =
       options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
     const shouldCreateTarget =
       options?.createTargetIfMissing === true && !targetExists;
+    const expectedBaselineHash = options?.expectedBaselineHash;
+    const writeFileIfUnchanged = fs.writeFileIfUnchanged?.bind(fs);
+    if (
+      !shouldCreateTarget
+      && expectedBaselineHash
+      && writeFileIfUnchanged
+    ) {
+      const result = await measureAsync(
+        "save_file.write_if_unchanged",
+        () => writeFileIfUnchanged(
+          targetPath,
+          doc,
+          expectedBaselineHash,
+        ),
+        {
+          category: "save_file",
+          detail: targetPath,
+        },
+      );
+      if (result?.written) {
+        return doc;
+      }
+      if (result?.currentContent !== undefined) {
+        runtime.externalConflictBaselines.set(
+          targetPath,
+          createEditorDocumentText(result.currentContent),
+        );
+      }
+      runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+        kind: result?.missing ? "deleted" : "modified",
+        path: targetPath,
+      }));
+      throw new SaveWriteConflictError(targetPath);
+    }
+
+    if (!shouldCreateTarget && expectedBaselineHash) {
+      try {
+        const currentContent = await measureAsync(
+          "save_file.fallback_preflight_read",
+          () => fs.readFile(targetPath),
+          {
+            category: "save_file",
+            detail: targetPath,
+          },
+        );
+        if (fnv1aHash(currentContent) !== expectedBaselineHash) {
+          runtime.externalConflictBaselines.set(
+            targetPath,
+            createEditorDocumentText(currentContent),
+          );
+          runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+            kind: "modified",
+            path: targetPath,
+          }));
+          throw new SaveWriteConflictError(targetPath);
+        }
+      } catch (error: unknown) {
+        if (error instanceof SaveWriteConflictError) {
+          throw error;
+        }
+        runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+          kind: "deleted",
+          path: targetPath,
+        }));
+        throw new SaveWriteConflictError(targetPath);
+      }
+    }
+
     await measureAsync(
       "save_file.write",
       () => (shouldCreateTarget
@@ -97,13 +168,32 @@ export function createEditorSessionPersistence({
     return doc;
   };
 
+  const knownDiskHash = (path: string): string => {
+    const pipelineHash = runtime.pipeline.getLastSavedHash(path);
+    if (pipelineHash !== undefined) {
+      return pipelineHash;
+    }
+    const bufferedDoc = runtime.buffers.get(path) ?? emptyEditorDocument;
+    return fnv1aHash(editorDocumentToString(bufferedDoc));
+  };
+
   const saveCurrentDocument = async (): Promise<boolean> => {
     const currentPath = runtime.getCurrentPath();
     if (!currentPath) return true;
+    if (runtime.getState().externalConflict?.path === currentPath) {
+      return false;
+    }
+    const currentDocument = runtime.getCurrentDocument();
+    if (currentDocument && !currentDocument.dirty) {
+      return true;
+    }
 
     const result = await runtime.pipeline.save(currentPath, () => {
       const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
-      return { content: editorDocumentToString(doc) };
+      return {
+        content: editorDocumentToString(doc),
+        expectedBaselineHash: knownDiskHash(currentPath),
+      };
     });
 
     if (result.saved && result.savedContent !== undefined) {
@@ -115,9 +205,13 @@ export function createEditorSessionPersistence({
       if (savedRevisionIsCurrent) {
         runtime.liveDocs.set(currentPath, savedDoc);
       }
+      runtime.externalConflictBaselines.delete(currentPath);
 
       runtime.commit(
-        markSessionDocumentDirty(runtime.getState(), currentPath, !savedRevisionIsCurrent),
+        clearExternalDocumentConflict(
+          markSessionDocumentDirty(runtime.getState(), currentPath, !savedRevisionIsCurrent),
+          currentPath,
+        ),
         savedRevisionIsCurrent ? { editorDoc: result.savedContent } : undefined,
       );
       onAfterSave?.();
@@ -180,8 +274,15 @@ export function createEditorSessionPersistence({
       return null;
     }
 
+    const state = runtime.getState();
+    const externalConflict = state.externalConflict;
     runtime.commit(
       {
+        ...state,
+        externalConflict:
+          externalConflict && remapPath(externalConflict.path, oldPath, newPath)
+            ? null
+            : externalConflict,
         currentDocument: {
           ...currentDocument,
           path: remappedCurrentPath,

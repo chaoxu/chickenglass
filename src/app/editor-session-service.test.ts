@@ -94,7 +94,11 @@ function createSessionHarness(fs: FileSystem) {
     requestUnsavedChangesDecision: async () => "discard",
     runtime,
   });
-  runtime.setWriteDocumentSnapshot(persistence.writeDocumentSnapshot);
+  runtime.setWriteDocumentSnapshot((path, snapshot) =>
+    persistence.writeDocumentSnapshot(path, snapshot.content, {
+      expectedBaselineHash: snapshot.expectedBaselineHash,
+    }),
+  );
   const service = createEditorSessionService({
     fs,
     refreshTree: async () => {},

@@ -6,17 +6,19 @@ import {
 import {
   createEditorSessionState,
   type EditorSessionState,
+  type ExternalDocumentConflict,
   type SessionDocument,
   hasSessionPath,
   getCurrentSessionDocument,
 } from "./editor-session-model";
 import { createActiveDocumentSignal, type ActiveDocumentSignal } from "./active-document-signal";
-import { SavePipeline } from "./save-pipeline";
+import { SavePipeline, type SaveSnapshot } from "./save-pipeline";
 
 export interface EditorSessionSnapshot {
   currentDocument: SessionDocument | null;
   currentPath: string | null;
   editorDoc: string;
+  externalConflict: ExternalDocumentConflict | null;
 }
 
 export interface CommitSessionStateOptions {
@@ -27,12 +29,13 @@ export interface CommitSessionStateOptions {
 type SessionListener = () => void;
 type WriteDocumentSnapshot = (
   path: string,
-  content: string,
+  snapshot: SaveSnapshot,
 ) => Promise<string>;
 
 export interface EditorSessionRuntime {
   readonly buffers: Map<string, EditorDocumentText>;
   readonly liveDocs: Map<string, EditorDocumentText>;
+  readonly externalConflictBaselines: Map<string, EditorDocumentText>;
   readonly pipeline: SavePipeline;
   readonly activeDocumentSignal: ActiveDocumentSignal;
   subscribe: (listener: SessionListener) => () => void;
@@ -82,14 +85,16 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     currentDocument: null,
     currentPath: null,
     editorDoc: "",
+    externalConflict: null,
   };
 
   const buffers = new Map<string, EditorDocumentText>();
   const liveDocs = new Map<string, EditorDocumentText>();
+  const externalConflictBaselines = new Map<string, EditorDocumentText>();
   const listeners = new Set<SessionListener>();
   const activeDocumentSignal = createActiveDocumentSignal();
-  const pipeline = new SavePipeline((path, content) =>
-    writeDocumentSnapshot(path, content),
+  const pipeline = new SavePipeline((path, snapshot) =>
+    writeDocumentSnapshot(path, snapshot),
   );
 
   const refreshSnapshot = () => {
@@ -97,6 +102,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
       currentDocument: state.currentDocument,
       currentPath: state.currentDocument?.path ?? null,
       editorDoc,
+      externalConflict: state.externalConflict,
     };
   };
 
@@ -118,6 +124,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
   return {
     buffers,
     liveDocs,
+    externalConflictBaselines,
     pipeline,
     activeDocumentSignal,
     subscribe: (listener) => {

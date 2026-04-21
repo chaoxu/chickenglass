@@ -1,38 +1,30 @@
 import { useEffect } from "react";
-import type { RefObject } from "react";
 import { FileWatcher } from "../file-watcher";
 import type { ExternalDocumentSyncResult } from "../editor-session-service";
 import { isTauri } from "../../lib/tauri";
 
 interface UseProjectFileWatcherOptions {
   projectRoot: string | null;
-  containerRef: RefObject<HTMLElement | null>;
   refreshTree: (changedPath?: string) => Promise<void>;
-  reloadFile: (path: string) => Promise<void>;
   handleWatchedPathChange?: (path: string) => void | Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
 }
 
 export function useProjectFileWatcher({
   projectRoot,
-  containerRef,
   refreshTree,
-  reloadFile,
   handleWatchedPathChange,
   syncExternalChange,
 }: UseProjectFileWatcherOptions): void {
   useEffect(() => {
-    const container = containerRef.current;
-    if (!isTauri() || !projectRoot || !container) {
+    if (!isTauri() || !projectRoot) {
       return;
     }
 
     const watcher = new FileWatcher({
       refreshTree,
-      reloadFile,
       handleWatchedPathChange,
       syncExternalChange,
-      container,
     });
     let cancelled = false;
 
@@ -57,11 +49,9 @@ export function useProjectFileWatcher({
       void stopWatcher();
     };
   }, [
-    containerRef,
     handleWatchedPathChange,
     projectRoot,
     refreshTree,
-    reloadFile,
     syncExternalChange,
   ]);
 }

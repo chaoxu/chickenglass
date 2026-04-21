@@ -56,6 +56,116 @@ pub fn write_text_file(path: &Path, relative_path: &str, content: &str) -> Resul
     })
 }
 
+pub enum ConditionalTextWriteResult {
+    Written,
+    Modified(String),
+    Missing,
+}
+
+pub fn write_text_file_if_hash(
+    path: &Path,
+    relative_path: &str,
+    content: &str,
+    expected_hash: &str,
+    hash_content: impl Fn(&str) -> String,
+) -> Result<ConditionalTextWriteResult, String> {
+    write_text_file_if_hash_with_hook(
+        path,
+        relative_path,
+        content,
+        expected_hash,
+        hash_content,
+        || {},
+    )
+}
+
+fn write_text_file_if_hash_with_hook(
+    path: &Path,
+    relative_path: &str,
+    content: &str,
+    expected_hash: &str,
+    hash_content: impl Fn(&str) -> String,
+    before_final_check: impl FnOnce(),
+) -> Result<ConditionalTextWriteResult, String> {
+    let expected = match FileHandle::from_path(path) {
+        Ok(handle) => handle,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ConditionalTextWriteResult::Missing);
+        }
+        Err(error) => {
+            return Err(format!("Failed to inspect '{}': {}", relative_path, error));
+        }
+    };
+    let current = match fs::read_to_string(path) {
+        Ok(current) => current,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ConditionalTextWriteResult::Missing);
+        }
+        Err(error) => {
+            return Err(format!("Failed to read '{}': {}", relative_path, error));
+        }
+    };
+    if hash_content(&current) != expected_hash {
+        return Ok(ConditionalTextWriteResult::Modified(current));
+    }
+
+    let permissions = existing_file_permissions_for_atomic_write(path)
+        .map_err(|e| format!("Failed to inspect '{}': {}", relative_path, e))?;
+    let temp_path = write_same_directory_temp_file(path, content.as_bytes(), Some(permissions))
+        .map_err(|e| format!("Failed to write '{}': {}", relative_path, e))?;
+
+    before_final_check();
+
+    let final_content = match fs::read_to_string(path) {
+        Ok(final_content) => final_content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let _ = fs::remove_file(&temp_path);
+            return Ok(ConditionalTextWriteResult::Missing);
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            return Err(format!("Failed to read '{}': {}", relative_path, error));
+        }
+    };
+    if hash_content(&final_content) != expected_hash {
+        let _ = fs::remove_file(&temp_path);
+        return Ok(ConditionalTextWriteResult::Modified(final_content));
+    }
+
+    let actual = match FileHandle::from_path(path) {
+        Ok(actual) => actual,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let _ = fs::remove_file(&temp_path);
+            return Ok(ConditionalTextWriteResult::Missing);
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            return Err(format!("Failed to inspect '{}': {}", relative_path, error));
+        }
+    };
+    if actual != expected {
+        let _ = fs::remove_file(&temp_path);
+        return Ok(ConditionalTextWriteResult::Modified(final_content));
+    }
+
+    if let Err(error) = verify_existing_file_writable(path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("Failed to write '{}': {}", relative_path, error));
+    }
+
+    match fs::rename(&temp_path, path) {
+        Ok(()) => {
+            sync_parent_directory(path)
+                .map_err(|e| format!("Failed to write '{}': {}", relative_path, e))?;
+            Ok(ConditionalTextWriteResult::Written)
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            Err(format!("Failed to write '{}': {}", relative_path, error))
+        }
+    }
+}
+
 pub fn create_text_file(
     path: &Path,
     relative_path: &str,
@@ -384,8 +494,9 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 #[cfg(test)]
 mod tests {
     use super::{
-        FileEntry, create_text_file, delete_path, install_project_root, list_children, rename_path,
-        write_binary_file, write_existing_file, write_existing_file_with_handle,
+        ConditionalTextWriteResult, FileEntry, create_text_file, delete_path,
+        install_project_root, list_children, rename_path, write_binary_file,
+        write_existing_file, write_existing_file_with_handle, write_text_file_if_hash_with_hook,
     };
     use crate::commands::state::ProjectRootEntry;
     use base64::Engine;
@@ -622,6 +733,33 @@ mod tests {
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
         assert!(!file.exists(), "deleted file must not be recreated");
         assert!(atomic_temp_paths(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn conditional_text_write_rejects_same_inode_change_before_replace() {
+        let dir = create_temp_dir("conditional-write-race");
+        let file = dir.join("note.md");
+        fs::write(&file, "saved").unwrap();
+
+        let result = write_text_file_if_hash_with_hook(
+            &file,
+            "note.md",
+            "local edit",
+            "saved",
+            str::to_string,
+            || {
+                fs::write(&file, "external edit").unwrap();
+            },
+        )
+        .unwrap();
+
+        assert!(matches!(
+            result,
+            ConditionalTextWriteResult::Modified(content) if content == "external edit"
+        ));
+        assert_eq!(fs::read_to_string(&file).unwrap(), "external edit");
 
         let _ = fs::remove_dir_all(&dir);
     }

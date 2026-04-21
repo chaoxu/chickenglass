@@ -1060,11 +1060,13 @@ describe("#372 — error handling coverage", () => {
     const app = fileText("src/app/app.tsx");
     const boundary = fileText("src/app/components/error-boundary.tsx");
     const fileWatcher = fileText("src/app/file-watcher.ts");
+    const conflictBanner = fileText("src/app/components/external-conflict-banner.tsx");
     const findReplace = fileText("src/editor/find-replace.ts");
 
     expect(app).toContain("<ErrorBoundary>");
     expect(boundary).toContain("getDerivedStateFromError");
-    expect(fileWatcher).toContain("reload button handler failed");
+    expect(fileWatcher).toContain("handleFileChanged failed");
+    expect(conflictBanner).toContain("discard local edits failed");
     expect(findReplace).toContain("action click handler failed");
   });
 });

@@ -21,6 +21,7 @@ import {
   readFileCommand,
   renameFileCommand,
   revealInFinderCommand,
+  writeFileIfUnchangedCommand,
   writeFileBinaryCommand,
   writeFileCommand,
 } from "./tauri-client/fs";
@@ -90,6 +91,10 @@ export class TauriFileSystem implements FileSystem {
 
   async writeFile(path: string, content: string): Promise<void> {
     await writeFileCommand(path, content);
+  }
+
+  async writeFileIfUnchanged(path: string, content: string, expectedHash: string) {
+    return writeFileIfUnchangedCommand(path, content, expectedHash);
   }
 
   async createFile(path: string, content?: string): Promise<void> {

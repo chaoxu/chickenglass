@@ -109,7 +109,6 @@ function ConnectedAppOverlays({
 
 function AppInner() {
   const fs = useFileSystem();
-  const appContainerRef = useRef<HTMLDivElement | null>(null);
   const dialogs = useDialogs();
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
@@ -135,7 +134,7 @@ function AppInner() {
     editor.hasDirtyDocument,
     editor.saveFile,
     workspace.settings.autoSaveInterval,
-    unsavedChanges.status === "pending",
+    unsavedChanges.status === "pending" || editor.hasUnresolvedExternalConflict,
     unsavedChanges.suspensionVersion,
     {
       activeDocumentSignal: editor.activeDocumentSignal,
@@ -193,9 +192,7 @@ function AppInner() {
 
   useProjectFileWatcher({
     projectRoot: workspace.projectRoot,
-    containerRef: appContainerRef,
     refreshTree: workspace.refreshTree,
-    reloadFile: editor.reloadFile,
     handleWatchedPathChange: editor.handleWatchedPathChange,
     syncExternalChange: editor.syncExternalChange,
   });
@@ -231,7 +228,6 @@ function AppInner() {
           onWidthChange={sidebarLayout.setSidebarWidth}
         >
           <div
-            ref={appContainerRef}
             className="flex h-screen overflow-hidden overscroll-contain"
             onDragOver={editor.handleDragOver}
             onDrop={editor.handleDrop}

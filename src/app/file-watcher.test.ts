@@ -64,33 +64,25 @@ import { FileWatcher } from "./file-watcher";
 function createWatcher(
   options: {
     refreshTree?: (path?: string) => Promise<void>;
-    reloadFile?: (path: string) => Promise<void>;
     handleWatchedPathChange?: (path: string) => void | Promise<void>;
     syncExternalChange?: (path: string) => Promise<ExternalDocumentSyncResult>;
   } = {},
 ) {
-  const container = document.createElement("div");
   const refreshTree =
     options.refreshTree ?? vi.fn(async (_path?: string) => {});
-  const reloadFile =
-    options.reloadFile ?? vi.fn(async (_path: string) => {});
   const handleWatchedPathChange =
     options.handleWatchedPathChange ?? vi.fn();
   const syncExternalChange =
     options.syncExternalChange ?? vi.fn(async () => "notify" as const);
   const watcher = new FileWatcher({
     refreshTree,
-    reloadFile,
     handleWatchedPathChange,
     syncExternalChange,
-    container,
   });
 
   return {
-    container,
     watcher,
     refreshTree,
-    reloadFile,
     handleWatchedPathChange,
     syncExternalChange,
   };
@@ -253,8 +245,9 @@ describe("FileWatcher", () => {
     expect(syncExternalChange).toHaveBeenCalledWith("current.md");
   });
 
-  it("queues dirty-file notifications instead of dropping earlier ones", async () => {
-    const { container, watcher } = createWatcher();
+  it("leaves dirty conflict presentation to the session state", async () => {
+    const syncExternalChange = vi.fn(async () => "notify" as const);
+    const { watcher } = createWatcher({ syncExternalChange });
     const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
       .handleFileChanged
       .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
@@ -262,85 +255,8 @@ describe("FileWatcher", () => {
     await handleFileChanged("a.md");
     await handleFileChanged("b.md");
 
-    expect(container.textContent).toContain(
-      "\"a.md\" changed externally while you have local edits.",
-    );
-    expect(container.textContent).toContain("Keep edits");
-    expect(container.textContent).toContain("Reload from disk");
-
-    const keepButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-no");
-    expect(keepButton).not.toBeNull();
-    expect(keepButton?.textContent).toBe("Keep edits");
-    keepButton?.click();
-
-    expect(container.textContent).toContain(
-      "\"b.md\" changed externally while you have local edits.",
-    );
-  });
-
-  it("suppresses duplicate notifications while a file is already pending", async () => {
-    const { container, watcher } = createWatcher();
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
-
-    await handleFileChanged("a.md");
-    await handleFileChanged("a.md");
-
-    expect(container.querySelectorAll(".file-watcher-notification")).toHaveLength(1);
-    expect(container.textContent?.match(/a\.md/g)?.length).toBe(1);
-  });
-
-  it("reloads the current file and advances to the next pending notification", async () => {
-    const reloadFile = vi.fn(async () => {});
-    const { container, watcher } = createWatcher({ reloadFile });
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
-
-    await handleFileChanged("a.md");
-    await handleFileChanged("b.md");
-
-    const reloadButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
-    expect(reloadButton).not.toBeNull();
-    expect(reloadButton?.textContent).toBe("Reload from disk");
-    reloadButton?.click();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(reloadFile).toHaveBeenCalledWith("a.md");
-    expect(container.textContent).toContain(
-      "\"b.md\" changed externally while you have local edits.",
-    );
-  });
-
-  it("catches synchronous reload handler failures and still advances the queue", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const reloadFile = vi.fn<(_: string) => Promise<void>>(() => {
-      throw new Error("boom");
-    });
-    const { container, watcher } = createWatcher({ reloadFile });
-    const handleFileChanged = (watcher as unknown as { handleFileChanged: (path: string) => Promise<void> })
-      .handleFileChanged
-      .bind(watcher as unknown as { handleFileChanged: (path: string) => Promise<void> });
-
-    await handleFileChanged("a.md");
-    await handleFileChanged("b.md");
-
-    const reloadButton = container.querySelector<HTMLButtonElement>(".file-watcher-btn-yes");
-    expect(reloadButton).not.toBeNull();
-    reloadButton?.click();
-    await Promise.resolve();
-
-    expect(consoleError).toHaveBeenCalledWith(
-      "[file-watcher] reload button handler failed",
-      "a.md",
-      expect.any(Error),
-    );
-    expect(container.textContent).toContain(
-      "\"b.md\" changed externally while you have local edits.",
-    );
-    consoleError.mockRestore();
+    expect(syncExternalChange).toHaveBeenCalledWith("a.md");
+    expect(syncExternalChange).toHaveBeenCalledWith("b.md");
   });
 
   it("refreshes the tree for structural changes even when the path is not open", async () => {
@@ -449,8 +365,10 @@ describe("FileWatcher", () => {
     expect(handleWatchedPathChange).toHaveBeenCalledWith("assets/diagram.png");
   });
 
-  it("does not show a notification when the session already reloaded the clean file", async () => {
-    const { container, watcher } = createWatcher({
+  it("does not refresh the tree when the session already reloaded a clean file", async () => {
+    const refreshTree = vi.fn(async (_path?: string) => {});
+    const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
+      refreshTree,
       syncExternalChange: async () => "reloaded",
     });
     const handleFileChanged = (
@@ -463,7 +381,6 @@ describe("FileWatcher", () => {
 
     await handleFileChanged({ path: "a.md", treeChanged: false });
 
-    expect(container.querySelector(".file-watcher-notification")).toBeNull();
-    expect(container.textContent).toBe("");
+    expect(refreshTreeSpy).not.toHaveBeenCalled();
   });
 });
