@@ -5,10 +5,11 @@ const config: KnipConfig = {
     "editor.ts",
     "src/editor/index.ts",
     "src/app/index.ts",
+    "server/index.ts",
     "scripts/*.mjs",
     "scripts/regression-tests/*.mjs",
   ],
-  project: ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
+  project: ["src/**/*.{ts,tsx}", "server/**/*.ts", "scripts/**/*.mjs"],
   ignoreDependencies: [
     // Tailwind — used via @tailwindcss/vite plugin, not imported directly
     "tailwindcss",

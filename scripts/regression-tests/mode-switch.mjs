@@ -169,8 +169,10 @@ export async function run(page) {
     }
   }
 
-  const richState = states.find((state) => state.mode === "cm6-rich");
-  if (!richState || richState.richWidgetCount === 0) {
+  const restoredRichStates = states
+    .slice(1)
+    .filter((state) => state.mode === "cm6-rich");
+  if (restoredRichStates.length === 0 || restoredRichStates.some((state) => state.richWidgetCount === 0)) {
     return {
       pass: false,
       message: "CM6 rich mode did not restore rendered rich widgets after mode switching",

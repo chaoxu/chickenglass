@@ -212,6 +212,43 @@ const fsStub: FileSystem = {
   readFileBinary: async () => new Uint8Array(),
 };
 
+class MethodBackedFileSystem implements FileSystem {
+  readonly childrenCalls: string[] = [];
+
+  async listTree(): Promise<FileEntry> {
+    return { name: "project", path: "", isDirectory: true, children: [] };
+  }
+
+  async listChildren(path: string): Promise<FileEntry[]> {
+    this.childrenCalls.push(path);
+    return [{ name: "notes.md", path: "notes.md", isDirectory: false }];
+  }
+
+  async readFile(): Promise<string> {
+    return "";
+  }
+
+  async writeFile(): Promise<void> {}
+
+  async createFile(): Promise<void> {}
+
+  async exists(): Promise<boolean> {
+    return false;
+  }
+
+  async renameFile(): Promise<void> {}
+
+  async createDirectory(): Promise<void> {}
+
+  async deleteFile(): Promise<void> {}
+
+  async writeFileBinary(): Promise<void> {}
+
+  async readFileBinary(): Promise<Uint8Array> {
+    return new Uint8Array();
+  }
+}
+
 describe("useAppWorkspaceSession", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -274,6 +311,28 @@ describe("useAppWorkspaceSession", () => {
       projectRoot: "/tmp/next-project",
       currentDocument: null,
     });
+  });
+
+  it("preserves filesystem method receivers when shallow-loading children", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    const fs = new MethodBackedFileSystem();
+    const { Harness, ref } = createHarness(fs);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await ref.openProjectRoot("/tmp/method-backed-project");
+    });
+
+    expect(fs.childrenCalls).toEqual([""]);
+    expect(ref.fileTree?.children?.map((entry) => entry.path)).toEqual(["notes.md"]);
   });
 
   it("keeps tree and config from the newest overlapping project-root load", async () => {

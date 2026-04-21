@@ -145,6 +145,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
+    "ws": "^8.20.0",
     "yaml": "^2.8.3",
     "zustand": "^5.0.12"
   },
@@ -161,6 +162,7 @@
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react-swc": "^4.3.0",
     "fast-check": "^4.6.0",
     "jsdom": "^29.0.0",

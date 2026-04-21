@@ -1,92 +1,90 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
+import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
+import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import {
   createEmptyHistoryState,
   HistoryPlugin,
   type HistoryState,
 } from "@lexical/react/LexicalHistoryPlugin";
-import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
-import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
-import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
-import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
+import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
+import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
+import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { LexicalEditor } from "lexical";
-
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
 import type { EditorDocumentChange } from "../lib/editor-doc-change";
 import {
-  focusSurface,
   type FocusOwner,
   type FocusOwnerRole,
+  focusSurface,
 } from "../state/editor-focus";
-import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
-import {
-  LexicalRenderContextProvider,
-  type LexicalRenderContextValue,
-} from "./render-context";
+import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { BibliographySection } from "./bibliography-section";
+import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
+import { CursorRevealPlugin } from "./cursor-reveal-plugin";
+import { DocumentChangeBridgeProvider } from "./document-change-bridge";
+import { LexicalSurfaceEditableProvider } from "./editability-context";
+import { EditorFocusPlugin } from "./editor-focus-plugin";
+import {
+  DestructiveKeySelectionSyncPlugin,
+  EditableSyncPlugin,
+  FormatEventPlugin,
+  RootElementPlugin,
+  repairBlankClickSelection,
+  ViewportTrackingPlugin,
+} from "./editor-surface-shared";
 import {
   EmbeddedFieldFlushProvider,
 } from "./embedded-field-flush-registry";
-import { LexicalSurfaceEditableProvider } from "./editability-context";
-import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
+import { InteractionTracePlugin } from "./interaction-trace-plugin";
 import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
-import { CursorRevealPlugin } from "./cursor-reveal-plugin";
-import { REVEAL_MODE, type RevealPresentation } from "./reveal-mode";
-import {
-  RevealPresentationProvider,
-  useRevealPresentation,
-} from "./reveal-presentation-context";
-import { StructureEditProvider } from "./structure-edit-plugin";
 import {
   coflatMarkdownNodes,
   coflatMarkdownTransformers,
   createLexicalInitialEditorState,
   lexicalMarkdownTheme,
 } from "./markdown";
-import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
-import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
-import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
-import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
-import { TableActionMenuPlugin } from "./table-action-menu-plugin";
-import { SlashPickerPlugin } from "./slash-picker-plugin";
-import { SourcePositionPlugin } from "./source-position-plugin";
-import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
-import type {
-  MarkdownEditorHandle,
-  MarkdownEditorSelection,
-} from "./markdown-editor-types";
-import { ActiveEditorPlugin } from "./active-editor-plugin";
-import { TabKeyPlugin } from "./tab-key-plugin";
-import { TreeViewPlugin } from "./tree-view-plugin";
-import { InteractionTracePlugin } from "./interaction-trace-plugin";
-import { DocumentChangeBridgeProvider } from "./document-change-bridge";
-
-import {
-  CoflatClipboardPlugin,
-  CodeFenceExitPlugin,
-  CodeHighlightPlugin,
-  SelectionAlwaysOnPlugin,
-} from "./rich-editor-plugins";
-import {
-  DestructiveKeySelectionSyncPlugin,
-  EditableSyncPlugin,
-  FormatEventPlugin,
-  repairBlankClickSelection,
-  RootElementPlugin,
-  ViewportTrackingPlugin,
-} from "./editor-surface-shared";
 import {
   MarkdownSyncPlugin,
   RichMarkdownEditorHandlePlugin,
   useMarkdownEditorSessionController,
 } from "./markdown-editor-session";
+import type {
+  MarkdownEditorHandle,
+  MarkdownEditorSelection,
+} from "./markdown-editor-types";
+import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
+import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
+import {
+  LexicalRenderContextProvider,
+  type LexicalRenderContextValue,
+} from "./render-context";
+import { REVEAL_MODE, type RevealPresentation } from "./reveal-mode";
+import {
+  RevealPresentationProvider,
+  useRevealPresentation,
+} from "./reveal-presentation-context";
+import {
+  CodeFenceExitPlugin,
+  CodeHighlightPlugin,
+  CoflatClipboardPlugin,
+  SelectionAlwaysOnPlugin,
+} from "./rich-editor-plugins";
+import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
+import { SlashPickerPlugin } from "./slash-picker-plugin";
+import { SourcePositionPlugin } from "./source-position-plugin";
+import { StructureEditProvider } from "./structure-edit-plugin";
+import { TabKeyPlugin } from "./tab-key-plugin";
+import { TableActionMenuPlugin } from "./table-action-menu-plugin";
+import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
+import { TreeViewPlugin } from "./tree-view-plugin";
 
 export type { LexicalRichMarkdownEditorProps };
 
@@ -167,6 +165,7 @@ export function LexicalRichMarkdownEditor({
     sourceSelectionRef,
     userEditPendingRef,
     embeddedFieldFlushRegistry,
+    flushRichDocumentSnapshot,
     handleRichChange,
     syncSelectionToDocLength,
   } = useMarkdownEditorSessionController({
@@ -245,6 +244,7 @@ export function LexicalRichMarkdownEditor({
                   : <ClickableLinkPlugin />}
                 <RichMarkdownEditorHandlePlugin
                   focusOwner={focusOwner}
+                  flushRichDocumentSnapshot={flushRichDocumentSnapshot}
                   lastCommittedDocRef={lastCommittedDocRef}
                   onEditorReady={onEditorReady}
                   onDocChange={onDocChange}

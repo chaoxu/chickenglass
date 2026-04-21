@@ -1,6 +1,6 @@
-import { describe, expect, it, afterEach } from "vitest";
 import { search } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { CSS } from "../constants/css-classes";
 import { createTestView } from "../test-utils";
@@ -8,6 +8,7 @@ import {
   collectVisibleSearchMatches,
   findReplaceExtension,
   getSearchControllerState,
+  MAX_CACHED_SEARCH_MATCH_RANGES,
   openFindSearch,
   openReplaceSearch,
   searchControllerExtensions,
@@ -141,5 +142,23 @@ describe("searchController", () => {
     expect(moved.ranges).toBe(initial.ranges);
     expect(moved.total).toBe(3);
     expect(moved.current).toBe(2);
+  });
+
+  it("does not retain match range objects for extremely common queries", () => {
+    const view = createView("a".repeat(MAX_CACHED_SEARCH_MATCH_RANGES + 1));
+
+    openFindSearch(view);
+    setSearchControllerQuery(view, {
+      search: "a",
+      replace: "",
+      caseSensitive: false,
+      regexp: false,
+      wholeWord: false,
+    });
+
+    const initial = updateSearchMatchCache(view, null);
+
+    expect(initial.total).toBe(MAX_CACHED_SEARCH_MATCH_RANGES + 1);
+    expect(initial.ranges).toBeNull();
   });
 });

@@ -80,6 +80,10 @@ local function inlines_to_latex(inlines)
   return pandoc.write(pandoc.Pandoc({ pandoc.Plain(inlines) }), "latex")
 end
 
+local function trim(s)
+  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
 local function handle_figure(el)
   local title = escape_latex_text(pop_title(el) or "")
   local id = el.identifier
@@ -247,24 +251,64 @@ end
 local function transform_cite(el)
   local segments = {}
 
-  local function append_segment(kind, id)
+  local function append_segment(kind, citation)
     local last = segments[#segments]
     if last and last.kind == kind then
-      table.insert(last.ids, id)
+      table.insert(last.citations, citation)
     else
-      table.insert(segments, { kind = kind, ids = { id } })
+      table.insert(segments, { kind = kind, citations = { citation } })
     end
   end
 
   for _, c in ipairs(el.citations) do
-    if is_xref_id(c.id) then append_segment("xref", c.id)
-    else                     append_segment("bib", c.id) end
+    if is_xref_id(c.id) then append_segment("xref", c)
+    else                     append_segment("bib", c) end
+  end
+
+  local function citation_note(citation)
+    local parts = {}
+    local prefix = trim(inlines_to_latex(citation.prefix))
+    local suffix = trim(inlines_to_latex(citation.suffix)):gsub("^,%s*", "")
+    if prefix ~= "" then table.insert(parts, prefix) end
+    if suffix ~= "" then table.insert(parts, suffix) end
+    return table.concat(parts, " ")
+  end
+
+  local function render_bib_segment(citations)
+    local has_note = false
+    for _, citation in ipairs(citations) do
+      if citation_note(citation) ~= "" then
+        has_note = true
+        break
+      end
+    end
+    if not has_note then
+      local ids = {}
+      for _, citation in ipairs(citations) do table.insert(ids, citation.id) end
+      return "\\cite{" .. table.concat(ids, ",") .. "}"
+    end
+
+    local cites = {}
+    for _, citation in ipairs(citations) do
+      local note = citation_note(citation)
+      if note ~= "" then
+        table.insert(cites, "\\cite[" .. note .. "]{" .. citation.id .. "}")
+      else
+        table.insert(cites, "\\cite{" .. citation.id .. "}")
+      end
+    end
+    return table.concat(cites, "; ")
   end
 
   local pieces = {}
   for _, segment in ipairs(segments) do
-    local macro = segment.kind == "xref" and "\\cref" or "\\cite"
-    table.insert(pieces, macro .. "{" .. table.concat(segment.ids, ",") .. "}")
+    if segment.kind == "xref" then
+      local ids = {}
+      for _, citation in ipairs(segment.citations) do table.insert(ids, citation.id) end
+      table.insert(pieces, "\\cref{" .. table.concat(ids, ",") .. "}")
+    else
+      table.insert(pieces, render_bib_segment(segment.citations))
+    end
   end
 
   return pandoc.RawInline("latex", table.concat(pieces, "; "))

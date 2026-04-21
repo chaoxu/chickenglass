@@ -1,5 +1,5 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
 import {
   $createNodeSelection,
@@ -12,14 +12,14 @@ import {
   $setSelection,
   UNDO_COMMAND,
 } from "lexical";
-import { createElement, type ComponentProps } from "react";
+import { type ComponentProps, createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
 import { setActiveEditor } from "./active-editor-tracker";
-import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { LexicalMarkdownEditor } from "./markdown-editor";
+import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { RAW_BLOCK_SOURCE_SELECTOR } from "./source-position-contract";
 
 type MarkdownEditorProps = ComponentProps<typeof LexicalMarkdownEditor>;
@@ -144,6 +144,60 @@ describe("LexicalMarkdownEditor history", () => {
       await waitFor(() => {
         expect(onTextChange).toHaveBeenCalledWith("Alpha Beta");
       });
+      expect(onDocChange).toHaveBeenCalledWith([{
+        from: 5,
+        insert: " Beta",
+        to: 5,
+      }]);
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("flushes pending rich text edits before switching to source mode", async () => {
+    const onDocChange = vi.fn();
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "Alpha",
+      editorMode: "lexical",
+      onDocChange,
+      onTextChange,
+    });
+
+    try {
+      const rootElement = editor.editor.getRootElement();
+      if (!rootElement) {
+        throw new Error("expected editor root");
+      }
+
+      act(() => {
+        fireEvent.keyDown(rootElement, { key: "Backspace" });
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected text");
+          }
+          text.select(text.getTextContentSize(), text.getTextContentSize());
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) {
+            throw new Error("expected range selection");
+          }
+          selection.insertText(" Beta");
+        }, { discrete: true });
+      });
+
+      act(() => {
+        editor.rerender({ doc: "Alpha", editorMode: "source" });
+      });
+
+      await waitFor(() => {
+        expect(editor.handle.getDoc()).toBe("Alpha Beta");
+      });
+      expect(onTextChange).toHaveBeenCalledWith("Alpha Beta");
       expect(onDocChange).toHaveBeenCalledWith([{
         from: 5,
         insert: " Beta",

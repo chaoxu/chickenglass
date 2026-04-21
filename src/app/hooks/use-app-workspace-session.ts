@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { isTauri } from "../../lib/tauri";
 import type { FileEntry, FileSystem } from "../file-manager";
-import { loadProjectConfig } from "../project-config";
+import { measureAsync, withPerfOperation } from "../perf";
 import type { ProjectConfig } from "../project-config";
+import { loadProjectConfig } from "../project-config";
 import { useRecentFiles } from "./use-recent-files";
 import { useSettings } from "./use-settings";
 import { useTheme } from "./use-theme";
 import { useWindowState } from "./use-window-state";
-import { measureAsync, withPerfOperation } from "../perf";
-import { isTauri } from "../../lib/tauri";
 
 // Lazy-loaded to keep tauri-fs out of the browser startup chunk (#446).
 // Other modules already dynamically import tauri-fs; this static import
@@ -154,14 +154,13 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   }, [saveWindowState]);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
-    const listChildren = fs.listChildren;
-    if (listChildren) {
+    if (fs.listChildren) {
       // Shallow load: root children + config in parallel — sidebar renders
       // immediately.  Sub-directory children are loaded on demand when the
       // user expands them.  Consumers that need full depth (export) call
       // listTree() directly; default-doc search uses listChildren lazily.
       const [shallowChildren, nextProjectConfig] = await Promise.all([
-        measureAsync("sidebar.file_tree_shallow", () => listChildren(""), {
+        measureAsync("sidebar.file_tree_shallow", () => fs.listChildren?.("") as Promise<FileEntry[]>, {
           category: "sidebar",
         }),
         measureAsync(

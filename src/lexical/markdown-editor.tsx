@@ -1,19 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FocusEventHandler,
-  type KeyboardEventHandler,
-  type MouseEvent as ReactMouseEvent,
-  type MutableRefObject,
-} from "react";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
@@ -26,71 +15,56 @@ import {
   COMMAND_PRIORITY_LOW,
   type LexicalEditor,
 } from "lexical";
-
-import type { RevealMode, RevealPresentation } from "./reveal-mode";
-import { REVEAL_PRESENTATION } from "./reveal-mode";
+import {
+  type FocusEventHandler,
+  type KeyboardEventHandler,
+  type MutableRefObject,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
 import {
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
 } from "../lib/editor-doc-change";
+import { useDevSettings } from "../state/dev-settings";
 import {
-  focusSurface,
   type FocusOwner,
   type FocusOwnerRole,
+  focusSurface,
 } from "../state/editor-focus";
-import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
+import { ActiveEditorPlugin } from "./active-editor-plugin";
 import { BibliographySection } from "./bibliography-section";
 import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
-import { CodeFenceExitPlugin, CodeHighlightPlugin } from "./rich-editor-plugins";
-import { EmbeddedFieldFlushProvider } from "./embedded-field-flush-registry";
+import { CursorRevealPlugin } from "./cursor-reveal-plugin";
+import { DocumentChangeBridgeProvider } from "./document-change-bridge";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import {
   DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
   FormatEventPlugin,
-  repairBlankClickSelection,
   RootElementPlugin,
+  repairBlankClickSelection,
   storeSelection,
   ViewportTrackingPlugin,
 } from "./editor-surface-shared";
+import { EmbeddedFieldFlushProvider } from "./embedded-field-flush-registry";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
 import { InteractionTracePlugin } from "./interaction-trace-plugin";
-import { CursorRevealPlugin } from "./cursor-reveal-plugin";
-import { RevealPresentationProvider } from "./reveal-presentation-context";
-import { StructureEditProvider } from "./structure-edit-plugin";
+import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import {
   coflatMarkdownNodes,
   coflatMarkdownTransformers,
   createLexicalInitialEditorState,
   lexicalMarkdownTheme,
 } from "./markdown";
-import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
-import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
-import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
-import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
-import { SlashPickerPlugin } from "./slash-picker-plugin";
-import { TabKeyPlugin } from "./tab-key-plugin";
-import {
-  LexicalRenderContextProvider,
-  type LexicalRenderContextValue,
-} from "./render-context";
-import {
-  readSourcePositionFromElement,
-  SourcePositionPlugin,
-} from "./source-position-plugin";
-import {
-  getSourceText,
-  $readSourceTextSelectionFromLexicalRoot,
-  writeSourceTextToLexicalRoot,
-} from "./source-text";
-import { ActiveEditorPlugin } from "./active-editor-plugin";
-import { DocumentChangeBridgeProvider } from "./document-change-bridge";
-import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
-import { TreeViewPlugin } from "./tree-view-plugin";
 import {
   MarkdownEditorHandlePlugin,
   MarkdownModeSyncPlugin,
@@ -98,7 +72,32 @@ import {
   shouldIgnoreMarkdownEditorChange,
   useMarkdownEditorSessionController,
 } from "./markdown-editor-session";
-import { useDevSettings } from "../state/dev-settings";
+import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
+import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
+import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
+import {
+  LexicalRenderContextProvider,
+  type LexicalRenderContextValue,
+} from "./render-context";
+import type { RevealMode, RevealPresentation } from "./reveal-mode";
+import { REVEAL_PRESENTATION } from "./reveal-mode";
+import { RevealPresentationProvider } from "./reveal-presentation-context";
+import { CodeFenceExitPlugin, CodeHighlightPlugin } from "./rich-editor-plugins";
+import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
+import { SlashPickerPlugin } from "./slash-picker-plugin";
+import {
+  readSourcePositionFromElement,
+  SourcePositionPlugin,
+} from "./source-position-plugin";
+import { SET_SOURCE_SELECTION_COMMAND } from "./source-selection-command";
+import {
+  $readSourceTextSelectionFromLexicalRoot,
+  getSourceText,
+  writeSourceTextToLexicalRoot,
+} from "./source-text";
+import { StructureEditProvider } from "./structure-edit-plugin";
+import { TabKeyPlugin } from "./tab-key-plugin";
+import { TreeViewPlugin } from "./tree-view-plugin";
 
 function SourceSelectionPlugin({
   editorMode,
@@ -272,6 +271,7 @@ export function LexicalMarkdownEditor({
     userEditPendingRef,
     embeddedFieldFlushRegistry,
     focusOwnerRef,
+    flushRichDocumentSnapshot,
     handleRichChange,
   } = useMarkdownEditorSessionController({
     doc,
@@ -390,6 +390,7 @@ export function LexicalMarkdownEditor({
                 <MarkdownEditorHandlePlugin
                   editorModeRef={editorModeRef}
                   focusOwnerRef={focusOwnerRef}
+                  flushRichDocumentSnapshot={flushRichDocumentSnapshot}
                   lastCommittedDocRef={lastCommittedDocRef}
                   onEditorReady={onEditorReady}
                   onDocChange={onDocChange}
@@ -402,6 +403,7 @@ export function LexicalMarkdownEditor({
                 <MarkdownModeSyncPlugin
                   doc={doc}
                   editorMode={editorMode}
+                  flushRichDocumentSnapshot={flushRichDocumentSnapshot}
                   lastCommittedDocRef={lastCommittedDocRef}
                   pendingLocalEchoDocRef={pendingLocalEchoDocRef}
                   selectionRef={sourceSelectionRef}

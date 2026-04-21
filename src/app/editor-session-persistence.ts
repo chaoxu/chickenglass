@@ -1,4 +1,10 @@
 import { isTauri } from "../lib/tauri";
+import { confirmAction } from "./confirm-action";
+import {
+  createEditorDocumentText,
+  editorDocumentToString,
+  emptyEditorDocument,
+} from "./editor-doc-change";
 import {
   clearSessionDocument,
   markSessionDocumentDirty,
@@ -6,18 +12,12 @@ import {
 } from "./editor-session-actions";
 import { getCurrentSessionDocument } from "./editor-session-model";
 import {
-  createEditorDocumentText,
-  editorDocumentToString,
-  emptyEditorDocument,
-} from "./editor-doc-change";
-import { applySaveAsResult } from "./editor-session-save";
-import {
   type EditorSessionRuntime,
 } from "./editor-session-runtime";
+import { applySaveAsResult } from "./editor-session-save";
 import type { FileSystem } from "./file-manager";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
-import { confirmAction } from "./confirm-action";
 import type {
   UnsavedChangesDecision,
   UnsavedChangesRequest,
@@ -191,13 +191,6 @@ export function createEditorSessionPersistence({
       if (decision === "save") {
         const saved = await saveCurrentDocument();
         if (!saved) return;
-      } else {
-        const savedDoc = runtime.buffers.get(currentDocument.path) ?? emptyEditorDocument;
-        runtime.liveDocs.set(currentDocument.path, savedDoc);
-        runtime.commit(
-          markSessionDocumentDirty(runtime.getState(), currentDocument.path, false),
-          { editorDoc: editorDocumentToString(savedDoc) },
-        );
       }
     }
 

@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub struct ProjectPathResolver {
     canonical_root: PathBuf,
@@ -36,6 +36,7 @@ impl ProjectPathResolver {
     }
 
     pub fn resolve_project_entry_path(&self, relative: &str) -> Result<PathBuf, String> {
+        reject_dot_leaf_component(relative)?;
         let full = self.canonical_root.join(relative);
         let entry = canonicalize_parent_maybe_missing(&full)
             .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
@@ -69,13 +70,25 @@ impl ProjectPathResolver {
     }
 }
 
+fn reject_dot_leaf_component(relative: &str) -> Result<(), String> {
+    let leaf = relative
+        .rsplit(['/', '\\'])
+        .find(|segment| !segment.is_empty())
+        .ok_or_else(|| "Path must end in a normal file name".to_string())?;
+    if leaf == "." || leaf == ".." {
+        return Err("Path must end in a normal file name".to_string());
+    }
+    Ok(())
+}
+
 fn canonicalize_parent_maybe_missing(path: &Path) -> Result<PathBuf, String> {
     let parent = path
         .parent()
         .ok_or_else(|| format!("Path '{}' has no parent", path.display()))?;
-    let name = path
-        .file_name()
-        .ok_or_else(|| format!("Path '{}' has no file name", path.display()))?;
+    let name = match path.components().next_back() {
+        Some(Component::Normal(name)) => name.to_owned(),
+        _ => return Err(format!("Path '{}' must end in a normal file name", path.display())),
+    };
     Ok(canonicalize_maybe_missing(parent)?.join(name))
 }
 
@@ -430,6 +443,26 @@ mod tests {
 
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn resolve_existing_entry_path_rejects_dot_leaf_components() {
+        let root = create_temp_dir("entry-dot-root");
+        fs::create_dir(root.join("docs")).unwrap();
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        for relative in ["docs/.", "docs/..", "docs/../.."] {
+            let err = resolver
+                .resolve_existing_entry_path(relative)
+                .expect_err("dot leaf components should be rejected");
+            assert!(
+                err.contains("must end in a normal file name")
+                    || err.contains("escapes project root"),
+                "relative={relative}, got: {err}",
+            );
+        }
+
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

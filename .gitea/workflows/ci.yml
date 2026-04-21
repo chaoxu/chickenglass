@@ -63,6 +63,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:4173 >/dev/null
           pnpm test:browser:merged-app -- --url http://127.0.0.1:4173 --browser managed --timeout 30000
+          pnpm test:browser:lexical -- --url http://127.0.0.1:4173 --browser managed --timeout 30000
 
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:

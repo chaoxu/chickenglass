@@ -2,19 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createEditorDocumentText,
+  type EditorDocumentText,
   editorDocumentToString,
   emptyEditorDocument,
-  type EditorDocumentText,
 } from "./editor-doc-change";
-import type { FileSystem } from "./file-manager";
-import { MemoryFileSystem } from "./file-manager";
-import { createEditorSessionState, type SessionDocument } from "./editor-session-model";
 import { markSessionDocumentDirty } from "./editor-session-actions";
-import { createEditorSessionRuntime, type EditorSessionRuntime } from "./editor-session-runtime";
+import { createEditorSessionState, type SessionDocument } from "./editor-session-model";
 import {
   createEditorSessionPersistence,
   type EditorSessionPersistence,
 } from "./editor-session-persistence";
+import { createEditorSessionRuntime, type EditorSessionRuntime } from "./editor-session-runtime";
+import type { FileSystem } from "./file-manager";
+import { MemoryFileSystem } from "./file-manager";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "./unsaved-changes";
 
 const sessionMockState = vi.hoisted(() => ({
@@ -334,6 +334,42 @@ describe("createEditorSessionPersistence", () => {
     expect(ref.runtime.getEditorDoc()).toBe("");
     expect(ref.runtime.buffers.has("draft.md")).toBe(false);
     expect(ref.runtime.liveDocs.has("draft.md")).toBe(false);
+  });
+
+  it("keeps unsaved edits when discard-delete fails", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "saved" });
+    vi.spyOn(fs, "deleteFile").mockRejectedValueOnce(new Error("permission denied"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const requestUnsavedChangesDecision = vi.fn<
+      (request: UnsavedChangesRequest) => Promise<UnsavedChangesDecision>
+    >(async () => "discard");
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      editorDoc: "unsaved",
+      buffers: createDocumentMap({ "draft.md": "saved" }),
+      liveDocs: createDocumentMap({ "draft.md": "unsaved" }),
+      requestUnsavedChangesDecision,
+    });
+
+    try {
+      await ref.result.handleDelete("draft.md");
+    } finally {
+      consoleError.mockRestore();
+    }
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("saved");
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+    expect(ref.runtime.getEditorDoc()).toBe("unsaved");
+    expect(editorDocumentToString(ref.runtime.liveDocs.get("draft.md") ?? emptyEditorDocument)).toBe("unsaved");
   });
 
   it("saveAs creates a missing target from the active document", async () => {

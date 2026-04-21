@@ -67,4 +67,16 @@ describe("LaTeX filter inline mappings", () => {
 
     expect(latex).toContain("\\cref{thm:main}; \\cite{karger2000}");
   });
+
+  it.skipIf(!hasPandoc)("preserves citation locators in mixed clusters", () => {
+    const latex = runPandoc([
+      "::: {.theorem #thm:main}",
+      "Body",
+      ":::",
+      "",
+      "See [@thm:main; @karger2000, p. 42].",
+    ].join("\n"));
+
+    expect(latex).toContain("\\cref{thm:main}; \\cite[p.~42]{karger2000}");
+  });
 });

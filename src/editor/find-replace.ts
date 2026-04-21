@@ -21,23 +21,24 @@ import {
   openSearchPanel,
   replaceAll,
   replaceNext,
+  SearchQuery,
   search,
   searchKeymap,
   searchPanelOpen,
-  SearchQuery,
   setSearchQuery,
 } from "@codemirror/search";
-import { StateEffect, StateField, type Extension } from "@codemirror/state";
+import { type Extension, StateEffect, StateField } from "@codemirror/state";
 import {
   type EditorView,
+  keymap,
   type Panel,
   type ViewUpdate,
-  keymap,
 } from "@codemirror/view";
 import { CSS } from "../constants";
+
 export {
-  type SearchMatchRange,
   collectVisibleSearchMatches,
+  type SearchMatchRange,
 } from "../search/search-matches";
 
 // ===========================================================================
@@ -63,6 +64,8 @@ export interface SearchMatchSpan {
   readonly from: number;
   readonly to: number;
 }
+
+export const MAX_CACHED_SEARCH_MATCH_RANGES = 10_000;
 
 const DEFAULT_SEARCH_UI_STATE: SearchUiState = {
   replaceVisible: false,
@@ -102,25 +105,33 @@ export function countSearchMatches(
 
 function collectSearchMatchSummary(
   view: EditorView,
-): { current: number; total: number; ranges: readonly SearchMatchSpan[] } {
+): { current: number; total: number; ranges: readonly SearchMatchSpan[] | null } {
   const query = getSearchQuery(view.state);
   if (!query.valid) return { current: 0, total: 0, ranges: [] };
 
   const cursor = query.getCursor(view.state);
   const sel = view.state.selection.main;
   const ranges: SearchMatchSpan[] = [];
+  let cacheRanges = true;
   let total = 0;
   let current = 0;
 
   for (let result = cursor.next(); !result.done; result = cursor.next()) {
     total++;
-    ranges.push({ from: result.value.from, to: result.value.to });
+    if (cacheRanges) {
+      if (ranges.length < MAX_CACHED_SEARCH_MATCH_RANGES) {
+        ranges.push({ from: result.value.from, to: result.value.to });
+      } else {
+        ranges.length = 0;
+        cacheRanges = false;
+      }
+    }
     if (result.value.from === sel.from && result.value.to === sel.to) {
       current = total;
     }
   }
 
-  return { current, total, ranges };
+  return { current, total, ranges: cacheRanges ? ranges : null };
 }
 
 function findMatchOrdinal(
@@ -323,7 +334,7 @@ export interface SearchMatchCacheSnapshot {
   readonly query: SearchQuery;
   readonly current: number;
   readonly total: number;
-  readonly ranges: readonly SearchMatchSpan[];
+  readonly ranges: readonly SearchMatchSpan[] | null;
 }
 
 function searchQueriesMatchEqual(left: SearchQuery, right: SearchQuery): boolean {
@@ -362,6 +373,18 @@ function updateMatchCache(
 
   if (cache.selFrom === sel.from && cache.selTo === sel.to) {
     return cache;
+  }
+
+  if (cache.ranges === null) {
+    const { current, total, ranges } = collectSearchMatchSummary(view);
+    return {
+      ...cache,
+      selFrom: sel.from,
+      selTo: sel.to,
+      current,
+      total,
+      ranges,
+    };
   }
 
   return {

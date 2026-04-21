@@ -1,5 +1,8 @@
 import { lazy, Suspense, useMemo, useRef } from "react";
-import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
+import { AppMainShell } from "./components/app-main-shell";
+import { AppSidebarShell } from "./components/app-sidebar-shell";
+import { ErrorBoundary } from "./components/error-boundary";
+import { SidebarProvider } from "./components/sidebar";
 import {
   AppEditorControllerProvider,
   useAppEditorController,
@@ -8,22 +11,19 @@ import {
   AppWorkspaceControllerProvider,
   useAppWorkspaceController,
 } from "./contexts/app-workspace-context";
-import { MemoryFileSystem, type FileSystem } from "./file-manager";
-import { SidebarProvider } from "./components/sidebar";
-import { AppMainShell } from "./components/app-main-shell";
-import { AppSidebarShell } from "./components/app-sidebar-shell";
-import { ErrorBoundary } from "./components/error-boundary";
-import { useAppFileDialogs } from "./hooks/use-app-file-dialogs";
+import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
+import { type FileEntry, type FileSystem, MemoryFileSystem } from "./file-manager";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
+import { useAppFileDialogs } from "./hooks/use-app-file-dialogs";
 import { useAppOverlays } from "./hooks/use-app-overlays";
 import { useAppSessionPersistence } from "./hooks/use-app-session-persistence";
+import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
 import { useDialogs } from "./hooks/use-dialogs";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
-import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
-import { useAppWorkspaceSession } from "./hooks/use-app-workspace-session";
-import { useSidebarLayout, type SidebarLayoutController } from "./hooks/use-sidebar-layout";
+import { type SidebarLayoutController, useSidebarLayout } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
+import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 
 /** Lazy-loaded overlay dialogs — not needed until the user opens one. */
 const AppOverlays = lazy(() =>
@@ -98,11 +98,10 @@ function AppInner() {
   // Stable reference for lazy child loading — used by default-doc search
   // and session persistence so their effects don't re-fire unnecessarily.
   const listChildrenStable = useMemo(() => {
-    const { listChildren } = fs;
-    if (!listChildren) {
+    if (!fs.listChildren) {
       return undefined;
     }
-    return (path: string) => listChildren(path);
+    return (path: string) => fs.listChildren?.(path) as Promise<FileEntry[]>;
   }, [fs]);
 
   const loadFixtureProject = useMemo(() => {
