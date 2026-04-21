@@ -296,7 +296,6 @@ describe("useAppOverlays", () => {
 
   it("builds the search index from markdown files, using live editor text for the active file", async () => {
     const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdate");
-    const updateFileSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFile");
     const view = createSearchIndexView("# Live draft\n");
     const activeAnalysis = view.state.field(documentAnalysisField);
     const {
@@ -326,11 +325,6 @@ describe("useAppOverlays", () => {
       expect(result.current.searchVersion).toBeGreaterThan(0);
     });
 
-    expect(updateFileSpy).toHaveBeenCalledWith(
-      "notes/current.md",
-      "# Live draft\n",
-      activeAnalysis,
-    );
     expect(readFileSpy).toHaveBeenCalledTimes(1);
     expect(readFileSpy).toHaveBeenCalledWith("notes/other.md");
     expect(readFileSpy).not.toHaveBeenCalledWith("notes/current.md");
@@ -349,6 +343,7 @@ describe("useAppOverlays", () => {
   });
 
   it("resyncs the active markdown file and bumps searchVersion on active-document edits while search is open", async () => {
+    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdate");
     const updateFileSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFile");
     const view = createSearchIndexView("# Current\n");
     const {
@@ -371,7 +366,7 @@ describe("useAppOverlays", () => {
     });
 
     await vi.waitFor(() => {
-      expect(updateFileSpy).toHaveBeenCalled();
+      expect(bulkUpdateSpy).toHaveBeenCalled();
       expect(result.current.searchVersion).toBeGreaterThan(0);
     });
 

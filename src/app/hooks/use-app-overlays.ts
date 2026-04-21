@@ -27,6 +27,7 @@ import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import { useAutoSave } from "./use-auto-save";
 import { applyMarkdownFormatAction } from "../editor-format-actions";
+import { measureAsync } from "../perf";
 import type { UseDialogsReturn } from "./use-dialogs";
 import { type HotkeyBinding, useHotkeys } from "./use-hotkeys";
 import { useMenuEvents } from "./use-menu-events";
@@ -120,6 +121,46 @@ function toMenuHandlers(defs: CommandDef[]): Record<string, () => void> {
 
 const LABEL_ACTION_MESSAGE =
   "Place the cursor on a local label definition or reference in the current document.";
+const ACTIVE_SEARCH_REINDEX_DEBOUNCE_MS = 120;
+const ACTIVE_SEARCH_REINDEX_IDLE_TIMEOUT_MS = 1_000;
+
+type IdleTaskHandle = number;
+type IdleTaskDeadline = {
+  readonly didTimeout: boolean;
+  timeRemaining: () => number;
+};
+type WindowWithIdleTask = Window & {
+  requestIdleCallback?: (
+    callback: (deadline: IdleTaskDeadline) => void,
+    options?: { readonly timeout?: number },
+  ) => IdleTaskHandle;
+  cancelIdleCallback?: (handle: IdleTaskHandle) => void;
+};
+
+function scheduleDebouncedIdleTask(
+  task: () => void,
+): () => void {
+  let idleHandle: IdleTaskHandle | null = null;
+  const timeoutHandle = window.setTimeout(() => {
+    const idleWindow = window as WindowWithIdleTask;
+    if (idleWindow.requestIdleCallback) {
+      idleHandle = idleWindow.requestIdleCallback(() => {
+        idleHandle = null;
+        task();
+      }, { timeout: ACTIVE_SEARCH_REINDEX_IDLE_TIMEOUT_MS });
+      return;
+    }
+    task();
+  }, ACTIVE_SEARCH_REINDEX_DEBOUNCE_MS);
+
+  return () => {
+    window.clearTimeout(timeoutHandle);
+    if (idleHandle !== null) {
+      const idleWindow = window as WindowWithIdleTask;
+      idleWindow.cancelIdleCallback?.(idleHandle);
+    }
+  };
+}
 
 function duplicateRenameMessage(id: string): string {
   return `Local label "${id}" is defined more than once in this document. Resolve the duplicate label before renaming it.`;
@@ -192,6 +233,7 @@ export function useAppOverlays({
 
   useEffect(() => {
     if (!dialogs.searchOpen) {
+      setSearchSyncRevision(0);
       return;
     }
 
@@ -226,7 +268,14 @@ export function useAppOverlays({
         );
 
         if (!cancelled) {
-          await indexer.bulkUpdate(files);
+          await measureAsync(
+            "search.index.bulkUpdate",
+            () => indexer.bulkUpdate(files),
+            {
+              category: "search",
+              detail: `${files.length} files`,
+            },
+          );
           setSearchVersion((version) => version + 1);
         }
       } catch (error: unknown) {
@@ -247,19 +296,49 @@ export function useAppOverlays({
   ]);
 
   useEffect(() => {
-    if (!dialogs.searchOpen || !editor.currentPath?.endsWith(".md")) {
+    if (
+      !dialogs.searchOpen ||
+      searchSyncRevision === 0 ||
+      !editor.currentPath?.endsWith(".md")
+    ) {
       return;
     }
 
-    void indexer
-      .updateFile(editor.currentPath, activeSearchDoc, activeSearchAnalysis)
-      .then(() => {
-        setSearchVersion((version) => version + 1);
-      })
-      .catch((error: unknown) => {
-        console.error("[search] failed to sync active file into app search index", error);
-      });
-  }, [dialogs.searchOpen, indexer, editor.currentPath, activeSearchDoc]);
+    const currentPath = editor.currentPath;
+    let cancelled = false;
+    const cancelScheduledSync = scheduleDebouncedIdleTask(() => {
+      void measureAsync(
+        "search.index.updateFile",
+        () => indexer.updateFile(currentPath, activeSearchDoc, activeSearchAnalysis),
+        {
+          category: "search",
+          detail: currentPath,
+        },
+      )
+        .then(() => {
+          if (!cancelled) {
+            setSearchVersion((version) => version + 1);
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            console.error("[search] failed to sync active file into app search index", error);
+          }
+        });
+    });
+
+    return () => {
+      cancelled = true;
+      cancelScheduledSync();
+    };
+  }, [
+    dialogs.searchOpen,
+    indexer,
+    editor.currentPath,
+    activeSearchDoc,
+    activeSearchAnalysis,
+    searchSyncRevision,
+  ]);
 
   const handleExportHtml = useCallback(() => {
     const currentPath = editor.currentPath;

@@ -135,7 +135,7 @@ export function SearchPanel({
 }: SearchPanelProps) {
   if (!open) return null;
 
-  const { query, typeFilter, results, searching } = state;
+  const { query, typeFilter, results, hasMore, searching } = state;
   const grouped = groupByFile(results);
   const text = query.trim();
   let statusText: string;
@@ -143,6 +143,8 @@ export function SearchPanel({
     statusText = "Searching…";
   } else if (results.length === 0) {
     statusText = text || typeFilter ? "No results found" : "Type to search";
+  } else if (hasMore) {
+    statusText = `Showing first ${results.length} results`;
   } else {
     statusText = `${results.length} result${results.length === 1 ? "" : "s"}`;
   }

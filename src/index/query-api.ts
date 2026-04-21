@@ -15,6 +15,8 @@ export interface IndexQuery {
   readonly content?: string;
   /** Restrict results to a specific file path. */
   readonly file?: string;
+  /** Maximum number of results to return. */
+  readonly limit?: number;
 }
 
 /** A raw-text search against source files. */
@@ -23,6 +25,8 @@ export interface SourceTextQuery {
   readonly text: string;
   /** Restrict results to a specific file path. */
   readonly file?: string;
+  /** Maximum number of results to return. */
+  readonly limit?: number;
 }
 
 /** A single entry in the document index. */
@@ -82,6 +86,56 @@ export interface ResolvedReference {
   readonly target: IndexEntry | undefined;
 }
 
+interface SourceLineIndex {
+  readonly lineNumber: number;
+  readonly offset: number;
+  readonly text: string;
+  readonly lowerText: string;
+}
+
+const entryContentLowerCache = new WeakMap<IndexEntry, string>();
+const sourceLineIndexCache = new WeakMap<FileIndex, readonly SourceLineIndex[]>();
+
+function normalizeResultLimit(limit: number | undefined): number | undefined {
+  if (limit === undefined) return undefined;
+  return Math.max(0, Math.floor(limit));
+}
+
+function hasReachedLimit(results: readonly IndexEntry[], limit: number | undefined): boolean {
+  return limit !== undefined && results.length >= limit;
+}
+
+function getLowerEntryContent(entry: IndexEntry): string {
+  const cached = entryContentLowerCache.get(entry);
+  if (cached !== undefined) return cached;
+  const lowerContent = entry.content.toLowerCase();
+  entryContentLowerCache.set(entry, lowerContent);
+  return lowerContent;
+}
+
+function getSourceLineIndex(fileIndex: FileIndex): readonly SourceLineIndex[] {
+  const cached = sourceLineIndexCache.get(fileIndex);
+  if (cached !== undefined) return cached;
+
+  const lines = fileIndex.sourceText.split("\n");
+  const indexedLines: SourceLineIndex[] = [];
+  let offset = 0;
+
+  for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+    const text = lines[lineNumber];
+    indexedLines.push({
+      lineNumber: lineNumber + 1,
+      offset,
+      text,
+      lowerText: text.toLowerCase(),
+    });
+    offset += text.length + 1;
+  }
+
+  sourceLineIndexCache.set(fileIndex, indexedLines);
+  return indexedLines;
+}
+
 /**
  * Query the document index, returning all entries matching the given filters.
  * Filters are AND-combined: an entry must match all specified fields.
@@ -91,6 +145,10 @@ export function queryIndex(
   query: IndexQuery,
 ): readonly IndexEntry[] {
   const results: IndexEntry[] = [];
+  const limit = normalizeResultLimit(query.limit);
+  if (limit === 0) return results;
+
+  const content = query.content?.toLowerCase();
 
   for (const [, fileIndex] of index.files) {
     if (query.file !== undefined && fileIndex.file !== query.file) continue;
@@ -99,12 +157,13 @@ export function queryIndex(
       if (query.type !== undefined && entry.type !== query.type) continue;
       if (query.label !== undefined && entry.label !== query.label) continue;
       if (
-        query.content !== undefined &&
-        !entry.content.toLowerCase().includes(query.content.toLowerCase())
+        content !== undefined &&
+        !getLowerEntryContent(entry).includes(content)
       ) {
         continue;
       }
       results.push(entry);
+      if (hasReachedLimit(results, limit)) return results;
     }
   }
 
@@ -127,37 +186,33 @@ export function querySourceText(
 
   const needle = text.toLowerCase();
   const results: IndexEntry[] = [];
+  const limit = normalizeResultLimit(query.limit);
+  if (limit === 0) return results;
 
   for (const [, fileIndex] of index.files) {
     if (query.file !== undefined && fileIndex.file !== query.file) continue;
 
-    const lines = fileIndex.sourceText.split("\n");
-    let offset = 0;
-
-    for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
-      const lineText = lines[lineNumber];
-      const haystack = lineText.toLowerCase();
+    for (const line of getSourceLineIndex(fileIndex)) {
       let searchFrom = 0;
 
       while (true) {
-        const found = haystack.indexOf(needle, searchFrom);
+        const found = line.lowerText.indexOf(needle, searchFrom);
         if (found < 0) break;
 
         results.push({
           type: "text",
-          number: String(lineNumber + 1),
+          number: String(line.lineNumber),
           file: fileIndex.file,
           position: {
-            from: offset + found,
-            to: offset + found + text.length,
+            from: line.offset + found,
+            to: line.offset + found + text.length,
           },
-          content: lineText,
+          content: line.text,
         });
+        if (hasReachedLimit(results, limit)) return results;
 
         searchFrom = found + Math.max(text.length, 1);
       }
-
-      offset += lineText.length + 1;
     }
   }
 

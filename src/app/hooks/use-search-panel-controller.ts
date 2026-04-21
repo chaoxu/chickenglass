@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import type { BackgroundIndexer } from "../../index/indexer";
 import type { IndexEntry } from "../../index/query-api";
+import { measureAsync } from "../perf";
 import { buildSemanticSearchQuery, type AppSearchMode } from "../search";
+
+export const SEARCH_RESULT_LIMIT = 500;
 
 export interface SearchPanelControllerState {
   readonly query: string;
   readonly typeFilter: string;
   readonly results: readonly IndexEntry[];
+  readonly hasMore: boolean;
   readonly searching: boolean;
 }
 
@@ -26,18 +30,20 @@ const DEFAULT_SEARCH_PANEL_CONTROLLER_STATE: SearchPanelControllerState = {
   query: "",
   typeFilter: "",
   results: [],
+  hasMore: false,
   searching: false,
 };
 
 function clearSearchResults(
   state: SearchPanelControllerState,
 ): SearchPanelControllerState {
-  if (state.results.length === 0 && !state.searching) {
+  if (state.results.length === 0 && !state.hasMore && !state.searching) {
     return state;
   }
   return {
     ...state,
     results: [],
+    hasMore: false,
     searching: false,
   };
 }
@@ -49,6 +55,7 @@ function resetSearchPanelState(
     state.query === "" &&
     state.typeFilter === "" &&
     state.results.length === 0 &&
+    !state.hasMore &&
     !state.searching
   ) {
     return state;
@@ -84,6 +91,7 @@ export function useSearchPanelController({
         : {
           ...current,
           typeFilter: "",
+          hasMore: false,
         }
     ));
   }, [searchMode]);
@@ -117,13 +125,33 @@ export function useSearchPanelController({
 
     void (async () => {
       try {
-        const results = searchMode === "semantic"
-          ? await indexer.query(buildSemanticSearchQuery(text, type))
-          : await indexer.querySourceText({ text });
+        const results = await measureAsync(
+          "search.query",
+          async () => (
+            searchMode === "semantic"
+              ? await indexer.query({
+                ...buildSemanticSearchQuery(text, type),
+                limit: SEARCH_RESULT_LIMIT + 1,
+              })
+              : await indexer.querySourceText({
+                text,
+                limit: SEARCH_RESULT_LIMIT + 1,
+              })
+          ),
+          {
+            category: "search",
+            detail: searchMode,
+          },
+        );
+        const hasMore = results.length > SEARCH_RESULT_LIMIT;
+        const visibleResults = hasMore
+          ? results.slice(0, SEARCH_RESULT_LIMIT)
+          : results;
         if (!cancelled) {
           setState((current) => ({
             ...current,
-            results,
+            results: visibleResults,
+            hasMore,
             searching: false,
           }));
         }
@@ -132,6 +160,7 @@ export function useSearchPanelController({
           setState((current) => ({
             ...current,
             results: [],
+            hasMore: false,
             searching: false,
           }));
         }

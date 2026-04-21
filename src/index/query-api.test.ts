@@ -92,6 +92,15 @@ describe("queryIndex", () => {
     const results = queryIndex(index, { type: "lemma" });
     expect(results).toHaveLength(0);
   });
+
+  it("stops after the requested result limit", () => {
+    const results = queryIndex(index, { content: "group", limit: 2 });
+    expect(results).toHaveLength(2);
+    expect(results.map((entry) => entry.file)).toEqual([
+      "chapter1.md",
+      "chapter2.md",
+    ]);
+  });
 });
 
 describe("querySourceText", () => {
@@ -135,6 +144,12 @@ describe("querySourceText", () => {
 
   it("returns no results for empty text", () => {
     expect(querySourceText(index, { text: "   " })).toEqual([]);
+  });
+
+  it("stops raw source search after the requested result limit", () => {
+    const results = querySourceText(index, { text: "raw_token_785", limit: 1 });
+    expect(results).toHaveLength(1);
+    expect(results[0].number).toBe("2");
   });
 });
 
