@@ -24,6 +24,7 @@ import {
   hasLineClassAt,
   hasMarkClassInRange,
 } from "../test-utils";
+import { CSS } from "../constants/css-classes";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -189,7 +190,16 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
         [{ from: 0, to: v.state.doc.length }],
         () => false,
       );
-      return items.filter((r) => r.value.spec.class === "cf-source-delimiter");
+      return items.filter((r) => r.value.spec.class === CSS.sourceDelimiter);
+    }
+
+    function getInlineSourceRuns(v: EditorView) {
+      const items = collectMarkdownItems(
+        v,
+        [{ from: 0, to: v.state.doc.length }],
+        () => false,
+      );
+      return items.filter((r) => r.value.spec.class === CSS.inlineSource);
     }
 
     it("applies cf-source-delimiter to bold markers when cursor is inside", () => {
@@ -225,6 +235,18 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       view = createView("**bold** rest", 12);
       const delims = getSourceDelimiters(view);
       expect(delims.length).toBe(0);
+    });
+
+    it("applies compact reveal metrics to link source marks and URL content", () => {
+      const doc = "[target](https://example.com)";
+      view = createView(doc, doc.indexOf("target") + 2);
+
+      const delims = getSourceDelimiters(view);
+      const sourceRuns = getInlineSourceRuns(view);
+
+      expect(delims.length).toBeGreaterThanOrEqual(4);
+      expect(sourceRuns).toHaveLength(1);
+      expect(view.state.sliceDoc(sourceRuns[0].from, sourceRuns[0].to)).toBe("https://example.com");
     });
   });
 

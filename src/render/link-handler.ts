@@ -1,5 +1,6 @@
 import { Decoration, type EditorView } from "@codemirror/view";
 
+import { CSS } from "../constants/css-classes";
 import { isSafeUrl } from "../lib/url-utils";
 import { openExternalUrl } from "../lib/open-link";
 
@@ -15,7 +16,7 @@ export function getLinkDecoration(url: string): Decoration {
   }
 
   const linkDeco = Decoration.mark({
-    class: "cf-link-rendered",
+    class: CSS.linkRendered,
     attributes: { "data-url": url },
   });
   linkDecorationCache.set(url, linkDeco);

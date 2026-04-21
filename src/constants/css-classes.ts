@@ -166,6 +166,9 @@ export const CSS = {
   /** Source delimiter (revealed **, *, ~~, ==, $, \(, etc. — reduced metrics). */
   sourceDelimiter: "cf-source-delimiter",
 
+  /** Generic inline source content revealed inside an existing prose line. */
+  inlineSource: "cf-inline-source",
+
   /** Math source (delimiter visible when cursor on math). */
   mathSource: "cf-math-source",
 

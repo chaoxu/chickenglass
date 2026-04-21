@@ -25,6 +25,7 @@ import {
   linkDecorationCacheSizeForTest,
   openRenderedLinkAtEvent,
 } from "./link-handler";
+import { CSS } from "../constants/css-classes";
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
@@ -57,41 +58,46 @@ const hrDecoration = Decoration.mark({ class: "cf-hr" });
 const highlightDecoration = Decoration.mark({ class: "cf-highlight" });
 
 /** Content style decorations — always applied for seamless WYSIWYG. */
-const boldDecoration = Decoration.mark({ class: "cf-bold" });
-const italicDecoration = Decoration.mark({ class: "cf-italic" });
-const strikethroughDecoration = Decoration.mark({ class: "cf-strikethrough" });
-const inlineCodeDecoration = Decoration.mark({ class: "cf-inline-code" });
+const boldDecoration = Decoration.mark({ class: CSS.bold });
+const italicDecoration = Decoration.mark({ class: CSS.italic });
+const strikethroughDecoration = Decoration.mark({ class: CSS.strikethrough });
+const inlineCodeDecoration = Decoration.mark({ class: CSS.inlineCode });
 
 /** Source-delimiter decoration: reduced-size metrics so visible delimiters
  *  don't push the line box taller than surrounding content (#789). */
-const sourceDelimiterDecoration = Decoration.mark({ class: "cf-source-delimiter" });
+const sourceDelimiterDecoration = Decoration.mark({ class: CSS.sourceDelimiter });
+const inlineSourceDecoration = Decoration.mark({ class: CSS.inlineSource });
 
 /** Mark node types whose visible delimiters need source-delimiter styling.
  *  CodeMark is excluded — cf-inline-code already wraps the entire InlineCode range. */
-const SOURCE_DELIMITER_MARKS = new Set(["EmphasisMark", "StrikethroughMark", "HighlightMark"]);
+const SOURCE_DELIMITER_MARKS = new Set(["EmphasisMark", "StrikethroughMark", "HighlightMark", "LinkMark"]);
+const INLINE_SOURCE_MARKS = new Set(["URL"]);
 
 /**
- * Recursively walk a subtree and add source-delimiter decorations to all
- * matching mark nodes. Handles nested inline elements (e.g. `***x***` where
- * Emphasis wraps StrongEmphasis) that the main tree walk won't visit because
- * the outer handler returns false (#789).
+ * Recursively walk a subtree and add compact source metrics to visible raw
+ * tokens. Handles nested inline elements (e.g. `***x***` where Emphasis wraps
+ * StrongEmphasis) that the main tree walk won't visit because the outer
+ * handler returns false (#789).
  */
-function addSourceDelimitersInSubtree(node: SyntaxNode, items: Range<Decoration>[]): void {
+function addInlineRevealSourceMetricsInSubtree(node: SyntaxNode, items: Range<Decoration>[]): void {
   let child = node.firstChild;
   while (child) {
     if (SOURCE_DELIMITER_MARKS.has(child.name)) {
       items.push(sourceDelimiterDecoration.range(child.from, child.to));
     }
-    addSourceDelimitersInSubtree(child, items);
+    if (INLINE_SOURCE_MARKS.has(child.name)) {
+      items.push(inlineSourceDecoration.range(child.from, child.to));
+    }
+    addInlineRevealSourceMetricsInSubtree(child, items);
     child = child.nextSibling;
   }
 }
 
 /** Decoration to style bullet list markers. */
-const bulletListDecoration = Decoration.mark({ class: "cf-list-bullet" });
+const bulletListDecoration = Decoration.mark({ class: CSS.listBullet });
 
 /** Decoration to style ordered list markers. */
-const numberListDecoration = Decoration.mark({ class: "cf-list-number" });
+const numberListDecoration = Decoration.mark({ class: CSS.listNumber });
 
 /** Map from element node names to their content style decorations. */
 const styleMap: Readonly<Record<string, Decoration>> = {
@@ -182,7 +188,7 @@ function handleHeaderMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): voi
 function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   ctx.items.push(highlightDecoration.range(node.from, node.to));
   if (cursorInRange(ctx.view, node.from, node.to)) {
-    addSourceDelimitersInSubtree(node.node, ctx.items);
+    addInlineRevealSourceMetricsInSubtree(node.node, ctx.items);
     return false as const; // keep highlight style, show markers
   }
   // Walk children to hide HighlightMark
@@ -192,6 +198,7 @@ function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
 function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   const { view, items } = ctx;
   if (cursorInRange(view, node.from, node.to)) {
+    addInlineRevealSourceMetricsInSubtree(node.node, items);
     return false as const; // cursor inside: show full source for editing
   }
   // Extract URL from the URL child node
@@ -236,7 +243,7 @@ function handleElement(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   // Recursively decorate all mark nodes in the subtree so nested inline
   // elements (e.g. ***x***, **a *b* c**) also get reduced metrics (#789).
   if (cursorInRange(view, node.from, node.to)) {
-    addSourceDelimitersInSubtree(node.node, items);
+    addInlineRevealSourceMetricsInSubtree(node.node, items);
     return false as const;
   }
   // Cursor outside: walk children to hide markers

@@ -462,6 +462,7 @@ export function buildSidenoteDecorations(state: EditorState): DecorationSet {
   const items: Range<Decoration>[] = [];
   const numberMap = numberFootnotes(footnotes);
   const macros = state.field(mathMacrosField, false) ?? {};
+  const inlineSourceDecoration = Decoration.mark({ class: CSS.inlineSource });
 
   // Render refs as superscript numbers (both collapsed and expanded modes).
   // Each ref widget receives the definition's document offset so that clicking
@@ -513,6 +514,9 @@ export function buildSidenoteDecorations(state: EditorState): DecorationSet {
     // When cursor is on the label, show it as source (heading-like pattern).
     const num = numberMap.get(def.id) ?? 0;
     const labelWidget = new FootnoteDefLabelWidget(num, def.id);
+    if (cursorOnLabel) {
+      items.push(inlineSourceDecoration.range(def.from, def.labelTo));
+    }
     addMarkerReplacement(def.from, def.labelTo, cursorOnLabel, labelWidget, items);
   }
 

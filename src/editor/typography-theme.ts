@@ -1,5 +1,12 @@
 import { contentFont, monoFont } from "../constants/editor-constants";
 
+const inlineSourceTypography = {
+  fontFamily: monoFont,
+  fontSize: "0.85em",
+  lineHeight: "0",
+  verticalAlign: "baseline",
+};
+
 /**
  * Typography styles: document title, headings, inline formatting
  * (bold, italic, strikethrough, inline code), links, section numbers,
@@ -93,6 +100,8 @@ export const typographyThemeStyles = {
   ".cf-inline-code": {
     fontFamily: monoFont,
     fontSize: "0.85em",
+    lineHeight: "0",
+    verticalAlign: "baseline",
   },
 
   /* Rendered link styling — shown when cursor is outside the link */
@@ -137,21 +146,24 @@ export const typographyThemeStyles = {
    * surrounding content. lineHeight: "0" follows the same pattern as
    * heading markers (.tok-heading.tok-meta). */
   ".cf-source-delimiter": {
-    fontFamily: monoFont,
-    fontSize: "0.85em",
-    lineHeight: "0",
+    ...inlineSourceTypography,
+  },
+
+  /* Inline source content that is not itself a delimiter, such as a revealed
+   * link URL or footnote label. Kept on zero line-height so activating source
+   * reveal cannot increase the surrounding prose row. */
+  ".cf-inline-source": {
+    ...inlineSourceTypography,
   },
 
   /* Math source content — LaTeX between $ delimiters when editing */
   ".cf-math-source": {
-    fontFamily: monoFont,
-    fontSize: "0.85em",
+    ...inlineSourceTypography,
   },
 
   /* Reference source — raw [@id] token when cursor is inside */
   ".cf-reference-source": {
-    fontFamily: monoFont,
-    fontSize: "0.85em",
+    ...inlineSourceTypography,
   },
 
   /* Header markers (# symbols) shown in muted color when editing. */
