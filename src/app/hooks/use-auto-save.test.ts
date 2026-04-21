@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActiveDocumentSignal } from "../active-document-signal";
 import { createActiveDocumentSignal } from "../active-document-signal";
-import { useAutoSave } from "./use-auto-save";
+import { useAutoSave, type UseAutoSaveReturn } from "./use-auto-save";
 
 interface HarnessProps {
   isDirty: boolean;
@@ -11,6 +11,7 @@ interface HarnessProps {
   interval?: number;
   activeDocumentSignal?: ActiveDocumentSignal;
   currentPath?: string | null;
+  onReady?: (controller: UseAutoSaveReturn) => void;
   suspended?: boolean;
   suspensionVersion?: number;
 }
@@ -21,13 +22,15 @@ const Harness: FC<HarnessProps> = ({
   interval = 30_000,
   activeDocumentSignal,
   currentPath = "notes.md",
+  onReady,
   suspended = false,
   suspensionVersion = 0,
 }) => {
-  useAutoSave(isDirty, onSave, interval, suspended, suspensionVersion, {
+  const controller = useAutoSave(isDirty, onSave, interval, suspended, suspensionVersion, {
     activeDocumentSignal,
     currentPath,
   });
+  onReady?.(controller);
   return null;
 };
 
@@ -60,7 +63,25 @@ describe("useAutoSave", () => {
     vi.useRealTimers();
   });
 
-  it("saves immediately on blur outside Tauri", async () => {
+  it("saves immediately on blur outside Tauri when autosave is enabled", async () => {
+    const onSave = vi.fn(async () => {});
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onSave,
+        interval: 30_000,
+      }));
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event("blur"));
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not save on browser lifecycle events when autosave is off", async () => {
     const onSave = vi.fn(async () => {});
 
     act(() => {
@@ -73,9 +94,14 @@ describe("useAutoSave", () => {
 
     await act(async () => {
       window.dispatchEvent(new Event("blur"));
+      window.dispatchEvent(new Event("pagehide"));
+      window.dispatchEvent(new Event("beforeunload"));
+      hiddenState = true;
+      document.dispatchEvent(new Event("visibilitychange"));
+      await Promise.resolve();
     });
 
-    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("debounces dirty edits until the configured idle delay", async () => {
@@ -159,7 +185,7 @@ describe("useAutoSave", () => {
         root.render(createElement(Harness, {
           isDirty: true,
           onSave,
-          interval: 0,
+          interval: 30_000,
         }));
       });
 
@@ -191,7 +217,7 @@ describe("useAutoSave", () => {
         root.render(createElement(Harness, {
           isDirty: true,
           onSave,
-          interval: 0,
+          interval: 30_000,
         }));
       });
 
@@ -212,6 +238,64 @@ describe("useAutoSave", () => {
     }
   });
 
+  it("awaits a queued forced flush requested while a save is in flight", async () => {
+    let controller: UseAutoSaveReturn | null = null;
+    const saveResolvers: Array<() => void> = [];
+    const onSave = vi.fn(() => new Promise<void>((resolve) => {
+      saveResolvers.push(resolve);
+    }));
+
+    act(() => {
+      root.render(createElement(Harness, {
+        isDirty: true,
+        onReady: (nextController) => {
+          controller = nextController;
+        },
+        onSave,
+        interval: 0,
+      }));
+    });
+    const getController = () => {
+      if (!controller) {
+        throw new Error("Auto-save controller was not initialized");
+      }
+      return controller;
+    };
+
+    const firstFlush = getController().flushPendingAutoSave(
+      "navigation",
+      { force: true },
+    );
+    await Promise.resolve();
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    let secondFlushResolved = false;
+    const secondFlush = getController().flushPendingAutoSave(
+      "shutdown",
+      { force: true },
+    ).then(() => {
+      secondFlushResolved = true;
+    });
+    await Promise.resolve();
+    expect(secondFlushResolved).toBe(false);
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      saveResolvers[0]?.();
+      await Promise.resolve();
+    });
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(secondFlushResolved).toBe(false);
+
+    await act(async () => {
+      saveResolvers[1]?.();
+      await firstFlush;
+      await secondFlush;
+    });
+
+    expect(secondFlushResolved).toBe(true);
+  });
+
   it("delays Tauri blur saves so a suspended close flow can cancel them", async () => {
     const onSave = vi.fn(async () => {});
     (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
@@ -221,7 +305,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspended: false,
       }));
     });
@@ -235,7 +319,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspended: true,
       }));
     });
@@ -256,7 +340,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspensionVersion: 0,
       }));
     });
@@ -270,7 +354,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspended: true,
         suspensionVersion: 1,
       }));
@@ -280,7 +364,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspended: false,
         suspensionVersion: 2,
       }));
@@ -302,7 +386,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspensionVersion: 0,
       }));
     });
@@ -316,7 +400,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspended: true,
         suspensionVersion: 1,
       }));
@@ -326,7 +410,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
         suspended: false,
         suspensionVersion: 2,
       }));
@@ -348,7 +432,7 @@ describe("useAutoSave", () => {
       root.render(createElement(Harness, {
         isDirty: true,
         onSave,
-        interval: 0,
+        interval: 30_000,
       }));
     });
 

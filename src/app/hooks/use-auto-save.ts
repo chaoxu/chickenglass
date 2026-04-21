@@ -46,7 +46,7 @@ export function useAutoSave(
     suspended,
   });
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savingRef = useRef(false);
+  const savePromiseRef = useRef<Promise<void> | null>(null);
   const saveAgainAfterCurrentRef = useRef<AutoSaveFlushOptions | null>(null);
   const pendingEventSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -79,28 +79,45 @@ export function useAutoSave(
     clearDebounceTimer();
     clearPendingEventSave();
     const state = stateRef.current;
-    if (state.suspended || (!state.isDirty && flushOptions?.force !== true)) {
+    if (
+      state.suspended ||
+      (state.delayMs <= 0 && flushOptions?.force !== true) ||
+      (!state.isDirty && flushOptions?.force !== true)
+    ) {
       return;
     }
-    if (savingRef.current) {
+    if (savePromiseRef.current) {
       saveAgainAfterCurrentRef.current =
         flushOptions?.force === true ? { force: true } : {};
-      return;
+      return savePromiseRef.current;
     }
 
-    savingRef.current = true;
-    try {
-      await state.onSave();
-    } catch (error: unknown) {
-      logCatchError("[auto-save] save failed")(error);
-    } finally {
-      savingRef.current = false;
-      const nextFlushOptions = saveAgainAfterCurrentRef.current;
-      if (nextFlushOptions !== null) {
+    const savePromise = (async () => {
+      let nextFlushOptions: AutoSaveFlushOptions | null = flushOptions ?? {};
+      while (nextFlushOptions !== null) {
+        const activeState = stateRef.current;
+        if (
+          activeState.suspended ||
+          (activeState.delayMs <= 0 && nextFlushOptions.force !== true) ||
+          (!activeState.isDirty && nextFlushOptions.force !== true)
+        ) {
+          break;
+        }
         saveAgainAfterCurrentRef.current = null;
-        await flushPendingAutoSave("idle", nextFlushOptions);
+        try {
+          await activeState.onSave();
+        } catch (error: unknown) {
+          logCatchError("[auto-save] save failed")(error);
+        }
+        nextFlushOptions = saveAgainAfterCurrentRef.current;
       }
-    }
+    })().finally(() => {
+      if (savePromiseRef.current === savePromise) {
+        savePromiseRef.current = null;
+      }
+    });
+    savePromiseRef.current = savePromise;
+    return savePromise;
   }, [clearDebounceTimer, clearPendingEventSave]);
 
   const scheduleDebouncedSave = useCallback(() => {

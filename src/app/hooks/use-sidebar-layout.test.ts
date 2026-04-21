@@ -59,6 +59,17 @@ describe("useSidebarLayout", () => {
     vi.restoreAllMocks();
   });
 
+  it("uses the desktop layout when matchMedia is unavailable", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: undefined,
+    });
+
+    const { result } = renderHook(() => useSidebarLayout());
+
+    expect(result.current.sidebarCollapsed).toBe(false);
+  });
+
   it("starts collapsed on narrow viewports", () => {
     installMatchMedia(true);
 

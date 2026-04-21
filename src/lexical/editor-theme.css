@@ -628,7 +628,8 @@
 .cf-lexical-display-math-body {
   grid-column: 2;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
+  padding-block: 0.35em;
   text-align: center;
 }
 
@@ -676,7 +677,8 @@
 .cf-lexical-display-math-preview-equation {
   min-width: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
+  padding-block: 0.35em;
   text-align: center;
 }
 

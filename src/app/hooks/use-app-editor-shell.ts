@@ -254,11 +254,21 @@ export function useAppEditorShell({
   const flushDirtyCurrentDocument = useCallback(async (
     reason: AutoSaveFlushReason,
   ) => {
-    if (!currentPath || !isPathDirty(currentPath)) {
+    if (
+      !currentPath ||
+      !isPathDirty(currentPath) ||
+      !flushPendingAutoSave ||
+      settings.autoSaveInterval <= 0
+    ) {
       return;
     }
-    await flushPendingAutoSave?.(reason, { force: true });
-  }, [currentPath, flushPendingAutoSave, isPathDirty]);
+    await flushPendingAutoSave(reason, { force: true });
+  }, [
+    currentPath,
+    flushPendingAutoSave,
+    isPathDirty,
+    settings.autoSaveInterval,
+  ]);
 
   const openFile = useCallback(async (path: string) => {
     if (path !== currentPath) {

@@ -42,11 +42,12 @@ interface HarnessOptions {
     options?: AutoSaveFlushOptions,
   ) => Promise<void>;
   requestUnsavedChangesDecision?: () => Promise<"save" | "discard" | "cancel">;
+  settings?: Partial<Settings>;
 }
 
 function createHarness(
   options: HarnessOptions = {},
-): { Harness: FC; ref: HarnessRef } {
+): { Harness: FC; fs: MemoryFileSystem; ref: HarnessRef } {
   const ref: HarnessRef = {
     result: null as unknown as AppEditorShellController,
   };
@@ -67,6 +68,7 @@ function createHarness(
     writingTheme: "academic",
     customCss: "",
     skipDirtyConfirm: true,
+    ...options.settings,
   };
 
   const fs = new MemoryFileSystem(options.files ?? {});
@@ -84,7 +86,7 @@ function createHarness(
     return null;
   };
 
-  return { Harness, ref };
+  return { Harness, fs, ref };
 }
 
 function replaceCurrentDoc(
@@ -291,6 +293,110 @@ describe("useAppEditorShell", () => {
 
     expect(flushPendingAutoSave).toHaveBeenCalledWith("navigation", { force: true });
     expect(ref.result.currentPath).toBe("b.md");
+  });
+
+  it("does not force autosave before switching files when autosave is off", async () => {
+    const flushPendingAutoSave = vi.fn(async () => {});
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("cancel");
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+        "b.md": "# B\n",
+      },
+      flushPendingAutoSave,
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    await act(async () => {
+      await ref.result.openFile("b.md");
+    });
+
+    expect(flushPendingAutoSave).not.toHaveBeenCalled();
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    expect(ref.result.currentPath).toBe("a.md");
+    await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
+  });
+
+  it("does not force autosave before closing a dirty file when autosave is off", async () => {
+    const flushPendingAutoSave = vi.fn(async () => {});
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("cancel");
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+      flushPendingAutoSave,
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    await act(async () => {
+      await ref.result.closeCurrentFile();
+    });
+
+    expect(flushPendingAutoSave).not.toHaveBeenCalled();
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    expect(ref.result.currentPath).toBe("a.md");
+    await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
+  });
+
+  it("does not force autosave before window close when autosave is off", async () => {
+    const flushPendingAutoSave = vi.fn(async () => {});
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("cancel");
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+      flushPendingAutoSave,
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    let canClose = true;
+    await act(async () => {
+      canClose = await ref.result.handleWindowCloseRequest();
+    });
+
+    expect(canClose).toBe(false);
+    expect(flushPendingAutoSave).not.toHaveBeenCalled();
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
   });
 
   it("does not persist a target mode override when search navigation is canceled", async () => {

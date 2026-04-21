@@ -13,18 +13,25 @@ export interface SidebarLayoutController {
   setSidenotesCollapsed: Dispatch<SetStateAction<boolean>>;
 }
 
+const NARROW_VIEWPORT_QUERY = "(max-width: 640px)";
+
+function isNarrowViewport(): boolean {
+  return typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
+}
+
 export function useSidebarLayout(): SidebarLayoutController {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(max-width: 640px)").matches
-      : false
-  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(isNarrowViewport);
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 640px)");
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const media = window.matchMedia(NARROW_VIEWPORT_QUERY);
     const collapseForNarrowViewport = () => {
       if (media.matches) {
         setSidebarCollapsed(true);
