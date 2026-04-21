@@ -19,6 +19,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
+import {
+  DEBUG_EDITOR_SELECTOR,
+  MODE_BUTTON_SELECTOR,
+} from "../src/debug/debug-bridge-contract.js";
+
+export { DEBUG_EDITOR_SELECTOR, MODE_BUTTON_SELECTOR };
 
 const DEFAULT_PORT = 9322;
 const DEFAULT_APP_URL = "http://localhost:5173";
@@ -69,7 +75,12 @@ function formatInspectablePages(pages) {
 
 async function pageHasDebugBridge(page) {
   return page.evaluate(
-    () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
+    () => Boolean(
+      window.__app
+        && window.__editor
+        && window.__cfDebug
+        && (window.__cmView || document.querySelector("[data-testid='lexical-editor']")),
+    ),
   ).catch(() => false);
 }
 
@@ -189,6 +200,12 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
  */
 export async function focusEditorEnd(page) {
   await page.evaluate(() => {
+    if (window.__editor) {
+      const doc = window.__editor.getDoc();
+      window.__editor.focus();
+      window.__editor.setSelection(doc.length);
+      return;
+    }
     const view = window.__cmView;
     view.focus();
     view.dispatch({ selection: { anchor: view.state.doc.length } });
@@ -202,7 +219,25 @@ export async function focusEditorEnd(page) {
  * @param {import("playwright").Page} page
  */
 export async function readEditorText(page) {
-  return page.evaluate(() => window.__cmView.state.doc.toString());
+  return page.evaluate(() =>
+    window.__editor?.getDoc?.() ?? window.__cmView.state.doc.toString()
+  );
+}
+
+/**
+ * Apply an editor formatting command through the product-neutral debug bridge.
+ *
+ * @param {import("playwright").Page} page
+ * @param {import("../src/constants/events").FormatEventDetail} detail
+ */
+export async function formatSelection(page, detail) {
+  const handled = await page.evaluate((nextDetail) => (
+    window.__editor?.formatSelection?.(nextDetail) ?? false
+  ), detail);
+  if (!handled) {
+    throw new Error(`formatSelection was not handled: ${JSON.stringify(detail)}`);
+  }
+  await sleep(150);
 }
 
 /**
@@ -516,7 +551,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   try {
     await page.waitForFunction(
       ({ method, path, expectedLength, expectedPrefix, expectedSuffix }) => {
-        const text = window.__cmView?.state?.doc?.toString();
+        const text = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString();
         const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
         if (typeof text !== "string" || currentPath !== path) {
           return false;
@@ -542,7 +577,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   } catch (error) {
     const diagnostics = await page.evaluate(
       ({ expectedPrefix, expectedSuffix }) => {
-        const text = window.__cmView?.state?.doc?.toString();
+        const text = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString();
         const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
         return {
           currentPath,
@@ -591,7 +626,7 @@ export async function openRegressionDocument(page, path = "index.md") {
  */
 export async function findLine(page, needle) {
   return page.evaluate((text) => {
-    const docText = window.__cmView.state.doc.toString();
+    const docText = window.__editor?.getDoc?.() ?? window.__cmView.state.doc.toString();
     const lines = docText.split("\n");
     for (let line = 1; line <= lines.length; line += 1) {
       if (lines[line - 1].includes(text)) {
@@ -668,7 +703,9 @@ export async function jumpToTextAnchor(
   needle,
   { occurrence = 1, offset = 0 } = {},
 ) {
-  const documentText = await page.evaluate(() => window.__cmView.state.doc.toString());
+  const documentText = await page.evaluate(() =>
+    window.__editor?.getDoc?.() ?? window.__cmView.state.doc.toString()
+  );
   const result = resolveTextAnchorInDocument(documentText, needle, {
     occurrence,
     offset,
@@ -679,6 +716,11 @@ export async function jumpToTextAnchor(
   }
 
   await page.evaluate(({ anchor }) => {
+    if (window.__editor) {
+      window.__editor.focus();
+      window.__editor.setSelection(anchor);
+      return;
+    }
     const view = window.__cmView;
     view.focus();
     view.dispatch({
@@ -698,7 +740,8 @@ export async function jumpToTextAnchor(
  * @param {"rich" | "source" | "read" | "Rich" | "Source" | "Read"} mode
  */
 export async function switchToMode(page, mode) {
-  const targetLabel = MODE_LABELS[mode] ?? mode;
+  const normalizedMode = mode === "lexical" ? "rich" : mode;
+  const targetLabel = MODE_LABELS[normalizedMode] ?? normalizedMode;
 
   const changedViaApp = await page.evaluate(async (nextMode) => {
     if (!window.__app?.setMode || !window.__app?.getMode) {
@@ -707,11 +750,11 @@ export async function switchToMode(page, mode) {
     window.__app.setMode(nextMode);
     await new Promise((resolve) => setTimeout(resolve, 200));
     return window.__app.getMode();
-  }, mode);
+  }, normalizedMode);
 
   if (changedViaApp !== null) {
-    if (changedViaApp !== mode) {
-      throw new Error(`Failed to switch editor mode to ${mode}; current mode is ${changedViaApp}.`);
+    if (changedViaApp !== normalizedMode) {
+      throw new Error(`Failed to switch editor mode to ${normalizedMode}; current mode is ${changedViaApp}.`);
     }
     await sleep(200);
     return;
@@ -1513,20 +1556,29 @@ async function collectEditorHealth(page, options = {}) {
     const visibleCount = (selector) =>
       [...document.querySelectorAll(selector)].filter((el) => isVisible(el)).length;
 
+    const hasCmBridge = Boolean(window.__cmView && window.__cmDebug);
     if (!window.__app) issues.push("missing window.__app");
-    if (!window.__cmView) issues.push("missing window.__cmView");
-    if (!window.__cmDebug) issues.push("missing window.__cmDebug");
+    if (!window.__editor && !hasCmBridge) issues.push("missing editor debug bridge");
     if (!window.__cfDebug) issues.push("missing window.__cfDebug");
 
     const view = window.__cmView;
     const mode = window.__app?.getMode?.() ?? null;
-    const docLength = view?.state?.doc?.length ?? -1;
-    const selection = view?.state?.selection?.main
+    const editorDoc = window.__editor?.getDoc?.() ?? null;
+    const editorSelection = window.__editor?.getSelection?.() ?? null;
+    const docLength = typeof editorDoc === "string"
+      ? editorDoc.length
+      : view?.state?.doc?.length ?? -1;
+    const selection = editorSelection
       ? {
-          anchor: view.state.selection.main.anchor,
-          head: view.state.selection.main.head,
+          anchor: editorSelection.anchor,
+          head: editorSelection.focus,
         }
-      : null;
+      : view?.state?.selection?.main
+        ? {
+            anchor: view.state.selection.main.anchor,
+            head: view.state.selection.main.head,
+          }
+        : null;
     const semantics = window.__cmDebug?.semantics?.() ?? null;
     const treeString = window.__cmDebug?.treeString?.() ?? "";
     const dialogCount = visibleCount('[role="dialog"]');
@@ -1550,10 +1602,10 @@ async function collectEditorHealth(page, options = {}) {
       issues.push("missing main selection");
     }
 
-    if (!semantics || typeof semantics.revision !== "number" || Number.isNaN(semantics.revision)) {
+    if (hasCmBridge && (!semantics || typeof semantics.revision !== "number" || Number.isNaN(semantics.revision))) {
       issues.push("invalid semantic revision info");
     }
-    if (typeof treeString !== "string" || treeString.length === 0) {
+    if (hasCmBridge && (typeof treeString !== "string" || treeString.length === 0)) {
       issues.push("missing syntax tree string");
     }
     if (dialogCount > limits.maxVisibleDialogs) {
@@ -1627,7 +1679,8 @@ export function createArgParser(argv = process.argv.slice(2)) {
 }
 
 /**
- * Wait for the debug bridge globals (__app, __cmView, __cmDebug, __cfDebug).
+ * Wait for the debug bridge globals. Coflat exposes CM6 globals; Coflat 2
+ * exposes the product-neutral `__editor` bridge plus the Lexical root.
  *
  * @param {import("playwright").Page} page
  * @param {object} [options]
@@ -1636,17 +1689,31 @@ export function createArgParser(argv = process.argv.slice(2)) {
 export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
   try {
     await page.waitForFunction(
-      () => Boolean(window.__app && window.__cmView && window.__cmDebug && window.__cfDebug),
+      () => Boolean(
+        window.__app
+          && window.__editor
+          && window.__cfDebug
+          && (window.__cmView || document.querySelector("[data-testid='lexical-editor']")),
+      ),
       { timeout, polling: 100 },
     );
+    await page.evaluate(async () => {
+      await Promise.all([
+        window.__app?.ready,
+        window.__editor?.ready,
+        window.__cfDebug?.ready,
+      ].filter(Boolean));
+    });
   } catch (error) {
     const title = await page.title().catch(() => "");
     const diagnostics = await page.evaluate(() => {
       const globals = {
         __app: Boolean(window.__app),
+        __editor: Boolean(window.__editor),
         __cmView: Boolean(window.__cmView),
         __cmDebug: Boolean(window.__cmDebug),
         __cfDebug: Boolean(window.__cfDebug),
+        lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
       };
       return {
         readyState: document.readyState,
@@ -1696,7 +1763,7 @@ export async function resetEditorState(page) {
   await openRegressionDocument(page);
   await page.waitForFunction(
     () => {
-      const doc = window.__cmView?.state?.doc?.toString() ?? "";
+      const doc = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString() ?? "";
       return doc.includes("Coflat Feature Showcase") && doc.includes("SearchNeedle");
     },
     { timeout: 5000 },

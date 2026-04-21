@@ -47,6 +47,7 @@ declare global {
      * Set by useAppDebug; cleared on unmount.
      */
     __app?: {
+      ready: Promise<void>;
       openFile: (path: string) => Promise<void>;
       hasFile: (path: string) => Promise<boolean>;
       openFileWithContent: (name: string, content: string) => Promise<void>;
@@ -65,10 +66,29 @@ declare global {
     };
 
     /**
+     * Product-neutral editor debug bridge. CM6-backed Coflat delegates to the
+     * active `EditorView`; Lexical-backed Coflat 2 delegates to the active
+     * `MarkdownEditorHandle`.
+     */
+    __editor?: {
+      ready: Promise<void>;
+      focus: () => void;
+      getDoc: () => string;
+      getSelection: () => import("../lexical/markdown-editor-types").MarkdownEditorSelection;
+      peekDoc: () => string;
+      peekSelection: () => import("../lexical/markdown-editor-types").MarkdownEditorSelection;
+      insertText: (text: string) => void;
+      setDoc: (doc: string) => void;
+      setSelection: (anchor: number, focus?: number) => void;
+      formatSelection: (detail: import("../constants/events").FormatEventDetail) => boolean;
+    };
+
+    /**
      * Performance debug helpers.
      * Set by useAppDebug; cleared on unmount.
      */
     __cfDebug?: {
+      ready: Promise<void>;
       perfSummary: () => Promise<unknown>;
       printPerfSummary: () => Promise<unknown>;
       clearPerf: () => Promise<void>;

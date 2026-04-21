@@ -161,6 +161,7 @@ function AppInner() {
     saveFile: editor.saveFile,
     closeFile: (options) => editor.closeCurrentFile(options),
     getCurrentDocText: editor.getCurrentDocText,
+    getLexicalEditorHandle: editor.getLexicalEditorHandle,
     setSearchOpen: dialogs.setSearchOpen,
     requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,

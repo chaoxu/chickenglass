@@ -50,6 +50,7 @@
     "chrome:test": "node scripts/test-chrome.mjs",
     "convert:latex": "python3 scripts/latex-to-coflat.py",
     "test:browser": "node scripts/test-regression.mjs",
+    "test:browser:coflat2": "node scripts/coflat2-browser-smoke.mjs",
     "perf:capture": "node scripts/perf-regression.mjs capture",
     "perf:compare": "node scripts/perf-regression.mjs compare",
     "perf:capture:heavy": "node scripts/perf-regression.mjs capture --heavy-doc",

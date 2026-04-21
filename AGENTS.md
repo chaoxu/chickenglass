@@ -150,6 +150,14 @@ __app.saveFile()             — save current file
 __app.getProjectRoot()       — current project root path (or null)
 __app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
 __app.isDirty()              — whether any open document has unsaved changes
+__app.ready                  — resolves after the app debug bridge is connected
+__editor.ready               — resolves after the product-neutral editor bridge is connected
+__editor.getDoc()            — current document text for CM6 or Lexical
+__editor.setDoc(text)        — replace current document text through the active editor
+__editor.insertText(text)    — insert text through the active editor
+__editor.setSelection(a, f)  — set active editor selection
+__editor.formatSelection(detail) — format current selection through the active editor
+__cfDebug.ready              — resolves after performance/debug helpers are connected
 __cfDebug.toggleFps()        — toggle the status-bar FPS meter
 __cfDebug.togglePerfPanel()  — toggle the floating perf debug panel
 __cfDebug.renderState()      — proxy to the current visible rich-render snapshot

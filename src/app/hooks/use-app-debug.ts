@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { FormatEventDetail } from "../../constants/events";
 import type { EditorMode } from "../../editor";
 import { isTauri } from "../../lib/tauri";
 import {
@@ -21,11 +22,17 @@ import {
 import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { useDevSettings } from "../../state/dev-settings";
 import { clearInteractionLog, getInteractionLog } from "../../lexical/interaction-trace";
+import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
+import { applyMarkdownFormatAction } from "../editor-format-actions";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
   debugListWindowsCommand,
 } from "../tauri-client/debug";
+import {
+  getDebugBridgeReadyPromise,
+  markDebugBridgeReady,
+} from "../../debug/debug-bridge-ready";
 
 export interface DebugDocumentState {
   path: string;
@@ -64,6 +71,7 @@ interface AppDebugDeps {
   saveFile: () => Promise<void>;
   closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
   getCurrentDocText: () => string;
+  getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   setSearchOpen: (open: boolean) => void;
   requestNativeClose: () => Promise<void>;
   setMode: (mode: EditorMode) => void;
@@ -84,6 +92,7 @@ export function useAppDebug({
   saveFile,
   closeFile,
   getCurrentDocText,
+  getLexicalEditorHandle,
   setSearchOpen,
   requestNativeClose,
   setMode,
@@ -109,6 +118,86 @@ export function useAppDebug({
           kind: file.kind,
           base64Length: file.base64.length,
         };
+
+  const getEditorHandle = () => getLexicalEditorHandle();
+
+  const getCmView = () => window.__cmView ?? null;
+
+  const readEditorSelection = (): MarkdownEditorSelection => {
+    const handle = getEditorHandle();
+    if (handle) {
+      return handle.getSelection();
+    }
+    const view = getCmView();
+    if (!view) {
+      return { anchor: 0, focus: 0, from: 0, to: 0 };
+    }
+    const selection = view.state.selection.main;
+    return {
+      anchor: selection.anchor,
+      focus: selection.head,
+      from: selection.from,
+      to: selection.to,
+    };
+  };
+
+  const focusEditor = () => {
+    const handle = getEditorHandle();
+    if (handle) {
+      handle.focus();
+      return;
+    }
+    getCmView()?.focus();
+  };
+
+  const insertEditorText = (text: string) => {
+    const handle = getEditorHandle();
+    if (handle) {
+      handle.insertText(text);
+      return;
+    }
+    const view = getCmView();
+    if (!view) return;
+    const selection = view.state.selection.main;
+    view.dispatch({
+      changes: { from: selection.from, to: selection.to, insert: text },
+      selection: { anchor: selection.from + text.length },
+    });
+  };
+
+  const setEditorDoc = (doc: string) => {
+    const handle = getEditorHandle();
+    if (handle) {
+      handle.setDoc(doc);
+      return;
+    }
+    const view = getCmView();
+    if (!view) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: doc },
+      selection: { anchor: Math.min(view.state.selection.main.head, doc.length) },
+    });
+  };
+
+  const setEditorSelection = (anchor: number, focus?: number) => {
+    const handle = getEditorHandle();
+    if (handle) {
+      handle.setSelection(anchor, focus);
+      return;
+    }
+    const view = getCmView();
+    if (!view) return;
+    view.dispatch({
+      selection: { anchor, head: focus ?? anchor },
+      scrollIntoView: true,
+    });
+  };
+
+  const formatEditorSelection = (detail: FormatEventDetail): boolean =>
+    applyMarkdownFormatAction({
+      editorHandle: getEditorHandle(),
+      getCurrentDocText,
+    }, detail);
 
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).
@@ -154,6 +243,7 @@ export function useAppDebug({
 
   useEffect(() => {
     window.__app = {
+      ready: getDebugBridgeReadyPromise("app"),
       openFile: async (path) => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
@@ -232,7 +322,22 @@ export function useAppDebug({
       getCurrentDocument: () => currentDocument,
       isDirty: () => hasDirtyDocument,
     };
+    markDebugBridgeReady("app");
+    window.__editor = {
+      ready: getDebugBridgeReadyPromise("editor"),
+      focus: focusEditor,
+      getDoc: getCurrentDocText,
+      getSelection: readEditorSelection,
+      peekDoc: getCurrentDocText,
+      peekSelection: readEditorSelection,
+      insertText: insertEditorText,
+      setDoc: setEditorDoc,
+      setSelection: setEditorSelection,
+      formatSelection: formatEditorSelection,
+    };
+    markDebugBridgeReady("editor");
     window.__cfDebug = {
+      ready: getDebugBridgeReadyPromise("cfDebug"),
       perfSummary: getCombinedPerfSnapshot,
       printPerfSummary,
       clearPerf: clearCombinedPerf,
@@ -251,6 +356,7 @@ export function useAppDebug({
         }),
       clearSession: clearDebugSessionEvents,
     };
+    markDebugBridgeReady("cfDebug");
     if (import.meta.env.DEV && isTauri()) {
       window.__tauriSmoke = {
         openProject,
@@ -284,6 +390,7 @@ export function useAppDebug({
       // Clear debug globals on unmount / HMR so stale closures are not left
       // on window between hot-reloads or component teardowns.
       delete window.__app;
+      delete window.__editor;
       delete window.__cfDebug;
       delete window.__tauriSmoke;
     };
@@ -296,6 +403,7 @@ export function useAppDebug({
     saveFile,
     closeFile,
     getCurrentDocText,
+    getLexicalEditorHandle,
     setSearchOpen,
     requestNativeClose,
     setMode,

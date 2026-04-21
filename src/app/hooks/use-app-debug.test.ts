@@ -39,6 +39,7 @@ const openFileWithContent = vi.fn(async (_name: string, _content: string) => {})
 const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
 const getCurrentDocText = vi.fn(() => "# Notes");
+const getLexicalEditorHandle = vi.fn(() => null);
 const setSearchOpen = vi.fn((_open: boolean) => {});
 const requestNativeClose = vi.fn(async () => {});
 const setMode = vi.fn((_mode: "rich" | "source" | "read") => {});
@@ -53,6 +54,7 @@ const Harness: FC = () => {
     saveFile,
     closeFile,
     getCurrentDocText,
+    getLexicalEditorHandle,
     setSearchOpen,
     requestNativeClose,
     setMode,
@@ -84,6 +86,8 @@ describe("useAppDebug", () => {
     closeFile.mockClear();
     getCurrentDocText.mockClear();
     getCurrentDocText.mockReturnValue("# Notes");
+    getLexicalEditorHandle.mockClear();
+    getLexicalEditorHandle.mockReturnValue(null);
     setSearchOpen.mockClear();
     requestNativeClose.mockClear();
     setMode.mockClear();
@@ -105,6 +109,10 @@ describe("useAppDebug", () => {
     });
 
     expect(window.__app?.openFileWithContent).toBeDefined();
+    await expect(window.__app?.ready).resolves.toBeUndefined();
+    await expect(window.__editor?.ready).resolves.toBeUndefined();
+    await expect(window.__cfDebug?.ready).resolves.toBeUndefined();
+    expect(window.__editor?.getDoc()).toBe("# Notes");
     expect(window.__cfDebug?.interactionLog).toBeDefined();
     expect(window.__cfDebug?.exportSession()).toMatchObject({
       currentDocument: "# Notes",
