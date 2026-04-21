@@ -23,23 +23,35 @@
  */
 
 import {
-  type DecorationSet,
-  Decoration,
-  EditorView,
-  WidgetType,
-  type PluginValue,
-  type ViewUpdate,
-  ViewPlugin,
-} from "@codemirror/view";
-import {
   type EditorState,
   type Extension,
   type Range,
-  StateEffect,
-  StateField,
   type Transaction,
 } from "@codemirror/state";
-
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  type PluginValue,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
+import { CSS } from "../constants/css-classes";
+import {
+  type FootnoteSemantics,
+  numberFootnotes,
+  orderedFootnoteEntries,
+} from "../semantics/document";
+import { createChangeChecker } from "../state/change-detection";
+import {
+  getActiveStructureEditTarget,
+  isFootnoteLabelStructureEditActive,
+} from "../state/cm-structure-edit";
+import {
+  documentSemanticsField,
+  getDocumentAnalysisSliceRevision,
+} from "../state/document-analysis";
+import { mathMacrosField } from "../state/math-macros";
 import {
   addMarkerReplacement,
   buildDecorations,
@@ -47,85 +59,32 @@ import {
 } from "./decoration-core";
 import { createDecorationsField } from "./decoration-field";
 import {
-  createBooleanToggleField,
   editorFocusField,
   focusTracker,
 } from "./focus-state";
 import {
-  cloneRenderedHTMLElement,
-} from "./widget-core";
+  FootnoteDefLabelWidget,
+  FootnoteInlineWidget,
+  FootnoteRefWidget,
+} from "./sidenote-footnote-widgets";
+// FootnoteDefLabelWidget extends SimpleTextRenderWidget in the helper module.
+import { FootnoteSectionWidget } from "./sidenote-section-widget";
 import {
-  RenderWidget,
-  SimpleTextRenderWidget,
-  serializeMacros,
-} from "./source-widget";
-import {
-  type FootnoteSemantics,
-  numberFootnotes,
-  orderedFootnoteEntries,
-} from "../semantics/document";
-import {
-  documentSemanticsField,
-  getDocumentAnalysisSliceRevision,
-} from "../state/document-analysis";
-import { mathMacrosField } from "../state/math-macros";
-import { renderDocumentFragmentToDom } from "../document-surfaces";
-import { CSS } from "../constants/css-classes";
-import {
-  getActiveStructureEditTarget,
-  isFootnoteLabelStructureEditActive,
-} from "../state/cm-structure-edit";
-import { createChangeChecker } from "../state/change-detection";
+  footnoteInlineExpandedField,
+  footnoteInlineToggleEffect,
+  sidenotesCollapsedEffect,
+  sidenotesCollapsedField,
+} from "./sidenote-state";
+import { serializeMacros } from "./source-widget";
 
-/** StateEffect to toggle sidenote margin visibility. */
-export const sidenotesCollapsedEffect = StateEffect.define<boolean>();
-
-/** StateField tracking whether the sidenote margin is collapsed. */
-export const sidenotesCollapsedField = createBooleanToggleField(sidenotesCollapsedEffect);
-
-// ---------------------------------------------------------------------------
-// Inline footnote expansion (#458)
-// ---------------------------------------------------------------------------
-
-/** StateEffect to toggle inline expansion of a footnote ref. */
-export const footnoteInlineToggleEffect = StateEffect.define<{ id: string; expanded: boolean }>();
-
-/**
- * StateField tracking which footnote IDs are currently expanded inline.
- *
- * When a user clicks a footnote ref in collapsed-sidenotes mode, the
- * definition content appears inline below the ref line instead of scrolling
- * to the definition. This keeps the user in reading context.
- */
-export const footnoteInlineExpandedField = StateField.define<ReadonlySet<string>>({
-  create() {
-    return new Set<string>();
-  },
-  update(value, tr) {
-    let changed = false;
-    let next: Set<string> | undefined;
-    for (const effect of tr.effects) {
-      if (effect.is(footnoteInlineToggleEffect)) {
-        if (!next) next = new Set(value);
-        if (effect.value.expanded) {
-          next.add(effect.value.id);
-        } else {
-          next.delete(effect.value.id);
-        }
-        changed = true;
-      }
-    }
-    return changed && next ? next : value;
-  },
-  compare(a, b) {
-    if (a === b) return true;
-    if (a.size !== b.size) return false;
-    for (const id of a) {
-      if (!b.has(id)) return false;
-    }
-    return true;
-  },
-});
+export { FootnoteInlineWidget } from "./sidenote-footnote-widgets";
+export { FootnoteSectionWidget } from "./sidenote-section-widget";
+export {
+  footnoteInlineExpandedField,
+  footnoteInlineToggleEffect,
+  sidenotesCollapsedEffect,
+  sidenotesCollapsedField,
+} from "./sidenote-state";
 
 /** Collect footnote references and definitions from the shared semantics field. */
 export function collectFootnotes(state: EditorState): FootnoteSemantics {
@@ -236,221 +195,6 @@ function footnoteSectionShouldUpdate(update: ViewUpdate): boolean {
     footnoteSliceChanged(update.startState, update.state)
     || mathMacrosChanged(update.startState, update.state)
   );
-}
-
-/** Widget for the [^id]: label, rendered as a small superscript number. */
-class FootnoteDefLabelWidget extends SimpleTextRenderWidget {
-  constructor(
-    private readonly number: number,
-    private readonly id: string,
-  ) {
-    super({
-      tagName: "sup",
-      className: "cf-sidenote-def-label",
-      text: String(number),
-    });
-  }
-
-  eq(other: FootnoteDefLabelWidget): boolean {
-    return this.number === other.number && this.id === other.id;
-  }
-}
-
-/** Widget for a footnote reference rendered as a superscript number.
- *
- * When sidenotes are collapsed and a definition exists, clicking the
- * superscript toggles inline expansion of the footnote definition below
- * the ref (#458). When sidenotes are expanded (margin visible), clicking
- * navigates to the definition. Otherwise, the default source-reveal
- * behavior places the cursor on the ref source.
- */
-class FootnoteRefWidget extends SimpleTextRenderWidget {
-  private readonly mouseDownHandlers = new WeakMap<HTMLElement, (event: MouseEvent) => void>();
-
-  constructor(
-    private readonly number: number,
-    private readonly id: string,
-    /** Document offset of the footnote definition, or -1 if none exists. */
-    private readonly defFrom: number,
-    /** Whether this ref's footnote is currently expanded inline. */
-    private readonly inlineExpanded: boolean,
-  ) {
-    super({
-      tagName: "sup",
-      className: CSS.sidenoteRef,
-      text: String(number),
-      attrs: { "data-footnote-id": id, "aria-label": `Footnote ${id}` },
-    });
-  }
-
-  override toDOM(view?: EditorView): HTMLElement {
-    const el = this.createDOM();
-    this.setSourceRangeAttrs(el);
-
-    if (this.inlineExpanded) {
-      el.classList.add(CSS.sidenoteRefExpanded);
-    }
-
-    if (view && this.defFrom >= 0) {
-      const id = this.id;
-      const defFrom = this.defFrom;
-      const inlineExpanded = this.inlineExpanded;
-      const handleMouseDown = (e: MouseEvent): void => {
-        e.preventDefault();
-        const collapsed = view.state.field(sidenotesCollapsedField, false) ?? false;
-        if (collapsed) {
-          // Collapsed mode: toggle inline expansion (#458)
-          view.dispatch({
-            effects: footnoteInlineToggleEffect.of({ id, expanded: !inlineExpanded }),
-          });
-        } else {
-          // Expanded mode (margin visible): navigate to definition
-          view.focus();
-          view.dispatch({ selection: { anchor: defFrom }, scrollIntoView: true });
-        }
-      };
-      this.mouseDownHandlers.set(el, handleMouseDown);
-      el.addEventListener("mousedown", handleMouseDown);
-    } else if (view && this.sourceFrom >= 0) {
-      this.bindSourceReveal(el, view);
-    }
-
-    return el;
-  }
-
-  override destroy(dom: HTMLElement): void {
-    const handleMouseDown = this.mouseDownHandlers.get(dom);
-    if (!handleMouseDown) return;
-    dom.removeEventListener("mousedown", handleMouseDown);
-    this.mouseDownHandlers.delete(dom);
-  }
-
-  eq(other: FootnoteRefWidget): boolean {
-    return (
-      this.number === other.number &&
-      this.id === other.id &&
-      this.defFrom === other.defFrom &&
-      this.inlineExpanded === other.inlineExpanded
-    );
-  }
-}
-
-/**
- * Widget that renders an inline footnote expansion below the ref line (#458).
- *
- * Shows a bordered box with the footnote number, rendered content, and an
- * "edit" link that navigates to the actual definition for editing. Clicking
- * the superscript ref again collapses this widget.
- *
- * Uses a plain WidgetType (not RenderWidget) because it is placed via
- * Decoration.widget with block:true, not Decoration.replace.
- */
-export class FootnoteInlineWidget extends WidgetType {
-  private readonly macrosKey: string;
-  private cachedDOM: HTMLElement | null = null;
-  private readonly mouseDownHandlers = new WeakMap<HTMLElement, (event: MouseEvent) => void>();
-
-  constructor(
-    private readonly number: number,
-    private readonly id: string,
-    private readonly content: string,
-    private readonly macros: Record<string, string>,
-    private readonly defFrom: number,
-  ) {
-    super();
-    this.macrosKey = serializeMacros(macros);
-  }
-
-  private createCachedDOM(): HTMLElement {
-    if (this.cachedDOM) {
-      return cloneRenderedHTMLElement(this.cachedDOM);
-    }
-
-    const wrapper = document.createElement("div");
-    wrapper.className = "cf-footnote-inline";
-    wrapper.setAttribute("aria-label", `Footnote ${this.id} content`);
-
-    const header = document.createElement("div");
-    header.className = "cf-footnote-inline-header";
-
-    const num = document.createElement("sup");
-    num.className = "cf-footnote-inline-number";
-    num.textContent = String(this.number);
-    header.appendChild(num);
-
-    const editBtn = document.createElement("button");
-    editBtn.className = "cf-footnote-inline-edit";
-    editBtn.textContent = "Edit";
-    editBtn.title = "Navigate to footnote definition";
-    header.appendChild(editBtn);
-    wrapper.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "cf-footnote-inline-body";
-    renderDocumentFragmentToDom(body, {
-      kind: "footnote",
-      text: this.content,
-      macros: this.macros,
-    });
-    wrapper.appendChild(body);
-
-    this.cachedDOM = cloneRenderedHTMLElement(wrapper);
-    return wrapper;
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    const wrapper = this.createCachedDOM();
-    const defFrom = this.defFrom;
-    const id = this.id;
-    const handleMouseDown = (e: MouseEvent): void => {
-      const target = e.target;
-      const origin = target instanceof Element
-        ? target
-        : target instanceof Node
-          ? target.parentElement
-          : null;
-      const editBtn = origin?.closest<HTMLButtonElement>(".cf-footnote-inline-edit");
-      if (!editBtn || !wrapper.contains(editBtn)) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      // Uncollapse sidenotes and navigate to definition
-      view.dispatch({
-        effects: [
-          sidenotesCollapsedEffect.of(false),
-          footnoteInlineToggleEffect.of({ id, expanded: false }),
-        ],
-        selection: { anchor: defFrom },
-        scrollIntoView: true,
-      });
-      view.focus();
-    };
-    this.mouseDownHandlers.set(wrapper, handleMouseDown);
-    wrapper.addEventListener("mousedown", handleMouseDown);
-    return wrapper;
-  }
-
-  override destroy(dom: HTMLElement): void {
-    const handleMouseDown = this.mouseDownHandlers.get(dom);
-    if (!handleMouseDown) return;
-    dom.removeEventListener("mousedown", handleMouseDown);
-    this.mouseDownHandlers.delete(dom);
-  }
-
-  eq(other: FootnoteInlineWidget): boolean {
-    return (
-      this.number === other.number &&
-      this.id === other.id &&
-      this.content === other.content &&
-      this.defFrom === other.defFrom &&
-      this.macrosKey === other.macrosKey
-    );
-  }
-
-  /** Block this widget from CM6 event handling — we handle clicks ourselves. */
-  ignoreEvent(): boolean {
-    return true;
-  }
 }
 
 /** Build sidenote decorations from editor state. */
@@ -568,87 +312,6 @@ export function computeSidenoteOffsets(
   }
 
   return offsets;
-}
-
-
-/** Widget that renders a "Footnotes" section at the bottom when sidenotes are collapsed. */
-export class FootnoteSectionWidget extends RenderWidget {
-  private readonly macrosKey: string;
-
-  constructor(
-    private readonly entries: ReadonlyArray<{ num: number; id: string; content: string; defFrom: number }>,
-    private readonly macros: Record<string, string>,
-  ) {
-    super();
-    this.macrosKey = serializeMacros(macros);
-  }
-
-  createDOM(): HTMLElement {
-    return this.createCachedDOM(() => {
-      const section = document.createElement("div");
-      section.className = `${CSS.bibliography} ${CSS.bibliographyFootnotes}`;
-
-      const heading = document.createElement("h2");
-      heading.className = CSS.bibliographyHeading;
-      heading.textContent = "Footnotes";
-      section.appendChild(heading);
-
-      const list = document.createElement("div");
-      list.className = CSS.bibliographyList;
-
-      for (const entry of this.entries) {
-        const div = document.createElement("div");
-        div.className = CSS.bibliographyEntry;
-        div.dataset.defFrom = String(entry.defFrom);
-
-        const num = document.createElement("sup");
-        num.className = CSS.bibliographyEntryNumber;
-        num.textContent = String(entry.num);
-        div.appendChild(num);
-
-        const content = document.createElement("span");
-        renderDocumentFragmentToDom(content, {
-          kind: "footnote",
-          text: entry.content,
-          macros: this.macros,
-        });
-        div.appendChild(content);
-
-        list.appendChild(div);
-      }
-
-      section.appendChild(list);
-      return section;
-    });
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    const section = this.createDOM();
-    for (const div of section.querySelectorAll<HTMLElement>(`.${CSS.bibliographyEntry}`)) {
-      const defFrom = Number(div.dataset.defFrom ?? "-1");
-      div.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        view.focus();
-        view.dispatch({
-          effects: sidenotesCollapsedEffect.of(false),
-          selection: { anchor: defFrom },
-          scrollIntoView: true,
-        });
-      });
-    }
-    return section;
-  }
-
-  eq(other: FootnoteSectionWidget): boolean {
-    if (this.entries.length !== other.entries.length) return false;
-    return this.entries.every(
-      (e, i) =>
-        e.id === other.entries[i].id &&
-        e.content === other.entries[i].content &&
-        e.num === other.entries[i].num &&
-        e.defFrom === other.entries[i].defFrom,
-    ) && this.macrosKey === other.macrosKey;
-  }
 }
 
 /** ViewPlugin that adds a "Footnotes" section at the end of the document when sidenotes are collapsed. */
