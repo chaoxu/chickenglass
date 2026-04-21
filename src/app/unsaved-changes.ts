@@ -4,7 +4,9 @@ export type UnsavedChangesReason =
   | "switch-file"
   | "close-file"
   | "close-window"
-  | "switch-project";
+  | "switch-project"
+  | "delete-file"
+  | "delete-folder";
 
 export interface UnsavedChangesRequest {
   reason: UnsavedChangesReason;

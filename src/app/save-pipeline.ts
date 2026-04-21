@@ -32,6 +32,7 @@ export type WriteFn = (
 export interface SaveResult {
   saved: boolean;
   lastSavedRevision: number;
+  savedContent?: string;
 }
 
 export class SavePipeline {
@@ -190,7 +191,11 @@ export class SavePipeline {
           this.savedHashes.set(path, fnv1aHash(diskContent));
           this.savedTimestamps.set(path, Date.now());
 
-          lastResult = { saved: true, lastSavedRevision: revisionAtStart };
+          lastResult = {
+            saved: true,
+            lastSavedRevision: revisionAtStart,
+            savedContent: diskContent,
+          };
         } catch (e: unknown) {
           console.error("[save-pipeline] write failed:", path, e);
           lastResult = { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };

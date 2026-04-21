@@ -106,6 +106,20 @@ describe("handleFileApi", () => {
     await expect(response.json()).resolves.toMatchObject({ content: "hello" });
   });
 
+  it("does not collapse directory read errors into not found", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    await fs.mkdir(path.join(rootDir, "docs"));
+
+    const response = await apiFetch(baseUrl, "/api/files/docs", {
+      headers: { Origin: baseUrl },
+    });
+
+    expect(response.status).not.toBe(404);
+    await expect(response.json()).resolves.not.toMatchObject({
+      error: "File not found: docs",
+    });
+  });
+
   it("rejects reads through symlinks that escape the project root", async () => {
     const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
     const outsideDir = await createTempDir("coflat-file-api-outside-");

@@ -20,6 +20,10 @@ function titleForRequest(request: UnsavedChangesRequest): string {
       return "Save changes before closing?";
     case "close-window":
       return "Save changes before closing the window?";
+    case "delete-file":
+      return "Save changes before deleting this file?";
+    case "delete-folder":
+      return "Save changes before deleting this folder?";
     case "switch-project":
       return "Save changes before switching folders?";
     case "switch-file":
@@ -30,6 +34,12 @@ function titleForRequest(request: UnsavedChangesRequest): string {
 
 function descriptionForRequest(request: UnsavedChangesRequest): string {
   const current = request.currentDocument.name;
+  if (request.reason === "delete-file") {
+    return `"${current}" has unsaved changes and will be deleted.`;
+  }
+  if (request.reason === "delete-folder") {
+    return `"${current}" has unsaved changes inside the folder being deleted.`;
+  }
   if (!request.target) {
     return `"${current}" has unsaved changes.`;
   }

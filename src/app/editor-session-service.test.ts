@@ -91,6 +91,7 @@ function createSessionHarness(fs: FileSystem) {
     fs,
     refreshTree: async () => {},
     addRecentFile: () => {},
+    requestUnsavedChangesDecision: async () => "discard",
     runtime,
   });
   runtime.setWriteDocumentSnapshot(persistence.writeDocumentSnapshot);

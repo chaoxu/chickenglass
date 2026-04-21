@@ -6,6 +6,7 @@ import {
 } from "./editor-session-actions";
 import { getCurrentSessionDocument } from "./editor-session-model";
 import {
+  createEditorDocumentText,
   editorDocumentToString,
   emptyEditorDocument,
 } from "./editor-doc-change";
@@ -17,6 +18,10 @@ import type { FileSystem } from "./file-manager";
 import { basename } from "./lib/utils";
 import { measureAsync } from "./perf";
 import { confirmAction } from "./confirm-action";
+import type {
+  UnsavedChangesDecision,
+  UnsavedChangesRequest,
+} from "./unsaved-changes";
 
 export interface EditorSessionPersistenceOptions {
   fs: FileSystem;
@@ -24,6 +29,9 @@ export interface EditorSessionPersistenceOptions {
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
   onAfterSave?: () => void;
+  requestUnsavedChangesDecision: (
+    request: UnsavedChangesRequest,
+  ) => Promise<UnsavedChangesDecision>;
   runtime: EditorSessionRuntime;
 }
 
@@ -57,6 +65,7 @@ export function createEditorSessionPersistence({
   refreshTree,
   addRecentFile,
   onAfterSave,
+  requestUnsavedChangesDecision,
   runtime,
 }: EditorSessionPersistenceOptions): EditorSessionPersistence {
   const writeDocumentSnapshot = async (
@@ -90,17 +99,24 @@ export function createEditorSessionPersistence({
       return { content: editorDocumentToString(doc) };
     });
 
-    if (result.saved) {
-      const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
-      runtime.buffers.set(currentPath, doc);
-      runtime.liveDocs.set(currentPath, doc);
+    if (result.saved && result.savedContent !== undefined) {
+      const savedDoc = createEditorDocumentText(result.savedContent);
+      runtime.buffers.set(currentPath, savedDoc);
+
+      const currentRevision = runtime.pipeline.getRevision(currentPath);
+      const savedRevisionIsCurrent = currentRevision === result.lastSavedRevision;
+      if (savedRevisionIsCurrent) {
+        runtime.liveDocs.set(currentPath, savedDoc);
+      }
+
       runtime.commit(
-        markSessionDocumentDirty(runtime.getState(), currentPath, false),
-        { editorDoc: editorDocumentToString(doc) },
+        markSessionDocumentDirty(runtime.getState(), currentPath, !savedRevisionIsCurrent),
+        savedRevisionIsCurrent ? { editorDoc: result.savedContent } : undefined,
       );
       onAfterSave?.();
+      return savedRevisionIsCurrent;
     }
-    return result.saved;
+    return false;
   };
 
   const saveFile = async (): Promise<void> => {
@@ -154,6 +170,37 @@ export function createEditorSessionPersistence({
     });
     if (!ok) return;
 
+    const currentDocument = getCurrentSessionDocument(runtime.getState());
+    const deletingCurrentDocument = currentDocument && (
+      currentDocument.path === path
+      || currentDocument.path.startsWith(`${path}/`)
+    );
+    if (deletingCurrentDocument && currentDocument.dirty) {
+      const decision = await requestUnsavedChangesDecision({
+        reason: currentDocument.path === path ? "delete-file" : "delete-folder",
+        currentDocument: {
+          path: currentDocument.path,
+          name: currentDocument.name,
+        },
+        target: {
+          path,
+          name: basename(path),
+        },
+      });
+      if (decision === "cancel") return;
+      if (decision === "save") {
+        const saved = await saveCurrentDocument();
+        if (!saved) return;
+      } else {
+        const savedDoc = runtime.buffers.get(currentDocument.path) ?? emptyEditorDocument;
+        runtime.liveDocs.set(currentDocument.path, savedDoc);
+        runtime.commit(
+          markSessionDocumentDirty(runtime.getState(), currentDocument.path, false),
+          { editorDoc: editorDocumentToString(savedDoc) },
+        );
+      }
+    }
+
     try {
       await measureAsync("delete_file.write", () => fs.deleteFile(path), {
         category: "delete_file",
@@ -164,15 +211,16 @@ export function createEditorSessionPersistence({
       return;
     }
 
-    const currentDocument = getCurrentSessionDocument(runtime.getState());
-    if (currentDocument && (
-      currentDocument.path === path
-      || currentDocument.path.startsWith(`${path}/`)
+    const documentAfterDeleteDecision = getCurrentSessionDocument(runtime.getState());
+    if (documentAfterDeleteDecision && (
+      documentAfterDeleteDecision.path === path
+      || documentAfterDeleteDecision.path.startsWith(`${path}/`)
     )) {
-      runtime.buffers.delete(currentDocument.path);
-      runtime.liveDocs.delete(currentDocument.path);
+      runtime.pipeline.clear(documentAfterDeleteDecision.path);
+      runtime.buffers.delete(documentAfterDeleteDecision.path);
+      runtime.liveDocs.delete(documentAfterDeleteDecision.path);
       runtime.commit(
-        clearSessionDocument(runtime.getState(), currentDocument.path),
+        clearSessionDocument(runtime.getState(), documentAfterDeleteDecision.path),
         { editorDoc: "" },
       );
     }

@@ -154,13 +154,14 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   }, [saveWindowState]);
 
   const loadWorkspaceContents = useCallback(async (requestId: number): Promise<FileEntry | null> => {
-    if (fs.listChildren) {
+    const listChildren = fs.listChildren;
+    if (listChildren) {
       // Shallow load: root children + config in parallel — sidebar renders
       // immediately.  Sub-directory children are loaded on demand when the
       // user expands them.  Consumers that need full depth (export) call
       // listTree() directly; default-doc search uses listChildren lazily.
       const [shallowChildren, nextProjectConfig] = await Promise.all([
-        measureAsync("sidebar.file_tree_shallow", () => fs.listChildren!(""), {
+        measureAsync("sidebar.file_tree_shallow", () => listChildren(""), {
           category: "sidebar",
         }),
         measureAsync(

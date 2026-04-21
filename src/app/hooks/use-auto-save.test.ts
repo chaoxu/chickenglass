@@ -69,6 +69,30 @@ describe("useAutoSave", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
+  it("logs auto-save failures", async () => {
+    const error = new Error("disk full");
+    const onSave = vi.fn(async () => { throw error; });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      act(() => {
+        root.render(createElement(Harness, {
+          isDirty: true,
+          onSave,
+          interval: 0,
+        }));
+      });
+
+      await act(async () => {
+        window.dispatchEvent(new Event("blur"));
+      });
+
+      expect(consoleError).toHaveBeenCalledWith("[auto-save] save failed", error);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it("delays Tauri blur saves so a suspended close flow can cancel them", async () => {
     const onSave = vi.fn(async () => {});
     (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;

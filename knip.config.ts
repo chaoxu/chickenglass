@@ -10,8 +10,6 @@ const config: KnipConfig = {
   ],
   project: ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
   ignoreDependencies: [
-    // Tauri CLI — invoked via shell, not imported
-    "@tauri-apps/cli",
     // Tailwind — used via @tailwindcss/vite plugin, not imported directly
     "tailwindcss",
     // Type-only packages

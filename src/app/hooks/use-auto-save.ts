@@ -17,6 +17,7 @@
 
 import { useEffect, useRef } from "react";
 import { isTauri } from "../../lib/tauri";
+import { logCatchError } from "../lib/log-catch-error";
 
 const TAURI_EVENT_SAVE_DELAY_MS = 250;
 
@@ -57,11 +58,11 @@ export function useAutoSave(
       if (suspended) return;
       if (!isDirty || savingRef.current) return;
       savingRef.current = true;
-      onSave().catch(() => {
-        // Auto-save is best-effort — swallow errors silently.
-      }).finally(() => {
-        savingRef.current = false;
-      });
+      onSave()
+        .catch(logCatchError("[auto-save] save failed"))
+        .finally(() => {
+          savingRef.current = false;
+        });
     };
 
     const scheduleEventSave = (reason: "blur" | "hidden") => {

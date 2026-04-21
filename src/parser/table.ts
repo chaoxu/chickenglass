@@ -50,8 +50,8 @@ function parseRow(
     cellStart = -1,
     cellEnd = -1;
 
-  const parseCell = () => {
-    elts!.push(
+  const parseCell = (target: Element[]) => {
+    target.push(
       cx.elt(
         "TableCell",
         offset + cellStart,
@@ -80,7 +80,7 @@ function parseRow(
       if (!first || cellStart > -1) count++;
       first = false;
       if (elts) {
-        if (cellStart > -1) parseCell();
+        if (cellStart > -1) parseCell(elts);
         elts.push(cx.elt("TableDelimiter", i + offset, i + offset + 1));
       }
       cellStart = cellEnd = -1;
@@ -95,7 +95,7 @@ function parseRow(
 
   if (cellStart > -1) {
     count++;
-    if (elts) parseCell();
+    if (elts) parseCell(elts);
   }
 
   return count;

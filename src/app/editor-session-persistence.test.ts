@@ -9,11 +9,13 @@ import {
 import type { FileSystem } from "./file-manager";
 import { MemoryFileSystem } from "./file-manager";
 import { createEditorSessionState, type SessionDocument } from "./editor-session-model";
+import { markSessionDocumentDirty } from "./editor-session-actions";
 import { createEditorSessionRuntime, type EditorSessionRuntime } from "./editor-session-runtime";
 import {
   createEditorSessionPersistence,
   type EditorSessionPersistence,
 } from "./editor-session-persistence";
+import type { UnsavedChangesDecision, UnsavedChangesRequest } from "./unsaved-changes";
 
 const sessionMockState = vi.hoisted(() => ({
   isTauri: false,
@@ -64,6 +66,9 @@ interface HarnessOptions {
   liveDocs: Map<string, EditorDocumentText>;
   refreshTree?: () => Promise<void>;
   addRecentFile?: (path: string) => void;
+  requestUnsavedChangesDecision?: (
+    request: UnsavedChangesRequest,
+  ) => Promise<UnsavedChangesDecision>;
 }
 
 function createHarness({
@@ -74,6 +79,7 @@ function createHarness({
   liveDocs: initialLiveDocs,
   refreshTree = async () => {},
   addRecentFile = () => {},
+  requestUnsavedChangesDecision = async () => "discard",
 }: HarnessOptions): HarnessRef {
   const runtime = createEditorSessionRuntime();
   runtime.commit(createEditorSessionState(currentDocument), { editorDoc });
@@ -93,6 +99,7 @@ function createHarness({
     fs,
     refreshTree,
     addRecentFile,
+    requestUnsavedChangesDecision,
     runtime,
   });
 
@@ -106,6 +113,12 @@ function createDocumentMap(entries: Record<string, string>): Map<string, EditorD
   return new Map(
     Object.entries(entries).map(([path, doc]) => [path, createEditorDocumentText(doc)]),
   );
+}
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
 }
 
 describe("createEditorSessionPersistence", () => {
@@ -142,6 +155,50 @@ describe("createEditorSessionPersistence", () => {
     expect(ref.runtime.getEditorDoc()).toBe(edited);
     expect(editorDocumentToString(ref.runtime.buffers.get("main.md") ?? emptyEditorDocument)).toBe(edited);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("main.md") ?? emptyEditorDocument)).toBe(edited);
+  });
+
+  it("keeps newer edits dirty when they happen during an in-flight save", async () => {
+    const writeGate = createDeferred<void>();
+    const writeStarted = createDeferred<void>();
+    const fs = new MemoryFileSystem({ "main.md": "old" });
+    const writeSpy = vi.spyOn(fs, "writeFile").mockImplementation(async (path, content) => {
+      writeStarted.resolve();
+      await writeGate.promise;
+      await MemoryFileSystem.prototype.writeFile.call(fs, path, content);
+    });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: true,
+      },
+      editorDoc: "first edit",
+      buffers: createDocumentMap({ "main.md": "old" }),
+      liveDocs: createDocumentMap({ "main.md": "first edit" }),
+    });
+    ref.runtime.pipeline.bumpRevision("main.md");
+
+    const savePromise = ref.result.saveCurrentDocument();
+    await writeStarted.promise;
+
+    const newerDoc = createEditorDocumentText("second edit");
+    ref.runtime.liveDocs.set("main.md", newerDoc);
+    ref.runtime.pipeline.bumpRevision("main.md");
+    ref.runtime.commit(
+      markSessionDocumentDirty(ref.runtime.getState(), "main.md", true),
+      { editorDoc: "second edit" },
+    );
+
+    writeGate.resolve();
+    await expect(savePromise).resolves.toBe(false);
+
+    expect(writeSpy).toHaveBeenCalledWith("main.md", "first edit");
+    await expect(fs.readFile("main.md")).resolves.toBe("first edit");
+    expect(ref.runtime.getCurrentDocument()?.dirty).toBe(true);
+    expect(ref.runtime.getEditorDoc()).toBe("second edit");
+    expect(editorDocumentToString(ref.runtime.buffers.get("main.md") ?? emptyEditorDocument)).toBe("first edit");
+    expect(editorDocumentToString(ref.runtime.liveDocs.get("main.md") ?? emptyEditorDocument)).toBe("second edit");
   });
 
   it("renames the active document buffers after a successful rename", async () => {
@@ -208,6 +265,75 @@ describe("createEditorSessionPersistence", () => {
     expect(ref.runtime.getEditorDoc()).toBe("");
     expect(ref.runtime.buffers.has("notes/draft.md")).toBe(false);
     expect(ref.runtime.liveDocs.has("notes/draft.md")).toBe(false);
+  });
+
+  it("cancels deleting a dirty active file when unsaved changes are canceled", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "saved" });
+    const requestUnsavedChangesDecision = vi.fn<
+      (request: UnsavedChangesRequest) => Promise<UnsavedChangesDecision>
+    >(async () => "cancel");
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      editorDoc: "unsaved",
+      buffers: createDocumentMap({ "draft.md": "saved" }),
+      liveDocs: createDocumentMap({ "draft.md": "unsaved" }),
+      requestUnsavedChangesDecision,
+    });
+
+    await ref.result.handleDelete("draft.md");
+
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledWith({
+      reason: "delete-file",
+      currentDocument: {
+        path: "draft.md",
+        name: "draft.md",
+      },
+      target: {
+        path: "draft.md",
+        name: "draft.md",
+      },
+    });
+    await expect(fs.readFile("draft.md")).resolves.toBe("saved");
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+    expect(ref.runtime.getEditorDoc()).toBe("unsaved");
+  });
+
+  it("saves a dirty active file before deleting it when requested", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "saved" });
+    const requestUnsavedChangesDecision = vi.fn<
+      (request: UnsavedChangesRequest) => Promise<UnsavedChangesDecision>
+    >(async () => "save");
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      editorDoc: "unsaved",
+      buffers: createDocumentMap({ "draft.md": "saved" }),
+      liveDocs: createDocumentMap({ "draft.md": "unsaved" }),
+      requestUnsavedChangesDecision,
+    });
+    ref.runtime.pipeline.bumpRevision("draft.md");
+
+    await ref.result.handleDelete("draft.md");
+
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    await expect(fs.exists("draft.md")).resolves.toBe(false);
+    expect(ref.runtime.getCurrentDocument()).toBeNull();
+    expect(ref.runtime.getEditorDoc()).toBe("");
+    expect(ref.runtime.buffers.has("draft.md")).toBe(false);
+    expect(ref.runtime.liveDocs.has("draft.md")).toBe(false);
   });
 
   it("saveAs creates a missing target from the active document", async () => {

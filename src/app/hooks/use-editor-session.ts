@@ -70,12 +70,14 @@ export function useEditorSession({
     refreshTree,
     addRecentFile,
     onAfterSave,
+    requestUnsavedChangesDecision,
     runtime,
   }), [
     addRecentFile,
     fs,
     onAfterSave,
     refreshTree,
+    requestUnsavedChangesDecision,
     runtime,
   ]);
 

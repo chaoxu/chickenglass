@@ -22,6 +22,37 @@ function decodeRequestPath(requestPath: string): string | null {
   }
 }
 
+function fileSystemErrorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code: unknown }).code)
+    : undefined;
+}
+
+function sendFileSystemError(
+  res: ServerResponse,
+  error: unknown,
+  decodedPath: string,
+): boolean {
+  const code = fileSystemErrorCode(error);
+  if (code === "ENOENT" || code === "ENOTDIR") {
+    sendError(res, 404, `File not found: ${decodedPath}`);
+    return true;
+  }
+  if (code === "EACCES" || code === "EPERM") {
+    sendError(res, 403, `Permission denied: ${decodedPath}`);
+    return true;
+  }
+  if (code === "EEXIST") {
+    sendError(res, 409, `File already exists: ${decodedPath}`);
+    return true;
+  }
+  if (code === "EISDIR") {
+    sendError(res, 409, `Expected a file: ${decodedPath}`);
+    return true;
+  }
+  return false;
+}
+
 async function resolveRealPathCandidate(candidatePath: string): Promise<string | null> {
   let currentPath = candidatePath;
   const unresolvedSegments: string[] = [];
@@ -209,8 +240,10 @@ export async function handleFileApi(
       try {
         const content = await fs.readFile(safePath, "utf-8");
         sendJson(res, 200, { content });
-      } catch {
-        sendError(res, 404, `File not found: ${decodedPath}`);
+      } catch (error: unknown) {
+        if (!sendFileSystemError(res, error, decodedPath)) {
+          throw error;
+        }
       }
       return true;
     }
@@ -227,12 +260,21 @@ export async function handleFileApi(
 
       try {
         await fs.access(safePath);
-      } catch {
-        sendError(res, 404, `File not found: ${decodedPath}`);
+      } catch (error: unknown) {
+        if (!sendFileSystemError(res, error, decodedPath)) {
+          throw error;
+        }
         return true;
       }
 
-      await fs.writeFile(safePath, content, "utf-8");
+      try {
+        await fs.writeFile(safePath, content, "utf-8");
+      } catch (error: unknown) {
+        if (!sendFileSystemError(res, error, decodedPath)) {
+          throw error;
+        }
+        return true;
+      }
       sendJson(res, 200, { ok: true });
       return true;
     }
@@ -251,12 +293,25 @@ export async function handleFileApi(
         await fs.access(safePath);
         sendError(res, 409, `File already exists: ${decodedPath}`);
         return true;
-      } catch {
-        // File does not exist, proceed to create
+      } catch (error: unknown) {
+        const code = fileSystemErrorCode(error);
+        if (code !== "ENOENT" && code !== "ENOTDIR") {
+          if (!sendFileSystemError(res, error, decodedPath)) {
+            throw error;
+          }
+          return true;
+        }
       }
 
-      await fs.mkdir(path.dirname(safePath), { recursive: true });
-      await fs.writeFile(safePath, content ?? "", "utf-8");
+      try {
+        await fs.mkdir(path.dirname(safePath), { recursive: true });
+        await fs.writeFile(safePath, content ?? "", { encoding: "utf-8", flag: "wx" });
+      } catch (error: unknown) {
+        if (!sendFileSystemError(res, error, decodedPath)) {
+          throw error;
+        }
+        return true;
+      }
       sendJson(res, 201, { ok: true });
       return true;
     }
@@ -271,8 +326,10 @@ export async function handleFileApi(
       try {
         await fs.unlink(safePath);
         sendJson(res, 200, { ok: true });
-      } catch {
-        sendError(res, 404, `File not found: ${decodedPath}`);
+      } catch (error: unknown) {
+        if (!sendFileSystemError(res, error, decodedPath)) {
+          throw error;
+        }
       }
       return true;
     }
