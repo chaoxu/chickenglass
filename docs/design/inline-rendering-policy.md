@@ -9,8 +9,8 @@ rendered, degraded, or disallowed.
 
 ### `document-body`
 
-Full document rendering. Used by Coflat's CM6 rich-mode viewport and the HTML
-export path (`markdownToHtml`). Coflat 2 has its own Lexical renderers, but
+Full document rendering. Used by the CM6 rich-mode viewport and the HTML
+export path (`markdownToHtml`). Lexical has its own renderers, but
 shared chrome/export callers should follow the same surface policy. All inline
 and block constructs are rendered at full fidelity.
 
@@ -26,7 +26,6 @@ cross-references remain interactive.
 **Consumers:**
 - Heading text in HTML export (`renderHeading` in `markdown-to-html.ts`)
 - Fenced div titles in HTML export (`renderFencedDiv` in `markdown-to-html.ts`)
-- Frontmatter document title in read mode (`read-mode-view.tsx`)
 - Block header widgets in rich mode (`plugin-render.ts`)
 - Frontmatter title widget in rich mode (`frontmatter-state.ts`)
 
@@ -116,7 +115,7 @@ export function renderInline(
 ): string;
 ```
 
-Used by the read-mode HTML export and React components that set
+Used by HTML export and React components that set
 `dangerouslySetInnerHTML` (outline, breadcrumbs).
 
 ### Policy selection helper (`src/inline-surface.ts`)

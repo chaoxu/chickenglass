@@ -241,7 +241,7 @@ function checkInvariants(view: EditorView, stepIndex: number, op: EditOp): void 
 
   // Mode field is valid
   const mode = state.field(editorModeField);
-  if (mode !== "rich" && mode !== "source" && mode !== "read") {
+  if (mode !== "rich" && mode !== "source") {
     throw new Error(`Step ${stepIndex} (${op.type}): invalid mode "${mode}"`);
   }
 

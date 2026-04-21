@@ -58,7 +58,7 @@ Shared browser options:
 Capture / replay options:
   --fixture index.md      Open a deterministic fixture via the shared harness
   --file notes.md         Open a file through window.__app.openFile()
-  --mode rich|source|read Switch mode after opening
+  --mode cm6-rich|lexical|source Switch mode after opening
   --line 42               Place the cursor at a specific line
   --col 0                 Column offset for --line (0-based)
   --anchor-text "needle"  Jump to the first matching text anchor
@@ -79,7 +79,7 @@ Step JSON format:
   {"type":"click","editorX":120,"editorY":80,"button":0}
   {"type":"setCursor","line":42,"col":0}
   {"type":"jumpToText","text":"Lemma","occurrence":1,"offset":0}
-  {"type":"switchMode","mode":"rich"}
+  {"type":"switchMode","mode":"cm6-rich"}
   {"type":"activateStructure"}
   {"type":"moveVertically","direction":"down","count":2}
   {"type":"sleep","ms":250}
@@ -214,8 +214,8 @@ function normalizeStep(step, index) {
         offset: Number.isInteger(step.offset) ? step.offset : 0,
       };
     case "switchMode":
-      if (!["rich", "source", "read"].includes(step.mode)) {
-        throw new Error(`Invalid switchMode step at index ${index}: expected rich/source/read.`);
+      if (!["rich", "cm6-rich", "lexical", "source"].includes(step.mode)) {
+        throw new Error(`Invalid switchMode step at index ${index}: expected cm6-rich/lexical/source.`);
       }
       return {
         type: "switchMode",

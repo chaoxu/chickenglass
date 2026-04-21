@@ -3,7 +3,6 @@ import {
   createEditor,
   editorModeField,
   markdownEditorModes,
-  normalizeEditorMode,
   setEditorMode,
 } from "./editor";
 import { frontmatterField } from "./frontmatter-state";
@@ -56,9 +55,6 @@ describe("editorModeField", () => {
     setEditorMode(view, "source");
     expect(view.state.field(editorModeField)).toBe("source");
 
-    setEditorMode(view, "read");
-    expect(view.state.field(editorModeField)).toBe("read");
-
     setEditorMode(view, "rich");
     expect(view.state.field(editorModeField)).toBe("rich");
 
@@ -104,8 +100,8 @@ describe("extension bundle composition", () => {
     const parent = document.createElement("div");
     const view = createEditor({ parent, doc: "# Hello\n" });
 
-    // Cycle through all three modes — proves compartments are wired correctly
-    for (const mode of ["source", "read", "rich"] as const) {
+    // Cycle through both CM6 modes — proves compartments are wired correctly
+    for (const mode of ["source", "rich"] as const) {
       setEditorMode(view, mode);
       expect(view.state.field(editorModeField)).toBe(mode);
     }
@@ -136,14 +132,8 @@ describe("extension bundle composition", () => {
   });
 });
 
-describe("normalizeEditorMode", () => {
-  it("disables read mode for markdown files", () => {
-    expect(normalizeEditorMode("read", true)).toBe("rich");
+describe("markdownEditorModes", () => {
+  it("exposes the CM6 modes", () => {
     expect(markdownEditorModes).toEqual(["rich", "source"]);
-  });
-
-  it("forces non-markdown files into source mode", () => {
-    expect(normalizeEditorMode("rich", false)).toBe("source");
-    expect(normalizeEditorMode("read", false)).toBe("source");
   });
 });

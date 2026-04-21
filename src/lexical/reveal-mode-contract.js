@@ -4,8 +4,6 @@ export const REVEAL_MODE = {
   SOURCE: "source",
 };
 
-export const LEGACY_EDITOR_MODE_READ = "read";
-
 export const revealModes = [
   REVEAL_MODE.LEXICAL,
   REVEAL_MODE.PARAGRAPH,
@@ -16,10 +14,6 @@ export const REVEAL_MODE_LABELS = {
   [REVEAL_MODE.LEXICAL]: "Cursor reveal",
   [REVEAL_MODE.PARAGRAPH]: "Paragraph reveal",
   [REVEAL_MODE.SOURCE]: "Complete reveal",
-};
-
-export const LEGACY_EDITOR_MODE_ALIASES = {
-  [LEGACY_EDITOR_MODE_READ]: REVEAL_MODE.LEXICAL,
 };
 
 export const REVEAL_PRESENTATION = {
@@ -41,7 +35,5 @@ const REVEAL_MODE_SET = new Set(revealModes);
 
 export function normalizeRevealModeInput(mode) {
   const normalized = String(mode).toLowerCase();
-  return LEGACY_EDITOR_MODE_ALIASES[normalized] ?? (
-    REVEAL_MODE_SET.has(normalized) ? normalized : null
-  );
+  return REVEAL_MODE_SET.has(normalized) ? normalized : null;
 }

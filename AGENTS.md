@@ -1,9 +1,8 @@
 # Coflats
 
-Semantic document editors for mathematical writing. The repo builds two products:
-Coflat with the CM6 markdown-native editor, and Coflat 2 with the Lexical
-WYSIWYG editor. Both products share the same app shell, document format, file
-IO, semantic services, and Tauri backend.
+Semantic document editor for mathematical writing. The app can switch at
+runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode. The
+document format, file IO, semantic services, and Tauri backend are shared.
 
 ## Shared file
 
@@ -19,7 +18,7 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 ## Stack
 
 - **Language**: TypeScript (strict mode) + Rust (Tauri backend)
-- **Editors**: CodeMirror 6 for Coflat; Lexical for Coflat 2
+- **Editors**: CodeMirror 6 for rich/source markdown editing; Lexical for WYSIWYG editing
 - **Parser**: Lezer (`@lezer/markdown` with custom extensions)
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (smaller bundles, native webview)
@@ -49,24 +48,21 @@ scripts/         # browser harness, CDP helpers, blog import tools
 
 ```bash
 pnpm install         # install dependencies
-pnpm dev             # start Coflat dev server (Vite)
-pnpm dev:coflat2     # start Coflat 2 dev server (Lexical WYSIWYG product)
+pnpm dev             # start Coflats dev server (Vite)
 pnpm dev:show        # start stable no-HMR dev server on localhost:5173 for demos / shared review
 pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
 pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
-pnpm build           # production build (frontend only)
-pnpm build:coflats   # build both Coflat and Coflat 2 frontend products
+pnpm build           # production build (frontend + editor package)
+pnpm build:coflats   # alias for pnpm build
 pnpm lint            # Biome lint
 pnpm lint:fix        # Biome lint autofix
 pnpm test            # run tests (Vitest)
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
 pnpm typecheck       # typecheck only
-pnpm tauri:dev       # launch Coflat Tauri desktop app
-pnpm tauri:dev:coflat2 # launch Coflat 2 Tauri desktop app
-pnpm tauri:build     # build Coflat production desktop binary
-pnpm tauri:build:coflat2 # build Coflat 2 production desktop binary
+pnpm tauri:dev       # launch Coflats Tauri desktop app
+pnpm tauri:build     # build Coflats production desktop binary
 pnpm test:browser    # stable managed-browser regression harness
 pnpm perf:capture:heavy -- --scenario typing-rich-burst
                      # heavy-doc perf lane with longer open/debug budgets
@@ -126,9 +122,9 @@ Workflow at `.gitea/workflows/ci.yml`. Runs on push/PR to `main`.
 
 Debug globals are exposed on `window` for console and Playwright testing:
 
-Prefer the product-neutral `__editor` bridge when a helper can work in both
-Coflat and Coflat 2. Use `__cmView` / `__cmDebug` only for Coflat's CM6-specific
-rendering, parser, geometry, and scroll investigations.
+Prefer the surface-neutral `__editor` bridge when a helper can work in both
+CM6 and Lexical. Use `__cmView` / `__cmDebug` only for CM6-specific rendering,
+parser, geometry, and scroll investigations.
 
 ```
 __cmView                     — CM6 EditorView (dispatch, state, focus)
@@ -149,7 +145,7 @@ __cmDebug.clearMotionGuards() — clear recorded vertical-motion guard events
 __cmDebug.moveVertically("up") — rich-mode vertical move with reverse-scroll guard
 __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
 __app.openFile("posts/x.md") — open any file by path (app's real function)
-__app.setMode("source")      — switch editor mode (rich/source/read)
+__app.setMode("lexical")     — switch editor mode (cm6-rich/lexical/source)
 __app.saveFile()             — save current file
 __app.getProjectRoot()       — current project root path (or null)
 __app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
@@ -191,14 +187,14 @@ When asked to start the preview server, prefer `pnpm build && pnpm preview`. The
 Prefer the managed Playwright harness for automated verification. The manual CDP/app-mode lane is still useful for visual debugging, but it is not the default regression path anymore.
 
 Managed harness:
-1. Start `pnpm dev` for Coflat, or `pnpm dev:coflat2` for Coflat 2.
-2. Run scripts like `pnpm test:browser`, `pnpm test:browser:coflat2`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
+1. Start `pnpm dev`.
+2. Run scripts like `pnpm test:browser`, `pnpm test:browser:lexical`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
 
 Manual CDP lane:
-1. Start `pnpm dev` or `pnpm dev:coflat2`, then `pnpm chrome` (CDP on port 9322).
+1. Start `pnpm dev`, then `pnpm chrome` (CDP on port 9322).
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
-3. Use `page.evaluate()` + `__editor`/`__app` for product-neutral actions. Use `__cmView`/`__cmDebug` only when investigating Coflat's CM6 surface. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
+3. Use `page.evaluate()` + `__editor`/`__app` for surface-neutral actions. Use `__cmView`/`__cmDebug` only when investigating the CM6 surface. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
 4. Screenshots: use the `screenshot()` helper from `scripts/test-helpers.mjs`, or `node scripts/screenshot.mjs [file] --output path.png`. **Do not call `page.screenshot()` directly** — headed Chrome CDP can hang there.
 5. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 

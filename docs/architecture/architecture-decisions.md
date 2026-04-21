@@ -2,10 +2,10 @@
 
 ## Core editing
 
-- **Pandoc-free editing loop**: Pandoc is only for export. Coflat edits markdown through Lezer + CM6 + KaTeX directly. Coflat 2 edits a Lexical document model and serializes Pandoc-flavored markdown at the boundary.
-- **Editor engines are product-selected**: Coflat and Coflat 2 share the app shell, file IO, semantics, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 or Lexical editor surfaces, not in duplicated app flows.
-- **Read mode is hidden and deferred**: Read mode is currently disabled in the UI. Do not implement, fix, or test read-mode features until rich mode is complete for the active product. Focus rendering work on the product's rich mode.
-- **Read mode = HTML export**: `markdown-to-html.ts` is a standalone Lezer tree walker with no CM6 dependency. Keep it CM6-free -- pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
+- **Pandoc-free editing loop**: Pandoc is only for export. CM6 edits markdown through Lezer + KaTeX directly. Lexical edits a document model and serializes Pandoc-flavored markdown at the boundary.
+- **Editor surfaces are runtime-selected**: Coflats has one app shell, file IO layer, semantics pipeline, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 or Lexical editor surfaces, not in duplicated app flows.
+- **No in-app read mode**: The app exposes CM6 rich, Lexical WYSIWYG, and source modes. Do not implement, fix, or test a separate read-mode surface.
+- **HTML export is separate from editing modes**: `markdown-to-html.ts` is a standalone Lezer tree walker with no CM6 dependency. Keep it CM6-free -- pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
 - **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem."
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
 
@@ -14,7 +14,7 @@
 - **FileSystem abstraction**: `MemoryFileSystem` (demo/dev) and `TauriFileSystem` (desktop). Runtime detection via `window.__TAURI_INTERNALS__` (primary) or `globalThis.isTauri` (fallback) — see `src/lib/tauri.ts`.
 - **Shared app modes**: Browser dev mode loads demo content. Tauri app starts with demo content and lets the user open real files or folders.
 - **Document configuration has neutral owners**: Frontmatter/project config parsing must stay consumable by both editor engines. CM6 may cache derived values in StateFields; shared semantics should not require a CM6 view.
-- **CM6 widgets stay in the CM6 layer**: `RenderWidget` and decoration-specific behavior are implementation details of Coflat's editor engine.
+- **CM6 widgets stay in the CM6 layer**: `RenderWidget` and decoration-specific behavior are implementation details of the CM6 editor surface.
 
 ## Design philosophy
 

@@ -54,7 +54,7 @@ function createHarness(
     showLineNumbers: false,
     wordWrap: true,
     spellCheck: false,
-    editorMode: "rich",
+    editorMode: "cm6-rich",
     theme: "system",
     defaultExportFormat: "pdf",
     enabledPlugins: {},
@@ -276,6 +276,6 @@ describe("useAppEditorShell", () => {
     });
 
     expect(ref.result.currentPath).toBe("b.md");
-    expect(ref.result.editorMode).toBe("rich");
+    expect(ref.result.editorMode).toBe("cm6-rich");
   });
 });

@@ -1,7 +1,7 @@
 /**
  * Regression test: app search follows editor mode and preserves it on navigation.
  *
- * Rich mode should search semantic index entries with a type filter, while
+ * CM6 rich mode should search semantic index entries with a type filter, while
  * source mode should search raw file text and keep the destination file in
  * source mode after a cross-file result is opened.
  */
@@ -45,7 +45,7 @@ async function setMode(page, mode) {
 
 export async function run(page) {
   await openFixtureDocument(page, "cogirth/search-mode-awareness.md", { project: "full-project" });
-  await setMode(page, "rich");
+  await setMode(page, "cm6-rich");
 
   await openAppSearch(page);
 

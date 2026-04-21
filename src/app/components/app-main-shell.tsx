@@ -7,7 +7,7 @@ import { useAppEditorController } from "../contexts/app-editor-context";
 import { useFileSystem } from "../contexts/file-system-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
-import { activeCoflatProduct } from "../../product";
+import { isLexicalEditorMode } from "../../editor-display-mode";
 
 interface AppMainShellProps {
   sidebarLayout: Pick<
@@ -29,7 +29,8 @@ export function AppMainShell({
   const currentPath = editor.currentPath;
   const trackOutline = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "outline";
   const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
-  const useLexicalEditor = activeCoflatProduct.editorEngine === "lexical-wysiwyg";
+  const useLexicalEditor = isLexicalEditorMode(editor.editorMode);
+  const cm6EditorMode = editor.editorMode === "source" ? "source" : "rich";
 
   return (
     <SidebarInset>
@@ -51,8 +52,8 @@ export function AppMainShell({
             onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
             onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
             onLexicalEditorReady={editor.handleLexicalEditorReady}
+            onSurfaceReady={editor.handleLexicalSurfaceReady}
             editorMode={editor.editorMode}
-            activeDocumentSignal={editor.activeDocumentSignal}
           />
         ) : currentPath ? (
           <EditorPane
@@ -72,8 +73,7 @@ export function AppMainShell({
             onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
             onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
             onDocumentReady={editor.handleEditorDocumentReady}
-            editorMode={editor.editorMode}
-            activeDocumentSignal={editor.activeDocumentSignal}
+            editorMode={cm6EditorMode}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">

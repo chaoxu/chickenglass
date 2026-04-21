@@ -8,8 +8,14 @@ import {
   tabSizeExtension,
   defaultEditorPlugins,
   EditorPluginManager,
+  type EditorMode as Cm6EditorMode,
 } from "../../editor";
-import { normalizeEditorMode, type EditorMode } from "../../editor-display-mode";
+import {
+  defaultEditorMode,
+  isLexicalEditorMode,
+  normalizeEditorMode,
+  type EditorMode,
+} from "../../editor-display-mode";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
 import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";
@@ -23,13 +29,16 @@ import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import type { ActiveDocumentSignal } from "../active-document-signal";
-import { activeCoflatProduct } from "../../product";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 interface PendingModeOverride {
   path: string;
   mode: EditorMode;
   requestId: number;
+}
+
+function toCm6EditorMode(mode: EditorMode): Cm6EditorMode {
+  return mode === "source" ? "source" : "rich";
 }
 
 /** Dependencies injected into the shell hook from the top-level app component. */
@@ -100,6 +109,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
   /** Called by the Lexical editor surface when its imperative handle is available. */
   handleLexicalEditorReady: (handle: MarkdownEditorHandle | null) => void;
+  /** Called when the Lexical surface mounts, clearing stale CM6 state. */
+  handleLexicalSurfaceReady: () => void;
   /** Return the current Lexical editor handle without forcing app-shell rerenders. */
   getLexicalEditorHandle: () => MarkdownEditorHandle | null;
 
@@ -144,7 +155,7 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
    * Explicitly set the display mode for the active tab.
    * Stores a per-tab override so switching tabs restores the per-file mode.
    */
-  handleModeChange: (mode: EditorMode) => void;
+  handleModeChange: (mode: EditorMode | string) => void;
   /** True when the active file has a `.md` extension (determines default mode). */
   isMarkdownFile: boolean;
 
@@ -281,9 +292,24 @@ export function useAppEditorShell({
     }
   }, [syncView]);
 
+  const handleLexicalSurfaceReady = useCallback(() => {
+    setEditorState(null);
+    editorViewRef.current = null;
+    syncView(null);
+    setHeadings([]);
+    setDiagnostics([]);
+  }, [syncView]);
+
   const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
     lexicalEditorHandleRef.current = handle;
-  }, []);
+    if (!handle) return;
+    const pending = pendingLexicalNavigationRef.current;
+    if (!pending || pending.path !== currentPath) return;
+    pendingLexicalNavigationRef.current = null;
+    handle.setSelection(pending.pos, pending.pos);
+    handle.focus();
+    pending.onComplete?.();
+  }, [currentPath]);
   const getLexicalEditorHandle = useCallback(() => lexicalEditorHandleRef.current, []);
 
   const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
@@ -351,17 +377,19 @@ export function useAppEditorShell({
     if (pendingModeOverride && pendingModeOverride.path === currentPath) {
       return normalizeEditorMode(pendingModeOverride.mode, isMarkdownFile);
     }
-    return normalizeEditorMode("rich", isMarkdownFile);
+    return normalizeEditorMode(defaultEditorMode, isMarkdownFile);
   }, [modeOverrides, pendingModeOverride, currentPath, isMarkdownFile]);
 
   // Sync the computed mode into the CM6 view.
+  const cm6EditorMode = toCm6EditorMode(editorMode);
   useEffect(() => {
     const view = editorState?.view;
     if (!view) return;
-    setEditorMode(view, editorMode);
-  }, [editorState?.view, editorMode]);
+    if (isLexicalEditorMode(editorMode)) return;
+    setEditorMode(view, cm6EditorMode);
+  }, [editorState?.view, editorMode, cm6EditorMode]);
 
-  const handleModeChange = useCallback((mode: EditorMode) => {
+  const handleModeChange = useCallback((mode: EditorMode | string) => {
     const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
     const applyModeOverride = () => {
@@ -376,7 +404,9 @@ export function useAppEditorShell({
       );
       const view = editorState?.view;
       if (!view) return;
-      setEditorMode(view, normalizedMode);
+      if (!isLexicalEditorMode(normalizedMode)) {
+        setEditorMode(view, toCm6EditorMode(normalizedMode));
+      }
     };
     if (flushResult.shouldDeferModeSwitch) {
       window.setTimeout(applyModeOverride, 0);
@@ -437,7 +467,7 @@ export function useAppEditorShell({
       mode: normalizedMode,
       requestId,
     });
-    if (activeCoflatProduct.editorEngine === "lexical-wysiwyg") {
+    if (isLexicalEditorMode(normalizedMode)) {
       pendingLexicalNavigationRef.current = {
         onComplete,
         path: target.file,
@@ -466,7 +496,7 @@ export function useAppEditorShell({
         [target.file]: normalizedMode,
       }));
     });
-  }, [currentPath, handleSearchResultNavigation, isMarkdownFile, openFile]);
+  }, [handleSearchResultNavigation, openFile]);
 
   const hasDirtyDocument = currentDocument?.dirty ?? false;
 
@@ -505,6 +535,7 @@ export function useAppEditorShell({
     handleDirtyChange: session.markCurrentDocumentDirty,
     handleEditorDocumentReady,
     handleLexicalEditorReady,
+    handleLexicalSurfaceReady,
     getLexicalEditorHandle,
     handleOutlineSelect,
     handleGotoLine,

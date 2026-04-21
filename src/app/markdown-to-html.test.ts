@@ -349,7 +349,7 @@ describe("markdownToHtml", () => {
     expect(html).not.toContain('class="bib-entry"');
   });
 
-  it("uses CSL formatting for read-mode citations and bibliography when provided", () => {
+  it("uses CSL formatting for exported citations and bibliography when provided", () => {
     const entry: CslJsonItem = {
       id: "karger2000",
       type: "article-journal",

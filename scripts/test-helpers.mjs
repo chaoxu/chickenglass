@@ -47,9 +47,10 @@ export const PUBLIC_SHOWCASE_FIXTURE = {
   ],
 };
 const MODE_LABELS = {
-  rich: "Rich",
+  "cm6-rich": "CM6 Rich",
+  lexical: "Lexical",
+  rich: "CM6 Rich",
   source: "Source",
-  read: "Read",
 };
 const TEXT_FIXTURE_EXTENSIONS = new Set([
   ".bib",
@@ -479,7 +480,7 @@ export function resolveFixtureDocumentWithFallback(
  *   content?: string,
  * }} fixture
  * @param {{
- *   mode?: "rich" | "source" | "read",
+ *   mode?: "rich" | "cm6-rich" | "lexical" | "source",
  *   discardCurrent?: boolean,
  *   project?: "single-file" | "full-project",
  *   timeoutMs?: number,
@@ -737,10 +738,16 @@ export async function jumpToTextAnchor(
  * Cycle the editor mode button until the requested mode is active.
  *
  * @param {import("playwright").Page} page
- * @param {"rich" | "source" | "read" | "Rich" | "Source" | "Read"} mode
+ * @param {"rich" | "cm6-rich" | "lexical" | "source" | "CM6 Rich" | "Lexical" | "Source"} mode
  */
 export async function switchToMode(page, mode) {
-  const normalizedMode = mode === "lexical" ? "rich" : mode;
+  const normalizedMode = mode === "Rich" || mode === "CM6 Rich" || mode === "rich"
+    ? "cm6-rich"
+    : mode === "Lexical"
+      ? "lexical"
+      : mode === "Source"
+        ? "source"
+        : mode;
   const targetLabel = MODE_LABELS[normalizedMode] ?? normalizedMode;
 
   const changedViaApp = await page.evaluate(async (nextMode) => {
@@ -1545,7 +1552,7 @@ async function collectEditorHealth(page, options = {}) {
 
   return page.evaluate((limits) => {
     const issues = [];
-    const modeLabels = new Set(["rich", "source", "read"]);
+    const modeLabels = new Set(["cm6-rich", "lexical", "source"]);
 
     const isVisible = (el) => {
       if (!(el instanceof HTMLElement)) return false;
@@ -1679,8 +1686,8 @@ export function createArgParser(argv = process.argv.slice(2)) {
 }
 
 /**
- * Wait for the debug bridge globals. Coflat exposes CM6 globals; Coflat 2
- * exposes the product-neutral `__editor` bridge plus the Lexical root.
+ * Wait for the debug bridge globals. CM6 mode exposes CM6 globals; Lexical
+ * mode exposes the product-neutral `__editor` bridge plus the Lexical root.
  *
  * @param {import("playwright").Page} page
  * @param {object} [options]
@@ -1758,7 +1765,7 @@ export async function resetEditorState(page) {
     throw new Error("Failed to discard the current document during reset");
   }
   await page.evaluate(() => {
-    window.__app.setMode("rich");
+    window.__app.setMode("cm6-rich");
   });
   await openRegressionDocument(page);
   await page.waitForFunction(

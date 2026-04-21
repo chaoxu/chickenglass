@@ -45,7 +45,7 @@ function selectionSignature(page) {
 
 export async function run(page) {
   await openRegressionDocument(page, "index.md");
-  await switchToMode(page, "rich");
+  await switchToMode(page, "cm6-rich");
   await page.evaluate(() => {
     window.__cmView.focus();
     window.__cmDebug.clearStructure();

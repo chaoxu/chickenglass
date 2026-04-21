@@ -11,7 +11,7 @@
 
 import type { EditorView } from "@codemirror/view";
 import type { DebugHelpers, DebugRenderState } from "../editor";
-import type { EditorMode } from "../editor";
+import type { EditorMode } from "../editor-display-mode";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
 import type { ScrollGuardEvent } from "../app/hooks/use-editor-scroll";
 import type {
@@ -58,7 +58,7 @@ declare global {
       saveFile: () => Promise<void>;
       closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
       setSearchOpen: (open: boolean) => void;
-      setMode: (mode: EditorMode) => void;
+      setMode: (mode: EditorMode | string) => void;
       getMode: () => EditorMode;
       getProjectRoot: () => string | null;
       getCurrentDocument: () => DebugDocumentState | null;
@@ -66,8 +66,8 @@ declare global {
     };
 
     /**
-     * Product-neutral editor debug bridge. CM6-backed Coflat delegates to the
-     * active `EditorView`; Lexical-backed Coflat 2 delegates to the active
+     * Product-neutral editor debug bridge. CM6 mode delegates to the
+     * active `EditorView`; Lexical mode delegates to the active
      * `MarkdownEditorHandle`.
      */
     __editor?: {

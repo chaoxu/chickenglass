@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, lazy, Suspense, useSyncExternalStore, useCallback, useEffect } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { EditorView } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -18,20 +18,8 @@ import {
 import { blockCounterField } from "../../state/block-counter";
 import { mathMacrosField } from "../../state/math-macros";
 import { bibDataField } from "../../citations/citation-render";
-import { frontmatterField } from "../../editor";
-import type { EditorMode } from "../../editor-display-mode";
+import type { EditorMode } from "../../editor";
 import { serializeMacros } from "../../render/render-core";
-import {
-  EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
-  unsubscribeNoop,
-  type ActiveDocumentSignal,
-} from "../active-document-signal";
-import type { EditorSurfaceCommonProps } from "../editor-engines/types";
-
-/** Lazy-loaded read-mode view — kept out of the startup bundle (read mode is deferred). */
-const ReadModeView = lazy(() =>
-  import("./read-mode-view").then((m) => ({ default: m.ReadModeView })),
-);
 
 const EMPTY_MACROS: Record<string, string> = {};
 const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
@@ -41,9 +29,7 @@ const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   globalLayoutChanged: false,
   layoutChangeFrom: -1,
 };
-export interface EditorPaneProps
-  extends UseEditorOptions,
-    Pick<EditorSurfaceCommonProps<EditorMode>, "activeDocumentSignal" | "editorMode"> {
+export interface EditorPaneProps extends UseEditorOptions {
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;
@@ -52,10 +38,8 @@ export interface EditorPaneProps
   onHeadingsChange?: (headings: HeadingEntry[]) => void;
   /** Called when the document diagnostics change. */
   onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
-  /** Current editor mode — "read" shows the HTML renderer instead of CM6. */
+  /** Current CM6 mode. */
   editorMode?: EditorMode;
-  /** External signal used to refresh read mode without rerendering the shell. */
-  activeDocumentSignal?: ActiveDocumentSignal;
 }
 
 export function EditorPane({
@@ -65,11 +49,9 @@ export function EditorPane({
   onSidenotesCollapsedChange,
   onHeadingsChange,
   onDiagnosticsChange,
-  editorMode,
-  activeDocumentSignal,
+  editorMode: _editorMode,
   ...editorOptions
 }: EditorPaneProps) {
-  const isReadMode = editorMode === "read";
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [sidenoteInvalidation, setSidenoteInvalidation] = useState<SidenoteInvalidation>(
     EMPTY_SIDENOTE_INVALIDATION,
@@ -77,7 +59,6 @@ export function EditorPane({
   const onHeadingsChangeRef = useLatest(onHeadingsChange);
   const onDiagnosticsChangeRef = useLatest(onDiagnosticsChange);
   const sidenotesCollapsedRef = useLatest(sidenotesCollapsed);
-  const isReadModeRef = useLatest(isReadMode);
 
   // CM6 extension that detects heading-slice revision changes and
   // pushes fresh headings into React.  Created once (stable reference)
@@ -119,7 +100,7 @@ export function EditorPane({
 
   const sidenoteTrackingExtension = useMemo(() => {
     return EditorView.updateListener.of((update) => {
-      if (isReadModeRef.current || sidenotesCollapsedRef.current) return;
+      if (sidenotesCollapsedRef.current) return;
 
       const beforeAnalysis = update.startState.field(documentSemanticsField, false);
       const afterAnalysis = update.state.field(documentSemanticsField, false);
@@ -189,67 +170,20 @@ export function EditorPane({
 
   // Extract headings for breadcrumbs and outline
   const headings = view ? extractHeadings(view.state) : [];
-  const subscribeToActiveDocument = useCallback((onStoreChange: () => void) => {
-    if (!isReadMode || !activeDocumentSignal) {
-      return unsubscribeNoop;
-    }
-    return activeDocumentSignal.subscribe(onStoreChange);
-  }, [activeDocumentSignal, isReadMode]);
-  const getActiveDocumentSnapshot = useCallback(() => {
-    if (!isReadMode || !activeDocumentSignal) {
-      return EMPTY_ACTIVE_DOCUMENT_SNAPSHOT;
-    }
-    return activeDocumentSignal.getSnapshot();
-  }, [activeDocumentSignal, isReadMode]);
-  const activeDocument = useSyncExternalStore(
-    subscribeToActiveDocument,
-    getActiveDocumentSnapshot,
-    getActiveDocumentSnapshot,
-  );
-
-  // Get the live document content, frontmatter config, and bibliography for ReadModeView
-  const readModeContent = useMemo(() => {
-    if (!isReadMode) {
-      return editorOptions.doc;
-    }
-    // Only read mode subscribes to active-document edits so rich/source typing
-    // does not pull the editor pane through a React rerender.
-    return view ? view.state.doc.toString() : editorOptions.doc;
-  }, [activeDocument.revision, editorOptions.doc, isReadMode, view]);
-  const fmState = view ? view.state.field(frontmatterField, false) : undefined;
-  const frontmatterConfig = fmState?.config ?? {};
-  const bibData = view ? view.state.field(bibDataField, false) : undefined;
 
   return (
     <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
-      {!isReadMode && (
-        <Breadcrumbs
-          headings={headings}
-          onSelect={(from) => {
-            if (view) {
-              view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
-              view.focus();
-            }
-          }}
-        />
-      )}
-      {/* CM6 editor — hidden (not unmounted) in read mode to preserve state */}
-      <div ref={containerRef} className="h-full" style={isReadMode ? { display: "none" } : undefined} />
-      {/* Read mode HTML renderer (lazy-loaded — read mode is deferred) */}
-      {isReadMode && (
-        <Suspense fallback={null}>
-          <ReadModeView
-            content={readModeContent}
-            frontmatterConfig={frontmatterConfig}
-            bibliography={bibData?.store}
-            cslProcessor={bibData?.cslProcessor}
-            fs={editorOptions.fs}
-            docPath={editorOptions.docPath}
-          />
-        </Suspense>
-      )}
-      {/* Portal target — SidenoteMargin renders into the CM6 scroller via DOM portal */}
-      {!isReadMode && !sidenotesCollapsed && (
+      <Breadcrumbs
+        headings={headings}
+        onSelect={(from) => {
+          if (view) {
+            view.dispatch({ selection: { anchor: from }, scrollIntoView: true });
+            view.focus();
+          }
+        }}
+      />
+      <div ref={containerRef} className="h-full" />
+      {!sidenotesCollapsed && (
         <SidenoteMargin view={view} invalidation={sidenoteInvalidation} />
       )}
     </div>

@@ -24,6 +24,7 @@ import { useDevSettings } from "../../state/dev-settings";
 import { clearInteractionLog, getInteractionLog } from "../../lexical/interaction-trace";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { applyMarkdownFormatAction } from "../editor-format-actions";
+import { planMarkdownFormat } from "../format-markdown";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -74,7 +75,7 @@ interface AppDebugDeps {
   getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   setSearchOpen: (open: boolean) => void;
   requestNativeClose: () => Promise<void>;
-  setMode: (mode: EditorMode) => void;
+  setMode: (mode: EditorMode | string) => void;
   getMode: () => EditorMode;
   projectRoot: string | null;
   currentDocument: DebugDocumentState | null;
@@ -193,11 +194,36 @@ export function useAppDebug({
     });
   };
 
-  const formatEditorSelection = (detail: FormatEventDetail): boolean =>
-    applyMarkdownFormatAction({
+  const formatEditorSelection = (detail: FormatEventDetail): boolean => {
+    const handled = applyMarkdownFormatAction({
       editorHandle: getEditorHandle(),
       getCurrentDocText,
     }, detail);
+    if (handled) return true;
+    const view = getCmView();
+    if (!view) return false;
+    const selection = view.state.selection.main;
+    const plan = planMarkdownFormat(
+      view.state.doc.toString(),
+      {
+        anchor: selection.anchor,
+        focus: selection.head,
+        from: selection.from,
+        to: selection.to,
+      },
+      detail,
+    );
+    view.dispatch({
+      changes: [...plan.changes],
+      selection: {
+        anchor: plan.selection.anchor,
+        head: plan.selection.focus,
+      },
+      scrollIntoView: true,
+    });
+    view.focus();
+    return true;
+  };
 
   // Stop the FPS rAF loop only on true unmount / HMR — not on every effect
   // refresh caused by dependency changes (openProject, currentDocument, etc.).

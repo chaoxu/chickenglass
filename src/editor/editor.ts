@@ -51,8 +51,6 @@ import { richClipboardOutputFilter } from "./rich-clipboard";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
 import { coflatDarkTheme, coflatTheme } from "./theme";
-import type { EditorMode } from "../editor-display-mode";
-import { markdownEditorModes, normalizeEditorMode } from "../editor-display-mode";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -60,8 +58,9 @@ const fallbackDocument = "# Untitled\n";
 const debugLaneCompartment = new Compartment();
 const defaultDebugLaneExtensions: Extension[] = [];
 
-export { markdownEditorModes, normalizeEditorMode };
-export type { EditorMode };
+export type EditorMode = "rich" | "source";
+
+export const markdownEditorModes: readonly EditorMode[] = ["rich", "source"];
 
 /** StateEffect used to update the tracked editor mode. */
 export const setEditorModeEffect = StateEffect.define<EditorMode>();
@@ -247,11 +246,10 @@ export function createEditor(config: EditorConfig): EditorView {
 }
 
 /**
- * Switch the editor between rich, source, and read modes.
+ * Switch the CM6 editor between rich and source modes.
  *
  * - **rich**: Typora-style — decorations active, editable (default)
  * - **source**: plain markdown — no decorations, editable
- * - **read**: decorations active, read-only
  */
 export function setEditorMode(view: EditorView, mode: EditorMode): void {
   const effects: StateEffect<unknown>[] = [];
@@ -273,14 +271,6 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
         EditorView.editorAttributes.of({ class: "cf-source-mode" }),
       ));
       effects.push(syntaxHighlightCompartment.reconfigure(sourceSyntaxHighlightingExtension));
-      break;
-    case "read":
-      effects.push(renderCompartment.reconfigure(renderingExtensions));
-      effects.push(editableCompartment.reconfigure(EditorView.editable.of(false)));
-      effects.push(modeClassCompartment.reconfigure(
-        EditorView.editorAttributes.of({ class: "cf-read-mode" }),
-      ));
-      effects.push(syntaxHighlightCompartment.reconfigure([]));
       break;
   }
 

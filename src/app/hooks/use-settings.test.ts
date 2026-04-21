@@ -50,7 +50,7 @@ describe("useSettings", () => {
         showLineNumbers: false,
         wordWrap: true,
         spellCheck: false,
-        editorMode: "rich",
+        editorMode: "cm6-rich",
         theme: "system",
         defaultExportFormat: "pdf",
         enabledPlugins: { spellcheck: false },
@@ -70,7 +70,7 @@ describe("useSettings", () => {
       expect(settings.fontSize).toBe(20);
       expect(settings.tabSize).toBe(4);
       expect(settings.lineHeight).toBe(1.6);
-      expect(settings.editorMode).toBe("rich");
+      expect(settings.editorMode).toBe("cm6-rich");
     });
 
     it("migrates legacy spellCheck into enabledPlugins", () => {
@@ -153,7 +153,7 @@ describe("useSettings", () => {
       const stored = storedSettings();
       expect(stored?.tabSize).toBe(8);
       expect(stored?.lineHeight).toBe(1.6);
-      expect(stored?.editorMode).toBe("rich");
+      expect(stored?.editorMode).toBe("cm6-rich");
     });
 
     it("updates the in-memory state", () => {

@@ -11,6 +11,7 @@ import { useState, useCallback } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
+import { defaultEditorMode, normalizeEditorMode } from "../../editor-display-mode";
 
 const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 30000,
@@ -20,7 +21,7 @@ const DEFAULT_SETTINGS: Settings = {
   showLineNumbers: false,
   wordWrap: true,
   spellCheck: false,
-  editorMode: "rich",
+  editorMode: defaultEditorMode,
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},
@@ -63,6 +64,7 @@ function loadSettings(): Settings {
   if (!isValidTheme(loaded.theme)) {
     loaded.theme = "system";
   }
+  loaded.editorMode = normalizeEditorMode(loaded.editorMode, true);
 
   return loaded;
 }

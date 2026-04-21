@@ -8,8 +8,8 @@ import {
 
 describe("getAppSearchMode", () => {
   it("uses semantic search outside source mode", () => {
-    expect(getAppSearchMode("rich")).toBe("semantic");
-    expect(getAppSearchMode("read")).toBe("semantic");
+    expect(getAppSearchMode("cm6-rich")).toBe("semantic");
+    expect(getAppSearchMode("lexical")).toBe("semantic");
   });
 
   it("uses source search in source mode", () => {

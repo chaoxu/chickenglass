@@ -44,9 +44,9 @@ export interface StatusBarProps {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const MODE_LABELS: Record<EditorMode, string> = {
-  rich: "Rich",
+  "cm6-rich": "CM6 Rich",
+  lexical: "Lexical",
   source: "Source",
-  read: "Read",
 };
 
 // ── StatusBar ──────────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ const MODE_LABELS: Record<EditorMode, string> = {
  *
  * Left:   word count + character count (clickable — opens stats popover)
  * Center: cursor position Ln/Col
- * Right:  build info + mode indicator (mode is clickable to cycle Rich ↔ Source)
+ * Right:  build info + mode indicator (mode is clickable to cycle editor surfaces)
  */
 export function StatusBar({
   editorMode,
@@ -103,7 +103,9 @@ export function StatusBar({
 
   const cycleMode = useCallback(() => {
     const idx = markdownEditorModes.indexOf(editorMode);
-    const next = markdownEditorModes[(idx + 1) % markdownEditorModes.length];
+    const next = markdownEditorModes[
+      (Math.max(0, idx) + 1) % markdownEditorModes.length
+    ];
     onModeChange(next);
   }, [editorMode, onModeChange]);
 

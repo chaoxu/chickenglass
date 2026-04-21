@@ -554,7 +554,7 @@ This file exercises document-relative image resolution from a nested path.
 
 This document demonstrates the shared Coflats format for mathematical writing. The editor provides:
 
-- **Rich editing**: Coflat reveals markdown source on focus; Coflat 2 edits WYSIWYG and saves markdown
+- **Rich editing**: CM6 reveals markdown source on focus; Lexical edits WYSIWYG and saves markdown
 - **KaTeX math**: inline $x^2$ and display mode with equation labels
 - **Theorem environments**: fenced divs with automatic numbering
 - **Cross-references**: click-to-navigate between theorems, equations, and citations

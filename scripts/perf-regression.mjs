@@ -346,7 +346,7 @@ async function openCleanRichDocument(page, fixture, runtimeOptions) {
     page,
     fixture,
     {
-      mode: "rich",
+      mode: "cm6-rich",
       timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
       settleMs: runtimeOptions.postOpenSettleMs,
     },
@@ -429,7 +429,7 @@ export const scenarios = {
     defaultSettleMs: 400,
     run: async (page, runtimeOptions) => {
       await openFixtureDocument(page, "index.md", {
-        mode: "rich",
+        mode: "cm6-rich",
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
@@ -443,7 +443,7 @@ export const scenarios = {
         page,
         "posts/2020-07-11-yotta-savings-and-covering-designs.md",
         {
-          mode: "rich",
+          mode: "cm6-rich",
           timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
           settleMs: runtimeOptions.postOpenSettleMs,
         },
@@ -451,17 +451,17 @@ export const scenarios = {
     },
   },
   "mode-cycle-index": {
-    description: "Reload the app, open demo/index.md, then cycle Source/Read/Rich.",
+    description: "Reload the app, open demo/index.md, then cycle Source/Lexical/CM6 Rich.",
     defaultSettleMs: 500,
     run: async (page, runtimeOptions) => {
       await openFixtureDocument(page, "index.md", {
-        mode: "rich",
+        mode: "cm6-rich",
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
       await switchToMode(page, "source");
-      await switchToMode(page, "read");
-      await switchToMode(page, "rich");
+      await switchToMode(page, "lexical");
+      await switchToMode(page, "cm6-rich");
     },
   },
   "local-edit-index": {
@@ -469,7 +469,7 @@ export const scenarios = {
     defaultSettleMs: 300,
     run: async (page, runtimeOptions) => {
       await openFixtureDocument(page, "index.md", {
-        mode: "rich",
+        mode: "cm6-rich",
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
@@ -572,7 +572,7 @@ export const scenarios = {
     defaultSettleMs: 400,
     run: async (page, runtimeOptions) => {
       await openFixtureDocument(page, resolveScrollFixture(), {
-        mode: "rich",
+        mode: "cm6-rich",
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
@@ -586,7 +586,7 @@ export const scenarios = {
     defaultSettleMs: 400,
     run: async (page, runtimeOptions) => {
       await openFixtureDocument(page, resolveScrollFixture(), {
-        mode: "rich",
+        mode: "cm6-rich",
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });

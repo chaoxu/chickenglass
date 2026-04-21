@@ -42,8 +42,8 @@ const getCurrentDocText = vi.fn(() => "# Notes");
 const getLexicalEditorHandle = vi.fn(() => null);
 const setSearchOpen = vi.fn((_open: boolean) => {});
 const requestNativeClose = vi.fn(async () => {});
-const setMode = vi.fn((_mode: "rich" | "source" | "read") => {});
-const getMode = vi.fn(() => "rich" as const);
+const setMode = vi.fn((_mode: string) => {});
+const getMode = vi.fn(() => "cm6-rich" as const);
 
 const Harness: FC = () => {
   useAppDebug({
@@ -92,7 +92,7 @@ describe("useAppDebug", () => {
     requestNativeClose.mockClear();
     setMode.mockClear();
     getMode.mockClear();
-    getMode.mockReturnValue("rich");
+    getMode.mockReturnValue("cm6-rich");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -131,7 +131,7 @@ describe("useAppDebug", () => {
       dirty: true,
       startupComplete: true,
       restoredProjectRoot: "/tmp/saved-project",
-      mode: "rich",
+      mode: "cm6-rich",
       backendProjectRoot: "/tmp/backend-project",
       backendProjectGeneration: 4,
       watcherRoot: "/tmp/backend-project",

@@ -55,7 +55,7 @@ vi.mock("./use-settings", () => ({
       showLineNumbers: false,
       wordWrap: true,
       spellCheck: false,
-      editorMode: "rich",
+      editorMode: "cm6-rich",
       theme: "system",
       defaultExportFormat: "pdf",
       enabledPlugins: {},

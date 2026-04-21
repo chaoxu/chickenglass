@@ -21,8 +21,9 @@ function cycleEditorMode(view: EditorView): boolean {
   // Read the current mode from the CM6 StateField so the cycle stays in sync
   // with React state (e.g., when the app switches modes programmatically).
   const currentMode = view.state.field(editorModeField, false) ?? "rich";
+  const currentIndex = markdownEditorModes.indexOf(currentMode);
   const nextMode = markdownEditorModes[
-    (markdownEditorModes.indexOf(currentMode) + 1) % markdownEditorModes.length
+    (Math.max(0, currentIndex) + 1) % markdownEditorModes.length
   ];
   setEditorMode(view, nextMode);
 

@@ -6,8 +6,6 @@ export const REVEAL_MODE: {
 
 export type RevealMode = (typeof REVEAL_MODE)[keyof typeof REVEAL_MODE];
 
-export const LEGACY_EDITOR_MODE_READ: "read";
-
 export const revealModes: readonly [
   typeof REVEAL_MODE.LEXICAL,
   typeof REVEAL_MODE.PARAGRAPH,
@@ -15,8 +13,6 @@ export const revealModes: readonly [
 ];
 
 export const REVEAL_MODE_LABELS: Readonly<Record<RevealMode, string>>;
-
-export const LEGACY_EDITOR_MODE_ALIASES: Readonly<Record<typeof LEGACY_EDITOR_MODE_READ, RevealMode>>;
 
 export const REVEAL_PRESENTATION: {
   readonly INLINE: "inline";

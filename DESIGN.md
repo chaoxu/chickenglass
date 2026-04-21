@@ -2,15 +2,15 @@
 
 ## What is it
 
-A shared desktop/browser codebase for semantic document editors, optimized for
-mathematical writing. It builds Coflat with the CM6 markdown-native editor and
-Coflat 2 with the Lexical WYSIWYG editor. Both products share the same document
-format, app shell, file IO, semantic services, and Tauri backend.
+A desktop/browser semantic document editor optimized for mathematical writing.
+The app switches at runtime between CM6 rich mode, Lexical WYSIWYG mode, and
+CM6 source mode. All modes share the same document format, app shell, file IO,
+semantic services, and Tauri backend.
 
 ## Core philosophy
 
 - Semantics first, presentation derived.
-- Coflat edits Pandoc-flavored markdown directly; Coflat 2 edits a rich document
+- CM6 edits Pandoc-flavored markdown directly; Lexical edits a rich document
   model and uses markdown as the boundary serialization format.
 - Every block type is a plugin. The core knows nothing about "theorem" or "proof."
 - Pandoc-free editing loop. Pandoc is an export tool, not part of the core.
@@ -19,7 +19,7 @@ format, app shell, file IO, semantic services, and Tauri backend.
 ## Stack
 
 - **Language**: TypeScript (frontend) + Rust (Tauri backend)
-- **Editors**: CodeMirror 6 for Coflat; Lexical for Coflat 2
+- **Editors**: CodeMirror 6 for rich/source markdown editing; Lexical for WYSIWYG editing
 - **Parser**: Lezer (extending `@lezer/markdown`)
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (~5MB binary, native OS webview)
@@ -139,8 +139,8 @@ blocks:
 Markdown-derived semantic nodes track source positions whenever they come from
 the boundary document. This enables:
 
-- Precise source <-> rendered mapping for Coflat's Typora-style editing
-- Stable markdown serialization for Coflat 2's WYSIWYG model
+- Precise source <-> rendered mapping for CM6 Typora-style editing
+- Stable markdown serialization for the Lexical WYSIWYG model
 - Structural edits in v3 that patch only affected source regions
 - Semantic indexing for search
 
@@ -158,8 +158,8 @@ Block plugins register additional Lezer extensions for custom body parsers.
 
 ### Editor rendering surfaces
 
-- **Coflat (CM6)**: ViewPlugins and decorations render markdown syntax in place. Source reveals on cursor focus.
-- **Coflat 2 (Lexical)**: Lexical nodes render the document directly and serialize back to Pandoc-flavored markdown at the boundary.
+- **CM6 rich**: ViewPlugins and decorations render markdown syntax in place. Source reveals on cursor focus.
+- **Lexical WYSIWYG**: Lexical nodes render the document directly and serialize back to Pandoc-flavored markdown at the boundary.
 - **Math**: KaTeX renders `$...$` and `$$...$$` inline.
 - **Semantic blocks**: Rendered with type label, number, optional title.
 - **Cross-references**: Rendered as "Theorem 1" / "Eq. (3)" etc.
@@ -177,10 +177,10 @@ A background process (or web worker) that:
 
 ## Versioning roadmap
 
-### Current product family
+### Current App
 
-- Coflat: CodeMirror 6 editor with Lezer markdown parser extensions
-- Coflat 2: Lexical WYSIWYG editor with markdown load/save serialization
+- CM6 rich/source editor with Lezer markdown parser extensions
+- Lexical WYSIWYG editor with markdown load/save serialization
 - Shared Pandoc-flavored markdown format
 - Block plugin system with default math environments
 - KaTeX math rendering

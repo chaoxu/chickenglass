@@ -85,7 +85,7 @@ Examples:
 
 - CM6 widget/decorations
 - React view components
-- HTML export/read-mode output
+- HTML export output
 - tooltip or chrome-label rendering
 
 ### 4. Side-effect layer

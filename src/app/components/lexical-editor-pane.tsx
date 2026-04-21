@@ -4,7 +4,6 @@ import { Breadcrumbs } from "./breadcrumbs";
 import { extractDiagnosticsFromMarkdown } from "../markdown/diagnostics";
 import { extractHeadingsFromMarkdown } from "../markdown/headings";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import type { ActiveDocumentSignal } from "../active-document-signal";
 import type { DiagnosticEntry } from "../diagnostics";
 import type { HeadingEntry } from "../heading-ancestry";
 import type { FileSystem } from "../file-manager";
@@ -17,7 +16,6 @@ import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import type { ProjectConfig } from "../../project-config";
 
 interface LexicalEditorPaneProps {
-  readonly activeDocumentSignal?: ActiveDocumentSignal;
   readonly doc: string;
   readonly docPath?: string;
   readonly editorMode?: EditorMode;
@@ -28,6 +26,7 @@ interface LexicalEditorPaneProps {
   readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle | null) => void;
   readonly onProgrammaticDocChange?: (doc: string) => void;
+  readonly onSurfaceReady?: () => void;
   readonly onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   readonly projectConfig?: ProjectConfig;
   readonly sidenotesCollapsed?: boolean;
@@ -39,13 +38,13 @@ function toRevealMode(mode: EditorMode | undefined): RevealMode {
 }
 
 export function LexicalEditorPane({
-  activeDocumentSignal: _activeDocumentSignal,
   editorMode,
   onDiagnosticsChange,
   onDirtyChange,
   onHeadingsChange,
   onLexicalEditorReady,
   onProgrammaticDocChange: _onProgrammaticDocChange,
+  onSurfaceReady,
   onSidenotesCollapsedChange: _onSidenotesCollapsedChange,
   projectConfig: _projectConfig,
   sidenotesCollapsed: _sidenotesCollapsed,
@@ -61,7 +60,6 @@ export function LexicalEditorPane({
     to: 0,
   });
   const lexicalMode = toRevealMode(editorMode);
-  const editable = editorMode !== "read";
 
   const syncDocumentDerivedState = useCallback((doc: string) => {
     const counts = computeLiveStats(doc);
@@ -103,6 +101,10 @@ export function LexicalEditorPane({
     };
   }, [onLexicalEditorReady]);
 
+  useEffect(() => {
+    onSurfaceReady?.();
+  }, [onSurfaceReady]);
+
   const headings = useMemo(
     () => extractHeadingsFromMarkdown(editorOptions.doc),
     [editorOptions.doc],
@@ -124,7 +126,7 @@ export function LexicalEditorPane({
       <LexicalMarkdownEditor
         doc={editorOptions.doc}
         docPath={editorOptions.docPath}
-        editable={editable}
+        editable
         editorMode={lexicalMode}
         onDocChange={editorOptions.onDocChange}
         onDirtyChange={onDirtyChange}

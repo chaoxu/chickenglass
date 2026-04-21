@@ -60,7 +60,7 @@ const defaultSettings: Settings = {
   showLineNumbers: false,
   wordWrap: true,
   spellCheck: false,
-  editorMode: "rich",
+  editorMode: "cm6-rich",
   theme: "system",
   defaultExportFormat: "pdf",
   enabledPlugins: {},
@@ -143,6 +143,7 @@ function createEditorHarness(
       saveAs: vi.fn(async () => {}),
       closeCurrentFile: vi.fn(async () => true),
       hasDirtyDocument: false,
+      editorMode: "cm6-rich",
       pluginManager: {
         getPlugins: vi.fn(() => []),
       } as unknown as UseAppOverlaysProps["editor"]["pluginManager"],

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Coflat 2 browser smoke.
+ * Coflats Lexical browser smoke.
  *
  * This is intentionally separate from `scripts/test-regression.mjs`: the
- * default regression lane still targets Coflat's CM6 editor, while this script
- * validates Lexical-only surfaces behind `VITE_COFLAT_PRODUCT=coflat2`.
+ * default regression lane still targets the CM6 editor, while this script
+ * validates the runtime Lexical surface in the unified app.
  *
  * Prerequisite:
- *   pnpm dev:coflat2 --host 127.0.0.1 --port 5173
+ *   pnpm dev --host 127.0.0.1 --port 5173
  */
 
 import console from "node:console";
@@ -28,7 +28,7 @@ import {
 } from "./test-helpers.mjs";
 
 const DEFAULT_URL = "http://localhost:5173";
-const INSERT_MARKER = "COFLAT2SMOKEINSERT";
+const INSERT_MARKER = "COFLATSLEXICALSMOKEINSERT";
 
 const FORMAT_FIXTURE = {
   virtualPath: "format-command.md",
@@ -64,10 +64,10 @@ function createHeavySmokeDoc() {
   }
   return [
     "---",
-    "title: Coflat 2 Smoke",
+    "title: Coflats Lexical Smoke",
     "---",
     "",
-    "# Coflat 2 Smoke {#sec:intro}",
+    "# Coflats Lexical Smoke {#sec:intro}",
     "",
     ...sections,
   ].join("\n");
@@ -75,8 +75,8 @@ function createHeavySmokeDoc() {
 
 function heavyFixture() {
   return {
-    virtualPath: "coflat2-heavy-smoke.md",
-    displayPath: "generated:coflat2-heavy-smoke.md",
+    virtualPath: "coflats-lexical-heavy-smoke.md",
+    displayPath: "generated:coflats-lexical-heavy-smoke.md",
     content: createHeavySmokeDoc(),
   };
 }
@@ -90,7 +90,7 @@ async function assertLexicalSurface(page) {
 
   if (!state.hasLexicalRoot) {
     throw new Error(
-      "Lexical editor root did not mount. Start the app with `pnpm dev:coflat2`.",
+      "Lexical editor root did not mount after switching to Lexical mode.",
     );
   }
   if (!state.hasEditorBridge) {
@@ -99,7 +99,7 @@ async function assertLexicalSurface(page) {
 }
 
 async function runFormatScenario(page) {
-  await openFixtureDocument(page, FORMAT_FIXTURE, { mode: "rich" });
+  await openFixtureDocument(page, FORMAT_FIXTURE, { mode: "lexical" });
   await page.evaluate(({ from, to }) => {
     window.__editor.setSelection(from, to);
   }, selectSourceRange(FORMAT_FIXTURE.content, "Beta"));
@@ -127,7 +127,7 @@ async function runModeAndHeavyTypingScenario(page) {
   await page.evaluate(async ({ path, content }) => {
     await window.__app.closeFile?.({ discard: true });
     await window.__app.openFileWithContent(path, content);
-    window.__app.setMode("rich");
+    window.__app.setMode("lexical");
   }, {
     path: fixture.virtualPath,
     content: fixture.content,
@@ -172,20 +172,20 @@ async function runModeAndHeavyTypingScenario(page) {
         selection: window.__editor?.getSelection?.() ?? null,
       };
     }, INSERT_MARKER);
-    throw new Error(`Coflat 2 smoke insertion did not reach canonical markdown: ${JSON.stringify(diagnostics)}; ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Lexical smoke insertion did not reach canonical markdown: ${JSON.stringify(diagnostics)}; ${error instanceof Error ? error.message : String(error)}`);
   }
 
   const afterTyping = await readEditorText(page);
   await switchToMode(page, "source");
   const sourceText = await readEditorText(page);
   if (sourceText !== afterTyping) {
-    throw new Error("Switching Coflat 2 to source mode changed the canonical markdown.");
+    throw new Error("Switching the Lexical surface to source mode changed the canonical markdown.");
   }
 
   await saveCurrentFile(page);
   const currentPath = await page.evaluate(() => window.__app.getCurrentDocument()?.path ?? null);
   if (!currentPath) {
-    throw new Error("No current document after saving Coflat 2 smoke fixture.");
+    throw new Error("No current document after saving Lexical smoke fixture.");
   }
   await page.evaluate(async (path) => {
     await window.__app.openFile(path);
@@ -209,16 +209,17 @@ async function main() {
   try {
     page = await connectEditor({ browser, headless, timeout, url });
     await waitForDebugBridge(page, { timeout });
+    await switchToMode(page, "lexical");
     await assertLexicalSurface(page);
-    await assertEditorHealth(page, "coflat2-initial");
+    await assertEditorHealth(page, "lexical-initial");
 
     await runFormatScenario(page);
-    await assertEditorHealth(page, "coflat2-format");
+    await assertEditorHealth(page, "lexical-format");
 
     await runModeAndHeavyTypingScenario(page);
-    await assertEditorHealth(page, "coflat2-heavy-typing");
+    await assertEditorHealth(page, "lexical-heavy-typing");
 
-    console.log("Coflat 2 browser smoke passed.");
+    console.log("Coflats Lexical browser smoke passed.");
   } finally {
     if (page) {
       await disconnectBrowser(page);

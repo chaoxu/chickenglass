@@ -7,9 +7,11 @@ import {
   normalizeRevealModeInput,
 } from "./reveal-mode";
 
-describe("Coflat 2 reveal modes", () => {
-  it("normalizes legacy read mode to Lexical cursor reveal", () => {
-    expect(normalizeRevealModeInput("read")).toBe(REVEAL_MODE.LEXICAL);
+describe("Lexical reveal modes", () => {
+  it("normalizes known reveal mode strings", () => {
+    expect(normalizeRevealModeInput("lexical")).toBe(REVEAL_MODE.LEXICAL);
+    expect(normalizeRevealModeInput("paragraph")).toBe(REVEAL_MODE.PARAGRAPH);
+    expect(normalizeRevealModeInput("read")).toBeNull();
   });
 
   it("forces non-markdown files into source mode", () => {

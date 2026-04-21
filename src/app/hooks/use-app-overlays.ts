@@ -6,7 +6,6 @@ import {
   type SimpleFormatEventType,
 } from "../../constants/events";
 import { BackgroundIndexer } from "../../index";
-import { activeCoflatProduct } from "../../product";
 import { documentAnalysisField } from "../../state/document-analysis";
 import { useDevSettings } from "../../state/dev-settings";
 import {
@@ -48,7 +47,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage" | "editorMode"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -463,7 +462,7 @@ export function useAppOverlays({
 
     // ── Help ──────────────────────────────────────────────────────────────
     { id: "help.shortcuts", label: "Keyboard Shortcuts", category: "Help", shortcut: `${modKey}+/`, hotkey: "mod+/", menuId: "help_shortcuts", action: () => dialogs.setShortcutsOpen(true), hotkeyAction: () => dialogs.setShortcutsOpen((value) => !value) },
-    { id: "help.about", label: `About ${activeCoflatProduct.displayName}`, category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
+    { id: "help.about", label: "About Coflats", category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
 
     // ── Recent files (palette only) ──────────────────────────────────────
     ...(workspace.recentFiles ?? []).map((path, i) => ({

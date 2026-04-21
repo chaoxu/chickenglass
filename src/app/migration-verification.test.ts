@@ -724,13 +724,12 @@ describe("#277 — first-class theme surface tokens", () => {
     expect(css).toContain('@import "./editor-theme.css"');
   });
 
-  it("rich and read block styling consume the shared theme tokens", () => {
+  it("rich block styling consumes the shared theme tokens", () => {
     const richCss = fileText("src/editor/block-theme.ts");
-    const readCss = fileText("src/globals.css");
     expect(richCss).toContain("var(--cf-block-header-accent)");
     expect(richCss).toContain("var(--cf-proof-marker)");
-    expect(readCss).toContain("var(--cf-block-title-separator)");
-    expect(readCss).toContain("var(--cf-table-header-border)");
+    expect(richCss).toContain("var(--cf-block-title-separator)");
+    expect(richCss).toContain("var(--cf-table-header-border)");
   });
 });
 
@@ -1121,16 +1120,16 @@ describe("#290 — Lezer-first markdown parsing", () => {
   });
 });
 
-describe("#291 — project rename to Coflat", () => {
-  it("core product metadata uses the Coflat name", () => {
+describe("#291 — project rename to Coflats", () => {
+  it("core product metadata uses the Coflats name", () => {
     const pkg = fileText("package.json");
     const tauri = fileText("src-tauri/tauri.conf.json");
     const html = fileText("index.html");
 
     expect(pkg).toContain('"name": "coflat"');
-    expect(tauri).toContain('"productName": "Coflat"');
+    expect(tauri).toContain('"productName": "Coflats"');
     expect(tauri).toContain('"identifier": "com.coflat.app"');
-    expect(html).toContain("<title>Coflat</title>");
+    expect(html).toContain("<title>Coflats</title>");
   });
 
   it("theme exports and project config filename are renamed", async () => {
@@ -1296,14 +1295,12 @@ describe("#314 — document surface renderer layer", () => {
     const headingChrome = fileText("src/app/components/heading-chrome.tsx");
     // Tooltip rendering moved to use-footnote-tooltip (T27 decomposition)
     const footnoteTooltip = fileText("src/app/hooks/use-footnote-tooltip.ts");
-    const readMode = fileText("src/app/components/read-mode-view.tsx");
     const hoverPreview = fileText("src/render/hover-preview.ts");
     const pluginRenderChrome = fileText("src/render/plugin-adapters/chrome.ts");
     const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
     expect(headingChrome).toContain("../../document-surfaces");
     expect(footnoteTooltip).toContain("../../document-surfaces");
-    expect(readMode).toContain("../../document-surfaces");
     expect(hoverPreview).toContain("../document-surfaces");
     expect(pluginRenderChrome).toContain("../../document-surfaces");
     expect(frontmatterRender).toContain("../document-surfaces");

@@ -1,5 +1,5 @@
 {
-  "productName": "Coflat",
+  "productName": "Coflats",
   "version": "2.0.0",
   "identifier": "com.coflat.app",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Coflat",
+        "title": "Coflats",
         "width": 1200,
         "height": 800,
         "minWidth": 800,

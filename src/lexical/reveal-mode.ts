@@ -17,8 +17,6 @@ import {
 import type { RevealMode } from "./reveal-mode-contract.js";
 
 export {
-  LEGACY_EDITOR_MODE_ALIASES,
-  LEGACY_EDITOR_MODE_READ,
   REVEAL_PRESENTATION,
   REVEAL_PRESENTATION_LABELS,
   REVEAL_MODE,

@@ -1,7 +1,7 @@
 /**
  * About dialog React component.
  *
- * Simple modal: "Coflat v0.1.0", description, credits, GitHub link.
+ * Simple modal: "Coflats v0.1.0", description, credits, GitHub link.
  * Uses the shared app dialog primitives for escape, focus trap, and overlay.
  */
 
@@ -38,6 +38,11 @@ const PREFIX_CREDITS: Credit[] = [
   { name: "Tauri", url: "https://tauri.app" },
 ];
 
+const EDITOR_CREDITS: Credit[] = [
+  { name: "CodeMirror", url: "https://codemirror.net" },
+  { name: "Lexical", url: "https://lexical.dev" },
+];
+
 const SUFFIX_CREDITS: Credit[] = [
   { name: "KaTeX", url: "https://katex.org" },
   { name: "Lezer", url: "https://lezer.codemirror.net" },
@@ -54,10 +59,7 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
   const [logDirectoryLoading, setLogDirectoryLoading] = useState(false);
   const desktopRuntime = isTauri();
   const product = activeCoflatProduct;
-  const editorCredit = product.editorEngine === "lexical-wysiwyg"
-    ? { name: "Lexical", url: "https://lexical.dev" }
-    : { name: "CodeMirror", url: "https://codemirror.net" };
-  const credits = [...PREFIX_CREDITS, editorCredit, ...SUFFIX_CREDITS];
+  const credits = [...PREFIX_CREDITS, ...EDITOR_CREDITS, ...SUFFIX_CREDITS];
 
   useEffect(() => {
     if (!open || !desktopRuntime) return;

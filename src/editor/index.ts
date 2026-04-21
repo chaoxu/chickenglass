@@ -4,7 +4,6 @@ export {
   setEditorMode,
   editorModeField,
   markdownEditorModes,
-  normalizeEditorMode,
   tabSizeExtension,
   themeCompartment,
   wordWrapCompartment,

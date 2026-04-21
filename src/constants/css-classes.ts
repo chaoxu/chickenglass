@@ -48,9 +48,6 @@ export const CSS = {
   /** Source mode editor attribute. */
   sourceMode: "cf-source-mode",
 
-  /** Read mode editor attribute. */
-  readMode: "cf-read-mode",
-
   /** Image wrapper, image element, loading, and error state. */
   imageWrapper: "cf-image-wrapper",
   image: "cf-image",
@@ -135,9 +132,6 @@ export const CSS = {
   /** Document title from frontmatter. */
   docTitle: "cf-doc-title",
 
-  /** Read mode view container. */
-  readModeView: "cf-read-mode-view",
-  readTitle: "cf-read-title",
   sectionNumber: "cf-section-number",
 
   /** Block blockquote. */

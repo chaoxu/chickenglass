@@ -18,13 +18,13 @@
 - Do a self-review/simplification pass before commit.
 - If the architecture is wrong, say so and fix that instead of preserving a bad shape.
 
-## Dual-editor ownership
+## Editor Surface Ownership
 
-- Coflat uses the CM6 markdown-native editor. Coflat 2 uses the Lexical WYSIWYG editor.
-- App-shell features should be shared unless they truly depend on one editor engine.
-- Prefer product-neutral bridges and types (`__editor`, app hooks, shared semantic stores) when code or tests need to work in both products.
-- Keep CM6-only rules in `src/editor`, `src/render`, CM6 state modules, and CM6 regression scripts. Keep Lexical-only rules in `src/lexical` and Coflat 2 smoke/regression paths.
-- Do not describe markdown as the only in-memory source of truth for Coflat 2. In Coflat 2, markdown is the load/save serialization boundary.
+- Coflats has one app shell with runtime editor modes: CM6 rich, Lexical WYSIWYG, and CM6 source.
+- App-shell features should be shared unless they truly depend on one editor surface.
+- Prefer surface-neutral bridges and types (`__editor`, app hooks, shared semantic stores) when code or tests need to work in both editor surfaces.
+- Keep CM6-only rules in `src/editor`, `src/render`, CM6 state modules, and CM6 regression scripts. Keep Lexical-only rules in `src/lexical` and Lexical smoke/regression paths.
+- Do not describe markdown as the only in-memory source of truth for Lexical. In Lexical mode, markdown is the load/save serialization boundary.
 
 ### Rigor prompt patterns
 
