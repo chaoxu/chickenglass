@@ -7,6 +7,7 @@ import {
   type DocumentSemantics,
   type FencedDivSemantics,
 } from "../semantics/document";
+import type { DocumentArtifacts } from "../semantics/incremental/engine";
 import {
   getDocumentAnalysis,
   rememberDocumentAnalysis,
@@ -19,10 +20,12 @@ import type { FileIndex, IndexEntry, IndexReference } from "./query-api";
 
 const fileIndexAnalysisCache = new WeakMap<FileIndex, DocumentSemantics>();
 
+export type FileIndexAnalysisInput = DocumentSemantics | DocumentArtifacts;
+
 export function extractFileIndex(
   content: string,
   file: string,
-  analysis?: DocumentSemantics,
+  analysis?: FileIndexAnalysisInput,
 ): FileIndex {
   const resolvedAnalysis = resolveAnalysis(content, file, analysis);
   const entries: IndexEntry[] = [];
@@ -37,11 +40,22 @@ export function extractFileIndex(
 function resolveAnalysis(
   content: string,
   file: string,
-  analysis: DocumentSemantics | undefined,
+  analysis: FileIndexAnalysisInput | undefined,
 ): DocumentSemantics {
-  return analysis
-    ? rememberDocumentAnalysis(content, analysis, file)
-    : getDocumentAnalysis(content, file);
+  if (!analysis) {
+    return getDocumentAnalysis(content, file);
+  }
+
+  const documentAnalysis = isDocumentArtifacts(analysis)
+    ? analysis.analysis
+    : analysis;
+  return rememberDocumentAnalysis(content, documentAnalysis, file);
+}
+
+function isDocumentArtifacts(
+  input: FileIndexAnalysisInput,
+): input is DocumentArtifacts {
+  return "analysis" in input && "ir" in input;
 }
 
 export function getFileIndexAnalysis(
@@ -164,7 +178,7 @@ export function updateFileInIndex(
   existingFiles: ReadonlyMap<string, FileIndex>,
   file: string,
   content: string,
-  analysis?: DocumentSemantics,
+  analysis?: FileIndexAnalysisInput,
 ): Map<string, FileIndex> {
   const newFiles = new Map(existingFiles);
   const fileIndex = extractFileIndex(content, file, analysis);

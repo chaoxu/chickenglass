@@ -22,13 +22,19 @@ type DocumentArtifacts = {
 - `DocumentAnalysis` remains the incremental owner for editor-facing consumers.
 - `DocumentIR` is the canonical export/AI/script shape for callers that must stay CM6-free.
 - The shared builder lives under `src/ir/` and is reused by both the standalone `treeToIR()` helper and the incremental semantics pipeline.
+- `getDocumentArtifacts(text, cacheKey)` is the cached CM6-free entry point. It reuses the same incremental `DocumentAnalysis` cache as index/citation callers, then rebuilds the IR projection from the current text and tree.
 
 ## Public entry points
 
 - `analyzeDocumentArtifacts(doc, tree)` in `src/semantics/document.ts`
-- `analyzeMarkdownDocument(text)` in `src/semantics/markdown-analysis.ts`
+- `getDocumentArtifacts(text, cacheKey?)` in `src/semantics/incremental/cached-document-analysis.ts`
+- `analyzeMarkdownDocument(text, cacheKey?)` in `src/semantics/markdown-analysis.ts`
 - `treeToIR(tree, text)` in `src/ir/tree-to-ir.ts`
 - The CM6 editor state still exposes `DocumentAnalysis` via `documentAnalysisField`; IR currently stays on the standalone helper path for non-CM6 consumers.
+
+## Include Status
+
+The legacy `src/plugins/include-resolver.ts` path was removed when non-Pandoc include syntax left the canonical format. There is no include-specific tree walker in the current pipeline. Legacy `.include` fenced divs flow through the same canonical fenced-div semantics as any other block, so indexing and IR consumers see the same `DocumentAnalysis.fencedDivs` / `DocumentIR.blocks` projection.
 
 ## Freshness rules
 

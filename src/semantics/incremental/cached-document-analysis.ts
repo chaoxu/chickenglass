@@ -2,7 +2,14 @@ import { ChangeSet } from "@codemirror/state";
 import { type DocumentAnalysis, stringTextSource } from "../document";
 import { markdownSemanticsParser } from "../markdown-parser";
 import { coalesceChangedRanges } from "./dirty-windows";
-import { createDocumentAnalysis, updateDocumentAnalysis } from "./engine";
+import {
+  buildDocumentArtifacts,
+  createDocumentAnalysis,
+  createDocumentArtifacts,
+  type DocumentArtifacts,
+  updateDocumentAnalysis,
+  updateDocumentArtifacts,
+} from "./engine";
 import type { RawChangedRange, SemanticDelta } from "./types";
 
 export interface CachedDocumentAnalysis {
@@ -11,8 +18,15 @@ export interface CachedDocumentAnalysis {
   readonly analysis: DocumentAnalysis;
 }
 
+export interface CachedDocumentArtifacts {
+  readonly version: number;
+  readonly text: string;
+  readonly artifacts: DocumentArtifacts;
+}
+
 const MAX_SHARED_DOCUMENT_ANALYSIS_ENTRIES = 64;
 const sharedDocumentAnalysisCache = new Map<string, CachedDocumentAnalysis>();
+const sharedDocumentArtifactsCache = new Map<string, CachedDocumentArtifacts>();
 
 export function getCachedDocumentAnalysis(
   text: string,
@@ -63,6 +77,72 @@ export function rememberCachedDocumentAnalysis(
   };
 }
 
+export function getCachedDocumentArtifacts(
+  text: string,
+  previous?: CachedDocumentArtifacts,
+): CachedDocumentArtifacts {
+  if (previous?.text === text) {
+    return previous;
+  }
+
+  const doc = stringTextSource(text);
+  const tree = markdownSemanticsParser.parse(text);
+  if (!previous) {
+    return {
+      version: 0,
+      text,
+      artifacts: createDocumentArtifacts(doc, tree),
+    };
+  }
+
+  return {
+    version: previous.version + 1,
+    text,
+    artifacts: updateDocumentArtifacts(
+      previous.artifacts,
+      doc,
+      tree,
+      buildTextSemanticDelta(previous.text, text),
+    ),
+  };
+}
+
+function getCachedDocumentArtifactsFromAnalysis(
+  text: string,
+  previous?: CachedDocumentAnalysis,
+): CachedDocumentArtifacts {
+  const doc = stringTextSource(text);
+  const tree = markdownSemanticsParser.parse(text);
+
+  if (!previous) {
+    return {
+      version: 0,
+      text,
+      artifacts: createDocumentArtifacts(doc, tree),
+    };
+  }
+
+  if (previous.text === text) {
+    return {
+      version: previous.version,
+      text,
+      artifacts: buildDocumentArtifacts(previous.analysis, doc, tree),
+    };
+  }
+
+  const analysis = updateDocumentAnalysis(
+    previous.analysis,
+    doc,
+    tree,
+    buildTextSemanticDelta(previous.text, text),
+  );
+  return {
+    version: previous.version + 1,
+    text,
+    artifacts: buildDocumentArtifacts(analysis, doc, tree),
+  };
+}
+
 /**
  * Shared non-CM6 accessor for callers that know a stable document path.
  * The underlying analysis still comes from the incremental engine; this
@@ -82,7 +162,34 @@ export function getDocumentAnalysis(
     getSharedCachedDocumentAnalysis(normalizedCacheKey),
   );
   setSharedCachedDocumentAnalysis(normalizedCacheKey, cached);
+  invalidateSharedDocumentArtifacts(normalizedCacheKey, cached);
   return cached.analysis;
+}
+
+/**
+ * Shared non-CM6 accessor for callers that need both semantic analysis and
+ * `DocumentIR`. This keeps IR consumers on the same cached incremental
+ * analysis source as the indexer and citation paths while rebuilding the IR
+ * projection from the current text/tree.
+ */
+export function getDocumentArtifacts(
+  text: string,
+  cacheKey?: string,
+): DocumentArtifacts {
+  const normalizedCacheKey = normalizeCacheKey(cacheKey);
+  if (!normalizedCacheKey) {
+    return getCachedDocumentArtifacts(text).artifacts;
+  }
+
+  const cachedArtifacts = getSharedCachedDocumentArtifacts(normalizedCacheKey);
+  const cached = cachedArtifacts
+    ? getCachedDocumentArtifacts(text, cachedArtifacts)
+    : getCachedDocumentArtifactsFromAnalysis(
+        text,
+        getSharedCachedDocumentAnalysis(normalizedCacheKey),
+      );
+  setSharedCachedDocumentArtifacts(normalizedCacheKey, cached);
+  return cached.artifacts;
 }
 
 export function rememberDocumentAnalysis(
@@ -101,11 +208,13 @@ export function rememberDocumentAnalysis(
     getSharedCachedDocumentAnalysis(normalizedCacheKey),
   );
   setSharedCachedDocumentAnalysis(normalizedCacheKey, cached);
+  invalidateSharedDocumentArtifacts(normalizedCacheKey, cached);
   return cached.analysis;
 }
 
 export function clearDocumentAnalysisCache(): void {
   sharedDocumentAnalysisCache.clear();
+  sharedDocumentArtifactsCache.clear();
 }
 
 function buildTextSemanticDelta(
@@ -177,6 +286,54 @@ function setSharedCachedDocumentAnalysis(
   if (oldestCacheKey !== undefined) {
     sharedDocumentAnalysisCache.delete(oldestCacheKey);
   }
+}
+
+function getSharedCachedDocumentArtifacts(
+  cacheKey: string,
+): CachedDocumentArtifacts | undefined {
+  const cached = sharedDocumentArtifactsCache.get(cacheKey);
+  if (!cached) {
+    return undefined;
+  }
+
+  sharedDocumentArtifactsCache.delete(cacheKey);
+  sharedDocumentArtifactsCache.set(cacheKey, cached);
+  return cached;
+}
+
+function setSharedCachedDocumentArtifacts(
+  cacheKey: string,
+  cached: CachedDocumentArtifacts,
+): void {
+  sharedDocumentArtifactsCache.set(cacheKey, cached);
+  setSharedCachedDocumentAnalysis(cacheKey, {
+    version: cached.version,
+    text: cached.text,
+    analysis: cached.artifacts.analysis,
+  });
+
+  if (sharedDocumentArtifactsCache.size <= MAX_SHARED_DOCUMENT_ANALYSIS_ENTRIES) {
+    return;
+  }
+
+  const oldestCacheKey = sharedDocumentArtifactsCache.keys().next().value;
+  if (oldestCacheKey !== undefined) {
+    sharedDocumentArtifactsCache.delete(oldestCacheKey);
+  }
+}
+
+function invalidateSharedDocumentArtifacts(
+  cacheKey: string,
+  cached: CachedDocumentAnalysis,
+): void {
+  const artifacts = sharedDocumentArtifactsCache.get(cacheKey);
+  if (
+    artifacts?.text === cached.text
+    && artifacts.artifacts.analysis === cached.analysis
+  ) {
+    return;
+  }
+  sharedDocumentArtifactsCache.delete(cacheKey);
 }
 
 function collectChangedRanges(

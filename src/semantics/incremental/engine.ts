@@ -440,7 +440,7 @@ export function createDocumentAnalysis(
   return finalizeDocumentAnalysis(undefined, slices, excludedRanges, doc);
 }
 
-function buildDocumentArtifacts(
+export function buildDocumentArtifacts(
   analysis: DocumentAnalysis,
   doc: TextSource,
   tree: Tree,

@@ -4,6 +4,7 @@ import {
   getCachedDocumentAnalysis,
   rememberCachedDocumentAnalysis,
 } from "../semantics/incremental/cached-document-analysis";
+import { analyzeMarkdownDocument } from "../semantics/markdown-analysis";
 import * as incrementalEngine from "../semantics/incremental/engine";
 import {
   extractFileIndex,
@@ -381,6 +382,80 @@ See [@eq:class] for the class equation.`;
       expect(types).toContain("equation");
 
       expect(result.references.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("can consume canonical document artifacts without rebuilding private semantics", () => {
+      const content = [
+        "# Intro {#sec:intro}",
+        "",
+        "See [@thm:main] and @eq:main.",
+        "",
+        "::: {.theorem #thm:main} Main Result",
+        "Body.",
+        ":::",
+        "",
+        "$$x^2$$ {#eq:main}",
+        "",
+      ].join("\n");
+      const artifacts = analyzeMarkdownDocument(content, "paper.md");
+      const result = extractFileIndex(content, "paper.md", artifacts);
+
+      expect(getFileIndexAnalysis(result)).toBe(artifacts.analysis);
+      const indexedTargets = result.entries
+        .map((entry) => ({
+          type: entry.type,
+          label: entry.label,
+          title: entry.title,
+        }))
+        .sort((left, right) => left.type.localeCompare(right.type));
+
+      expect(indexedTargets).toEqual([
+        {
+          type: "equation",
+          label: artifacts.ir.math[0]?.label,
+          title: undefined,
+        },
+        {
+          type: "heading",
+          label: "sec:intro",
+          title: artifacts.ir.sections[0]?.heading,
+        },
+        {
+          type: "theorem",
+          label: artifacts.ir.blocks[0]?.label,
+          title: artifacts.ir.blocks[0]?.title,
+        },
+      ]);
+      expect(result.references.map((reference) => reference.ids)).toEqual(
+        artifacts.ir.references.map((reference) => reference.ids),
+      );
+    });
+
+    it("treats legacy include blocks as ordinary fenced-div semantics", () => {
+      const content = [
+        "::: {.include #inc:chapter}",
+        "chapter.md",
+        ":::",
+        "",
+      ].join("\n");
+      const artifacts = analyzeMarkdownDocument(content, "root.md");
+      const result = extractFileIndex(content, "root.md", artifacts);
+
+      expect(artifacts.ir.blocks).toEqual([
+        expect.objectContaining({
+          type: "include",
+          label: "inc:chapter",
+          content: "chapter.md",
+        }),
+      ]);
+      expect(result.entries).toEqual([
+        expect.objectContaining({
+          type: "include",
+          label: "inc:chapter",
+          content: "chapter.md",
+        }),
+      ]);
+      expect(getFileIndexAnalysis(result)).toBe(artifacts.analysis);
     });
   });
 });

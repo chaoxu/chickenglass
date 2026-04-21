@@ -36,6 +36,7 @@ export {
 
 export {
   extractFileIndex,
+  type FileIndexAnalysisInput,
   updateFileInIndex,
   removeFileFromIndex,
 } from "./extract";

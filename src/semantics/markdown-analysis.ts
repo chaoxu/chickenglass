@@ -1,18 +1,18 @@
 import {
-  analyzeDocumentArtifacts,
   type DocumentArtifacts,
   type DocumentSemantics,
-  stringTextSource,
 } from "./document";
-import { markdownSemanticsParser } from "./markdown-parser";
+import { getDocumentArtifacts } from "./incremental/cached-document-analysis";
 
 /**
  * Parse markdown with the editor's extension set and return the canonical
  * plain-data artifacts for non-CM6 consumers.
  */
-export function analyzeMarkdownDocument(text: string): DocumentArtifacts {
-  const tree = markdownSemanticsParser.parse(text);
-  return analyzeDocumentArtifacts(stringTextSource(text), tree);
+export function analyzeMarkdownDocument(
+  text: string,
+  cacheKey?: string,
+): DocumentArtifacts {
+  return getDocumentArtifacts(text, cacheKey);
 }
 
 /**
@@ -21,6 +21,9 @@ export function analyzeMarkdownDocument(text: string): DocumentArtifacts {
  * This is the CM6-free entry point for callers that need the same fenced-div,
  * equation, and reference semantics as the editor/indexer.
  */
-export function analyzeMarkdownSemantics(text: string): DocumentSemantics {
-  return analyzeMarkdownDocument(text).analysis;
+export function analyzeMarkdownSemantics(
+  text: string,
+  cacheKey?: string,
+): DocumentSemantics {
+  return analyzeMarkdownDocument(text, cacheKey).analysis;
 }
