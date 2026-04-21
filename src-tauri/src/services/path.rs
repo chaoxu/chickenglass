@@ -14,6 +14,7 @@ impl ProjectPathResolver {
     }
 
     pub fn resolve_project_path(&self, relative: &str) -> Result<PathBuf, String> {
+        reject_unsafe_relative_components(relative, true)?;
         let full = self.canonical_root.join(relative);
         // Resolve `..` and symlink aliases before checking project-root containment.
         let canonical = canonicalize_maybe_missing(&full)
@@ -36,7 +37,7 @@ impl ProjectPathResolver {
     }
 
     pub fn resolve_project_entry_path(&self, relative: &str) -> Result<PathBuf, String> {
-        reject_dot_leaf_component(relative)?;
+        reject_unsafe_relative_components(relative, false)?;
         let full = self.canonical_root.join(relative);
         let entry = canonicalize_parent_maybe_missing(&full)
             .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
@@ -70,12 +71,49 @@ impl ProjectPathResolver {
     }
 }
 
-fn reject_dot_leaf_component(relative: &str) -> Result<(), String> {
-    let leaf = relative
-        .rsplit(['/', '\\'])
-        .find(|segment| !segment.is_empty())
-        .ok_or_else(|| "Path must end in a normal file name".to_string())?;
-    if leaf == "." || leaf == ".." {
+fn reject_unsafe_relative_components(relative: &str, allow_empty: bool) -> Result<(), String> {
+    if relative.is_empty() {
+        return if allow_empty {
+            Ok(())
+        } else {
+            Err("Path must end in a normal file name".to_string())
+        };
+    }
+
+    let path = Path::new(relative);
+    if path.is_absolute() {
+        return Err("Path must be relative to project root".to_string());
+    }
+
+    for component in path.components() {
+        match component {
+            Component::Normal(_) => {}
+            Component::CurDir | Component::ParentDir => {
+                return Err("Path cannot contain . or .. components".to_string());
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err("Path must be relative to project root".to_string());
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    let separators: &[char] = &['/', '\\'];
+    #[cfg(not(windows))]
+    let separators: &[char] = &['/'];
+
+    let mut has_normal_segment = false;
+    for segment in relative.split(separators) {
+        if segment.is_empty() {
+            continue;
+        }
+        has_normal_segment = true;
+        if segment == "." || segment == ".." {
+            return Err("Path cannot contain . or .. components".to_string());
+        }
+    }
+
+    if !allow_empty && !has_normal_segment {
         return Err("Path must end in a normal file name".to_string());
     }
     Ok(())
@@ -87,7 +125,12 @@ fn canonicalize_parent_maybe_missing(path: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("Path '{}' has no parent", path.display()))?;
     let name = match path.components().next_back() {
         Some(Component::Normal(name)) => name.to_owned(),
-        _ => return Err(format!("Path '{}' must end in a normal file name", path.display())),
+        _ => {
+            return Err(format!(
+                "Path '{}' must end in a normal file name",
+                path.display()
+            ));
+        }
     };
     Ok(canonicalize_maybe_missing(parent)?.join(name))
 }
@@ -318,22 +361,66 @@ mod tests {
         let err = resolver
             .resolve_project_path("sub/../../etc/passwd")
             .expect_err("should reject traversal");
-        assert!(err.contains("escapes project root"), "got: {}", err);
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
 
         fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
-    fn resolve_project_path_allows_dotdot_within_root() {
+    fn resolve_project_path_rejects_dotdot_within_root() {
         let root = create_temp_dir("dotdot-within");
         fs::create_dir_all(root.join("a/b")).unwrap();
         let file = root.join("a/target.md");
         fs::write(&file, "").unwrap();
         let resolver = ProjectPathResolver::new(&root).unwrap();
 
-        let result = resolver.resolve_project_path("a/b/../target.md").unwrap();
-        assert!(result.ends_with("target.md"));
-        assert!(result.starts_with(&root));
+        let err = resolver
+            .resolve_project_path("a/b/../target.md")
+            .expect_err("frontend paths must not contain dotdot segments");
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn resolve_project_path_rejects_dot_segments() {
+        let root = create_temp_dir("dot-segments");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        for relative in ["./note.md", "docs/./note.md", "docs/."] {
+            let err = resolver
+                .resolve_project_path(relative)
+                .expect_err("frontend paths must not contain dot segments");
+            assert!(
+                err.contains("cannot contain . or .. components"),
+                "relative={relative}, got: {err}",
+            );
+        }
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn resolve_project_path_rejects_dotdot_after_missing_ancestor() {
+        let root = create_temp_dir("missing-ancestor-dotdot");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        let err = resolver
+            .resolve_project_path("a/../../escaped.md")
+            .expect_err("dotdot after a missing ancestor must be rejected");
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
 
         fs::remove_dir_all(&root).unwrap();
     }
@@ -457,10 +544,27 @@ mod tests {
                 .expect_err("dot leaf components should be rejected");
             assert!(
                 err.contains("must end in a normal file name")
-                    || err.contains("escapes project root"),
+                    || err.contains("cannot contain . or .. components"),
                 "relative={relative}, got: {err}",
             );
         }
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn resolve_project_entry_path_rejects_dotdot_after_missing_ancestor() {
+        let root = create_temp_dir("entry-missing-ancestor-dotdot");
+        let resolver = ProjectPathResolver::new(&root).unwrap();
+
+        let err = resolver
+            .resolve_project_entry_path("a/../../escaped.md")
+            .expect_err("dotdot after a missing ancestor must be rejected");
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
 
         fs::remove_dir_all(&root).unwrap();
     }

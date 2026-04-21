@@ -3,10 +3,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use tauri::{command, State, WebviewWindow};
+use tauri::{State, WebviewWindow, command};
 
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
-use super::context::{run_command, CommandSpec, WindowCommandContext};
 use crate::services::path::ProjectPathResolver;
 
 const CHECK_PANDOC: CommandSpec =
@@ -217,9 +217,9 @@ pub fn export_document(
 #[cfg(test)]
 mod tests {
     use super::{
-        bibliography_metadata_value, build_latex_pandoc_args, build_pandoc_resource_path,
-        resolve_export_output_path, resolve_export_source_dir, resolve_latex_template,
-        LATEX_PANDOC_FROM,
+        LATEX_PANDOC_FROM, bibliography_metadata_value, build_latex_pandoc_args,
+        build_pandoc_resource_path, resolve_export_output_path, resolve_export_source_dir,
+        resolve_latex_template,
     };
     use crate::services::path::ProjectPathResolver;
     use std::fs;
@@ -238,6 +238,15 @@ mod tests {
         let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}-{counter}"));
         fs::create_dir_all(&path).expect("create temp dir");
         path.canonicalize().expect("canonicalize temp dir")
+    }
+
+    fn assert_rejects_unsafe_project_path(error: &str) {
+        assert!(
+            error.contains("escapes project root")
+                || error.contains("must be relative to project root")
+                || error.contains("cannot contain . or .. components"),
+            "got: {error}",
+        );
     }
 
     #[test]
@@ -263,7 +272,7 @@ mod tests {
         let error = resolve_export_output_path(&paths, "../out.pdf")
             .expect_err("path traversal should fail");
 
-        assert!(error.contains("escapes project root"));
+        assert_rejects_unsafe_project_path(&error);
 
         fs::remove_dir_all(&project_root).expect("remove project root");
     }
@@ -278,7 +287,7 @@ mod tests {
         let error = resolve_export_output_path(&paths, outside_path.to_str().expect("utf-8 path"))
             .expect_err("absolute path outside root should fail");
 
-        assert!(error.contains("escapes project root"));
+        assert_rejects_unsafe_project_path(&error);
 
         fs::remove_dir_all(&project_root).expect("remove project root");
         fs::remove_dir_all(&outside_root).expect("remove outside root");
@@ -377,7 +386,7 @@ mod tests {
         let error = resolve_latex_template(&paths, Some("../template.tex"))
             .expect_err("path traversal should fail");
 
-        assert!(error.contains("escapes project root"));
+        assert_rejects_unsafe_project_path(&error);
 
         fs::remove_dir_all(&project_root).expect("remove project root");
     }
@@ -418,9 +427,10 @@ mod tests {
         assert!(args.contains(&"--wrap=preserve".to_string()));
         assert!(args.contains(&"--syntax-highlighting=none".to_string()));
         assert!(args.iter().any(|arg| arg.ends_with("src/latex/filter.lua")));
-        assert!(args
-            .iter()
-            .any(|arg| arg.ends_with("src/latex/template/lipics.tex")));
+        assert!(
+            args.iter()
+                .any(|arg| arg.ends_with("src/latex/template/lipics.tex"))
+        );
         assert!(args.iter().any(|arg| arg.starts_with("--resource-path=")));
         assert!(args.iter().any(|arg| arg.starts_with("--output=")));
         assert!(args.contains(&"--metadata=bibliography=project".to_string()));

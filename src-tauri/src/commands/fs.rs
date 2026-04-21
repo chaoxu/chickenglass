@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tauri::{State, WebviewWindow, command};
 
@@ -101,9 +101,7 @@ pub fn create_file(
     content: Option<String>,
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(CREATE_FILE, Some(&path), |project_root| {
-        let paths = ProjectPathResolver::new(project_root)?;
-        let full = paths.resolve_project_entry_path(&path)?;
-        filesystem::create_text_file(&full, &path, content.as_deref())
+        create_file_at_project_root(project_root, &path, content.as_deref())
     })
 }
 
@@ -117,11 +115,7 @@ pub fn create_directory(
     WindowCommandContext::new(&window, &root, &perf).run(
         CREATE_DIRECTORY,
         Some(&path),
-        |project_root| {
-            let paths = ProjectPathResolver::new(project_root)?;
-            let full = paths.resolve_project_entry_path(&path)?;
-            filesystem::create_directory(&full, &path)
-        },
+        |project_root| create_directory_at_project_root(project_root, &path),
     )
 }
 
@@ -193,11 +187,7 @@ pub fn write_file_binary(
     WindowCommandContext::new(&window, &root, &perf).run(
         WRITE_FILE_BINARY,
         Some(&path),
-        |project_root| {
-            let paths = ProjectPathResolver::new(project_root)?;
-            let full = paths.resolve_project_path(&path)?;
-            filesystem::write_binary_file(&full, &path, &data_base64)
-        },
+        |project_root| write_binary_file_at_project_root(project_root, &path, &data_base64),
     )
 }
 
@@ -239,4 +229,136 @@ pub fn list_children(
             filesystem::list_children(&dir, &path)
         },
     )
+}
+
+fn create_file_at_project_root(
+    project_root: &Path,
+    path: &str,
+    content: Option<&str>,
+) -> Result<(), String> {
+    let paths = ProjectPathResolver::new(project_root)?;
+    let full = paths.resolve_project_entry_path(path)?;
+    filesystem::create_text_file(&full, path, content)
+}
+
+fn create_directory_at_project_root(project_root: &Path, path: &str) -> Result<(), String> {
+    let paths = ProjectPathResolver::new(project_root)?;
+    let full = paths.resolve_project_entry_path(path)?;
+    filesystem::create_directory(&full, path)
+}
+
+fn write_binary_file_at_project_root(
+    project_root: &Path,
+    path: &str,
+    data_base64: &str,
+) -> Result<(), String> {
+    let paths = ProjectPathResolver::new(project_root)?;
+    let full = paths.resolve_project_path(path)?;
+    filesystem::write_binary_file(&full, path, data_base64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        create_directory_at_project_root, create_file_at_project_root,
+        write_binary_file_at_project_root,
+    };
+    use base64::Engine;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn create_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path.canonicalize().expect("canonicalize temp dir")
+    }
+
+    fn sibling_escape_path(root: &PathBuf, name: &str) -> (String, PathBuf) {
+        let sibling_name = format!(
+            "{}-{name}",
+            root.file_name()
+                .and_then(|value| value.to_str())
+                .expect("temp root should be utf-8"),
+        );
+        let escaped = root
+            .parent()
+            .expect("temp root should have parent")
+            .join(&sibling_name);
+        (format!("a/../../{sibling_name}"), escaped)
+    }
+
+    #[test]
+    fn create_file_rejects_missing_ancestor_traversal() {
+        let root = create_temp_dir("cmd-create-file-traversal");
+        let (relative, escaped) = sibling_escape_path(&root, "escaped.md");
+
+        let err = create_file_at_project_root(&root, &relative, Some("escaped"))
+            .expect_err("create_file should reject traversal before creating parents");
+
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
+        assert!(!escaped.exists(), "escaped file must not be created");
+        assert!(
+            !root.join("a").exists(),
+            "resolver must reject before creating parents"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_file(&escaped);
+    }
+
+    #[test]
+    fn create_directory_rejects_missing_ancestor_traversal() {
+        let root = create_temp_dir("cmd-create-dir-traversal");
+        let (relative, escaped) = sibling_escape_path(&root, "escaped-dir");
+
+        let err = create_directory_at_project_root(&root, &relative)
+            .expect_err("create_directory should reject traversal before creating parents");
+
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
+        assert!(!escaped.exists(), "escaped directory must not be created");
+        assert!(
+            !root.join("a").exists(),
+            "resolver must reject before creating parents"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&escaped);
+    }
+
+    #[test]
+    fn write_file_binary_rejects_missing_ancestor_traversal() {
+        let root = create_temp_dir("cmd-write-binary-traversal");
+        let (relative, escaped) = sibling_escape_path(&root, "escaped.bin");
+        let encoded = base64::engine::general_purpose::STANDARD.encode([1, 2, 3]);
+
+        let err = write_binary_file_at_project_root(&root, &relative, &encoded)
+            .expect_err("write_file_binary should reject traversal before creating parents");
+
+        assert!(
+            err.contains("cannot contain . or .. components"),
+            "got: {}",
+            err
+        );
+        assert!(!escaped.exists(), "escaped binary file must not be created");
+        assert!(
+            !root.join("a").exists(),
+            "resolver must reject before creating parents"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_file(&escaped);
+    }
 }
