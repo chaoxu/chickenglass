@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorState, type Extension } from "@codemirror/state";
 import * as language from "@codemirror/language";
-import { EditorView } from "@codemirror/view";
+import {
+  type Decoration as CodeMirrorDecoration,
+  type DecorationSet,
+  EditorView,
+} from "@codemirror/view";
 import { COPY_RESET_MS } from "../constants";
 import { CSS } from "../constants/css-classes";
 import { markdown } from "@codemirror/lang-markdown";
@@ -47,6 +51,27 @@ function createTestState(doc: string, cursorPos = 0, focused = false) {
 
 function getDecoSpecs(state: EditorState) {
   return getDecorationSpecs(state.field(codeBlockDecorationField));
+}
+
+function getLineDecorationValues(
+  decoSet: DecorationSet,
+  lineStart: number,
+  classSubstr: string,
+): CodeMirrorDecoration[] {
+  const values: CodeMirrorDecoration[] = [];
+  const cursor = decoSet.iter();
+  while (cursor.value) {
+    const className = cursor.value.spec.class as string | undefined;
+    if (
+      cursor.from === lineStart &&
+      cursor.from === cursor.to &&
+      className?.includes(classSubstr)
+    ) {
+      values.push(cursor.value);
+    }
+    cursor.next();
+  }
+  return values;
 }
 
 function createCodeBlockView(
@@ -255,6 +280,127 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+  });
+
+  it("does not rebuild code-block decorations for prose-only cursor movement (#1176)", () => {
+    const doc = [
+      "intro prose",
+      "",
+      "```js",
+      "console.log('a')",
+      "```",
+      "",
+      "first prose position",
+      "second prose position",
+      "",
+      "```py",
+      "print('b')",
+      "```",
+    ].join("\n");
+    const state = createTestState(doc, doc.indexOf("first prose"), true);
+    const beforeDecorations = state.field(codeBlockDecorationField);
+
+    const movedState = state.update({
+      selection: { anchor: doc.indexOf("second prose") },
+    }).state;
+
+    expect(movedState.field(codeBlockDecorationField)).toBe(beforeDecorations);
+  });
+
+  it("rebuilds only the newly active code block on prose-to-code cursor movement (#1176)", () => {
+    const doc = [
+      "```js",
+      "console.log('a')",
+      "```",
+      "",
+      "prose between blocks",
+      "",
+      "```py",
+      "print('b')",
+      "```",
+      "",
+      "```ts",
+      "const c = 1",
+      "```",
+    ].join("\n");
+    const state = createTestState(doc, doc.indexOf("prose between"), true);
+    const beforeDecorations = state.field(codeBlockDecorationField);
+    const firstHeader = state.doc.lineAt(doc.indexOf("```js")).from;
+    const middleHeader = state.doc.lineAt(doc.indexOf("```py")).from;
+    const lastHeader = state.doc.lineAt(doc.indexOf("```ts")).from;
+    const firstHeaderDecorations = getLineDecorationValues(
+      beforeDecorations,
+      firstHeader,
+      CSS.codeblockHeader,
+    );
+    const lastHeaderDecorations = getLineDecorationValues(
+      beforeDecorations,
+      lastHeader,
+      CSS.codeblockHeader,
+    );
+
+    const movedState = state.update({
+      selection: { anchor: doc.indexOf("print('b')") },
+    }).state;
+    const afterDecorations = movedState.field(codeBlockDecorationField);
+    const afterSpecs = getDecorationSpecs(afterDecorations);
+
+    expect(afterDecorations).not.toBe(beforeDecorations);
+    expect(hasLineClassAt(afterSpecs, middleHeader, CSS.activeShellTop)).toBe(true);
+    expect(hasLineClassAt(afterSpecs, firstHeader, CSS.activeShellTop)).toBe(false);
+    expect(hasLineClassAt(afterSpecs, lastHeader, CSS.activeShellTop)).toBe(false);
+    expect(getLineDecorationValues(afterDecorations, firstHeader, CSS.codeblockHeader)[0])
+      .toBe(firstHeaderDecorations[0]);
+    expect(getLineDecorationValues(afterDecorations, lastHeader, CSS.codeblockHeader)[0])
+      .toBe(lastHeaderDecorations[0]);
+  });
+
+  it("rebuilds only the previously active code block on code-to-prose cursor movement (#1176)", () => {
+    const doc = [
+      "```js",
+      "console.log('a')",
+      "```",
+      "",
+      "prose between blocks",
+      "",
+      "```py",
+      "print('b')",
+      "```",
+      "",
+      "```ts",
+      "const c = 1",
+      "```",
+    ].join("\n");
+    const state = createTestState(doc, doc.indexOf("print('b')"), true);
+    const beforeDecorations = state.field(codeBlockDecorationField);
+    const beforeSpecs = getDecorationSpecs(beforeDecorations);
+    const firstHeader = state.doc.lineAt(doc.indexOf("```js")).from;
+    const middleHeader = state.doc.lineAt(doc.indexOf("```py")).from;
+    const lastHeader = state.doc.lineAt(doc.indexOf("```ts")).from;
+    const firstHeaderDecorations = getLineDecorationValues(
+      beforeDecorations,
+      firstHeader,
+      CSS.codeblockHeader,
+    );
+    const lastHeaderDecorations = getLineDecorationValues(
+      beforeDecorations,
+      lastHeader,
+      CSS.codeblockHeader,
+    );
+
+    const movedState = state.update({
+      selection: { anchor: doc.indexOf("prose between") },
+    }).state;
+    const afterDecorations = movedState.field(codeBlockDecorationField);
+    const afterSpecs = getDecorationSpecs(afterDecorations);
+
+    expect(hasLineClassAt(beforeSpecs, middleHeader, CSS.activeShellTop)).toBe(true);
+    expect(afterDecorations).not.toBe(beforeDecorations);
+    expect(hasLineClassAt(afterSpecs, middleHeader, CSS.activeShellTop)).toBe(false);
+    expect(getLineDecorationValues(afterDecorations, firstHeader, CSS.codeblockHeader)[0])
+      .toBe(firstHeaderDecorations[0]);
+    expect(getLineDecorationValues(afterDecorations, lastHeader, CSS.codeblockHeader)[0])
+      .toBe(lastHeaderDecorations[0]);
   });
 
   it("shows opening fence as source only during explicit structure edit", () => {

@@ -14,7 +14,10 @@ import { __iconNode as checkIconNode } from "lucide-react/dist/esm/icons/check.j
 import { __iconNode as copyIconNode } from "lucide-react/dist/esm/icons/copy.js";
 import { COPY_RESET_MS } from "../constants";
 import { CSS } from "../constants/css-classes";
-import { activeCodeBlockOpenFenceStarts } from "../state/shell-ownership";
+import {
+  activeCodeBlock,
+  activeCodeBlockOpenFenceStarts,
+} from "../state/shell-ownership";
 import { isFencedCode } from "../lib/syntax-tree-helpers";
 import {
   activateStructureEditAt,
@@ -138,6 +141,11 @@ function joinClasses(...classes: Array<string | false | null | undefined>): stri
 }
 
 const codeBlockStructureRevisionChanged = createChangeChecker(getCodeBlockStructureRevision);
+
+interface DecorationRebuildRange {
+  readonly from: number;
+  readonly to: number;
+}
 
 class CodeBlockLanguageWidget extends ShellWidget {
   constructor(private readonly language: string) {
@@ -326,6 +334,80 @@ function buildCodeBlockItemsInRange(
   return items;
 }
 
+function sameRebuildRange(
+  left: DecorationRebuildRange | null,
+  right: DecorationRebuildRange | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  return left.from === right.from && left.to === right.to;
+}
+
+function activeCodeBlockRebuildRange(state: EditorState): DecorationRebuildRange | null {
+  const block = activeCodeBlock(state);
+  return block ? { from: block.from, to: block.to } : null;
+}
+
+function mergeRebuildRanges(
+  ranges: readonly DecorationRebuildRange[],
+): readonly DecorationRebuildRange[] {
+  const sorted = ranges
+    .filter((range) => range.from <= range.to)
+    .sort((left, right) => left.from - right.from || left.to - right.to);
+  const merged: DecorationRebuildRange[] = [];
+
+  for (const range of sorted) {
+    const previous = merged.at(-1);
+    if (!previous || previous.to < range.from) {
+      merged.push(range);
+      continue;
+    }
+    merged[merged.length - 1] = {
+      from: previous.from,
+      to: Math.max(previous.to, range.to),
+    };
+  }
+
+  return merged;
+}
+
+function rebuildCodeBlockDecorationRanges(
+  value: DecorationSet,
+  state: EditorState,
+  ranges: readonly DecorationRebuildRange[],
+): DecorationSet {
+  let updated = value;
+
+  for (const range of mergeRebuildRanges(ranges)) {
+    updated = updated.update({
+      filterFrom: range.from,
+      filterTo: range.to,
+      filter: () => false,
+      add: buildCodeBlockItemsInRange(state, range.from, range.to),
+      sort: true,
+    });
+  }
+
+  return updated;
+}
+
+function updateActiveCodeBlockDecorations(
+  value: DecorationSet,
+  tr: Transaction,
+): DecorationSet {
+  const previousActiveRange = activeCodeBlockRebuildRange(tr.startState);
+  const nextActiveRange = activeCodeBlockRebuildRange(tr.state);
+
+  if (sameRebuildRange(previousActiveRange, nextActiveRange)) {
+    return value;
+  }
+
+  return rebuildCodeBlockDecorationRanges(
+    value,
+    tr.state,
+    [previousActiveRange, nextActiveRange].filter((range) => range !== null),
+  );
+}
+
 /**
  * Incremental doc-change update: map existing decorations through changes,
  * then filter and rebuild only the dirty region.
@@ -387,7 +469,8 @@ export function docChangeTouchesCodeBlockContent(
  * On doc change with tree change: incremental rebuild scoped to the dirty
  * region (filterFrom/filterTo) instead of full-document rebuild (#723).
  * On doc change without tree change: maps decoration positions only.
- * On cursor/focus/tree-only change: full rebuild.
+ * On cursor change: rebuild only the previous/new active code block ranges.
+ * On focus/tree-only change: full rebuild.
  */
 export const codeBlockDecorationField = createDecorationStateField({
   create(state) {
@@ -418,10 +501,13 @@ export const codeBlockDecorationField = createDecorationStateField({
       return value.map(tr.changes);
     }
 
+    if (tr.selection !== undefined) {
+      return updateActiveCodeBlockDecorations(value, tr);
+    }
+
     if (
-      tr.selection !== undefined ||
-      (syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
-        syntaxTreeAvailable(tr.state, tr.state.doc.length))
+      syntaxTree(tr.state) !== syntaxTree(tr.startState) &&
+      syntaxTreeAvailable(tr.state, tr.state.doc.length)
     ) {
       return buildCodeBlockDecorations(tr.state);
     }
