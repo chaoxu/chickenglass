@@ -3,6 +3,7 @@ import {
   $getSelection,
   $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
+  type EditorState,
   type EditorUpdateOptions,
   HISTORY_MERGE_TAG,
   type LexicalEditor,
@@ -15,6 +16,7 @@ import {
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
 } from "../lib/editor-doc-change";
+import { measureSync } from "../app/perf";
 import type { SurfaceFocusOwner } from "../state/editor-focus";
 import { getActiveEditor } from "./active-editor-tracker";
 import { hasCursorRevealActive } from "./cursor-reveal-state";
@@ -178,12 +180,17 @@ export interface MarkdownEditorSessionController {
   readonly userEditPendingRef: MutableRefObject<boolean>;
   readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
   readonly embeddedFieldFlushRegistry: ReturnType<typeof createEmbeddedFieldFlushRegistry>;
-  readonly flushRichDocumentSnapshot: () => void;
+  readonly flushRichDocumentSnapshot: () => string | null;
   readonly handleRichChange: (editor: LexicalEditor, tags: Set<string>) => void;
   readonly syncSelectionToDocLength: (docLength: number) => void;
 }
 
 type RichChangePolicy = "markdown" | "dirty";
+
+interface RichMarkdownSnapshot {
+  readonly editorState: EditorState;
+  readonly markdown: string;
+}
 
 function isUserCommittedRichChange(
   requireUserEditFlag: boolean,
@@ -225,6 +232,7 @@ export function useMarkdownEditorSessionController({
   const focusOwnerRef = useRef(focusOwner);
   const richSnapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const richSnapshotEditorRef = useRef<LexicalEditor | null>(null);
+  const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
   const embeddedFieldFlushRegistry = useMemo(createEmbeddedFieldFlushRegistry, []);
 
   useEffect(() => {
@@ -240,21 +248,47 @@ export function useMarkdownEditorSessionController({
     richSnapshotEditorRef.current = null;
   }, []);
 
+  const readRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
+    const editorState = editor.getEditorState();
+    const cached = richMarkdownSnapshotRef.current;
+    if (cached?.editorState === editorState) {
+      return cached.markdown;
+    }
+
+    const markdown = getLexicalMarkdown(editor);
+    richMarkdownSnapshotRef.current = {
+      editorState,
+      markdown,
+    };
+    return markdown;
+  }, []);
+
   const publishRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
-    const nextDoc = getLexicalMarkdown(editor);
+    const nextDoc = measureSync(
+      "lexical.publishRichDocumentSnapshot",
+      () => readRichDocumentSnapshot(editor),
+      { category: "lexical" },
+    );
     const changes = createMinimalEditorDocumentChanges(
       lastCommittedDocRef.current,
       nextDoc,
     );
     if (changes.length === 0) {
-      return;
+      return nextDoc;
     }
 
     pendingLocalEchoDocRef.current = nextDoc;
     lastCommittedDocRef.current = nextDoc;
     onTextChange?.(nextDoc);
     onDocChange?.(changes);
-  }, [lastCommittedDocRef, onDocChange, onTextChange, pendingLocalEchoDocRef]);
+    return nextDoc;
+  }, [
+    lastCommittedDocRef,
+    onDocChange,
+    onTextChange,
+    pendingLocalEchoDocRef,
+    readRichDocumentSnapshot,
+  ]);
 
   const scheduleRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
     const timer = richSnapshotTimerRef.current;
@@ -271,12 +305,18 @@ export function useMarkdownEditorSessionController({
 
   const flushRichDocumentSnapshot = useCallback(() => {
     const editor = richSnapshotEditorRef.current;
-    if (!editor) return;
+    if (!editor) return null;
     clearRichSnapshotTimer();
-    publishRichDocumentSnapshot(editor);
+    return measureSync(
+      "lexical.flushRichDocumentSnapshot",
+      () => publishRichDocumentSnapshot(editor),
+      { category: "lexical" },
+    );
   }, [clearRichSnapshotTimer, publishRichDocumentSnapshot]);
 
-  useEffect(() => flushRichDocumentSnapshot, [flushRichDocumentSnapshot]);
+  useEffect(() => () => {
+    flushRichDocumentSnapshot();
+  }, [flushRichDocumentSnapshot]);
 
   const handleRichChange = useCallback((editor: LexicalEditor, tags: Set<string>) => {
     if (shouldIgnoreMarkdownEditorChange(editor, tags)) {
@@ -402,7 +442,7 @@ export function MarkdownModeSyncPlugin({
 }: {
   readonly doc: string;
   readonly editorMode: RevealMode;
-  readonly flushRichDocumentSnapshot?: () => void;
+  readonly flushRichDocumentSnapshot?: () => string | null;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
@@ -494,7 +534,7 @@ export function MarkdownModeSyncPlugin({
 interface MarkdownEditorHandlePluginProps {
   readonly editorModeRef: MutableRefObject<RevealMode>;
   readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
-  readonly flushRichDocumentSnapshot?: () => void;
+  readonly flushRichDocumentSnapshot?: () => string | null;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
@@ -525,13 +565,42 @@ export function MarkdownEditorHandlePlugin({
   const [editor] = useLexicalComposerContext();
   const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
   const selectionSnapshotFreshRef = useRef(false);
+  const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
 
   useEffect(() => {
     if (!onEditorReady) {
       return;
     }
 
-    const readDocumentSnapshot = () => readEditorDocument(editor, editorModeRef.current);
+    const readRichDocumentSnapshot = () => {
+      const editorState = editor.getEditorState();
+      const cached = richMarkdownSnapshotRef.current;
+      if (cached?.editorState === editorState) {
+        return cached.markdown;
+      }
+
+      const markdown = getLexicalMarkdown(editor);
+      richMarkdownSnapshotRef.current = {
+        editorState,
+        markdown,
+      };
+      return markdown;
+    };
+
+    const cacheRichDocumentSnapshot = (markdown: string) => {
+      if (editorModeRef.current === "source") {
+        return;
+      }
+      richMarkdownSnapshotRef.current = {
+        editorState: editor.getEditorState(),
+        markdown,
+      };
+    };
+
+    const readDocumentSnapshot = () =>
+      editorModeRef.current === "source"
+        ? getSourceText(editor)
+        : readRichDocumentSnapshot();
     const readSelectionDocumentSnapshot = () =>
       editorModeRef.current === "source"
         ? getSourceText(editor)
@@ -628,7 +697,11 @@ export function MarkdownEditorHandlePlugin({
 
     const flushPendingEdits = () => {
       embeddedFieldFlushRegistry?.flush();
-      flushRichDocumentSnapshot?.();
+      const flushedDoc = flushRichDocumentSnapshot?.() ?? null;
+      if (flushedDoc !== null) {
+        cacheRichDocumentSnapshot(flushedDoc);
+      }
+      return flushedDoc;
     };
 
     const readFreshDocument = () => {
@@ -641,8 +714,8 @@ export function MarkdownEditorHandlePlugin({
             fallback: selectionRef.current,
             markdown: preFlushRevealDoc,
           });
-      flushPendingEdits();
-      const nextDoc = readDocumentSnapshot();
+      const flushedDoc = flushPendingEdits();
+      const nextDoc = flushedDoc ?? readDocumentSnapshot();
       stageDocumentSnapshot(nextDoc);
       if (preFlushRevealSelection) {
         const nextSelection = createMarkdownSelection(
@@ -889,7 +962,7 @@ export function MarkdownEditorHandlePlugin({
 
 interface RichMarkdownEditorHandlePluginProps {
   readonly focusOwner: SurfaceFocusOwner;
-  readonly flushRichDocumentSnapshot?: () => void;
+  readonly flushRichDocumentSnapshot?: () => string | null;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly onEditorReady?: (handle: MarkdownEditorHandle, editor: LexicalEditor) => void;
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;

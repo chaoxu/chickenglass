@@ -7,6 +7,7 @@ import {
   $isRangeSelection,
   $isTextNode,
   $setSelection,
+  type EditorState,
   type LexicalEditor,
   type LexicalNode,
   type TextNode,
@@ -49,6 +50,26 @@ import {
 interface SourceSelectionReadOptions {
   readonly fallback?: MarkdownEditorSelection;
   readonly markdown?: string;
+}
+
+interface CachedSourceSpanIndex {
+  readonly markdown: string;
+  readonly spanIndex: SourceSpanIndex;
+}
+
+const readSourceSpanIndexCache = new WeakMap<EditorState, CachedSourceSpanIndex>();
+
+function readCachedSourceSpanIndex(
+  editorState: EditorState,
+  markdown: string,
+): SourceSpanIndex {
+  const cached = readSourceSpanIndexCache.get(editorState);
+  if (cached?.markdown === markdown) {
+    return cached.spanIndex;
+  }
+  const spanIndex = createSourceSpanIndex(markdown);
+  readSourceSpanIndexCache.set(editorState, { markdown, spanIndex });
+  return spanIndex;
 }
 
 export function mapVisibleTextOffsetToMarkdown(
@@ -421,7 +442,9 @@ export function readSourceSelectionFromLexicalSelection(
   const editorState = editor.getEditorState();
 
   return editorState.read(() => {
-    const spanIndex = options.markdown ? createSourceSpanIndex(options.markdown) : null;
+    const spanIndex = options.markdown
+      ? readCachedSourceSpanIndex(editorState, options.markdown)
+      : null;
     const selection = $getSelection();
     if ($isRangeSelection(selection)) {
       const anchor = readSourceOffsetFromRangePoint(editor, selection.anchor, spanIndex);

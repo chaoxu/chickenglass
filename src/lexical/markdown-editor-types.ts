@@ -10,7 +10,7 @@ export interface MarkdownEditorSelection {
 export interface MarkdownEditorHandle {
   applyChanges: (changes: readonly EditorDocumentChange[]) => void;
   focus: () => void;
-  flushPendingEdits: () => void;
+  flushPendingEdits: () => string | null;
   getDoc: () => string;
   getSelection: () => MarkdownEditorSelection;
   peekDoc: () => string;

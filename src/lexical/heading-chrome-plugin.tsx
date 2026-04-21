@@ -1,4 +1,4 @@
-import { extractHeadingDefinitions } from "../app/markdown/headings";
+import { buildDocumentLabelParseSnapshot } from "../app/markdown/labels";
 import { SOURCE_POSITION_DATASET } from "./source-position-contract";
 
 // NOTE: Never mutate the Text node contents under a heading element. Lexical
@@ -13,7 +13,7 @@ export function syncHeadingChrome(root: HTMLElement | null, doc: string): void {
     return;
   }
 
-  const headings = extractHeadingDefinitions(doc);
+  const headings = buildDocumentLabelParseSnapshot(doc).headings;
   const elements = [...root.querySelectorAll<HTMLElement>(".cf-lexical-heading")];
 
   for (const element of elements) {

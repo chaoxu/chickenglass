@@ -8,6 +8,7 @@ import {
   type TextNode,
 } from "lexical";
 
+import { measureSync } from "../app/perf";
 import { getInlineTextFormatSpecs } from "./runtime";
 import type { InlineTextFormatFamily } from "./runtime";
 import {
@@ -538,9 +539,11 @@ export class SourceSpanIndex {
 }
 
 export function createSourceSpanIndex(markdown: string): SourceSpanIndex {
-  const spans: SourceSpan[] = [];
-  const nodeRanges = new Map<string, SourceRange>();
-  const cursor = new ParsedSourceCursor(parseMarkdownSourceTokens(markdown));
-  collectNodeSpans($getRoot(), cursor, spans, nodeRanges);
-  return new SourceSpanIndex(spans, nodeRanges);
+  return measureSync("lexical.createSourceSpanIndex", () => {
+    const spans: SourceSpan[] = [];
+    const nodeRanges = new Map<string, SourceRange>();
+    const cursor = new ParsedSourceCursor(parseMarkdownSourceTokens(markdown));
+    collectNodeSpans($getRoot(), cursor, spans, nodeRanges);
+    return new SourceSpanIndex(spans, nodeRanges);
+  }, { category: "lexical", detail: `${markdown.length} chars` });
 }

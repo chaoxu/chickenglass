@@ -6,6 +6,7 @@ import {
 } from "react";
 
 import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
+import { measureSync } from "../app/perf";
 import { useFileSystem } from "../app/contexts/file-system-context";
 import type { FileSystem } from "../app/file-manager";
 import { type CitationRenderData, useCitationRenderData } from "../citations/citation-render-data";
@@ -91,7 +92,11 @@ function LexicalRenderContextRuntimeProvider({
   const projectConfig = useProjectConfigResource(resolver);
   const documentSnapshot = useMemo(() => buildDocumentLabelParseSnapshot(doc), [doc]);
   const documentRuntime = useMemo(
-    () => buildDocumentRuntime(doc, projectConfig, resolver, documentSnapshot),
+    () => measureSync(
+      "lexical.buildDocumentRuntime",
+      () => buildDocumentRuntime(doc, projectConfig, resolver, documentSnapshot),
+      { category: "lexical", detail: `${doc.length} chars` },
+    ),
     [doc, documentSnapshot, projectConfig, resolver],
   );
   const citations = useCitationRenderData(documentSnapshot.references, documentRuntime.config, resolver);

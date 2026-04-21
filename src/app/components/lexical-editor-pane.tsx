@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { computeLiveStats } from "../writing-stats";
 import { Breadcrumbs } from "./breadcrumbs";
-import { extractDiagnosticsFromMarkdown } from "../markdown/diagnostics";
-import { extractHeadingsFromMarkdown } from "../markdown/headings";
+import {
+  buildDocumentLabelGraph,
+  buildDocumentLabelParseSnapshot,
+  isLikelyLocalReferenceId,
+  type DocumentLabelGraph,
+} from "../markdown/labels";
+import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import type { DiagnosticEntry } from "../diagnostics";
 import type { HeadingEntry } from "../heading-ancestry";
@@ -37,6 +42,93 @@ function toRevealMode(mode: EditorMode | undefined): RevealMode {
   return mode === "source" ? REVEAL_MODE.SOURCE : REVEAL_MODE.LEXICAL;
 }
 
+interface LexicalPaneDerivedState {
+  readonly chars: number;
+  readonly diagnostics: DiagnosticEntry[];
+  readonly doc: string;
+  readonly headings: HeadingEntry[];
+  readonly words: number;
+}
+
+function extractDiagnosticsFromGraph(graph: DocumentLabelGraph): DiagnosticEntry[] {
+  const diagnostics: DiagnosticEntry[] = [];
+
+  for (const [id, definitions] of graph.duplicatesById) {
+    for (const definition of definitions) {
+      diagnostics.push({
+        severity: "error",
+        message: `Duplicate local target ID "${id}"`,
+        from: definition.from,
+        to: definition.to,
+      });
+    }
+  }
+
+  for (const reference of graph.references) {
+    if (!isLikelyLocalReferenceId(reference.id)) {
+      continue;
+    }
+    if (graph.definitionsById.has(reference.id)) {
+      continue;
+    }
+    diagnostics.push({
+      severity: "warning",
+      message: `Unresolved reference "@${reference.id}"`,
+      from: reference.from,
+      to: reference.to,
+    });
+  }
+
+  diagnostics.sort((left, right) => {
+    if (left.severity !== right.severity) {
+      return left.severity === "error" ? -1 : 1;
+    }
+    return left.from - right.from;
+  });
+
+  return diagnostics;
+}
+
+function deriveLexicalPaneState(doc: string): LexicalPaneDerivedState {
+  return measureSync("lexical.derivePaneState", () => {
+    const counts = measureSync(
+      "lexical.computeLiveStats",
+      () => computeLiveStats(doc),
+      { category: "lexical", detail: `${doc.length} chars` },
+    );
+    const snapshot = buildDocumentLabelParseSnapshot(doc);
+    const headings = measureSync(
+      "lexical.deriveHeadings",
+      () => snapshot.headings.map(({ level, text, number, pos, id }) => ({
+        level,
+        text,
+        number,
+        pos,
+        id,
+      })),
+      { category: "lexical", detail: `${snapshot.headings.length} headings` },
+    );
+    const graph = measureSync(
+      "lexical.deriveLabelGraph",
+      () => buildDocumentLabelGraph(doc, snapshot),
+      { category: "lexical", detail: `${snapshot.references.length} refs` },
+    );
+    const diagnostics = measureSync(
+      "lexical.deriveDiagnostics",
+      () => extractDiagnosticsFromGraph(graph),
+      { category: "lexical", detail: `${graph.references.length} refs` },
+    );
+
+    return {
+      chars: counts.chars,
+      diagnostics,
+      doc,
+      headings,
+      words: counts.words,
+    };
+  }, { category: "lexical", detail: `${doc.length} chars` });
+}
+
 export function LexicalEditorPane({
   editorMode,
   onDiagnosticsChange,
@@ -51,6 +143,8 @@ export function LexicalEditorPane({
   theme: _theme,
   ...editorOptions
 }: LexicalEditorPaneProps) {
+  const [initialDerivedState] = useState(() => deriveLexicalPaneState(editorOptions.doc));
+  const derivedStateRef = useRef(initialDerivedState);
   const [handle, setHandle] = useState<MarkdownEditorHandle | null>(null);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
   const currentDocRef = useRef(editorOptions.doc);
@@ -62,12 +156,25 @@ export function LexicalEditorPane({
   });
   const lexicalMode = toRevealMode(editorMode);
 
+  const getDerivedState = useCallback((doc: string) => {
+    const cached = derivedStateRef.current;
+    if (cached.doc === doc) {
+      return cached;
+    }
+    const nextState = deriveLexicalPaneState(doc);
+    derivedStateRef.current = nextState;
+    return nextState;
+  }, []);
+
   const syncDocumentDerivedState = useCallback((doc: string) => {
-    const counts = computeLiveStats(doc);
-    useEditorTelemetryStore.getState().setLiveCounts(counts.words, counts.chars);
-    onHeadingsChange?.(extractHeadingsFromMarkdown(doc));
-    onDiagnosticsChange?.(extractDiagnosticsFromMarkdown(doc));
-  }, [onDiagnosticsChange, onHeadingsChange]);
+    const derivedState = getDerivedState(doc);
+    useEditorTelemetryStore.getState().setLiveCounts(
+      derivedState.words,
+      derivedState.chars,
+    );
+    onHeadingsChange?.(derivedState.headings);
+    onDiagnosticsChange?.(derivedState.diagnostics);
+  }, [getDerivedState, onDiagnosticsChange, onHeadingsChange]);
 
   useEffect(() => {
     currentDocRef.current = editorOptions.doc;
@@ -113,10 +220,7 @@ export function LexicalEditorPane({
     onSurfaceReady?.();
   }, [onSurfaceReady]);
 
-  const headings = useMemo(
-    () => extractHeadingsFromMarkdown(editorOptions.doc),
-    [editorOptions.doc],
-  );
+  const headings = getDerivedState(editorOptions.doc).headings;
 
   return (
     <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>

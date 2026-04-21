@@ -20,11 +20,11 @@ interface HarnessOptions {
   readonly sessionDoc: string;
 }
 
-function createHandle(peekDoc: string): MarkdownEditorHandle {
+function createHandle(peekDoc: string, flushedDoc: string | null = null): MarkdownEditorHandle {
   return {
     applyChanges: vi.fn(),
     focus: vi.fn(),
-    flushPendingEdits: vi.fn(),
+    flushPendingEdits: vi.fn(() => flushedDoc),
     getDoc: vi.fn(() => peekDoc),
     getSelection: vi.fn(() => ({ anchor: 0, focus: 0, from: 0, to: 0 })),
     peekDoc: vi.fn(() => peekDoc),
@@ -130,6 +130,30 @@ describe("useEditorTransactions", () => {
       intent: "debug-read",
       value: "# A edited\n",
     });
+  });
+
+  it("uses the flushed editor snapshot without forcing a second document read", () => {
+    const handle = createHandle("# A stale\n", "# A flushed\n");
+    const {
+      Harness,
+      handleDocumentSnapshot,
+      ref,
+    } = createHarness({
+      currentPath: "a.md",
+      editorDoc: "# A\n",
+      handle,
+      sessionDoc: "# A\n",
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    const result = ref.result.runEditorTransaction("mode-switch", () => undefined);
+
+    expect(handle.flushPendingEdits).toHaveBeenCalledOnce();
+    expect(handle.getSelection).toHaveBeenCalledOnce();
+    expect(handle.getDoc).not.toHaveBeenCalled();
+    expect(handleDocumentSnapshot).toHaveBeenCalledWith("# A flushed\n");
+    expect(result.flush.shouldDeferModeSwitch).toBe(true);
   });
 
   it("runs transactions without editor flushing when no document is active", () => {

@@ -44,15 +44,16 @@ export function useEditorTransactions({
       };
     }
 
-    if (
+    const needsSelectionSnapshot =
       intent === "mode-switch"
       || intent === "search-navigation"
-      || intent === "source-selection"
-    ) {
+      || intent === "source-selection";
+
+    const flushedDoc = handle.flushPendingEdits();
+    if (needsSelectionSnapshot) {
       handle.getSelection();
     }
-    handle.flushPendingEdits();
-    const freshDoc = handle.getDoc();
+    const freshDoc = flushedDoc ?? handle.getDoc();
     const currentDoc = getSessionCurrentDocText();
     if (freshDoc !== currentDoc) {
       handleDocumentSnapshot(freshDoc);
