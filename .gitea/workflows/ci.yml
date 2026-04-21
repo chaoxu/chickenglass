@@ -21,6 +21,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm lint:boundaries
       - run: pnpm typecheck
+      - run: pnpm typecheck:server
       - run: pnpm knip
 
   # ── Frontend: unit tests ──────────────────────────────────────────────────
@@ -36,9 +37,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
-  # ── Lexical WYSIWYG browser smoke ─────────────────────────────────────────
-  lexical-smoke:
-    name: Lexical browser smoke
+  # ── Production app: build + required browser subset ───────────────────────
+  merged-app-browser:
+    name: Production app browser subset
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,19 +49,20 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Run Lexical smoke
+      - run: pnpm build:app
+      - name: Run merged-app browser subset
         run: |
-          pnpm exec vite --host 127.0.0.1 --port 5173 --strictPort > /tmp/coflats-vite.log 2>&1 &
+          pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/coflats-preview.log 2>&1 &
           server_pid=$!
           trap 'kill $server_pid' EXIT
           for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then
               break
             fi
             sleep 1
           done
-          curl -fsS http://127.0.0.1:5173 >/dev/null
-          pnpm test:browser:lexical -- --url http://127.0.0.1:5173 --browser managed --timeout 30000
+          curl -fsS http://127.0.0.1:4173 >/dev/null
+          pnpm test:browser:merged-app -- --url http://127.0.0.1:4173 --browser managed --timeout 30000
 
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:
@@ -77,6 +79,7 @@ jobs:
       - run: pnpm build:editor
       - run: pnpm publint
       - run: pnpm size
+      - run: pnpm smoke:editor-package
 
   # ── Rust / Tauri backend ──────────────────────────────────────────────────
   rust:

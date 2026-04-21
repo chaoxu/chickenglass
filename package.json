@@ -45,6 +45,7 @@
     "chrome:test": "node scripts/test-chrome.mjs",
     "convert:latex": "python3 scripts/latex-to-coflat.py",
     "test:browser": "node scripts/test-regression.mjs",
+    "test:browser:merged-app": "node scripts/test-regression.mjs --filter mode-switch,index-open-rich-render,headings,math-render",
     "test:browser:lexical": "node scripts/coflats-lexical-smoke.mjs",
     "perf:capture": "node scripts/perf-regression.mjs capture",
     "perf:compare": "node scripts/perf-regression.mjs compare",
