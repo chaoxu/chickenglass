@@ -14,6 +14,7 @@ import { imageUrlEffect, imageUrlField } from "../state/image-url";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
+import { focusEffect } from "./focus-state";
 
 describe("ImagePreviewWidget (image state)", () => {
   const imageState = (src: string) => ({ kind: "image" as const, src });
@@ -436,6 +437,7 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
       cursorPos: doc.length,
       extensions: [markdown(), imageRenderPlugin],
     });
+    view.dispatch({ effects: focusEffect.of(true) });
     return view;
   }
 
@@ -485,6 +487,7 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
     });
 
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
+    expect(view.contentDOM.textContent).toContain("![first]");
     expect(view.state.selection.main.from).toBe(firstImageFrom);
   });
 
@@ -552,13 +555,126 @@ describe("ImageRenderPlugin incremental docChanged (#824)", () => {
 
 describe("imageRenderPlugin block ownership", () => {
   it("uses a block replacement for standalone image lines", () => {
-    const view = createTestView("![](figure.png)", {
+    const doc = ["intro", "", "![](figure.png)"].join("\n");
+    const imageFrom = doc.indexOf("![]");
+    const imageTo = imageFrom + "![](figure.png)".length;
+    const view = createTestView(doc, {
+      cursorPos: 0,
       extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
     });
     const specs = getDecorationSpecs(
       view.state.field(_imageDecorationFieldForTest).decorations,
     );
-    expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(true);
+    expect(
+      specs.some((spec) =>
+        spec.block === true &&
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.from === imageFrom &&
+        spec.to === imageTo
+      ),
+    ).toBe(true);
+    view.destroy();
+  });
+
+  it("keeps a focused standalone image rendered while revealing its source below", () => {
+    const doc = ["before", "", "![diagram](figure.png)", "", "after"].join("\n");
+    const imageFrom = doc.indexOf("![diagram]");
+    const imageTo = imageFrom + "![diagram](figure.png)".length;
+    const view = createTestView(doc, {
+      cursorPos: doc.indexOf("figure.png"),
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
+    });
+    view.dispatch({ effects: focusEffect.of(true) });
+    const specs = getDecorationSpecs(
+      view.state.field(_imageDecorationFieldForTest).decorations,
+    );
+
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(1);
+    expect(
+      specs.some((spec) =>
+        spec.block === true &&
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.from === imageFrom &&
+        spec.to === imageFrom
+      ),
+    ).toBe(true);
+    expect(
+      specs.some((spec) =>
+        spec.block === true &&
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.from === imageFrom &&
+        spec.to === imageTo
+      ),
+    ).toBe(false);
+    expect(specs.filter((spec) => spec.class === CSS.sourceDelimiter)).toHaveLength(4);
+    expect(specs.filter((spec) => spec.class === CSS.inlineSource)).toHaveLength(1);
+    expect(view.contentDOM.textContent).toContain("![diagram](figure.png)");
+    view.destroy();
+  });
+
+  it("keeps a standalone image rendered after editing its revealed source", () => {
+    const doc = ["before", "", "![diagram](figure.png)", "", "after"].join("\n");
+    const imageFrom = doc.indexOf("![diagram]");
+    const insertAt = doc.indexOf(".png");
+    const view = createTestView(doc, {
+      cursorPos: insertAt,
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
+    });
+    view.dispatch({ effects: focusEffect.of(true) });
+
+    view.dispatch({
+      changes: { from: insertAt, insert: "-v2" },
+      selection: { anchor: insertAt + "-v2".length },
+    });
+
+    const nextImageTo = imageFrom + "![diagram](figure-v2.png)".length;
+    const specs = getDecorationSpecs(
+      view.state.field(_imageDecorationFieldForTest).decorations,
+    );
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(1);
+    expect(
+      specs.some((spec) =>
+        spec.block === true &&
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.from === imageFrom &&
+        spec.to === imageFrom
+      ),
+    ).toBe(true);
+    expect(
+      specs.some((spec) =>
+        spec.block === true &&
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.from === imageFrom &&
+        spec.to === nextImageTo
+      ),
+    ).toBe(false);
+    expect(view.contentDOM.textContent).toContain("![diagram](figure-v2.png)");
+    view.destroy();
+  });
+
+  it("returns to a block replacement when the cursor leaves a standalone image", () => {
+    const doc = ["![diagram](figure.png)", "", "after"].join("\n");
+    const imageTo = "![diagram](figure.png)".length;
+    const view = createTestView(doc, {
+      cursorPos: doc.indexOf("figure.png"),
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
+    });
+    view.dispatch({ effects: focusEffect.of(true) });
+
+    view.dispatch({ selection: { anchor: doc.indexOf("after") } });
+
+    const specs = getDecorationSpecs(
+      view.state.field(_imageDecorationFieldForTest).decorations,
+    );
+    expect(
+      specs.some((spec) =>
+        spec.block === true &&
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.from === 0 &&
+        spec.to === imageTo
+      ),
+    ).toBe(true);
+    expect(specs.some((spec) => spec.class === CSS.inlineSource)).toBe(false);
     view.destroy();
   });
 
@@ -571,6 +687,31 @@ describe("imageRenderPlugin block ownership", () => {
     );
     expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(false);
     expect(specs.some((spec) => spec.widgetClass === "ImagePreviewWidget")).toBe(true);
+    view.destroy();
+  });
+
+  it("does not promote focused inline images into block source editing", () => {
+    const doc = "prefix ![diagram](figure.png) suffix";
+    const imageFrom = doc.indexOf("![diagram]");
+    const imageTo = imageFrom + "![diagram](figure.png)".length;
+    const view = createTestView(doc, {
+      cursorPos: doc.indexOf("figure.png"),
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
+    });
+    view.dispatch({ effects: focusEffect.of(true) });
+    const specs = getDecorationSpecs(
+      view.state.field(_imageDecorationFieldForTest).decorations,
+    );
+
+    expect(
+      specs.some((spec) =>
+        spec.widgetClass === "ImagePreviewWidget" &&
+        spec.block !== true &&
+        spec.from === imageFrom &&
+        spec.to === imageTo
+      ),
+    ).toBe(true);
+    expect(specs.some((spec) => spec.block === true && spec.widgetClass === "ImagePreviewWidget")).toBe(false);
     view.destroy();
   });
 });

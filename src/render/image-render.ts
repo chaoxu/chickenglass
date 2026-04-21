@@ -7,7 +7,7 @@ import {
 } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
-  type Decoration,
+  Decoration,
   type DecorationSet,
   EditorView,
   type ViewUpdate,
@@ -52,6 +52,18 @@ import {
   rangeIntersectsDirtyRanges,
   type DirtyRange,
 } from "./incremental-dirty-ranges";
+import {
+  editorFocusField,
+  focusTracker,
+} from "./focus-state";
+import {
+  type ActiveImageSourceTarget,
+  activeSourceTargetsEqual,
+  addActiveImageSourceDecorations,
+  getActiveImageSourceTarget,
+  isStandaloneImageLine,
+  mapActiveSourceTargetThroughChanges,
+} from "./image-source-reveal";
 
 type ImagePreviewState =
   | { kind: "image"; src: string }
@@ -285,16 +297,6 @@ function mediaPreviewWidget(
   }
 }
 
-function isStandaloneImageLine(
-  state: EditorState,
-  from: number,
-  to: number,
-): boolean {
-  const line = state.doc.lineAt(from);
-  const imageText = state.sliceDoc(from, to);
-  return line.text.trim() === imageText;
-}
-
 interface ImageNodeInfo {
   readonly from: number;
   readonly to: number;
@@ -316,6 +318,7 @@ interface ImageDecorationState {
   readonly mediaDependencies: LocalMediaDependencies;
   readonly dependencyCounts: LocalMediaDependencyCounts;
   readonly infosByResolvedPath: ImageInfosByResolvedPath;
+  readonly activeSource: ActiveImageSourceTarget | null;
 }
 
 function createDependencyCounts(): LocalMediaDependencyCounts {
@@ -521,7 +524,9 @@ function collectAllImageNodeInfos(state: EditorState): ImageNodeInfo[] {
 }
 
 function buildImageItemsFromInfos(
+  state: EditorState,
   infos: readonly ImageNodeInfo[],
+  activeSource: ActiveImageSourceTarget | null,
 ): Range<Decoration>[] {
   const items: Range<Decoration>[] = [];
   for (const info of infos) {
@@ -533,7 +538,15 @@ function buildImageItemsFromInfos(
           { kind: "image", src: info.src },
           info.isBlock,
         );
-    if (info.isBlock) {
+    const activeBlockSource = info.isBlock
+      && activeSourceTargetsEqual(activeSource, info);
+    if (activeBlockSource) {
+      widget.updateSourceRange(info.from, info.to);
+      items.push(
+        Decoration.widget({ widget, block: true, side: -1 }).range(info.from),
+      );
+      addActiveImageSourceDecorations(state, info, items);
+    } else if (info.isBlock) {
       pushBlockWidgetDecoration(items, widget, info.from, info.to);
     } else {
       pushWidgetDecoration(items, widget, info.from, info.to);
@@ -555,11 +568,13 @@ function buildDependencyCountsFromInfos(
 function buildImageDecorationState(state: EditorState): ImageDecorationState {
   const infos = collectAllImageNodeInfos(state);
   const dependencyCounts = buildDependencyCountsFromInfos(infos);
+  const activeSource = getActiveImageSourceTarget(state);
   return {
-    decorations: buildDecorations(buildImageItemsFromInfos(infos)),
+    decorations: buildDecorations(buildImageItemsFromInfos(state, infos, activeSource)),
     mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
     dependencyCounts,
     infosByResolvedPath: buildImageInfoPathIndex(infos),
+    activeSource,
   };
 }
 
@@ -577,21 +592,36 @@ function mapInfoRangeToDirtyRange(
   );
 }
 
+function imageDecorationTouchesDirtyRanges(
+  from: number,
+  to: number,
+  dirtyRanges: readonly DirtyRange[],
+): boolean {
+  if (from !== to) return rangeIntersectsDirtyRanges(from, to, dirtyRanges);
+  for (const range of dirtyRanges) {
+    if (from >= range.from && from <= range.to) return true;
+    if (range.from > from) break;
+  }
+  return false;
+}
+
 function replaceImageDecorationsInRanges(
+  state: EditorState,
   decorations: DecorationSet,
   dirtyRanges: readonly DirtyRange[],
   infos: readonly ImageNodeInfo[],
+  activeSource: ActiveImageSourceTarget | null,
 ): DecorationSet {
   let next = decorations;
   for (const range of dirtyRanges) {
     next = next.update({
       filterFrom: range.from,
       filterTo: range.to,
-      filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
+      filter: (from, to) => !imageDecorationTouchesDirtyRanges(from, to, [range]),
     });
   }
 
-  const items = buildImageItemsFromInfos(infos);
+  const items = buildImageItemsFromInfos(state, infos, activeSource);
   if (items.length > 0) {
     next = next.update({
       add: items,
@@ -612,6 +642,24 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
     return buildImageDecorationState(state);
   },
   update(value, tr) {
+    const beforeActiveSource = value.activeSource;
+    const afterActiveSource = getActiveImageSourceTarget(tr.state);
+    const mappedBeforeActiveSource = tr.docChanged
+      ? mapActiveSourceTargetThroughChanges(
+          beforeActiveSource,
+          tr.state,
+          tr.changes,
+        )
+      : beforeActiveSource;
+    const activeSourceChanged = !activeSourceTargetsEqual(
+      mappedBeforeActiveSource,
+      afterActiveSource,
+    );
+
+    if (activeSourceChanged) {
+      return buildImageDecorationState(tr.state);
+    }
+
     if (tr.docChanged) {
       const oldDirtyRanges = dirtyRangesFromChanges(
         tr.changes,
@@ -644,13 +692,16 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
       }
       return {
         decorations: replaceImageDecorationsInRanges(
+          tr.state,
           value.decorations.map(tr.changes),
           dirtyRanges,
           newInfos,
+          afterActiveSource,
         ),
         mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
         dependencyCounts,
         infosByResolvedPath,
+        activeSource: afterActiveSource,
       };
     }
 
@@ -668,13 +719,16 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
       ).map((info) => refreshImageNodeInfoPreview(tr.state, info));
       return {
         decorations: replaceImageDecorationsInRanges(
+          tr.state,
           value.decorations,
           infos.map((info) => ({ from: info.from, to: info.to })),
           infos,
+          afterActiveSource,
         ),
         mediaDependencies: value.mediaDependencies,
         dependencyCounts: value.dependencyCounts,
         infosByResolvedPath: value.infosByResolvedPath,
+        activeSource: afterActiveSource,
       };
     }
 
@@ -725,6 +779,8 @@ const imageRequestPlugin = ViewPlugin.fromClass(class {
 export { imageDecorationField as _imageDecorationFieldForTest };
 
 export const imageRenderPlugin: Extension = [
+  editorFocusField,
+  focusTracker,
   imageDecorationField,
   imageRequestPlugin,
 ];
