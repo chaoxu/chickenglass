@@ -8,7 +8,6 @@ import {
 import {
   clearSessionDocument,
   markSessionDocumentDirty,
-  renameSessionDocument,
 } from "./editor-session-actions";
 import { getCurrentSessionDocument } from "./editor-session-model";
 import {
@@ -58,6 +57,14 @@ function currentDocumentText(
     ?? runtime.buffers.get(path)
     ?? emptyEditorDocument,
   );
+}
+
+function remapPath(path: string, oldPath: string, newPath: string): string | null {
+  if (path === oldPath) return newPath;
+  if (oldPath !== "" && path.startsWith(`${oldPath}/`)) {
+    return `${newPath}/${path.slice(oldPath.length + 1)}`;
+  }
+  return null;
 }
 
 export function createEditorSessionPersistence({
@@ -123,31 +130,68 @@ export function createEditorSessionPersistence({
     await saveCurrentDocument();
   };
 
-  const renameBuffers = (oldPath: string, newPath: string) => {
-    const buffered = runtime.buffers.get(oldPath);
-    if (buffered !== undefined) {
-      runtime.buffers.delete(oldPath);
-      runtime.buffers.set(newPath, buffered);
+  const renameBuffers = (oldPath: string, newPath: string): string | null => {
+    const pathsToRename = new Map<string, string>();
+    const addRemappedPath = (path: string) => {
+      const remapped = remapPath(path, oldPath, newPath);
+      if (remapped) {
+        pathsToRename.set(path, remapped);
+      }
+    };
+
+    for (const path of runtime.buffers.keys()) {
+      addRemappedPath(path);
+    }
+    for (const path of runtime.liveDocs.keys()) {
+      addRemappedPath(path);
+    }
+    const currentDocument = runtime.getCurrentDocument();
+    if (currentDocument) {
+      addRemappedPath(currentDocument.path);
     }
 
-    const liveDoc = runtime.liveDocs.get(oldPath);
-    if (liveDoc !== undefined) {
-      runtime.liveDocs.delete(oldPath);
-      runtime.liveDocs.set(newPath, liveDoc);
+    for (const [oldDocumentPath, newDocumentPath] of pathsToRename) {
+      const buffered = runtime.buffers.get(oldDocumentPath);
+      const liveDoc = runtime.liveDocs.get(oldDocumentPath);
+
+      if (buffered !== undefined) {
+        runtime.buffers.delete(oldDocumentPath);
+        runtime.buffers.set(newDocumentPath, buffered);
+      }
+
+      if (liveDoc !== undefined) {
+        runtime.liveDocs.delete(oldDocumentPath);
+        runtime.liveDocs.set(newDocumentPath, liveDoc);
+      }
+
+      runtime.pipeline.clear(oldDocumentPath);
+      runtime.pipeline.initPath(
+        newDocumentPath,
+        editorDocumentToString(buffered ?? liveDoc ?? emptyEditorDocument),
+      );
     }
 
-    runtime.pipeline.clear(oldPath);
-    runtime.pipeline.initPath(
-      newPath,
-      editorDocumentToString(liveDoc ?? buffered ?? emptyEditorDocument),
-    );
+    if (!currentDocument) {
+      return null;
+    }
+
+    const remappedCurrentPath = remapPath(currentDocument.path, oldPath, newPath);
+    if (!remappedCurrentPath) {
+      return null;
+    }
 
     runtime.commit(
-      renameSessionDocument(runtime.getState(), oldPath, newPath, basename(newPath)),
-      runtime.getCurrentPath() === oldPath
-        ? { editorDoc: currentDocumentText(newPath, runtime) }
-        : undefined,
+      {
+        currentDocument: {
+          ...currentDocument,
+          path: remappedCurrentPath,
+          name: basename(remappedCurrentPath),
+        },
+      },
+      { editorDoc: currentDocumentText(remappedCurrentPath, runtime) },
     );
+
+    return remappedCurrentPath;
   };
 
   const handleRename = async (oldPath: string, newPath: string) => {
@@ -157,8 +201,8 @@ export function createEditorSessionPersistence({
       const newDir = newPath.substring(0, Math.max(0, newPath.lastIndexOf("/")));
       // Same-directory rename: scoped refresh. Cross-directory: full refresh.
       await refreshTree(oldDir === newDir ? newPath : undefined);
-      renameBuffers(oldPath, newPath);
-      addRecentFile(newPath);
+      const renamedCurrentPath = renameBuffers(oldPath, newPath);
+      addRecentFile(renamedCurrentPath ?? newPath);
     } catch (e: unknown) {
       console.error("[session] rename failed:", e);
     }

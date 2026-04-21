@@ -121,6 +121,79 @@ function createDeferred<T = void>() {
   return { promise, resolve };
 }
 
+function createDirectoryRenameFileSystem(initialFiles: Record<string, string>): FileSystem {
+  const files = new Map(Object.entries(initialFiles));
+  const remapPath = (path: string, oldPath: string, newPath: string): string | null => {
+    if (path === oldPath) return newPath;
+    if (oldPath !== "" && path.startsWith(`${oldPath}/`)) {
+      return `${newPath}/${path.slice(oldPath.length + 1)}`;
+    }
+    return null;
+  };
+
+  return {
+    listTree: async () => ({ name: "root", path: "", isDirectory: true, children: [] }),
+    readFile: async (path: string) => {
+      const content = files.get(path);
+      if (content === undefined) {
+        throw new Error(`File not found: ${path}`);
+      }
+      return content;
+    },
+    writeFile: async (path: string, content: string) => {
+      if (!files.has(path)) {
+        throw new Error(`File not found: ${path}`);
+      }
+      files.set(path, content);
+    },
+    createFile: async (path: string, content?: string) => {
+      files.set(path, content ?? "");
+    },
+    exists: async (path: string) => {
+      if (files.has(path)) return true;
+      const prefix = `${path}/`;
+      return [...files.keys()].some((candidate) => candidate.startsWith(prefix));
+    },
+    renameFile: async (oldPath: string, newPath: string) => {
+      const renamedEntries = [...files.entries()]
+        .map(([path, content]) => {
+          const remapped = remapPath(path, oldPath, newPath);
+          return remapped ? { oldPath: path, newPath: remapped, content } : null;
+        })
+        .filter((entry): entry is { oldPath: string; newPath: string; content: string } =>
+          entry !== null,
+        );
+
+      if (renamedEntries.length === 0) {
+        throw new Error(`File not found: ${oldPath}`);
+      }
+
+      for (const entry of renamedEntries) {
+        files.delete(entry.oldPath);
+      }
+      for (const entry of renamedEntries) {
+        files.set(entry.newPath, entry.content);
+      }
+    },
+    createDirectory: async () => {},
+    deleteFile: async (path: string) => {
+      if (files.delete(path)) return;
+      const prefix = `${path}/`;
+      const descendants = [...files.keys()].filter((candidate) =>
+        candidate.startsWith(prefix),
+      );
+      if (descendants.length === 0) {
+        throw new Error(`File not found: ${path}`);
+      }
+      for (const descendant of descendants) {
+        files.delete(descendant);
+      }
+    },
+    writeFileBinary: async () => {},
+    readFileBinary: async () => new Uint8Array(),
+  };
+}
+
 describe("createEditorSessionPersistence", () => {
   beforeEach(() => {
     sessionMockState.reset();
@@ -235,6 +308,90 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.buffers.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
     expect(ref.runtime.liveDocs.has("draft.md")).toBe(false);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
+  });
+
+  it("remaps a clean active file inside a renamed folder", async () => {
+    const fs = createDirectoryRenameFileSystem({
+      "notes/draft.md": "saved",
+      "notes/other.md": "other",
+    });
+    const refreshTree = vi.fn(async () => {});
+    const addRecentFile = vi.fn();
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "notes/draft.md",
+        name: "draft.md",
+        dirty: false,
+      },
+      editorDoc: "saved",
+      buffers: createDocumentMap({ "notes/draft.md": "saved" }),
+      liveDocs: createDocumentMap({ "notes/draft.md": "saved" }),
+      refreshTree,
+      addRecentFile,
+    });
+
+    await ref.result.handleRename("notes", "archive");
+
+    await expect(fs.exists("notes/draft.md")).resolves.toBe(false);
+    await expect(fs.readFile("archive/draft.md")).resolves.toBe("saved");
+    await expect(fs.readFile("archive/other.md")).resolves.toBe("other");
+    expect(refreshTree).toHaveBeenCalledWith("archive");
+    expect(addRecentFile).toHaveBeenCalledWith("archive/draft.md");
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "archive/draft.md",
+      name: "draft.md",
+      dirty: false,
+    });
+    expect(ref.runtime.getEditorDoc()).toBe("saved");
+    expect(ref.runtime.buffers.has("notes/draft.md")).toBe(false);
+    expect(editorDocumentToString(ref.runtime.buffers.get("archive/draft.md") ?? emptyEditorDocument)).toBe("saved");
+    expect(ref.runtime.liveDocs.has("notes/draft.md")).toBe(false);
+    expect(editorDocumentToString(ref.runtime.liveDocs.get("archive/draft.md") ?? emptyEditorDocument)).toBe("saved");
+  });
+
+  it("remaps and saves a dirty active file inside a renamed folder", async () => {
+    const fs = createDirectoryRenameFileSystem({
+      "notes/draft.md": "saved",
+      "notes/other.md": "other",
+    });
+    const addRecentFile = vi.fn();
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "notes/draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      editorDoc: "local edit",
+      buffers: createDocumentMap({ "notes/draft.md": "saved" }),
+      liveDocs: createDocumentMap({ "notes/draft.md": "local edit" }),
+      addRecentFile,
+    });
+    ref.runtime.pipeline.bumpRevision("notes/draft.md");
+
+    await ref.result.handleRename("notes", "archive");
+
+    expect(addRecentFile).toHaveBeenCalledWith("archive/draft.md");
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "archive/draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+    expect(ref.runtime.getEditorDoc()).toBe("local edit");
+    expect(editorDocumentToString(ref.runtime.buffers.get("archive/draft.md") ?? emptyEditorDocument)).toBe("saved");
+    expect(editorDocumentToString(ref.runtime.liveDocs.get("archive/draft.md") ?? emptyEditorDocument)).toBe("local edit");
+
+    await expect(ref.result.saveCurrentDocument()).resolves.toBe(true);
+
+    await expect(fs.exists("notes/draft.md")).resolves.toBe(false);
+    await expect(fs.readFile("archive/draft.md")).resolves.toBe("local edit");
+    await expect(fs.readFile("archive/other.md")).resolves.toBe("other");
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "archive/draft.md",
+      name: "draft.md",
+      dirty: false,
+    });
   });
 
   it("clears the current session when deleting a parent directory", async () => {

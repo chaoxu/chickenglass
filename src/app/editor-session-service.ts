@@ -74,6 +74,12 @@ function makeTransitionRequest(
   };
 }
 
+function pathAffectsDocument(changedPath: string, documentPath: string): boolean {
+  return documentPath === changedPath || (
+    changedPath !== "" && documentPath.startsWith(`${changedPath}/`)
+  );
+}
+
 export function createEditorSessionService({
   fs,
   refreshTree,
@@ -319,18 +325,32 @@ export function createEditorSessionService({
   };
 
   const syncExternalChange = async (path: string): Promise<ExternalDocumentSyncResult> => {
-    if (!runtime.hasPath(path)) {
+    const currentDocumentBeforeRead = runtime.getCurrentDocument();
+    const affectsCurrentDocumentBeforeRead =
+      currentDocumentBeforeRead !== null
+      && pathAffectsDocument(path, currentDocumentBeforeRead.path);
+    if (!runtime.hasPath(path) && !affectsCurrentDocumentBeforeRead) {
       return "ignore";
     }
 
     let content: string;
     try {
       content = await fs.readFile(path);
-    } catch {
+    } catch (_error: unknown) {
       const currentDocument = runtime.getCurrentDocument();
-      return currentDocument?.path === path && currentDocument.dirty
-        ? "notify"
-        : "ignore";
+      if (!currentDocument || !pathAffectsDocument(path, currentDocument.path)) {
+        return "ignore";
+      }
+
+      if (!currentDocument.dirty) {
+        runtime.activeDocumentSignal.publish(currentDocument.path);
+        runtime.commit(
+          markSessionDocumentDirty(runtime.getState(), currentDocument.path, true),
+        );
+        return "ignore";
+      }
+
+      return currentDocument.path === path ? "notify" : "ignore";
     }
 
     if (!runtime.hasPath(path)) {

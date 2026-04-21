@@ -158,4 +158,40 @@ describe("editor session lower-layer invariants", () => {
     expect(runtime.buffers.has("renamed.md")).toBe(false);
     expect(runtime.liveDocs.has("renamed.md")).toBe(false);
   });
+
+  it("keeps a clean active document as a dirty recovery buffer when it is deleted externally", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "Recovered text" });
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFile("draft.md");
+    await fs.deleteFile("draft.md");
+
+    await expect(service.syncExternalChange("draft.md")).resolves.toBe("ignore");
+
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+    expect(runtime.getEditorDoc()).toBe("Recovered text");
+    expect(service.getCurrentDocText()).toBe("Recovered text");
+  });
+
+  it("keeps a clean active descendant as a dirty recovery buffer when its folder is removed externally", async () => {
+    const fs = new MemoryFileSystem({ "notes/draft.md": "Nested text" });
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFile("notes/draft.md");
+    await fs.deleteFile("notes");
+
+    await expect(service.syncExternalChange("notes")).resolves.toBe("ignore");
+
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "notes/draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+    expect(runtime.getEditorDoc()).toBe("Nested text");
+    expect(service.getCurrentDocText()).toBe("Nested text");
+  });
 });
