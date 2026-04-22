@@ -4,6 +4,7 @@ import { $setSelection, type EditorUpdateOptions, type LexicalEditor } from "lex
 import { measureSync } from "../app/perf";
 import { createMinimalEditorDocumentChanges } from "../lib/editor-doc-change";
 import { parseMarkdownFragmentToJSON } from "./headless-markdown-parse";
+import { isRevealSourceStyle } from "./reveal-source-style";
 import { createSourceSpanIndex } from "./source-spans";
 
 export function applyIncrementalRichDocumentSync(
@@ -26,8 +27,15 @@ export function applyIncrementalRichDocumentSync(
     editor.update(() => {
       const spanIndex = createSourceSpanIndex(previousDoc);
       const location = spanIndex.findNearestLocation(change.from);
-      const topLevel = location?.node.getTopLevelElement();
-      if (!topLevel || topLevel.getType() !== "paragraph") {
+      if (!location) {
+        return;
+      }
+      const topLevel = location.node.getTopLevelElement();
+      if (!topLevel) {
+        return;
+      }
+      const topLevelType = topLevel.getType();
+      if (topLevelType !== "paragraph" && topLevelType !== "coflat-raw-block") {
         return;
       }
 
@@ -46,16 +54,22 @@ export function applyIncrementalRichDocumentSync(
       }
 
       const nextBlockSource = nextDoc.slice(blockFrom, nextBlockTo);
-      if (/\n\s*\n/.test(nextBlockSource)) {
-        return;
-      }
-
       const parsedBlocks = parseMarkdownFragmentToJSON(nextBlockSource);
       if (parsedBlocks.length !== 1) {
         return;
       }
       const [replacement] = $generateNodesFromSerializedNodes([...parsedBlocks]);
-      if (!replacement || replacement.getType() !== topLevel.getType()) {
+      const replacementType = replacement?.getType() ?? null;
+      const restoresRawBlockReveal = topLevelType === "paragraph"
+        && replacementType === "coflat-raw-block"
+        && location.kind === "text"
+        && isRevealSourceStyle(location.node.getStyle());
+      if (topLevelType === "paragraph"
+        && !restoresRawBlockReveal
+        && /\n\s*\n/.test(nextBlockSource)) {
+        return;
+      }
+      if (!replacement || (replacementType !== topLevelType && !restoresRawBlockReveal)) {
         return;
       }
 

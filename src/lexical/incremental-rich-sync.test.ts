@@ -55,6 +55,31 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
+  it("replaces one affected raw block and leaves sibling blocks intact", () => {
+    const previousMarkdown = [
+      "::: {.theorem #thm:sample title=\"Sample\"}",
+      "Alpha [@thm:main-upper] Beta.",
+      "",
+      "Second paragraph.",
+      ":::",
+      "",
+      "Tail paragraph.",
+    ].join("\n");
+    const nextMarkdown = previousMarkdown.replace(" Beta", "123 Beta");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const applied = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    const nextKeys = readTopLevelKeys(editor);
+    expect(nextKeys).toHaveLength(previousKeys.length);
+    expect(nextKeys[0]).not.toBe(previousKeys[0]);
+    expect(nextKeys.slice(1)).toEqual(previousKeys.slice(1));
+  });
+
   it("falls back when a change crosses paragraph boundaries", () => {
     const previousMarkdown = "Alpha beta.\n\nSecond paragraph.";
     const nextMarkdown = "Alpha paragraph.";

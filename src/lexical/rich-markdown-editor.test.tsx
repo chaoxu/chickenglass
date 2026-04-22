@@ -127,6 +127,53 @@ function getPerfSummaryCount(name: string): number {
   return getFrontendPerfSnapshot().summaries.find((entry) => entry.name === name)?.count ?? 0;
 }
 
+function installZeroGeometryMocks(): () => void {
+  const textPrototype = Text.prototype as unknown as {
+    getBoundingClientRect?: () => DOMRect;
+  };
+  const elementPrototype = Element.prototype as unknown as {
+    getBoundingClientRect?: () => DOMRect;
+  };
+  const rangePrototype = Range.prototype as unknown as {
+    getBoundingClientRect?: () => DOMRect;
+  };
+  const originalTextGetBoundingClientRect = textPrototype.getBoundingClientRect;
+  const originalElementGetBoundingClientRect = elementPrototype.getBoundingClientRect;
+  const originalRangeGetBoundingClientRect = rangePrototype.getBoundingClientRect;
+  const getZeroRect = () => ({
+    bottom: 0,
+    height: 0,
+    left: 0,
+    right: 0,
+    toJSON: () => ({}),
+    top: 0,
+    width: 0,
+    x: 0,
+    y: 0,
+  });
+  textPrototype.getBoundingClientRect = getZeroRect;
+  elementPrototype.getBoundingClientRect = getZeroRect;
+  rangePrototype.getBoundingClientRect = getZeroRect;
+
+  return () => {
+    if (originalTextGetBoundingClientRect) {
+      textPrototype.getBoundingClientRect = originalTextGetBoundingClientRect;
+    } else {
+      delete textPrototype.getBoundingClientRect;
+    }
+    if (originalElementGetBoundingClientRect) {
+      elementPrototype.getBoundingClientRect = originalElementGetBoundingClientRect;
+    } else {
+      delete elementPrototype.getBoundingClientRect;
+    }
+    if (originalRangeGetBoundingClientRect) {
+      rangePrototype.getBoundingClientRect = originalRangeGetBoundingClientRect;
+    } else {
+      delete rangePrototype.getBoundingClientRect;
+    }
+  };
+}
+
 describe("ClickableLinkPlugin in read-only mode", () => {
   it("renders link as anchor in read-only mode", async () => {
     const editor = await mountEditor({
@@ -497,32 +544,7 @@ describe("__editor selection bridge (rich mode)", () => {
     const insertAt = doc.indexOf(" Beta");
     const onTextChange = vi.fn();
     const editor = await mountEditor({ doc, onTextChange });
-    const textPrototype = Text.prototype as unknown as {
-      getBoundingClientRect?: () => DOMRect;
-    };
-    const elementPrototype = Element.prototype as unknown as {
-      getBoundingClientRect?: () => DOMRect;
-    };
-    const rangePrototype = Range.prototype as unknown as {
-      getBoundingClientRect?: () => DOMRect;
-    };
-    const originalTextGetBoundingClientRect = textPrototype.getBoundingClientRect;
-    const originalElementGetBoundingClientRect = elementPrototype.getBoundingClientRect;
-    const originalRangeGetBoundingClientRect = rangePrototype.getBoundingClientRect;
-    const getZeroRect = () => ({
-      bottom: 0,
-      height: 0,
-      left: 0,
-      right: 0,
-      toJSON: () => ({}),
-      top: 0,
-      width: 0,
-      x: 0,
-      y: 0,
-    });
-    textPrototype.getBoundingClientRect = getZeroRect;
-    elementPrototype.getBoundingClientRect = getZeroRect;
-    rangePrototype.getBoundingClientRect = getZeroRect;
+    const restoreGeometry = installZeroGeometryMocks();
 
     try {
       clearFrontendPerf();
@@ -549,21 +571,52 @@ describe("__editor selection bridge (rich mode)", () => {
       expect(editor.handle.getDoc()).toBe(expectedDoc);
     } finally {
       editor.unmount();
-      if (originalTextGetBoundingClientRect) {
-        textPrototype.getBoundingClientRect = originalTextGetBoundingClientRect;
-      } else {
-        delete textPrototype.getBoundingClientRect;
-      }
-      if (originalElementGetBoundingClientRect) {
-        elementPrototype.getBoundingClientRect = originalElementGetBoundingClientRect;
-      } else {
-        delete elementPrototype.getBoundingClientRect;
-      }
-      if (originalRangeGetBoundingClientRect) {
-        rangePrototype.getBoundingClientRect = originalRangeGetBoundingClientRect;
-      } else {
-        delete rangePrototype.getBoundingClientRect;
-      }
+      restoreGeometry();
+      clearFrontendPerf();
+    }
+  });
+
+  it("incrementally syncs coalesced bridge inserts inside raw blocks", async () => {
+    const doc = [
+      "::: {.theorem #thm:sample title=\"Sample\"}",
+      "Alpha [@thm:main-upper] Beta.",
+      "",
+      "Second paragraph.",
+      ":::",
+      "",
+      "Tail paragraph.",
+    ].join("\n");
+    const insertAt = doc.indexOf(" Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+    const restoreGeometry = installZeroGeometryMocks();
+
+    try {
+      clearFrontendPerf();
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.editor.update(() => {
+          $setSelection(null);
+        }, { discrete: true });
+        editor.handle.insertText("1");
+        editor.handle.insertText("2");
+        editor.handle.insertText("3");
+      });
+
+      const expectedDoc = doc.replace(" Beta", "123 Beta");
+      expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1_050));
+      });
+
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
+      expect(editor.handle.getDoc()).toBe(expectedDoc);
+    } finally {
+      editor.unmount();
+      restoreGeometry();
       clearFrontendPerf();
     }
   });
