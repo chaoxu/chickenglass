@@ -29,6 +29,7 @@ afterEach(() => {
 
 describe("LexicalEditorPane renderer registration", () => {
   it("registers decorator renderers in the production pane entrypoint", async () => {
+    vi.useRealTimers();
     vi.resetModules();
     const registry = await import("../../lexical/nodes/renderer-registry");
     registry._resetRenderersForTest();
