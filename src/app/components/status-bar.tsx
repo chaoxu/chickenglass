@@ -31,6 +31,7 @@ export interface CursorPosition {
 export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
+  saveStatus?: "conflict" | "saved" | "unsaved";
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
   /** External signal used to refresh full stats without rerendering the shell. */
@@ -49,6 +50,12 @@ const MODE_LABELS: Record<EditorMode, string> = {
   source: "Source",
 };
 
+const SAVE_STATUS_LABELS: Record<NonNullable<StatusBarProps["saveStatus"]>, string> = {
+  conflict: "Conflict",
+  saved: "Saved",
+  unsaved: "Unsaved",
+};
+
 // ── StatusBar ──────────────────────────────────────────────────────────────────
 
 /**
@@ -61,6 +68,7 @@ const MODE_LABELS: Record<EditorMode, string> = {
 export function StatusBar({
   editorMode,
   onModeChange,
+  saveStatus = "saved",
   onOpenPalette,
   onOpenSettings,
   activeDocumentSignal,
@@ -159,6 +167,17 @@ export function StatusBar({
 
         {/* Right: FPS meter + build info + command palette + mode indicator */}
         <div className="flex items-center gap-1 pr-1">
+          <span
+            data-testid="save-status"
+            className={cn(
+              "px-1 tabular-nums",
+              saveStatus === "conflict" && "text-[var(--cf-danger,#c62828)]",
+              saveStatus === "unsaved" && "text-[var(--cf-fg)]",
+            )}
+            title={SAVE_STATUS_LABELS[saveStatus]}
+          >
+            {SAVE_STATUS_LABELS[saveStatus]}
+          </span>
           <FpsIndicator />
           {buildInfo && (
             <span

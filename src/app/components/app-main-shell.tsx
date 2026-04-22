@@ -55,6 +55,11 @@ export function AppMainShell({
   const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
   const useLexicalEditor = isLexicalEditorMode(editor.editorMode);
   const cm6EditorMode = editor.editorMode === "source" ? "source" : "rich";
+  const saveStatus = editor.hasUnresolvedExternalConflict
+    ? "conflict"
+    : editor.currentDocument?.dirty
+      ? "unsaved"
+      : "saved";
 
   return (
     <SidebarInset>
@@ -124,6 +129,7 @@ export function AppMainShell({
 
       <StatusBar
         editorMode={editor.editorMode}
+        saveStatus={saveStatus}
         onModeChange={editor.handleModeChange}
         onOpenPalette={onOpenPalette}
         onOpenSettings={onOpenSettings}
