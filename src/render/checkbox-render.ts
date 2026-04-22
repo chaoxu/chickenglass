@@ -25,7 +25,7 @@ import {
 import {
   createIncrementalDecorationsViewPlugin,
 } from "./view-plugin-factories";
-import { normalizeDirtyRange, type VisibleRange } from "./viewport-diff";
+import { normalizeDirtyRange, snapshotRanges, type VisibleRange } from "./viewport-diff";
 import { RenderWidget } from "./source-widget";
 
 /** Checkbox widget that toggles task marker content on click. */
@@ -135,6 +135,13 @@ function computeCheckboxDocChangeRanges(update: ViewUpdate): readonly VisibleRan
     });
     collectTaskMarkerDirtyRangesInState(update.state, fromB, toB, pushMappedRange);
   });
+
+  if (
+    dirtyRanges.length === 0 &&
+    syntaxTree(update.state) !== syntaxTree(update.startState)
+  ) {
+    return snapshotRanges(update.view.visibleRanges);
+  }
 
   return dirtyRanges;
 }
