@@ -133,8 +133,9 @@ class TableParser implements LeafBlockParser {
         isDelimiterLine((lineText = line.text.slice(line.pos)))
       ) {
         const firstRow: Element[] = [];
-        const firstCount = parseRow(cx, leaf.content, 0, firstRow, leaf.start);
-        if (firstCount === parseRow(cx, lineText, line.pos)) {
+        parseRow(cx, leaf.content, 0, firstRow, leaf.start);
+        const delimiterCount = parseRow(cx, lineText, line.pos);
+        if (delimiterCount > 0) {
           this.rows = [
             cx.elt(
               "TableHeader",
@@ -211,8 +212,7 @@ export const tableExtension: MarkdownConfig = {
         const next = cx.peekLine();
         return (
           isDelimiterLine(next) &&
-          parseRow(cx, line.text, line.basePos) ===
-            parseRow(cx, next, line.basePos)
+          parseRow(cx, next, line.basePos) > 0
         );
       },
       before: "SetextHeading",

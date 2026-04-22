@@ -66,12 +66,12 @@ import {
   lexicalMarkdownTheme,
 } from "./markdown";
 import {
-  MarkdownEditorHandlePlugin,
-  MarkdownModeSyncPlugin,
+  LexicalEditorHandlePlugin,
+  LexicalSourceBridgePlugin,
   sameSelection,
   shouldIgnoreMarkdownEditorChange,
-  useMarkdownEditorSessionController,
-} from "./markdown-editor-session";
+  useLexicalDocumentSessionController,
+} from "./lexical-document-session";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
@@ -276,7 +276,7 @@ export function LexicalMarkdownEditor({
     cancelRichDocumentSnapshot,
     flushRichDocumentSnapshot,
     handleRichChange,
-  } = useMarkdownEditorSessionController({
+  } = useLexicalDocumentSessionController({
     doc,
     focusOwner,
     onDocChange,
@@ -390,7 +390,7 @@ export function LexicalMarkdownEditor({
                 <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
                 <EditableSyncPlugin editable={editable} />
                 {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
-                <MarkdownEditorHandlePlugin
+                <LexicalEditorHandlePlugin
                   cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
                   canonicalBridgeEchoRef={canonicalBridgeEchoRef}
                   editorModeRef={editorModeRef}
@@ -406,7 +406,7 @@ export function LexicalMarkdownEditor({
                   selectionRef={sourceSelectionRef}
                   userEditPendingRef={userEditPendingRef}
                 />
-                <MarkdownModeSyncPlugin
+                <LexicalSourceBridgePlugin
                   canonicalBridgeEchoRef={canonicalBridgeEchoRef}
                   doc={doc}
                   editorMode={editorMode}

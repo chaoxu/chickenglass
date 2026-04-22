@@ -128,6 +128,9 @@ export function renderCitationCluster(
         : rendered;
       return escapeHtml(stripped);
     }
+    if (isCitationId(id)) {
+      return escapeHtml(locators?.[index] ? `${id}, ${locators[index]}` : id);
+    }
 
     const label = resolveCrossrefLabel(id, semantics, blockCounters);
     return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(label)}</a>`;

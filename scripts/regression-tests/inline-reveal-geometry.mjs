@@ -113,7 +113,12 @@ async function ensureSidenoteLabelsVisible(page) {
     }
     button.click();
   });
-  await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll("[cmdk-item]")).some((candidate) =>
+      candidate.textContent?.includes("Toggle Sidenote Margin")
+    ),
+    { timeout: 5000 },
+  );
   await page.evaluate(() => {
     const item = Array.from(document.querySelectorAll("[cmdk-item]")).find((candidate) =>
       candidate.textContent?.includes("Toggle Sidenote Margin")

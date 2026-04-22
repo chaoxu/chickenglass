@@ -4,7 +4,6 @@ import {
 } from "../../semantics/document";
 import { rememberDocumentAnalysis } from "../../semantics/incremental/cached-document-analysis";
 import {
-  CslProcessor,
   collectCitationBacklinkIndexFromReferences,
   collectCitationMatches,
   registerCitationsWithProcessor,
@@ -28,9 +27,7 @@ export function markdownToHtml(
     options?.documentPath,
   );
   const includeBibliography = options?.includeBibliography !== false;
-  const cslProcessor = options?.cslProcessor ?? (options?.bibliography
-    ? new CslProcessor([...options.bibliography.values()])
-    : undefined);
+  const cslProcessor = options?.cslProcessor;
 
   if (options?.bibliography && cslProcessor) {
     const matches = collectCitationMatches(semantics.references, options.bibliography, {

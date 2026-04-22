@@ -4,19 +4,16 @@ import console from "node:console";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseChromeArgs } from "./chrome-common.mjs";
+import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import {
   assertEditorHealth,
-  connectEditor,
   createArgParser,
-  disconnectBrowser,
   EXTERNAL_FIXTURE_ROOT,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocumentWithFallback,
   sleep,
   traceVerticalCursorMotion,
-  waitForDebugBridge,
 } from "./test-helpers.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -190,7 +187,6 @@ export function resolveCursorScrollTimeout(argv) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
   const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
   if (hasFlag("--help") || hasFlag("-h")) {
     printUsage();
@@ -207,15 +203,9 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const timeout = resolveCursorScrollTimeout(argv);
 
-  const page = await connectEditor({
-    browser: chromeArgs.browser,
-    headless: chromeArgs.headless,
-    port: chromeArgs.port,
-    timeout,
-    url: chromeArgs.url,
-  });
+  const session = await openBrowserSession(argv, { timeoutFallback: timeout });
+  const { page } = session;
   try {
-    await waitForDebugBridge(page, { timeout });
     await sleep(500);
 
     const result = await runCursorScrollRegression(page, {
@@ -260,7 +250,7 @@ export async function main(argv = process.argv.slice(2)) {
       process.exitCode = 1;
     }
   } finally {
-    await disconnectBrowser(page);
+    await closeBrowserSession(session);
   }
 }
 

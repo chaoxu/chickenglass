@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import {
-  connectEditor,
+  createArgParser,
   openFixtureDocument,
   openRegressionDocument,
   sleep,
-  waitForDebugBridge,
 } from "./test-helpers.mjs";
 
 const DEFAULT_URL = "http://localhost:5173";
@@ -15,30 +15,8 @@ const DEFAULT_STEP_COUNT = 24;
 const DEFAULT_SETTLE_MS = 120;
 const DEFAULT_BOTTOM_OFFSET_PX = 2600;
 
-function getFlag(name, fallback = undefined) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return fallback;
-  return process.argv[index + 1] ?? fallback;
-}
-
-function getIntFlag(name, fallback) {
-  const raw = getFlag(name, undefined);
-  if (raw === undefined) return fallback;
-  if (!/^-?\d+$/.test(raw.trim())) {
-    throw new Error(`Invalid integer value for ${name}: ${raw}`);
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid integer value for ${name}: ${raw}`);
-  }
-  return parsed;
-}
-
-function hasFlag(name) {
-  return process.argv.includes(name);
-}
-
-function resolveTarget() {
+function resolveTarget(parser) {
+  const { getFlag } = parser;
   const fixture = getFlag("--fixture", undefined);
   const regression = getFlag("--regression", undefined);
   if (fixture && regression) {
@@ -109,8 +87,10 @@ function printSamples(samples, expectedStepPx) {
   }
 }
 
-async function main() {
-  const target = resolveTarget();
+async function main(argv = process.argv.slice(2)) {
+  const parser = createArgParser(argv);
+  const { getFlag, getIntFlag, hasFlag } = parser;
+  const target = resolveTarget(parser);
   const url = getFlag("--url", DEFAULT_URL);
   const stepPx = getIntFlag("--step-px", DEFAULT_STEP_PX);
   const stepCount = getIntFlag("--step-count", DEFAULT_STEP_COUNT);
@@ -119,15 +99,10 @@ async function main() {
   const timeout = getIntFlag("--timeout", 15000);
   const simulateWheel = hasFlag("--simulate-wheel");
 
-  const page = await connectEditor({
-    browser: "managed",
-    headless: !hasFlag("--headed"),
-    timeout,
-    url,
-  });
+  const session = await openBrowserSession(argv, { timeoutFallback: timeout });
+  const { page } = session;
 
   try {
-    await waitForDebugBridge(page, { timeout });
     await target.open(page);
     await sleep(700);
 
@@ -219,7 +194,7 @@ async function main() {
       console.log(JSON.stringify(worst, null, 2));
     }
   } finally {
-    await page.context().browser()?.close();
+    await closeBrowserSession(session);
   }
 }
 

@@ -13,6 +13,7 @@ import {
   type DocumentAnalysisSliceRevisions,
 } from "../semantics/incremental/engine";
 import { buildSemanticDelta } from "../semantics/incremental/semantic-delta";
+import { measureSync } from "../lib/perf";
 
 const MATERIALIZE_TEXT_AFTER_SLICE_CALLS = 8;
 
@@ -35,7 +36,10 @@ export function editorStateTextSource(state: EditorState): TextSource {
 
   function getMaterializedText(): string {
     if (materializedText === undefined) {
-      materializedText = doc.toString();
+      materializedText = measureSync(
+        "cm6.documentAnalysis.text.materialize",
+        () => doc.toString(),
+      );
     }
     return materializedText;
   }
@@ -67,7 +71,10 @@ export function editorStateTextSource(state: EditorState): TextSource {
 }
 
 function completeSyntaxTree(state: EditorState) {
-  return ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
+  return measureSync(
+    "cm6.documentAnalysis.ensureSyntaxTree",
+    () => ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state),
+  );
 }
 
 /**
@@ -81,7 +88,9 @@ function completeSyntaxTree(state: EditorState) {
  */
 export const documentAnalysisField = StateField.define<DocumentAnalysis>({
   create(state) {
-    return createDocumentAnalysis(editorStateTextSource(state), completeSyntaxTree(state));
+    return measureSync("cm6.documentAnalysis.create", () =>
+      createDocumentAnalysis(editorStateTextSource(state), completeSyntaxTree(state))
+    );
   },
 
   update(value, tr) {

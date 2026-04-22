@@ -3,7 +3,7 @@ import {
   type DocumentScan,
   type DocumentLabelGraph,
   scanDocument,
-} from "../../../app/markdown/labels";
+} from "../../../lib/markdown/labels";
 import type { FrontmatterConfig } from "../../../lib/frontmatter";
 import { parseFrontmatter } from "../../../lib/frontmatter";
 import { type ProjectConfig, mergeConfigs } from "../../../project-config";

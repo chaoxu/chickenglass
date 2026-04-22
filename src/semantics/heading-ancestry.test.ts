@@ -159,6 +159,35 @@ describe("headingAncestryAt", () => {
     expect(ancestry).toHaveLength(3);
     expect(ancestry[2].text).toBe("D");
   });
+
+  it("matches the legacy filtered walk on heading-heavy documents", () => {
+    const denseHeadings: HeadingEntry[] = Array.from({ length: 10_000 }, (_, index) => ({
+      level: (index % 6) + 1,
+      text: `H${index}`,
+      number: String(index + 1),
+      pos: index * 10,
+    }));
+    const legacyAncestryAt = (cursorPos: number): HeadingEntry[] => {
+      const before = denseHeadings.filter((heading) => heading.pos <= cursorPos);
+      const ancestry: HeadingEntry[] = [];
+      let currentLevel = Infinity;
+      for (let index = before.length - 1; index >= 0; index -= 1) {
+        const heading = before[index];
+        if (heading.level < currentLevel) {
+          ancestry.unshift(heading);
+          currentLevel = heading.level;
+          if (currentLevel === 1) break;
+        }
+      }
+      return ancestry;
+    };
+
+    for (const cursorPos of [0, 25_000, 55_555, 99_999]) {
+      expect(headingAncestryAt(denseHeadings, cursorPos)).toEqual(
+        legacyAncestryAt(cursorPos),
+      );
+    }
+  });
 });
 
 describe("activeHeadingIndex", () => {

@@ -5,22 +5,24 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
-import { parseChromeArgs } from "./chrome-common.mjs";
+import {
+  closeBrowserSession,
+  openBrowserPage,
+  openBrowserSession,
+} from "./devx-browser-session.mjs";
 import {
   assertEditorHealth,
   captureDebugState,
-  connectEditor,
   createArgParser,
-  disconnectBrowser,
-  ensureAppServer,
   jumpToTextAnchor,
   openFixtureDocument,
   openFile,
   setCursor,
   sleep,
   switchToMode,
-  waitForDebugBridge,
 } from "./test-helpers.mjs";
+
+export { openBrowserPage, openBrowserSession };
 
 const COMPARABLE_CAPTURE_FIELDS = [
   "document",
@@ -643,60 +645,6 @@ function maybeWriteOutput(path, payload) {
     writeFileSync(path, `${text}\n`);
   }
   console.log(text);
-}
-
-export async function openBrowserSession(argv, { autoStartServer = true } = {}) {
-  const { getIntFlag, hasFlag } = createArgParser(argv);
-  const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
-  const timeout = getIntFlag("--timeout", 15000);
-  const stopAppServer = await ensureAppServer(chromeArgs.url, {
-    autoStart: autoStartServer && !hasFlag("--no-start-server"),
-  });
-  let page = null;
-
-  try {
-    page = await connectEditor({
-      browser: chromeArgs.browser,
-      headless: chromeArgs.headless,
-      port: chromeArgs.port,
-      timeout,
-      url: chromeArgs.url,
-    });
-
-    if (chromeArgs.browser === "cdp") {
-      await page.reload({ waitUntil: "load" });
-    }
-
-    await waitForDebugBridge(page, { timeout });
-    return { page, stopAppServer };
-  } catch (error) {
-    if (page) {
-      await disconnectBrowser(page).catch((disconnectError) => {
-        console.warn(
-          `Failed to disconnect browser after browser-repro setup failure: ${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`,
-        );
-      });
-    }
-    if (stopAppServer) {
-      await stopAppServer();
-    }
-    throw error;
-  }
-}
-
-export async function openBrowserPage(argv) {
-  const { page } = await openBrowserSession(argv, { autoStartServer: false });
-  return page;
-}
-
-async function closeBrowserSession(session) {
-  try {
-    await disconnectBrowser(session.page);
-  } finally {
-    if (session.stopAppServer) {
-      await session.stopAppServer();
-    }
-  }
 }
 
 async function runCaptureCommand(argv) {

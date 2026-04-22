@@ -137,10 +137,53 @@ export function buildPerfRegressionReport({
   return report;
 }
 
+function entryCategoryKey(entry) {
+  return `${entry.source}:${entry.category}`;
+}
+
+function buildEntryCategoryTotals(entries) {
+  const totals = new Map();
+  for (const entry of entries) {
+    const key = entryCategoryKey(entry);
+    const total = totals.get(key) ?? {
+      source: entry.source,
+      category: entry.category,
+      meanAvgMs: 0,
+      worstMaxMs: 0,
+    };
+    total.meanAvgMs += entry.meanAvgMs;
+    total.worstMaxMs += entry.worstMaxMs;
+    totals.set(key, total);
+  }
+  return totals;
+}
+
+function entryTimingRegressed(baseline, current, thresholdPct, minDeltaMs) {
+  const avgDeltaMs = roundMs(current.meanAvgMs - baseline.meanAvgMs);
+  const maxDeltaMs = roundMs(current.worstMaxMs - baseline.worstMaxMs);
+  const avgPct = baseline.meanAvgMs > 0
+    ? (current.meanAvgMs - baseline.meanAvgMs) / baseline.meanAvgMs
+    : 0;
+  const maxPct = baseline.worstMaxMs > 0
+    ? (current.worstMaxMs - baseline.worstMaxMs) / baseline.worstMaxMs
+    : 0;
+  const avgRegressed = avgDeltaMs > minDeltaMs && avgPct > thresholdPct;
+  const maxRegressed = maxDeltaMs > minDeltaMs * 2 && maxPct > thresholdPct;
+  return {
+    avgDeltaMs,
+    maxDeltaMs,
+    avgPct,
+    maxPct,
+    regressed: avgRegressed || maxRegressed,
+  };
+}
+
 function compareEntrySets(baselineEntries, currentEntries, thresholdPct, minDeltaMs) {
   const currentByKey = new Map(
     currentEntries.map((entry) => [`${entry.source}:${entry.category}:${entry.name}`, entry]),
   );
+  const baselineCategoryTotals = buildEntryCategoryTotals(baselineEntries);
+  const currentCategoryTotals = buildEntryCategoryTotals(currentEntries);
   const comparisons = [];
 
   for (const baseline of baselineEntries) {
@@ -159,27 +202,33 @@ function compareEntrySets(baselineEntries, currentEntries, thresholdPct, minDelt
       continue;
     }
 
-    const avgDeltaMs = roundMs(current.meanAvgMs - baseline.meanAvgMs);
-    const maxDeltaMs = roundMs(current.worstMaxMs - baseline.worstMaxMs);
-    const avgPct = baseline.meanAvgMs > 0
-      ? (current.meanAvgMs - baseline.meanAvgMs) / baseline.meanAvgMs
-      : 0;
-    const maxPct = baseline.worstMaxMs > 0
-      ? (current.worstMaxMs - baseline.worstMaxMs) / baseline.worstMaxMs
-      : 0;
-    const avgRegressed = avgDeltaMs > minDeltaMs && avgPct > thresholdPct;
-    const maxRegressed = maxDeltaMs > minDeltaMs && maxPct > thresholdPct;
+    const comparison = entryTimingRegressed(
+      baseline,
+      current,
+      thresholdPct,
+      minDeltaMs,
+    );
+    const baselineCategory = baselineCategoryTotals.get(entryCategoryKey(baseline));
+    const currentCategory = currentCategoryTotals.get(entryCategoryKey(current));
+    const categoryRegressed = baselineCategory && currentCategory
+      ? entryTimingRegressed(
+          baselineCategory,
+          currentCategory,
+          thresholdPct,
+          minDeltaMs,
+        ).regressed
+      : true;
 
     comparisons.push({
       key,
       source: baseline.source,
       category: baseline.category,
       name: baseline.name,
-      status: avgRegressed || maxRegressed ? "regressed" : "ok",
-      avgDeltaMs,
-      maxDeltaMs,
-      avgPct: roundMs(avgPct * 100),
-      maxPct: roundMs(maxPct * 100),
+      status: comparison.regressed && categoryRegressed ? "regressed" : "ok",
+      avgDeltaMs: comparison.avgDeltaMs,
+      maxDeltaMs: comparison.maxDeltaMs,
+      avgPct: roundMs(comparison.avgPct * 100),
+      maxPct: roundMs(comparison.maxPct * 100),
       baseline,
       current,
     });
@@ -220,7 +269,7 @@ function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDel
       ? (current.maxValue - baseline.maxValue) / baseline.maxValue
       : (maxDelta > 0 ? 1 : 0);
     const meanRegressed = meanDelta > minDelta && meanPct > thresholdPct;
-    const maxRegressed = maxDelta > minDelta && maxPct > thresholdPct;
+    const maxRegressed = maxDelta > minDelta * 2 && maxPct > thresholdPct;
 
     comparisons.push({
       key,

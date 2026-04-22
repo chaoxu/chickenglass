@@ -285,7 +285,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
       rootView.focus();
       rootView.dispatch({
         selection: { anchor: targetPos },
-        scrollIntoView: true,
+        scrollIntoView: false,
         userEvent: "select",
       });
     });

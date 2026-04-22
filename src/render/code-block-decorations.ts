@@ -473,6 +473,7 @@ export function docChangeTouchesCodeBlockContent(
  * On focus/tree-only change: full rebuild.
  */
 export const codeBlockDecorationField = createDecorationStateField({
+  spanName: "cm6.codeBlockDecorations",
   create(state) {
     return buildCodeBlockDecorations(state);
   },

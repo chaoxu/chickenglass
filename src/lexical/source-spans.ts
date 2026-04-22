@@ -8,7 +8,7 @@ import {
   type TextNode,
 } from "lexical";
 
-import { measureSync } from "../app/perf";
+import { measureSync } from "../lib/perf";
 import { getInlineTextFormatSpecs } from "./runtime";
 import type { InlineTextFormatFamily } from "./runtime";
 import {

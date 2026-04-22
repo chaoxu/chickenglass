@@ -1,4 +1,4 @@
-import { HEADING_TRAILING_ATTRIBUTES_RE, parseHeadingLine } from "../../app/markdown/heading-syntax";
+import { HEADING_TRAILING_ATTRIBUTES_RE, parseHeadingLine } from "../../lib/markdown/heading-syntax";
 import { findNextInlineMathSource } from "../../lib/inline-math-source";
 import { MARKDOWN_IMAGE_IMPORT_RE } from "../../lib/markdown-image";
 import {

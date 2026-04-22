@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDocumentLabelGraph } from "../app/markdown/labels";
+import { buildDocumentLabelGraph } from "../lib/markdown/labels";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { roundTripMarkdown } from "./markdown";
 import { buildRenderIndex } from "./markdown/reference-index";

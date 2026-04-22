@@ -20,14 +20,11 @@ import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { parseChromeArgs } from "./chrome-common.mjs";
+import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
 import {
-  connectEditor,
   createArgParser,
-  disconnectBrowser,
-  ensureAppServer,
   resetEditorState,
-  waitForDebugBridge,
 } from "./test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -77,7 +74,13 @@ async function loadTests(filter) {
     if (filter.length > 0 && !filter.includes(mod.name)) {
       continue;
     }
-    tests.push({ file, name: mod.name, run: mod.run });
+    tests.push({
+      file,
+      name: mod.name,
+      run: mod.run,
+      editorHealth: mod.editorHealth,
+      runtimeIssues: mod.runtimeIssues,
+    });
   }
 
   return tests;
@@ -85,8 +88,7 @@ async function loadTests(filter) {
 
 async function main() {
   const args = normalizeCliArgs(process.argv.slice(2));
-  const chromeArgs = parseChromeArgs(args, { browser: "managed" });
-  const { getFlag, getIntFlag, hasFlag } = createArgParser(args);
+  const { getFlag, getIntFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
   const scenarioArg = getFlag("--scenario", "");
   const timeout = getIntFlag("--timeout", 15000);
@@ -96,19 +98,11 @@ async function main() {
   console.log("========================\n");
 
   // Connect to the browser harness
+  let session = null;
   let page;
-  let stopAppServer = null;
   try {
-    stopAppServer = await ensureAppServer(chromeArgs.url, {
-      autoStart: !hasFlag("--no-start-server"),
-    });
-    page = await connectEditor({
-      browser: chromeArgs.browser,
-      headless: chromeArgs.headless,
-      port: chromeArgs.port,
-      timeout,
-      url: chromeArgs.url,
-    });
+    session = await openBrowserSession(args, { timeoutFallback: timeout });
+    page = session.page;
   } catch (err) {
     console.error("Failed to open the browser regression harness.");
     console.error("Managed mode starts the app server automatically for localhost URLs.");
@@ -117,8 +111,8 @@ async function main() {
     console.error("Optional manual browser lane:");
     console.error("  pnpm chrome");
     console.error(`\nError: ${err.message}`);
-    if (stopAppServer) {
-      await stopAppServer();
+    if (session) {
+      await closeBrowserSession(session);
     }
     process.exit(1);
   }
@@ -129,13 +123,10 @@ async function main() {
       return;
     }
     shuttingDown = true;
-    if (page) {
-      await disconnectBrowser(page);
+    if (session) {
+      await closeBrowserSession(session);
+      session = null;
       page = null;
-    }
-    if (stopAppServer) {
-      await stopAppServer();
-      stopAppServer = null;
     }
   };
   const onSigint = () => {
@@ -148,19 +139,6 @@ async function main() {
   process.once("SIGTERM", onSigterm);
 
   try {
-    // Wait for the app to be ready
-    try {
-      if (chromeArgs.browser === "cdp") {
-        await page.reload({ waitUntil: "load" });
-      }
-      await waitForDebugBridge(page, { timeout });
-    } catch {
-      console.error("Timed out waiting for debug bridge (__app, __editor, and product-specific debug globals).");
-      console.error("The dev server may not have finished loading.");
-      process.exitCode = 1;
-      return;
-    }
-
     // Load test modules
     const tests = await loadTests(filter);
     if (tests.length === 0) {
@@ -193,7 +171,7 @@ async function main() {
       // Run the test
       const startTime = Date.now();
       try {
-        const result = await test.run(page);
+        const result = await runRegressionTestWithChecks(page, test);
         const elapsed = Date.now() - startTime;
         const suffix = result.message ? ` — ${result.message}` : "";
 

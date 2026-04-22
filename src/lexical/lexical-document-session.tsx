@@ -14,8 +14,8 @@ import {
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
 } from "../lib/editor-doc-change";
-import { measureSync } from "../app/perf";
 import type { SurfaceFocusOwner } from "../state/editor-focus";
+import { measureSync } from "../lib/perf";
 import { getActiveEditor } from "./active-editor-tracker";
 import { hasCursorRevealActive } from "./cursor-reveal-state";
 import { readVisibleTextDomSelection } from "./dom-selection";
@@ -174,7 +174,7 @@ export function shouldIgnoreMarkdownEditorChange(
   return !tags.has(COFLAT_REVEAL_COMMIT_TAG) && hasCursorRevealActive(editor);
 }
 
-export interface MarkdownEditorSessionController {
+export interface LexicalDocumentSessionController {
   readonly initialDocRef: MutableRefObject<string>;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
@@ -220,7 +220,7 @@ function selectionTouchesFencedDiv(
   );
 }
 
-export function useMarkdownEditorSessionController({
+export function useLexicalDocumentSessionController({
   doc,
   focusOwner,
   onDocChange,
@@ -238,7 +238,7 @@ export function useMarkdownEditorSessionController({
   readonly onTextChange?: (text: string) => void;
   readonly requireUserEditFlag?: boolean;
   readonly richChangePolicy?: RichChangePolicy;
-}): MarkdownEditorSessionController {
+}): LexicalDocumentSessionController {
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
   const pendingLocalEchoDocRef = useRef<string | null>(null);
@@ -406,7 +406,7 @@ export function useMarkdownEditorSessionController({
   };
 }
 
-export function MarkdownSyncPlugin({
+export function LexicalDocumentSyncPlugin({
   doc,
   lastCommittedDocRef,
   pendingLocalEchoDocRef,
@@ -449,7 +449,7 @@ export function MarkdownSyncPlugin({
   return null;
 }
 
-export function MarkdownModeSyncPlugin({
+export function LexicalSourceBridgePlugin({
   canonicalBridgeEchoRef,
   doc,
   editorMode,
@@ -605,7 +605,7 @@ export function MarkdownModeSyncPlugin({
   return null;
 }
 
-interface MarkdownEditorHandlePluginProps {
+interface LexicalEditorHandlePluginProps {
   readonly canonicalBridgeEchoRef?: MutableRefObject<boolean>;
   readonly editorModeRef: MutableRefObject<RevealMode>;
   readonly cancelRichDocumentSnapshot?: () => void;
@@ -624,7 +624,7 @@ interface MarkdownEditorHandlePluginProps {
   readonly userEditPendingRef: MutableRefObject<boolean>;
 }
 
-export function MarkdownEditorHandlePlugin({
+export function LexicalEditorHandlePlugin({
   canonicalBridgeEchoRef,
   editorModeRef,
   cancelRichDocumentSnapshot,
@@ -641,7 +641,7 @@ export function MarkdownEditorHandlePlugin({
   selectionRef,
   storeSelectionOnNoopChange = false,
   userEditPendingRef,
-}: MarkdownEditorHandlePluginProps) {
+}: LexicalEditorHandlePluginProps) {
   const [editor] = useLexicalComposerContext();
   const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
   const selectionSnapshotFreshRef = useRef(false);
@@ -1131,7 +1131,7 @@ export function MarkdownEditorHandlePlugin({
   return null;
 }
 
-interface RichMarkdownEditorHandlePluginProps {
+interface RichLexicalEditorHandlePluginProps {
   readonly canonicalBridgeEchoRef?: MutableRefObject<boolean>;
   readonly cancelRichDocumentSnapshot?: () => void;
   readonly focusOwner: SurfaceFocusOwner;
@@ -1146,7 +1146,7 @@ interface RichMarkdownEditorHandlePluginProps {
   readonly userEditPendingRef: MutableRefObject<boolean>;
 }
 
-export function RichMarkdownEditorHandlePlugin({
+export function RichLexicalEditorHandlePlugin({
   canonicalBridgeEchoRef,
   cancelRichDocumentSnapshot,
   focusOwner,
@@ -1159,13 +1159,13 @@ export function RichMarkdownEditorHandlePlugin({
   pendingLocalEchoDocRef,
   selectionRef,
   userEditPendingRef,
-}: RichMarkdownEditorHandlePluginProps) {
+}: RichLexicalEditorHandlePluginProps) {
   const editorModeRef = useRef<RevealMode>(REVEAL_MODE.LEXICAL);
   const focusOwnerRef = useRef<SurfaceFocusOwner>(focusOwner);
   focusOwnerRef.current = focusOwner;
 
   return (
-    <MarkdownEditorHandlePlugin
+    <LexicalEditorHandlePlugin
       cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
       canonicalBridgeEchoRef={canonicalBridgeEchoRef}
       editorModeRef={editorModeRef}

@@ -1,9 +1,10 @@
 import type { SyntaxNode } from "@lezer/common";
 import { readBracedLabelId } from "../../parser/label-utils";
+import { extractRawFrontmatter } from "../../parser/frontmatter";
 import { BLOCK_MANIFEST_ENTRIES, EXCLUDED_FROM_FALLBACK } from "../../constants/block-manifest";
 import { CSS } from "../../constants/css-classes";
 import { capitalize } from "../../lib/utils";
-import { escapeHtml, renderMath, type InlineContext, type WalkContext } from "./shared";
+import { documentBodyInlineContext, escapeHtml, renderMath, type WalkContext } from "./shared";
 import { renderChildren, renderDocumentInline, renderInlineWithSurface } from "./inline";
 
 export function renderNode(node: SyntaxNode, context: WalkContext): string {
@@ -45,23 +46,14 @@ export function renderNode(node: SyntaxNode, context: WalkContext): string {
 function renderDocument(node: SyntaxNode, context: WalkContext): string {
   const output: string[] = [];
   let child = node.firstChild;
+  const frontmatterEnd = extractRawFrontmatter(context.doc)?.end ?? -1;
 
-  if (context.doc.startsWith("---")) {
-    const firstNewline = context.doc.indexOf("\n");
-    if (firstNewline !== -1) {
-      const afterFirstLine = context.doc.slice(3, firstNewline).trim();
-      if (afterFirstLine.length === 0) {
-        const closingIndex = context.doc.indexOf("\n---", firstNewline);
-        if (closingIndex !== -1) {
-          const frontmatterEnd = closingIndex + 4;
-          while (child && child.to <= frontmatterEnd) {
-            child = child.nextSibling;
-          }
-          if (child && child.from < frontmatterEnd) {
-            child = child.nextSibling;
-          }
-        }
-      }
+  if (frontmatterEnd >= 0) {
+    while (child && child.to <= frontmatterEnd) {
+      child = child.nextSibling;
+    }
+    if (child && child.from < frontmatterEnd) {
+      child = child.nextSibling;
     }
   }
 
@@ -96,8 +88,9 @@ function renderHeading(node: SyntaxNode, context: WalkContext): string {
     ? `<span class="${CSS.sectionNumber}">${heading.number}</span> `
     : "";
   const level = heading?.level ?? fallbackLevel;
+  const idAttr = heading?.id ? ` id="${escapeHtml(heading.id)}"` : "";
 
-  return `<h${level}>${prefix}${renderedText}</h${level}>`;
+  return `<h${level}${idAttr}>${prefix}${renderedText}</h${level}>`;
 }
 
 function renderFencedCode(node: SyntaxNode, context: WalkContext): string {
@@ -119,7 +112,7 @@ function renderList(
 
   while (child) {
     if (child.name === "ListItem") {
-      items.push(renderListItem(child, context));
+      items.push(renderListItem(child, context, isLooseList(node, context.doc)));
     }
     child = child.nextSibling;
   }
@@ -128,7 +121,38 @@ function renderList(
   return `<${tag}>\n${itemsHtml}\n</${tag}>`;
 }
 
-function renderListItem(node: SyntaxNode, context: WalkContext): string {
+function isLooseList(node: SyntaxNode, doc: string): boolean {
+  let item = node.firstChild;
+  while (item) {
+    if (item.name === "ListItem" && isLooseListItem(item, doc)) return true;
+    item = item.nextSibling;
+  }
+  return false;
+}
+
+function isLooseListItem(node: SyntaxNode, doc: string): boolean {
+  let paragraphCount = 0;
+  let previousBlock: SyntaxNode | null = null;
+  let child = node.firstChild;
+
+  while (child) {
+    if (child.name !== "ListMark") {
+      if (previousBlock && hasBlankLineBetween(doc, previousBlock, child)) return true;
+      if (child.name === "Paragraph") paragraphCount += 1;
+      if (paragraphCount > 1) return true;
+      previousBlock = child;
+    }
+    child = child.nextSibling;
+  }
+
+  return false;
+}
+
+function hasBlankLineBetween(doc: string, left: SyntaxNode, right: SyntaxNode): boolean {
+  return /\r?\n[ \t]*\r?\n/.test(doc.slice(left.to, right.from));
+}
+
+function renderListItem(node: SyntaxNode, context: WalkContext, loose: boolean): string {
   const parts: string[] = [];
   let child = node.firstChild;
 
@@ -143,17 +167,24 @@ function renderListItem(node: SyntaxNode, context: WalkContext): string {
       if (taskMarker) {
         const markerText = context.doc.slice(taskMarker.from, taskMarker.to);
         const checked = markerText !== "[ ]" ? " checked" : "";
-        parts.push(`<input type="checkbox" disabled${checked}>`);
+        const contentStart = taskMarker.to + 1;
+        const taskContent = context.doc.slice(contentStart, child.to).trim();
+        const taskHtml = `<input type="checkbox" disabled${checked}>${
+          taskContent
+            ? ` ${renderInlineWithSurface(taskContent, documentBodyInlineContext(taskContent, context))}`
+            : ""
+        }`;
+        parts.push(loose ? `<p>${taskHtml}</p>` : taskHtml);
+      } else {
+        const taskContent = context.doc.slice(child.from, child.to).trim();
+        parts.push(renderInlineWithSurface(taskContent, documentBodyInlineContext(taskContent, context)));
       }
-      const contentStart = taskMarker ? taskMarker.to + 1 : child.from;
-      const taskContent = context.doc.slice(contentStart, child.to).trim();
-      parts.push(renderInlineWithSurface(taskContent, documentBodyInlineContext(taskContent, context)));
       child = child.nextSibling;
       continue;
     }
 
     if (child.name === "Paragraph") {
-      parts.push(renderChildren(child, context));
+      parts.push(loose ? renderNode(child, context) : renderChildren(child, context));
       child = child.nextSibling;
       continue;
     }
@@ -163,7 +194,7 @@ function renderListItem(node: SyntaxNode, context: WalkContext): string {
     child = child.nextSibling;
   }
 
-  return parts.join(" ");
+  return parts.join("\n");
 }
 
 function renderFencedDiv(node: SyntaxNode, context: WalkContext): string {
@@ -263,12 +294,13 @@ function renderDisplayMath(node: SyntaxNode, context: WalkContext): string {
     ? context.semantics.equationById.get(equationId)?.number
     : undefined;
   const mathHtml = renderMath(latex, true, context.macros);
+  const idAttr = equationId ? ` id="${escapeHtml(equationId)}"` : "";
 
   if (equationNumber === undefined) {
-    return `<div class="${CSS.mathDisplay}">${mathHtml}</div>`;
+    return `<div class="${CSS.mathDisplay}"${idAttr}>${mathHtml}</div>`;
   }
 
-  return `<div class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}"><div class="${CSS.mathDisplayContent}">${mathHtml}</div><span class="${CSS.mathDisplayNumber}">(${equationNumber})</span></div>`;
+  return `<div class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}"${idAttr}><div class="${CSS.mathDisplayContent}">${mathHtml}</div><span class="${CSS.mathDisplayNumber}">(${equationNumber})</span></div>`;
 }
 
 function renderFootnoteDef(node: SyntaxNode, context: WalkContext): string {
@@ -282,58 +314,27 @@ function renderFootnoteDef(node: SyntaxNode, context: WalkContext): string {
   return `<div class="footnote" id="fn-${escapeHtml(footnote.id)}"><sup>${escapeHtml(footnote.id)}</sup> ${content}</div>`;
 }
 
-function documentBodyInlineContext(
-  doc: string,
-  context: WalkContext,
-): Pick<
-  InlineContext,
-  | "doc"
-  | "macros"
-  | "bibliography"
-  | "citedIds"
-  | "nextCitationOccurrence"
-  | "cslProcessor"
-  | "blockCounters"
-  | "surface"
-  | "semantics"
-  | "documentPath"
-  | "imageUrlOverrides"
-> {
-  return {
-    doc,
-    macros: context.macros,
-    bibliography: context.bibliography,
-    citedIds: context.citedIds,
-    nextCitationOccurrence: context.nextCitationOccurrence,
-    cslProcessor: context.cslProcessor,
-    blockCounters: context.blockCounters,
-    surface: "document-body",
-    semantics: context.semantics,
-    documentPath: context.documentPath,
-    imageUrlOverrides: context.imageUrlOverrides,
-  };
-}
-
 function renderTable(node: SyntaxNode, context: WalkContext): string {
   const delimiterNode = node.getChild("TableDelimiter");
   if (!delimiterNode) return "";
 
   const alignments = parseTableAlignments(context.doc.slice(delimiterNode.from, delimiterNode.to));
+  const headerNode = node.getChild("TableHeader");
+  const headerCells = headerNode?.getChildren("TableCell") ?? [];
+  const columnCount = alignments.length;
   const renderRow = (cells: readonly SyntaxNode[], tag: "th" | "td"): string => {
     let row = "";
-    for (let index = 0; index < cells.length; index += 1) {
+    for (let index = 0; index < columnCount; index += 1) {
       const align = alignments[index] ? ` style="text-align: ${alignments[index]}"` : "";
-      const content = renderChildren(cells[index], context);
+      const cell = cells[index];
+      const content = cell ? renderChildren(cell, context) : "";
       row += `<${tag}${align}>${content}</${tag}>\n`;
     }
     return row;
   };
 
-  const headerNode = node.getChild("TableHeader");
   let html = "<table>\n<thead>\n<tr>\n";
-  if (headerNode) {
-    html += renderRow(headerNode.getChildren("TableCell"), "th");
-  }
+  html += renderRow(headerCells, "th");
   html += "</tr>\n</thead>\n<tbody>\n";
 
   let child = node.firstChild;

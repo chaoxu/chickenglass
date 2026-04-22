@@ -6,6 +6,7 @@ import {
   isLoopbackAppUrl,
   normalizeConnectEditorOptions,
   resolveTextAnchorInDocument,
+  screenshot,
   waitForDebugBridge,
   waitForAppUrl,
 } from "./test-helpers.mjs";
@@ -13,6 +14,11 @@ import {
 describe("test helpers browser harness", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    delete window.__app;
+    delete window.__editor;
+    delete window.__cmView;
+    delete window.__cmDebug;
+    delete window.__cfDebug;
   });
 
   it("defaults automated harnesses to a managed headless browser when requested", () => {
@@ -63,40 +69,49 @@ describe("test helpers browser harness", () => {
     ]);
   });
 
-  it("times out readiness promises after debug globals appear", async () => {
-    let evaluateCalls = 0;
+  it.each([
+    ["__app.ready", "__app"],
+    ["__editor.ready", "__editor"],
+    ["__cfDebug.ready", "__cfDebug"],
+  ])("reports the stuck %s readiness promise", async (expectedPending, stuckGlobal) => {
+    const stuck = new Promise(() => {});
+    window.__app = { ready: stuckGlobal === "__app" ? stuck : Promise.resolve() };
+    window.__editor = { ready: stuckGlobal === "__editor" ? stuck : Promise.resolve() };
+    window.__cfDebug = { ready: stuckGlobal === "__cfDebug" ? stuck : Promise.resolve() };
+    window.__cmView = {};
+    window.__cmDebug = {};
     const page = {
       waitForFunction: vi.fn(async () => {}),
-      evaluate: vi.fn(async () => {
-        evaluateCalls += 1;
-        if (evaluateCalls === 1) {
-          return new Promise(() => {});
-        }
-        return {
-          readyState: "complete",
-          globals: {
-            __app: true,
-            __editor: true,
-            __cmView: true,
-            __cmDebug: true,
-            __cfDebug: true,
-            lexicalEditor: true,
-          },
-        };
-      }),
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
       title: vi.fn(async () => "Coflat"),
       url: vi.fn(() => "http://localhost:5173/"),
       context: vi.fn(() => ({ browser: () => null })),
     };
 
     await expect(waitForDebugBridge(page, { timeout: 10 })).rejects.toThrow(
-      "debug bridge readiness timed out after 10ms",
+      `pending: ${expectedPending}`,
     );
     expect(page.waitForFunction).toHaveBeenCalledWith(expect.any(Function), {
       timeout: 10,
       polling: 100,
     });
     expect(page.evaluate).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("screenshot", () => {
+  it("does not use the fresh-page fallback for buffer captures by default", async () => {
+    const error = new Error("capture failed");
+    const page = {
+      screenshot: vi.fn(async () => {
+        throw error;
+      }),
+    };
+
+    await expect(screenshot(page, {
+      clip: { x: 0, y: 0, width: 10, height: 10 },
+      timeout: 10,
+    })).rejects.toThrow("capture failed");
   });
 });
 
@@ -171,5 +186,24 @@ describe("createArgParser", () => {
     expect(() => getIntFlag("--timeout", 15000)).toThrow(
       "Invalid integer value for --timeout: 15s",
     );
+  });
+
+  it("collects positionals without treating flag values as files", () => {
+    expect(
+      createArgParser([
+        "--url",
+        "http://localhost:5174",
+        "index.md",
+        "--output",
+        "/tmp/shot.png",
+      ]).getPositionals(),
+    ).toEqual(["index.md"]);
+    expect(
+      createArgParser([
+        "index.md",
+        "--url",
+        "http://localhost:5174",
+      ]).getPositionals(),
+    ).toEqual(["index.md"]);
   });
 });

@@ -9,29 +9,27 @@
  */
 
 import process from "node:process";
-import { connectEditor, openFile, screenshot, createArgParser, disconnectBrowser } from "./test-helpers.mjs";
+import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createArgParser, openFile, screenshot } from "./test-helpers.mjs";
 
 const args = process.argv.slice(2);
-const { getFlag } = createArgParser(args);
+const { getFlag, getPositionals } = createArgParser(args);
 const output = getFlag("--output", `/tmp/coflat-screenshot-${Date.now()}.png`);
-const url = getFlag("--url");
+const file = getPositionals()[0] ?? "index.md";
 
-// Get positional arguments (first non-flag arg that isn't a flag value)
-const outputIdx = args.indexOf("--output");
-const file =
-  args.find((a, i) => !a.startsWith("-") && (outputIdx < 0 || i !== outputIdx + 1)) ??
-  "index.md";
-
-let page;
+let session;
 try {
-  page = await connectEditor(undefined, { url });
+  session = await openBrowserSession(args, { defaultBrowser: "cdp" });
 } catch {
   console.error("Cannot connect to CDP.\nMake sure Chrome is running: pnpm chrome");
   process.exit(1);
 }
 
-await openFile(page, file);
-await screenshot(page, output, { fullPage: true });
-console.log(output);
-
-await disconnectBrowser(page);
+try {
+  const { page } = session;
+  await openFile(page, file);
+  await screenshot(page, output, { fullPage: true });
+  console.log(output);
+} finally {
+  await closeBrowserSession(session);
+}

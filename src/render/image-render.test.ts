@@ -752,4 +752,24 @@ describe("imageRenderPlugin cache-only invalidation", () => {
     expect(resolvePreview).not.toHaveBeenCalled();
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
   });
+
+  it("requests near-viewport image previews without prefetching offscreen images", () => {
+    const lateImages = Array.from(
+      { length: 12 },
+      (_, index) => `![late ${index}](late-${index}.png)`,
+    ).join("\n\n");
+    const doc = [
+      "![hero](hero.png)",
+      "x".repeat(25_000),
+      lateImages,
+    ].join("\n\n");
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
+
+    view = createTestView(doc, {
+      cursorPos: 0,
+      extensions: [markdown(), imageUrlField, pdfPreviewField, imageRenderPlugin],
+    });
+
+    expect(resolvePreview.mock.calls.map((call) => call[1])).toEqual(["hero.png"]);
+  });
 });

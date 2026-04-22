@@ -48,6 +48,11 @@ import {
   ACTIVATE_STRUCTURE_EDIT_COMMAND,
   type ActivateStructureEditRequest,
 } from "./structure-edit-plugin";
+import {
+  $findVisibleTextLocation,
+  $getVisibleTextLength,
+  type VisibleTextAffinity,
+} from "./visible-source-traversal";
 
 interface SourceSelectionReadOptions {
   readonly fallback?: MarkdownEditorSelection;
@@ -77,57 +82,25 @@ function readCachedSourceSpanIndex(
 export function mapVisibleTextOffsetToMarkdown(
   markdown: string,
   visibleOffset: number,
-  affinity: "backward" | "forward" = "forward",
+  affinity: VisibleTextAffinity = "forward",
 ): number | null {
   const probeEditor = createHeadlessCoflatEditor();
   setLexicalMarkdown(probeEditor, markdown);
 
   return probeEditor.getEditorState().read(() => {
     const spanIndex = createSourceSpanIndex(markdown);
-    let remaining = Math.max(0, visibleOffset);
-    let lastTextNode: TextNode | null = null;
-
-    const visit = (node: LexicalNode): { readonly node: TextNode; readonly offset: number } | null => {
-      if ($isTextNode(node)) {
-        lastTextNode = node;
-        const length = node.getTextContentSize();
-        if (remaining < length || (remaining === length && affinity === "backward")) {
-          return { node, offset: remaining };
-        }
-        remaining -= length;
-        return null;
-      }
-
-      if (!$isElementNode(node)) {
-        remaining -= node.getTextContent().length;
-        return null;
-      }
-
-      for (const child of node.getChildren()) {
-        const found = visit(child);
-        if (found) {
-          return found;
-        }
-      }
-      return null;
-    };
-
-    const location = visit($getRoot());
+    const location = $findVisibleTextLocation($getRoot(), visibleOffset, affinity);
     if (location) {
       return spanIndex.getTextNodeOffset(location.node, location.offset);
     }
-    if (lastTextNode === null) {
-      return null;
-    }
-    const fallbackNode = lastTextNode as TextNode;
-    return spanIndex.getTextNodeOffset(fallbackNode, fallbackNode.getTextContentSize());
+    return null;
   });
 }
 
 export function getMarkdownVisibleTextLength(markdown: string): number {
   const probeEditor = createHeadlessCoflatEditor();
   setLexicalMarkdown(probeEditor, markdown);
-  return probeEditor.getEditorState().read(() => $getRoot().getTextContent().length);
+  return probeEditor.getEditorState().read(() => $getVisibleTextLength($getRoot()));
 }
 
 export function mapVisibleTextSelectionToMarkdown(

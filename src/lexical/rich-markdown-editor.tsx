@@ -52,10 +52,10 @@ import {
   lexicalMarkdownTheme,
 } from "./markdown";
 import {
-  MarkdownSyncPlugin,
-  RichMarkdownEditorHandlePlugin,
-  useMarkdownEditorSessionController,
-} from "./markdown-editor-session";
+  LexicalDocumentSyncPlugin,
+  RichLexicalEditorHandlePlugin,
+  useLexicalDocumentSessionController,
+} from "./lexical-document-session";
 import type {
   MarkdownEditorHandle,
   MarkdownEditorSelection,
@@ -170,7 +170,7 @@ export function LexicalRichMarkdownEditor({
     flushRichDocumentSnapshot,
     handleRichChange,
     syncSelectionToDocLength,
-  } = useMarkdownEditorSessionController({
+  } = useLexicalDocumentSessionController({
     doc,
     focusOwner,
     onDocChange,
@@ -244,7 +244,7 @@ export function LexicalRichMarkdownEditor({
                 {editable
                   ? <CursorRevealPlugin editorMode={REVEAL_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
                   : <ClickableLinkPlugin />}
-                <RichMarkdownEditorHandlePlugin
+                <RichLexicalEditorHandlePlugin
                   cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
                   canonicalBridgeEchoRef={canonicalBridgeEchoRef}
                   focusOwner={focusOwner}
@@ -261,7 +261,7 @@ export function LexicalRichMarkdownEditor({
                 <RootElementPlugin onRootElementChange={onRootElementChange} />
                 {editable ? <InlineTokenBoundaryPlugin /> : null}
                 {editable ? <DestructiveKeySelectionSyncPlugin /> : null}
-                <MarkdownSyncPlugin
+                <LexicalDocumentSyncPlugin
                   doc={doc}
                   lastCommittedDocRef={lastCommittedDocRef}
                   pendingLocalEchoDocRef={pendingLocalEchoDocRef}

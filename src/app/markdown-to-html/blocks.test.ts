@@ -27,6 +27,27 @@ describe("blocks module", () => {
     expect(html).toContain("<h1>Hello</h1>");
   });
 
+  it("skips CRLF YAML frontmatter with the canonical boundary parser", () => {
+    const html = renderDocument("---\r\ntitle: Test\r\n---\r\n\r\n# Hello");
+
+    expect(html).not.toContain("title: Test");
+    expect(html).toContain("<h1>Hello</h1>");
+  });
+
+  it("does not skip a leading thematic break as frontmatter", () => {
+    const html = renderDocument("---\n\n# Hello");
+
+    expect(html).toContain("<hr>");
+    expect(html).toContain("<h1>Hello</h1>");
+  });
+
+  it("skips malformed YAML frontmatter after a valid boundary", () => {
+    const html = renderDocument("---\ntitle: [\n---\n\n# Hello");
+
+    expect(html).not.toContain("title: [");
+    expect(html).toContain("<h1>Hello</h1>");
+  });
+
   it("keeps proof labels inline when the body starts with a paragraph", () => {
     const html = renderDocument("::: {.proof}\nProof text.\n:::");
 

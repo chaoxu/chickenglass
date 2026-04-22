@@ -60,8 +60,8 @@ export function extractHeadings(state: EditorState): HeadingEntry[] {
  * inside D's content, returns [A, C, D].
  *
  * Algorithm:
- * 1. Filter `headings` to those whose position is ≤ `cursorPos` ("before").
- * 2. Walk backwards through "before", collecting headings with strictly
+ * 1. Binary-search the last heading whose position is ≤ `cursorPos`.
+ * 2. Walk backwards from that heading, collecting headings with strictly
  *    decreasing level numbers into `ancestry`. The `Infinity` sentinel
  *    initialises `currentLevel` so that the innermost heading (any level)
  *    is always accepted on the first iteration.
@@ -70,22 +70,20 @@ export function extractHeadings(state: EditorState): HeadingEntry[] {
  * 4. `ancestry` is built in reverse order via `unshift`, so the result is
  *    sorted outermost-first (h1 → h2 → … → deepest enclosing heading).
  *
- * Complexity: O(n) where n = headings before cursor.
+ * Complexity: O(log n + depth), without allocating a filtered heading array.
  */
 export function headingAncestryAt(
   headings: ReadonlyArray<HeadingEntry>,
   cursorPos: number,
 ): HeadingEntry[] {
-  // Collect headings at or before cursor
-  const before = headings.filter((h) => h.pos <= cursorPos);
-  if (before.length === 0) return [];
+  const activeIndex = activeHeadingIndex(headings, cursorPos);
+  if (activeIndex < 0) return [];
 
-  // Walk backwards: collect each heading with a strictly decreasing level
   const ancestry: HeadingEntry[] = [];
   let currentLevel = Infinity;
 
-  for (let i = before.length - 1; i >= 0; i--) {
-    const h = before[i];
+  for (let i = activeIndex; i >= 0; i--) {
+    const h = headings[i];
     if (h.level < currentLevel) {
       ancestry.unshift(h);
       currentLevel = h.level;
@@ -107,12 +105,15 @@ export function activeHeadingIndex(
   headings: ReadonlyArray<HeadingEntry>,
   cursorPos: number,
 ): number {
-  let active = -1;
-  for (let i = headings.length - 1; i >= 0; i--) {
-    if (headings[i].pos <= cursorPos) {
-      active = i;
-      break;
+  let low = 0;
+  let high = headings.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (headings[mid].pos <= cursorPos) {
+      low = mid + 1;
+    } else {
+      high = mid;
     }
   }
-  return active;
+  return low - 1;
 }

@@ -130,6 +130,22 @@ describe("markdownToHtml", () => {
     expect(html).toContain("</ul>");
   });
 
+  it("preserves loose list paragraph structure", () => {
+    const html = markdownToHtml("- first\n\n  second paragraph\n\n- item two");
+
+    expect(html).toContain("<li><p>first</p>\n<p>second paragraph</p></li>");
+    expect(html).toContain("<li><p>item two</p></li>");
+  });
+
+  it("keeps tight nested lists as block children without paragraph wrappers", () => {
+    const html = markdownToHtml("- first\n  - nested\n- second");
+
+    expect(html).toContain("<li>first\n<ul>");
+    expect(html).toContain("<li>nested</li>");
+    expect(html).toContain("<li>second</li>");
+    expect(html).not.toContain("<p>first</p>");
+  });
+
   it("renders ordered lists", () => {
     const html = markdownToHtml("1. First\n2. Second\n3. Third");
     expect(html).toContain("<ol>");
@@ -185,7 +201,7 @@ describe("markdownToHtml", () => {
 
   it("renders display math with equation labels", () => {
     const html = markdownToHtml("$$\nx^2\n$$ {#eq:foo}");
-    expect(html).toContain(`class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}"`);
+    expect(html).toContain(`class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}" id="eq:foo"`);
     expect(html).toContain(`class="${CSS.mathDisplayNumber}"`);
     expect(html).toContain("katex");
     expect(html).toContain("(1)");
@@ -263,6 +279,38 @@ describe("markdownToHtml", () => {
     expect(html).toContain("<table>");
     expect(html).toContain("<th>");
     expect(html).toContain("<td>");
+  });
+
+  it("pads short table rows to the Pandoc column width", () => {
+    const md = "| A | B |\n| --- | --- |\n| 1 |";
+    const html = markdownToHtml(md);
+
+    expect(html).toContain("<td>1</td>\n<td></td>");
+  });
+
+  it("truncates overlong table body rows to the Pandoc column width", () => {
+    const md = "| A | B |\n| --- | --- |\n| 1 | 2 | 3 |";
+    const html = markdownToHtml(md);
+
+    expect(html).toContain("<td>1</td>\n<td>2</td>");
+    expect(html).not.toContain("<td>3</td>");
+  });
+
+  it("truncates overlong table headers to the Pandoc delimiter width", () => {
+    const md = "| A | B | C |\n| --- | --- |\n| 1 | 2 | 3 |";
+    const html = markdownToHtml(md);
+
+    expect(html).toContain("<th>A</th>\n<th>B</th>");
+    expect(html).not.toContain("<th>C</th>");
+    expect(html).not.toContain("<td>3</td>");
+  });
+
+  it("uses delimiter-only table columns as Pandoc-style empty header cells", () => {
+    const md = "| A | B |\n| --- | --- | --- |\n| 1 | 2 | 3 |";
+    const html = markdownToHtml(md);
+
+    expect(html).toContain("<th>A</th>\n<th>B</th>\n<th></th>");
+    expect(html).toContain("<td>1</td>\n<td>2</td>\n<td>3</td>");
   });
 
   it("renders table alignment", () => {
@@ -747,7 +795,24 @@ describe("markdownToHtml", () => {
     const html = markdownToHtml(doc, { sectionNumbers: true });
 
     expect(html).toContain('href="#sec:background"');
+    expect(html).toContain('<h2 id="sec:background"');
     expect(html).toContain("Section 1.1");
+  });
+
+  it("renders heading and equation ids as cross-reference targets", () => {
+    const doc = [
+      "# Intro {#sec:intro}",
+      "",
+      "$$x^2$$ {#eq:energy}",
+      "",
+      "See [@sec:intro] and [@eq:energy].",
+    ].join("\n");
+    const html = markdownToHtml(doc, { sectionNumbers: true });
+
+    expect(html).toContain('<h1 id="sec:intro"');
+    expect(html).toContain(`class="${CSS.mathDisplay} ${CSS.mathDisplayNumbered}" id="eq:energy"`);
+    expect(html).toContain('href="#sec:intro"');
+    expect(html).toContain('href="#eq:energy"');
   });
 
   it("renders bibliography backlinks to citation occurrences", () => {

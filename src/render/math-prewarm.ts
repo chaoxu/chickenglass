@@ -85,6 +85,7 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
   class {
     private generation = 0;
     private lastRegions: readonly MathSemantics[] | null = null;
+    private lastMacros: Record<string, string> | null = null;
     private lastMacrosKey = "";
 
     constructor(view: EditorView) {
@@ -94,17 +95,28 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       const regions = update.state.field(documentAnalysisField).mathRegions;
       const macros = update.state.field(mathMacrosField);
-      const macrosKey = serializeMacros(macros);
+      const macrosKey = macros === this.lastMacros
+        ? this.lastMacrosKey
+        : serializeMacros(macros);
       const macrosChanged = macrosKey !== this.lastMacrosKey;
-      const mathContentTouched = docChangeTouchesMathContent(update);
 
-      if (
-        macrosChanged ||
-        (
-          (!update.docChanged || mathContentTouched)
-          && prewarmMathRegionsChanged(this.lastRegions, regions)
-        )
-      ) {
+      if (regions === this.lastRegions && !macrosChanged) {
+        return;
+      }
+
+      const regionsChanged = prewarmMathRegionsChanged(this.lastRegions, regions);
+      if (!regionsChanged && !macrosChanged) {
+        this.lastRegions = regions;
+        this.lastMacros = macros;
+        this.lastMacrosKey = macrosKey;
+        return;
+      }
+
+      const mathContentTouched = update.docChanged
+        ? docChangeTouchesMathContent(update)
+        : false;
+
+      if (macrosChanged || !update.docChanged || mathContentTouched) {
         this.schedulePrewarm(update.state, macrosChanged);
       }
     }
@@ -121,6 +133,7 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       const macros = state.field(mathMacrosField);
 
       this.lastRegions = regions;
+      this.lastMacros = macros;
       this.lastMacrosKey = serializeMacros(macros);
 
       if (clearCache) {

@@ -333,7 +333,7 @@ describe("LexicalMarkdownEditor mode round-trip (issue #99)", () => {
   // `getDoc()` returns an exact byte-for-byte copy — this is the lossless
   // side of the mode pair we assert against. The lexical-side serializer
   // (`getLexicalMarkdown`) is lossy for these shapes; the fix in
-  // MarkdownModeSyncPlugin avoids routing through it on a pure mode toggle,
+    // LexicalSourceBridgePlugin avoids routing through it on a pure mode toggle,
   // so the text that lands in source mode after a rich → source switch is
   // the canonical committed doc, not the lossy re-serialization.
   const FIXTURE = [

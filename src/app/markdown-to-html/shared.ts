@@ -77,6 +77,49 @@ export interface WalkContext {
   readonly imageUrlOverrides?: ReadonlyMap<string, string>;
 }
 
+export function documentBodyInlineContext(
+  doc: string,
+  context: Pick<
+    WalkContext,
+    | "macros"
+    | "bibliography"
+    | "citedIds"
+    | "nextCitationOccurrence"
+    | "cslProcessor"
+    | "blockCounters"
+    | "semantics"
+    | "documentPath"
+    | "imageUrlOverrides"
+  >,
+): Pick<
+  InlineContext,
+  | "doc"
+  | "macros"
+  | "bibliography"
+  | "citedIds"
+  | "nextCitationOccurrence"
+  | "cslProcessor"
+  | "blockCounters"
+  | "surface"
+  | "semantics"
+  | "documentPath"
+  | "imageUrlOverrides"
+> {
+  return {
+    doc,
+    macros: context.macros,
+    bibliography: context.bibliography,
+    citedIds: context.citedIds,
+    nextCitationOccurrence: context.nextCitationOccurrence,
+    cslProcessor: context.cslProcessor,
+    blockCounters: context.blockCounters,
+    surface: "document-body",
+    semantics: context.semantics,
+    documentPath: context.documentPath,
+    imageUrlOverrides: context.imageUrlOverrides,
+  };
+}
+
 export interface CitationRenderContext {
   bibliography?: BibStore;
   citedIds?: string[];

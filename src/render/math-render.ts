@@ -462,14 +462,24 @@ function collectInlineViewportDirtyRanges(
   afterRanges: readonly { from: number; to: number }[],
 ): DirtyRange[] {
   const dirtyRanges: DirtyRange[] = [];
-  for (const region of regions) {
-    if (region.isDisplay) continue;
+  const seen = new Set<MathSemantics>();
+  const visit = (region: MathSemantics) => {
+    if (region.isDisplay || seen.has(region)) return;
+    seen.add(region);
     const wasVisible = rangeIntersectsRanges(region.from, region.to, beforeRanges);
     const isVisible = rangeIntersectsRanges(region.from, region.to, afterRanges);
     if (wasVisible !== isVisible) {
       dirtyRanges.push({ from: region.from, to: region.to });
     }
+  };
+
+  for (const range of beforeRanges) {
+    forEachMathRegionIntersectingRange(regions, range, visit);
   }
+  for (const range of afterRanges) {
+    forEachMathRegionIntersectingRange(regions, range, visit);
+  }
+
   return mergeDirtyRanges(dirtyRanges);
 }
 
@@ -507,6 +517,7 @@ function rebuildMathDecorations(state: EditorState): DecorationSet {
  * are permitted by CM6.
  */
 const mathDecorationField = createDecorationStateField({
+  spanName: "cm6.mathDecorations",
   create(state) {
     return rebuildMathDecorations(state);
   },

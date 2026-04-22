@@ -4,7 +4,7 @@ import { $isHeadingNode } from "@lexical/rich-text";
 import {
   parseHeadingText,
   type HeadingEntry,
-} from "../app/markdown/headings";
+} from "../lib/markdown/headings";
 import {
   HEADING_SOURCE_SELECTOR,
   SOURCE_POSITION_DATASET,
