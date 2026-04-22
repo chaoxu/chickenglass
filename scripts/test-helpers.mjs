@@ -1854,7 +1854,13 @@ export function createArgParser(argv = process.argv.slice(2)) {
   };
   const getIntFlag = (flag, fallback) => {
     const value = getFlag(flag);
-    return value !== undefined ? parseInt(value, 10) : fallback;
+    if (value === undefined) {
+      return fallback;
+    }
+    if (!/^-?\d+$/.test(value)) {
+      throw new Error(`Invalid integer value for ${flag}: ${value}`);
+    }
+    return Number.parseInt(value, 10);
   };
   const hasFlag = (flag) => argv.includes(flag);
   return { getFlag, getIntFlag, hasFlag };

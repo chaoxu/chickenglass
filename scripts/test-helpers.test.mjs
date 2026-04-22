@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  buildViteDevArgs,
+  createArgParser,
+  isLoopbackAppUrl,
   normalizeConnectEditorOptions,
   resolveTextAnchorInDocument,
-  buildViteDevArgs,
-  isLoopbackAppUrl,
   waitForAppUrl,
 } from "./test-helpers.mjs";
 
@@ -101,6 +102,37 @@ describe("text anchors", () => {
   it("rejects non-positive occurrences", () => {
     expect(() => resolveTextAnchorInDocument("alpha", "alpha", { occurrence: 0 })).toThrow(
       "Text anchor occurrence must be a positive integer; got 0.",
+    );
+  });
+});
+
+describe("createArgParser", () => {
+  it("parses integer flags", () => {
+    const { getIntFlag } = createArgParser(["--timeout", "30000", "--offset", "-4"]);
+
+    expect(getIntFlag("--timeout", 15000)).toBe(30000);
+    expect(getIntFlag("--offset", 0)).toBe(-4);
+  });
+
+  it("returns the fallback for missing integer flags", () => {
+    const { getIntFlag } = createArgParser([]);
+
+    expect(getIntFlag("--timeout", 15000)).toBe(15000);
+  });
+
+  it("rejects invalid integer flags", () => {
+    const { getIntFlag } = createArgParser(["--iterations", "nope"]);
+
+    expect(() => getIntFlag("--iterations", 3)).toThrow(
+      "Invalid integer value for --iterations: nope",
+    );
+  });
+
+  it("rejects partially numeric integer flags", () => {
+    const { getIntFlag } = createArgParser(["--timeout", "15s"]);
+
+    expect(() => getIntFlag("--timeout", 15000)).toThrow(
+      "Invalid integer value for --timeout: 15s",
     );
   });
 });
