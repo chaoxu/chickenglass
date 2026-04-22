@@ -4,10 +4,14 @@ const browserReproMocks = vi.hoisted(() => {
   const page = {
     reload: vi.fn(async () => {}),
   };
+  const stopAppServer = vi.fn(async () => {});
 
   return {
     page,
+    stopAppServer,
     connectEditor: vi.fn(async () => page),
+    disconnectBrowser: vi.fn(async () => {}),
+    ensureAppServer: vi.fn(async () => stopAppServer),
     waitForDebugBridge: vi.fn(async () => {}),
   };
 });
@@ -17,6 +21,8 @@ vi.mock("./test-helpers.mjs", async () => {
   return {
     ...actual,
     connectEditor: browserReproMocks.connectEditor,
+    disconnectBrowser: browserReproMocks.disconnectBrowser,
+    ensureAppServer: browserReproMocks.ensureAppServer,
     waitForDebugBridge: browserReproMocks.waitForDebugBridge,
   };
 });
@@ -25,6 +31,7 @@ const {
   diffSessionSummaries,
   extractReplayActions,
   openBrowserPage,
+  openBrowserSession,
   parseSessionEvents,
   summarizeSessionEvents,
 } = await import("./browser-repro.mjs");
@@ -196,7 +203,7 @@ describe("browser repro helpers", () => {
   });
 
   it("reuses the parsed timeout after reloading the CDP page", async () => {
-    await openBrowserPage([
+    await openBrowserSession([
       "--browser",
       "cdp",
       "--port",
@@ -207,6 +214,10 @@ describe("browser repro helpers", () => {
       "http://localhost:5174",
     ]);
 
+    expect(browserReproMocks.ensureAppServer).toHaveBeenCalledWith(
+      "http://localhost:5174",
+      { autoStart: true },
+    );
     expect(browserReproMocks.connectEditor).toHaveBeenCalledWith({
       browser: "cdp",
       headless: false,
@@ -219,5 +230,45 @@ describe("browser repro helpers", () => {
       browserReproMocks.page,
       { timeout: 42000 },
     );
+  });
+
+  it("starts the app server for the managed repro lane by default", async () => {
+    const session = await openBrowserSession([]);
+
+    expect(browserReproMocks.ensureAppServer).toHaveBeenCalledWith(
+      "http://localhost:5173",
+      { autoStart: true },
+    );
+    expect(session).toEqual({
+      page: browserReproMocks.page,
+      stopAppServer: browserReproMocks.stopAppServer,
+    });
+  });
+
+  it("honors --no-start-server for repro sessions", async () => {
+    await openBrowserSession(["--no-start-server"]);
+
+    expect(browserReproMocks.ensureAppServer).toHaveBeenCalledWith(
+      "http://localhost:5173",
+      { autoStart: false },
+    );
+  });
+
+  it("keeps the compatibility page opener on the no-autostart path", async () => {
+    await openBrowserPage([]);
+
+    expect(browserReproMocks.ensureAppServer).toHaveBeenCalledWith(
+      "http://localhost:5173",
+      { autoStart: false },
+    );
+  });
+
+  it("cleans up browser and server when setup fails after page creation", async () => {
+    browserReproMocks.waitForDebugBridge.mockRejectedValueOnce(new Error("bridge unavailable"));
+
+    await expect(openBrowserSession([])).rejects.toThrow("bridge unavailable");
+
+    expect(browserReproMocks.disconnectBrowser).toHaveBeenCalledWith(browserReproMocks.page);
+    expect(browserReproMocks.stopAppServer).toHaveBeenCalledTimes(1);
   });
 });

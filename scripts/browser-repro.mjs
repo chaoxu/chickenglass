@@ -12,6 +12,7 @@ import {
   connectEditor,
   createArgParser,
   disconnectBrowser,
+  ensureAppServer,
   jumpToTextAnchor,
   openFixtureDocument,
   openFile,
@@ -53,6 +54,7 @@ Shared browser options:
   --url http://localhost:5173
   --port 9322
   --timeout 30000
+  --no-start-server
   --headed | --headless
 
 Capture / replay options:
@@ -643,24 +645,58 @@ function maybeWriteOutput(path, payload) {
   console.log(text);
 }
 
-export async function openBrowserPage(argv) {
-  const { getIntFlag } = createArgParser(argv);
+export async function openBrowserSession(argv, { autoStartServer = true } = {}) {
+  const { getIntFlag, hasFlag } = createArgParser(argv);
   const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
   const timeout = getIntFlag("--timeout", 15000);
-  const page = await connectEditor({
-    browser: chromeArgs.browser,
-    headless: chromeArgs.headless,
-    port: chromeArgs.port,
-    timeout,
-    url: chromeArgs.url,
+  const stopAppServer = await ensureAppServer(chromeArgs.url, {
+    autoStart: autoStartServer && !hasFlag("--no-start-server"),
   });
+  let page = null;
 
-  if (chromeArgs.browser === "cdp") {
-    await page.reload({ waitUntil: "load" });
+  try {
+    page = await connectEditor({
+      browser: chromeArgs.browser,
+      headless: chromeArgs.headless,
+      port: chromeArgs.port,
+      timeout,
+      url: chromeArgs.url,
+    });
+
+    if (chromeArgs.browser === "cdp") {
+      await page.reload({ waitUntil: "load" });
+    }
+
+    await waitForDebugBridge(page, { timeout });
+    return { page, stopAppServer };
+  } catch (error) {
+    if (page) {
+      await disconnectBrowser(page).catch((disconnectError) => {
+        console.warn(
+          `Failed to disconnect browser after browser-repro setup failure: ${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`,
+        );
+      });
+    }
+    if (stopAppServer) {
+      await stopAppServer();
+    }
+    throw error;
   }
+}
 
-  await waitForDebugBridge(page, { timeout });
+export async function openBrowserPage(argv) {
+  const { page } = await openBrowserSession(argv, { autoStartServer: false });
   return page;
+}
+
+async function closeBrowserSession(session) {
+  try {
+    await disconnectBrowser(session.page);
+  } finally {
+    if (session.stopAppServer) {
+      await session.stopAppServer();
+    }
+  }
 }
 
 async function runCaptureCommand(argv) {
@@ -668,7 +704,8 @@ async function runCaptureCommand(argv) {
   const steps = loadSteps(argv);
   const label = getFlag("--label") ?? "capture";
   const outputPath = getFlag("--output");
-  const page = await openBrowserPage(argv);
+  const session = await openBrowserSession(argv);
+  const { page } = session;
 
   try {
     await preparePage(page, argv);
@@ -694,7 +731,7 @@ async function runCaptureCommand(argv) {
       finalCapture,
     });
   } finally {
-    await disconnectBrowser(page);
+    await closeBrowserSession(session);
   }
 }
 
@@ -712,7 +749,8 @@ async function runReplayCommand(argv) {
   const actions = replay.actions.slice(0, Math.max(0, limit));
   const outputPath = getFlag("--output");
   const label = getFlag("--label") ?? `replay ${basename(sessionPath)}`;
-  const page = await openBrowserPage(argv);
+  const session = await openBrowserSession(argv);
+  const { page } = session;
 
   try {
     await preparePage(page, argv);
@@ -741,7 +779,7 @@ async function runReplayCommand(argv) {
       finalCapture,
     });
   } finally {
-    await disconnectBrowser(page);
+    await closeBrowserSession(session);
   }
 }
 
