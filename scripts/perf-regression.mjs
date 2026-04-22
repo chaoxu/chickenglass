@@ -484,10 +484,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const semanticCountBefore = await semanticSpanCount();
       const deferredSyncBefore = await frontendSummary("lexical.setLexicalMarkdown");
       const incrementalSyncBefore = await frontendSummary("lexical.incrementalRichSync");
-      const sourceSpanIndexBefore = await frontendSummary("lexical.createSourceSpanIndex");
       editor.setSelection(nextAnchor);
       editor.focus();
       await waitForAnimationFrames();
+      const sourceSpanIndexBefore = await frontendSummary("lexical.createSourceSpanIndex");
 
       const timings = [];
       const wallStart = performance.now();

@@ -1084,6 +1084,10 @@ export function MarkdownEditorHandlePlugin({
             richSelectionDomInsertFailedRef.current = true;
             canonicalFallbackSelectionRef.current = nextSelection;
             scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
+          } else if (nextSelection.anchor === nextSelection.focus) {
+            selectionSnapshotFreshRef.current = true;
+            richSelectionDomInsertFailedRef.current = false;
+            canonicalFallbackSelectionRef.current = null;
           } else {
             const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
               fallback: undefined,

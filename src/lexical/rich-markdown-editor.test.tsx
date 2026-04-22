@@ -511,6 +511,73 @@ describe("__editor selection bridge (rich mode)", () => {
     }
   });
 
+  it("trusts a successful collapsed rich setSelection without a second source-span read", async () => {
+    const editor = await mountEditor({ doc: "plain prose only" });
+
+    try {
+      clearFrontendPerf();
+      act(() => {
+        editor.handle.setSelection(3, 3);
+      });
+
+      expect(getPerfSummaryCount("lexical.createSourceSpanIndex")).toBe(1);
+    } finally {
+      editor.unmount();
+      clearFrontendPerf();
+    }
+  });
+
+  it("clears stale fallback state after a later successful collapsed prose setSelection", async () => {
+    const doc = "Alpha Beta";
+    const insertAt = doc.indexOf(" Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+    const restoreGeometry = installZeroGeometryMocks();
+
+    try {
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.editor.update(() => {
+          $setSelection(null);
+        }, { discrete: true });
+        editor.handle.insertText("1");
+        editor.handle.setSelection(0);
+        editor.handle.insertText("Z");
+      });
+
+      const expectedDoc = "ZAlpha1 Beta";
+      expect(editor.handle.getDoc()).toBe(expectedDoc);
+      expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
+    } finally {
+      editor.unmount();
+      restoreGeometry();
+    }
+  });
+
+  it("keeps canonical fallback insertion for collapsed setSelection inside fenced div source", async () => {
+    const doc = [
+      "::: {.theorem #thm:sample title=\"Sample\"}",
+      "Alpha Beta.",
+      ":::",
+    ].join("\n");
+    const insertAt = doc.indexOf("Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+
+    try {
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.handle.insertText("Z");
+      });
+
+      const expectedDoc = doc.replace("Beta", "ZBeta");
+      expect(editor.handle.getDoc()).toBe(expectedDoc);
+      expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("getSelection reports the live source position when the caret is inside a heading", async () => {
     const editor = await mountEditor({ doc: "# Title\n\nbody" });
 
