@@ -63,6 +63,23 @@ describe("block-syntax", () => {
     });
   });
 
+  it("parses fenced div titles with braces through the canonical attr parser", () => {
+    const parsed = parseStructuredFencedDivRaw([
+      '::: {.theorem #thm:brace title="A } B"}',
+      "Body",
+      ":::",
+    ].join("\n"));
+
+    expect(parsed).toMatchObject({
+      attrsRaw: '{.theorem #thm:brace title="A } B"}',
+      blockType: "theorem",
+      id: "thm:brace",
+      title: "A } B",
+      titleKind: "attribute",
+      titleMarkdown: "A } B",
+    });
+  });
+
   it("treats bare known block labels as type-only fenced div openers", () => {
     const parsed = parseStructuredFencedDivRaw([
       "::: Proof",
@@ -157,7 +174,7 @@ describe("block-syntax", () => {
     });
   });
 
-  it("parses raw LaTeX equation environments", () => {
+  it("parses raw LaTeX equation environments without creating canonical labels", () => {
     const parsed = parseStructuredDisplayMathRaw([
       "\\begin{equation}\\label{eq:sum}",
       "x + y",
@@ -167,7 +184,7 @@ describe("block-syntax", () => {
     expect(parsed).toMatchObject({
       body: "x + y",
       bodyMarkdown: "x + y",
-      id: "eq:sum",
+      id: undefined,
       labelSuffix: "\\label{eq:sum}",
       openingDelimiter: "\\begin{equation}",
     });

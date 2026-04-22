@@ -140,10 +140,13 @@ describe("block-scanner", () => {
 
   it("does not recognize non-canonical single-line fenced divs", () => {
     expect(collectSourceBlockRanges("::: {.theorem} Short statement. :::")).toEqual([]);
+    expect(collectSourceBlockRanges("::: {.theorem #thm:a} Legacy title\nBody\n:::")).toEqual([]);
+    expect(collectSourceBlockRanges(":::\nBody\n:::")).toEqual([]);
   });
 
   it("exposes shared markdown-expansion start-line matchers", () => {
     expect(matchFencedDivStartLine("::: {.theorem}", { requireHeader: true })?.[1]).toBe(":::");
+    expect(matchFencedDivStartLine("::: {.theorem} Legacy")).toBeNull();
     expect(matchFencedDivStartLine(":::", { requireHeader: true })).toBeNull();
     expect(isDisplayMathDollarExpansionLine("$$")).toBe(true);
     expect(isDisplayMathDollarExpansionLine("$$x + y$$")).toBe(false);

@@ -176,6 +176,11 @@ function parseOpeningFence(
   };
 }
 
+/** Check a raw source line for a canonical fenced-div opening fence. */
+export function isCanonicalFencedDivOpeningLine(text: string): boolean {
+  return parseOpeningFence(text, readFencePrefix(text, skipSpaceTab(text, 0))) !== undefined;
+}
+
 interface OpeningFenceInfo {
   readonly colonCount: number;
   readonly attrFrom: number;

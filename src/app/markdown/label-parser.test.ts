@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractMarkdownEquations } from "./label-parser";
+import { extractMarkdownBlocks, extractMarkdownEquations } from "./label-parser";
 
 describe("extractMarkdownEquations", () => {
   it("extracts labels from canonical pandoc-crossref display math attributes", () => {
@@ -24,7 +24,7 @@ describe("extractMarkdownEquations", () => {
     ]);
   });
 
-  it("continues to read legacy raw LaTeX equation labels", () => {
+  it("does not create canonical labels from raw LaTeX equation labels", () => {
     const doc = [
       "Before",
       "\\begin{equation}\\label{eq:sum}",
@@ -36,9 +36,9 @@ describe("extractMarkdownEquations", () => {
     expect(extractMarkdownEquations(doc)).toEqual([
       {
         from: 7,
-        id: "eq:sum",
-        labelFrom: 30,
-        labelTo: 36,
+        id: undefined,
+        labelFrom: undefined,
+        labelTo: undefined,
         text: "x + y",
         to: 58,
       },
@@ -153,5 +153,19 @@ describe("extractMarkdownEquations", () => {
 
   it("ignores malformed raw equations that the block scanner rejects", () => {
     expect(extractMarkdownEquations("\\begin{equation}\\label{eq:nope}\nx + y")).toEqual([]);
+  });
+
+  it("ignores non-canonical fenced-div blocks", () => {
+    const doc = [
+      "::: {.theorem #thm:a} Legacy title",
+      "Body",
+      ":::",
+      "",
+      '::: {.lemma #lem:b title="Canonical"}',
+      "Body",
+      ":::",
+    ].join("\n");
+
+    expect(extractMarkdownBlocks(doc).map((block) => block.id)).toEqual(["lem:b"]);
   });
 });

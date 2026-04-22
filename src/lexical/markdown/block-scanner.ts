@@ -1,5 +1,6 @@
 import { FRONTMATTER_DELIMITER_RE } from "../../lib/frontmatter";
 import { MARKDOWN_IMAGE_LINE_RE, isMarkdownImageLine } from "../../lib/markdown-image";
+import { isCanonicalFencedDivOpeningLine } from "../../parser/fenced-div";
 
 export { FRONTMATTER_DELIMITER_RE };
 
@@ -45,6 +46,9 @@ export function matchFencedDivStartLine(
     return null;
   }
   if (options.requireHeader && (match[2] ?? "").trim().length === 0) {
+    return null;
+  }
+  if (!isCanonicalFencedDivOpeningLine(line)) {
     return null;
   }
   return match;
@@ -171,11 +175,9 @@ export function matchFencedDivEndLine(
     const stack = [colonCount];
     for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
       const line = lines[lineIndex] ?? "";
-      const innerMatch = line.match(FENCED_DIV_START_RE);
+      const innerMatch = matchFencedDivStartLine(line);
       if (
         innerMatch
-        && (innerMatch[2] ?? "").trim().length > 0
-        && (innerMatch[1]?.length ?? 0) >= 3
       ) {
         stack.push(innerMatch[1]?.length ?? 0);
         continue;

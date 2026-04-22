@@ -4,6 +4,8 @@ import {
   FENCED_DIV_START_RE,
   type SourceBlockRange,
 } from "./block-scanner";
+import { findMatchingBrace } from "../../parser/char-utils";
+import { parseFencedDivAttrs as parseCanonicalFencedDivAttrs } from "../../parser/fenced-div-attrs";
 import { parseBracedId } from "../../parser/label-utils";
 
 export interface FencedDivInfo {
@@ -65,22 +67,6 @@ export type SpecialBlockRange = SourceBlockRange & {
   readonly variant: "display-math" | "fenced-div";
 };
 
-function parseFencedDivAttrs(attrs: string) {
-  const titleAttrMatch = attrs.match(/\btitle=(?:"([^"]*)"|'([^']*)')/);
-  const classes = [...attrs.matchAll(/\.([A-Za-z][\w-]*)/g)].map((match) => match[1]);
-  const id = attrs.match(/#([A-Za-z0-9_][\w.:-]*)/)?.[1];
-
-  const titleAttribute = titleAttrMatch?.[1] || titleAttrMatch?.[2] || undefined;
-
-  return {
-    blockType: normalizeBlockType(classes[0], titleAttribute),
-    id,
-    title: titleAttribute,
-    titleKind: titleAttrMatch ? "attribute" : "none",
-    titleMarkdown: titleAttribute,
-  } as const;
-}
-
 export function parseDisplayMathRaw(raw: string): DisplayMathInfo {
   const parsed = parseStructuredDisplayMathRaw(raw);
   return {
@@ -123,21 +109,22 @@ export function parseStructuredFencedDivRaw(raw: string): ParsedFencedDivBlock {
     };
   }
 
-  const attrsEnd = header.indexOf("}");
-  const attrs = attrsEnd >= 0 ? header.slice(0, attrsEnd + 1) : header;
-  const parsedAttrs = parseFencedDivAttrs(attrs);
+  const attrsEnd = findMatchingBrace(header, 0);
+  const attrs = attrsEnd >= 0 ? header.slice(0, attrsEnd) : header;
+  const parsedAttrs = parseCanonicalFencedDivAttrs(attrs);
+  const titleAttribute = parsedAttrs?.keyValues.title;
 
   return {
     attrsRaw: attrs,
-    blockType: parsedAttrs.blockType,
+    blockType: normalizeBlockType(parsedAttrs?.classes[0], titleAttribute),
     body,
     bodyMarkdown,
     closingFence,
     fence,
-    id: parsedAttrs.id,
-    title: parsedAttrs.title,
-    titleMarkdown: parsedAttrs.titleMarkdown,
-    titleKind: parsedAttrs.titleKind,
+    id: parsedAttrs?.id,
+    title: titleAttribute,
+    titleMarkdown: titleAttribute,
+    titleKind: titleAttribute !== undefined ? "attribute" : "none",
   };
 }
 
@@ -215,22 +202,16 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
   const equationMatch = firstLine.match(/^\\begin\{(equation\*?)\}(?:\s*\\label\{([A-Za-z][\w.:-]*)\})?\s*$/);
   if (equationMatch) {
     const environment = equationMatch[1] as "equation" | "equation*";
-    const id = equationMatch[2];
-    const labelToken = id ? `\\label{${id}}` : undefined;
-    const labelTokenIndex = labelToken ? firstLine.indexOf(labelToken) : -1;
+    const rawLabelId = equationMatch[2];
     const bodyMarkdown = lines.slice(1, -1).join("\n");
     return {
       body: bodyMarkdown.trim(),
       bodyMarkdown,
       closingDelimiter: `\\end{${environment}}`,
-      id,
-      labelFrom: id && labelTokenIndex >= 0
-        ? labelTokenIndex + "\\label{".length
-        : undefined,
-      labelSuffix: id ? `\\label{${id}}` : "",
-      labelTo: id && labelTokenIndex >= 0
-        ? labelTokenIndex + "\\label{".length + id.length
-        : undefined,
+      id: undefined,
+      labelFrom: undefined,
+      labelSuffix: rawLabelId ? `\\label{${rawLabelId}}` : "",
+      labelTo: undefined,
       openingDelimiter: `\\begin{${environment}}`,
     };
   }
@@ -332,7 +313,7 @@ export function serializeDisplayMathRaw(
 ): string {
   if (parsed.openingDelimiter.startsWith("\\begin{equation")) {
     return [
-      `${parsed.openingDelimiter}${parsed.id ? `\\label{${parsed.id}}` : ""}`,
+      `${parsed.openingDelimiter}${parsed.labelSuffix}`,
       bodyMarkdown,
       parsed.closingDelimiter,
     ].join("\n");

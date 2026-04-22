@@ -44,9 +44,9 @@ describe("rich-html-preview", () => {
     const html = renderMarkdownRichHtml([
       "See [@eq:sum].",
       "",
-      "\\begin{equation}\\label{eq:sum}",
+      "$$",
       "x + y",
-      "\\end{equation}",
+      "$$ {#eq:sum}",
     ].join("\n"), {
       citations: {
         store: new Map(),
