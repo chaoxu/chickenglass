@@ -277,7 +277,7 @@ export function useAppOverlays({
         ? editor.getCurrentDocText()
         : ""
     ),
-    [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.getCurrentDocText],
+    [dialogs.searchOpen, editor.currentPath, editor.getCurrentDocText],
   );
   const activeSearchSnapshot: ActiveSearchSnapshot = {
     path: editor.currentPath,
@@ -405,19 +405,24 @@ export function useAppOverlays({
             return;
           }
 
-          const latestActiveSearchSnapshot = latestActiveSearchSnapshotRef.current;
+          const latestEditorSnapshot = latestEditorSnapshotRef.current;
+          const latestCurrentPath = latestEditorSnapshot.currentPath;
           if (
-            latestActiveSearchSnapshot.path !== null &&
-            searchablePathSet.has(latestActiveSearchSnapshot.path)
+            latestCurrentPath !== null &&
+            searchablePathSet.has(latestCurrentPath)
           ) {
-            const latestAnalysisResult = await readStableActiveDocumentAnalysis(
-              latestActiveSearchSnapshot,
-            );
+            const latestActiveSearchSnapshot: ActiveSearchSnapshot = {
+              path: latestCurrentPath,
+              doc: latestEditorSnapshot.getCurrentDocText(),
+              view: latestEditorSnapshot.view,
+            };
+            latestActiveSearchSnapshotRef.current = latestActiveSearchSnapshot;
+            const latestAnalysisResult = await readStableActiveDocumentAnalysis(latestActiveSearchSnapshot);
             if (latestAnalysisResult.stale || cancelled) {
               return;
             }
             await activeIndexer.updateFile(
-              latestActiveSearchSnapshot.path,
+              latestCurrentPath,
               latestActiveSearchSnapshot.doc,
               latestAnalysisResult.analysis,
             );
@@ -453,22 +458,27 @@ export function useAppOverlays({
     }
 
     const currentPath = editor.currentPath;
-    const syncSnapshot: ActiveSearchSnapshot = {
-      path: currentPath,
-      doc: activeSearchDoc,
-      view: activeSearchView,
-    };
     let cancelled = false;
     const cancelScheduledSync = scheduleDebouncedIdleTask(() => {
       void measureAsync(
         "search.index.updateFile",
         async () => {
+          const latestEditorSnapshot = latestEditorSnapshotRef.current;
+          if (latestEditorSnapshot.currentPath !== currentPath) {
+            return null;
+          }
+          const syncSnapshot: ActiveSearchSnapshot = {
+            path: currentPath,
+            doc: latestEditorSnapshot.getCurrentDocText(),
+            view: latestEditorSnapshot.view,
+          };
+          latestActiveSearchSnapshotRef.current = syncSnapshot;
           const activeIndexer = await ensureIndexer();
           const activeSearchAnalysis = await readStableActiveDocumentAnalysis(syncSnapshot);
           if (activeSearchAnalysis.stale) {
             return null;
           }
-          return activeIndexer.updateFile(currentPath, activeSearchDoc, activeSearchAnalysis.analysis);
+          return activeIndexer.updateFile(currentPath, syncSnapshot.doc, activeSearchAnalysis.analysis);
         },
         {
           category: "search",
@@ -495,8 +505,6 @@ export function useAppOverlays({
     dialogs.searchOpen,
     ensureIndexer,
     editor.currentPath,
-    activeSearchDoc,
-    activeSearchView,
     readStableActiveDocumentAnalysis,
     searchSyncRevision,
   ]);

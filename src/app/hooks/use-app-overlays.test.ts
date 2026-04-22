@@ -461,14 +461,18 @@ describe("useAppOverlays", () => {
       expect(result.current.searchVersion).toBeGreaterThan(0);
     });
 
+    const getCurrentDocText = vi.mocked(props.editor.getCurrentDocText);
     const initialUpdateCount = updateFileSpy.mock.calls.length;
     const initialSearchVersion = result.current.searchVersion;
+    const initialDocReadCount = getCurrentDocText.mock.calls.length;
 
     setCurrentDocText("# Updated live draft\n");
 
     act(() => {
       activeDocumentSignal.publish("notes/current.md");
     });
+
+    expect(getCurrentDocText).toHaveBeenCalledTimes(initialDocReadCount);
 
     await vi.waitFor(() => {
       expect(updateFileSpy).toHaveBeenCalledTimes(initialUpdateCount + 1);
