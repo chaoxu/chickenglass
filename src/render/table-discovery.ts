@@ -1,9 +1,4 @@
 import {
-  forceParsing,
-  syntaxParserRunning,
-  syntaxTreeAvailable,
-} from "@codemirror/language";
-import {
   EditorView,
   ViewPlugin,
   type ViewUpdate,
@@ -14,14 +9,16 @@ import {
   tableDiscoveryPendingParseField,
   type TableRange,
 } from "../state/table-discovery";
+import { SyntaxParseScheduler } from "./syntax-parse-scheduler";
 
 export { findTablesInState, type TableRange } from "../state/table-discovery";
 
 class TableDiscoveryParsePlugin {
-  private scheduled: ReturnType<typeof setTimeout> | null = null;
+  private readonly scheduler: SyntaxParseScheduler;
   private destroyed = false;
 
   constructor(private readonly view: EditorView) {
+    this.scheduler = new SyntaxParseScheduler(view);
     this.schedule();
   }
 
@@ -32,32 +29,20 @@ class TableDiscoveryParsePlugin {
 
   destroy(): void {
     this.destroyed = true;
-    const scheduled = this.scheduled;
-    this.scheduled = null;
-    if (scheduled !== null) clearTimeout(scheduled);
+    this.scheduler.destroy();
   }
 
   private schedule(): void {
     if (this.destroyed) return;
-    if (this.scheduled !== null) return;
-    if (!this.view.state.field(tableDiscoveryPendingParseField, false)) return;
-    if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
-
-    this.scheduled = setTimeout(() => {
-      this.scheduled = null;
-      if (this.destroyed) return;
-      if (!this.view.state.field(tableDiscoveryPendingParseField, false)) return;
-      if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
-      forceParsing(this.view, this.view.state.doc.length, 25);
-      if (
+    const pendingParse = this.view.state.field(tableDiscoveryPendingParseField, false);
+    if (!pendingParse) return;
+    this.scheduler.schedule({
+      targetTo: pendingParse.targetTo,
+      isStillNeeded: () => Boolean(
         !this.destroyed &&
-        this.view.state.field(tableDiscoveryPendingParseField, false) &&
-        !syntaxTreeAvailable(this.view.state, this.view.state.doc.length) &&
-        syntaxParserRunning(this.view)
-      ) {
-        this.schedule();
-      }
-    }, 0);
+        this.view.state.field(tableDiscoveryPendingParseField, false),
+      ),
+    });
   }
 }
 

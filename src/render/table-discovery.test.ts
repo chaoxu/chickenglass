@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
 import {
   computePendingTableParse,
+  computePendingTableParseTarget,
   sameDiscoveredTables,
   tableDiscoveryField,
   tableDiscoveryPendingParseField,
@@ -406,6 +407,28 @@ describe("table range helpers", () => {
     });
 
     expect(computePendingTableParse(state.field(tableDiscoveryField), transaction, false)).toBe(true);
+  });
+
+  it("targets pending table parsing to the dirty table region", () => {
+    const state = makeDiscoveryState([
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      ...Array.from({ length: 200 }, (_, index) => `tail ${index}`),
+    ].join("\n"));
+
+    const transaction = state.update({
+      changes: { from: state.doc.line(3).from + 1, insert: "|" },
+    });
+    const pending = computePendingTableParseTarget(
+      state.field(tableDiscoveryField),
+      transaction,
+      false,
+    );
+
+    expect(pending?.targetTo).toBeLessThan(transaction.state.doc.length);
+    expect(pending?.targetTo).toBeLessThan(transaction.state.doc.line(20).from);
   });
 
   it("defers table rebuilding while the syntax tree is incomplete", () => {

@@ -13,8 +13,6 @@ import {
   type Transaction,
 } from "@codemirror/state";
 import {
-  forceParsing,
-  syntaxParserRunning,
   syntaxTree,
   syntaxTreeAvailable,
 } from "@codemirror/language";
@@ -28,6 +26,7 @@ import {
 } from "../lib/range-helpers";
 import { documentSemanticsField } from "../state/document-analysis";
 import { buildDecorations } from "./decoration-core";
+import { SyntaxParseScheduler } from "./syntax-parse-scheduler";
 
 /**
  * Maps Lezer syntax node type names to HTML tag names.
@@ -358,23 +357,31 @@ const containerAttributePendingDirtyRegionField = StateField.define<DirtyRegion 
 
   update(value, tr) {
     const treeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
-    const treeReady = !treeChanged || syntaxTreeAvailable(tr.state, tr.state.doc.length);
     const pendingDirtyRegion = tr.docChanged && value
       ? mapDirtyRegion(value, tr)
       : value;
 
     if (tr.docChanged) {
-      if (treeChanged && treeReady) {
-        return null;
-      }
-
-      return mergeDirtyRegions(
+      const nextDirtyRegion = mergeDirtyRegions(
         pendingDirtyRegion,
         computePendingDirtyRegion(tr),
       );
+      if (
+        treeChanged &&
+        nextDirtyRegion &&
+        syntaxTreeAvailable(tr.state, nextDirtyRegion.filterTo)
+      ) {
+        return null;
+      }
+
+      return nextDirtyRegion;
     }
 
-    if (treeChanged && treeReady) {
+    if (
+      treeChanged &&
+      pendingDirtyRegion &&
+      syntaxTreeAvailable(tr.state, pendingDirtyRegion.filterTo)
+    ) {
       return null;
     }
 
@@ -406,30 +413,38 @@ export const containerAttributesField = StateField.define<DecorationSet>({
 
   update(value, tr) {
     const treeChanged = syntaxTree(tr.state) !== syntaxTree(tr.startState);
-    const treeReady = !treeChanged || syntaxTreeAvailable(tr.state, tr.state.doc.length);
-    const pendingDirtyRegion = tr.startState.field(
+    const previousPendingDirtyRegion = tr.startState.field(
+      containerAttributePendingDirtyRegionField,
+      false,
+    );
+    const nextPendingDirtyRegion = tr.state.field(
       containerAttributePendingDirtyRegionField,
       false,
     );
 
     if (tr.docChanged) {
-      if (treeChanged && treeReady) {
+      if (!nextPendingDirtyRegion) {
         return incrementalContainerUpdate(value, tr);
       }
 
       return value.map(tr.changes);
     }
 
-    if (treeChanged && treeReady) {
-      if (pendingDirtyRegion) {
+    if (treeChanged) {
+      if (previousPendingDirtyRegion && !nextPendingDirtyRegion) {
         return replaceContainerDecorationsInRange(
           value,
           tr.state,
-          expandDirtyRegionWithTree(tr.state, pendingDirtyRegion),
+          expandDirtyRegionWithTree(tr.state, previousPendingDirtyRegion),
         );
       }
 
-      return buildContainerDecorations(tr.state);
+      if (
+        !previousPendingDirtyRegion &&
+        syntaxTreeAvailable(tr.state, tr.state.doc.length)
+      ) {
+        return buildContainerDecorations(tr.state);
+      }
     }
 
     return value;
@@ -441,10 +456,12 @@ export const containerAttributesField = StateField.define<DecorationSet>({
 });
 
 class ContainerAttributeParsePlugin {
-  private scheduled: ReturnType<typeof setTimeout> | null = null;
+  private readonly scheduler: SyntaxParseScheduler;
   private destroyed = false;
 
-  constructor(private readonly view: EditorView) {}
+  constructor(private readonly view: EditorView) {
+    this.scheduler = new SyntaxParseScheduler(view);
+  }
 
   update(_update: ViewUpdate): void {
     if (this.destroyed) return;
@@ -455,31 +472,23 @@ class ContainerAttributeParsePlugin {
 
   destroy(): void {
     this.destroyed = true;
-    const scheduled = this.scheduled;
-    this.scheduled = null;
-    if (scheduled !== null) clearTimeout(scheduled);
+    this.scheduler.destroy();
   }
 
   private schedule(): void {
     if (this.destroyed) return;
-    if (this.scheduled !== null) return;
-    if (!this.view.state.field(containerAttributePendingDirtyRegionField, false)) return;
-    if (syntaxTreeAvailable(this.view.state, this.view.state.doc.length)) return;
-
-    this.scheduled = setTimeout(() => {
-      this.scheduled = null;
-      if (this.destroyed) return;
-      if (!this.view.state.field(containerAttributePendingDirtyRegionField, false)) return;
-      forceParsing(this.view, this.view.state.doc.length, 25);
-      if (
+    const pendingDirtyRegion = this.view.state.field(
+      containerAttributePendingDirtyRegionField,
+      false,
+    );
+    if (!pendingDirtyRegion) return;
+    this.scheduler.schedule({
+      targetTo: pendingDirtyRegion.filterTo,
+      isStillNeeded: () => Boolean(
         !this.destroyed &&
-        this.view.state.field(containerAttributePendingDirtyRegionField, false) &&
-        !syntaxTreeAvailable(this.view.state, this.view.state.doc.length) &&
-        syntaxParserRunning(this.view)
-      ) {
-        this.schedule();
-      }
-    }, 0);
+        this.view.state.field(containerAttributePendingDirtyRegionField, false),
+      ),
+    });
   }
 }
 

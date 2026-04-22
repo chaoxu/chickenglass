@@ -34,6 +34,10 @@ interface DirtyRange {
   readonly to: number;
 }
 
+export interface PendingTableParse {
+  readonly targetTo: number;
+}
+
 const TABLE_STRUCTURE_RE = /[|:\-\n\r]/;
 
 function getParsedTableLineCount(parsed: ParsedTable): number {
@@ -268,6 +272,41 @@ function computeDirtyRanges(
   return mergeRanges(dirtyRanges, 1);
 }
 
+function pendingTableParseFromDirtyRanges(
+  state: EditorState,
+  dirtyRanges: readonly DirtyRange[],
+): PendingTableParse | null {
+  if (dirtyRanges.length === 0) {
+    return null;
+  }
+  let targetTo = 0;
+  for (const range of dirtyRanges) {
+    targetTo = Math.max(targetTo, range.to);
+  }
+  return { targetTo: Math.min(state.doc.length, targetTo) };
+}
+
+function mergePendingTableParses(
+  left: PendingTableParse | null,
+  right: PendingTableParse | null,
+): PendingTableParse | null {
+  if (!left) return right;
+  if (!right) return left;
+  return { targetTo: Math.max(left.targetTo, right.targetTo) };
+}
+
+function mapPendingTableParse(
+  pending: PendingTableParse,
+  tr: Transaction,
+): PendingTableParse {
+  return {
+    targetTo: Math.max(0, Math.min(
+      tr.state.doc.length,
+      tr.changes.mapPos(pending.targetTo, -1),
+    )),
+  };
+}
+
 function tableOverlapsDirtyRanges(
   table: TableRange,
   dirtyRanges: readonly DirtyRange[],
@@ -312,43 +351,73 @@ function incrementalTableDiscoveryUpdate(
 export function updateDiscoveredTables(
   tables: readonly TableRange[],
   tr: Transaction,
-  treeAvailable = syntaxTreeAvailable(tr.state, tr.state.doc.length),
+  treeAvailable?: boolean,
 ): readonly TableRange[] {
   const finish = (next: readonly TableRange[]): readonly TableRange[] => (
     sameDiscoveredTables(tables, next) ? tables : next
   );
 
   if (!tr.docChanged) {
+    const treeReady = treeAvailable ?? syntaxTreeAvailable(tr.state, tr.state.doc.length);
     if (
       syntaxTree(tr.state) !== syntaxTree(tr.startState)
-      && treeAvailable
+      && treeReady
     ) {
       return finish(collectTables(tr.state));
     }
     return tables;
   }
 
-  if (!treeAvailable) {
+  if (treeAvailable === false) {
     return finish(mapTableRanges(tables, tr));
+  }
+
+  if (treeAvailable === undefined) {
+    const pendingParse = computePendingTableParseTarget(tables, tr);
+    if (pendingParse) {
+      return finish(mapTableRanges(tables, tr));
+    }
   }
 
   return finish(incrementalTableDiscoveryUpdate(tables, tr));
 }
 
-export function computePendingTableParse(
+export function computePendingTableParseTarget(
   tables: readonly TableRange[],
   tr: Transaction,
-  treeAvailable = syntaxTreeAvailable(tr.state, tr.state.doc.length),
-): boolean {
-  if (treeAvailable) {
-    return false;
+  treeAvailable?: boolean,
+): PendingTableParse | null {
+  if (treeAvailable === true) {
+    return null;
   }
 
   if (!tr.docChanged) {
-    return false;
+    return null;
   }
 
-  return !canSkipLocalTableRebuild(tables, tr);
+  if (canSkipLocalTableRebuild(tables, tr)) {
+    return null;
+  }
+
+  const pending = pendingTableParseFromDirtyRanges(
+    tr.state,
+    computeDirtyRanges(tables, tr),
+  );
+  if (!pending) {
+    return null;
+  }
+  if (treeAvailable === false) {
+    return pending;
+  }
+  return syntaxTreeAvailable(tr.state, pending.targetTo) ? null : pending;
+}
+
+export function computePendingTableParse(
+  tables: readonly TableRange[],
+  tr: Transaction,
+  treeAvailable?: boolean,
+): boolean {
+  return computePendingTableParseTarget(tables, tr, treeAvailable) !== null;
 }
 
 export function sameDiscoveredTables(
@@ -395,26 +464,29 @@ export const tableDiscoveryField = StateField.define<readonly TableRange[]>({
   },
 });
 
-export const tableDiscoveryPendingParseField = StateField.define<boolean>({
+export const tableDiscoveryPendingParseField = StateField.define<PendingTableParse | null>({
   create(state) {
-    return !syntaxTreeAvailable(state, state.doc.length);
+    return syntaxTreeAvailable(state, state.doc.length)
+      ? null
+      : { targetTo: state.doc.length };
   },
 
   update(value, tr) {
-    if (syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
-      return false;
-    }
-    if (value) {
-      return true;
-    }
-    if (!tr.docChanged) {
-      return false;
-    }
+    const mappedPending = value && tr.docChanged
+      ? mapPendingTableParse(value, tr)
+      : value;
     const tables = tr.startState.field(tableDiscoveryField, false) ??
       (syntaxTreeAvailable(tr.startState, tr.startState.doc.length)
         ? collectTables(tr.startState)
         : []);
-    return computePendingTableParse(tables, tr);
+    const nextPending = mergePendingTableParses(
+      mappedPending,
+      computePendingTableParseTarget(tables, tr),
+    );
+    if (!nextPending) {
+      return null;
+    }
+    return syntaxTreeAvailable(tr.state, nextPending.targetTo) ? null : nextPending;
   },
 });
 
