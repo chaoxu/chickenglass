@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { EditorState } from "@codemirror/state";
+import { EditorState, StateEffect } from "@codemirror/state";
+import { forceParsing } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
 import { tableDiscoveryField } from "../state/table-discovery";
@@ -10,7 +11,7 @@ import {
   getTableDeleteRange,
   tableGridExtension,
 } from "./table-grid";
-import { createTestView } from "../test-utils";
+import { createTestView, ensureFullSyntaxTree } from "../test-utils";
 
 const DOC = [
   "before",
@@ -29,19 +30,24 @@ afterEach(() => {
 });
 
 function makeView(doc = DOC): EditorView {
-  return createTestView(doc, {
+  const nextView = createTestView(doc, {
     extensions: [...createMarkdownLanguageExtensions(), tableGridExtension],
   });
+  forceParsing(nextView, nextView.state.doc.length, 5000);
+  return nextView;
 }
 
 function makeDiscoveryState(doc: string): EditorState {
-  return EditorState.create({
+  const parsedState = EditorState.create({
     doc,
     extensions: [
       ...createMarkdownLanguageExtensions(),
-      tableDiscoveryField,
     ],
   });
+  ensureFullSyntaxTree(parsedState);
+  return parsedState.update({
+    effects: StateEffect.appendConfig.of(tableDiscoveryField),
+  }).state;
 }
 
 function selectLines(target: EditorView, startLine: number, endLine: number): void {

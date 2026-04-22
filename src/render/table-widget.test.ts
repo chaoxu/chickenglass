@@ -1,12 +1,17 @@
 import { markdown } from "@codemirror/lang-markdown";
-import type { EditorState } from "@codemirror/state";
+import { StateEffect, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import { mathMacrosField } from "../state/math-macros";
 import { tableDiscoveryField } from "../state/table-discovery";
-import { createEditorState, createMockEditorView, getDecorationSpecs } from "../test-utils";
+import {
+  createEditorState,
+  createMockEditorView,
+  ensureFullSyntaxTree,
+  getDecorationSpecs,
+} from "../test-utils";
 import { editorFocusField } from "./render-utils";
 import { _tableDecorationFieldForTest as tableDecorationField } from "./table-render";
 import type { ParsedTable } from "./table-utils";
@@ -361,15 +366,18 @@ describe("tableDecorationField commit rebuild (#404)", () => {
   const TABLE_DOC = "| A | B |\n| --- | --- |\n| 1 | 2 |";
 
   function createTableState(doc: string): EditorState {
-    return createEditorState(doc, {
+    const parsedState = createEditorState(doc, {
       extensions: [
         markdown({ extensions: markdownExtensions }),
         frontmatterField,
         editorFocusField,
         mathMacrosField,
-        tableDecorationField,
       ],
     });
+    ensureFullSyntaxTree(parsedState);
+    return parsedState.update({
+      effects: StateEffect.appendConfig.of(tableDecorationField),
+    }).state;
   }
 
   function getWidgetCount(state: EditorState): number {
@@ -473,16 +481,21 @@ describe("tableDecorationField commit rebuild (#404)", () => {
 
 describe("tableDecorationField discovery updates", () => {
   function createTwoTableState(doc: string): EditorState {
-    return createEditorState(doc, {
+    const parsedState = createEditorState(doc, {
       extensions: [
         markdown({ extensions: markdownExtensions }),
         frontmatterField,
         editorFocusField,
         mathMacrosField,
-        tableDiscoveryField,
-        tableDecorationField,
       ],
     });
+    ensureFullSyntaxTree(parsedState);
+    return parsedState.update({
+      effects: StateEffect.appendConfig.of([
+        tableDiscoveryField,
+        tableDecorationField,
+      ]),
+    }).state;
   }
 
   function getWidgets(state: EditorState): readonly unknown[] {

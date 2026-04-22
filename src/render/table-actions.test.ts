@@ -1,4 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
+import { forceParsing } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { markdownExtensions } from "../parser";
@@ -54,12 +55,14 @@ const DOC = [
 let view: EditorView | undefined;
 
 function makeView(doc = DOC): EditorView {
-  return createTestView(doc, {
+  const nextView = createTestView(doc, {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       tableDiscoveryField,
     ],
   });
+  forceParsing(nextView, nextView.state.doc.length, 5000);
+  return nextView;
 }
 
 function getTable(target: EditorView) {

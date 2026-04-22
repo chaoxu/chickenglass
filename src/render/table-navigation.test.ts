@@ -1,4 +1,5 @@
 import { type EditorView, runScopeHandlers } from "@codemirror/view";
+import { forceParsing } from "@codemirror/language";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
 import { createTestView } from "../test-utils";
@@ -43,13 +44,15 @@ afterEach(() => {
 });
 
 function makeView(doc: string): EditorView {
-  return createTestView(doc, {
+  const nextView = createTestView(doc, {
     extensions: [
       ...createMarkdownLanguageExtensions(),
       tableDiscoveryField,
       tableKeybindings,
     ],
   });
+  forceParsing(nextView, nextView.state.doc.length, 5000);
+  return nextView;
 }
 
 function getCell(view: EditorView, lineNumber: number, colIndex: number): { from: number; to: number } {
