@@ -33,6 +33,7 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { applyIncrementalRichDocumentSync } from "./incremental-rich-sync";
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { parseStructuredFencedDivRaw } from "./markdown/block-syntax";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
@@ -646,6 +647,7 @@ export function MarkdownEditorHandlePlugin({
   const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
   const deferredRichSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deferredRichSyncDocRef = useRef<string | null>(null);
+  const deferredRichSyncBaseDocRef = useRef<string | null>(null);
   const richSelectionDomInsertFailedRef = useRef(false);
   const canonicalFallbackSelectionRef = useRef<MarkdownEditorSelection | null>(null);
 
@@ -692,20 +694,28 @@ export function MarkdownEditorHandlePlugin({
       if (nextDoc === null || editorModeRef.current === "source") {
         clearDeferredRichDocumentSync();
         deferredRichSyncDocRef.current = null;
+        deferredRichSyncBaseDocRef.current = null;
         return;
       }
 
       clearDeferredRichDocumentSync();
       deferredRichSyncDocRef.current = null;
+      const previousDoc = deferredRichSyncBaseDocRef.current;
+      deferredRichSyncBaseDocRef.current = null;
       const nextSelection = createMarkdownSelection(
         selectionRef.current.anchor,
         selectionRef.current.focus,
         nextDoc.length,
       );
       selectionRef.current = nextSelection;
-      setLexicalMarkdown(editor, nextDoc, {
+      const syncOptions = {
         tag: [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG],
-      });
+      };
+      const appliedIncrementally = previousDoc !== null
+        && applyIncrementalRichDocumentSync(editor, previousDoc, nextDoc, syncOptions);
+      if (!appliedIncrementally) {
+        setLexicalMarkdown(editor, nextDoc, syncOptions);
+      }
       const moved = selectSourceOffsetsInRichLexicalRoot(
         editor,
         nextDoc,
@@ -718,7 +728,10 @@ export function MarkdownEditorHandlePlugin({
       cacheRichDocumentSnapshot(nextDoc);
     };
 
-    const scheduleDeferredRichDocumentSync = (nextDoc: string) => {
+    const scheduleDeferredRichDocumentSync = (nextDoc: string, previousDoc: string) => {
+      if (deferredRichSyncDocRef.current === null) {
+        deferredRichSyncBaseDocRef.current = previousDoc;
+      }
       deferredRichSyncDocRef.current = nextDoc;
       clearDeferredRichDocumentSync();
       deferredRichSyncTimerRef.current = setTimeout(() => {
@@ -992,7 +1005,7 @@ export function MarkdownEditorHandlePlugin({
         publishDocumentSnapshot(nextDoc);
         selectionSnapshotFreshRef.current = true;
         richSelectionDomInsertFailedRef.current = true;
-        scheduleDeferredRichDocumentSync(nextDoc);
+        scheduleDeferredRichDocumentSync(nextDoc, currentDoc);
       },
       setDoc: (doc) => {
         pendingModeSyncRef?.current?.();

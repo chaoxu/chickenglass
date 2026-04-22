@@ -544,7 +544,8 @@ describe("__editor selection bridge (rich mode)", () => {
         await new Promise((resolve) => setTimeout(resolve, 1_050));
       });
 
-      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(1);
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
       expect(editor.handle.getDoc()).toBe(expectedDoc);
     } finally {
       editor.unmount();

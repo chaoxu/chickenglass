@@ -114,6 +114,10 @@ export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
   "lexical.typing.semantic_ms",
   "lexical.typing.deferred_sync_work_ms",
   "lexical.typing.deferred_sync_count",
+  "lexical.typing.incremental_sync_work_ms",
+  "lexical.typing.incremental_sync_count",
+  "lexical.typing.source_span_index_work_ms",
+  "lexical.typing.source_span_index_count",
   "lexical.typing.input_to_semantic_ms",
 ];
 
@@ -479,6 +483,8 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const beforeLength = readCanonicalDoc().length;
       const semanticCountBefore = await semanticSpanCount();
       const deferredSyncBefore = await frontendSummary("lexical.setLexicalMarkdown");
+      const incrementalSyncBefore = await frontendSummary("lexical.incrementalRichSync");
+      const sourceSpanIndexBefore = await frontendSummary("lexical.createSourceSpanIndex");
       editor.setSelection(nextAnchor);
       editor.focus();
       await waitForAnimationFrames();
@@ -525,18 +531,42 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const deferredSyncStart = performance.now();
       const beforeDeferredCount = deferredSyncBefore?.count ?? 0;
       const beforeDeferredTotalMs = deferredSyncBefore?.totalMs ?? 0;
+      const beforeIncrementalCount = incrementalSyncBefore?.count ?? 0;
+      const beforeIncrementalTotalMs = incrementalSyncBefore?.totalMs ?? 0;
       let deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+      let incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
       while (performance.now() - deferredSyncStart < 3000) {
-        if ((deferredSyncAfter?.count ?? 0) > beforeDeferredCount) {
+        if (
+          (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
+          || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
+        ) {
           break;
         }
         await sleepInPage(25);
         deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+        incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
       }
       const deferredSyncCount = Math.max(0, (deferredSyncAfter?.count ?? 0) - beforeDeferredCount);
       const deferredSyncWorkMs = Math.max(
         0,
         (deferredSyncAfter?.totalMs ?? 0) - beforeDeferredTotalMs,
+      );
+      const incrementalSyncCount = Math.max(
+        0,
+        (incrementalSyncAfter?.count ?? 0) - beforeIncrementalCount,
+      );
+      const incrementalSyncWorkMs = Math.max(
+        0,
+        (incrementalSyncAfter?.totalMs ?? 0) - beforeIncrementalTotalMs,
+      );
+      const sourceSpanIndexAfter = await frontendSummary("lexical.createSourceSpanIndex");
+      const sourceSpanIndexCount = Math.max(
+        0,
+        (sourceSpanIndexAfter?.count ?? 0) - (sourceSpanIndexBefore?.count ?? 0),
+      );
+      const sourceSpanIndexWorkMs = Math.max(
+        0,
+        (sourceSpanIndexAfter?.totalMs ?? 0) - (sourceSpanIndexBefore?.totalMs ?? 0),
       );
 
       return {
@@ -548,6 +578,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         settleMs,
         deferredSyncCount,
         deferredSyncWorkMs,
+        incrementalSyncCount,
+        incrementalSyncWorkMs,
+        sourceSpanIndexCount,
+        sourceSpanIndexWorkMs,
         inputToSemanticMs: wallMs + canonicalMs + semanticMs + settleMs,
       };
     },
@@ -612,6 +646,26 @@ export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
       name: withContext("lexical.typing.deferred_sync_count"),
       unit: "count",
       value: result.deferredSyncCount,
+    },
+    {
+      name: withContext("lexical.typing.incremental_sync_work_ms"),
+      unit: "ms",
+      value: result.incrementalSyncWorkMs,
+    },
+    {
+      name: withContext("lexical.typing.incremental_sync_count"),
+      unit: "count",
+      value: result.incrementalSyncCount,
+    },
+    {
+      name: withContext("lexical.typing.source_span_index_work_ms"),
+      unit: "ms",
+      value: result.sourceSpanIndexWorkMs,
+    },
+    {
+      name: withContext("lexical.typing.source_span_index_count"),
+      unit: "count",
+      value: result.sourceSpanIndexCount,
     },
     {
       name: withContext("lexical.typing.input_to_semantic_ms"),

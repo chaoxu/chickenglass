@@ -47,12 +47,6 @@ export const PUBLIC_SHOWCASE_FIXTURE = {
     resolve(EXTERNAL_DEMO_ROOT, "index.md"),
   ],
 };
-const MODE_LABELS = {
-  "cm6-rich": "CM6 Rich",
-  lexical: "Lexical",
-  rich: "CM6 Rich",
-  source: "Source",
-};
 const TEXT_FIXTURE_EXTENSIONS = new Set([
   ".bib",
   ".csl",
@@ -273,6 +267,7 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
     const page = await context.newPage();
     page.setDefaultTimeout(resolved.timeout);
     await page.goto(resolved.url, { waitUntil: "domcontentloaded" });
+    await waitForDebugBridge(page, { timeout: resolved.timeout });
     browserCleanupByPage.set(page, async () => {
       await browser.close();
     });
@@ -302,6 +297,7 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
   }
   await page.bringToFront().catch(() => {});
   page.setDefaultTimeout(Math.min(resolved.timeout, 10000));
+  await waitForDebugBridge(page, { timeout: resolved.timeout });
   browserCleanupByPage.set(page, async () => {
     await browser.close();
   });
@@ -910,44 +906,53 @@ export async function switchToMode(page, mode) {
       : mode === "Source"
         ? "source"
         : mode;
-  const targetLabel = MODE_LABELS[normalizedMode] ?? normalizedMode;
-
   const changedViaApp = await page.evaluate(async (nextMode) => {
+    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const bridgeStart = performance.now();
+    while (performance.now() - bridgeStart < 15_000) {
+      if (window.__app?.setMode && window.__app?.getMode) {
+        break;
+      }
+      await sleepInPage(50);
+    }
     if (!window.__app?.setMode || !window.__app?.getMode) {
       return null;
     }
     window.__app.setMode(nextMode);
-    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const start = performance.now();
     while (performance.now() - start < 2_000) {
-      const currentMode = window.__app.getMode();
+      const currentMode = window.__app?.getMode?.();
       if (currentMode === nextMode) {
         return currentMode;
       }
       await sleepInPage(50);
     }
-    return window.__app.getMode();
+    return window.__app?.getMode?.() ?? null;
   }, normalizedMode);
 
-  if (changedViaApp !== null) {
-    if (changedViaApp !== normalizedMode) {
-      throw new Error(`Failed to switch editor mode to ${normalizedMode}; current mode is ${changedViaApp}.`);
-    }
-    await sleep(200);
-    return;
+  if (changedViaApp === null) {
+    const diagnostics = await page.evaluate(() => ({
+      bodyText: document.body?.innerText?.slice(0, 200) ?? "",
+      globals: {
+        __app: Boolean(window.__app),
+        __cfDebug: Boolean(window.__cfDebug),
+        __cmView: Boolean(window.__cmView),
+        __editor: Boolean(window.__editor),
+      },
+      title: document.title,
+      url: location.href,
+    })).catch((error) => ({
+      evaluateError: error instanceof Error ? error.message : String(error),
+    }));
+    throw new Error(
+      `Failed to switch editor mode to ${normalizedMode}; app debug bridge unavailable: ${JSON.stringify(diagnostics)}`,
+    );
   }
 
-  const modeButton = page.getByTestId("mode-button");
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const currentLabel = (await modeButton.textContent())?.trim();
-    if (currentLabel === targetLabel) return;
-    await modeButton.click();
-    await sleep(200);
+  if (changedViaApp !== normalizedMode) {
+    throw new Error(`Failed to switch editor mode to ${normalizedMode}; current mode is ${changedViaApp}.`);
   }
-
-  const finalLabel = (await modeButton.textContent())?.trim();
-  throw new Error(`Failed to switch editor mode to ${targetLabel}; current mode is ${finalLabel ?? "<unknown>"}.`);
+  await sleep(200);
 }
 
 /**
