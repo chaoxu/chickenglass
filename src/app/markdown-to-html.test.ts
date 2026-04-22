@@ -214,7 +214,7 @@ describe("markdownToHtml", () => {
   });
 
   it("renders fenced divs with class", () => {
-    const html = markdownToHtml("::: {.theorem #thm-1} Main Result\nContent here.\n:::");
+    const html = markdownToHtml('::: {.theorem #thm-1 title="Main Result"}\nContent here.\n:::');
     expect(html).toContain(`class="${CSS.block("theorem")}"`);
     expect(html).toContain('id="thm-1"');
     expect(html).toContain("Main Result");
@@ -231,9 +231,9 @@ describe("markdownToHtml", () => {
     expect(html).toContain(`<strong class="${CSS.bold}">3SUM</strong>`);
   });
 
-  it("renders self-closing fenced divs", () => {
+  it("does not render non-canonical self-closing fenced divs as blocks", () => {
     const html = markdownToHtml("::: {.remark} The converse is false. :::");
-    expect(html).toContain(`class="${CSS.block("remark")}"`);
+    expect(html).not.toContain(`class="${CSS.block("remark")}"`);
     expect(html).toContain("The converse is false.");
   });
 
@@ -251,7 +251,7 @@ describe("markdownToHtml", () => {
   });
 
   it("renders figure captions below the content", () => {
-    const html = markdownToHtml("::: {.figure} Caption text\n![alt](img.png)\n:::");
+    const html = markdownToHtml('::: {.figure title="Caption text"}\n![alt](img.png)\n:::');
     expect(html).toContain('class="cf-block-caption"');
     expect(html.indexOf('class="cf-block-caption"')).toBeGreaterThan(html.indexOf("<img"));
     expect(html).toContain("Caption text");

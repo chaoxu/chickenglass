@@ -44,7 +44,7 @@ describe("buildDocumentLabelGraph", () => {
     const doc = [
       "# Intro {#sec:intro}",
       "",
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -129,7 +129,7 @@ describe("buildDocumentLabelGraph", () => {
     const doc = [
       "# Intro {#dup}",
       "",
-      "::: {.theorem #dup} Duplicate",
+      '::: {.theorem #dup title="Duplicate"}',
       "Body.",
       ":::",
       "",
@@ -170,7 +170,7 @@ describe("buildDocumentLabelGraph", () => {
 describe("documentLabelGraphField", () => {
   it("rebuilds numbering from current editor state after edits", () => {
     const before = createGraphState([
-      "::: {.theorem #thm:a} First",
+      '::: {.theorem #thm:a title="First"}',
       "Body.",
       ":::",
     ].join("\n"));
@@ -182,7 +182,7 @@ describe("documentLabelGraphField", () => {
       changes: {
         from: 0,
         insert: [
-          "::: {.theorem #thm:b} Second",
+          '::: {.theorem #thm:b title="Second"}',
           "Body.",
           ":::",
           "",
@@ -201,7 +201,7 @@ describe("documentLabelGraphField", () => {
       "",
       "Lead paragraph.",
       "",
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",

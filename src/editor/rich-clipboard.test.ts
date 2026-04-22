@@ -50,7 +50,7 @@ function copiedText(target: EditorView): string {
 describe("rich clipboard output filter", () => {
   it("balances copied multi-line fenced div fragments", () => {
     const doc = [
-      "::: {.theorem} Title",
+      '::: {.theorem title="Title"}',
       "Alpha",
       "Beta",
       ":::",
@@ -62,13 +62,13 @@ describe("rich clipboard output filter", () => {
     expect(copiedText(target)).toBe(doc);
   });
 
-  it("restores hidden inline closes for single-line fenced divs", () => {
+  it("leaves noncanonical single-line fenced div fragments literal", () => {
     const doc = "::: {.theorem} Title :::";
     const target = createClipboardView(doc);
 
     select(target, 0, doc.indexOf(" :::"));
 
-    expect(copiedText(target)).toBe(doc);
+    expect(copiedText(target)).toBe("::: {.theorem} Title");
   });
 
   it("preserves the original code-fence count when balancing copies", () => {
@@ -86,7 +86,7 @@ describe("rich clipboard output filter", () => {
 
   it("keeps body-only selections literal", () => {
     const doc = [
-      "::: {.theorem} Title",
+      '::: {.theorem title="Title"}',
       "Alpha",
       "Beta",
       ":::",
@@ -100,8 +100,8 @@ describe("rich clipboard output filter", () => {
 
   it("closes nested blocks from inner to outer", () => {
     const doc = [
-      "::: {.theorem} Outer",
-      "::: {.proof} Inner",
+      '::: {.theorem title="Outer"}',
+      '::: {.proof title="Inner"}',
       "Work",
       ":::",
       ":::",
@@ -115,7 +115,7 @@ describe("rich clipboard output filter", () => {
 
   it("keeps source-mode copy literal", () => {
     const doc = [
-      "::: {.theorem} Title",
+      '::: {.theorem title="Title"}',
       "Alpha",
       "Beta",
       ":::",
@@ -126,7 +126,7 @@ describe("rich clipboard output filter", () => {
     setEditorMode(target, "source");
 
     expect(copiedText(target)).toBe([
-      "::: {.theorem} Title",
+      '::: {.theorem title="Title"}',
       "Alpha",
       "Beta",
     ].join("\n"));

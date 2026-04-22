@@ -76,7 +76,7 @@ describe("treeToIR: sections from headings", () => {
 
 describe("treeToIR: blocks from fenced divs", () => {
   it("extracts a theorem block with title and label", () => {
-    const ir = parseDoc("::: {.theorem #thm-main} Main Theorem\nStatement here.\n:::\n");
+    const ir = parseDoc('::: {.theorem #thm-main title="Main Theorem"}\nStatement here.\n:::\n');
 
     expect(ir.blocks).toHaveLength(1);
     expect(ir.blocks[0].type).toBe("theorem");
@@ -96,11 +96,11 @@ describe("treeToIR: blocks from fenced divs", () => {
 
   it("extracts multiple blocks", () => {
     const doc = [
-      "::: {.theorem} T1",
+      '::: {.theorem title="T1"}',
       "Body 1.",
       ":::",
       "",
-      "::: {.definition} D1",
+      '::: {.definition title="D1"}',
       "Body 2.",
       ":::",
       "",
@@ -276,7 +276,7 @@ describe("treeToIR: mixed document", () => {
       "",
       "Some text with a reference [@thm-main].",
       "",
-      "::: {.theorem #thm-main} Main Theorem",
+      '::: {.theorem #thm-main title="Main Theorem"}',
       "Statement here.",
       ":::",
       "",

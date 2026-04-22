@@ -754,14 +754,14 @@ describe("useAppOverlays", () => {
     });
 
     const doc = [
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",
       "See [@thm:main].",
     ].join("\n");
     const expectedDoc = [
-      "::: {.theorem #thm:renamed} Main Result",
+      '::: {.theorem #thm:renamed title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -824,7 +824,7 @@ describe("useAppOverlays", () => {
     const doc = [
       "# Intro {#dup}",
       "",
-      "::: {.theorem #dup} Duplicate",
+      '::: {.theorem #dup title="Duplicate"}',
       "Body.",
       ":::",
       "",

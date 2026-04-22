@@ -59,6 +59,12 @@ export function mapFencedDivSemantics(
     titleFrom === undefined || titleToBase === undefined
       ? titleToBase
       : Math.max(titleFrom, titleToBase);
+  const titleSourceFrom = mapOptionalPos(value.titleSourceFrom, changes, 1);
+  const titleSourceToBase = mapOptionalPos(value.titleSourceTo, changes, -1);
+  const titleSourceTo =
+    titleSourceFrom === undefined || titleSourceToBase === undefined
+      ? titleSourceToBase
+      : Math.max(titleSourceFrom, titleSourceToBase);
   const closeFenceFrom = mapSentinelPos(value.closeFenceFrom, changes, 1);
   const closeFenceToBase = mapSentinelPos(value.closeFenceTo, changes, -1);
   const closeFenceTo =
@@ -75,6 +81,8 @@ export function mapFencedDivSemantics(
     && attrTo === value.attrTo
     && titleFrom === value.titleFrom
     && titleTo === value.titleTo
+    && titleSourceFrom === value.titleSourceFrom
+    && titleSourceTo === value.titleSourceTo
     && closeFenceFrom === value.closeFenceFrom
     && closeFenceTo === value.closeFenceTo
   ) {
@@ -91,6 +99,8 @@ export function mapFencedDivSemantics(
     attrTo,
     titleFrom,
     titleTo,
+    titleSourceFrom,
+    titleSourceTo,
     closeFenceFrom,
     closeFenceTo,
   };

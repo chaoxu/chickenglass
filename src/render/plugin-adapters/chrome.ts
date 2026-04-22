@@ -275,14 +275,22 @@ export function addInlineTitleParenDecorations(
 }
 
 export function addAttributeTitleDecoration(
+  adapter: PluginRenderAdapter,
   openFenceTo: number,
   title: string,
   macros: Record<string, string>,
   items: Range<Decoration>[],
+  sourceFrom?: number,
+  sourceTo?: number,
 ): void {
+  const widget = adapter.createAttributeTitleWidget(title, macros);
+  if (sourceFrom !== undefined && sourceTo !== undefined) {
+    widget.updateSourceRange(sourceFrom, sourceTo);
+  }
+
   items.push(
     Decoration.widget({
-      widget: new AttributeTitleWidget(title, macros),
+      widget,
       side: 1,
     }).range(openFenceTo),
   );
@@ -325,8 +333,8 @@ export function addCaptionDecoration(
 ): void {
   const captionWidget = adapter.createCaptionWidget(header, title, macros, active);
   captionWidget.updateSourceRange(
-    div.titleFrom ?? getFencedDivRevealFrom(div),
-    div.titleTo ?? getFencedDivRevealTo(div),
+    div.titleSourceFrom ?? div.titleFrom ?? getFencedDivRevealFrom(div),
+    div.titleSourceTo ?? div.titleTo ?? getFencedDivRevealTo(div),
   );
   items.push(
     Decoration.widget({

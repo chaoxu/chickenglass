@@ -85,7 +85,7 @@ $$ {#eq:einstein}
 \\sum_{k=0}^n \\binom{n}{k} = 2^n
 \\]
 
-::: {#thm:main .theorem} Main Result
+::: {#thm:main .theorem title="Main Result"}
 Every element of $\\R$ satisfies the property.
 :::
 
@@ -105,15 +105,13 @@ The proof follows directly. QED.
 A blockquote via fenced div.
 :::
 
-::::: {.theorem} Nested Example
+::::: {.theorem title="Nested Example"}
 Statement.
 
 :::: {.proof}
 Nested proof.
 ::::
 :::::
-
-::: {.theorem} Short statement. :::
 
 \`\`\`haskell
 fibonacci :: Int -> Int
@@ -430,11 +428,17 @@ describe("FORMAT.md coverage: Fenced Divs", () => {
     expect(mainThm?.title).toBe("Main Result");
   });
 
-  it("detects self-closing fenced divs", () => {
+  it("rejects non-canonical self-closing fenced divs", () => {
+    const doc = "::: {.theorem} Short statement. :::";
+    const state = createTestState(doc);
+    const semantics = state.field(documentSemanticsField);
+    expect(semantics.fencedDivs).toHaveLength(0);
+  });
+
+  it("does not expose self-closing fenced divs in FORMAT coverage", () => {
     const semantics = masterState.field(documentSemanticsField);
     const selfClosing = semantics.fencedDivs.find((d) => d.isSelfClosing);
-    expect(selfClosing).toBeDefined();
-    expect(selfClosing?.primaryClass).toBe("theorem");
+    expect(selfClosing).toBeUndefined();
   });
 
   it("handles nested fenced divs (more colons for outer)", () => {
@@ -444,14 +448,20 @@ describe("FORMAT.md coverage: Fenced Divs", () => {
     expect(proofs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("parses short-form fenced div (class and title, no braces)", () => {
-    const doc = "::: Theorem Main Result\nContent.\n:::";
+  it("parses class-only fenced-div shorthand", () => {
+    const doc = "::: theorem\nContent.\n:::";
     const state = createTestState(doc);
     const semantics = state.field(documentSemanticsField);
     expect(semantics.fencedDivs).toHaveLength(1);
     expect(semantics.fencedDivs[0].primaryClass).toBe("theorem");
-    // Short-form: first word is the class, rest is the title
-    expect(semantics.fencedDivs[0].title).toBe("Main Result");
+    expect(semantics.fencedDivs[0].title).toBeUndefined();
+  });
+
+  it("rejects non-canonical trailing titles on fenced-div openers", () => {
+    const doc = "::: {.theorem} Main Result\nContent.\n:::";
+    const state = createTestState(doc);
+    const semantics = state.field(documentSemanticsField);
+    expect(semantics.fencedDivs).toHaveLength(0);
   });
 });
 

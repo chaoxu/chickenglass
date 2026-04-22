@@ -202,7 +202,15 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       div.titleTo === undefined &&
       div.title
     ) {
-      addAttributeTitleDecoration(div.openFenceTo, div.title, macros, items);
+      addAttributeTitleDecoration(
+        pluginRenderAdapter,
+        div.openFenceTo,
+        div.title,
+        macros,
+        items,
+        div.titleSourceFrom,
+        div.titleSourceTo,
+      );
     }
 
     // --- Closing fence ---

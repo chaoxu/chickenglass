@@ -7,19 +7,6 @@ import { findNodeInfo, parseNodeInfos, parseNodeNames, type NodeInfo } from "../
 
 const fencedDivParser = parser.configure(fencedDiv);
 
-/** Parser with all markdown extensions (math, etc.) for inline-in-title tests. */
-const fullParser = parser.configure(markdownExtensions);
-
-/** Like nodeNames but using the full parser (includes math, etc.). */
-function fullNodeNames(text: string): string[] {
-  return parseNodeNames(text, fullParser);
-}
-
-/** Like nodeInfos but using the full parser. */
-function fullNodeInfos(text: string): NodeInfo[] {
-  return parseNodeInfos(text, fullParser);
-}
-
 /** Collect all node type names from parsing `text`. */
 function nodeNames(text: string): string[] {
   return parseNodeNames(text, fencedDivParser);
@@ -56,10 +43,10 @@ describe("fenced div parser", () => {
       expect(names).toContain("FencedDivAttributes");
     });
 
-    it("creates FencedDivTitle node when title is present", () => {
+    it("rejects non-canonical trailing title text", () => {
       const text = "::: {.theorem} My Title\nContent.\n:::";
       const names = nodeNames(text);
-      expect(names).toContain("FencedDivTitle");
+      expect(names).not.toContain("FencedDiv");
     });
 
     it("does not create FencedDivTitle when no title", () => {
@@ -92,71 +79,15 @@ describe("fenced div parser", () => {
     });
   });
 
-  describe("title", () => {
-    it("captures title text after closing brace", () => {
+  describe("non-canonical trailing titles", () => {
+    it("rejects title text after closing brace", () => {
       const text = "::: {.theorem} Fundamental Theorem\nContent.\n:::";
-      const infos = nodeInfos(text);
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Fundamental Theorem");
+      expect(nodeNames(text)).not.toContain("FencedDiv");
     });
 
-    it("short-form: first word is class, rest is title", () => {
+    it("rejects title text after class shorthand", () => {
       const text = "::: Title Only\nContent.\n:::";
-      const infos = nodeInfos(text);
-      const attr = findNode(infos, "FencedDivAttributes");
-      expect(attr.text).toBe("Title");
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Only");
-    });
-
-    /**
-     * REGRESSION GUARD — Title inline content parsing.
-     *
-     * FencedDivTitle MUST parse inline content (math, bold, italic, etc.)
-     * exactly like ATXHeading does for heading text. Without this, inline
-     * render plugins (math → KaTeX, bold, italic, highlight, links) don't
-     * see any nodes in the title range, so $x^2$ shows as raw text instead
-     * of rendered math.
-     *
-     * This has regressed 3+ times because:
-     * 1. FencedDivTitle was defined as block-only (no inline children)
-     * 2. Simplifications moved title rendering into a widget, killing inline parsing
-     * 3. The old plugin-level workaround (addTitleMathDecorations) only handled math
-     *
-     * The fix is at the parser level: call cx.parser.parseInline() on title text,
-     * producing InlineMath/Emphasis/etc. child nodes. This makes ALL inline plugins
-     * work automatically. See CLAUDE.md "Block headers must behave like headings."
-     */
-    it("parses inline math in title text (REGRESSION: must have InlineMath children)", () => {
-      const text = "::: {.theorem} Fundamental Theorem $x^2$\nContent.\n:::";
-      const names = fullNodeNames(text);
-      // FencedDivTitle must contain InlineMath as a child node
-      expect(names).toContain("FencedDivTitle");
-      expect(names).toContain("InlineMath");
-    });
-
-    it("parses bold/italic in title text (REGRESSION: must have Emphasis/StrongEmphasis)", () => {
-      const text = "::: {.theorem} A **bold** and *italic* title\nContent.\n:::";
-      const names = fullNodeNames(text);
-      expect(names).toContain("StrongEmphasis");
-      expect(names).toContain("Emphasis");
-    });
-
-    it("inline math in title has correct positions", () => {
-      const text = "::: {.theorem} Fundamental $x^2$\nContent.\n:::";
-      const infos = fullNodeInfos(text);
-      const mathNodes = infos.filter((n) => n.name === "InlineMath");
-      expect(mathNodes.length).toBeGreaterThanOrEqual(1);
-      const mathNode = mathNodes[0];
-      expect(mathNode.text).toBe("$x^2$");
-    });
-
-    it("title with multiple inline elements all parsed", () => {
-      const text = "::: {.theorem} The **Main** $\\alpha$-Result\nBody.\n:::";
-      const names = fullNodeNames(text);
-      expect(names).toContain("FencedDivTitle");
-      expect(names).toContain("StrongEmphasis");
-      expect(names).toContain("InlineMath");
+      expect(nodeNames(text)).not.toContain("FencedDiv");
     });
   });
 
@@ -273,13 +204,9 @@ describe("fenced div parser", () => {
       expect(attr.text).toBe("Theorem");
     });
 
-    it("creates FencedDivTitle for text after class name", () => {
+    it("rejects text after class name", () => {
       const text = "::: Theorem Main Result\nContent.\n:::";
-      const infos = nodeInfos(text);
-      const attr = findNode(infos, "FencedDivAttributes");
-      expect(attr.text).toBe("Theorem");
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Main Result");
+      expect(nodeNames(text)).not.toContain("FencedDiv");
     });
 
     it("does not create FencedDivTitle when only class name", () => {
@@ -312,71 +239,61 @@ describe("fenced div parser", () => {
   });
 
   describe("single-line syntax", () => {
-    it("creates FencedDiv for single-line div with braces", () => {
+    it("rejects single-line divs with braces", () => {
       const text = "::: {.theorem} Extreme Value Theorem :::";
       const names = nodeNames(text);
-      expect(names).toContain("FencedDiv");
+      expect(names).not.toContain("FencedDiv");
     });
 
-    it("has two FencedDivFence nodes (opening and closing)", () => {
+    it("does not create fence nodes for self-closing forms", () => {
       const text = "::: {.theorem} Extreme Value Theorem :::";
       const names = nodeNames(text);
       const fenceCount = names.filter((n) => n === "FencedDivFence").length;
-      expect(fenceCount).toBe(2);
+      expect(fenceCount).toBe(0);
     });
 
-    it("captures attributes", () => {
+    it("does not capture attributes", () => {
       const text = "::: {.lemma} A continuous image is compact. :::";
-      const infos = nodeInfos(text);
-      const attr = findNode(infos, "FencedDivAttributes");
-      expect(attr.text).toBe("{.lemma}");
+      expect(nodeNames(text)).not.toContain("FencedDivAttributes");
     });
 
-    it("captures title (content between attrs and closing :::)", () => {
+    it("does not capture title text", () => {
       const text = "::: {.theorem} Extreme Value Theorem :::";
-      const infos = nodeInfos(text);
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Extreme Value Theorem");
+      expect(nodeNames(text)).not.toContain("FencedDivTitle");
     });
 
-    it("works with short-form class name", () => {
+    it("rejects short-form self-closing divs", () => {
       const text = "::: corollary Every bounded sequence converges. :::";
-      const infos = nodeInfos(text);
-      const attr = findNode(infos, "FencedDivAttributes");
-      expect(attr.text).toBe("corollary");
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Every bounded sequence converges.");
+      expect(nodeNames(text)).not.toContain("FencedDiv");
     });
 
-    it("text after single-line div is parsed as separate paragraph", () => {
+    it("keeps self-closing source as paragraph text", () => {
       const text = "::: {.theorem} Short theorem. :::\nNext paragraph.";
       const infos = nodeInfos(text);
       const paragraphs = infos.filter((n) => n.name === "Paragraph");
-      expect(paragraphs.length).toBe(1);
-      expect(paragraphs[0].text.trim()).toBe("Next paragraph.");
+      expect(paragraphs.some((paragraph) => paragraph.text.includes("Short theorem"))).toBe(true);
+      expect(paragraphs.some((paragraph) => paragraph.text.includes("Next paragraph"))).toBe(true);
     });
 
-    it("multiple single-line divs in sequence", () => {
+    it("rejects multiple single-line divs in sequence", () => {
       const text = "::: {.lemma} Lemma A. :::\n::: {.lemma} Lemma B. :::";
       const names = nodeNames(text);
       const divCount = names.filter((n) => n === "FencedDiv").length;
-      expect(divCount).toBe(2);
+      expect(divCount).toBe(0);
     });
 
-    it("works with more colons", () => {
+    it("rejects self-closing forms with more colons", () => {
       const text = "::::: {.theorem} Long fence theorem. :::::";
       const names = nodeNames(text);
-      expect(names).toContain("FencedDiv");
+      expect(names).not.toContain("FencedDiv");
       const fenceCount = names.filter((n) => n === "FencedDivFence").length;
-      expect(fenceCount).toBe(2);
+      expect(fenceCount).toBe(0);
     });
 
-    it("does not treat title-less opening as self-closing", () => {
-      // ::: {.theorem} ::: — this has no content between attrs and closing,
-      // but should still be self-closing (empty title)
+    it("rejects empty self-closing forms", () => {
       const text = "::: {.theorem} :::";
       const names = nodeNames(text);
-      expect(names).toContain("FencedDiv");
+      expect(names).not.toContain("FencedDiv");
     });
   });
 
@@ -445,7 +362,7 @@ describe("fenced div parser", () => {
       // When $$ becomes $ (user deletes one $), the block should still close properly
       const fullParser = parser.configure(markdownExtensions);
       const text = [
-        "::: {.theorem} Title",
+        '::: {.theorem title="Title"}',
         "Content",
         "$",
         "\\sum_{k=1}^n k^2",
@@ -497,7 +414,7 @@ describe("fenced div parser", () => {
     it("sequential divs with display math before closing fence", () => {
       const fullParser = parser.configure(markdownExtensions);
       const text = [
-        "::: {.theorem} Fundamental Theorem",
+        '::: {.theorem title="Fundamental Theorem"}',
         "For all $n \\in \\N$:",
         "$$",
         "\\sum_{k=1}^n k^2 = \\frac{n(n+1)(2n+1)}{6}",
@@ -536,28 +453,16 @@ describe("fenced div parser", () => {
     });
 
     /**
-     * REGRESSION GUARD: trailing colon counting in self-closing divs.
-     *
-     * The closingColonEnd variable was removed as dead code. This test
-     * ensures self-closing divs still correctly count trailing colons
-     * and produce the expected two FencedDivFence nodes.
+     * REGRESSION GUARD: self-closing divs are non-canonical FORMAT.
      */
-    it("self-closing div trailing colons still counted after closingColonEnd removal", () => {
+    it("self-closing div trailing colons do not create fenced divs", () => {
       const text = "::: {.theorem} EVT :::";
-      const infos = nodeInfos(text);
-      const fences = infos.filter((n) => n.name === "FencedDivFence");
-      expect(fences.length).toBe(2);
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("EVT");
+      expect(nodeNames(text)).not.toContain("FencedDiv");
     });
 
-    it("self-closing div with many trailing colons still works", () => {
+    it("self-closing div with many trailing colons is still rejected", () => {
       const text = "::::: {.lemma} Statement :::::";
-      const infos = nodeInfos(text);
-      const fences = infos.filter((n) => n.name === "FencedDivFence");
-      expect(fences.length).toBe(2);
-      const title = findNode(infos, "FencedDivTitle");
-      expect(title.text).toBe("Statement");
+      expect(nodeNames(text)).not.toContain("FencedDiv");
     });
   });
 });

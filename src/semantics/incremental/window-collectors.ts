@@ -212,6 +212,8 @@ export function collectFencedDiv(
   let attrTo: number | undefined;
   let titleFrom: number | undefined;
   let titleTo: number | undefined;
+  let titleSourceFrom: number | undefined;
+  let titleSourceTo: number | undefined;
   let closeFenceFrom = -1;
   let closeFenceTo = -1;
 
@@ -257,6 +259,8 @@ export function collectFencedDiv(
   }
 
   let keyValueTitle: string | undefined;
+  let keyValueTitleFrom: number | undefined;
+  let keyValueTitleTo: number | undefined;
   if (attrNode) {
     const attrs = extractDivClass(doc.slice(attrNode.from, attrNode.to));
     if (attrs) {
@@ -264,6 +268,11 @@ export function collectFencedDiv(
       primaryClass = attrs.classes[0];
       id = attrs.id;
       keyValueTitle = attrs.keyValues.title;
+      const titleRange = attrs.keyValueRanges.title;
+      if (titleRange) {
+        keyValueTitleFrom = attrNode.from + titleRange.valueFrom;
+        keyValueTitleTo = attrNode.from + titleRange.valueTo;
+      }
     }
     attrFrom = attrNode.from;
     attrTo = attrNode.to;
@@ -274,9 +283,13 @@ export function collectFencedDiv(
     title = doc.slice(titleNode.from, titleNode.to).trim();
     titleFrom = titleNode.from;
     titleTo = titleNode.to;
+    titleSourceFrom = titleNode.from;
+    titleSourceTo = titleNode.to;
     openFenceTo = Math.max(openFenceTo, titleNode.to);
   } else if (keyValueTitle) {
     title = keyValueTitle;
+    titleSourceFrom = keyValueTitleFrom;
+    titleSourceTo = keyValueTitleTo;
   }
 
   const isSelfClosing =
@@ -292,6 +305,8 @@ export function collectFencedDiv(
     attrTo,
     titleFrom,
     titleTo,
+    titleSourceFrom,
+    titleSourceTo,
     closeFenceFrom,
     closeFenceTo,
     singleLine,

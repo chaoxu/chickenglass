@@ -132,11 +132,20 @@ describe("parseFencedDivAttrs", () => {
   });
 
   it("parses title key-value", () => {
-    const result = parseFencedDivAttrs('{.theorem #thm-1 title="Main result"}');
+    const input = '{.theorem #thm-1 title="Main result"}';
+    const result = parseFencedDivAttrs(input);
     expect(result).toEqual({
       classes: ["theorem"],
       id: "thm-1",
       keyValues: { title: "Main result" },
+    });
+    const keyFrom = input.indexOf("title");
+    const valueFrom = input.indexOf("Main result");
+    expect(result?.keyValueRanges.title).toEqual({
+      keyFrom,
+      keyTo: keyFrom + "title".length,
+      valueFrom,
+      valueTo: valueFrom + "Main result".length,
     });
   });
 

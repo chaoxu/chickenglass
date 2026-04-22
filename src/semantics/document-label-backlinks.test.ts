@@ -32,7 +32,7 @@ describe("resolveDocumentLabelBacklinks", () => {
     const doc = [
       "# Intro {#sec:intro}",
       "",
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -70,7 +70,7 @@ describe("resolveDocumentLabelBacklinks", () => {
     const doc = [
       "# Intro {#sec:intro}",
       "",
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -108,7 +108,7 @@ describe("resolveDocumentLabelBacklinks", () => {
     const doc = [
       "# Intro {#dup}",
       "",
-      "::: {.theorem #dup} Duplicate",
+      '::: {.theorem #dup title="Duplicate"}',
       "Body.",
       ":::",
       "",

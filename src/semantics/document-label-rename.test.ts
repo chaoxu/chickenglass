@@ -42,7 +42,7 @@ function applyRename(state: EditorState, nextId: string): EditorState {
 describe("resolveDocumentLabelRenameTarget", () => {
   it("requires the selection to stay inside an actual label token", () => {
     const doc = [
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -58,7 +58,7 @@ describe("resolveDocumentLabelRenameTarget", () => {
     const doc = [
       "# Intro {#dup}",
       "",
-      "::: {.theorem #dup} Duplicate",
+      '::: {.theorem #dup title="Duplicate"}',
       "Body.",
       ":::",
       "",
@@ -124,7 +124,7 @@ describe("prepareDocumentLabelRename", () => {
     {
       name: "fenced-block labels from a bracketed reference",
       doc: [
-        "::: {.theorem #thm:main} Main Result",
+        '::: {.theorem #thm:main title="Main Result"}',
         "Body.",
         ":::",
         "",
@@ -134,7 +134,7 @@ describe("prepareDocumentLabelRename", () => {
       selectionOffset: 2,
       nextId: "thm:result",
       expectedDoc: [
-        "::: {.theorem #thm:result} Main Result",
+        '::: {.theorem #thm:result title="Main Result"}',
         "Body.",
         ":::",
         "",
@@ -153,7 +153,7 @@ describe("prepareDocumentLabelRename", () => {
 
   it("preserves clustered-reference syntax and leaves citations untouched", () => {
     const doc = [
-      "::: {.theorem #thm:main} Main Result",
+      '::: {.theorem #thm:main title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -174,7 +174,7 @@ describe("prepareDocumentLabelRename", () => {
 
     const renamed = state.update({ changes: [...rename.changes] }).state;
     expect(renamed.doc.toString()).toBe([
-      "::: {.theorem #thm:renamed} Main Result",
+      '::: {.theorem #thm:renamed title="Main Result"}',
       "Body.",
       ":::",
       "",

@@ -87,7 +87,7 @@ Equation references should work in both bracketed and narrative forms:
 
 # Block Hover Preview Coverage
 
-:::: {#thm:hover-preview .theorem} Hover Preview Stress Test
+:::: {#thm:hover-preview .theorem title="Hover Preview Stress Test"}
 This referenced block exists to test hover previews for paragraphs, lists, blockquotes, citations, links, inline math, and display math.
 
 It contains **bold**, `code`, [a link](https://example.com), [@cormen2009], and inline math $x^2 + y^2$ in one paragraph.
@@ -109,7 +109,7 @@ Hover this block reference: [@thm:hover-preview].
 
 Hover the cluster items separately: [@thm:hover-preview; @thm:fundamental; @eq:gaussian].
 
-:::: {.theorem} Gap Test
+:::: {.theorem title="Gap Test"}
 Outer content before inner
 
 ::: {.blockquote}
@@ -136,7 +136,7 @@ Outer content after inner closes with $\beta$
 
 # Math in Fenced Divs
 
-::: {#thm:fundamental .theorem} Fundamental Theorem
+::: {#thm:fundamental .theorem title="Fundamental Theorem"}
 For all $n \in \N$:
 $$
 \sum_{k=1}^n k^2 = \frac{n(n+1)(2n+1)}{6}
@@ -147,7 +147,7 @@ $$
 By induction. Base case $n=1$: $1 = \frac{1 \cdot 2 \cdot 3}{6}$.
 :::
 
-:::: {.theorem #thm:nested} Outer shell
+:::: {.theorem #thm:nested title="Outer shell"}
 Outer shell content should stay rendered while an inner structure target is active.
 
 ::: {.proof #prf:nested}
@@ -236,10 +236,10 @@ $$
 
 ![Local hover-preview figure](showcase/hover-preview-figure.svg) should render as inline image without relying on a remote placeholder.
 
-# Bold in Fenced-Div Titles
+# Fenced-Div Title Attributes
 
-::: {.theorem} **Main Result**
-This theorem title should render "Main Result" in bold.
+::: {.theorem title="Main Result"}
+This theorem title uses the canonical Pandoc title attribute.
 :::
 
 ::: {.problem title="**3SUM**"}
@@ -248,8 +248,8 @@ This problem title uses the `title=` attribute and should render "3SUM" in bold.
 
 # Rich Block Titles
 
-::: {.remark} Title with [a link](https://example.com), [@cormen2009], `code`, and $x^2$
-This block title should stay rich inside the document surface.
+::: {.remark title="Rich title sample"}
+This block body keeps rich inline coverage with [a link](https://example.com), [@cormen2009], `code`, and $x^2$.
 :::
 
 # Footnotes
@@ -283,7 +283,7 @@ $$
 \text{SearchNeedle} = x + y
 $$
 
-::: {.definition} SearchNeedle Block Title
+::: {.definition title="SearchNeedle Block Title"}
 This block body also contains SearchNeedle and [@cormen2009].
 :::
 
@@ -317,15 +317,15 @@ Use this file to verify the split issues from #396 through #410.
 
 These blocks cover newer caption-below behavior, regular local raster images, and local PDF image rendering.
 
-::: {#fig:growth-local .figure} Linear versus exponential growth chart
+::: {#fig:growth-local .figure title="Linear versus exponential growth chart"}
 ![Linear versus exponential growth chart](showcase/linear-vs-exponential-growth.png)
 :::
 
-::: {#fig:pdf-local .figure} Local PDF figure with math $x^2 + y^2 = z^2$
+::: {#fig:pdf-local .figure title="Local PDF figure with math x^2 + y^2 = z^2"}
 ![Generated showcase figure rendered from a local PDF asset](showcase/generated-figure.pdf)
 :::
 
-::: {#tbl:feature-matrix .table} Feature coverage matrix
+::: {#tbl:feature-matrix .table title="Feature coverage matrix"}
 | Surface | Example | What to verify |
 |---------|---------|----------------|
 | raster figure block | [@fig:growth-local] | regular local image rendering + caption below |

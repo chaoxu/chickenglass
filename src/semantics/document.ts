@@ -102,6 +102,8 @@ export interface FencedDivSemantics {
   readonly attrTo?: number;
   readonly titleFrom?: number;
   readonly titleTo?: number;
+  readonly titleSourceFrom?: number;
+  readonly titleSourceTo?: number;
   readonly closeFenceFrom: number;
   readonly closeFenceTo: number;
   readonly singleLine: boolean;

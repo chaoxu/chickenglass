@@ -34,7 +34,7 @@ describe("buildDocumentReferenceCatalog", () => {
     const doc = [
       "# Duplicate {#dup}",
       "",
-      "::: {.theorem #dup} Main Result",
+      '::: {.theorem #dup title="Main Result"}',
       "Body.",
       ":::",
       "",
@@ -74,7 +74,7 @@ describe("buildDocumentReferenceCatalog", () => {
     const doc = [
       "# Duplicate {#dup}",
       "",
-      "::: {.theorem #dup} Main Result",
+      '::: {.theorem #dup title="Main Result"}',
       "Body.",
       ":::",
       "",

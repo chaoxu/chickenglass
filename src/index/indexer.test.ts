@@ -69,7 +69,7 @@ describe("cached document analysis", () => {
 describe("extractFileIndex", () => {
   describe("fenced divs", () => {
     it("extracts a basic theorem block", () => {
-      const content = `::: {.theorem #thm-1} Main Result
+      const content = `::: {.theorem #thm-1 title="Main Result"}
 Let $x$ be a positive integer.
 :::`;
       const result = extractFileIndex(content, "test.md");
@@ -130,7 +130,7 @@ Inner proof.
     });
 
     it("extracts block with title only (no label)", () => {
-      const content = `::: {.remark} A Note
+      const content = `::: {.remark title="A Note"}
 Some remark content.
 :::`;
       const result = extractFileIndex(content, "test.md");
@@ -364,7 +364,7 @@ We study groups as defined below.
 A **group** is a set $G$ with an operation.
 :::
 
-::: {.theorem #thm-main} Main Theorem
+::: {.theorem #thm-main title="Main Theorem"}
 Every finite group has an identity element.
 :::
 
@@ -390,7 +390,7 @@ See [@eq:class] for the class equation.`;
         "",
         "See [@thm:main] and @eq:main.",
         "",
-        "::: {.theorem #thm:main} Main Result",
+        '::: {.theorem #thm:main title="Main Result"}',
         "Body.",
         ":::",
         "",

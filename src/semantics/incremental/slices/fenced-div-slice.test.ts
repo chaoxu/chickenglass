@@ -25,11 +25,11 @@ function fullTree(state: EditorState) {
 describe("mergeFencedDivSlice", () => {
   it("replaces only dirty-window overlaps and preserves unrelated identity", () => {
     const doc = [
-      "::: {.theorem #thm:first} First",
+      '::: {.theorem #thm:first title="First"}',
       "alpha",
       ":::",
       "",
-      "::: {.proof #prf:second} Second",
+      '::: {.proof #prf:second title="Second"}',
       "beta",
       ":::",
       "",
@@ -66,7 +66,7 @@ describe("mergeFencedDivSlice", () => {
 
   it("replaces a div when a deletion collapses the dirty window onto its end", () => {
     const doc = [
-      "::: {.theorem #thm:first} First",
+      '::: {.theorem #thm:first title="First"}',
       "alpha",
       ":::",
     ].join("\n");
@@ -101,11 +101,11 @@ describe("mergeFencedDivSlice", () => {
 
   it("re-extracts adjacent divs when a boundary edit changes the next block", () => {
     const doc = [
-      "::: {.theorem} First",
+      '::: {.theorem title="First"}',
       "alpha",
       ":::",
       "",
-      "::: {.proof} Second",
+      '::: {.proof title="Second"}',
       "beta",
       ":::",
       "",
@@ -136,8 +136,9 @@ describe("mergeFencedDivSlice", () => {
 
     expect(afterDivs).toEqual(analyzeFencedDivs(afterDoc, fullTree(tr.state)));
     expect(afterDivs).toHaveLength(2);
-    expect(afterDivs[1]?.to).toBe(53);
-    expect(afterDivs[1]?.closeFenceFrom).toBe(54);
+    expect(afterDivs[0]?.title).toBe("First");
+    expect(afterDivs[1]?.title).toBe("Second");
+    expect(afterDivs[1]?.primaryClass).toBe("proof");
   });
 
   it("drops a div when an edit touching its start stops it parsing", () => {

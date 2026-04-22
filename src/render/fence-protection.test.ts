@@ -261,8 +261,8 @@ describe("openingFenceDeletionCleanup", () => {
   });
 
   it("auto-removes closing fence when partial deletion breaks the colon prefix (#766)", () => {
-    // Repro from #766: select `:::: {.the` from `:::: {.theorem} Gap Test` and delete
-    const partial = `:::: {.theorem} Gap Test\ncontent\n::::`;
+    // Repro from #766: select `:::: {.the` from a titled theorem opener and delete
+    const partial = `:::: {.theorem title="Gap Test"}\ncontent\n::::`;
     const state = createProtectedState(partial);
     // `:::: {.the` = positions 0-10; colon protection allows this because
     // the selection spans past the colon prefix (atOrBeforeStart && pastColonEnd)
@@ -298,7 +298,7 @@ describe("openingFenceDeletionCleanup", () => {
     expect(result.endsWith(":::")).toBe(true);
   });
 
-  it("preserves single-line fenced div content after unrelated tail edits", () => {
+  it("leaves noncanonical single-line fenced div content unprotected", () => {
     const singleLine = `before\n\n::: {.theorem} Title :::\n\nafter`;
     const state = createProtectedState(singleLine);
     const afterTailEdit = state.update({
@@ -337,10 +337,10 @@ describe("openingFenceDeletionCleanup", () => {
   it("auto-removes closing fence for indented fenced div when prefix is deleted (#766)", () => {
     // Indented fenced div (e.g. inside a list item) — openFenceFrom points
     // to the first colon, which is past the line start.
-    const indented = `- text\n\n  ::: {.theorem} Title\n  content\n  :::`;
+    const indented = `- text\n\n  ::: {.theorem title="Title"}\n  content\n  :::`;
     const state = createProtectedState(indented);
     // Find the opening fence line
-    const openLine = state.doc.line(3); // "  ::: {.theorem} Title"
+    const openLine = state.doc.line(3); // '  ::: {.theorem title="Title"}'
     const colonStart = openLine.from + 2; // skip two spaces of indentation
     // Delete from first colon past the prefix: `::: {.the` = 10 chars
     const tr = state.update({
@@ -352,7 +352,7 @@ describe("openingFenceDeletionCleanup", () => {
   });
 
   it("auto-removes closing fence for indented fenced div on full-line deletion (#766)", () => {
-    const indented = `- text\n\n  ::: {.theorem} Title\n  content\n  :::`;
+    const indented = `- text\n\n  ::: {.theorem title="Title"}\n  content\n  :::`;
     const state = createProtectedState(indented);
     const openLine = state.doc.line(3);
     // Delete the entire opening fence line (including newline)

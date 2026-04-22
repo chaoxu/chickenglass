@@ -430,11 +430,11 @@ describe("documentAnalysisField incremental contract", () => {
 
   it("keeps unrelated fenced div objects when editing another div body", () => {
     const doc = [
-      "::: {.theorem #thm:first} First",
+      '::: {.theorem #thm:first title="First"}',
       "alpha",
       ":::",
       "",
-      "::: {.proof #prf:second} Second",
+      '::: {.proof #prf:second title="Second"}',
       "beta",
       ":::",
       "",
@@ -506,11 +506,11 @@ describe("documentAnalysisField incremental contract", () => {
 
   it("updates adjacent div positions when a boundary edit changes the next block", () => {
     const doc = [
-      "::: {.theorem} First",
+      '::: {.theorem title="First"}',
       "alpha",
       ":::",
       "",
-      "::: {.proof} Second",
+      '::: {.proof title="Second"}',
       "beta",
       ":::",
       "",
@@ -523,11 +523,15 @@ describe("documentAnalysisField incremental contract", () => {
     }).state;
     const after = afterState.field(documentAnalysisField);
 
+    const rebuilt = analyzeDocumentSemantics(
+      editorStateTextSource(afterState),
+      fullTree(afterState),
+    );
+    expect(after.fencedDivs).toEqual(rebuilt.fencedDivs);
     expect(after.fencedDivs).toHaveLength(2);
-    expect(after.fencedDivs[0]?.to).toBe(57);
-    expect(after.fencedDivs[1]?.from).toBe(29);
-    expect(after.fencedDivs[1]?.to).toBe(53);
-    expect(after.fencedDivs[1]?.closeFenceFrom).toBe(54);
+    expect(after.fencedDivs[0]?.title).toBe("First");
+    expect(after.fencedDivs[1]?.title).toBe("Second");
+    expect(after.fencedDivs[1]?.primaryClass).toBe("proof");
   });
 
   it("drops disappearing custom div state after a touching-start boundary edit", () => {

@@ -29,7 +29,7 @@ function createState(doc: string): EditorState {
 
 describe("structure-edit-state", () => {
   it("maps an active fenced-block target through document edits before the block", () => {
-    const doc = `::: {.theorem} Title\nBody\n:::`;
+    const doc = `::: {.theorem title="Title"}\nBody\n:::`;
     const state = createState(doc);
     const target = createFencedStructureEditTarget(state, 0);
     expect(target).not.toBeNull();
@@ -134,10 +134,10 @@ describe("structure-edit-state", () => {
 
   it("prefers the innermost fenced block opener in nested fenced divs", () => {
     const doc = [
-      ":::: {.theorem} Hover Preview Stress Test",
+      ':::: {.theorem title="Hover Preview Stress Test"}',
       "Outer content",
       "",
-      "::: {.blockquote} Blockquote",
+      '::: {.blockquote title="Blockquote"}',
       "Inner quote body",
       ":::",
       "::::",
@@ -150,7 +150,7 @@ describe("structure-edit-state", () => {
       throw new Error("expected nested fenced-opener target");
     }
     expect(target.className).toBe("blockquote");
-    expect(target.openFenceFrom).toBe(doc.indexOf("::: {.blockquote}"));
+    expect(target.openFenceFrom).toBe(doc.indexOf("::: {.blockquote"));
   });
 
   it("clears structure edit when a programmatic document replacement switches files", () => {

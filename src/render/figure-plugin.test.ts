@@ -104,7 +104,7 @@ describe("figure plugin", () => {
   });
 
   it("clicking a rendered caption moves the cursor to the opening-line caption source", () => {
-    const doc = `::: {.figure #fig-test} A caption line.\n![](image.png)\n:::`;
+    const doc = `::: {.figure #fig-test title="A caption line."}\n![](image.png)\n:::`;
     const view = createView(doc, doc.indexOf("!["));
 
     const caption = view.dom.querySelector<HTMLElement>(".cf-block-caption");

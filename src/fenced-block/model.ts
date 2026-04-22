@@ -36,6 +36,8 @@ interface FencedDivGeometryInfo extends FencedBlockInfo {
   readonly attrTo?: number;
   readonly titleFrom?: number;
   readonly titleTo?: number;
+  readonly titleSourceFrom?: number;
+  readonly titleSourceTo?: number;
 }
 
 const fencedDivInfoCache = new WeakMap<object, FencedDivInfo[]>();
@@ -266,6 +268,12 @@ export function mapFencedDivInfo<T extends FencedDivGeometryInfo>(
     titleFrom === undefined || titleToBase === undefined
       ? titleToBase
       : Math.max(titleFrom, titleToBase);
+  const titleSourceFrom = mapOptionalPos(div.titleSourceFrom, changes, 1);
+  const titleSourceToBase = mapOptionalPos(div.titleSourceTo, changes, -1);
+  const titleSourceTo =
+    titleSourceFrom === undefined || titleSourceToBase === undefined
+      ? titleSourceToBase
+      : Math.max(titleSourceFrom, titleSourceToBase);
 
   if (
     mappedBlock === div
@@ -273,6 +281,8 @@ export function mapFencedDivInfo<T extends FencedDivGeometryInfo>(
     && attrTo === div.attrTo
     && titleFrom === div.titleFrom
     && titleTo === div.titleTo
+    && titleSourceFrom === div.titleSourceFrom
+    && titleSourceTo === div.titleSourceTo
   ) {
     return div;
   }
@@ -283,6 +293,8 @@ export function mapFencedDivInfo<T extends FencedDivGeometryInfo>(
     attrTo,
     titleFrom,
     titleTo,
+    titleSourceFrom,
+    titleSourceTo,
   };
 }
 

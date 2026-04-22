@@ -72,6 +72,7 @@ describe("document semantics analyzers", () => {
     const tree = parser.parse(doc);
 
     const divs = analyzeFencedDivs(stringTextSource(doc), tree);
+    const titleFrom = doc.indexOf("**3SUM**");
 
     expect(divs).toHaveLength(1);
     expect(divs[0]).toMatchObject({
@@ -79,6 +80,8 @@ describe("document semantics analyzers", () => {
       classes: ["problem"],
       id: "p1",
       title: "**3SUM**",
+      titleSourceFrom: titleFrom,
+      titleSourceTo: titleFrom + "**3SUM**".length,
       isSelfClosing: false,
     });
   });
@@ -276,7 +279,7 @@ describe("document semantics analyzers", () => {
       "",
       "Some text[^fn1] with a reference [@thm-main].",
       "",
-      "::: {.theorem #thm-main} Main Theorem",
+      '::: {.theorem #thm-main title="Main Theorem"}',
       "Statement here.",
       ":::",
       "",

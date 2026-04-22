@@ -414,7 +414,7 @@ $$ {#eq:sum}
 
 # Theorems & Proofs
 
-::: {.theorem #thm-evt} Extreme Value Theorem
+::: {.theorem #thm-evt title="Extreme Value Theorem"}
 Every continuous function $f: [a,b] \\to \\R$ attains its maximum and minimum.
 :::
 
@@ -434,17 +434,21 @@ A set $K \\subseteq \\R$ is **compact** if every open cover of $K$ has a finite 
 Every continuous function on a closed interval is bounded.
 :::
 
-::: Theorem Bolzano-Weierstrass
+::: {.theorem title="Bolzano-Weierstrass"}
 Every bounded sequence in $\\R$ has a convergent subsequence.
 :::
 
-::: {.problem #prob-macros} Custom Macros
+::: {.problem #prob-macros title="Custom Macros"}
 Show that $\\set{x \\in \\R : \\floor{x} = \\ceil{x}}$ equals $\\Z$, and that for any $\\e > 0$ there exists $n \\in \\N$ with $1/n < \\e$.
 :::
 
-::: {.corollary} Every continuous function on a closed interval is bounded. :::
+::: {.corollary}
+Every continuous function on a closed interval is bounded.
+:::
 
-::: {.remark} The converse of the Extreme Value Theorem is false. :::
+::: {.remark}
+The converse of the Extreme Value Theorem is false.
+:::
 
 # Cross-References
 
@@ -585,13 +589,13 @@ This document demonstrates the shared Coflats format for mathematical writing. T
 
 The notion of compactness is central to analysis. In $\\R^n$, the Heine-Borel theorem states that a set is compact if and only if it is closed and bounded.
 
-::: {.theorem #thm-heine-borel} Heine-Borel
+::: {.theorem #thm-heine-borel title="Heine-Borel"}
 A subset of $\\R^n$ is compact if and only if it is closed and bounded.
 :::
 
 ## Continuity
 
-::: {.definition #def-continuous} Continuity of $f: X \\to Y$
+::: {.definition #def-continuous title="Continuity of $f: X \\to Y$"}
 A function $f$ is **continuous** at $x_0$ if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that $d(x, x_0) < \\delta$ implies $d(f(x), f(x_0)) < \\varepsilon$.
 :::
 

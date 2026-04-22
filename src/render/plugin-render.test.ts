@@ -109,7 +109,7 @@ function getWidgetFromDecorations<T>(state: EditorState, widgetClass: string): T
 }
 
 const TWO_BLOCKS = [
-  "::: {.theorem} Title",
+  '::: {.theorem title="Title"}',
   "Content",
   ":::",
   "",
@@ -159,7 +159,7 @@ describe("blockDecorationField", () => {
     expect(specs.some((spec) =>
       spec.widgetClass === "BlockHeaderWidget" &&
       spec.from === theoremLine.from
-    )).toBe(true);
+    )).toBe(false);
 
     const proofLine = active.doc.line(5).from;
     expect(hasLineClassAt(specs, proofLine, CSS.blockHeader)).toBe(true);
@@ -179,7 +179,7 @@ describe("blockDecorationField", () => {
 
   it("rebuilds when the plugin registry changes without a doc edit", () => {
     const doc = [
-      "::: {.theorem} Title",
+      '::: {.theorem title="Title"}',
       "Content",
       ":::",
     ].join("\n");
@@ -235,7 +235,7 @@ describe("blockDecorationField", () => {
       "",
       "Plain prose here.",
       "",
-      "::: {.theorem #thm:one} Title",
+      '::: {.theorem #thm:one title="Title"}',
       "Body",
       ":::",
     ].join("\n");
@@ -251,7 +251,7 @@ describe("blockDecorationField", () => {
 
   it("rebuilds when fenced-div render content changes", () => {
     const doc = [
-      "::: {.theorem #thm:one} Old Title",
+      '::: {.theorem #thm:one title="Old Title"}',
       "Body",
       ":::",
     ].join("\n");
@@ -292,7 +292,7 @@ describe("blockDecorationField", () => {
     expect(specs.some((spec) =>
       spec.widgetClass === "BlockHeaderWidget" &&
       spec.from === openLine.from
-    )).toBe(true);
+    )).toBe(false);
 
     // Closing fence is always hidden — cf-block-closing-fence, not cf-block-source
     const closeFenceLine = state.doc.line(3).from;
@@ -318,65 +318,32 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, proofCloseLine, CSS.blockClosingFence)).toBe(true);
   });
 
-  it("header widget replaces only fence prefix, not title text", () => {
+  it("trailing title text prevents block header rendering", () => {
     const doc = `::: {.theorem} **Main Result**\nContent\n:::`;
     const state = createTestState(doc);
     const specs = getDecoSpecs(state);
 
-    // Widget should replace only the fence prefix, not the title text
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
-    expect(widgets.length).toBe(1);
-
-    const line1 = state.doc.line(1);
-    // Replace range should start at line start but NOT extend to end of line
-    expect(widgets[0].from).toBe(line1.from);
-    expect(widgets[0].to).toBeLessThan(line1.to);
+    expect(widgets.length).toBe(0);
   });
 
-  /**
-   * REGRESSION GUARD — Block header rendering must behave like headings.
-   *
-   * The widget MUST replace only the fence prefix ("::: {.class}"), leaving
-   * the title text as editable document content. This ensures:
-   * 1. Inline plugins render math/bold/italic in the title (Lezer parses them)
-   * 2. Cursor-aware toggling works (only source when cursor touches inline element)
-   * 3. Title parens are added via Decoration.widget (not CSS ::before/::after
-   *    which breaks when Decoration.replace splits the mark around math widgets)
-   *
-   * This has regressed 3+ times. See CLAUDE.md "Block headers must behave like headings."
-   */
-  it("title text NOT inside widget — inline plugins can render it (REGRESSION)", () => {
-    const doc = `::: {.theorem} Fundamental Theorem $x^2$\nContent\n:::`;
+  it("canonical title attributes render a block header widget", () => {
+    const doc = `::: {.theorem title="Fundamental Theorem"}\nContent\n:::`;
     const state = createTestState(doc);
     const specs = getDecoSpecs(state);
 
-    const line1 = state.doc.line(1);
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
     expect(widgets.length).toBe(1);
-
-    // Widget must NOT extend to end of line (title text is outside widget)
-    expect(widgets[0].to).toBeLessThan(line1.to);
-
-    // Title text ($x^2$) range must not be covered by any replace decoration
-    const titleText = "Fundamental Theorem $x^2$";
-    const titleFrom = line1.text.indexOf(titleText) + line1.from;
-    const titleTo = titleFrom + titleText.length;
-    const replaceSpecs = specs.filter(
-      (s) => s.widgetClass && s.from < titleTo && s.to > titleFrom,
-    );
-    // Only the header widget should exist, and it must end before the title
-    for (const r of replaceSpecs) {
-      expect(r.to).toBeLessThanOrEqual(titleFrom);
-    }
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeader)).toBe(true);
   });
 
-  it("title paren widgets stay visible for titled blocks during explicit structure edit", () => {
-    const doc = `::: {.theorem} Main Result\nContent\n:::`;
+  it("attribute title widgets hide during explicit structure edit", () => {
+    const doc = `::: {.theorem title="Main Result"}\nContent\n:::`;
 
     const rendered = createTestState(doc);
     const renderedSpecs = getDecoSpecs(rendered);
-    const renderedParens = renderedSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
-    expect(renderedParens.length).toBe(2); // ( and )
+    const renderedTitleWidgets = renderedSpecs.filter((s) => s.widgetClass === "AttributeTitleWidget");
+    expect(renderedTitleWidgets.length).toBe(1);
 
     const base = createTestState(doc, 0, true);
     const source = applyStateEffects(
@@ -384,12 +351,12 @@ describe("blockDecorationField", () => {
       setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
     );
     const sourceSpecs = getDecoSpecs(source);
-    const sourceParens = sourceSpecs.filter((s) => s.widgetClass === "SimpleTextWidget");
-    expect(sourceParens.length).toBe(2);
+    const sourceTitleWidgets = sourceSpecs.filter((s) => s.widgetClass === "AttributeTitleWidget");
+    expect(sourceTitleWidgets.length).toBe(0);
   });
 
   it("structure edit keeps widget replacement for geometry stability (#1015)", () => {
-    const doc = `::: {.theorem} Main Result\nContent\n:::`;
+    const doc = `::: {.theorem title="Main Result"}\nContent\n:::`;
     const base = createTestState(doc, 0, true);
     const state = applyStateEffects(
       base,
@@ -463,17 +430,13 @@ describe("blockDecorationField", () => {
     expect(attrTitleWidgets.length).toBe(0);
   });
 
-  it("inline title takes precedence over attribute title (issue #401)", () => {
-    // Both inline title and attribute title present — inline wins
+  it("rejects trailing inline titles even when an attribute title exists", () => {
     const doc = `::: {.theorem title="Attr Title"} Inline Title\nContent\n:::`;
     const state = createTestState(doc);
     const specs = getDecoSpecs(state);
 
-    // Should have inline title paren widgets (for the inline title text)
-    const parenWidgets = specs.filter((s) => s.widgetClass === "SimpleTextWidget");
-    expect(parenWidgets.length).toBe(2);
-
-    // Should NOT have an AttributeTitleWidget (inline title takes precedence)
+    const headerWidgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(headerWidgets.length).toBe(0);
     const attrTitleWidgets = specs.filter((s) => s.widgetClass === "AttributeTitleWidget");
     expect(attrTitleWidgets.length).toBe(0);
   });
@@ -502,7 +465,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
       "blocks:",
       "  theorem: false",
       "---",
-      "::: {.theorem} Main Result",
+      '::: {.theorem title="Main Result"}',
       "Content",
       ":::",
     ].join("\n");
@@ -587,7 +550,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
   });
 
   it("renders figure captions as below-content widgets", () => {
-    const doc = `::: {.figure} Caption text\n![alt](img.png)\n:::`;
+    const doc = `::: {.figure title="Caption text"}\n![alt](img.png)\n:::`;
     const state = createTestStateWithPlugins(
       doc,
       [makeBlockPlugin({ name: "figure", numbered: true, title: "Figure", captionPosition: "below" })],
@@ -600,7 +563,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
   });
 
   it("targets the hidden opening-line caption text for below-caption widgets", () => {
-    const doc = `::: {.figure} Caption text\n![alt](img.png)\n:::`;
+    const doc = `::: {.figure title="Caption text"}\n![alt](img.png)\n:::`;
     const state = createTestStateWithPlugins(
       doc,
       [makeBlockPlugin({ name: "figure", numbered: true, title: "Figure", captionPosition: "below" })],

@@ -143,7 +143,7 @@ describe("collectReferenceCompletionCandidates", () => {
       [
         "# Background {#sec:background}",
         "",
-        "::: {#thm:main .theorem} Fundamental theorem",
+        '::: {#thm:main .theorem title="Fundamental theorem"}',
         "Statement.",
         ":::",
         "",
@@ -379,11 +379,11 @@ describe("reference autocomplete integration", () => {
     const doc = [
       "# Background {#sec:background}",
       "",
-      "::: {#thm:main .theorem} Fundamental theorem",
+      '::: {#thm:main .theorem title="Fundamental theorem"}',
       "Statement with $x^2$ inline math.",
       ":::",
       "",
-      "::: {#tbl:results .table} Results table",
+      '::: {#tbl:results .table title="Results table"}',
       "",
       "| A | B |",
       "| --- | --- |",
@@ -468,7 +468,7 @@ describe("reference autocomplete integration", () => {
 
   it("keeps nested citations compact inside semantic completion previews", async () => {
     const doc = [
-      "::: {#thm:main .theorem} Compact theorem",
+      '::: {#thm:main .theorem title="Compact theorem"}',
       "Statement cites [@karger2000].",
       ":::",
       "",

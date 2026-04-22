@@ -80,7 +80,7 @@ describe("hover preview block rendering", () => {
   it("renders full table block structure with caption wrapper", () => {
     const view = createPreviewView(
       [
-        "::: {#tbl:main .table} Results table",
+        '::: {#tbl:main .table title="Results table"}',
         "",
         "| A | B |",
         "| --- | --- |",
@@ -113,7 +113,7 @@ describe("hover preview block rendering", () => {
 
     const view = createPreviewView(
       [
-        "::: {#fig:main .figure} Figure caption",
+        '::: {#fig:main .figure title="Figure caption"}',
         "",
         "![Figure](fig.png)",
         ":::",
@@ -138,7 +138,7 @@ describe("hover preview block rendering", () => {
 
     const view = createPreviewView(
       [
-        "::: {#fig:main .figure} Figure caption",
+        '::: {#fig:main .figure title="Figure caption"}',
         "",
         "![Figure](fig.pdf)",
         ":::",
@@ -170,7 +170,7 @@ describe("hover preview block rendering", () => {
 
     const view = createPreviewView(
       [
-        "::: {#fig:main .figure} Figure caption",
+        '::: {#fig:main .figure title="Figure caption"}',
         "",
         "![Preview PDF](fig.pdf)",
         ":::",
@@ -198,7 +198,7 @@ describe("hover preview block rendering", () => {
 
     const view = createPreviewView(
       [
-        "::: {#fig:main .figure} Figure caption",
+        '::: {#fig:main .figure title="Figure caption"}',
         "",
         "![Figure](fig.png)",
         ":::",

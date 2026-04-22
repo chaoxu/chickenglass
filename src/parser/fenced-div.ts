@@ -12,7 +12,7 @@ import { COLON, OPEN_BRACE, findMatchingBrace, isSpaceTab, skipSpaceTab } from "
  * Lezer markdown extension for Pandoc-style fenced divs.
  *
  * Syntax:
- *   ::: {.class #id key=val} Optional Title
+ *   ::: {.class #id key=val title="Optional Title"}
  *   Content parsed as full markdown.
  *   :::
  *
@@ -115,7 +115,7 @@ function parseFenceColonsAndAttrs(
       cursor++;
     }
   } else {
-    // Short-form: ::: ClassName [Title...]
+    // Short-form: ::: ClassName
     // The first word is treated as the class name. We synthesize a
     // FencedDivAttributes node whose text is the bare class name
     // (no braces). extractDivClass() in fenced-div-attrs.ts handles
@@ -144,70 +144,11 @@ function parseFenceColonsAndAttrs(
 }
 
 /**
- * Stage 2: Detect whether the line is self-closing (ends with `:::`) and
- * locate the closing fence span.
- * Returns `{ isSelfClosing, closingFenceFrom, closingFenceTo }`.
- */
-function detectSelfClosingFence(
-  text: string,
-  cursorAfterAttr: number,
-): { isSelfClosing: boolean; closingFenceFrom: number; closingFenceTo: number } {
-  // Scan backwards from end of line past whitespace, then check for 3+ colons
-  let lineEnd = text.length;
-  while (lineEnd > cursorAfterAttr && isSpaceTab(text.charCodeAt(lineEnd - 1))) {
-    lineEnd--;
-  }
-
-  let closingColonStart = lineEnd;
-  while (
-    closingColonStart > cursorAfterAttr &&
-    text.charCodeAt(closingColonStart - 1) === COLON
-  ) {
-    closingColonStart--;
-  }
-  const trailingColons = lineEnd - closingColonStart;
-
-  if (trailingColons >= 3) {
-    // Verify there's whitespace (or nothing) between the title and the closing colons.
-    // Only self-closing if there's content between attrs and the trailing :::
-    // (otherwise it's ambiguous with a bare opening fence).
-    let beforeClosing = closingColonStart;
-    while (beforeClosing > cursorAfterAttr && isSpaceTab(text.charCodeAt(beforeClosing - 1))) {
-      beforeClosing--;
-    }
-    if (beforeClosing > cursorAfterAttr || closingColonStart > cursorAfterAttr) {
-      return { isSelfClosing: true, closingFenceFrom: closingColonStart, closingFenceTo: lineEnd };
-    }
-  }
-
-  return { isSelfClosing: false, closingFenceFrom: lineEnd, closingFenceTo: lineEnd };
-}
-
-/**
- * Stage 3: Extract the title span from the remaining text between the
- * attribute block and the optional closing fence.
- */
-function parseFenceTitle(
-  text: string,
-  titleFrom: number,
-  isSelfClosing: boolean,
-  closingFenceFrom: number,
-): { titleFrom: number; titleTo: number } {
-  let titleTo = isSelfClosing ? closingFenceFrom : text.length;
-  while (titleTo > titleFrom && isSpaceTab(text.charCodeAt(titleTo - 1))) {
-    titleTo--;
-  }
-  return { titleFrom, titleTo };
-}
-
-/**
  * Parse an opening fence line. Returns fence info or undefined.
- * Opening fence: 3+ colons, optional attributes `{...}`, optional title.
+ * Opening fence: 3+ colons plus optional Pandoc attributes.
  *
- * Delegates to three focused helpers:
- *   1. parseFenceColonsAndAttrs — colon count + attribute span
- *   2. detectSelfClosingFence  — trailing ::: detection
- *   3. parseFenceTitle         — title span trimming
+ * FORMAT follows Pandoc: titles must be attributes, and self-closing
+ * single-line divs are not canonical fenced-div blocks.
  */
 function parseOpeningFence(
   text: string,
@@ -219,18 +160,19 @@ function parseOpeningFence(
   if (!stage1) return undefined;
 
   const { colonCount, attrFrom, attrTo, cursorAfterAttr } = stage1;
-  const { isSelfClosing, closingFenceFrom, closingFenceTo } = detectSelfClosingFence(text, cursorAfterAttr);
-  const { titleFrom, titleTo } = parseFenceTitle(text, cursorAfterAttr, isSelfClosing, closingFenceFrom);
+  if (text.slice(cursorAfterAttr).trim().length > 0) {
+    return undefined;
+  }
 
   return {
     colonCount,
     attrFrom,
     attrTo,
-    titleFrom,
-    titleTo,
-    isSelfClosing,
-    closingFenceFrom,
-    closingFenceTo,
+    titleFrom: cursorAfterAttr,
+    titleTo: cursorAfterAttr,
+    isSelfClosing: false,
+    closingFenceFrom: text.length,
+    closingFenceTo: text.length,
   };
 }
 
