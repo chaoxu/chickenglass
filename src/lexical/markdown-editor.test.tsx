@@ -388,6 +388,54 @@ describe("LexicalMarkdownEditor mode round-trip (issue #99)", () => {
       editor.unmount();
     }
   });
+
+  it("does not let delayed rich-mode sync overwrite an immediate edit after source → rich", async () => {
+    const doc = [
+      "# Authoring",
+      "",
+      "::: {.definition #def:stable-surface} Stable Surface",
+      "A stable surface.",
+      ":::",
+      "",
+      "::: {.theorem #thm:authoring-invariant} Authoring Invariant",
+      "For every edit burst $E$, the serialized markdown remains canonical.",
+      ":::",
+      "",
+      "::: {.proof}",
+      "The proof is by direct inspection. First we edit in Source, then in Lexical. The final document still contains @def:stable-surface.",
+      ":::",
+      "",
+      "$$",
+      "\\int_0^1 x^2 \\, dx = \\frac{1}{3}",
+      "$$ {#eq:authoring-integral}",
+      "",
+      "| Surface | Checked |",
+      "| --- | --- |",
+      "| Lexical | yes |",
+      "",
+    ].join("\n");
+    const editor = await mountEditor({ doc, editorMode: "source" });
+
+    try {
+      await waitFor(() => expect(editor.handle.getDoc()).toBe(doc));
+
+      act(() => {
+        editor.rerender({ doc, editorMode: "lexical" });
+      });
+
+      const insertAt = doc.indexOf("The final document still contains");
+      act(() => {
+        editor.handle.setSelection(insertAt, insertAt);
+        editor.handle.insertText("Lexical edit: ");
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(editor.handle.getDoc()).toContain("Lexical edit:");
+      expect(editor.handle.getDoc()).toContain("The final document still contains");
+    } finally {
+      editor.unmount();
+    }
+  });
 });
 
 describe("LexicalMarkdownEditor rich selection bridge", () => {

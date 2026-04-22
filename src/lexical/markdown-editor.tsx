@@ -252,6 +252,7 @@ export function LexicalMarkdownEditor({
   const inheritedSurface = useEditorScrollSurface();
   const initialModeRef = useRef(editorMode);
   const editorModeRef = useRef(editorMode);
+  const pendingModeSyncRef = useRef<(() => void) | null>(null);
   const [surfaceElement, setSurfaceElement] = useState<HTMLElement | null>(null);
   const selectionAlwaysOn = useDevSettings((s) => s.selectionAlwaysOn);
   const isSourceMode = editorMode === "source";
@@ -396,6 +397,7 @@ export function LexicalMarkdownEditor({
                   onDocChange={onDocChange}
                   onSelectionChange={onSelectionChange}
                   onTextChange={onTextChange}
+                  pendingModeSyncRef={pendingModeSyncRef}
                   pendingLocalEchoDocRef={pendingLocalEchoDocRef}
                   selectionRef={sourceSelectionRef}
                   userEditPendingRef={userEditPendingRef}
@@ -405,6 +407,7 @@ export function LexicalMarkdownEditor({
                   editorMode={editorMode}
                   flushRichDocumentSnapshot={flushRichDocumentSnapshot}
                   lastCommittedDocRef={lastCommittedDocRef}
+                  pendingModeSyncRef={pendingModeSyncRef}
                   pendingLocalEchoDocRef={pendingLocalEchoDocRef}
                   selectionRef={sourceSelectionRef}
                   userEditPendingRef={userEditPendingRef}

@@ -285,6 +285,10 @@ function getHotkeyHandler(key: string): () => void {
   return binding.handler;
 }
 
+function flushAsyncImports(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
 describe("useAppOverlays", () => {
   beforeEach(() => {
     overlayHookState.reset();
@@ -344,6 +348,48 @@ describe("useAppOverlays", () => {
     expect(result.current.indexer).toBeInstanceOf(BackgroundIndexer);
     expect(dialogs.searchOpen).toBe(true);
     expect(editor.currentPath).toBe("notes/current.md");
+  });
+
+  it("does not pair stale active-file content with a newer analysis while search opens", async () => {
+    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdateChunked");
+    const view = createSearchIndexView("# A\n");
+    const first = await createHookProps({
+      files: {
+        "notes/a.md": "# A on disk\n",
+        "notes/b.md": "# B on disk\n",
+      },
+      currentPath: "notes/a.md",
+      currentDocText: "# A\n",
+      view,
+      dialogs: { searchOpen: true },
+    });
+    const second = await createHookProps({
+      files: {
+        "notes/a.md": "# A on disk\n",
+        "notes/b.md": "# B on disk\n",
+      },
+      currentPath: "notes/b.md",
+      currentDocText: "# B\n",
+      view,
+      dialogs: { searchOpen: true },
+    });
+
+    const { rerender } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: first.props,
+    });
+    first.setCurrentDocText("# B\n");
+    rerender(second.props);
+
+    await vi.waitFor(() => {
+      expect(bulkUpdateSpy).toHaveBeenCalled();
+    });
+
+    for (const [files] of bulkUpdateSpy.mock.calls) {
+      const staleEntry = files.find((file) => file.file === "notes/a.md" && file.content === "# A\n");
+      if (staleEntry) {
+        expect(staleEntry.analysis).toBeUndefined();
+      }
+    }
   });
 
   it("limits concurrent search index file reads", async () => {
@@ -632,6 +678,73 @@ describe("useAppOverlays", () => {
     });
   });
 
+  it("does not apply a lazy format command to a stale Lexical handle", async () => {
+    const staleApplyChanges = vi.fn();
+    const staleHandle = {
+      applyChanges: staleApplyChanges,
+      focus: vi.fn(),
+      flushPendingEdits: vi.fn(),
+      getDoc: vi.fn(() => "alpha beta"),
+      getSelection: vi.fn(() => ({
+        anchor: 6,
+        focus: 10,
+        from: 6,
+        to: 10,
+      })),
+      peekDoc: vi.fn(() => "alpha beta"),
+      peekSelection: vi.fn(() => ({
+        anchor: 6,
+        focus: 10,
+        from: 6,
+        to: 10,
+      })),
+      insertText: vi.fn(),
+      setDoc: vi.fn(),
+      setSelection: vi.fn(),
+    } satisfies MarkdownEditorHandle;
+    const currentHandle = {
+      ...staleHandle,
+      applyChanges: vi.fn(),
+      getDoc: vi.fn(() => "gamma delta"),
+      getSelection: vi.fn(() => ({
+        anchor: 6,
+        focus: 11,
+        from: 6,
+        to: 11,
+      })),
+      peekDoc: vi.fn(() => "gamma delta"),
+      peekSelection: vi.fn(() => ({
+        anchor: 6,
+        focus: 11,
+        from: 6,
+        to: 11,
+      })),
+    } satisfies MarkdownEditorHandle;
+    const first = await createHookProps({
+      currentPath: "a.md",
+      currentDocText: "alpha beta",
+      lexicalEditorHandle: staleHandle,
+    });
+    const second = await createHookProps({
+      currentPath: "b.md",
+      currentDocText: "gamma delta",
+      lexicalEditorHandle: currentHandle,
+    });
+
+    const { result, rerender } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: first.props,
+    });
+
+    act(() => {
+      getCommand(result.current.commands, "format.bold").action();
+      rerender(second.props);
+    });
+    await flushAsyncImports();
+
+    expect(staleApplyChanges).not.toHaveBeenCalled();
+    expect(currentHandle.applyChanges).not.toHaveBeenCalled();
+  });
+
   it("renames a local label through the hook command flow", async () => {
     const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("thm:renamed");
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
@@ -674,6 +787,34 @@ describe("useAppOverlays", () => {
       expect(view.state.doc.toString()).toBe(expectedDoc);
     });
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not rename a local label after the active document changes during lazy import", async () => {
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("thm:renamed");
+    const view = createLabelView("::: {.theorem #thm:old}\nOld\n:::\n", 16);
+    const first = await createHookProps({
+      currentPath: "a.md",
+      currentDocText: view.state.doc.toString(),
+      view,
+    });
+    const second = await createHookProps({
+      currentPath: "b.md",
+      currentDocText: "# Other\n",
+      view: null,
+    });
+
+    const { result, rerender } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: first.props,
+    });
+
+    act(() => {
+      getCommand(result.current.commands, "edit.rename-local-label").action();
+      rerender(second.props);
+    });
+    await flushAsyncImports();
+
+    expect(promptSpy).not.toHaveBeenCalled();
+    expect(view.state.doc.toString()).toBe("::: {.theorem #thm:old}\nOld\n:::\n");
   });
 
   it("alerts instead of renaming when the selected label is duplicated", async () => {

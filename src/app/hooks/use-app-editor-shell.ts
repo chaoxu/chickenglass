@@ -468,6 +468,17 @@ export function useAppEditorShell({
     const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
     const applyModeOverride = () => {
+      const finishModeOverride = () => {
+        if (currentPath) {
+          setModeOverrides((previous) => ({
+            ...previous,
+            [currentPath]: normalizedMode,
+          }));
+        }
+        setPendingModeOverride((previous) =>
+          previous?.path === currentPath ? null : previous,
+        );
+      };
       if (
         isLexicalEditorMode(normalizedMode) &&
         !isLexicalEditorMode(editorMode)
@@ -475,17 +486,11 @@ export function useAppEditorShell({
         const liveDoc = getSessionCurrentDocText();
         if (liveDoc !== editorDoc) {
           sessionHandleDocumentSnapshot(liveDoc);
+          window.setTimeout(finishModeOverride, 0);
+          return;
         }
       }
-      if (currentPath) {
-        setModeOverrides((previous) => ({
-          ...previous,
-          [currentPath]: normalizedMode,
-        }));
-      }
-      setPendingModeOverride((previous) =>
-        previous?.path === currentPath ? null : previous,
-      );
+      finishModeOverride();
     };
     if (flushResult.shouldDeferModeSwitch) {
       window.setTimeout(applyModeOverride, 0);

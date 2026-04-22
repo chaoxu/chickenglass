@@ -35,6 +35,7 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { parseStructuredFencedDivRaw } from "./markdown/block-syntax";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import { REVEAL_MODE, type RevealMode } from "./reveal-mode";
@@ -204,6 +205,17 @@ function isUserCommittedRichChange(
     || tags.has(COFLAT_NESTED_EDIT_TAG)
     || tags.has(COFLAT_REVEAL_COMMIT_TAG)
     || tags.has(PASTE_TAG);
+}
+
+function selectionTouchesFencedDiv(
+  doc: string,
+  selection: MarkdownEditorSelection,
+): boolean {
+  return collectSourceBlockRanges(doc).some((range) =>
+    range.variant === "fenced-div" &&
+    selection.from >= range.from &&
+    selection.to <= range.to
+  );
 }
 
 export function useMarkdownEditorSessionController({
@@ -437,6 +449,7 @@ export function MarkdownModeSyncPlugin({
   editorMode,
   flushRichDocumentSnapshot,
   lastCommittedDocRef,
+  pendingModeSyncRef,
   pendingLocalEchoDocRef,
   selectionRef,
   userEditPendingRef,
@@ -445,6 +458,7 @@ export function MarkdownModeSyncPlugin({
   readonly editorMode: RevealMode;
   readonly flushRichDocumentSnapshot?: () => string | null;
   readonly lastCommittedDocRef: MutableRefObject<string>;
+  readonly pendingModeSyncRef?: MutableRefObject<(() => void) | null>;
   readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
   readonly userEditPendingRef: MutableRefObject<boolean>;
@@ -488,9 +502,20 @@ export function MarkdownModeSyncPlugin({
     appliedModeRef.current = editorMode;
     pendingLocalEchoDocRef.current = null;
 
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) {
+    let applied = false;
+    const applyModeSync = () => {
+      if (applied) {
+        return;
+      }
+      applied = true;
+      if (pendingModeSyncRef?.current === applyModeSync) {
+        pendingModeSyncRef.current = null;
+      }
+      const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
+      if (
+        lastCommittedDocRef.current !== nextDoc ||
+        (pendingLocalEchoDoc !== null && pendingLocalEchoDoc !== nextDoc)
+      ) {
         return;
       }
       const selectionToApply = createMarkdownSelection(
@@ -514,9 +539,16 @@ export function MarkdownModeSyncPlugin({
           },
         );
       }
-    });
+    };
+    pendingModeSyncRef?.current?.();
+    if (pendingModeSyncRef) {
+      pendingModeSyncRef.current = applyModeSync;
+    }
+    queueMicrotask(applyModeSync);
     return () => {
-      cancelled = true;
+      if (pendingModeSyncRef?.current === applyModeSync) {
+        pendingModeSyncRef.current = null;
+      }
     };
   }, [
     doc,
@@ -524,6 +556,7 @@ export function MarkdownModeSyncPlugin({
     editorMode,
     flushRichDocumentSnapshot,
     lastCommittedDocRef,
+    pendingModeSyncRef,
     pendingLocalEchoDocRef,
     selectionRef,
     userEditPendingRef,
@@ -541,6 +574,7 @@ interface MarkdownEditorHandlePluginProps {
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onSelectionChange?: (selection: MarkdownEditorSelection) => void;
   readonly onTextChange?: (text: string) => void;
+  readonly pendingModeSyncRef?: MutableRefObject<(() => void) | null>;
   readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
   readonly readInactiveRichSelection?: boolean;
   readonly selectionRef: MutableRefObject<MarkdownEditorSelection>;
@@ -557,6 +591,7 @@ export function MarkdownEditorHandlePlugin({
   onDocChange,
   onSelectionChange,
   onTextChange,
+  pendingModeSyncRef,
   pendingLocalEchoDocRef,
   readInactiveRichSelection = false,
   selectionRef,
@@ -760,6 +795,7 @@ export function MarkdownEditorHandlePlugin({
     };
 
     const readFreshDocument = () => {
+      pendingModeSyncRef?.current?.();
       const preFlushRevealDoc = editorModeRef.current === "source" || !hasCursorRevealActive(editor)
         ? null
         : readDocumentSnapshot();
@@ -807,11 +843,14 @@ export function MarkdownEditorHandlePlugin({
       if (!moved) {
         return null;
       }
-
-      const actualSelection = readSourceSelectionFromLexicalSelection(editor, {
-        fallback: desiredSelection,
+      const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
+        fallback: undefined,
         markdown: currentDoc,
-      }) ?? desiredSelection;
+      });
+      if (!liveSelection || !sameSelection(liveSelection, desiredSelection)) {
+        return null;
+      }
+
       let inserted = false;
       editor.update(() => {
         const lexicalSelection = $getSelection();
@@ -820,17 +859,20 @@ export function MarkdownEditorHandlePlugin({
         }
         lexicalSelection.insertText(text);
         inserted = true;
-      }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
+      }, {
+        discrete: true,
+        tag: [SKIP_SCROLL_INTO_VIEW_TAG, COFLAT_INCREMENTAL_DOC_CHANGE_TAG],
+      });
       if (!inserted) {
         return null;
       }
 
       const nextDoc = [
-        currentDoc.slice(0, actualSelection.from),
+        currentDoc.slice(0, liveSelection.from),
         text,
-        currentDoc.slice(actualSelection.to),
+        currentDoc.slice(liveSelection.to),
       ].join("");
-      const nextOffset = actualSelection.from + text.length;
+      const nextOffset = liveSelection.from + text.length;
       return {
         nextDoc,
         nextSelection: createMarkdownSelection(nextOffset, nextOffset, nextDoc.length),
@@ -854,7 +896,10 @@ export function MarkdownEditorHandlePlugin({
         }
         lexicalSelection.insertText(text);
         inserted = true;
-      }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
+      }, {
+        discrete: true,
+        tag: [SKIP_SCROLL_INTO_VIEW_TAG, COFLAT_INCREMENTAL_DOC_CHANGE_TAG],
+      });
       if (!inserted) {
         return null;
       }
@@ -873,6 +918,7 @@ export function MarkdownEditorHandlePlugin({
 
     onEditorReady({
       applyChanges: (changes) => {
+        pendingModeSyncRef?.current?.();
         if (changes.length === 0) {
           return;
         }
@@ -916,6 +962,7 @@ export function MarkdownEditorHandlePlugin({
         setLexicalMarkdown(editor, nextDoc);
       },
       focus: () => {
+        pendingModeSyncRef?.current?.();
         applyDeferredRichDocumentSync();
         if (editorModeRef.current !== "source") {
           scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
@@ -928,6 +975,7 @@ export function MarkdownEditorHandlePlugin({
       peekDoc: readDocumentSnapshot,
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {
+        pendingModeSyncRef?.current?.();
         const richTrackedDoc = editorModeRef.current === "source" || !selectionSnapshotFreshRef.current
           ? null
           : readSelectionDocumentSnapshot();
@@ -960,7 +1008,8 @@ export function MarkdownEditorHandlePlugin({
           return;
         }
 
-        if (richTrackedDoc !== null) {
+        const forceCanonicalRichInsert = selectionTouchesFencedDiv(currentDoc, selection);
+        if (!forceCanonicalRichInsert && richTrackedDoc !== null) {
           const trackedInsert = insertTextIntoTrackedRichSelection(richTrackedDoc, text);
           if (trackedInsert) {
             selectionRef.current = trackedInsert.nextSelection;
@@ -974,7 +1023,7 @@ export function MarkdownEditorHandlePlugin({
           richSelectionDomInsertFailedRef.current = true;
         }
 
-        const richInsert = richSelectionDomInsertFailedRef.current
+        const richInsert = forceCanonicalRichInsert || richSelectionDomInsertFailedRef.current
           ? null
           : insertTextIntoRichSelection(currentDoc, text);
         if (richInsert) {
@@ -995,9 +1044,11 @@ export function MarkdownEditorHandlePlugin({
         );
         publishDocumentSnapshot(nextDoc);
         selectionSnapshotFreshRef.current = true;
+        richSelectionDomInsertFailedRef.current = true;
         scheduleDeferredRichDocumentSync(nextDoc);
       },
       setDoc: (doc) => {
+        pendingModeSyncRef?.current?.();
         const currentDoc = readFreshDocument();
         const nextSelection = storeSelection(
           selectionRef,
@@ -1020,6 +1071,7 @@ export function MarkdownEditorHandlePlugin({
         setLexicalMarkdown(editor, doc);
       },
       setSelection: (anchor, focus = anchor, options) => {
+        pendingModeSyncRef?.current?.();
         if (editorModeRef.current === "source") {
           flushPendingEdits();
         } else {
@@ -1048,13 +1100,18 @@ export function MarkdownEditorHandlePlugin({
             nextSelection.anchor,
             nextSelection.focus,
           );
-          if (!moved) {
+          if (!moved || selectionTouchesFencedDiv(currentDoc, nextSelection)) {
             selectionSnapshotFreshRef.current = false;
             richSelectionDomInsertFailedRef.current = true;
             scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
           } else {
-            selectionSnapshotFreshRef.current = true;
-            richSelectionDomInsertFailedRef.current = false;
+            const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
+              fallback: undefined,
+              markdown: currentDoc,
+            });
+            const selectionMatches = liveSelection !== null && sameSelection(liveSelection, nextSelection);
+            selectionSnapshotFreshRef.current = selectionMatches;
+            richSelectionDomInsertFailedRef.current = !selectionMatches;
           }
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
@@ -1076,6 +1133,7 @@ export function MarkdownEditorHandlePlugin({
     onDocChange,
     onSelectionChange,
     onTextChange,
+    pendingModeSyncRef,
     pendingLocalEchoDocRef,
     readInactiveRichSelection,
     selectionRef,

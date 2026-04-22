@@ -30,11 +30,48 @@ import {
 
 const DEFAULT_URL = "http://localhost:5173";
 const INSERT_MARKER = "COFLATSLEXICALSMOKEINSERT";
+const MODE_SWITCH_MARKER = "COFLATSLEXICALMODESWITCHINSERT";
 
 const FORMAT_FIXTURE = {
   virtualPath: "format-command.md",
   displayPath: "fixture:format-command.md",
   content: "Alpha Beta\n",
+};
+
+const MODE_SWITCH_FIXTURE = {
+  virtualPath: "lexical-mode-switch-authoring.md",
+  displayPath: "generated:lexical-mode-switch-authoring.md",
+  content: [
+    "---",
+    "title: Lexical Mode Switch Authoring",
+    "---",
+    "",
+    "# Lexical Mode Switch Authoring {#sec:lexical-mode-switch}",
+    "",
+    "This document exercises Source to Lexical editing with canonical Pandoc-style markdown.",
+    "",
+    "::: {.definition #def:mode-switch-stability} Mode Switch Stability",
+    "A mode switch keeps the canonical markdown snapshot as the source of truth.",
+    ":::",
+    "",
+    "::: {.theorem #thm:mode-switch-stability} Mode Switch Theorem",
+    "Every immediate authoring edit survives the delayed rich synchronization pass.",
+    ":::",
+    "",
+    "::: {.proof}",
+    "The proof starts before the insertion marker and references @thm:mode-switch-stability.",
+    ":::",
+    "",
+    "$$",
+    "s_1 + s_2 = s_3",
+    "$$ {#eq:mode-switch-stability}",
+    "",
+    "| Surface | State |",
+    "| --- | --- |",
+    "| Source | active |",
+    "| Lexical | active |",
+    "",
+  ].join("\n"),
 };
 
 function selectSourceRange(doc, needle) {
@@ -132,6 +169,68 @@ async function runFormatScenario(page) {
   const sourceFormatted = await readEditorText(page);
   if (sourceFormatted !== "*Alpha* **Beta**\n") {
     throw new Error(`Source-mode italic formatting produced ${JSON.stringify(sourceFormatted)}.`);
+  }
+}
+
+async function runSourceToLexicalImmediateEditScenario(page) {
+  await openFixtureDocument(page, MODE_SWITCH_FIXTURE, {
+    mode: "source",
+    timeoutMs: 30_000,
+    settleMs: 300,
+  });
+  await page.evaluate(() => {
+    const doc = window.__editor.getDoc();
+    window.__editor.setSelection(doc.length, doc.length);
+    window.__editor.insertText("\n## Source Appendix {#sec:lexical-mode-switch-appendix}\n\nSource edit before Lexical switch.\n");
+  });
+  await page.waitForFunction(
+    () => window.__editor?.getDoc?.().includes("Source edit before Lexical switch."),
+    null,
+    { timeout: 10_000, polling: 100 },
+  );
+
+  await switchToMode(page, "lexical");
+  await page.waitForFunction(
+    ({ editorSelector, proofText }) => {
+      const doc = window.__editor?.getDoc?.() ?? "";
+      return window.__app?.getMode?.() === "lexical" &&
+        Boolean(document.querySelector(editorSelector)) &&
+        doc.includes(proofText);
+    },
+    {
+      editorSelector: DEBUG_EDITOR_SELECTOR,
+      proofText: "The proof starts before the insertion marker",
+    },
+    { timeout: 10_000, polling: 100 },
+  );
+  await page.evaluate((marker) => {
+    const doc = window.__editor.getDoc();
+    const pos = doc.indexOf("The proof starts before the insertion marker");
+    if (pos < 0) {
+      throw new Error("Cannot find proof insertion point after switching to Lexical.");
+    }
+    window.__editor.setSelection(pos, pos);
+    window.__editor.insertText(`${marker} `);
+  }, MODE_SWITCH_MARKER);
+  await page.waitForFunction(
+    (marker) => window.__editor?.getDoc?.().includes(marker),
+    MODE_SWITCH_MARKER,
+    { timeout: 10_000, polling: 100 },
+  );
+  await sleep(750);
+
+  const afterDeferredSync = await readEditorText(page);
+  if (!afterDeferredSync.includes(MODE_SWITCH_MARKER)) {
+    throw new Error("Immediate Lexical edit was lost after delayed rich synchronization.");
+  }
+  if (!afterDeferredSync.includes("Source edit before Lexical switch.")) {
+    throw new Error("Source edit was lost after Source to Lexical authoring scenario.");
+  }
+
+  await switchToMode(page, "cm6-rich");
+  const afterRoundTrip = await readEditorText(page);
+  if (!afterRoundTrip.includes(MODE_SWITCH_MARKER)) {
+    throw new Error("Immediate Lexical edit was lost after returning to CM6 Rich.");
   }
 }
 
@@ -233,6 +332,9 @@ async function main() {
     await runFormatScenario(page);
     await assertEditorHealth(page, "lexical-format");
 
+    await runSourceToLexicalImmediateEditScenario(page);
+    await assertEditorHealth(page, "lexical-source-switch-immediate-edit");
+
     await runModeAndHeavyTypingScenario(page);
     await assertEditorHealth(page, "lexical-heavy-typing");
 
@@ -248,6 +350,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
   process.exit(1);
 });

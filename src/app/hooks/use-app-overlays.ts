@@ -126,6 +126,18 @@ type WindowWithIdleTask = Window & {
   cancelIdleCallback?: (handle: IdleTaskHandle) => void;
 };
 type EditorViewSnapshot = NonNullable<AppOverlayDeps["editor"]["editorState"]>["view"];
+interface ActiveSearchSnapshot {
+  readonly doc: string;
+  readonly path: string | null;
+  readonly view: EditorViewSnapshot | null;
+}
+
+function sameActiveSearchSnapshot(
+  left: ActiveSearchSnapshot,
+  right: ActiveSearchSnapshot,
+): boolean {
+  return left.path === right.path && left.doc === right.doc && left.view === right.view;
+}
 
 function scheduleDebouncedIdleTask(
   task: () => void,
@@ -267,23 +279,44 @@ export function useAppOverlays({
     ),
     [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.getCurrentDocText],
   );
-  const latestActiveSearchSnapshotRef = useRef<{
-    path: string | null;
-    doc: string;
-    view: EditorViewSnapshot | null;
-  }>({
+  const activeSearchSnapshot: ActiveSearchSnapshot = {
     path: editor.currentPath,
     doc: activeSearchDoc,
     view: activeSearchView,
+  };
+  const latestActiveSearchSnapshotRef = useRef<ActiveSearchSnapshot>(activeSearchSnapshot);
+  latestActiveSearchSnapshotRef.current = activeSearchSnapshot;
+  const latestEditorSnapshotRef = useRef({
+    currentPath: editor.currentPath,
+    getCurrentDocText: editor.getCurrentDocText,
+    getLexicalEditorHandle: editor.getLexicalEditorHandle,
+    view: activeSearchView,
   });
+  latestEditorSnapshotRef.current = {
+    currentPath: editor.currentPath,
+    getCurrentDocText: editor.getCurrentDocText,
+    getLexicalEditorHandle: editor.getLexicalEditorHandle,
+    view: activeSearchView,
+  };
 
-  useEffect(() => {
-    latestActiveSearchSnapshotRef.current = {
-      path: editor.currentPath,
-      doc: activeSearchDoc,
-      view: activeSearchView,
-    };
-  }, [editor.currentPath, activeSearchDoc, activeSearchView]);
+  const readStableActiveDocumentAnalysis = useCallback(async (
+    snapshot: ActiveSearchSnapshot,
+  ): Promise<{ analysis: IndexFileSnapshot["analysis"] | undefined; stale: boolean }> => {
+    const analysis = await readActiveDocumentAnalysis(snapshot.view);
+    const latestSnapshot = latestActiveSearchSnapshotRef.current;
+    if (!sameActiveSearchSnapshot(snapshot, latestSnapshot)) {
+      return { analysis: undefined, stale: true };
+    }
+    return { analysis, stale: false };
+  }, []);
+
+  const isCurrentEditorView = useCallback((
+    path: string | null,
+    view: EditorViewSnapshot,
+  ) => {
+    const latest = latestEditorSnapshotRef.current;
+    return latest.currentPath === path && latest.view === view;
+  }, []);
 
   const ensureIndexer = useCallback(async (): Promise<BackgroundIndexer> => {
     if (indexerRef.current) {
@@ -338,12 +371,15 @@ export function useAppOverlays({
         const markdownPaths = collectSearchableMarkdownPaths(tree);
         const searchablePathSet = new Set(markdownPaths);
         const activeIndexer = await ensureIndexer();
-        const activeSearchAnalysis = await readActiveDocumentAnalysis(activeSearchView);
+        const startingActiveSnapshot = latestActiveSearchSnapshotRef.current;
+        const activeSearchAnalysis = (
+          await readStableActiveDocumentAnalysis(startingActiveSnapshot)
+        ).analysis;
         const files = await readSearchIndexFiles({
           fs,
           paths: markdownPaths,
-          currentPath: editor.currentPath,
-          activeSearchDoc,
+          currentPath: startingActiveSnapshot.path,
+          activeSearchDoc: startingActiveSnapshot.doc,
           activeSearchAnalysis,
           isCancelled: () => cancelled,
         });
@@ -374,13 +410,16 @@ export function useAppOverlays({
             latestActiveSearchSnapshot.path !== null &&
             searchablePathSet.has(latestActiveSearchSnapshot.path)
           ) {
-            const latestActiveSearchAnalysis = await readActiveDocumentAnalysis(
-              latestActiveSearchSnapshot.view,
+            const latestAnalysisResult = await readStableActiveDocumentAnalysis(
+              latestActiveSearchSnapshot,
             );
+            if (latestAnalysisResult.stale || cancelled) {
+              return;
+            }
             await activeIndexer.updateFile(
               latestActiveSearchSnapshot.path,
               latestActiveSearchSnapshot.doc,
-              latestActiveSearchAnalysis,
+              latestAnalysisResult.analysis,
             );
           }
           setSearchVersion((version) => version + 1);
@@ -401,6 +440,7 @@ export function useAppOverlays({
     fs,
     ensureIndexer,
     activeSearchView,
+    readStableActiveDocumentAnalysis,
   ]);
 
   useEffect(() => {
@@ -413,14 +453,22 @@ export function useAppOverlays({
     }
 
     const currentPath = editor.currentPath;
+    const syncSnapshot: ActiveSearchSnapshot = {
+      path: currentPath,
+      doc: activeSearchDoc,
+      view: activeSearchView,
+    };
     let cancelled = false;
     const cancelScheduledSync = scheduleDebouncedIdleTask(() => {
       void measureAsync(
         "search.index.updateFile",
         async () => {
           const activeIndexer = await ensureIndexer();
-          const activeSearchAnalysis = await readActiveDocumentAnalysis(activeSearchView);
-          return activeIndexer.updateFile(currentPath, activeSearchDoc, activeSearchAnalysis);
+          const activeSearchAnalysis = await readStableActiveDocumentAnalysis(syncSnapshot);
+          if (activeSearchAnalysis.stale) {
+            return null;
+          }
+          return activeIndexer.updateFile(currentPath, activeSearchDoc, activeSearchAnalysis.analysis);
         },
         {
           category: "search",
@@ -449,6 +497,7 @@ export function useAppOverlays({
     editor.currentPath,
     activeSearchDoc,
     activeSearchView,
+    readStableActiveDocumentAnalysis,
     searchSyncRevision,
   ]);
 
@@ -497,6 +546,7 @@ export function useAppOverlays({
   }, [editor]);
 
   const applyFormat = useCallback((detail: FormatEventDetail) => {
+    const requestPath = editor.currentPath;
     const editorHandle = editor.getLexicalEditorHandle();
     if (!editorHandle) {
       dispatchFormatDetail(detail);
@@ -504,9 +554,16 @@ export function useAppOverlays({
     }
 
     void import("../editor-format-actions").then(({ applyMarkdownFormatAction }) => {
+      const latest = latestEditorSnapshotRef.current;
+      if (
+        latest.currentPath !== requestPath ||
+        latest.getLexicalEditorHandle() !== editorHandle
+      ) {
+        return;
+      }
       const handled = applyMarkdownFormatAction({
         editorHandle,
-        getCurrentDocText: editor.getCurrentDocText,
+        getCurrentDocText: latest.getCurrentDocText,
       }, detail);
       if (!handled) {
         dispatchFormatDetail(detail);
@@ -533,8 +590,14 @@ export function useAppOverlays({
       const { resolveDocumentLabelBacklinks } = await import(
         "../../semantics/document-label-backlinks"
       );
+      if (!isCurrentEditorView(editor.currentPath, view)) {
+        return;
+      }
       const lookup = resolveDocumentLabelBacklinks(view.state);
       if (lookup.kind === "ready") {
+        if (!isCurrentEditorView(editor.currentPath, view)) {
+          return;
+        }
         setLabelBacklinks(lookup.result);
         return;
       }
@@ -548,7 +611,7 @@ export function useAppOverlays({
 
       window.alert(LABEL_ACTION_MESSAGE);
     })();
-  }, [editor.currentPath, editor.editorState?.view]);
+  }, [editor.currentPath, editor.editorState?.view, isCurrentEditorView]);
 
   const handleRenameDocumentLabel = useCallback(() => {
     const view = editor.editorState?.view;
@@ -562,6 +625,10 @@ export function useAppOverlays({
         prepareDocumentLabelRename,
         resolveDocumentLabelRenameTarget,
       } = await import("../../semantics/document-label-rename");
+      const requestPath = editor.currentPath;
+      if (!isCurrentEditorView(requestPath, view)) {
+        return;
+      }
       const lookup = resolveDocumentLabelRenameTarget(view.state);
       if (lookup.kind === "duplicate") {
         window.alert(duplicateRenameMessage(lookup.id));
@@ -584,6 +651,9 @@ export function useAppOverlays({
       const rename = prepareDocumentLabelRename(view.state, promptedId);
       if (rename.kind === "ready") {
         if (rename.changes.length === 0) return;
+        if (!isCurrentEditorView(requestPath, view)) {
+          return;
+        }
         if (dispatchIfConnected(
           view,
           { changes: [...rename.changes], scrollIntoView: true },
@@ -616,7 +686,7 @@ export function useAppOverlays({
 
       window.alert(LABEL_ACTION_MESSAGE);
     })();
-  }, [editor.currentPath, editor.editorState?.view]);
+  }, [editor.currentPath, editor.editorState?.view, isCurrentEditorView]);
 
   // ── Single command registry ──────────────────────────────────────────────
   // Each command is defined once. Palette entries, hotkey bindings, and

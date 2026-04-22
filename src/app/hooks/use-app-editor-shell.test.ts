@@ -271,7 +271,9 @@ describe("useAppEditorShell", () => {
       ref.result.handleModeChange("lexical");
     });
 
-    expect(ref.result.editorMode).toBe("lexical");
+    await vi.waitFor(() => {
+      expect(ref.result.editorMode).toBe("lexical");
+    });
     expect(ref.result.editorDoc).toBe("# A changed in CM6\n");
   });
 
