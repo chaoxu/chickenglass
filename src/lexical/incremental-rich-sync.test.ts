@@ -98,7 +98,21 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
-  it("replaces one affected raw block and leaves sibling blocks intact", () => {
+  it("replaces the affected line when preserved newlines create sibling paragraphs", () => {
+    const previousMarkdown = "First paragraph line.\nSecond paragraph line.";
+    const nextMarkdown = "First paragraph line.\nSecond changed line.";
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+
+    expect(result).toMatchObject({
+      applied: true,
+      blockFrom: previousMarkdown.indexOf("Second"),
+      nextBlockSource: "Second changed line.",
+      nextBlockTo: nextMarkdown.length,
+    });
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+  });
+
+  it("updates one affected raw block and leaves sibling blocks intact", () => {
     const previousMarkdown = [
       "::: {.theorem #thm:sample title=\"Sample\"}",
       "Alpha [@thm:main-upper] Beta.",
@@ -125,8 +139,54 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
     const nextKeys = readTopLevelKeys(editor);
     expect(nextKeys).toHaveLength(previousKeys.length);
-    expect(nextKeys[0]).not.toBe(previousKeys[0]);
+    expect(nextKeys[0]).toBe(previousKeys[0]);
     expect(nextKeys.slice(1)).toEqual(previousKeys.slice(1));
+  });
+
+  it("updates the edited raw-block occurrence when duplicate raw sources exist", () => {
+    const repeatedRawBlock = [
+      "::: {.proof}",
+      "Repeated body.",
+      ":::",
+    ].join("\n");
+    const previousMarkdown = [
+      "::: {#legacy .theorem} Legacy Title",
+      "Ignored by the canonical source-block scanner.",
+      ":::",
+      "",
+      repeatedRawBlock,
+      "",
+      repeatedRawBlock,
+    ].join("\n");
+    const firstBodyOffset = previousMarkdown.indexOf("Repeated body.") + "Repeated".length;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, firstBodyOffset),
+      "1",
+      previousMarkdown.slice(firstBodyOffset),
+    ].join("");
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+  });
+
+  it("falls back when a raw-block body edit can change block boundaries", () => {
+    const previousMarkdown = [
+      "::: {.proof}",
+      "Body text.",
+      ":::",
+    ].join("\n");
+    const insertAt = previousMarkdown.indexOf("\n:::");
+    const nextMarkdown = [
+      previousMarkdown.slice(0, insertAt),
+      "\n:::",
+      "\nEscaped paragraph.",
+      previousMarkdown.slice(insertAt),
+    ].join("");
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+
+    expect(result).toEqual({ applied: false });
+    expect(getLexicalMarkdown(editor)).toBe(previousMarkdown);
   });
 
   it("falls back when a change crosses paragraph boundaries", () => {

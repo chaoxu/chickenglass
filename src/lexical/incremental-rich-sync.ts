@@ -1,11 +1,18 @@
 import { $generateNodesFromSerializedNodes } from "@lexical/clipboard";
-import { $getRoot, $setSelection, type EditorUpdateOptions, type LexicalEditor } from "lexical";
+import {
+  $getRoot,
+  $setSelection,
+  type EditorUpdateOptions,
+  type LexicalEditor,
+  type LexicalNode,
+  type SerializedLexicalNode,
+} from "lexical";
 
 import { measureSync } from "../app/perf";
 import { createMinimalEditorDocumentChanges, type EditorDocumentChange } from "../lib/editor-doc-change";
 import { collectSourceBlockRanges, type SourceBlockRange } from "./markdown/block-scanner";
 import { parseMarkdownFragmentToJSON } from "./headless-markdown-parse";
-import { $isRawBlockNode } from "./nodes/raw-block-node";
+import { $isRawBlockNode, type RawBlockNode } from "./nodes/raw-block-node";
 
 export type IncrementalRichDocumentSyncResult =
   | { readonly applied: false }
@@ -82,16 +89,7 @@ function collectIncrementalSyncBlockRanges(markdown: string): IncrementalSyncBlo
       continue;
     }
 
-    const startLineIndex = lineIndex;
-    while (
-      lineIndex + 1 < lines.length
-      && (lines[lineIndex + 1] ?? "").trim().length > 0
-      && !ATX_HEADING_LINE_RE.test(lines[lineIndex + 1] ?? "")
-      && !sourceBlocksByStartLine.has(lineIndex + 1)
-    ) {
-      lineIndex += 1;
-    }
-    ranges.push(rangeFromLineSpan(lines, lineOffsets, startLineIndex, lineIndex));
+    ranges.push(rangeFromLineSpan(lines, lineOffsets, lineIndex, lineIndex));
     lineIndex += 1;
   }
 
@@ -110,6 +108,114 @@ function findIncrementalSyncBlockRange(
     return null;
   }
   return { ...ranges[index], index };
+}
+
+interface RawBlockTarget {
+  readonly from: number;
+  readonly node: RawBlockNode;
+  readonly source: string;
+  readonly to: number;
+}
+
+function findRawBlockTargetContainingChange(
+  rootChildren: readonly LexicalNode[],
+  previousDoc: string,
+  change: EditorDocumentChange,
+): RawBlockTarget | null {
+  let searchFrom = 0;
+  for (const child of rootChildren) {
+    if (!$isRawBlockNode(child)) {
+      continue;
+    }
+
+    const source = child.getRaw();
+    if (source.length === 0) {
+      continue;
+    }
+
+    const from = previousDoc.indexOf(source, searchFrom);
+    if (from < 0) {
+      return null;
+    }
+    const to = from + source.length;
+    if (change.from >= from && change.to <= to) {
+      return { from, node: child, source, to };
+    }
+    searchFrom = to;
+  }
+  return null;
+}
+
+function hasMultipleRawBlocksBySource(
+  rootChildren: readonly LexicalNode[],
+  source: string,
+): boolean {
+  let seen = false;
+  for (const child of rootChildren) {
+    if (!$isRawBlockNode(child) || child.getRaw() !== source) {
+      continue;
+    }
+    if (seen) {
+      return true;
+    }
+    seen = true;
+  }
+  return false;
+}
+
+interface BlockIdentity {
+  readonly text: string;
+  readonly type: string;
+}
+
+function blockIdentityFromSerializedBlock(
+  block: SerializedLexicalNode,
+): BlockIdentity | null {
+  const [node] = $generateNodesFromSerializedNodes([block]);
+  return node
+    ? {
+        text: node.getTextContent(),
+        type: node.getType(),
+      }
+    : null;
+}
+
+function findUniqueTopLevelByIdentity(
+  rootChildren: readonly LexicalNode[],
+  identity: BlockIdentity,
+): LexicalNode | null {
+  let match: LexicalNode | null = null;
+  for (const child of rootChildren) {
+    if (child.getType() !== identity.type || child.getTextContent() !== identity.text) {
+      continue;
+    }
+    if (match) {
+      return null;
+    }
+    match = child;
+  }
+  return match;
+}
+
+function isRawBlockBodyOnlyChange(
+  previousBlockSource: string,
+  change: EditorDocumentChange,
+  blockFrom: number,
+): boolean {
+  if (
+    change.from !== change.to
+    || /[\n\r\\:$]/.test(change.insert)
+  ) {
+    return false;
+  }
+  const firstLineEnd = previousBlockSource.indexOf("\n");
+  const lastLineStart = previousBlockSource.lastIndexOf("\n");
+  if (firstLineEnd < 0 || lastLineStart <= firstLineEnd) {
+    return false;
+  }
+  const relativeFrom = change.from - blockFrom;
+  const relativeTo = change.to - blockFrom;
+  return relativeFrom > firstLineEnd && relativeTo < lastLineStart;
 }
 
 export function applyIncrementalRichDocumentSync(
@@ -135,7 +241,92 @@ export function applyIncrementalRichDocumentSync(
         return;
       }
       const rootChildren = $getRoot().getChildren();
-      const topLevel = rootChildren[blockRange.index] ?? null;
+      let blockFrom = blockRange.from;
+      let blockTo = blockRange.to;
+      if (change.from < blockFrom || change.to > blockTo) {
+        return;
+      }
+      let previousBlockSource = previousDoc.slice(blockFrom, blockTo);
+      let topLevel: LexicalNode | null = rootChildren[blockRange.index] ?? null;
+      let rawSourceMatch = $isRawBlockNode(topLevel) && topLevel.getRaw() === previousBlockSource
+        ? topLevel
+        : null;
+      let rawBlockTarget: RawBlockTarget | null | undefined;
+      let previousBlocks: SerializedLexicalNode[] | null = null;
+      const clearPreviousBlockCache = () => {
+        previousBlocks = null;
+        previousIdentity = undefined;
+      };
+      const useRawBlockTarget = (): boolean => {
+        rawBlockTarget ??= findRawBlockTargetContainingChange(
+          rootChildren,
+          previousDoc,
+          change,
+        );
+        if (!rawBlockTarget) {
+          return false;
+        }
+        blockFrom = rawBlockTarget.from;
+        blockTo = rawBlockTarget.to;
+        previousBlockSource = rawBlockTarget.source;
+        topLevel = rawBlockTarget.node;
+        rawSourceMatch = rawBlockTarget.node;
+        clearPreviousBlockCache();
+        return true;
+      };
+      const getPreviousBlocks = () => {
+        previousBlocks ??= parseMarkdownFragmentToJSON(previousBlockSource);
+        return previousBlocks;
+      };
+      let previousIdentity: BlockIdentity | null | undefined;
+      const getPreviousIdentity = () => {
+        if (previousIdentity !== undefined) {
+          return previousIdentity;
+        }
+        const blocks = getPreviousBlocks();
+        previousIdentity = blocks.length === 1 && blocks[0]
+          ? blockIdentityFromSerializedBlock(blocks[0])
+          : null;
+        return previousIdentity;
+      };
+      const findParsedTopLevelMatch = () => {
+        const identity = getPreviousIdentity();
+        return identity ? findUniqueTopLevelByIdentity(rootChildren, identity) : null;
+      };
+      if (rawSourceMatch && hasMultipleRawBlocksBySource(rootChildren, previousBlockSource)) {
+        useRawBlockTarget();
+      }
+      if (
+        rawSourceMatch
+        && (
+          topLevel?.getType() !== "coflat-raw-block"
+          || ($isRawBlockNode(topLevel) && topLevel.getRaw() !== previousBlockSource)
+        )
+      ) {
+        topLevel = rawSourceMatch;
+      }
+      if (
+        !topLevel
+        || (topLevel.getType() !== "paragraph" && topLevel.getType() !== "coflat-raw-block")
+      ) {
+        topLevel = findParsedTopLevelMatch();
+        if (!topLevel) {
+          useRawBlockTarget();
+        }
+      } else if (!rawSourceMatch) {
+        const identity = getPreviousIdentity();
+        if (
+          identity
+          && (topLevel.getType() !== identity.type || topLevel.getTextContent() !== identity.text)
+        ) {
+          const parsedMatch = findUniqueTopLevelByIdentity(rootChildren, identity);
+          if (parsedMatch && !parsedMatch.is(topLevel)) {
+            topLevel = parsedMatch;
+          } else if (!parsedMatch) {
+            useRawBlockTarget();
+          }
+        }
+      }
       if (!topLevel) {
         return;
       }
@@ -144,19 +335,19 @@ export function applyIncrementalRichDocumentSync(
         return;
       }
 
-      const blockFrom = blockRange.from;
-      const blockTo = blockRange.to;
-      if (change.from < blockFrom || change.to > blockTo) {
-        return;
-      }
-      const previousBlockSource = previousDoc.slice(blockFrom, blockTo);
       let restoresRawBlockReveal = false;
       if (topLevelType === "coflat-raw-block") {
         if (!$isRawBlockNode(topLevel)) {
           return;
         }
+        if (topLevel.getRaw() !== previousBlockSource) {
+          if (!rawSourceMatch || !$isRawBlockNode(rawSourceMatch)) {
+            return;
+          }
+          topLevel = rawSourceMatch;
+        }
       } else {
-        const previousBlocks = parseMarkdownFragmentToJSON(previousBlockSource);
+        const previousBlocks = getPreviousBlocks();
         restoresRawBlockReveal = previousBlocks.length === 1
           && previousBlocks[0]?.type === "coflat-raw-block"
           && topLevel.getTextContent() === previousBlockSource;
@@ -174,6 +365,23 @@ export function applyIncrementalRichDocumentSync(
       }
 
       const nextBlockSource = nextDoc.slice(blockFrom, nextBlockTo);
+      if (
+        topLevelType === "coflat-raw-block"
+        && $isRawBlockNode(topLevel)
+        && isRawBlockBodyOnlyChange(previousBlockSource, change, blockFrom)
+      ) {
+        topLevel.setRaw(nextBlockSource);
+        result = {
+          applied: true,
+          blockFrom,
+          blockTo,
+          nextBlockSource,
+          nextBlockTo,
+          nodeKey: topLevel.getKey(),
+        };
+        return;
+      }
+
       const parsedBlocks = parseMarkdownFragmentToJSON(nextBlockSource);
       if (parsedBlocks.length !== 1) {
         return;

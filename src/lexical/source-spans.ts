@@ -568,6 +568,15 @@ function createSourceSpanIndexForNode(
 ): SourceSpanIndex {
   const spans: SourceSpan[] = [];
   const nodeRanges = new Map<string, SourceRange>();
+  if ($isRawBlockNode(node) && node.getRaw() === markdown) {
+    const range = { from: 0, to: markdown.length };
+    addRevealSpan(spans, node, range, "raw-block", markdown);
+    nodeRanges.set(node.getKey(), range);
+    return new SourceSpanIndex(
+      spans.map((span) => shiftSpan(span, sourceOffset)),
+      shiftNodeRanges(nodeRanges, sourceOffset),
+    );
+  }
   const cursor = new ParsedSourceCursor(parseMarkdownSourceTokens(markdown));
   collectNodeSpans(node, cursor, spans, nodeRanges);
   return new SourceSpanIndex(
