@@ -2,7 +2,7 @@ import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { Dialog, DialogContent } from "./dialog";
+import { Dialog, DialogContent, DialogTitle } from "./dialog";
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -23,12 +23,14 @@ const Command = React.forwardRef<
 interface CommandDialogProps extends React.ComponentProps<typeof Dialog> {
   contentClassName?: string;
   commandClassName?: string;
+  title?: string;
 }
 
 function CommandDialog({
   children,
   contentClassName,
   commandClassName,
+  title = "Command palette",
   ...props
 }: CommandDialogProps) {
   return (
@@ -40,6 +42,7 @@ function CommandDialog({
         )}
         aria-describedby={undefined}
       >
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         <Command className={commandClassName}>{children}</Command>
       </DialogContent>
     </Dialog>

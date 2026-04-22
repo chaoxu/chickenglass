@@ -275,6 +275,7 @@ function updateTableDecorationsForReferenceChange(
  * (which cross line breaks) are permitted by CM6.
  */
 const tableDecorationField = createDecorationStateField({
+  spanName: "cm6.tableDecorations",
   create(state) {
     return buildTableDecorationsFromState(state);
   },

@@ -50,4 +50,22 @@ describe("mathPrewarmPlugin", () => {
 
     expect(renderSpy).not.toHaveBeenCalled();
   });
+
+  it("does not prewarm unchanged math on selection-only updates", () => {
+    vi.useFakeTimers();
+    try {
+      const doc = "Keep $a$ and $b$ while moving the cursor.";
+      const v = createMathPrewarmView(doc);
+      vi.runOnlyPendingTimers();
+      clearKatexHtmlCache();
+      const renderSpy = vi.spyOn(katex, "renderToString");
+
+      v.dispatch({ selection: { anchor: doc.length } });
+      vi.runOnlyPendingTimers();
+
+      expect(renderSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

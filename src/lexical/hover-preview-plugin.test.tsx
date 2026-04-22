@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { MemoryFileSystem } from "../app/file-manager";
-import { buildDocumentLabelGraph } from "../app/markdown/labels";
+import { buildDocumentLabelGraph } from "../lib/markdown/labels";
 import { createReferencePreviewBuilder } from "./hover-preview-plugin";
 import type { LexicalRenderContextValue } from "./render-context";
 import { buildFootnoteDefinitionMap } from "./markdown/footnotes";

@@ -9,6 +9,7 @@ import {
 } from "@codemirror/view";
 import { createChangeChecker } from "../state/change-detection";
 import { focusEffect } from "./focus-state";
+import { measureSync } from "../lib/perf";
 
 const structuralChangeDetected = createChangeChecker({ doc: true, tree: true });
 
@@ -41,10 +42,17 @@ export function cursorSensitiveShouldRebuild(tr: Transaction): boolean {
 export function createDecorationStateField(options: {
   create: (state: EditorState) => DecorationSet;
   update: (value: DecorationSet, tr: Transaction) => DecorationSet;
+  spanName?: string;
 }): StateField<DecorationSet> {
   return StateField.define<DecorationSet>({
-    create: options.create,
-    update: options.update,
+    create(state) {
+      return options.spanName
+        ? measureSync(`${options.spanName}.create`, () => options.create(state))
+        : options.create(state);
+    },
+    update(value, tr) {
+      return options.update(value, tr);
+    },
     provide(field) {
       return EditorView.decorations.from(field);
     },

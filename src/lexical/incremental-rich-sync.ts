@@ -8,8 +8,8 @@ import {
   type SerializedLexicalNode,
 } from "lexical";
 
-import { measureSync } from "../app/perf";
 import { createMinimalEditorDocumentChanges, type EditorDocumentChange } from "../lib/editor-doc-change";
+import { measureSync } from "../lib/perf";
 import { collectSourceBlockRanges, type SourceBlockRange } from "./markdown/block-scanner";
 import { parseMarkdownFragmentToJSON } from "./headless-markdown-parse";
 import { $isRawBlockNode, type RawBlockNode } from "./nodes/raw-block-node";

@@ -1,4 +1,4 @@
-import { type DocumentScan, scanDocument } from "../../app/markdown/labels";
+import { type DocumentScan, scanDocument } from "../../lib/markdown/labels";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
 import { normalizeBlockType, resolveBlockNumbering, resolveBlockTitle } from "./block-metadata";
 import { FOOTNOTE_DEFINITION_MULTILINE_RE } from "./footnotes";

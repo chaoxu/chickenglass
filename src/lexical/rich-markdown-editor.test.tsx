@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
-import { clearFrontendPerf, getFrontendPerfSnapshot } from "../app/perf";
+import { clearFrontendPerf, getFrontendPerfSnapshot } from "../lib/perf";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { registerCoflatDecoratorRenderers } from "./renderers/block-renderers";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";

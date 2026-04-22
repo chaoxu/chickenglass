@@ -285,4 +285,94 @@ describe("perf regression reports", () => {
     expect(result.regressions).toHaveLength(0);
     expect(result.frontend[0].status).toBe("ok");
   });
+
+  it("does not fail a leaf frontend span when its category total stays within budget", () => {
+    const baseline = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "citations",
+          name: "citations.parse_bib",
+          meanAvgMs: 25,
+          worstMaxMs: 40,
+        },
+        {
+          source: "frontend",
+          category: "citations",
+          name: "citations.create_processor",
+          meanAvgMs: 8,
+          worstMaxMs: 15,
+        },
+      ],
+      backend: [],
+    };
+    const current = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "citations",
+          name: "citations.parse_bib",
+          meanAvgMs: 16,
+          worstMaxMs: 28,
+        },
+        {
+          source: "frontend",
+          category: "citations",
+          name: "citations.create_processor",
+          meanAvgMs: 14,
+          worstMaxMs: 25,
+        },
+      ],
+      backend: [],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.25,
+      minDeltaMs: 5,
+    });
+
+    expect(result.regressions).toHaveLength(0);
+    expect(result.frontend.find((entry) => entry.name === "citations.create_processor")).toMatchObject({
+      status: "ok",
+      avgDeltaMs: 6,
+    });
+  });
+
+  it("keeps max-only timing outliers from failing short local runs", () => {
+    const baseline = {
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.settle_ms.index.after_frontmatter",
+          unit: "ms",
+          meanValue: 15,
+          maxValue: 25,
+        },
+      ],
+    };
+    const current = {
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.settle_ms.index.after_frontmatter",
+          unit: "ms",
+          meanValue: 15.1,
+          maxValue: 32,
+        },
+      ],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.25,
+      minDeltaMs: 5,
+    });
+
+    expect(result.regressions).toHaveLength(0);
+    expect(result.metrics[0]).toMatchObject({
+      status: "ok",
+      maxDelta: 7,
+    });
+  });
 });

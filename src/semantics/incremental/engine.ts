@@ -5,7 +5,6 @@ import {
   classifyReferenceIndex,
   mapReferenceIndex,
 } from "../../references/classifier";
-import { compareRangesByToThenFrom } from "../../lib/range-order";
 import type { ReferenceIndexModel } from "../../references/model";
 import type {
   DocumentAnalysis,
@@ -51,6 +50,7 @@ import {
   replaceOverlappingRanges,
   type PositionMapper,
 } from "./merge-utils";
+import { compareRangesByToThenFrom } from "../../lib/range-order";
 import type { DirtyWindow, SemanticDelta } from "./types";
 import type { ReferenceSemantics } from "../document";
 import {

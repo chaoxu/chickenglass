@@ -14,7 +14,7 @@ import {
   NAVIGATE_SOURCE_POSITION_EVENT,
   type NavigateSourcePositionEventDetail,
 } from "../constants/events";
-import { measureSync } from "../app/perf";
+import { measureSync } from "../lib/perf";
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { sourcePositionFromElement } from "./source-position-dom";

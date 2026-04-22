@@ -72,6 +72,7 @@ import { $createReferenceNode, $isReferenceNode, type ReferenceNode } from "./no
 import type { RevealChromePreview } from "./reveal-chrome-types";
 import { isMarkdownImageLine } from "../lib/markdown-image";
 import { isReferenceTokenSource } from "../lib/reference-tokens";
+import { $getVisibleTextOffset } from "./visible-source-traversal";
 
 export type RevealBoundaryDirection = "backward" | "forward";
 
@@ -216,43 +217,6 @@ function findAncestor<T extends LexicalNode>(
   return null;
 }
 
-function computeVisibleOffsetWithin(
-  root: LexicalNode,
-  anchorNode: LexicalNode,
-  anchorOffset: number,
-): number {
-  let visible = 0;
-  let found = false;
-
-  function walk(node: LexicalNode): void {
-    if (found) {
-      return;
-    }
-    if (node === anchorNode) {
-      visible += anchorOffset;
-      found = true;
-      return;
-    }
-    if ($isTextNode(node)) {
-      visible += node.getTextContentSize();
-      return;
-    }
-    if ($isElementNode(node)) {
-      for (const child of node.getChildren()) {
-        walk(child);
-        if (found) {
-          return;
-        }
-      }
-      return;
-    }
-    visible += node.getTextContent().length;
-  }
-
-  walk(root);
-  return visible;
-}
-
 const linkAdapter: RevealAdapter = {
   id: "link",
   findSubject(selection) {
@@ -263,7 +227,7 @@ const linkAdapter: RevealAdapter = {
     if (!link) {
       return null;
     }
-    const visibleOffset = computeVisibleOffsetWithin(
+    const visibleOffset = $getVisibleTextOffset(
       link,
       selection.anchor.getNode(),
       selection.anchor.offset,
@@ -531,51 +495,6 @@ function isRevealableTopLevelBlock(node: LexicalNode): boolean {
     || $isRawBlockNode(node);
 }
 
-/**
- * Walk `top`'s descendants in document order, summing visible text
- * lengths until we encounter `anchorNode`, then add `anchorOffset`.
- * Returns an approximate visible-text offset of the caret inside the
- * block. The paragraph adapter uses this as a heuristic source offset
- * — formatting markers (`*`, `**`, `[…]`) shift the actual source
- * offset by a few chars, but the result lands close enough that the
- * caret no longer always ends up at end-of-source.
- */
-function $computeBlockVisibleOffset(
-  top: LexicalNode,
-  anchorNode: LexicalNode,
-  anchorOffset: number,
-): number {
-  let visible = 0;
-  let found = false;
-  function walk(node: LexicalNode): void {
-    if (found) {
-      return;
-    }
-    if (node === anchorNode) {
-      visible += anchorOffset;
-      found = true;
-      return;
-    }
-    if ($isTextNode(node)) {
-      visible += node.getTextContentSize();
-      return;
-    }
-    if ($isElementNode(node)) {
-      for (const child of node.getChildren()) {
-        walk(child);
-        if (found) {
-          return;
-        }
-      }
-      return;
-    }
-    // Decorator with a textual representation (inline math, refs).
-    visible += node.getTextContent().length;
-  }
-  walk(top);
-  return visible;
-}
-
 const paragraphAdapter: RevealAdapter = {
   id: "paragraph",
   findSubject(selection) {
@@ -587,7 +506,7 @@ const paragraphAdapter: RevealAdapter = {
       const anchorNode = anchor.getNode();
       top = anchorNode.getTopLevelElement();
       if (top && isRevealableTopLevelBlock(top)) {
-        caretOffset = $computeBlockVisibleOffset(top, anchorNode, anchor.offset);
+        caretOffset = $getVisibleTextOffset(top, anchorNode, anchor.offset);
       }
     } else if ($isNodeSelection(selection)) {
       // Decorator click (e.g. clicking a theorem block) lands here. The

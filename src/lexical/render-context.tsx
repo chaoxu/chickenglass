@@ -5,10 +5,10 @@ import {
   type ReactNode,
 } from "react";
 
-import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
-import { measureSync } from "../app/perf";
+import { buildDocumentLabelParseSnapshot } from "../lib/markdown/label-parser";
 import { useFileSystem } from "../app/contexts/file-system-context";
 import type { FileSystem } from "../app/file-manager";
+import { measureSync } from "../lib/perf";
 import { type CitationRenderData, useCitationRenderData } from "../citations/citation-render-data";
 import { buildDocumentRuntime, type LexicalDocumentRuntime } from "./runtime/controller/document-runtime";
 import {

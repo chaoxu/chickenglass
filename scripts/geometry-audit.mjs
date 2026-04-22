@@ -4,14 +4,11 @@ import console from "node:console";
 import process from "node:process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseChromeArgs } from "./chrome-common.mjs";
+import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import {
   assertEditorHealth,
   clearStructure,
-  connectEditor,
   createArgParser,
-  disconnectBrowser,
-  EXTERNAL_DEMO_ROOT,
   EXTERNAL_FIXTURE_ROOT,
   getGeometrySnapshot,
   openFixtureDocument,
@@ -21,7 +18,6 @@ import {
   setCursor,
   settleEditorLayout,
   sleep,
-  waitForDebugBridge,
 } from "./test-helpers.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +63,9 @@ Options:
   --port <n>                         CDP port for Chrome for Testing
   --url <url>                        App URL Chrome is already running against
   --timeout <ms>                     Browser/debug bridge timeout (default: 15000)
+  --assert-clean                     Exit non-zero if geometry deltas exceed tolerances
+  --max-top-delta <px>               Allowed absolute top delta (default: 0)
+  --max-height-delta <px>            Allowed absolute height delta (default: 0)
   --json                             Print JSON instead of a text report
 `);
 }
@@ -276,8 +275,41 @@ function formatReport({ fixture, scenario, line, radius, result }) {
   return parts.join("\n");
 }
 
+export function collectGeometryViolations(results, options = {}) {
+  const maxTopDelta = options.maxTopDelta ?? 0;
+  const maxHeightDelta = options.maxHeightDelta ?? 0;
+  const violations = [];
+
+  for (const { scenario, result } of results) {
+    for (const delta of result.deltas ?? []) {
+      for (const line of delta.lines ?? []) {
+        const topDelta = line.topDelta ?? 0;
+        const heightDelta = line.heightDelta ?? 0;
+        if (
+          Math.abs(topDelta) > maxTopDelta ||
+          Math.abs(heightDelta) > maxHeightDelta ||
+          line.before === null ||
+          line.after === null
+        ) {
+          violations.push({
+            scenario,
+            from: delta.from,
+            to: delta.to,
+            line: line.line,
+            topDelta,
+            heightDelta,
+            missingBefore: line.before === null,
+            missingAfter: line.after === null,
+          });
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
 async function main(argv = process.argv.slice(2)) {
-  const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
   const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
   if (hasFlag("--help") || hasFlag("-h")) {
     printUsage();
@@ -300,16 +332,12 @@ async function main(argv = process.argv.slice(2)) {
   const line = getIntFlag("--line", fixture.defaultLine ?? requestedFixture.defaultLine);
   const radius = getIntFlag("--radius", 3);
   const timeout = getIntFlag("--timeout", 15000);
+  const maxTopDelta = getIntFlag("--max-top-delta", 0);
+  const maxHeightDelta = getIntFlag("--max-height-delta", 0);
 
-  const page = await connectEditor({
-    browser: chromeArgs.browser,
-    headless: chromeArgs.headless,
-    port: chromeArgs.port,
-    timeout,
-    url: chromeArgs.url,
-  });
+  const session = await openBrowserSession(argv, { timeoutFallback: timeout });
+  const { page } = session;
   try {
-    await waitForDebugBridge(page, { timeout });
     await openFixtureDocument(page, fixture, { mode: "rich" });
     await assertEditorHealth(page, "geometry-audit: fixture-open", {
       maxVisibleDialogs: 2,
@@ -333,10 +361,30 @@ async function main(argv = process.argv.slice(2)) {
       allResults.push({ scenario: sc, result });
     }
 
+    const violations = collectGeometryViolations(allResults, {
+      maxTopDelta,
+      maxHeightDelta,
+    });
+
     if (hasFlag("--json")) {
       const output = allResults.length === 1
-        ? { fixture: fixture.displayPath, scenario: allResults[0].scenario, line, radius, result: allResults[0].result }
-        : { fixture: fixture.displayPath, scenarios: allResults.map((r) => ({ scenario: r.scenario, ...r.result })), line, radius };
+        ? {
+            fixture: fixture.displayPath,
+            scenario: allResults[0].scenario,
+            line,
+            radius,
+            result: allResults[0].result,
+            clean: violations.length === 0,
+            violations,
+          }
+        : {
+            fixture: fixture.displayPath,
+            scenarios: allResults.map((r) => ({ scenario: r.scenario, ...r.result })),
+            line,
+            radius,
+            clean: violations.length === 0,
+            violations,
+          };
       console.log(JSON.stringify(output, null, 2));
     } else {
       for (const { scenario: sc, result } of allResults) {
@@ -345,20 +393,21 @@ async function main(argv = process.argv.slice(2)) {
     }
 
     // Summary: report geometry-clean vs geometry-dirty
-    const geometryDirty = allResults.some(({ result }) =>
-      result.deltas?.some((d) =>
-        d.lines?.some((l) =>
-          (l.topDelta !== undefined && l.topDelta !== 0) ||
-          (l.heightDelta !== undefined && l.heightDelta !== 0),
-        ),
-      ),
-    );
+    const geometryDirty = violations.length > 0;
     if (!hasFlag("--json")) {
       const tag = geometryDirty ? "DIRTY" : "CLEAN";
       console.log(`\n=== Geometry: ${tag} ===`);
+      if (violations.length > 0) {
+        console.log(
+          `Tolerance: top<=${maxTopDelta}px height<=${maxHeightDelta}px; violations=${violations.length}`,
+        );
+      }
+    }
+    if (hasFlag("--assert-clean") && violations.length > 0) {
+      process.exitCode = 1;
     }
   } finally {
-    await disconnectBrowser(page);
+    await closeBrowserSession(session);
   }
 }
 

@@ -20,12 +20,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 import {
   DEBUG_EDITOR_SELECTOR,
   MODE_BUTTON_SELECTOR,
 } from "../src/debug/debug-bridge-contract.js";
 
-export { DEBUG_EDITOR_SELECTOR, MODE_BUTTON_SELECTOR };
+export { createArgParser, DEBUG_EDITOR_SELECTOR, MODE_BUTTON_SELECTOR };
 
 const DEFAULT_PORT = 9322;
 const DEFAULT_APP_URL = "http://localhost:5173";
@@ -393,9 +394,21 @@ export async function discardCurrentFile(page) {
  */
 export async function openFile(page, path) {
   try {
-    await page.evaluate((p) => window.__app.openFile(p), path);
-    await sleep(500);
-    return;
+    const opened = await page.evaluate(async (p) => {
+      const app = window.__app;
+      if (!app?.openFile) {
+        throw new Error("window.__app.openFile is unavailable.");
+      }
+      if (app.hasFile && !(await app.hasFile(p))) {
+        return false;
+      }
+      await app.openFile(p);
+      return true;
+    }, path);
+    if (opened) {
+      await sleep(500);
+      return;
+    }
   } catch (error) {
     if (!hasFixtureDocument(path)) {
       throw error;
@@ -1841,29 +1854,103 @@ export async function assertEditorHealth(page, label, options = {}) {
   return health;
 }
 
-/**
- * Create a flag-value parser for CLI arguments.
- *
- * @param {string[]} [argv] - defaults to process.argv.slice(2)
- * @returns {{ getFlag: (flag: string, fallback?: string) => string|undefined, getIntFlag: (flag: string, fallback?: number) => number, hasFlag: (flag: string) => boolean }}
- */
-export function createArgParser(argv = process.argv.slice(2)) {
-  const getFlag = (flag, fallback = undefined) => {
-    const index = argv.indexOf(flag);
-    return index >= 0 && index + 1 < argv.length ? argv[index + 1] : fallback;
-  };
-  const getIntFlag = (flag, fallback) => {
-    const value = getFlag(flag);
-    if (value === undefined) {
-      return fallback;
+async function waitForDebugBridgeReady(page, timeout) {
+  const readiness = await page.evaluate(async (timeoutMs) => {
+    const sources = [
+      { name: "__app.ready", promise: window.__app?.ready },
+      { name: "__editor.ready", promise: window.__editor?.ready },
+      { name: "__cfDebug.ready", promise: window.__cfDebug?.ready },
+    ].filter((source) => source.promise && typeof source.promise.then === "function");
+    const state = new Map(sources.map((source) => [source.name, "pending"]));
+
+    if (sources.length === 0) {
+      return {
+        status: "ready",
+        pending: [],
+        rejected: [],
+      };
     }
-    if (!/^-?\d+$/.test(value)) {
-      throw new Error(`Invalid integer value for ${flag}: ${value}`);
-    }
-    return Number.parseInt(value, 10);
-  };
-  const hasFlag = (flag) => argv.includes(flag);
-  return { getFlag, getIntFlag, hasFlag };
+
+    let timeoutId;
+    const timeoutPromise = new Promise((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve({
+          status: "timeout",
+          pending: [...state.entries()]
+            .filter(([, status]) => status === "pending")
+            .map(([name]) => name),
+          rejected: [...state.entries()]
+            .filter(([, status]) => status === "rejected")
+            .map(([name]) => name),
+        });
+      }, timeoutMs);
+    });
+    const readyPromise = Promise.all(sources.map((source) =>
+      Promise.resolve(source.promise).then(
+        () => {
+          state.set(source.name, "ready");
+        },
+        () => {
+          state.set(source.name, "rejected");
+        },
+      )
+    )).then(() => ({
+      status: [...state.values()].includes("rejected") ? "rejected" : "ready",
+      pending: [...state.entries()]
+        .filter(([, status]) => status === "pending")
+        .map(([name]) => name),
+      rejected: [...state.entries()]
+        .filter(([, status]) => status === "rejected")
+        .map(([name]) => name),
+    }));
+
+    return Promise.race([readyPromise, timeoutPromise]).finally(() => {
+      clearTimeout(timeoutId);
+    });
+  }, timeout);
+
+  if (readiness.status === "timeout") {
+    throw new Error(
+      `debug bridge readiness timed out after ${timeout}ms; pending: ${readiness.pending.join(", ") || "none"}`,
+    );
+  }
+  if (readiness.status === "rejected") {
+    throw new Error(
+      `debug bridge readiness rejected: ${readiness.rejected.join(", ") || "unknown"}`,
+    );
+  }
+  return readiness;
+}
+
+async function collectDebugBridgeDiagnostics(page) {
+  return page.evaluate(() => {
+    const globals = {
+      __app: Boolean(window.__app),
+      __editor: Boolean(window.__editor),
+      __cmView: Boolean(window.__cmView),
+      __cmDebug: Boolean(window.__cmDebug),
+      __cfDebug: Boolean(window.__cfDebug),
+      lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
+    };
+    const readyGlobals = [
+      { name: "__app.ready", promise: window.__app?.ready },
+      { name: "__editor.ready", promise: window.__editor?.ready },
+      { name: "__cfDebug.ready", promise: window.__cfDebug?.ready },
+    ];
+    return {
+      readyState: document.readyState,
+      globals,
+      readiness: readyGlobals.map((entry) => ({
+        name: entry.name,
+        present: Boolean(entry.promise && typeof entry.promise.then === "function"),
+      })),
+    };
+  }).catch((evaluateError) => ({
+    readyState: "<unavailable>",
+    globals: {},
+    readiness: [],
+    evaluateError: evaluateError instanceof Error ? evaluateError.message : String(evaluateError),
+  }));
 }
 
 /**
@@ -1885,47 +1972,30 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
       ),
       { timeout, polling: 100 },
     );
-    await withTimeout(
-      page.evaluate(async () => {
-        await Promise.all([
-          window.__app?.ready,
-          window.__editor?.ready,
-          window.__cfDebug?.ready,
-        ].filter(Boolean));
-      }),
-      timeout,
-      `debug bridge readiness timed out after ${timeout}ms`,
-    );
+    await waitForDebugBridgeReady(page, timeout);
   } catch (error) {
     const title = await page.title().catch(() => "");
-    const diagnostics = await page.evaluate(() => {
-      const globals = {
-        __app: Boolean(window.__app),
-        __editor: Boolean(window.__editor),
-        __cmView: Boolean(window.__cmView),
-        __cmDebug: Boolean(window.__cmDebug),
-        __cfDebug: Boolean(window.__cfDebug),
-        lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
-      };
-      return {
-        readyState: document.readyState,
-        globals,
-      };
-    }).catch((evaluateError) => ({
-      readyState: "<unavailable>",
-      globals: {},
-      evaluateError: evaluateError instanceof Error ? evaluateError.message : String(evaluateError),
-    }));
+    const diagnostics = await collectDebugBridgeDiagnostics(page);
     const browser = page.context().browser();
     const pages = browser ? await inspectBrowserPages(browser, {}) : [];
-    const missingGlobals = Object.entries(diagnostics.globals)
-      .filter(([, present]) => !present)
-      .map(([name]) => name);
+    const missingGlobals = ["__app", "__editor", "__cfDebug"]
+      .filter((name) => !diagnostics.globals[name]);
+    if (!diagnostics.globals.__cmView && !diagnostics.globals.lexicalEditor) {
+      missingGlobals.push("__cmView or lexicalEditor");
+    }
+    const pendingReady = diagnostics.readiness
+      ?.filter((entry) => entry.present)
+      .map((entry) => entry.name) ?? [];
     const reason = missingGlobals.length > 0
       ? `missing ${missingGlobals.join(", ")}`
-      : diagnostics.evaluateError ?? (error instanceof Error ? error.message : String(error));
+      : diagnostics.evaluateError ?? (
+          error instanceof Error ? error.message : String(error)
+        );
+    const readinessSuffix = pendingReady.length > 0
+      ? `; ready promises present: ${pendingReady.join(", ")}`
+      : "";
     throw new Error(
-      `Timed out waiting for debug bridge on ${page.url() || "<blank>"}${title ? ` (${title})` : ""}; readyState=${diagnostics.readyState}; ${reason}. Open pages: ${formatInspectablePages(pages)}`,
+      `Timed out waiting for debug bridge on ${page.url() || "<blank>"}${title ? ` (${title})` : ""}; readyState=${diagnostics.readyState}; ${reason}${readinessSuffix}. Open pages: ${formatInspectablePages(pages)}`,
     );
   }
 }
@@ -1978,7 +2048,7 @@ export async function screenshot(page, path, options = {}) {
   const resolvedPath = typeof path === "string" ? path : undefined;
   const resolvedOptions = typeof path === "string" ? options : path ?? {};
   const {
-    fallback = true,
+    fallback = Boolean(resolvedPath),
     timeout = 5000,
     ...screenshotOptions
   } = resolvedOptions;

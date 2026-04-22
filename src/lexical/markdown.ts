@@ -31,8 +31,8 @@ import {
   type TextNode,
 } from "lexical";
 
-import { measureSync } from "../app/perf";
-import { HEADING_TRAILING_ATTRIBUTES_RE } from "../app/markdown/heading-syntax";
+import { HEADING_TRAILING_ATTRIBUTES_RE } from "../lib/markdown/heading-syntax";
+import { measureSync } from "../lib/perf";
 import {
   findNextInlineMathSource,
   INLINE_MATH_DOLLAR_IMPORT_RE,

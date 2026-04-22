@@ -64,6 +64,7 @@ import {
   isStandaloneImageLine,
   mapActiveSourceTargetThroughChanges,
 } from "./image-source-reveal";
+import { measureSync } from "../lib/perf";
 
 type ImagePreviewState =
   | { kind: "image"; src: string }
@@ -72,6 +73,8 @@ type ImagePreviewState =
   | { kind: "error"; fallbackSrc: string };
 
 const imagePreviewHeightCache = new Map<string, number>();
+const INITIAL_IMAGE_PREVIEW_SCAN_LIMIT = 20_000;
+const IMAGE_PREVIEW_PREFETCH_MARGIN = 4_000;
 
 /**
  * Single widget class for all image preview states.
@@ -566,7 +569,10 @@ function buildDependencyCountsFromInfos(
 }
 
 function buildImageDecorationState(state: EditorState): ImageDecorationState {
-  const infos = collectAllImageNodeInfos(state);
+  const infos = measureSync(
+    "cm6.imageDiscovery.collectAll",
+    () => collectAllImageNodeInfos(state),
+  );
   const dependencyCounts = buildDependencyCountsFromInfos(infos);
   const activeSource = getActiveImageSourceTarget(state);
   return {
@@ -639,7 +645,10 @@ const imageDecorationsChanged = createChangeChecker(
 
 const imageDecorationField: StateField<ImageDecorationState> = StateField.define({
   create(state) {
-    return buildImageDecorationState(state);
+    return measureSync(
+      "cm6.imageDecorations.create",
+      () => buildImageDecorationState(state),
+    );
   },
   update(value, tr) {
     const beforeActiveSource = value.activeSource;
@@ -743,15 +752,50 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
 function requestImagePreviewsForInfos(
   view: EditorView,
   infos: readonly ImageNodeInfo[],
+  requestedSrcs?: Set<string>,
 ): void {
   for (const info of infos) {
+    if (requestedSrcs?.has(info.src)) continue;
+    requestedSrcs?.add(info.src);
     resolveLocalMediaPreview(view, info.src);
   }
 }
 
+function expandPreviewRange(
+  state: EditorState,
+  from: number,
+  to: number,
+): DirtyRange {
+  return {
+    from: Math.max(0, from - IMAGE_PREVIEW_PREFETCH_MARGIN),
+    to: Math.min(state.doc.length, to + IMAGE_PREVIEW_PREFETCH_MARGIN),
+  };
+}
+
+function previewRequestRangesForView(view: EditorView): readonly DirtyRange[] {
+  const visibleRanges = view.visibleRanges.length > 0
+    ? view.visibleRanges
+    : [{ from: 0, to: Math.min(view.state.doc.length, INITIAL_IMAGE_PREVIEW_SCAN_LIMIT) }];
+
+  if (
+    visibleRanges.length === 1
+    && visibleRanges[0].from === 0
+    && visibleRanges[0].to === view.state.doc.length
+    && view.state.doc.length > INITIAL_IMAGE_PREVIEW_SCAN_LIMIT
+  ) {
+    return [{ from: 0, to: INITIAL_IMAGE_PREVIEW_SCAN_LIMIT }];
+  }
+
+  return visibleRanges.map((range) =>
+    expandPreviewRange(view.state, range.from, range.to)
+  );
+}
+
 const imageRequestPlugin = ViewPlugin.fromClass(class {
+  private readonly requestedSrcs = new Set<string>();
+
   constructor(view: EditorView) {
-    requestImagePreviewsForInfos(view, collectAllImageNodeInfos(view.state));
+    this.requestNearViewport(view);
   }
 
   update(update: ViewUpdate): void {
@@ -763,16 +807,30 @@ const imageRequestPlugin = ViewPlugin.fromClass(class {
       requestImagePreviewsForInfos(
         update.view,
         collectImageNodeInfosInRanges(update.state, dirtyRanges),
+        this.requestedSrcs,
       );
       return;
     }
 
-    if (syntaxTree(update.state) !== syntaxTree(update.startState)) {
-      requestImagePreviewsForInfos(
-        update.view,
-        collectAllImageNodeInfos(update.state),
-      );
+    if (update.viewportChanged) {
+      this.requestNearViewport(update.view);
     }
+
+    if (syntaxTree(update.state) !== syntaxTree(update.startState)) {
+      this.requestNearViewport(update.view);
+    }
+  }
+
+  destroy(): void {
+    this.requestedSrcs.clear();
+  }
+
+  private requestNearViewport(view: EditorView): void {
+    const infos = measureSync(
+      "cm6.imageDiscovery.collectViewport",
+      () => collectImageNodeInfosInRanges(view.state, previewRequestRangesForView(view)),
+    );
+    requestImagePreviewsForInfos(view, infos, this.requestedSrcs);
   }
 });
 

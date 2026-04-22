@@ -1,4 +1,4 @@
-import { buildDocumentLabelParseSnapshot } from "../app/markdown/labels";
+import { buildDocumentLabelParseSnapshot } from "../lib/markdown/labels";
 import { SOURCE_POSITION_DATASET } from "./source-position-contract";
 
 // NOTE: Never mutate the Text node contents under a heading element. Lexical

@@ -42,6 +42,18 @@ describe("tableExtension — basic structure", () => {
     // 2 header cells + 2 data cells = 4
     expect(cells).toHaveLength(4);
   });
+
+  it("accepts a Pandoc table with more delimiter columns than header cells", () => {
+    const doc = "| A | B |\n| --- | --- | --- |\n| 1 | 2 | 3 |";
+
+    expect(findNodes(doc, "Table")).toHaveLength(1);
+  });
+
+  it("accepts a Pandoc table with fewer delimiter columns than header cells", () => {
+    const doc = "| A | B | C |\n| --- | --- |\n| 1 | 2 | 3 |";
+
+    expect(findNodes(doc, "Table")).toHaveLength(1);
+  });
 });
 
 describe("tableExtension — pipes inside $…$ math", () => {

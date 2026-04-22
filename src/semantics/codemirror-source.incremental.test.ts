@@ -604,4 +604,29 @@ describe("documentAnalysisField incremental contract", () => {
     expect(narrativeIds).not.toContain("mask");
     expect(narrativeIds).not.toContain("calc");
   });
+
+  it("keeps dense semantic range edits aligned with full rebuilds", () => {
+    const body = Array.from(
+      { length: 400 },
+      (_, index) => [
+        `# Heading ${index}`,
+        `Plain prose ${index} with @ref${index}.`,
+        `$x_${index}$ and [@cite${index}] remain indexed.`,
+      ].join("\n"),
+    ).join("\n\n");
+    let state = createSemanticsState(body);
+
+    for (const target of ["Plain prose 0", "Plain prose 200", "Plain prose 399"]) {
+      state = insertBefore(state, target, "fast ");
+      const analysis = state.field(documentAnalysisField);
+      const rebuilt = analyzeDocumentSemantics(
+        editorStateTextSource(state),
+        fullTree(state),
+      );
+
+      expect(analysis.headings).toEqual(rebuilt.headings);
+      expect(analysis.mathRegions).toEqual(rebuilt.mathRegions);
+      expect(analysis.references).toEqual(rebuilt.references);
+    }
+  });
 });
