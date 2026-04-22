@@ -59,7 +59,6 @@ Headings h1–h6: each has `-size`, `-weight`, `-style` (18 tokens total)
 | `blockSurfaces` | Theorem/proof/definition blocks | `--cf-fg`, all block/title tokens, per-type accents, nest 1-4, proof marker |
 | `tables` | Tables | `--cf-border`, all table tokens, code-font |
 | `tooltipAndHover` | Hover previews, crossref tooltips | `--cf-bg-overlay`, border-overlay, fg/muted/border, all preview tokens |
-| `export` | HTML/PDF export | All tokens (full `themeTokenNames` spread) |
 
 ## Theme sources
 

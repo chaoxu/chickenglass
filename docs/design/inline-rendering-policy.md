@@ -10,11 +10,11 @@ rendered, degraded, or disallowed.
 ### `document-body`
 
 Full document rendering. Used by the CM6 rich-mode viewport and the HTML
-export path (`markdownToHtml`). Lexical has its own renderers, but
-shared chrome/export callers should follow the same surface policy. All inline
+preview/read-mode path (`markdownToHtml`). Lexical has its own renderers, but
+shared chrome callers should follow the same surface policy. All inline
 and block constructs are rendered at full fidelity.
 
-**Consumers:** `markdownToHtml()` block-level walker, CM6 ViewPlugins for
+**Consumers:** `markdownToHtml()` preview/read-mode walker, CM6 ViewPlugins for
 paragraphs and list items.
 
 ### `document-inline`
@@ -24,8 +24,8 @@ document but structurally restricted to a single line. Links, citations, and
 cross-references remain interactive.
 
 **Consumers:**
-- Heading text in HTML export (`renderHeading` in `markdown-to-html.ts`)
-- Fenced div titles in HTML export (`renderFencedDiv` in `markdown-to-html.ts`)
+- Heading text in read-mode previews (`renderHeading` in `markdown-to-html.ts`)
+- Fenced div titles in read-mode previews (`renderFencedDiv` in `markdown-to-html.ts`)
 - Block header widgets in rich mode (`plugin-render.ts`)
 - Frontmatter title widget in rich mode (`frontmatter-state.ts`)
 
@@ -39,7 +39,6 @@ must be stable, single-line, and inert -- no interactive elements.
 - Breadcrumb labels (`breadcrumbs.tsx`)
 - Tab labels (planned)
 - Window title (planned)
-- Export metadata fields (planned)
 
 ## Node Type Policy Matrix
 
@@ -115,7 +114,7 @@ export function renderInline(
 ): string;
 ```
 
-Used by HTML export and React components that set
+Used by preview surfaces and React components that set
 `dangerouslySetInnerHTML` (outline, breadcrumbs).
 
 ### Policy selection helper (`src/inline-surface.ts`)

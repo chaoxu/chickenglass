@@ -2,7 +2,7 @@
  * Canonical KaTeX option builder.
  *
  * No dependency on CM6 or DOM — safe to use from both the CM6 renderer
- * (`inline-render.ts`) and the standalone HTML exporter (`markdown-to-html.ts`).
+ * (`inline-render.ts`) and the preview HTML renderer (`markdown-to-html.ts`).
  */
 
 import type { KatexOptions } from "katex";

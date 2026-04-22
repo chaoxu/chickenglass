@@ -3,7 +3,7 @@
  *
  * The ViewPlugin that rendered citations has been merged into the unified
  * `referenceRenderPlugin` in `../render/reference-render.ts`. This module
- * still exports everything needed by bibliography, HTML export, hover-preview,
+ * still exports everything needed by bibliography, preview rendering,
  * CSL processor, and the unified plugin itself.
  *
  * Supports:
@@ -11,8 +11,9 @@
  * - @id narrative citations: "Author (Year)"
  * - [@a; @b] multiple citations: "(Author1, Year1; Author2, Year2)"
  */
-import { SimpleTextReferenceWidget } from "../render/render-core";
+
 import { CSS } from "../constants/css-classes";
+import { SimpleTextReferenceWidget } from "../render/render-core";
 import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import type { BibStore } from "../state/bib-data";
 

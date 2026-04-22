@@ -29,7 +29,7 @@ Read these when you're working on a specific area:
 
 - **One app switches editor surfaces.** Coflats can switch at runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode.
 - **Markdown is the boundary format for Lexical.** CM6 edits markdown directly. Lexical edits a rich document model and serializes to Pandoc-flavored markdown at load/save boundaries.
-- **Lezer** is the shared markdown structure parser for Coflat's editor surface and shared semantic/export paths. Custom markdown extensions live in `src/parser/`.
+- **Lezer** is the shared markdown structure parser for Coflat's editor surface and shared semantic paths. Pandoc owns document export. Custom markdown extensions live in `src/parser/`.
 - **Rich modes are explicit.** CM6 rich mode is Typora-style source-backed rendering. Lexical mode is WYSIWYG editing with markdown serialization.
 - **Block plugins** (`src/plugins/`) define theorem/proof/definition environments as fenced divs. Each block type has a manifest entry, counter group, and render function.
 

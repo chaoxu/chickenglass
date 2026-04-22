@@ -1,13 +1,13 @@
 // Re-export canonical types from their source modules.
-export type { Tab } from "../tab-bar";
+
 export type { EditorMode } from "../../editor-display-mode";
+export type { Tab } from "../tab-bar";
 export type { Theme } from "../theme-manager";
 
 import type { EditorMode } from "../../editor-display-mode";
 import type { Theme } from "../theme-manager";
 
 export type ExportFormat = "pdf" | "latex" | "html";
-export type NativeExportFormat = Exclude<ExportFormat, "html">;
 
 /** UI-layer settings shape for the React shell. */
 export interface Settings {

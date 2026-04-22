@@ -422,8 +422,8 @@
   border-left-color: currentColor;
 }
 
-/* Display math: centered, no extra margin. Shared between CM6 decorations,
- * read mode, and HTML export — unscoped so all contexts inherit. */
+/* Display math: centered, no extra margin. Shared between CM6 decorations
+ * and read-mode preview surfaces, unscoped so all contexts inherit. */
 .cf-math-display {
   margin: 0;
   text-align: center;
@@ -916,9 +916,9 @@
 
 /* ── Fenced div blocks (theorem, proof, etc.) — shared by rich & read mode ──
  * Unscoped cf-block-* rules produced by both CM6 decorations (rich mode)
- * and markdownToHtml (read mode / HTML export). In rich mode, CM6's
+ * and markdownToHtml (read mode). In rich mode, CM6's
  * EditorView.theme auto-generates equivalent font-style rules under
- * .cm-editor scope; these globals serve read mode and HTML export.
+ * .cm-editor scope; these globals serve read mode.
  * Margin and proof ::after use :not(.cm-line) to avoid affecting CM6 lines. */
 .cf-block-theorem { font-style: var(--cf-block-theorem-style); }
 .cf-block-lemma { font-style: var(--cf-block-lemma-style); }
@@ -934,7 +934,7 @@
 .cf-block-figure { font-style: var(--cf-block-figure-style); }
 .cf-block-table { font-style: var(--cf-block-table-style); }
 
-/* Block margin — only on wrapper divs (read mode / HTML export), not on
+/* Block margin — only on wrapper divs (read mode), not on
  * CM6 .cm-line elements that carry the same cf-block-* class names.
  * All block divs carry the shared "cf-block" base class. */
 .cf-block:not(.cm-line) {
@@ -946,7 +946,7 @@
   position: relative;
 }
 
-/* QED tombstone at end of proof — outside CM6 only (read mode / HTML export).
+/* QED tombstone at end of proof — outside CM6 only (read mode).
  * Rich mode uses .cf-block-qed via CM6 line decoration on the last content
  * line instead. The :not(.cm-line) guard prevents this from firing on
  * CM6 line elements that carry the cf-block-proof class. */
@@ -988,7 +988,7 @@
   max-width: 100%;
 }
 
-/* Blockquote styling — cf-block-blockquote is unscoped (shared with export),
+/* Blockquote styling — cf-block-blockquote is unscoped (shared with read mode),
  * bare blockquote stays scoped to hover preview. */
 .cf-block-blockquote {
   border-left: 3px solid var(--cf-blockquote-border);

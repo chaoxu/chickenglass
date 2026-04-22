@@ -626,10 +626,16 @@ describe("#303 — boolean toggle field factory", () => {
 });
 
 describe("#309 — export theme tokens", () => {
-  it("export.ts resolves theme tokens for standalone HTML export", async () => {
-    const mod = await import("./export");
-    expect(mod._resolveExportThemeTokensForTest).toBeDefined();
-    expect(mod._buildHtmlDocumentForTest).toBeDefined();
+  it("HTML export no longer uses the standalone TypeScript renderer", async () => {
+    const mod = (await import("./export")) as Record<string, unknown>;
+    const exportFile = fileText("src/app/export.ts");
+
+    expect(mod.exportDocument).toBeDefined();
+    expect(exportFile).toContain("./tauri-client/export");
+    expect(exportFile).not.toContain("markdownToHtml");
+    expect(exportFile).not.toContain("buildHtmlDocument");
+    expect("_resolveExportThemeTokensForTest" in mod).toBe(false);
+    expect("_buildHtmlDocumentForTest" in mod).toBe(false);
   });
 });
 
@@ -1389,10 +1395,10 @@ describe("#316 — theme contract and surface token map", () => {
 
   it("separates theme DOM application from stateful theme orchestration", () => {
     const useTheme = fileText("src/app/hooks/use-theme.ts");
-    const exportFile = fileText("src/app/export.ts");
+    const themeConfig = fileText("src/editor/theme-config.ts");
 
     expect(useTheme).toContain("../theme-dom");
-    expect(exportFile).toContain("../theme-contract");
+    expect(themeConfig).toContain("../theme-contract");
   });
 });
 

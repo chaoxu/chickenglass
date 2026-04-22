@@ -13,8 +13,8 @@
  *   const bib = processor.bibliography(["karger2000"]);
  */
 
-import { type CslJsonItem } from "./bibtex-parser";
 import type { ReferenceIndexModel } from "../references/model";
+import { type CslJsonItem } from "./bibtex-parser";
 import defaultCslStyle from "./ieee.csl?raw";
 
 /**
@@ -446,7 +446,7 @@ function isCitationId(
  * citation-relevant ids and locators from each reference that has at least
  * one known bib entry.
  *
- * Used by both the CM6 editor (reference-render.ts) and the HTML exporter
+ * Used by both the CM6 editor (reference-render.ts) and preview renderer
  * (markdown-to-html.ts) before CSL registration, and by the bibliography
  * plugin to collect cited ids.
  */
@@ -567,7 +567,7 @@ export function collectCitationBacklinkIndexFromReferences(
 /**
  * Register citation matches with a CSL processor in document order.
  *
- * Both the CM6 editor (citation-render.ts) and the HTML exporter
+ * Both the CM6 editor (citation-render.ts) and preview renderer
  * (markdown-to-html.ts) need this step so numeric styles assign numbers
  * in document order. Extracted here to avoid duplication.
  */

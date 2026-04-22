@@ -1,123 +1,106 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryFileSystem, type FileSystem } from "./file-manager";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { resolveLocalImageOverridesMock } = vi.hoisted(() => ({
-  resolveLocalImageOverridesMock: vi.fn(),
+const { checkPandocCommandMock, exportDocumentCommandMock, isTauriMock } = vi.hoisted(() => ({
+  checkPandocCommandMock: vi.fn(),
+  exportDocumentCommandMock: vi.fn(),
+  isTauriMock: vi.fn(),
 }));
 
-vi.mock("./pdf-image-previews", () => ({
-  resolveLocalImageOverrides: resolveLocalImageOverridesMock,
+vi.mock("../lib/tauri", () => ({
+  isTauri: isTauriMock,
 }));
 
-import {
-  _buildHtmlDocumentForTest,
-  _buildHtmlDocumentAsyncForTest,
-  _resolveExportThemeTokensForTest,
-  _preprocessLatexExportForTest,
-  sanitizeCssValue,
-} from "./export";
+vi.mock("./tauri-client/export", () => ({
+  checkPandocCommand: checkPandocCommandMock,
+  exportDocumentCommand: exportDocumentCommandMock,
+}));
+
+import { _preprocessLatexExportForTest, exportDocument } from "./export";
 
 beforeEach(() => {
-  resolveLocalImageOverridesMock.mockReset();
-  resolveLocalImageOverridesMock.mockResolvedValue(new Map());
+  isTauriMock.mockReset();
+  checkPandocCommandMock.mockReset();
+  exportDocumentCommandMock.mockReset();
+
+  isTauriMock.mockReturnValue(true);
+  checkPandocCommandMock.mockResolvedValue("pandoc 3.9.0.2");
+  exportDocumentCommandMock.mockImplementation(
+    async (_content: string, _format: string, outputPath: string) => outputPath,
+  );
 });
 
-describe("resolveExportThemeTokens", () => {
-  const root = document.documentElement;
-  const touchedVars = [
-    "--cf-bg",
-    "--cf-fg",
-    "--cf-border",
-    "--cf-block-theorem-style",
-  ];
+describe("exportDocument", () => {
+  it("routes HTML export through the native Pandoc command", async () => {
+    const source = "---\ntitle: Paper\n---\n\n# Intro\n\n$$x^2$$ {#eq:x}";
 
-  afterEach(() => {
-    for (const name of touchedVars) {
-      root.style.removeProperty(name);
-    }
-  });
+    const outputPath = await exportDocument(source, "html", "notes/main.md");
 
-  it("falls back to light defaults when no theme override is present", () => {
-    const tokens = _resolveExportThemeTokensForTest();
-    expect(tokens["--cf-bg"]).toBe("#ffffff");
-    expect(tokens["--cf-fg"]).toBe("#09090b");
-    expect(tokens["--cf-block-theorem-style"]).toBe("italic");
-  });
-
-  it("reads resolved theme tokens from documentElement", () => {
-    root.style.setProperty("--cf-bg", "#101010");
-    root.style.setProperty("--cf-fg", "#fafafa");
-    root.style.setProperty("--cf-border", "#333333");
-
-    const tokens = _resolveExportThemeTokensForTest();
-    expect(tokens["--cf-bg"]).toBe("#101010");
-    expect(tokens["--cf-fg"]).toBe("#fafafa");
-    expect(tokens["--cf-border"]).toBe("#333333");
-  });
-});
-
-describe("buildHtmlDocument", () => {
-  it("uses theme CSS variables instead of hardcoded export colors", () => {
-    const html = _buildHtmlDocumentForTest(
-      "::: {.theorem} Title\nBody\n:::\n\nA [link](https://example.com).\n\n`code`",
-      "sample",
-    );
-
-    expect(html).toContain("--cf-bg: #ffffff;");
-    expect(html).toContain("color: var(--cf-fg);");
-    expect(html).toContain("background: var(--cf-hover);");
-    expect(html).toContain(".cf-block-theorem");
-    expect(html).toContain("font-style: var(--cf-block-theorem-style);");
-    expect(html).toContain("border-top: 1px solid var(--cf-border);");
-    expect(html).not.toContain("color: #111;");
-    expect(html).not.toContain("background: #fff;");
-    expect(html).not.toContain("border-left: 3px solid #4a9eff;");
-  });
-
-  it("feeds prepared PDF preview overrides into exported HTML", async () => {
-    const fs = {} as unknown as FileSystem;
-    resolveLocalImageOverridesMock.mockResolvedValue(new Map([
-      ["notes/fig.pdf", "data:image/png;base64,PDFPAGE1"],
-    ]));
-
-    const html = await _buildHtmlDocumentAsyncForTest(
-      "![Figure](fig.pdf)",
-      "sample",
-      fs,
+    expect(outputPath).toBe("notes/main.html");
+    expect(checkPandocCommandMock).toHaveBeenCalledOnce();
+    expect(exportDocumentCommandMock).toHaveBeenCalledWith(
+      source,
+      "html",
+      "notes/main.html",
       "notes/main.md",
     );
-
-    expect(resolveLocalImageOverridesMock).toHaveBeenCalledWith(
-      "![Figure](fig.pdf)",
-      fs,
-      "notes/main.md",
-    );
-    expect(html).toContain('<img src="data:image/png;base64,PDFPAGE1" alt="Figure">');
-    expect(html).not.toContain('<img src="fig.pdf" alt="Figure">');
   });
 
-  // Regression (#503): CSS values injected into the <style> block must not
-  // allow </style> breakout. Unit tests for sanitizeCssValue cover the
-  // stripping logic directly; this integration test verifies the serializer
-  // applies the sanitizer to all token values.
-  it("applies CSS sanitization to theme tokens in the style block", () => {
-    // jsdom's getComputedStyle may strip the value during set, so we verify
-    // that the serialization path calls sanitizeCssValue by checking a value
-    // that survives the round-trip but would be dangerous without sanitization.
-    const root = document.documentElement;
-    root.style.setProperty("--cf-bg", "red");
-    const html = _buildHtmlDocumentForTest("Hello", "test");
-    root.style.removeProperty("--cf-bg");
+  it("requires the desktop app for HTML export", async () => {
+    isTauriMock.mockReturnValue(false);
 
-    // The token should appear in the style block with its resolved value
-    expect(html).toContain("--cf-bg: red;");
-    expect(html).toContain("<style>");
+    await expect(exportDocument("# Intro", "html", "notes/main.md")).rejects.toThrow(
+      "Pandoc-backed export is not available in browser mode",
+    );
+
+    expect(checkPandocCommandMock).not.toHaveBeenCalled();
+    expect(exportDocumentCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("wraps missing Pandoc errors before invoking export", async () => {
+    checkPandocCommandMock.mockRejectedValue(new Error("ENOENT"));
+
+    await expect(exportDocument("# Intro", "html", "notes/main.md")).rejects.toThrow(
+      "Pandoc is not installed or not found in PATH",
+    );
+
+    expect(exportDocumentCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps LaTeX preprocessing and frontmatter options on LaTeX/PDF export", async () => {
+    const source = [
+      "---",
+      "bibliography: refs/project.bib",
+      "latex:",
+      "  template: lipics",
+      "  bibliography: refs/paper.bib",
+      "math:",
+      "  R: \"\\\\mathbb{R}\"",
+      "---",
+      "",
+      "\\begin{equation}\\label{eq:x}",
+      "x \\in \\R",
+      "\\end{equation}",
+    ].join("\n");
+
+    await exportDocument(source, "latex", "notes/main.md");
+
+    expect(exportDocumentCommandMock).toHaveBeenCalledOnce();
+    const [processed, format, outputPath, sourcePath, options] =
+      exportDocumentCommandMock.mock.calls[0] ?? [];
+    expect(format).toBe("latex");
+    expect(outputPath).toBe("notes/main.tex");
+    expect(sourcePath).toBe("notes/main.md");
+    expect(options).toEqual({
+      bibliography: "refs/paper.bib",
+      template: "lipics",
+    });
+    expect(processed).toContain("\\newcommand{\\R}{\\mathbb{R}}");
+    expect(processed).toContain("\\begin{equation}\\label{eq:x}");
   });
 });
 
 describe("preprocessLatexExport", () => {
   it("uses the canonical LaTeX preprocessing pipeline for desktop export", async () => {
-    const fs = new MemoryFileSystem({});
     const source = [
       "---",
       "math:",
@@ -131,43 +114,10 @@ describe("preprocessLatexExport", () => {
       "\\end{equation}",
     ].join("\n");
 
-    const processed = await _preprocessLatexExportForTest(source, "main.md", fs);
+    const processed = await _preprocessLatexExportForTest(source, "main.md");
 
     expect(processed).toContain("\\newcommand{\\R}{\\mathbb{R}}");
     expect(processed).toContain("\\begin{equation}\\label{eq:x}");
     expect(processed).toContain("\\end{equation}");
-  });
-});
-
-// ── sanitizeCssValue ────────────────────────────────────────────────────────
-//
-// Regression tests for CSS value injection in HTML export (issue #503).
-// Computed CSS values from getComputedStyle are interpolated into a <style>
-// block. A malicious value containing </style> could close the block and
-// inject arbitrary HTML.
-
-describe("sanitizeCssValue", () => {
-  it("passes through normal CSS values unchanged", () => {
-    expect(sanitizeCssValue("#ffffff")).toBe("#ffffff");
-    expect(sanitizeCssValue("italic")).toBe("italic");
-    expect(sanitizeCssValue("0.5rem 1rem")).toBe("0.5rem 1rem");
-    expect(sanitizeCssValue('"Helvetica Neue", sans-serif')).toBe('"Helvetica Neue", sans-serif');
-  });
-
-  it("strips </style> sequences to prevent breakout", () => {
-    expect(sanitizeCssValue("</style><script>alert(1)</script>")).toBe("<script>alert(1)</script>");
-  });
-
-  it("strips </style> case-insensitively", () => {
-    expect(sanitizeCssValue("</STYLE><script>alert(1)</script>")).toBe("<script>alert(1)</script>");
-    expect(sanitizeCssValue("</Style>")).toBe("");
-  });
-
-  it("strips multiple </style> occurrences", () => {
-    expect(sanitizeCssValue("a</style>b</style>c")).toBe("abc");
-  });
-
-  it("returns empty string for empty input", () => {
-    expect(sanitizeCssValue("")).toBe("");
   });
 });

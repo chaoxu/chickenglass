@@ -171,8 +171,8 @@ describe("markdownToHtml", () => {
   it("renders blockquotes as <blockquote> HTML", () => {
     // Regression (#399): the HTML renderer must parse standard `>` blockquote
     // syntax into Blockquote nodes. The editor parser strips blockquotes
-    // (removeBlockquote) since it uses fenced divs, but the HTML export /
-    // hover preview path must handle `>` syntax from content.
+    // (removeBlockquote) since it uses fenced divs, but preview surfaces must
+    // handle `>` syntax from imported content.
     const html = markdownToHtml("> This is a quote\n> Second line");
     expect(html).toContain("<blockquote>");
     expect(html).toContain("</blockquote>");
@@ -397,7 +397,7 @@ describe("markdownToHtml", () => {
     expect(html).not.toContain('class="bib-entry"');
   });
 
-  it("uses CSL formatting for exported citations and bibliography when provided", () => {
+  it("uses CSL formatting for preview citations and bibliography when provided", () => {
     const entry: CslJsonItem = {
       id: "karger2000",
       type: "article-journal",
@@ -460,9 +460,9 @@ describe("markdownToHtml", () => {
   });
 
   // Regression (#482): CSL bibliography HTML must be sanitized before
-  // interpolation into the HTML export. A malicious BibTeX entry could
+  // interpolation into preview HTML. A malicious BibTeX entry could
   // inject <script> or event handlers via CSL output.
-  it("sanitizes malicious CSL bibliography HTML in export output", () => {
+  it("sanitizes malicious CSL bibliography HTML in preview output", () => {
     const entry: CslJsonItem = {
       id: "evil2024",
       type: "article-journal",

@@ -5,7 +5,7 @@
 - **Pandoc-free editing loop**: Pandoc is only for export. CM6 edits markdown through Lezer + KaTeX directly. Lexical edits a document model and serializes Pandoc-flavored markdown at the boundary.
 - **Editor surfaces are runtime-selected**: Coflats has one app shell, file IO layer, semantics pipeline, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 or Lexical editor surfaces, not in duplicated app flows.
 - **No in-app read mode**: The app exposes CM6 rich, Lexical WYSIWYG, and source modes. Do not implement, fix, or test a separate read-mode surface.
-- **HTML export is separate from editing modes**: `markdown-to-html.ts` is a standalone Lezer tree walker with no CM6 dependency. Keep it CM6-free -- pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
+- **HTML export is Pandoc-owned**: HTML/PDF/LaTeX export goes through the native Pandoc command boundary. `markdown-to-html.ts` is only for in-app preview/read-style surfaces; keep it CM6-free and pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
 - **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem." Render-specific behavior follows the [Plugin Render Contract](./plugin-render-contract.md).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
 
@@ -26,7 +26,7 @@
 ## Future direction
 
 - **AI features must consume structured document data**: Future document QA and AI authoring features should consume a structured document IR derived from Lezer + Coflat semantics, not raw markdown, regex extraction, editor DOM, or ad hoc CM6 view state. The IR should stay plain-data and CM6-free. See [Document IR](./document-ir.md).
-- **Do not re-platform read/export markdown lightly**: Do not treat a full `remark`/`rehype` rewrite as a default cleanup. It is a replatforming project, not a routine library swap. Narrow hardening swaps are preferred first.
+- **Do not re-platform preview markdown lightly**: Do not treat a full `remark`/`rehype` rewrite as a default cleanup for in-app preview surfaces. It is a replatforming project, not a routine library swap. Narrow hardening swaps are preferred first.
 
 ## Library preferences
 

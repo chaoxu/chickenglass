@@ -69,7 +69,7 @@ export interface ConditionalWriteResult {
  *
  * Mirrors `NumberedBlock` from the CM6 block-counter state field but without
  * position data — only the fields needed for label formatting. Lives here so
- * that both the CM6-free HTML export path (`markdown-to-html.ts`) and the
+ * that both the CM6-free preview renderer (`markdown-to-html.ts`) and the
  * editor render layer can share the type without crossing the `src/app/`
  * boundary.
  */

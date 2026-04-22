@@ -1,28 +1,18 @@
 /**
  * PDF/LaTeX/HTML export.
  *
- * - PDF and LaTeX: invoked via the Tauri `export_document` command
- *   (spawns Pandoc from the Rust backend; content passed via stdin).
- * - HTML: self-contained, generated directly in TypeScript with
- *   proper semantic HTML (headings, lists, math via KaTeX, fenced divs).
+ * All formats are invoked via the Tauri `export_document` command, which
+ * spawns Pandoc from the Rust backend and passes document content via stdin.
  */
 
-import { isTauri } from "../lib/tauri";
-import { parseFrontmatter } from "../parser/frontmatter";
 import { resolveLatexExportOptions } from "../latex/export-options.mjs";
 import { preprocessWithReadFile } from "../latex/preprocess-core.mjs";
-import { measureAsync } from "./perf";
-import type { FileSystem, FileEntry } from "./file-manager";
-import {
-  markdownToHtml,
-  escapeHtml,
-  type MarkdownToHtmlOptions,
-} from "./markdown-to-html";
+import { isTauri } from "../lib/tauri";
+import { parseFrontmatter } from "../parser/frontmatter";
+import type { FileEntry, FileSystem } from "./file-manager";
 import type { ExportFormat } from "./lib/types";
-import { basename } from "./lib/utils";
-import { exportThemeTokenDefaults } from "../theme-contract";
+import { measureAsync } from "./perf";
 import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
-import { resolveLocalImageOverrides } from "./pdf-image-previews";
 
 export type { ExportFormat };
 
@@ -51,303 +41,20 @@ function deriveOutputPath(sourcePath: string, format: ExportFormat): string {
   return sourcePath + ext;
 }
 
-/**
- * Build a self-contained HTML document from markdown content.
- *
- * Parses the markdown and renders proper semantic HTML:
- * - Headings, paragraphs, lists (ordered, unordered, task lists)
- * - Math via KaTeX (inline and display)
- * - Fenced divs as semantic `<div class="cf-block cf-block-theorem">` etc.
- * - Code blocks, blockquotes, tables, horizontal rules
- * - Inline formatting: bold, italic, strikethrough, highlight, code
- *
- * Includes a minimal stylesheet and links KaTeX CSS for math rendering.
- */
-function buildHtmlDocument(
-  content: string,
-  title: string,
-  htmlOptions?: Pick<MarkdownToHtmlOptions, "documentPath" | "imageUrlOverrides">,
-): string {
-  const bodyHtml = markdownToHtml(content, htmlOptions);
-  const themeTokens = serializeExportThemeTokens({
-    ...resolveExportThemeTokens(),
-  });
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <style>
-    :root {
-${themeTokens}
-    }
-    /* Document typography */
-    body {
-      font-family: var(--cf-content-font);
-      font-size: 16px;
-      line-height: 1.7;
-      max-width: 800px;
-      margin: 3rem auto;
-      padding: 0 1.5rem;
-      color: var(--cf-fg);
-      background: var(--cf-bg);
-    }
-    h1, h2, h3, h4, h5, h6 {
-      font-family: var(--cf-ui-font);
-      margin-top: 2rem;
-      margin-bottom: 0.5rem;
-      color: var(--cf-fg);
-    }
-    a {
-      color: var(--cf-fg);
-      text-decoration: none;
-      border-bottom: 1px dotted var(--cf-muted);
-    }
-    .katex {
-      color: inherit;
-      font-size: inherit;
-    }
-    pre {
-      font-family: var(--cf-code-font);
-      background: var(--cf-hover);
-      border: 1px solid var(--cf-border);
-      padding: 1rem;
-      overflow-x: auto;
-      border-radius: 0;
-    }
-    code {
-      font-family: var(--cf-code-font);
-      font-size: 0.85em;
-      background: var(--cf-hover);
-      padding: 0.15em 0.35em;
-
-      border-radius: var(--cf-border-radius);
-    }
-    pre code {
-      background: none;
-      padding: 0;
-    }
-    blockquote {
-      margin-left: 0;
-      padding-left: 1em;
-      border-left: 3px solid var(--cf-blockquote-border);
-      color: var(--cf-blockquote-color);
-    }
-    ul, ol {
-      padding-left: 1.5em;
-      margin: 0.8em 0;
-      list-style-position: outside;
-    }
-    ul {
-      list-style-type: disc;
-    }
-    ol {
-      list-style-type: decimal;
-    }
-    li {
-      display: list-item;
-      margin: 0.2em 0;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 1.5rem 0;
-      font-size: var(--cf-table-font-size, 0.9em);
-    }
-    th, td {
-      border: 1px solid var(--cf-table-border);
-      padding: var(--cf-table-cell-padding);
-      line-height: var(--cf-table-line-height, 1.5);
-      text-align: left;
-    }
-    th {
-      font-weight: 600;
-      border-bottom: 2px solid var(--cf-table-header-border);
-      background: var(--cf-subtle);
-    }
-    hr {
-      border: none;
-      border-top: 1px solid var(--cf-border);
-      margin: 2rem 0;
-    }
-    mark {
-      background: var(--cf-mark-bg);
-      padding: 0.1em 0.2em;
-      border-radius: var(--cf-border-radius);
-    }
-    /* Inline formatting — cf-* classes shared with CM6 rich mode */
-    .cf-bold { font-weight: 700; }
-    .cf-italic { font-style: italic; }
-    .cf-strikethrough { text-decoration: line-through; }
-    .cf-highlight {
-      background: var(--cf-mark-bg);
-      padding: 0.1em 0.2em;
-      border-radius: var(--cf-border-radius);
-    }
-    .cf-inline-code {
-      font-family: var(--cf-code-font);
-      font-size: 0.85em;
-      background: var(--cf-hover);
-      padding: 0.15em 0.35em;
-      border-radius: var(--cf-border-radius);
-    }
-    .cf-math-display {
-      margin: 0;
-      text-align: center;
-    }
-    .cf-math-display-numbered {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      align-items: center;
-      text-align: initial;
-    }
-    .cf-math-display-content {
-      display: inline-block;
-    }
-    .cf-math-display-numbered > .cf-math-display-content {
-      grid-column: 2;
-    }
-    .cf-math-display-number {
-      grid-column: 3;
-      justify-self: end;
-      padding-left: 1rem;
-      white-space: nowrap;
-      font-style: normal;
-      font-variant-numeric: tabular-nums;
-    }
-    .cf-math-display .katex-display {
-      margin: 0;
-    }
-    .cf-block-theorem { font-style: var(--cf-block-theorem-style); margin: var(--cf-block-margin); }
-    .cf-block-lemma { font-style: var(--cf-block-lemma-style); margin: var(--cf-block-margin); }
-    .cf-block-corollary { font-style: var(--cf-block-corollary-style); margin: var(--cf-block-margin); }
-    .cf-block-proposition { font-style: var(--cf-block-proposition-style); margin: var(--cf-block-margin); }
-    .cf-block-conjecture { font-style: var(--cf-block-conjecture-style); margin: var(--cf-block-margin); }
-    .cf-block-definition { font-style: var(--cf-block-definition-style); margin: var(--cf-block-margin); }
-    .cf-block-problem { font-style: var(--cf-block-problem-style); margin: var(--cf-block-margin); }
-    .cf-block-example { font-style: var(--cf-block-example-style); margin: var(--cf-block-margin); }
-    .cf-block-remark, .cf-block-note { font-style: var(--cf-block-remark-style); margin: var(--cf-block-margin); }
-    .cf-block-proof {
-      font-style: var(--cf-block-proof-style);
-      margin: var(--cf-block-margin);
-      position: relative;
-    }
-    .cf-block-proof::after {
-      content: var(--cf-proof-marker);
-      color: var(--cf-proof-marker-color);
-      font-size: var(--cf-proof-marker-size);
-      float: right;
-    }
-    .cf-block-header-rendered {
-      display: var(--cf-block-title-display);
-      font-weight: var(--cf-block-title-weight);
-      color: var(--cf-block-title-color);
-      font-style: normal;
-    }
-    .cf-block-header-rendered::after {
-      content: var(--cf-block-title-separator);
-    }
-    .cross-ref {
-      color: var(--cf-fg);
-      text-decoration: none;
-      border-bottom: 1px dashed var(--cf-muted);
-    }
-    .cross-ref:hover {
-      border-bottom-style: solid;
-    }
-    .footnote {
-      font-size: 0.85em;
-      color: var(--cf-muted);
-      padding: 0.25rem 0;
-      border-top: 1px solid var(--cf-border);
-      margin-top: 0.5rem;
-    }
-    .math-error {
-      color: var(--cf-math-error-fg);
-      background: var(--cf-math-error-bg);
-    }
-    input[type="checkbox"] {
-      margin-right: 0.4em;
-    }
-  </style>
-</head>
-<body>
-${bodyHtml}
-</body>
-</html>`;
-}
-
-async function buildHtmlDocumentWithResolvedImages(
-  content: string,
-  title: string,
-  fs?: FileSystem,
-  documentPath = "",
-): Promise<string> {
-  const imageUrlOverrides = await resolveLocalImageOverrides(content, fs, documentPath);
-  return buildHtmlDocument(content, title, {
-    documentPath,
-    imageUrlOverrides,
-  });
-}
-
-function resolveExportThemeTokens(): Record<string, string> {
-  const tokens: Record<string, string> = {};
-  for (const [name, fallback] of Object.entries(exportThemeTokenDefaults)) {
-    tokens[name] = resolveExportCssValue(name, fallback);
-  }
-  return tokens;
-}
-
-function resolveExportCssValue(variableName: string, fallback: string): string {
-  if (typeof window === "undefined" || typeof getComputedStyle !== "function") {
-    return fallback;
-  }
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(variableName)
-    .trim();
-  return value || fallback;
-}
-
-/**
- * Sanitize a CSS value for safe interpolation inside a `<style>` block.
- *
- * Strips any `</style...>` sequence (case-insensitive) to prevent an attacker
- * from closing the style element and injecting arbitrary HTML. The regex
- * matches the full closing tag: `</style` + optional whitespace/attributes + `>`.
- */
-export function sanitizeCssValue(value: string): string {
-  // Remove </style> closing tags (case-insensitive) that could close the style block.
-  // Matches </style followed by optional whitespace/attributes and the closing >.
-  return value.replace(/<\/style\s*[^>]*>/gi, "");
-}
-
-function serializeExportThemeTokens(tokens: Record<string, string>): string {
-  return Object.entries(tokens)
-    .map(([name, value]) => `      ${name}: ${sanitizeCssValue(value)};`)
-    .join("\n");
-}
-
-export const _buildHtmlDocumentForTest = buildHtmlDocument;
-export const _buildHtmlDocumentAsyncForTest = buildHtmlDocumentWithResolvedImages;
-export const _resolveExportThemeTokensForTest = resolveExportThemeTokens;
 export const _preprocessLatexExportForTest = preprocessLatexExport;
 
 /**
  * Export a document to PDF, LaTeX, or HTML.
  *
- * - PDF/LaTeX: requires Tauri desktop app and Pandoc.
- * - HTML: works in both browser and Tauri modes; produces a self-contained
- *   file that can be opened directly in a browser.
+ * All formats require the Tauri desktop app and Pandoc. HTML export uses
+ * Pandoc directly instead of Coflat's in-app preview renderer.
  *
  * @param content - The full markdown content to export.
  * @param format - Target format: "pdf", "latex", or "html".
  * @param sourcePath - Path of the source .md file (used to derive output path).
- * @param fs - FileSystem to write the HTML output (only needed for "html" format).
+ * @param fs - Optional FileSystem used by LaTeX preprocessing helpers.
  * @returns The output file path on success.
- * @throws If not running in Tauri for pdf/latex, if Pandoc is missing, or if export fails.
+ * @throws If not running in Tauri, if Pandoc is missing, or if export fails.
  */
 export async function exportDocument(
   content: string,
@@ -355,19 +62,13 @@ export async function exportDocument(
   sourcePath: string,
   fs?: FileSystem,
 ): Promise<string> {
-  if (format === "html") {
-    return exportHtml(content, sourcePath, fs);
-  }
-
-  // PDF and LaTeX require Tauri + Pandoc
   if (!isTauri()) {
     throw new Error(
       "Export requires the Coflat desktop app. " +
-        "PDF/LaTeX export is not available in browser mode.",
+        "Pandoc-backed export is not available in browser mode.",
     );
   }
 
-  // Check that Pandoc is available
   try {
     await checkPandoc();
   } catch (e) {
@@ -379,11 +80,14 @@ export async function exportDocument(
   }
 
   const outputPath = deriveOutputPath(sourcePath, format);
+  if (format === "html") {
+    return exportDocumentCommand(content, format, outputPath, sourcePath);
+  }
+
   const latexOptions = resolveLatexExportOptions({
     config: parseFrontmatter(content).config,
   });
   const latexContent = await preprocessLatexExport(content, sourcePath, fs);
-
   return exportDocumentCommand(latexContent, format, outputPath, sourcePath, latexOptions);
 }
 
@@ -393,53 +97,6 @@ async function preprocessLatexExport(
   _fs?: FileSystem,
 ): Promise<string> {
   return preprocessWithReadFile(content);
-}
-
-/**
- * Export markdown content to a self-contained HTML file.
- *
- * In Tauri mode the file is written to disk via the filesystem backend.
- * In browser mode the file is offered as a download via the browser's
- * Blob/URL download mechanism (no filesystem access required).
- *
- * @param content - Markdown source content.
- * @param sourcePath - Path of the source .md file (used to derive the output path).
- * @param fs - FileSystem to write the output (only used in Tauri mode).
- * @returns The output path (absolute in Tauri, derived name in browser).
- */
-async function exportHtml(
-  content: string,
-  sourcePath: string,
-  fs?: FileSystem,
-): Promise<string> {
-  const name = basename(sourcePath);
-  const title = name.endsWith(".md") ? name.slice(0, -3) : name;
-  const html = await buildHtmlDocumentWithResolvedImages(content, title, fs, sourcePath);
-  const outputPath = deriveOutputPath(sourcePath, "html");
-
-  if (isTauri() && fs) {
-    // Write to disk via Tauri filesystem
-    try {
-      await fs.writeFile(outputPath, html);
-    } catch (_e) {
-      // best-effort: writeFile fails if the file doesn't exist yet — fall back to createFile
-      await fs.createFile(outputPath, html);
-    }
-    return outputPath;
-  }
-
-  // Browser fallback: trigger a file download
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = basename(outputPath);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  return outputPath;
 }
 
 /** Progress callback for batch export operations. */
@@ -453,7 +110,7 @@ export type BatchExportProgress = (completed: number, total: number, currentPath
  *
  * @param tree - The project file tree root entry.
  * @param format - Target format for all files.
- * @param fs - FileSystem used to read file contents (and write HTML output).
+ * @param fs - FileSystem used to read file contents.
  * @param onProgress - Optional callback invoked after each file is exported.
  * @returns Results for each file: `{ path, outputPath }` on success or
  *          `{ path, error }` on failure.

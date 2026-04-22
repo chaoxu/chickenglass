@@ -3,9 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use tauri::{State, WebviewWindow, command};
+use tauri::{command, State, WebviewWindow};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::context::{run_command, CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::ProjectPathResolver;
 
@@ -40,7 +40,6 @@ pub fn check_pandoc(perf: State<'_, PerfState>) -> Result<String, String> {
     })
 }
 
-/// Export a markdown document to PDF or LaTeX via Pandoc.
 fn resolve_export_output_path(
     paths: &ProjectPathResolver,
     output_path: &str,
@@ -154,6 +153,51 @@ fn build_latex_pandoc_args(
     Ok(args)
 }
 
+fn build_html_pandoc_args(
+    project_root: &Path,
+    source_dir: &Path,
+    output_path: &Path,
+) -> Result<Vec<String>, String> {
+    let resource_path = build_pandoc_resource_path(project_root, source_dir)?;
+    Ok(vec![
+        format!("--from={}", LATEX_PANDOC_FROM),
+        "--to=html5".to_string(),
+        "--standalone".to_string(),
+        "--wrap=preserve".to_string(),
+        "--katex".to_string(),
+        "--section-divs".to_string(),
+        "--filter=pandoc-crossref".to_string(),
+        "--citeproc".to_string(),
+        "--metadata=link-citations=true".to_string(),
+        format!("--resource-path={}", resource_path.to_string_lossy()),
+        format!("--output={}", output_path.to_string_lossy()),
+    ])
+}
+
+fn build_pandoc_args(
+    paths: &ProjectPathResolver,
+    project_root: &Path,
+    source_dir: &Path,
+    output_path: &Path,
+    format: &str,
+    template: Option<&str>,
+    bibliography: Option<&str>,
+) -> Result<Vec<String>, String> {
+    match format {
+        "pdf" | "latex" => build_latex_pandoc_args(
+            paths,
+            project_root,
+            source_dir,
+            output_path,
+            format,
+            template,
+            bibliography,
+        ),
+        "html" => build_html_pandoc_args(project_root, source_dir, output_path),
+        _ => Err(format!("Unsupported export format: {}", format)),
+    }
+}
+
 #[command]
 pub fn export_document(
     window: WebviewWindow,
@@ -174,7 +218,7 @@ pub fn export_document(
             let project_root = paths.resolve_project_path("")?;
             let output_path = resolve_export_output_path(&paths, &output_path)?;
             let source_dir = resolve_export_source_dir(&paths, &project_root, &source_path)?;
-            let args = build_latex_pandoc_args(
+            let args = build_pandoc_args(
                 &paths,
                 &project_root,
                 &source_dir,
@@ -217,9 +261,9 @@ pub fn export_document(
 #[cfg(test)]
 mod tests {
     use super::{
-        LATEX_PANDOC_FROM, bibliography_metadata_value, build_latex_pandoc_args,
-        build_pandoc_resource_path, resolve_export_output_path, resolve_export_source_dir,
-        resolve_latex_template,
+        bibliography_metadata_value, build_html_pandoc_args, build_latex_pandoc_args,
+        build_pandoc_args, build_pandoc_resource_path, resolve_export_output_path,
+        resolve_export_source_dir, resolve_latex_template, LATEX_PANDOC_FROM,
     };
     use crate::services::path::ProjectPathResolver;
     use std::fs;
@@ -427,10 +471,9 @@ mod tests {
         assert!(args.contains(&"--wrap=preserve".to_string()));
         assert!(args.contains(&"--syntax-highlighting=none".to_string()));
         assert!(args.iter().any(|arg| arg.ends_with("src/latex/filter.lua")));
-        assert!(
-            args.iter()
-                .any(|arg| arg.ends_with("src/latex/template/lipics.tex"))
-        );
+        assert!(args
+            .iter()
+            .any(|arg| arg.ends_with("src/latex/template/lipics.tex")));
         assert!(args.iter().any(|arg| arg.starts_with("--resource-path=")));
         assert!(args.iter().any(|arg| arg.starts_with("--output=")));
         assert!(args.contains(&"--metadata=bibliography=project".to_string()));
@@ -462,12 +505,67 @@ mod tests {
     }
 
     #[test]
+    fn builds_canonical_html_pandoc_args() {
+        let project_root = create_temp_dir("export-root");
+        let source_dir = project_root.join("notes");
+        fs::create_dir_all(&source_dir).expect("create source dir");
+        let output_path = project_root.join("out.html");
+
+        let args =
+            build_html_pandoc_args(&project_root, &source_dir, &output_path).expect("html args");
+
+        assert_eq!(args[0], format!("--from={}", LATEX_PANDOC_FROM));
+        assert!(args.contains(&"--to=html5".to_string()));
+        assert!(args.contains(&"--standalone".to_string()));
+        assert!(args.contains(&"--wrap=preserve".to_string()));
+        assert!(args.contains(&"--katex".to_string()));
+        assert!(args.contains(&"--section-divs".to_string()));
+        assert!(args.contains(&"--filter=pandoc-crossref".to_string()));
+        assert!(args.contains(&"--citeproc".to_string()));
+        assert!(args.contains(&"--metadata=link-citations=true".to_string()));
+        assert!(args.iter().any(|arg| arg.starts_with("--resource-path=")));
+        assert!(args.iter().any(|arg| arg.starts_with("--output=")));
+        assert!(!args.iter().any(|arg| arg.starts_with("--template=")));
+        assert!(!args.iter().any(|arg| arg.starts_with("--lua-filter=")));
+        assert!(!args.contains(&"--pdf-engine=xelatex".to_string()));
+
+        fs::remove_dir_all(&project_root).expect("remove project root");
+    }
+
+    #[test]
+    fn dispatches_html_export_to_html_pandoc_args() {
+        let project_root = create_temp_dir("export-root");
+        let output_path = project_root.join("out.html");
+        let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
+
+        let args = build_pandoc_args(
+            &paths,
+            &project_root,
+            &project_root,
+            &output_path,
+            "html",
+            Some("lipics"),
+            Some("refs/project.bib"),
+        )
+        .expect("pandoc args");
+
+        assert!(args.contains(&"--to=html5".to_string()));
+        assert!(!args.iter().any(|arg| arg.ends_with("src/latex/filter.lua")));
+        assert!(!args
+            .iter()
+            .any(|arg| arg.ends_with("src/latex/template/lipics.tex")));
+        assert!(!args.contains(&"--metadata=bibliography=project".to_string()));
+
+        fs::remove_dir_all(&project_root).expect("remove project root");
+    }
+
+    #[test]
     fn rejects_unsupported_export_formats() {
         let project_root = create_temp_dir("export-root");
         let output_path = project_root.join("out.docx");
         let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
-        let error = build_latex_pandoc_args(
+        let error = build_pandoc_args(
             &paths,
             &project_root,
             &project_root,
