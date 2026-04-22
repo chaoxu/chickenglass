@@ -10,7 +10,7 @@
  */
 
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
@@ -165,7 +165,7 @@ function createTestState(doc: string): EditorState {
 /** Collect all node names from the syntax tree of a state. */
 function getNodeNames(state: EditorState): string[] {
   const names: string[] = [];
-  syntaxTree(state).iterate({
+  completeSyntaxTree(state).iterate({
     enter(node) {
       names.push(node.name);
     },
@@ -176,7 +176,7 @@ function getNodeNames(state: EditorState): string[] {
 /** Find the first node with a given name and return its source text. */
 function findNodeText(state: EditorState, name: string): string | undefined {
   let result: string | undefined;
-  syntaxTree(state).iterate({
+  completeSyntaxTree(state).iterate({
     enter(node) {
       if (result !== undefined) return false;
       if (node.name === name) {
@@ -191,7 +191,7 @@ function findNodeText(state: EditorState, name: string): string | undefined {
 /** Count occurrences of a node name in the syntax tree. */
 function countNodes(state: EditorState, name: string): number {
   let count = 0;
-  syntaxTree(state).iterate({
+  completeSyntaxTree(state).iterate({
     enter(node) {
       if (node.name === name) count++;
     },
@@ -202,6 +202,14 @@ function countNodes(state: EditorState, name: string): number {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 const masterState = createTestState(MASTER_FIXTURE);
+
+function completeSyntaxTree(state: EditorState) {
+  const tree = ensureSyntaxTree(state, state.doc.length, 5000);
+  if (tree === null) {
+    throw new Error("FORMAT.md coverage fixture did not finish parsing");
+  }
+  return tree;
+}
 
 describe("FORMAT.md coverage: Frontmatter", () => {
   it("parses title from frontmatter", () => {
@@ -676,7 +684,7 @@ describe("FORMAT.md coverage: Links", () => {
     // Find all Link nodes; the cross-references ([@...]) also parse as Links,
     // so we search for the one containing the actual URL.
     const linkTexts: string[] = [];
-    syntaxTree(masterState).iterate({
+    completeSyntaxTree(masterState).iterate({
       enter(node) {
         if (node.name === "Link") {
           linkTexts.push(masterState.doc.sliceString(node.from, node.to));
