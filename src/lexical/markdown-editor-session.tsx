@@ -43,6 +43,7 @@ import {
   mapVisibleTextOffsetToMarkdown,
   readSourceSelectionFromLexicalSelection,
   scrollSourcePositionIntoView,
+  selectSourceOffsetsInRichLexicalNode,
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-position-plugin";
 import {
@@ -711,17 +712,35 @@ export function MarkdownEditorHandlePlugin({
       const syncOptions = {
         tag: [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG],
       };
-      const appliedIncrementally = previousDoc !== null
-        && applyIncrementalRichDocumentSync(editor, previousDoc, nextDoc, syncOptions);
-      if (!appliedIncrementally) {
+      const incrementalSyncResult = previousDoc !== null
+        ? applyIncrementalRichDocumentSync(editor, previousDoc, nextDoc, syncOptions)
+        : { applied: false as const };
+      if (!incrementalSyncResult.applied) {
         setLexicalMarkdown(editor, nextDoc, syncOptions);
       }
-      const moved = selectSourceOffsetsInRichLexicalRoot(
-        editor,
-        nextDoc,
-        nextSelection.anchor,
-        nextSelection.focus,
-      );
+      let moved = false;
+      if (
+        incrementalSyncResult.applied
+        && nextSelection.from >= incrementalSyncResult.blockFrom
+        && nextSelection.to <= incrementalSyncResult.nextBlockTo
+      ) {
+        moved = selectSourceOffsetsInRichLexicalNode(
+          editor,
+          incrementalSyncResult.nodeKey,
+          incrementalSyncResult.nextBlockSource,
+          incrementalSyncResult.blockFrom,
+          nextSelection.anchor,
+          nextSelection.focus,
+        );
+      }
+      if (!moved) {
+        moved = selectSourceOffsetsInRichLexicalRoot(
+          editor,
+          nextDoc,
+          nextSelection.anchor,
+          nextSelection.focus,
+        );
+      }
       selectionSnapshotFreshRef.current = moved;
       richSelectionDomInsertFailedRef.current = !moved;
       canonicalFallbackSelectionRef.current = moved ? null : nextSelection;

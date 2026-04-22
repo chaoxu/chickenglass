@@ -1,5 +1,6 @@
 import {
   $createRangeSelection,
+  $getNodeByKey,
   $getRoot,
   $getSelection,
   $isElementNode,
@@ -32,6 +33,7 @@ import {
 } from "./pending-surface-focus";
 import { sourcePositionFromElement } from "./source-position-dom";
 import {
+  createNodeSourceSpanIndex,
   createSourceSpanIndex,
   type SourceLocation,
   type SourceSpanIndex,
@@ -343,12 +345,61 @@ export function selectSourceOffsetsInRichLexicalRoot(
   focus = anchor,
   options: SelectSourceOffsetsOptions = {},
 ): boolean {
+  return selectSourceOffsetsWithSpanIndex(
+    editor,
+    () => createSourceSpanIndex(markdown),
+    anchor,
+    focus,
+    options,
+  );
+}
+
+export function selectSourceOffsetsInRichLexicalNode(
+  editor: LexicalEditor,
+  nodeKey: string,
+  markdownFragment: string,
+  sourceOffset: number,
+  anchor: number,
+  focus = anchor,
+  options: SelectSourceOffsetsOptions = {},
+): boolean {
+  const sourceEnd = sourceOffset + markdownFragment.length;
+  if (
+    anchor < sourceOffset
+    || anchor > sourceEnd
+    || focus < sourceOffset
+    || focus > sourceEnd
+  ) {
+    return false;
+  }
+  return selectSourceOffsetsWithSpanIndex(
+    editor,
+    () => {
+      const node = $getNodeByKey(nodeKey);
+      return node ? createNodeSourceSpanIndex(node, markdownFragment, sourceOffset) : null;
+    },
+    anchor,
+    focus,
+    options,
+  );
+}
+
+function selectSourceOffsetsWithSpanIndex(
+  editor: LexicalEditor,
+  createSpanIndex: () => SourceSpanIndex | null,
+  anchor: number,
+  focus: number,
+  options: SelectSourceOffsetsOptions,
+): boolean {
   let didSelect = false;
   let pendingRevealRequest: CursorRevealOpenRequest | null = null;
   let pendingStructureEditRequest: ActivateStructureEditRequest | null = null;
   editor.update(() => {
     const collapsed = anchor === focus;
-    const spanIndex = createSourceSpanIndex(markdown);
+    const spanIndex = createSpanIndex();
+    if (!spanIndex) {
+      return;
+    }
     const directAnchorLocation = spanIndex.findNearestLocation(anchor);
     const directFocusLocation = collapsed
       ? directAnchorLocation

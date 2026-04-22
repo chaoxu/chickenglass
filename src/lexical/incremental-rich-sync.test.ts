@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyIncrementalRichDocumentSync,
+  type IncrementalRichDocumentSyncResult,
 } from "./incremental-rich-sync";
 import {
   createHeadlessCoflatEditor,
@@ -17,13 +18,13 @@ function readTopLevelKeys(editor: ReturnType<typeof createHeadlessCoflatEditor>)
 }
 
 function applyIncrementalChange(previousMarkdown: string, nextMarkdown: string): {
-  readonly applied: boolean;
+  readonly result: IncrementalRichDocumentSyncResult;
   readonly editor: ReturnType<typeof createHeadlessCoflatEditor>;
 } {
   const editor = createHeadlessCoflatEditor();
   setLexicalMarkdown(editor, previousMarkdown);
   return {
-    applied: applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown),
+    result: applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown),
     editor,
   };
 }
@@ -36,9 +37,15 @@ describe("applyIncrementalRichDocumentSync", () => {
     setLexicalMarkdown(editor, previousMarkdown);
     const previousKeys = readTopLevelKeys(editor);
 
-    const applied = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
 
-    expect(applied).toBe(true);
+    expect(result).toMatchObject({
+      applied: true,
+      blockFrom: 0,
+      blockTo: "Alpha beta.".length,
+      nextBlockSource: "Alpha gamma.",
+      nextBlockTo: "Alpha gamma.".length,
+    });
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
     const nextKeys = readTopLevelKeys(editor);
     expect(nextKeys).toHaveLength(previousKeys.length);
@@ -49,9 +56,9 @@ describe("applyIncrementalRichDocumentSync", () => {
   it("keeps inline markdown replacements inside a single paragraph", () => {
     const previousMarkdown = "Alpha **bold** and $x$.";
     const nextMarkdown = "Alpha **strong** and $x$.";
-    const { applied, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
 
-    expect(applied).toBe(true);
+    expect(result.applied).toBe(true);
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
@@ -66,13 +73,19 @@ describe("applyIncrementalRichDocumentSync", () => {
       "Tail paragraph.",
     ].join("\n");
     const nextMarkdown = previousMarkdown.replace(" Beta", "123 Beta");
+    const expectedNextBlockSource = nextMarkdown.slice(0, nextMarkdown.indexOf("\n\nTail paragraph."));
     const editor = createHeadlessCoflatEditor();
     setLexicalMarkdown(editor, previousMarkdown);
     const previousKeys = readTopLevelKeys(editor);
 
-    const applied = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
 
-    expect(applied).toBe(true);
+    expect(result).toMatchObject({
+      applied: true,
+      blockFrom: 0,
+      nextBlockSource: expectedNextBlockSource,
+      nextBlockTo: expectedNextBlockSource.length,
+    });
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
     const nextKeys = readTopLevelKeys(editor);
     expect(nextKeys).toHaveLength(previousKeys.length);
@@ -83,27 +96,27 @@ describe("applyIncrementalRichDocumentSync", () => {
   it("falls back when a change crosses paragraph boundaries", () => {
     const previousMarkdown = "Alpha beta.\n\nSecond paragraph.";
     const nextMarkdown = "Alpha paragraph.";
-    const { applied, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
 
-    expect(applied).toBe(false);
+    expect(result).toEqual({ applied: false });
     expect(getLexicalMarkdown(editor)).toBe(previousMarkdown);
   });
 
   it("falls back when the replacement would create multiple blocks", () => {
     const previousMarkdown = "Alpha beta.";
     const nextMarkdown = "Alpha one\n\ntwo beta.";
-    const { applied, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
 
-    expect(applied).toBe(false);
+    expect(result).toEqual({ applied: false });
     expect(getLexicalMarkdown(editor)).toBe(previousMarkdown);
   });
 
   it("falls back for non-paragraph top-level blocks", () => {
     const previousMarkdown = "- Alpha beta";
     const nextMarkdown = "- Alpha gamma";
-    const { applied, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
 
-    expect(applied).toBe(false);
+    expect(result).toEqual({ applied: false });
     expect(getLexicalMarkdown(editor)).toBe(previousMarkdown);
   });
 });

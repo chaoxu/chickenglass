@@ -1,4 +1,4 @@
-import { COMMAND_PRIORITY_LOW } from "lexical";
+import { $getRoot, COMMAND_PRIORITY_LOW } from "lexical";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,10 +12,85 @@ import {
 } from "./structure-edit-plugin";
 import {
   mapVisibleTextSelectionToMarkdown,
+  readSourceSelectionFromLexicalSelection,
+  selectSourceOffsetsInRichLexicalNode,
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-selection";
 
+function findTopLevelKeyContaining(
+  editor: ReturnType<typeof createHeadlessCoflatEditor>,
+  text: string,
+): string {
+  return editor.getEditorState().read(() => {
+    const node = [...$getRoot().getChildren()].reverse().find((child) =>
+      child.getTextContent().includes(text)
+    );
+    if (!node) {
+      throw new Error(`Expected a top-level node containing ${text}`);
+    }
+    return node.getKey();
+  });
+}
+
 describe("source selection mapping", () => {
+  it("selects duplicated text through a local node source span", () => {
+    const doc = "same alpha\n\nsame beta";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+    const sourceOffset = doc.lastIndexOf("same");
+    const nodeKey = findTopLevelKeyContaining(editor, "same beta");
+    const target = sourceOffset + 2;
+
+    expect(selectSourceOffsetsInRichLexicalNode(
+      editor,
+      nodeKey,
+      doc.slice(sourceOffset),
+      sourceOffset,
+      target,
+    )).toBe(true);
+    expect(readSourceSelectionFromLexicalSelection(editor, { markdown: doc })).toEqual({
+      anchor: target,
+      focus: target,
+      from: target,
+      to: target,
+    });
+  });
+
+  it("opens link source reveal through a local node source span", () => {
+    const doc = "[same](https://one.example)\n\n[same](https://two.example)";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+    const sourceOffset = doc.lastIndexOf("[same]");
+    const nodeKey = findTopLevelKeyContaining(editor, "same");
+    const offset = doc.indexOf("two.example") + 2;
+    let request: CursorRevealOpenRequest | null = null;
+    const unregister = editor.registerCommand(
+      OPEN_CURSOR_REVEAL_COMMAND,
+      (nextRequest) => {
+        request = nextRequest;
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+
+    try {
+      expect(selectSourceOffsetsInRichLexicalNode(
+        editor,
+        nodeKey,
+        doc.slice(sourceOffset),
+        sourceOffset,
+        offset,
+      )).toBe(true);
+      expect(request).toMatchObject({
+        adapterId: "link",
+        caretOffset: offset - sourceOffset,
+        source: "[same](https://two.example)",
+      });
+    } finally {
+      unregister();
+    }
+  });
+
   it("opens link source reveal for titled links with formatted labels", () => {
     const doc = 'Alpha [**rich** link](https://example.com/path "A title") omega.';
     const editor = createHeadlessCoflatEditor();

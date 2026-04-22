@@ -568,6 +568,7 @@ describe("__editor selection bridge (rich mode)", () => {
 
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
       expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
+      expect(getPerfSummaryCount("lexical.createNodeSourceSpanIndex")).toBeGreaterThanOrEqual(1);
       expect(editor.handle.getDoc()).toBe(expectedDoc);
     } finally {
       editor.unmount();
@@ -613,6 +614,7 @@ describe("__editor selection bridge (rich mode)", () => {
 
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
       expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
+      expect(getPerfSummaryCount("lexical.createNodeSourceSpanIndex")).toBeGreaterThanOrEqual(1);
       expect(editor.handle.getDoc()).toBe(expectedDoc);
     } finally {
       editor.unmount();

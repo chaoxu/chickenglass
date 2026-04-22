@@ -32,6 +32,7 @@ export { readSourcePositionFromElement } from "./source-position-dom";
 export {
   mapVisibleTextOffsetToMarkdown,
   readSourceSelectionFromLexicalSelection,
+  selectSourceOffsetsInRichLexicalNode,
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-selection";
 

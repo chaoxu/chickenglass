@@ -15,9 +15,98 @@ import {
 import { createHeadlessCoflatEditor, setLexicalMarkdown } from "./markdown";
 import { $isInlineMathNode } from "./nodes/inline-math-node";
 import { readSourceSelectionFromLexicalSelection, selectSourceOffsetsInRichLexicalRoot } from "./source-selection";
-import { createSourceSpanIndex } from "./source-spans";
+import { createNodeSourceSpanIndex, createSourceSpanIndex } from "./source-spans";
+
+function collectElementNodesByText(node: LexicalNode, text: string): LexicalNode[] {
+  if (!$isElementNode(node)) {
+    return [];
+  }
+  const matches: LexicalNode[] = node.getTextContent() === text ? [node] : [];
+  for (const child of node.getChildren()) {
+    matches.push(...collectElementNodesByText(child, text));
+  }
+  return matches;
+}
+
+function findFirstTextNode(node: LexicalNode): TextNode | null {
+  if ($isTextNode(node)) {
+    return node;
+  }
+  if (!$isElementNode(node)) {
+    return null;
+  }
+  for (const child of node.getChildren()) {
+    const text = findFirstTextNode(child);
+    if (text) {
+      return text;
+    }
+  }
+  return null;
+}
 
 describe("source spans", () => {
+  it("creates a node-scoped index shifted to global offsets for duplicate blocks", () => {
+    const block = "Repeated block text";
+    const doc = `${block}\n\n${block}\n\n${block}`;
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const blocks = collectElementNodesByText($getRoot(), block);
+      const scopedNode = blocks[1];
+      if (!scopedNode) throw new Error("expected second duplicate block node");
+      const textNode = findFirstTextNode(scopedNode);
+      if (!textNode) throw new Error("expected scoped block text node");
+
+      const sourceOffset = doc.indexOf(block, block.length);
+      const index = createNodeSourceSpanIndex(scopedNode, block, sourceOffset);
+      const caretOffset = "Repeated ".length;
+      const location = index.findNearestLocation(sourceOffset + caretOffset);
+
+      expect(index.spans).toHaveLength(1);
+      expect(index.getNodeStart(scopedNode)).toBe(sourceOffset);
+      expect(index.getNodeEnd(scopedNode)).toBe(sourceOffset + block.length);
+      expect(index.getTextNodeOffset(textNode, caretOffset)).toBe(sourceOffset + caretOffset);
+      expect(location).toMatchObject({
+        kind: "text",
+        offset: caretOffset,
+      });
+      expect(location?.span.from).toBe(sourceOffset);
+      expect(location?.span.to).toBe(sourceOffset + block.length);
+    });
+  });
+
+  it("keeps scoped formatted spans global when duplicate block text appears earlier", () => {
+    const block = "Repeat **same** block";
+    const doc = `${block}\n\n${block}`;
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, doc);
+
+    editor.getEditorState().read(() => {
+      const blocks = collectElementNodesByText($getRoot(), "Repeat same block");
+      const scopedNode = blocks[1];
+      if (!scopedNode) throw new Error("expected second formatted duplicate block node");
+      const sourceOffset = doc.lastIndexOf(block);
+      const index = createNodeSourceSpanIndex(scopedNode, block, sourceOffset);
+
+      const delimiterLocation = index.findNearestLocation(sourceOffset + block.indexOf("**"));
+      expect(delimiterLocation).toMatchObject({
+        adapterId: "text-format",
+        kind: "reveal",
+        offset: 0,
+        source: "**same**",
+      });
+      expect(delimiterLocation?.span.from).toBe(sourceOffset + block.indexOf("**"));
+
+      const textLocation = index.findNearestLocation(sourceOffset + block.indexOf("same") + 2);
+      expect(textLocation).toMatchObject({
+        kind: "text",
+        offset: 2,
+      });
+      expect(textLocation?.span.from).toBe(sourceOffset + block.indexOf("same"));
+    });
+  });
+
   it("uses nested link-label spans before falling back to the whole link reveal", () => {
     const doc = 'Alpha [**rich** link](https://example.com/path "A title") omega.';
     const editor = createHeadlessCoflatEditor();

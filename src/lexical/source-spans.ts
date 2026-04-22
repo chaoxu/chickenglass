@@ -90,6 +90,29 @@ function unionRange(a: SourceRange | null, b: SourceRange | null): SourceRange |
   };
 }
 
+function shiftRange(range: SourceRange, offset: number): SourceRange {
+  return {
+    from: range.from + offset,
+    to: range.to + offset,
+  };
+}
+
+function shiftSpan(span: SourceSpan, offset: number): SourceSpan {
+  return {
+    ...span,
+    ...shiftRange(span, offset),
+  };
+}
+
+function shiftNodeRanges(
+  ranges: ReadonlyMap<string, SourceRange>,
+  offset: number,
+): ReadonlyMap<string, SourceRange> {
+  return new Map(
+    [...ranges].map(([key, range]) => [key, shiftRange(range, offset)]),
+  );
+}
+
 function revealSourceForNode(
   node: LexicalNode,
 ): { readonly adapterId: SourceRevealAdapterId; readonly source: string } | null {
@@ -538,12 +561,33 @@ export class SourceSpanIndex {
   }
 }
 
+function createSourceSpanIndexForNode(
+  node: LexicalNode,
+  markdown: string,
+  sourceOffset: number,
+): SourceSpanIndex {
+  const spans: SourceSpan[] = [];
+  const nodeRanges = new Map<string, SourceRange>();
+  const cursor = new ParsedSourceCursor(parseMarkdownSourceTokens(markdown));
+  collectNodeSpans(node, cursor, spans, nodeRanges);
+  return new SourceSpanIndex(
+    spans.map((span) => shiftSpan(span, sourceOffset)),
+    shiftNodeRanges(nodeRanges, sourceOffset),
+  );
+}
+
 export function createSourceSpanIndex(markdown: string): SourceSpanIndex {
   return measureSync("lexical.createSourceSpanIndex", () => {
-    const spans: SourceSpan[] = [];
-    const nodeRanges = new Map<string, SourceRange>();
-    const cursor = new ParsedSourceCursor(parseMarkdownSourceTokens(markdown));
-    collectNodeSpans($getRoot(), cursor, spans, nodeRanges);
-    return new SourceSpanIndex(spans, nodeRanges);
+    return createSourceSpanIndexForNode($getRoot(), markdown, 0);
   }, { category: "lexical", detail: `${markdown.length} chars` });
+}
+
+export function createNodeSourceSpanIndex(
+  node: LexicalNode,
+  markdownFragment: string,
+  sourceOffset: number,
+): SourceSpanIndex {
+  return measureSync("lexical.createNodeSourceSpanIndex", () => {
+    return createSourceSpanIndexForNode(node, markdownFragment, sourceOffset);
+  }, { category: "lexical", detail: `${markdownFragment.length} chars` });
 }
