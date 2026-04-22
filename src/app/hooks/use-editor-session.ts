@@ -89,6 +89,7 @@ export function useEditorSession({
 
   runtime.setWriteDocumentSnapshot((path, snapshot) =>
     sessionPersistence.writeDocumentSnapshot(path, snapshot.content, {
+      createTargetIfMissing: snapshot.createTargetIfMissing,
       expectedBaselineHash: snapshot.expectedBaselineHash,
     }),
   );

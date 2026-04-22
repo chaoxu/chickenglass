@@ -323,6 +323,27 @@ describe("useEditorSession", () => {
     expect(ref.result.editorDoc).toBe("# Scratch");
   });
 
+  it("creates the target file when saving a new in-memory document", async () => {
+    const fs = new MemoryFileSystem({});
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFileWithContent("scratch.md", "# Scratch");
+    });
+
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    await expect(fs.readFile("scratch.md")).resolves.toBe("# Scratch");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+    expect(ref.result.externalConflict).toBeNull();
+  });
+
   it("cleans up the actual current document after an async open when the path changed mid-flight", async () => {
     const reads = {
       "slow.md": createDeferred<string>(),
@@ -579,6 +600,39 @@ describe("useEditorSession", () => {
     });
     await expect(fs.readFile("draft.md")).resolves.toBe("newer edit");
     expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("converts a deleted conflict to modified when the file reappears during restore", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "hello" });
+    const createFile = fs.createFile.bind(fs);
+    vi.spyOn(fs, "createFile").mockImplementation(async (path) => {
+      await createFile(path, "external reappeared");
+      throw new Error("File already exists");
+    });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local edit"));
+    });
+    await fs.deleteFile("draft.md");
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("notify");
+      await ref.result.keepExternalConflict("draft.md");
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("external reappeared");
+    expect(ref.result.getCurrentDocText()).toBe("local edit");
+    expect(ref.result.externalConflict).toEqual({
+      kind: "modified",
+      path: "draft.md",
+    });
+    expect(ref.result.currentDocument?.dirty).toBe(true);
   });
 
   it("cancels file switching when the unsaved-changes prompt says cancel", async () => {

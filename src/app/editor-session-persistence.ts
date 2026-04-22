@@ -192,9 +192,17 @@ export function createEditorSessionPersistence({
       const doc = runtime.liveDocs.get(currentPath) ?? emptyEditorDocument;
       return {
         content: editorDocumentToString(doc),
+        createTargetIfMissing: runtime.newDocumentPaths.has(currentPath),
         expectedBaselineHash: knownDiskHash(currentPath),
       };
     });
+
+    if (result.error !== undefined) {
+      if (result.error instanceof SaveWriteConflictError) {
+        return false;
+      }
+      throw result.error;
+    }
 
     if (result.saved && result.savedContent !== undefined) {
       const savedDoc = createEditorDocumentText(result.savedContent);
@@ -206,6 +214,7 @@ export function createEditorSessionPersistence({
         runtime.liveDocs.set(currentPath, savedDoc);
       }
       runtime.externalConflictBaselines.delete(currentPath);
+      runtime.newDocumentPaths.delete(currentPath);
 
       runtime.commit(
         clearExternalDocumentConflict(

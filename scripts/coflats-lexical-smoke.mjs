@@ -6,8 +6,8 @@
  * default regression lane still targets the CM6 editor, while this script
  * validates the runtime Lexical surface in the unified app.
  *
- * Prerequisite:
- *   pnpm dev --host 127.0.0.1 --port 5173
+ * Starts the local Vite server automatically for localhost URLs unless
+ * `--no-start-server` is passed.
  */
 
 import console from "node:console";
@@ -18,6 +18,7 @@ import {
   createArgParser,
   DEBUG_EDITOR_SELECTOR,
   disconnectBrowser,
+  ensureAppServer,
   formatSelection,
   openFixtureDocument,
   readEditorText,
@@ -218,7 +219,11 @@ async function main() {
   const headless = !hasFlag("--headed");
 
   let page = null;
+  let stopAppServer = null;
   try {
+    stopAppServer = await ensureAppServer(url, {
+      autoStart: !hasFlag("--no-start-server"),
+    });
     page = await connectEditor({ browser, headless, timeout, url });
     await waitForDebugBridge(page, { timeout });
     await switchToMode(page, "lexical");
@@ -235,6 +240,9 @@ async function main() {
   } finally {
     if (page) {
       await disconnectBrowser(page);
+    }
+    if (stopAppServer) {
+      await stopAppServer();
     }
   }
 }

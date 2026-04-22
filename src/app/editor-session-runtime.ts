@@ -36,6 +36,7 @@ export interface EditorSessionRuntime {
   readonly buffers: Map<string, EditorDocumentText>;
   readonly liveDocs: Map<string, EditorDocumentText>;
   readonly externalConflictBaselines: Map<string, EditorDocumentText>;
+  readonly newDocumentPaths: Set<string>;
   readonly pipeline: SavePipeline;
   readonly activeDocumentSignal: ActiveDocumentSignal;
   subscribe: (listener: SessionListener) => () => void;
@@ -91,6 +92,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
   const buffers = new Map<string, EditorDocumentText>();
   const liveDocs = new Map<string, EditorDocumentText>();
   const externalConflictBaselines = new Map<string, EditorDocumentText>();
+  const newDocumentPaths = new Set<string>();
   const listeners = new Set<SessionListener>();
   const activeDocumentSignal = createActiveDocumentSignal();
   const pipeline = new SavePipeline((path, snapshot) =>
@@ -125,6 +127,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     buffers,
     liveDocs,
     externalConflictBaselines,
+    newDocumentPaths,
     pipeline,
     activeDocumentSignal,
     subscribe: (listener) => {

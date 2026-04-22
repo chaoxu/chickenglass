@@ -31,6 +31,7 @@ import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import type { ActiveDocumentSignal } from "../active-document-signal";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
+import type { EditorDocumentChange } from "../editor-doc-change";
 
 interface PendingModeOverride {
   path: string;
@@ -63,6 +64,23 @@ export interface AppEditorShellDeps {
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
+}
+
+export type SaveActivityStatus = "failed" | "idle" | "saving";
+
+export interface SaveActivity {
+  status: SaveActivityStatus;
+  message?: string;
+}
+
+function saveErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  return "Save failed";
 }
 
 /**
@@ -119,6 +137,8 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   handleLexicalSurfaceReady: () => void;
   /** Return the current Lexical editor handle without forcing app-shell rerenders. */
   getLexicalEditorHandle: () => MarkdownEditorHandle | null;
+  /** Current best-effort save operation state for the active document. */
+  saveActivity: SaveActivity;
 
   // --- Navigation ---
 
@@ -223,23 +243,60 @@ export function useAppEditorShell({
     handleDocumentSnapshot: sessionHandleDocumentSnapshot,
   } = session;
 
+  const [saveActivity, setSaveActivity] = useState<SaveActivity>({ status: "idle" });
   const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
   const editorViewRef = useRef<EditorView | null>(null);
   const lexicalEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
+  const saveActivityTokenRef = useRef(0);
   const pendingLexicalNavigationRef = useRef<{
     readonly onComplete?: () => void;
     readonly path: string;
     readonly pos: number;
   } | null>(null);
 
+  const clearSaveFailure = useCallback(() => {
+    setSaveActivity((previous) =>
+      previous.status === "failed" ? { status: "idle" } : previous,
+    );
+  }, []);
+
+  useEffect(() => {
+    saveActivityTokenRef.current += 1;
+    setSaveActivity({ status: "idle" });
+  }, [currentPath]);
+
+  useEffect(() => {
+    return activeDocumentSignal.subscribe(clearSaveFailure);
+  }, [activeDocumentSignal, clearSaveFailure]);
+
+  const handleDocChange = useCallback((changes: readonly EditorDocumentChange[]) => {
+    clearSaveFailure();
+    session.handleDocChange(changes);
+  }, [clearSaveFailure, session]);
+
+  const handleDocumentSnapshot = useCallback((doc: string) => {
+    clearSaveFailure();
+    sessionHandleDocumentSnapshot(doc);
+  }, [clearSaveFailure, sessionHandleDocumentSnapshot]);
+
+  const markCurrentDocumentDirty = useCallback(() => {
+    clearSaveFailure();
+    session.markCurrentDocumentDirty();
+  }, [clearSaveFailure, session]);
+
+  const handleProgrammaticDocChange = useCallback((path: string, doc: string) => {
+    clearSaveFailure();
+    session.handleProgrammaticDocChange(path, doc);
+  }, [clearSaveFailure, session]);
+
   const { runEditorTransaction } = useEditorTransactions({
     currentPath,
     editorDoc,
     editorHandleRef: lexicalEditorHandleRef,
     getSessionCurrentDocText,
-    handleDocumentSnapshot: session.handleDocumentSnapshot,
+    handleDocumentSnapshot,
   });
 
   const getCurrentDocText = useCallback(() => {
@@ -247,8 +304,22 @@ export function useAppEditorShell({
   }, [getSessionCurrentDocText, runEditorTransaction]);
 
   const saveFile = useCallback(async () => {
+    const saveToken = ++saveActivityTokenRef.current;
+    setSaveActivity({ status: "saving" });
     runEditorTransaction("save", () => undefined);
-    await sessionSaveFile();
+    try {
+      await sessionSaveFile();
+      setSaveActivity((previous) =>
+        saveActivityTokenRef.current === saveToken && previous.status === "saving"
+          ? { status: "idle" }
+          : previous,
+      );
+    } catch (error: unknown) {
+      if (saveActivityTokenRef.current === saveToken) {
+        setSaveActivity({ status: "failed", message: saveErrorMessage(error) });
+      }
+      throw error;
+    }
   }, [runEditorTransaction, sessionSaveFile]);
 
   const flushDirtyCurrentDocument = useCallback(async (
@@ -584,11 +655,12 @@ export function useAppEditorShell({
     handleEditorStateChange,
     handleHeadingsChange,
     handleDiagnosticsChange,
-    handleDirtyChange: session.markCurrentDocumentDirty,
+    handleDirtyChange: markCurrentDocumentDirty,
     handleEditorDocumentReady,
     handleLexicalEditorReady,
     handleLexicalSurfaceReady,
     getLexicalEditorHandle,
+    saveActivity,
     handleOutlineSelect,
     handleGotoLine,
     handleSearchResult,
@@ -602,5 +674,9 @@ export function useAppEditorShell({
     handleWatchedPathChange,
     handleDragOver,
     handleDrop,
+    handleDocChange,
+    handleDocumentSnapshot,
+    markCurrentDocumentDirty,
+    handleProgrammaticDocChange,
   };
 }

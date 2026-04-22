@@ -112,6 +112,40 @@ describe("SavePipeline", () => {
     expect(pipeline.getLastSavedHash("a.md")).toBe(fnv1aHash("v3"));
   });
 
+  it("resolves queued save callers with the coalesced final result", async () => {
+    const gate = createDeferred<string>();
+    let callCount = 0;
+    const writeFn = vi.fn(async (_p: string, snapshot: SaveSnapshot) => {
+      callCount++;
+      if (callCount === 1) {
+        await gate.promise;
+      }
+      return snapshot.content;
+    });
+    const pipeline = new SavePipeline(writeFn);
+    pipeline.bumpRevision("a.md");
+
+    const firstSave = pipeline.save("a.md", () => ({
+      content: "v1",
+    }));
+
+    pipeline.bumpRevision("a.md");
+    const secondSave = pipeline.save("a.md", () => ({
+      content: "v2",
+    }));
+
+    gate.resolve("");
+    const [firstResult, secondResult] = await Promise.all([firstSave, secondSave]);
+
+    expect(firstResult).toMatchObject({
+      saved: true,
+      lastSavedRevision: 2,
+      savedContent: "v2",
+    });
+    expect(secondResult).toEqual(firstResult);
+    expect(writeFn).toHaveBeenCalledTimes(2);
+  });
+
   it("does not re-save when revision did not advance during in-flight write", async () => {
     const gate = createDeferred<string>();
     let callCount = 0;

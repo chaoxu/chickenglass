@@ -31,7 +31,8 @@ export interface CursorPosition {
 export interface StatusBarProps {
   editorMode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
-  saveStatus?: "conflict" | "saved" | "unsaved";
+  saveStatus?: "conflict" | "failed" | "idle" | "saved" | "saving" | "unsaved";
+  saveStatusMessage?: string;
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
   /** External signal used to refresh full stats without rerendering the shell. */
@@ -50,9 +51,18 @@ const MODE_LABELS: Record<EditorMode, string> = {
   source: "Source",
 };
 
+const COMPACT_MODE_LABELS: Record<EditorMode, string> = {
+  "cm6-rich": "CM6",
+  lexical: "Lexical",
+  source: "Source",
+};
+
 const SAVE_STATUS_LABELS: Record<NonNullable<StatusBarProps["saveStatus"]>, string> = {
   conflict: "Conflict",
+  failed: "Failed",
+  idle: "",
   saved: "Saved",
+  saving: "Saving",
   unsaved: "Unsaved",
 };
 
@@ -68,7 +78,8 @@ const SAVE_STATUS_LABELS: Record<NonNullable<StatusBarProps["saveStatus"]>, stri
 export function StatusBar({
   editorMode,
   onModeChange,
-  saveStatus = "saved",
+  saveStatus = "idle",
+  saveStatusMessage,
   onOpenPalette,
   onOpenSettings,
   activeDocumentSignal,
@@ -138,7 +149,7 @@ export function StatusBar({
 
   return (
     <>
-      <div data-statusbar className="shrink-0 flex items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
+      <div data-statusbar className="shrink-0 flex min-w-0 items-center border-t border-[var(--cf-border)] bg-[var(--cf-bg)] h-6 px-2 text-xs text-[var(--cf-muted)] select-none">
         {/* Left: word + char count */}
         <div className="flex items-center gap-2">
           <button
@@ -159,25 +170,29 @@ export function StatusBar({
         </div>
 
         {/* Center: cursor position */}
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 min-w-0 flex items-center justify-center">
           <span>
             Ln {cursorLine}, Col {cursorCol}
           </span>
         </div>
 
         {/* Right: FPS meter + build info + command palette + mode indicator */}
-        <div className="flex items-center gap-1 pr-1">
-          <span
-            data-testid="save-status"
-            className={cn(
-              "px-1 tabular-nums",
-              saveStatus === "conflict" && "text-[var(--cf-danger,#c62828)]",
-              saveStatus === "unsaved" && "text-[var(--cf-fg)]",
-            )}
-            title={SAVE_STATUS_LABELS[saveStatus]}
-          >
-            {SAVE_STATUS_LABELS[saveStatus]}
-          </span>
+        <div className="flex shrink-0 items-center gap-1 pr-1">
+          {saveStatus !== "idle" && (
+            <span
+              data-testid="save-status"
+              className={cn(
+                "px-1 tabular-nums",
+                (saveStatus === "conflict" || saveStatus === "failed")
+                  && "text-[var(--cf-danger,#c62828)]",
+                (saveStatus === "saving" || saveStatus === "unsaved")
+                  && "text-[var(--cf-fg)]",
+              )}
+              title={saveStatusMessage ?? SAVE_STATUS_LABELS[saveStatus]}
+            >
+              {SAVE_STATUS_LABELS[saveStatus]}
+            </span>
+          )}
           <FpsIndicator />
           {buildInfo && (
             <span
@@ -229,9 +244,14 @@ export function StatusBar({
             aria-label={isMarkdown ? `Editor mode: ${MODE_LABELS[editorMode]}. Click to cycle mode` : "Source mode only for non-markdown files"}
             onClick={cycleMode}
             disabled={!isMarkdown}
-            className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-1 rounded whitespace-nowrap hover:bg-[var(--cf-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {MODE_LABELS[editorMode]}
+            <span className="sm:hidden" aria-hidden="true">
+              {COMPACT_MODE_LABELS[editorMode]}
+            </span>
+            <span className="hidden sm:inline" aria-hidden="true">
+              {MODE_LABELS[editorMode]}
+            </span>
           </button>
         </div>
       </div>

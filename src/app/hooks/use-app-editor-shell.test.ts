@@ -2,7 +2,7 @@ import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MemoryFileSystem } from "../file-manager";
+import { MemoryFileSystem, type ConditionalWriteResult } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
@@ -116,6 +116,12 @@ function createEditorHandle(doc: string): MarkdownEditorHandle {
     setDoc: vi.fn(),
     setSelection: vi.fn(),
   };
+}
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
 }
 
 describe("useAppEditorShell", () => {
@@ -293,6 +299,88 @@ describe("useAppEditorShell", () => {
 
     expect(flushPendingAutoSave).toHaveBeenCalledWith("navigation", { force: true });
     expect(ref.result.currentPath).toBe("b.md");
+  });
+
+  it("tracks in-flight and completed saves", async () => {
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+    });
+    const writeGate = createDeferred<void>();
+    const originalWrite = fs.writeFileIfUnchanged.bind(fs);
+    vi.spyOn(fs, "writeFileIfUnchanged").mockImplementation(async (
+      path: string,
+      content: string,
+      expectedHash: string,
+    ): Promise<ConditionalWriteResult> => {
+      await writeGate.promise;
+      return originalWrite(path, content, expectedHash);
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
+    });
+
+    let savePromise!: Promise<void>;
+    act(() => {
+      savePromise = ref.result.saveFile();
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.result.saveActivity.status).toBe("saving");
+    });
+
+    writeGate.resolve();
+    await act(async () => {
+      await savePromise;
+    });
+
+    expect(ref.result.saveActivity.status).toBe("idle");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("surfaces save failures until the next edit", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const saveError = new Error("disk full");
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+    });
+    vi.spyOn(fs, "writeFileIfUnchanged").mockRejectedValue(saveError);
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
+    });
+
+    await act(async () => {
+      await expect(ref.result.saveFile()).rejects.toThrow("disk full");
+    });
+
+    expect(ref.result.saveActivity).toEqual({
+      status: "failed",
+      message: "disk full",
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed again\n"));
+    });
+
+    expect(ref.result.saveActivity.status).toBe("idle");
+    consoleError.mockRestore();
   });
 
   it("does not force autosave before switching files when autosave is off", async () => {

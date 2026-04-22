@@ -28,6 +28,7 @@ export class SaveWriteConflictError extends Error {
 
 export interface SaveSnapshot {
   content: string;
+  createTargetIfMissing?: boolean;
   expectedBaselineHash?: string;
 }
 
@@ -41,6 +42,7 @@ export interface SaveResult {
   saved: boolean;
   lastSavedRevision: number;
   savedContent?: string;
+  error?: unknown;
 }
 
 export class SavePipeline {
@@ -63,6 +65,9 @@ export class SavePipeline {
 
   /** Whether a save loop is currently running for a path. */
   private readonly saving = new Map<string, boolean>();
+
+  /** Promise for the active save loop so queued callers can wait for it. */
+  private readonly activeSaves = new Map<string, Promise<SaveResult>>();
 
   /**
    * While a save is in flight, a new save request replaces the pending
@@ -160,11 +165,21 @@ export class SavePipeline {
     if (this.saving.get(path)) {
       // A save loop is already running — replace the pending snapshot.
       this.pending.set(path, getSnapshot);
-      // Return a deferred result — the loop will handle it.
-      return { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
+      // Wait for the loop so save-before-switch/close callers see the
+      // eventual coalesced result instead of a false failure.
+      return this.activeSaves.get(path)
+        ?? { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
     }
 
-    return this.runSaveLoop(path, getSnapshot);
+    const savePromise = this.runSaveLoop(path, getSnapshot);
+    this.activeSaves.set(path, savePromise);
+    try {
+      return await savePromise;
+    } finally {
+      if (this.activeSaves.get(path) === savePromise) {
+        this.activeSaves.delete(path);
+      }
+    }
   }
 
   private async runSaveLoop(
@@ -208,7 +223,11 @@ export class SavePipeline {
           if (!(e instanceof SaveWriteConflictError)) {
             console.error("[save-pipeline] write failed:", path, e);
           }
-          lastResult = { saved: false, lastSavedRevision: this.getLastSavedRevision(path) };
+          lastResult = {
+            saved: false,
+            lastSavedRevision: this.getLastSavedRevision(path),
+            error: e,
+          };
           break;
         }
 

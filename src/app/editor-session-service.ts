@@ -96,6 +96,7 @@ export function createEditorSessionService({
     runtime.buffers.delete(path);
     runtime.liveDocs.delete(path);
     runtime.externalConflictBaselines.delete(path);
+    runtime.newDocumentPaths.delete(path);
     runtime.commit(clearExternalDocumentConflict(runtime.getState(), path));
   };
 
@@ -229,6 +230,20 @@ export function createEditorSessionService({
       );
       await refreshTree(path);
     } catch (error: unknown) {
+      try {
+        if (await fs.exists(path)) {
+          const diskContent = await fs.readFile(path);
+          runtime.externalConflictBaselines.set(path, createEditorDocumentText(diskContent));
+          runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+            kind: "modified",
+            path,
+          }));
+          return;
+        }
+      } catch (_recheckError: unknown) {
+        // Preserve the deleted conflict below when the recheck cannot read a
+        // usable replacement baseline.
+      }
       console.error("[session] failed to restore deleted conflicted file:", path, error);
       runtime.commit(setExternalDocumentConflict(runtime.getState(), {
         kind: "deleted",
@@ -383,6 +398,9 @@ export function createEditorSessionService({
 
     runtime.buffers.set(path, emptyEditorDocument);
     runtime.liveDocs.set(path, createEditorDocumentText(content));
+    runtime.pipeline.initPath(path, "");
+    runtime.pipeline.bumpRevision(path);
+    runtime.newDocumentPaths.add(path);
     runtime.commit(
       setCurrentSessionDocument(runtime.getState(), {
         path,

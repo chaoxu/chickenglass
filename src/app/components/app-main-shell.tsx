@@ -55,8 +55,14 @@ export function AppMainShell({
   const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
   const useLexicalEditor = isLexicalEditorMode(editor.editorMode);
   const cm6EditorMode = editor.editorMode === "source" ? "source" : "rich";
-  const saveStatus = editor.hasUnresolvedExternalConflict
+  const saveStatus = !editor.currentDocument
+    ? "idle"
+    : editor.hasUnresolvedExternalConflict
     ? "conflict"
+    : editor.saveActivity.status === "failed"
+      ? "failed"
+      : editor.saveActivity.status === "saving"
+        ? "saving"
     : editor.currentDocument?.dirty
       ? "unsaved"
       : "saved";
@@ -130,6 +136,7 @@ export function AppMainShell({
       <StatusBar
         editorMode={editor.editorMode}
         saveStatus={saveStatus}
+        saveStatusMessage={editor.saveActivity.message}
         onModeChange={editor.handleModeChange}
         onOpenPalette={onOpenPalette}
         onOpenSettings={onOpenSettings}
