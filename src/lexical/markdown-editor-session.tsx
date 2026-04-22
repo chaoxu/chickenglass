@@ -1,7 +1,5 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
-  $getSelection,
-  $isRangeSelection,
   CLEAR_HISTORY_COMMAND,
   type EditorState,
   type EditorUpdateOptions,
@@ -178,10 +176,12 @@ export interface MarkdownEditorSessionController {
   readonly initialDocRef: MutableRefObject<string>;
   readonly lastCommittedDocRef: MutableRefObject<string>;
   readonly pendingLocalEchoDocRef: MutableRefObject<string | null>;
+  readonly canonicalBridgeEchoRef: MutableRefObject<boolean>;
   readonly sourceSelectionRef: MutableRefObject<MarkdownEditorSelection>;
   readonly userEditPendingRef: MutableRefObject<boolean>;
   readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
   readonly embeddedFieldFlushRegistry: ReturnType<typeof createEmbeddedFieldFlushRegistry>;
+  readonly cancelRichDocumentSnapshot: () => void;
   readonly flushRichDocumentSnapshot: () => string | null;
   readonly handleRichChange: (editor: LexicalEditor, tags: Set<string>) => void;
   readonly syncSelectionToDocLength: (docLength: number) => void;
@@ -240,6 +240,7 @@ export function useMarkdownEditorSessionController({
   const initialDocRef = useRef(doc);
   const lastCommittedDocRef = useRef(doc);
   const pendingLocalEchoDocRef = useRef<string | null>(null);
+  const canonicalBridgeEchoRef = useRef(false);
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
   const focusOwnerRef = useRef(focusOwner);
@@ -391,10 +392,12 @@ export function useMarkdownEditorSessionController({
     initialDocRef,
     lastCommittedDocRef,
     pendingLocalEchoDocRef,
+    canonicalBridgeEchoRef,
     sourceSelectionRef,
     userEditPendingRef,
     focusOwnerRef,
     embeddedFieldFlushRegistry,
+    cancelRichDocumentSnapshot: clearRichSnapshotTimer,
     flushRichDocumentSnapshot,
     handleRichChange,
     syncSelectionToDocLength,
@@ -445,6 +448,7 @@ export function MarkdownSyncPlugin({
 }
 
 export function MarkdownModeSyncPlugin({
+  canonicalBridgeEchoRef,
   doc,
   editorMode,
   flushRichDocumentSnapshot,
@@ -454,6 +458,7 @@ export function MarkdownModeSyncPlugin({
   selectionRef,
   userEditPendingRef,
 }: {
+  readonly canonicalBridgeEchoRef: MutableRefObject<boolean>;
   readonly doc: string;
   readonly editorMode: RevealMode;
   readonly flushRichDocumentSnapshot?: () => string | null;
@@ -465,17 +470,47 @@ export function MarkdownModeSyncPlugin({
 }) {
   const [editor] = useLexicalComposerContext();
   const appliedModeRef = useRef(editorMode);
+  const appliedDocPropRef = useRef(doc);
 
   useEffect(() => {
-    flushRichDocumentSnapshot?.();
-    const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
+    const previousDocProp = appliedDocPropRef.current;
+    const docPropChanged = previousDocProp !== doc;
+    const pendingLocalEchoDocBeforeFlush = pendingLocalEchoDocRef.current;
     const previousMode = appliedModeRef.current;
     const modeChanged = previousMode !== editorMode;
+    if (
+      !modeChanged
+      && canonicalBridgeEchoRef.current
+      && pendingLocalEchoDocBeforeFlush !== null
+    ) {
+      if (pendingLocalEchoDocBeforeFlush === doc) {
+        pendingLocalEchoDocRef.current = null;
+        canonicalBridgeEchoRef.current = false;
+      }
+      appliedDocPropRef.current = doc;
+      return;
+    }
+    if (
+      !modeChanged
+      && !docPropChanged
+      && pendingLocalEchoDocBeforeFlush !== null
+    ) {
+      if (pendingLocalEchoDocBeforeFlush === doc) {
+        pendingLocalEchoDocRef.current = null;
+      }
+      return;
+    }
+
+    if (pendingLocalEchoDocBeforeFlush === null) {
+      flushRichDocumentSnapshot?.();
+    }
+    const pendingLocalEchoDoc = pendingLocalEchoDocRef.current;
     const docChanged = doc !== lastCommittedDocRef.current;
     if (!modeChanged && !docChanged) {
       if (pendingLocalEchoDoc === doc) {
         pendingLocalEchoDocRef.current = null;
       }
+      appliedDocPropRef.current = doc;
       return;
     }
 
@@ -500,6 +535,8 @@ export function MarkdownModeSyncPlugin({
     lastCommittedDocRef.current = nextDoc;
     userEditPendingRef.current = false;
     appliedModeRef.current = editorMode;
+    appliedDocPropRef.current = doc;
+    canonicalBridgeEchoRef.current = false;
     pendingLocalEchoDocRef.current = null;
 
     let applied = false;
@@ -551,6 +588,7 @@ export function MarkdownModeSyncPlugin({
       }
     };
   }, [
+    canonicalBridgeEchoRef,
     doc,
     editor,
     editorMode,
@@ -566,7 +604,9 @@ export function MarkdownModeSyncPlugin({
 }
 
 interface MarkdownEditorHandlePluginProps {
+  readonly canonicalBridgeEchoRef?: MutableRefObject<boolean>;
   readonly editorModeRef: MutableRefObject<RevealMode>;
+  readonly cancelRichDocumentSnapshot?: () => void;
   readonly focusOwnerRef: MutableRefObject<SurfaceFocusOwner>;
   readonly flushRichDocumentSnapshot?: () => string | null;
   readonly lastCommittedDocRef: MutableRefObject<string>;
@@ -583,7 +623,9 @@ interface MarkdownEditorHandlePluginProps {
 }
 
 export function MarkdownEditorHandlePlugin({
+  canonicalBridgeEchoRef,
   editorModeRef,
+  cancelRichDocumentSnapshot,
   focusOwnerRef,
   flushRichDocumentSnapshot,
   lastCommittedDocRef,
@@ -605,6 +647,7 @@ export function MarkdownEditorHandlePlugin({
   const deferredRichSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deferredRichSyncDocRef = useRef<string | null>(null);
   const richSelectionDomInsertFailedRef = useRef(false);
+  const canonicalFallbackSelectionRef = useRef<MarkdownEditorSelection | null>(null);
 
   useEffect(() => {
     if (!onEditorReady) {
@@ -671,6 +714,7 @@ export function MarkdownEditorHandlePlugin({
       );
       selectionSnapshotFreshRef.current = moved;
       richSelectionDomInsertFailedRef.current = !moved;
+      canonicalFallbackSelectionRef.current = moved ? null : nextSelection;
       cacheRichDocumentSnapshot(nextDoc);
     };
 
@@ -685,7 +729,9 @@ export function MarkdownEditorHandlePlugin({
     const readDocumentSnapshot = () =>
       editorModeRef.current === "source"
         ? getSourceText(editor)
-        : deferredRichSyncDocRef.current ?? readRichDocumentSnapshot();
+        : deferredRichSyncDocRef.current
+          ?? pendingLocalEchoDocRef.current
+          ?? readRichDocumentSnapshot();
     const readSelectionDocumentSnapshot = () =>
       editorModeRef.current === "source"
         ? getSourceText(editor)
@@ -701,6 +747,7 @@ export function MarkdownEditorHandlePlugin({
     };
 
     const publishDocumentSnapshot = (nextDoc: string) => {
+      cancelRichDocumentSnapshot?.();
       const changes = createMinimalEditorDocumentChanges(
         lastCommittedDocRef.current,
         nextDoc,
@@ -718,6 +765,9 @@ export function MarkdownEditorHandlePlugin({
       const currentDoc = readDocumentSnapshot();
       if (editorModeRef.current === "source") {
         return selectionRef.current;
+      }
+      if (deferredRichSyncDocRef.current !== null || richSelectionDomInsertFailedRef.current) {
+        return canonicalFallbackSelectionRef.current ?? selectionRef.current;
       }
 
       const pendingDestructiveVisibleOffset = consumePendingDestructiveVisibleOffset(editor);
@@ -785,7 +835,9 @@ export function MarkdownEditorHandlePlugin({
     const flushPendingEdits = () => {
       embeddedFieldFlushRegistry?.flush();
       if (deferredRichSyncDocRef.current !== null) {
-        return deferredRichSyncDocRef.current;
+        const nextDoc = deferredRichSyncDocRef.current;
+        applyDeferredRichDocumentSync();
+        return nextDoc;
       }
       const flushedDoc = flushRichDocumentSnapshot?.() ?? null;
       if (flushedDoc !== null) {
@@ -823,97 +875,6 @@ export function MarkdownEditorHandlePlugin({
         refreshRichSelectionSnapshot(nextDoc);
       }
       return nextDoc;
-    };
-
-    const insertTextIntoRichSelection = (
-      currentDoc: string,
-      text: string,
-    ): { readonly nextDoc: string; readonly nextSelection: MarkdownEditorSelection } | null => {
-      const desiredSelection = createMarkdownSelection(
-        selectionRef.current.anchor,
-        selectionRef.current.focus,
-        currentDoc.length,
-      );
-      const moved = selectSourceOffsetsInRichLexicalRoot(
-        editor,
-        currentDoc,
-        desiredSelection.anchor,
-        desiredSelection.focus,
-      );
-      if (!moved) {
-        return null;
-      }
-      const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
-        fallback: undefined,
-        markdown: currentDoc,
-      });
-      if (!liveSelection || !sameSelection(liveSelection, desiredSelection)) {
-        return null;
-      }
-
-      let inserted = false;
-      editor.update(() => {
-        const lexicalSelection = $getSelection();
-        if (!$isRangeSelection(lexicalSelection)) {
-          return;
-        }
-        lexicalSelection.insertText(text);
-        inserted = true;
-      }, {
-        discrete: true,
-        tag: [SKIP_SCROLL_INTO_VIEW_TAG, COFLAT_INCREMENTAL_DOC_CHANGE_TAG],
-      });
-      if (!inserted) {
-        return null;
-      }
-
-      const nextDoc = [
-        currentDoc.slice(0, liveSelection.from),
-        text,
-        currentDoc.slice(liveSelection.to),
-      ].join("");
-      const nextOffset = liveSelection.from + text.length;
-      return {
-        nextDoc,
-        nextSelection: createMarkdownSelection(nextOffset, nextOffset, nextDoc.length),
-      };
-    };
-
-    const insertTextIntoTrackedRichSelection = (
-      currentDoc: string,
-      text: string,
-    ): { readonly nextDoc: string; readonly nextSelection: MarkdownEditorSelection } | null => {
-      const trackedSelection = createMarkdownSelection(
-        selectionRef.current.anchor,
-        selectionRef.current.focus,
-        currentDoc.length,
-      );
-      let inserted = false;
-      editor.update(() => {
-        const lexicalSelection = $getSelection();
-        if (!$isRangeSelection(lexicalSelection)) {
-          return;
-        }
-        lexicalSelection.insertText(text);
-        inserted = true;
-      }, {
-        discrete: true,
-        tag: [SKIP_SCROLL_INTO_VIEW_TAG, COFLAT_INCREMENTAL_DOC_CHANGE_TAG],
-      });
-      if (!inserted) {
-        return null;
-      }
-
-      const nextDoc = [
-        currentDoc.slice(0, trackedSelection.from),
-        text,
-        currentDoc.slice(trackedSelection.to),
-      ].join("");
-      const nextOffset = trackedSelection.from + text.length;
-      return {
-        nextDoc,
-        nextSelection: createMarkdownSelection(nextOffset, nextOffset, nextDoc.length),
-      };
     };
 
     onEditorReady({
@@ -976,13 +937,15 @@ export function MarkdownEditorHandlePlugin({
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {
         pendingModeSyncRef?.current?.();
-        const richTrackedDoc = editorModeRef.current === "source" || !selectionSnapshotFreshRef.current
-          ? null
-          : readSelectionDocumentSnapshot();
-        const currentDoc = richTrackedDoc ?? readFreshDocument();
+        const currentDoc = editorModeRef.current !== "source" && richSelectionDomInsertFailedRef.current
+          ? readSelectionDocumentSnapshot()
+          : readFreshDocument();
+        const baseSelection = editorModeRef.current !== "source" && richSelectionDomInsertFailedRef.current
+          ? canonicalFallbackSelectionRef.current ?? selectionRef.current
+          : selectionRef.current;
         const selection = createMarkdownSelection(
-          selectionRef.current.anchor,
-          selectionRef.current.focus,
+          baseSelection.anchor,
+          baseSelection.focus,
           currentDoc.length,
         );
         const nextDoc = [
@@ -1008,40 +971,16 @@ export function MarkdownEditorHandlePlugin({
           return;
         }
 
-        const forceCanonicalRichInsert = selectionTouchesFencedDiv(currentDoc, selection);
-        if (!forceCanonicalRichInsert && richTrackedDoc !== null) {
-          const trackedInsert = insertTextIntoTrackedRichSelection(richTrackedDoc, text);
-          if (trackedInsert) {
-            selectionRef.current = trackedInsert.nextSelection;
-            selectionSnapshotFreshRef.current = true;
-            richSelectionDomInsertFailedRef.current = false;
-            onSelectionChange?.(trackedInsert.nextSelection);
-            publishDocumentSnapshot(trackedInsert.nextDoc);
-            cacheRichDocumentSnapshot(trackedInsert.nextDoc);
-            return;
-          }
-          richSelectionDomInsertFailedRef.current = true;
-        }
-
-        const richInsert = forceCanonicalRichInsert || richSelectionDomInsertFailedRef.current
-          ? null
-          : insertTextIntoRichSelection(currentDoc, text);
-        if (richInsert) {
-          selectionRef.current = richInsert.nextSelection;
-          selectionSnapshotFreshRef.current = true;
-          richSelectionDomInsertFailedRef.current = false;
-          onSelectionChange?.(richInsert.nextSelection);
-          publishDocumentSnapshot(richInsert.nextDoc);
-          cacheRichDocumentSnapshot(richInsert.nextDoc);
-          return;
-        }
-
-        storeSelection(
+        const nextSelection = storeSelection(
           selectionRef,
           nextDoc.length,
           onSelectionChange,
           nextOffset,
         );
+        canonicalFallbackSelectionRef.current = nextSelection;
+        if (canonicalBridgeEchoRef) {
+          canonicalBridgeEchoRef.current = true;
+        }
         publishDocumentSnapshot(nextDoc);
         selectionSnapshotFreshRef.current = true;
         richSelectionDomInsertFailedRef.current = true;
@@ -1103,6 +1042,7 @@ export function MarkdownEditorHandlePlugin({
           if (!moved || selectionTouchesFencedDiv(currentDoc, nextSelection)) {
             selectionSnapshotFreshRef.current = false;
             richSelectionDomInsertFailedRef.current = true;
+            canonicalFallbackSelectionRef.current = nextSelection;
             scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
           } else {
             const liveSelection = readSourceSelectionFromLexicalSelection(editor, {
@@ -1112,6 +1052,7 @@ export function MarkdownEditorHandlePlugin({
             const selectionMatches = liveSelection !== null && sameSelection(liveSelection, nextSelection);
             selectionSnapshotFreshRef.current = selectionMatches;
             richSelectionDomInsertFailedRef.current = !selectionMatches;
+            canonicalFallbackSelectionRef.current = selectionMatches ? null : nextSelection;
           }
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
@@ -1126,6 +1067,8 @@ export function MarkdownEditorHandlePlugin({
     editor,
     editorModeRef,
     embeddedFieldFlushRegistry,
+    cancelRichDocumentSnapshot,
+    canonicalBridgeEchoRef,
     focusOwnerRef,
     flushRichDocumentSnapshot,
     lastCommittedDocRef,
@@ -1145,6 +1088,8 @@ export function MarkdownEditorHandlePlugin({
 }
 
 interface RichMarkdownEditorHandlePluginProps {
+  readonly canonicalBridgeEchoRef?: MutableRefObject<boolean>;
+  readonly cancelRichDocumentSnapshot?: () => void;
   readonly focusOwner: SurfaceFocusOwner;
   readonly flushRichDocumentSnapshot?: () => string | null;
   readonly lastCommittedDocRef: MutableRefObject<string>;
@@ -1158,6 +1103,8 @@ interface RichMarkdownEditorHandlePluginProps {
 }
 
 export function RichMarkdownEditorHandlePlugin({
+  canonicalBridgeEchoRef,
+  cancelRichDocumentSnapshot,
   focusOwner,
   flushRichDocumentSnapshot,
   lastCommittedDocRef,
@@ -1175,6 +1122,8 @@ export function RichMarkdownEditorHandlePlugin({
 
   return (
     <MarkdownEditorHandlePlugin
+      cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
+      canonicalBridgeEchoRef={canonicalBridgeEchoRef}
       editorModeRef={editorModeRef}
       focusOwnerRef={focusOwnerRef}
       flushRichDocumentSnapshot={flushRichDocumentSnapshot}

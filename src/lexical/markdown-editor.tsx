@@ -268,10 +268,12 @@ export function LexicalMarkdownEditor({
     initialDocRef,
     lastCommittedDocRef,
     pendingLocalEchoDocRef,
+    canonicalBridgeEchoRef,
     sourceSelectionRef,
     userEditPendingRef,
     embeddedFieldFlushRegistry,
     focusOwnerRef,
+    cancelRichDocumentSnapshot,
     flushRichDocumentSnapshot,
     handleRichChange,
   } = useMarkdownEditorSessionController({
@@ -389,6 +391,8 @@ export function LexicalMarkdownEditor({
                 <EditableSyncPlugin editable={editable} />
                 {!isSourceMode && editable ? <CursorRevealPlugin editorMode={editorMode} presentation={revealPresentation} /> : null}
                 <MarkdownEditorHandlePlugin
+                  cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
+                  canonicalBridgeEchoRef={canonicalBridgeEchoRef}
                   editorModeRef={editorModeRef}
                   focusOwnerRef={focusOwnerRef}
                   flushRichDocumentSnapshot={flushRichDocumentSnapshot}
@@ -403,6 +407,7 @@ export function LexicalMarkdownEditor({
                   userEditPendingRef={userEditPendingRef}
                 />
                 <MarkdownModeSyncPlugin
+                  canonicalBridgeEchoRef={canonicalBridgeEchoRef}
                   doc={doc}
                   editorMode={editorMode}
                   flushRichDocumentSnapshot={flushRichDocumentSnapshot}

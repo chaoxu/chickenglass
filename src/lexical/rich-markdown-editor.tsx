@@ -162,9 +162,11 @@ export function LexicalRichMarkdownEditor({
     initialDocRef,
     lastCommittedDocRef,
     pendingLocalEchoDocRef,
+    canonicalBridgeEchoRef,
     sourceSelectionRef,
     userEditPendingRef,
     embeddedFieldFlushRegistry,
+    cancelRichDocumentSnapshot,
     flushRichDocumentSnapshot,
     handleRichChange,
     syncSelectionToDocLength,
@@ -243,6 +245,8 @@ export function LexicalRichMarkdownEditor({
                   ? <CursorRevealPlugin editorMode={REVEAL_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
                   : <ClickableLinkPlugin />}
                 <RichMarkdownEditorHandlePlugin
+                  cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
+                  canonicalBridgeEchoRef={canonicalBridgeEchoRef}
                   focusOwner={focusOwner}
                   flushRichDocumentSnapshot={flushRichDocumentSnapshot}
                   lastCommittedDocRef={lastCommittedDocRef}
