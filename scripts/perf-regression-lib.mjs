@@ -264,7 +264,9 @@ export function comparePerfRegressionReports(
     thresholdPct,
     minDeltaMs,
   );
-  const regressions = [...frontend, ...backend, ...metrics].filter((entry) => entry.status === "regressed");
+  const regressions = [...frontend, ...backend, ...metrics].filter((entry) =>
+    entry.status === "regressed" || entry.status === "missing"
+  );
 
   return {
     thresholdPct,

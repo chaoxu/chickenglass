@@ -1070,43 +1070,43 @@ function printReportSummary(report) {
   }
 }
 
-function printComparison(result) {
+export function comparisonFailureRows(result) {
   const spanRegressions = [...result.frontend, ...result.backend]
-    .filter((entry) => entry.status === "regressed")
+    .filter((entry) => entry.status === "regressed" || entry.status === "missing")
     .map((entry) => ({
-    source: entry.source,
-    name: entry.name,
-    avgDeltaMs: entry.avgDeltaMs,
-    avgPct: `${entry.avgPct}%`,
-    maxDeltaMs: entry.maxDeltaMs,
-    maxPct: `${entry.maxPct}%`,
+      source: entry.source,
+      name: entry.name,
+      status: entry.status,
+      avgDeltaMs: entry.status === "missing" ? "missing" : entry.avgDeltaMs,
+      avgPct: entry.status === "missing" ? "missing" : `${entry.avgPct}%`,
+      maxDeltaMs: entry.status === "missing" ? "missing" : entry.maxDeltaMs,
+      maxPct: entry.status === "missing" ? "missing" : `${entry.maxPct}%`,
     }));
 
-  if (spanRegressions.length === 0) {
-    console.log("No perf regressions detected.");
-    const metricRegressions = result.metrics?.filter((entry) => entry.status === "regressed") ?? [];
-    if (metricRegressions.length === 0) {
-      return;
-    }
-  }
-
   const metricRegressions = (result.metrics ?? [])
-    .filter((entry) => entry.status === "regressed")
+    .filter((entry) => entry.status === "regressed" || entry.status === "missing")
     .map((entry) => ({
       source: "metric",
       name: entry.name,
-      avgDeltaMs: entry.meanDelta,
-      avgPct: `${entry.meanPct}%`,
-      maxDeltaMs: entry.maxDelta,
-      maxPct: `${entry.maxPct}%`,
+      status: entry.status,
+      avgDeltaMs: entry.status === "missing" ? "missing" : entry.meanDelta,
+      avgPct: entry.status === "missing" ? "missing" : `${entry.meanPct}%`,
+      maxDeltaMs: entry.status === "missing" ? "missing" : entry.maxDelta,
+      maxPct: entry.status === "missing" ? "missing" : `${entry.maxPct}%`,
     }));
 
-  if (spanRegressions.length === 0 && metricRegressions.length === 0) {
+  return [...spanRegressions, ...metricRegressions];
+}
+
+export function printComparison(result) {
+  const rows = comparisonFailureRows(result);
+  if (rows.length === 0) {
+    console.log("No perf regressions detected.");
     return;
   }
 
-  console.log("Perf regressions detected:");
-  console.table([...spanRegressions, ...metricRegressions]);
+  console.log("Perf regressions or missing measurements detected:");
+  console.table(rows);
 }
 
 export async function main(argv = process.argv.slice(2)) {

@@ -3,6 +3,7 @@ import {
   availableTypingBurstCases,
   TYPING_BURST_CASES,
   TYPING_BURST_REQUIRED_METRICS,
+  comparisonFailureRows,
   findTypingBurstPositions,
   resolvePerfRuntimeOptions,
   scenarios,
@@ -106,5 +107,29 @@ Final prose line.
       fixtureOpenTimeoutMs: 45000,
       postOpenSettleMs: 800,
     });
+  });
+
+  it("formats missing metric comparisons as failures", () => {
+    expect(comparisonFailureRows({
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.wall_ms.index.after_frontmatter",
+          unit: "ms",
+          status: "missing",
+        },
+      ],
+    })).toEqual([
+      {
+        source: "metric",
+        name: "typing.wall_ms.index.after_frontmatter",
+        status: "missing",
+        avgDeltaMs: "missing",
+        avgPct: "missing",
+        maxDeltaMs: "missing",
+        maxPct: "missing",
+      },
+    ]);
   });
 });

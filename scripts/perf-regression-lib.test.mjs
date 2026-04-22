@@ -210,6 +210,47 @@ describe("perf regression reports", () => {
     });
   });
 
+  it("treats missing baseline spans and metrics as compare failures", () => {
+    const baseline = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "open_file",
+          name: "open_file.read",
+          meanAvgMs: 20,
+          worstMaxMs: 30,
+        },
+      ],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.wall_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 20,
+          maxValue: 30,
+        },
+      ],
+    };
+    const current = {
+      frontend: [],
+      backend: [],
+      metrics: [],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current);
+
+    expect(result.frontend[0]).toMatchObject({
+      name: "open_file.read",
+      status: "missing",
+    });
+    expect(result.metrics[0]).toMatchObject({
+      name: "typing.wall_ms.cogirth_main2.inline_math",
+      status: "missing",
+    });
+    expect(result.regressions).toHaveLength(2);
+    expect(result.regressions.map((entry) => entry.status)).toEqual(["missing", "missing"]);
+  });
+
   it("does not flag tiny absolute deltas even when percentages look large", () => {
     const baseline = {
       frontend: [
