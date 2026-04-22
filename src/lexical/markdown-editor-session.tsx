@@ -63,7 +63,7 @@ import {
 } from "./update-tags";
 
 const RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
-const DEFERRED_RICH_DOCUMENT_SYNC_MS = 200;
+const DEFERRED_RICH_DOCUMENT_SYNC_MS = 900;
 
 export function sameSelection(
   left: MarkdownEditorSelection,
@@ -848,6 +848,14 @@ export function MarkdownEditorHandlePlugin({
 
     const readFreshDocument = () => {
       pendingModeSyncRef?.current?.();
+      if (editorModeRef.current !== "source" && deferredRichSyncDocRef.current !== null) {
+        const nextDoc = deferredRichSyncDocRef.current;
+        stageDocumentSnapshot(nextDoc);
+        if (selectionSnapshotFreshRef.current) {
+          selectionSnapshotFreshRef.current = false;
+        }
+        return nextDoc;
+      }
       const preFlushRevealDoc = editorModeRef.current === "source" || !hasCursorRevealActive(editor)
         ? null
         : readDocumentSnapshot();

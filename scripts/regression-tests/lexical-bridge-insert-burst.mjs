@@ -73,7 +73,7 @@ export async function run(page) {
         }
         await sleepInPage(0);
       }
-      await sleepInPage(650);
+      await sleepInPage(1_050);
       const after = editor.getDoc();
       return {
         afterLength: after.length,

@@ -541,7 +541,7 @@ describe("__editor selection bridge (rich mode)", () => {
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
 
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await new Promise((resolve) => setTimeout(resolve, 1_050));
       });
 
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(1);

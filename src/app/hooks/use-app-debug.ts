@@ -123,6 +123,24 @@ export function useAppDebug({
 
   const getCmView = () => window.__cmView ?? null;
 
+  const readEditorDoc = (): string => {
+    const handle = getEditorHandle();
+    if (handle) {
+      return handle.getDoc();
+    }
+    const view = getCmView();
+    return view ? view.state.doc.toString() : getCurrentDocText();
+  };
+
+  const peekEditorDoc = (): string => {
+    const handle = getEditorHandle();
+    if (handle) {
+      return handle.peekDoc();
+    }
+    const view = getCmView();
+    return view ? view.state.doc.toString() : getCurrentDocText();
+  };
+
   const readEditorSelection = (): MarkdownEditorSelection => {
     const handle = getEditorHandle();
     if (handle) {
@@ -358,9 +376,9 @@ export function useAppDebug({
     window.__editor = {
       ready: getDebugBridgeReadyPromise("editor"),
       focus: focusEditor,
-      getDoc: getCurrentDocText,
+      getDoc: readEditorDoc,
       getSelection: readEditorSelection,
-      peekDoc: getCurrentDocText,
+      peekDoc: peekEditorDoc,
       peekSelection: readEditorSelection,
       insertText: insertEditorText,
       setDoc: setEditorDoc,

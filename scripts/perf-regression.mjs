@@ -112,6 +112,8 @@ export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
   "lexical.typing.insert_max_ms",
   "lexical.typing.canonical_ms",
   "lexical.typing.semantic_ms",
+  "lexical.typing.deferred_sync_work_ms",
+  "lexical.typing.deferred_sync_count",
   "lexical.typing.input_to_semantic_ms",
 ];
 
@@ -461,15 +463,22 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         );
         return entry?.count ?? 0;
       };
+      const frontendSummary = async (name) => {
+        const snapshot = await window.__cfDebug.perfSummary();
+        return snapshot.frontend.summaries.find((summary) => summary.name === name) ?? null;
+      };
 
       const editor = window.__editor;
       if (!editor) {
         throw new Error("window.__editor is unavailable in Lexical mode.");
       }
       await editor.ready;
+      const readCanonicalDoc = () =>
+        typeof editor.peekDoc === "function" ? editor.peekDoc() : editor.getDoc();
 
-      const beforeLength = editor.getDoc().length;
+      const beforeLength = readCanonicalDoc().length;
       const semanticCountBefore = await semanticSpanCount();
+      const deferredSyncBefore = await frontendSummary("lexical.setLexicalMarkdown");
       editor.setSelection(nextAnchor);
       editor.focus();
       await waitForAnimationFrames();
@@ -486,13 +495,13 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const expectedLength = beforeLength + count;
       const canonicalStart = performance.now();
       while (performance.now() - canonicalStart < 5000) {
-        if (editor.getDoc().length >= expectedLength) {
+        if (readCanonicalDoc().length >= expectedLength) {
           break;
         }
         await sleepInPage(0);
       }
       const canonicalMs = performance.now() - canonicalStart;
-      const finalLength = editor.getDoc().length;
+      const finalLength = readCanonicalDoc().length;
       if (finalLength < expectedLength) {
         throw new Error(
           `Lexical bridge insert did not update canonical markdown: expected length >= ${expectedLength}, got ${finalLength}.`,
@@ -513,6 +522,23 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       await waitForIdle();
       const settleMs = performance.now() - settleStart;
 
+      const deferredSyncStart = performance.now();
+      const beforeDeferredCount = deferredSyncBefore?.count ?? 0;
+      const beforeDeferredTotalMs = deferredSyncBefore?.totalMs ?? 0;
+      let deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+      while (performance.now() - deferredSyncStart < 3000) {
+        if ((deferredSyncAfter?.count ?? 0) > beforeDeferredCount) {
+          break;
+        }
+        await sleepInPage(25);
+        deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+      }
+      const deferredSyncCount = Math.max(0, (deferredSyncAfter?.count ?? 0) - beforeDeferredCount);
+      const deferredSyncWorkMs = Math.max(
+        0,
+        (deferredSyncAfter?.totalMs ?? 0) - beforeDeferredTotalMs,
+      );
+
       return {
         wallMs,
         meanInsertMs: mean(timings),
@@ -520,6 +546,8 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         canonicalMs,
         semanticMs,
         settleMs,
+        deferredSyncCount,
+        deferredSyncWorkMs,
         inputToSemanticMs: wallMs + canonicalMs + semanticMs + settleMs,
       };
     },
@@ -574,6 +602,16 @@ export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
       name: withContext("lexical.typing.semantic_ms"),
       unit: "ms",
       value: result.semanticMs,
+    },
+    {
+      name: withContext("lexical.typing.deferred_sync_work_ms"),
+      unit: "ms",
+      value: result.deferredSyncWorkMs,
+    },
+    {
+      name: withContext("lexical.typing.deferred_sync_count"),
+      unit: "count",
+      value: result.deferredSyncCount,
     },
     {
       name: withContext("lexical.typing.input_to_semantic_ms"),

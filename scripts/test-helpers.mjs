@@ -917,7 +917,15 @@ export async function switchToMode(page, mode) {
       return null;
     }
     window.__app.setMode(nextMode);
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const start = performance.now();
+    while (performance.now() - start < 2_000) {
+      const currentMode = window.__app.getMode();
+      if (currentMode === nextMode) {
+        return currentMode;
+      }
+      await sleepInPage(50);
+    }
     return window.__app.getMode();
   }, normalizedMode);
 
