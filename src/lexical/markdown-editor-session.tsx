@@ -64,6 +64,7 @@ import {
 } from "./update-tags";
 
 const RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
+const DEFERRED_RICH_DOCUMENT_SYNC_MS = 200;
 
 export function sameSelection(
   left: MarkdownEditorSelection,
@@ -566,6 +567,9 @@ export function MarkdownEditorHandlePlugin({
   const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
   const selectionSnapshotFreshRef = useRef(false);
   const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
+  const deferredRichSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deferredRichSyncDocRef = useRef<string | null>(null);
+  const richSelectionDomInsertFailedRef = useRef(false);
 
   useEffect(() => {
     if (!onEditorReady) {
@@ -597,14 +601,62 @@ export function MarkdownEditorHandlePlugin({
       };
     };
 
+    const clearDeferredRichDocumentSync = () => {
+      const timer = deferredRichSyncTimerRef.current;
+      if (timer !== null) {
+        clearTimeout(timer);
+        deferredRichSyncTimerRef.current = null;
+      }
+    };
+
+    const applyDeferredRichDocumentSync = () => {
+      const nextDoc = deferredRichSyncDocRef.current;
+      if (nextDoc === null || editorModeRef.current === "source") {
+        clearDeferredRichDocumentSync();
+        deferredRichSyncDocRef.current = null;
+        return;
+      }
+
+      clearDeferredRichDocumentSync();
+      deferredRichSyncDocRef.current = null;
+      const nextSelection = createMarkdownSelection(
+        selectionRef.current.anchor,
+        selectionRef.current.focus,
+        nextDoc.length,
+      );
+      selectionRef.current = nextSelection;
+      setLexicalMarkdown(editor, nextDoc, {
+        tag: [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG],
+      });
+      const moved = selectSourceOffsetsInRichLexicalRoot(
+        editor,
+        nextDoc,
+        nextSelection.anchor,
+        nextSelection.focus,
+      );
+      selectionSnapshotFreshRef.current = moved;
+      richSelectionDomInsertFailedRef.current = !moved;
+      cacheRichDocumentSnapshot(nextDoc);
+    };
+
+    const scheduleDeferredRichDocumentSync = (nextDoc: string) => {
+      deferredRichSyncDocRef.current = nextDoc;
+      clearDeferredRichDocumentSync();
+      deferredRichSyncTimerRef.current = setTimeout(() => {
+        applyDeferredRichDocumentSync();
+      }, DEFERRED_RICH_DOCUMENT_SYNC_MS);
+    };
+
     const readDocumentSnapshot = () =>
       editorModeRef.current === "source"
         ? getSourceText(editor)
-        : readRichDocumentSnapshot();
+        : deferredRichSyncDocRef.current ?? readRichDocumentSnapshot();
     const readSelectionDocumentSnapshot = () =>
       editorModeRef.current === "source"
         ? getSourceText(editor)
-        : pendingLocalEchoDocRef.current ?? lastCommittedDocRef.current;
+        : deferredRichSyncDocRef.current
+          ?? pendingLocalEchoDocRef.current
+          ?? lastCommittedDocRef.current;
 
     const stageDocumentSnapshot = (nextDoc: string) => {
       if (nextDoc !== lastCommittedDocRef.current) {
@@ -697,6 +749,9 @@ export function MarkdownEditorHandlePlugin({
 
     const flushPendingEdits = () => {
       embeddedFieldFlushRegistry?.flush();
+      if (deferredRichSyncDocRef.current !== null) {
+        return deferredRichSyncDocRef.current;
+      }
       const flushedDoc = flushRichDocumentSnapshot?.() ?? null;
       if (flushedDoc !== null) {
         cacheRichDocumentSnapshot(flushedDoc);
@@ -861,6 +916,7 @@ export function MarkdownEditorHandlePlugin({
         setLexicalMarkdown(editor, nextDoc);
       },
       focus: () => {
+        applyDeferredRichDocumentSync();
         if (editorModeRef.current !== "source") {
           scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
         }
@@ -909,17 +965,22 @@ export function MarkdownEditorHandlePlugin({
           if (trackedInsert) {
             selectionRef.current = trackedInsert.nextSelection;
             selectionSnapshotFreshRef.current = true;
+            richSelectionDomInsertFailedRef.current = false;
             onSelectionChange?.(trackedInsert.nextSelection);
             publishDocumentSnapshot(trackedInsert.nextDoc);
             cacheRichDocumentSnapshot(trackedInsert.nextDoc);
             return;
           }
+          richSelectionDomInsertFailedRef.current = true;
         }
 
-        const richInsert = insertTextIntoRichSelection(currentDoc, text);
+        const richInsert = richSelectionDomInsertFailedRef.current
+          ? null
+          : insertTextIntoRichSelection(currentDoc, text);
         if (richInsert) {
           selectionRef.current = richInsert.nextSelection;
           selectionSnapshotFreshRef.current = true;
+          richSelectionDomInsertFailedRef.current = false;
           onSelectionChange?.(richInsert.nextSelection);
           publishDocumentSnapshot(richInsert.nextDoc);
           cacheRichDocumentSnapshot(richInsert.nextDoc);
@@ -932,9 +993,9 @@ export function MarkdownEditorHandlePlugin({
           onSelectionChange,
           nextOffset,
         );
-        userEditPendingRef.current = true;
         publishDocumentSnapshot(nextDoc);
-        setLexicalMarkdown(editor, nextDoc);
+        selectionSnapshotFreshRef.current = true;
+        scheduleDeferredRichDocumentSync(nextDoc);
       },
       setDoc: (doc) => {
         const currentDoc = readFreshDocument();
@@ -959,7 +1020,11 @@ export function MarkdownEditorHandlePlugin({
         setLexicalMarkdown(editor, doc);
       },
       setSelection: (anchor, focus = anchor, options) => {
-        flushPendingEdits();
+        if (editorModeRef.current === "source") {
+          flushPendingEdits();
+        } else {
+          applyDeferredRichDocumentSync();
+        }
         const currentDoc = readSelectionDocumentSnapshot();
         const nextSelection = storeSelection(
           selectionRef,
@@ -985,14 +1050,21 @@ export function MarkdownEditorHandlePlugin({
           );
           if (!moved) {
             selectionSnapshotFreshRef.current = false;
+            richSelectionDomInsertFailedRef.current = true;
             scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
           } else {
             selectionSnapshotFreshRef.current = true;
+            richSelectionDomInsertFailedRef.current = false;
           }
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
     }, editor);
+
+    return () => {
+      clearDeferredRichDocumentSync();
+      deferredRichSyncDocRef.current = null;
+    };
   }, [
     editor,
     editorModeRef,

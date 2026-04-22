@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
+import { clearFrontendPerf, getFrontendPerfSnapshot } from "../app/perf";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
 import { registerCoflatDecoratorRenderers } from "./renderers/block-renderers";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
@@ -120,6 +121,10 @@ function selectNode(editor: LexicalEditor, key: string): void {
       $setSelection(selection);
     }, { discrete: true });
   });
+}
+
+function getPerfSummaryCount(name: string): number {
+  return getFrontendPerfSnapshot().summaries.find((entry) => entry.name === name)?.count ?? 0;
 }
 
 describe("ClickableLinkPlugin in read-only mode", () => {
@@ -484,6 +489,81 @@ describe("__editor selection bridge (rich mode)", () => {
       });
     } finally {
       editor.unmount();
+    }
+  });
+
+  it("coalesces bridge inserts when the rich selection cannot accept direct text", async () => {
+    const doc = "Alpha Beta";
+    const insertAt = doc.indexOf(" Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+    const textPrototype = Text.prototype as unknown as {
+      getBoundingClientRect?: () => DOMRect;
+    };
+    const elementPrototype = Element.prototype as unknown as {
+      getBoundingClientRect?: () => DOMRect;
+    };
+    const rangePrototype = Range.prototype as unknown as {
+      getBoundingClientRect?: () => DOMRect;
+    };
+    const originalTextGetBoundingClientRect = textPrototype.getBoundingClientRect;
+    const originalElementGetBoundingClientRect = elementPrototype.getBoundingClientRect;
+    const originalRangeGetBoundingClientRect = rangePrototype.getBoundingClientRect;
+    const getZeroRect = () => ({
+      bottom: 0,
+      height: 0,
+      left: 0,
+      right: 0,
+      toJSON: () => ({}),
+      top: 0,
+      width: 0,
+      x: 0,
+      y: 0,
+    });
+    textPrototype.getBoundingClientRect = getZeroRect;
+    elementPrototype.getBoundingClientRect = getZeroRect;
+    rangePrototype.getBoundingClientRect = getZeroRect;
+
+    try {
+      clearFrontendPerf();
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.editor.update(() => {
+          $setSelection(null);
+        }, { discrete: true });
+        editor.handle.insertText("1");
+        editor.handle.insertText("2");
+        editor.handle.insertText("3");
+      });
+
+      const expectedDoc = "Alpha123 Beta";
+      expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      });
+
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(1);
+      expect(editor.handle.getDoc()).toBe(expectedDoc);
+    } finally {
+      editor.unmount();
+      if (originalTextGetBoundingClientRect) {
+        textPrototype.getBoundingClientRect = originalTextGetBoundingClientRect;
+      } else {
+        delete textPrototype.getBoundingClientRect;
+      }
+      if (originalElementGetBoundingClientRect) {
+        elementPrototype.getBoundingClientRect = originalElementGetBoundingClientRect;
+      } else {
+        delete elementPrototype.getBoundingClientRect;
+      }
+      if (originalRangeGetBoundingClientRect) {
+        rangePrototype.getBoundingClientRect = originalRangeGetBoundingClientRect;
+      } else {
+        delete rangePrototype.getBoundingClientRect;
+      }
+      clearFrontendPerf();
     }
   });
 });

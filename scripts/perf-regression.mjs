@@ -106,6 +106,15 @@ export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.input_to_idle_ms",
 ];
 
+export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
+  "lexical.typing.wall_ms",
+  "lexical.typing.insert_mean_ms",
+  "lexical.typing.insert_max_ms",
+  "lexical.typing.canonical_ms",
+  "lexical.typing.semantic_ms",
+  "lexical.typing.input_to_semantic_ms",
+];
+
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
 
 async function runSteppedScroll(page) {
@@ -361,6 +370,24 @@ async function openCleanRichDocument(page, fixture, runtimeOptions) {
   );
 }
 
+async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
+  await switchToMode(page, "source");
+  await openFixtureDocument(
+    page,
+    fixture,
+    {
+      mode: "lexical",
+      timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+      settleMs: runtimeOptions.postOpenSettleMs,
+    },
+  );
+  return evaluateStep(
+    page,
+    "getLoadedLexicalDocumentText",
+    async () => window.__editor.getDoc(),
+  );
+}
+
 async function measureTypingBurst(page, anchor, insertCount) {
   return evaluateStep(page, "measureTypingBurst", async ({ nextAnchor, count }) => {
     const mean = (values) =>
@@ -409,6 +436,97 @@ async function measureTypingBurst(page, anchor, insertCount) {
   }, { nextAnchor: anchor, count: insertCount });
 }
 
+async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
+  return evaluateStep(
+    page,
+    "measureLexicalBridgeTypingBurst",
+    async ({ nextAnchor, count }) => {
+      const mean = (values) =>
+        values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+      const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const waitForAnimationFrames = () =>
+        new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const waitForIdle = () =>
+        new Promise((resolve) => {
+          if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+            return;
+          }
+          setTimeout(resolve, 0);
+        });
+      const semanticSpanCount = async () => {
+        const snapshot = await window.__cfDebug.perfSummary();
+        const entry = snapshot.frontend.summaries.find(
+          (summary) => summary.name === "lexical.deriveSemanticState",
+        );
+        return entry?.count ?? 0;
+      };
+
+      const editor = window.__editor;
+      if (!editor) {
+        throw new Error("window.__editor is unavailable in Lexical mode.");
+      }
+      await editor.ready;
+
+      const beforeLength = editor.getDoc().length;
+      const semanticCountBefore = await semanticSpanCount();
+      editor.setSelection(nextAnchor);
+      editor.focus();
+      await waitForAnimationFrames();
+
+      const timings = [];
+      const wallStart = performance.now();
+      for (let i = 0; i < count; i += 1) {
+        const t0 = performance.now();
+        editor.insertText("1");
+        timings.push(performance.now() - t0);
+      }
+      const wallMs = performance.now() - wallStart;
+
+      const expectedLength = beforeLength + count;
+      const canonicalStart = performance.now();
+      while (performance.now() - canonicalStart < 5000) {
+        if (editor.getDoc().length >= expectedLength) {
+          break;
+        }
+        await sleepInPage(0);
+      }
+      const canonicalMs = performance.now() - canonicalStart;
+      const finalLength = editor.getDoc().length;
+      if (finalLength < expectedLength) {
+        throw new Error(
+          `Lexical bridge insert did not update canonical markdown: expected length >= ${expectedLength}, got ${finalLength}.`,
+        );
+      }
+
+      const semanticStart = performance.now();
+      while (performance.now() - semanticStart < 3000) {
+        if (await semanticSpanCount() > semanticCountBefore) {
+          break;
+        }
+        await sleepInPage(25);
+      }
+      const semanticMs = performance.now() - semanticStart;
+
+      const settleStart = performance.now();
+      await waitForAnimationFrames();
+      await waitForIdle();
+      const settleMs = performance.now() - settleStart;
+
+      return {
+        wallMs,
+        meanInsertMs: mean(timings),
+        maxInsertMs: Math.max(...timings, 0),
+        canonicalMs,
+        semanticMs,
+        settleMs,
+        inputToSemanticMs: wallMs + canonicalMs + semanticMs + settleMs,
+      };
+    },
+    { nextAnchor: anchor, count: insertCount },
+  );
+}
+
 export function typingBurstMetrics(caseKey, positionKey, result) {
   const withContext = (name) => `${name}.${caseKey}.${positionKey}`;
   return [
@@ -433,11 +551,55 @@ export function typingBurstMetrics(caseKey, positionKey, result) {
   ];
 }
 
+export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
+  const withContext = (name) => `${name}.${caseKey}.${positionKey}`;
+  return [
+    { name: withContext("lexical.typing.wall_ms"), unit: "ms", value: result.wallMs },
+    {
+      name: withContext("lexical.typing.insert_mean_ms"),
+      unit: "ms",
+      value: result.meanInsertMs,
+    },
+    {
+      name: withContext("lexical.typing.insert_max_ms"),
+      unit: "ms",
+      value: result.maxInsertMs,
+    },
+    {
+      name: withContext("lexical.typing.canonical_ms"),
+      unit: "ms",
+      value: result.canonicalMs,
+    },
+    {
+      name: withContext("lexical.typing.semantic_ms"),
+      unit: "ms",
+      value: result.semanticMs,
+    },
+    {
+      name: withContext("lexical.typing.input_to_semantic_ms"),
+      unit: "ms",
+      value: result.inputToSemanticMs,
+    },
+  ];
+}
+
 function typingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
   const metricNames = [];
   for (const caseDef of caseDefinitions) {
     for (const positionKey of caseDef.positionKeys ?? DEFAULT_TYPING_BURST_POSITION_KEYS) {
       for (const metricName of TYPING_BURST_REQUIRED_METRICS) {
+        metricNames.push(`${metricName}.${caseDef.key}.${positionKey}`);
+      }
+    }
+  }
+  return metricNames;
+}
+
+function lexicalTypingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
+  const metricNames = [];
+  for (const caseDef of caseDefinitions) {
+    for (const positionKey of caseDef.positionKeys ?? DEFAULT_TYPING_BURST_POSITION_KEYS) {
+      for (const metricName of LEXICAL_TYPING_BURST_REQUIRED_METRICS) {
         metricNames.push(`${metricName}.${caseDef.key}.${positionKey}`);
       }
     }
@@ -584,6 +746,39 @@ export const scenarios = {
           );
           const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
           metrics.push(...typingBurstMetrics(testCase.key, positionKey, result));
+        }
+      }
+      return { metrics };
+    },
+  },
+  "typing-lexical-bridge-burst": {
+    description: "Measure Lexical-mode typing bursts through the product-neutral editor bridge across representative markdown hotspots.",
+    defaultSettleMs: 300,
+    requiredMetrics: lexicalTypingBurstRequiredMetricNames(availableTypingBurstCases()),
+    run: async (page, runtimeOptions) => {
+      const metrics = [];
+      for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
+        const originalText = await openCleanLexicalDocument(
+          page,
+          testCase,
+          runtimeOptions,
+        );
+        const positions = findTypingBurstPositions(
+          originalText,
+          testCase.positionKeys,
+        );
+        for (const [positionKey, position] of Object.entries(positions)) {
+          await openCleanLexicalDocument(
+            page,
+            testCase,
+            runtimeOptions,
+          );
+          const result = await measureLexicalBridgeTypingBurst(
+            page,
+            position.anchor,
+            TYPING_BURST_INSERT_COUNT,
+          );
+          metrics.push(...lexicalTypingBurstMetrics(testCase.key, positionKey, result));
         }
       }
       return { metrics };
