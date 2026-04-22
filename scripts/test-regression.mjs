@@ -86,9 +86,10 @@ async function loadTests(filter) {
 async function main() {
   const args = normalizeCliArgs(process.argv.slice(2));
   const chromeArgs = parseChromeArgs(args, { browser: "managed" });
-  const { getFlag, hasFlag } = createArgParser(args);
+  const { getFlag, getIntFlag, hasFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
   const scenarioArg = getFlag("--scenario", "");
+  const timeout = getIntFlag("--timeout", 15000);
   const filter = resolveFilter({ filterArg, scenarioArg });
 
   console.log("Browser Regression Tests");
@@ -105,6 +106,7 @@ async function main() {
       browser: chromeArgs.browser,
       headless: chromeArgs.headless,
       port: chromeArgs.port,
+      timeout,
       url: chromeArgs.url,
     });
   } catch (err) {
@@ -151,7 +153,7 @@ async function main() {
       if (chromeArgs.browser === "cdp") {
         await page.reload({ waitUntil: "load" });
       }
-      await waitForDebugBridge(page);
+      await waitForDebugBridge(page, { timeout });
     } catch {
       console.error("Timed out waiting for debug bridge (__app, __editor, and product-specific debug globals).");
       console.error("The dev server may not have finished loading.");
