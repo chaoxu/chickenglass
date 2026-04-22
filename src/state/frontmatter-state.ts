@@ -7,10 +7,11 @@
  * Rendering (Typora-style title widget / YAML reveal) lives in
  * `editor/frontmatter-render.ts`.
  */
-import { EditorState, StateField } from "@codemirror/state";
+import { EditorState, StateField, type Text } from "@codemirror/state";
 
 import {
   type BlockConfig,
+  isFrontmatterDelimiterLine,
   parseFrontmatter,
   type FrontmatterConfig,
   type FrontmatterResult,
@@ -35,7 +36,28 @@ interface FrontmatterStateInternal extends FrontmatterState {
 
 /** Parse frontmatter from an EditorState's document. */
 function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
-  return parseFrontmatter(state.doc.toString());
+  const frontmatterPrefix = sliceFrontmatterPrefix(state.doc);
+  return frontmatterPrefix === null
+    ? { config: {}, end: -1 }
+    : parseFrontmatter(frontmatterPrefix);
+}
+
+function sliceFrontmatterPrefix(doc: Text): string | null {
+  const firstLine = doc.line(1);
+  if (!isFrontmatterDelimiterLine(firstLine.text) || doc.lines < 2) {
+    return null;
+  }
+
+  for (let lineNumber = 2; lineNumber <= doc.lines; lineNumber += 1) {
+    const line = doc.line(lineNumber);
+    if (!isFrontmatterDelimiterLine(line.text)) {
+      continue;
+    }
+    const end = line.number < doc.lines ? line.to + 1 : line.to;
+    return doc.sliceString(0, end);
+  }
+
+  return null;
 }
 
 function normalizeBlockConfig(config: BlockConfig): BlockConfig {

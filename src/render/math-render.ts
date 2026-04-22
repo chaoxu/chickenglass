@@ -2,6 +2,7 @@ import {
   type EditorState,
   type Extension,
   type Range,
+  type Text,
   type Transaction,
 } from "@codemirror/state";
 import {
@@ -340,6 +341,16 @@ function containsMathSyntaxEdit(text: string): boolean {
   return /[$\\()[\]{}#\r\n]/.test(text);
 }
 
+function textContainsMathSyntaxEdit(text: Text): boolean {
+  const cursor = text.iter();
+  while (!cursor.next().done) {
+    if (containsMathSyntaxEdit(cursor.value)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function sliceChangeContext(
   state: EditorState,
   from: number,
@@ -364,7 +375,7 @@ function summarizeMathChanges(
     if (
       !hasMathSyntaxEdit
       && (
-        containsMathSyntaxEdit(inserted.toString())
+        textContainsMathSyntaxEdit(inserted)
         || containsMathSyntaxEdit(sliceChangeContext(tr.startState, fromOld, toOld))
         || containsMathSyntaxEdit(sliceChangeContext(tr.state, fromNew, toNew))
       )

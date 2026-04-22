@@ -111,12 +111,16 @@ function findLineBoundary(
   return { lineEnd, next: lineFeed + 1 };
 }
 
+export function isFrontmatterDelimiterLine(line: string): boolean {
+  return line.slice(0, 3) === "---" && line.slice(3).trim().length === 0;
+}
+
 function isStandaloneDelimiter(
   doc: string,
   from: number,
   lineEnd: number,
 ): boolean {
-  return doc.slice(from, from + 3) === "---" && doc.slice(from + 3, lineEnd).trim().length === 0;
+  return isFrontmatterDelimiterLine(doc.slice(from, lineEnd));
 }
 
 export function extractRawFrontmatter(

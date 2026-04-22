@@ -15,7 +15,7 @@
 
 import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { Compartment, EditorSelection, type Extension, type Text } from "@codemirror/state";
+import { Annotation, Compartment, EditorSelection, type Extension, type Text } from "@codemirror/state";
 
 import {
   createEditor,
@@ -39,8 +39,11 @@ import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { ResolvedTheme } from "../theme-dom";
+import { normalizeCmTextString, textMatchesString } from "../codemirror-text";
 
 export type { ResolvedTheme } from "../theme-dom";
+
+const knownProgrammaticDocumentTextAnnotation = Annotation.define<string>();
 
 /** Options accepted by useEditor. */
 export interface UseEditorOptions {
@@ -220,7 +223,10 @@ export function useEditor(
         if (!programmaticDocChange) {
           onDocChangeRef.current?.(collectDocumentChanges(update));
         } else {
-          const docStr = update.state.doc.toString();
+          const annotatedDoc = update.transactions.find((tr) =>
+            tr.annotation(knownProgrammaticDocumentTextAnnotation) !== undefined
+          )?.annotation(knownProgrammaticDocumentTextAnnotation);
+          const docStr = annotatedDoc ?? update.state.doc.toString();
           lastLoadedDocRef.current = docStr;
           onProgrammaticDocChangeRef.current?.(docStr);
         }
@@ -271,7 +277,7 @@ export function useEditor(
 
     debugBridge.attachDebugView(newView);
     setView(newView);
-    finalizeDocumentSync(newView, doc, docPath, true);
+    finalizeDocumentSync(newView, normalizeCmTextString(doc), docPath, true);
 
     return () => {
       if (wordCountTimerRef.current !== null) {
@@ -300,12 +306,15 @@ export function useEditor(
     if (!view) return;
 
     const pathChanged = docPath !== lastLoadedPathRef.current;
-    const docMatchesLastLoaded = doc === lastLoadedDocRef.current;
+    const rawDocMatchesLastLoaded = doc === lastLoadedDocRef.current;
+    const normalizedDoc = rawDocMatchesLastLoaded ? doc : normalizeCmTextString(doc);
+    const docMatchesLastLoaded =
+      rawDocMatchesLastLoaded || normalizedDoc === lastLoadedDocRef.current;
     // Saving updates the external doc prop to match the already-live CM6 text.
     // Treat that sync as a no-op so cursor and scroll state stay intact.
     const docChangedExternally =
       !docMatchesLastLoaded
-      && doc !== view.state.doc.toString();
+      && !textMatchesString(view.state.doc, normalizedDoc);
     if (!pathChanged && !docChangedExternally) {
       return;
     }
@@ -327,19 +336,22 @@ export function useEditor(
         changes: {
           from: 0,
           to: view.state.doc.length,
-          insert: doc,
+          insert: normalizedDoc,
         },
         selection: destructiveActivation
           ? { anchor: 0 }
-          : preserveSelection(view.state.selection, doc.length),
+          : preserveSelection(view.state.selection, normalizedDoc.length),
         effects: clearBib,
-        annotations: programmaticDocumentChangeAnnotation.of(true),
+        annotations: [
+          programmaticDocumentChangeAnnotation.of(true),
+          knownProgrammaticDocumentTextAnnotation.of(normalizedDoc),
+        ],
       });
     } else if (pathChanged) {
       view.dispatch({ effects: clearBib });
     }
 
-    finalizeDocumentSync(view, doc, docPath, destructiveActivation);
+    finalizeDocumentSync(view, normalizedDoc, docPath, destructiveActivation);
   }, [doc, docPath, resetScroll, view]);
 
   return {

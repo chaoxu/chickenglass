@@ -177,6 +177,79 @@ describe("useEditor", () => {
     expect(ref.state.view?.state.doc.toString()).toBe("hello!");
   });
 
+  it("does not stringify the whole CM6 document when an external doc prop matches the live editor", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: "hello",
+        docPath: "draft.md",
+      }));
+    });
+
+    act(() => {
+      ref.state.view?.dispatch({
+        changes: { from: 5, to: 5, insert: "!" },
+      });
+    });
+
+    const toStringSpy = vi.spyOn(Text.prototype, "toString");
+    try {
+      act(() => {
+        root.render(createElement(Harness, {
+          doc: "hello!",
+          docPath: "draft.md",
+        }));
+      });
+
+      expect(toStringSpy).not.toHaveBeenCalled();
+    } finally {
+      toStringSpy.mockRestore();
+    }
+
+    expect(ref.state.view?.state.doc.toString()).toBe("hello!");
+  });
+
+  it("does not stringify the whole CM6 document for internal programmatic replacements", () => {
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+    const onProgrammaticDocChange = vi.fn();
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: "# First",
+        docPath: "draft.md",
+        onProgrammaticDocChange,
+      }));
+    });
+
+    onProgrammaticDocChange.mockClear();
+    const nextDoc = "# Second\r\nline";
+    const normalizedNextDoc = "# Second\nline";
+    const toStringSpy = vi.spyOn(Text.prototype, "toString");
+    try {
+      act(() => {
+        root.render(createElement(Harness, {
+          doc: nextDoc,
+          docPath: "draft.md",
+          onProgrammaticDocChange,
+        }));
+      });
+
+      expect(toStringSpy).not.toHaveBeenCalled();
+      expect(onProgrammaticDocChange).toHaveBeenCalledWith(normalizedNextDoc);
+    } finally {
+      toStringSpy.mockRestore();
+    }
+
+    expect(ref.state.view?.state.doc.toString()).toBe(normalizedNextDoc);
+  });
+
   it("debounces live stats updates after CM6 document edits", () => {
     vi.useFakeTimers();
     const ref: HarnessRef = {

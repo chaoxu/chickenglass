@@ -11,7 +11,7 @@
 
 import type { Text } from "@codemirror/state";
 
-import { parseFrontmatter } from "../parser/frontmatter";
+import { isFrontmatterDelimiterLine, parseFrontmatter } from "../parser/frontmatter";
 import { READING_WPM } from "../constants";
 
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
@@ -83,10 +83,6 @@ function countSentences(text: string): number {
 function getBody(text: string): string {
   const { end } = parseFrontmatter(text);
   return end >= 0 ? text.slice(end) : text;
-}
-
-function isFrontmatterDelimiterLine(text: string): boolean {
-  return text.slice(0, 3) === "---" && text.slice(3).trim().length === 0;
 }
 
 function getTextBodyStart(doc: Text): number {
