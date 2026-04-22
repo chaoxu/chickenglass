@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FileEntry } from "../file-manager";
 import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
+import {
+  createHotExitBackupStore,
+  type HotExitBackupStore,
+} from "../hot-exit-backups";
 
 const SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS = 200;
 
@@ -16,7 +20,7 @@ interface AppSessionPersistenceDeps {
   workspaceRequestRef: { readonly current: number };
   workspace: Pick<
     AppWorkspaceSessionController,
-    "windowState" | "saveWindowState" | "startupComplete"
+    "projectRoot" | "windowState" | "saveWindowState" | "startupComplete"
   >;
   sidebarLayout: Pick<
     SidebarLayoutController,
@@ -24,8 +28,9 @@ interface AppSessionPersistenceDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentDocument" | "currentPath" | "openFile"
+    "currentDocument" | "currentPath" | "openFile" | "restoreDocumentFromRecovery"
   >;
+  hotExitBackupStore?: HotExitBackupStore | null;
 }
 
 type SessionRestoreState =
@@ -50,11 +55,13 @@ export function useAppSessionPersistence({
   workspace,
   sidebarLayout,
   editor,
+  hotExitBackupStore,
 }: AppSessionPersistenceDeps): void {
   const [restoreState, setRestoreState] = useState<SessionRestoreState>({
     status: "waiting-startup",
   });
   const {
+    projectRoot,
     windowState,
     saveWindowState,
     startupComplete,
@@ -69,7 +76,12 @@ export function useAppSessionPersistence({
     currentDocument,
     currentPath,
     openFile,
+    restoreDocumentFromRecovery,
   } = editor;
+  const defaultHotExitBackupStore = useMemo(() => createHotExitBackupStore(), []);
+  const recoveryStore = hotExitBackupStore === undefined
+    ? defaultHotExitBackupStore
+    : hotExitBackupStore;
 
   useEffect(() => {
     if (restoreState.status !== "completed") return;
@@ -159,6 +171,37 @@ export function useAppSessionPersistence({
           return;
         }
 
+        if (recoveryStore && projectRoot) {
+          try {
+            const summaries = await recoveryStore.listBackups(projectRoot);
+            if (cancelled || workspaceRequestRef.current !== generation) {
+              return;
+            }
+            const recoverySummary = (savedDocumentPath
+              ? summaries.find((summary) => summary.path === savedDocumentPath)
+              : undefined) ?? summaries[0];
+            if (recoverySummary) {
+              const shouldRestore = window.confirm(
+                `Recover unsaved changes for "${recoverySummary.name}"?`,
+              );
+              if (shouldRestore) {
+                const backup = await recoveryStore.readBackup(projectRoot, recoverySummary.path);
+                if (cancelled || workspaceRequestRef.current !== generation) {
+                return;
+              }
+              if (backup) {
+                await restoreDocumentFromRecovery(backup.path, backup.content, {
+                  baselineHash: backup.baselineHash,
+                });
+                return;
+              }
+            }
+            }
+          } catch (error: unknown) {
+            console.error("[session] failed to restore hot-exit backup:", error);
+          }
+        }
+
         if (savedDocumentPath) {
           try {
             await openFile(savedDocumentPath);
@@ -198,6 +241,9 @@ export function useAppSessionPersistence({
     fileTree,
     listChildren,
     openFile,
+    projectRoot,
+    recoveryStore,
+    restoreDocumentFromRecovery,
     restoreState,
     workspaceRequestRef,
   ]);

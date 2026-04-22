@@ -22,7 +22,11 @@ export interface EditorSessionDeps {
   refreshTree: (changedPath?: string) => Promise<void>;
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
-  onAfterSave?: () => void;
+  onAfterSave?: (path: string) => void | Promise<void>;
+  /** Callback fired when an old document path should no longer retain side data. */
+  onAfterPathRemoved?: (path: string) => void | Promise<void>;
+  /** Callback fired after explicit discard of dirty edits. */
+  onAfterDiscard?: (path: string) => void | Promise<void>;
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
@@ -35,6 +39,7 @@ export interface UseEditorSessionReturn {
   externalConflict: ExternalDocumentConflict | null;
   activeDocumentSignal: ActiveDocumentSignal;
   getCurrentDocText: () => string;
+  getCurrentBaselineHash: () => string | null;
   isPathOpen: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   cancelPendingOpenFile: () => void;
@@ -44,6 +49,11 @@ export interface UseEditorSessionReturn {
   handleProgrammaticDocChange: (path: string, doc: string) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
+  restoreDocumentFromRecovery: (
+    path: string,
+    content: string,
+    options?: { baselineHash?: string },
+  ) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
   keepExternalConflict: (path: string) => Promise<void>;
@@ -63,6 +73,8 @@ export function useEditorSession({
   refreshTree,
   addRecentFile,
   onAfterSave,
+  onAfterPathRemoved,
+  onAfterDiscard,
   requestUnsavedChangesDecision,
 }: EditorSessionDeps): UseEditorSessionReturn {
   const runtime = useMemo(() => createEditorSessionRuntime(), []);
@@ -76,12 +88,14 @@ export function useEditorSession({
     refreshTree,
     addRecentFile,
     onAfterSave,
+    onAfterPathRemoved,
     requestUnsavedChangesDecision,
     runtime,
   }), [
     addRecentFile,
     fs,
     onAfterSave,
+    onAfterPathRemoved,
     refreshTree,
     requestUnsavedChangesDecision,
     runtime,
@@ -99,6 +113,7 @@ export function useEditorSession({
     addRecentFile,
     requestUnsavedChangesDecision,
     runtime,
+    onAfterDiscard,
     saveCurrentDocument: sessionPersistence.saveCurrentDocument,
   }), [
     addRecentFile,
@@ -106,6 +121,7 @@ export function useEditorSession({
     refreshTree,
     requestUnsavedChangesDecision,
     runtime,
+    onAfterDiscard,
     sessionPersistence,
   ]);
 
@@ -116,6 +132,8 @@ export function useEditorSession({
     externalConflict: snapshot.externalConflict,
     activeDocumentSignal: runtime.activeDocumentSignal,
     getCurrentDocText: sessionService.getCurrentDocText,
+    getCurrentBaselineHash: () =>
+      snapshot.currentPath ? runtime.getPathBaselineHash(snapshot.currentPath) : null,
     isPathOpen: sessionService.isPathOpen,
     isPathDirty: sessionService.isPathDirty,
     cancelPendingOpenFile: sessionService.cancelPendingOpenFile,
@@ -125,6 +143,7 @@ export function useEditorSession({
     handleProgrammaticDocChange: sessionService.handleProgrammaticDocChange,
     openFile: sessionService.openFile,
     openFileWithContent: sessionService.openFileWithContent,
+    restoreDocumentFromRecovery: sessionService.restoreDocumentFromRecovery,
     reloadFile: sessionService.reloadFile,
     syncExternalChange: sessionService.syncExternalChange,
     keepExternalConflict: sessionService.keepExternalConflict,

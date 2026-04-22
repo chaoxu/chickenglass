@@ -408,6 +408,29 @@ function docChangeCanShiftMathDecorations(
   return canShift;
 }
 
+function docChangeCanShiftDecorationSet(
+  decorations: DecorationSet,
+  tr: Transaction,
+): boolean {
+  let maxTo = -1;
+  const cursor = decorations.iter();
+  while (cursor.value) {
+    maxTo = Math.max(maxTo, cursor.to);
+    cursor.next();
+  }
+  if (maxTo < 0) return false;
+  if (maxTo > tr.state.doc.length) return true;
+
+  let canShift = false;
+  tr.changes.iterChangedRanges((fromOld) => {
+    if (fromOld <= maxTo) {
+      canShift = true;
+    }
+  });
+  return canShift;
+}
+
+
 function sameViewportRanges(
   before: readonly { from: number; to: number }[],
   after: readonly { from: number; to: number }[],
@@ -517,8 +540,9 @@ const mathDecorationField = createDecorationStateField({
       },
       contextChanged: () => inlineViewportChanged,
       contextUpdateMode: "dirty-ranges",
-      // Edits after every math range cannot shift math decorations, so keep the
-      // DecorationSet stable for that common path.
+      // Edits after every math range can keep the DecorationSet by identity.
+      // The "keep" branch below still maps when the actual decoration set
+      // would shift or exceed the new document bounds.
       stableDocChangeMode: "keep",
       shouldRebuild: (_transaction, context) => {
         if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {
@@ -567,7 +591,9 @@ const mathDecorationField = createDecorationStateField({
 
     switch (updatePlan.kind) {
       case "keep":
-        return value;
+        return tr.docChanged && docChangeCanShiftDecorationSet(value, tr)
+          ? value.map(tr.changes)
+          : value;
       case "map":
         return value.map(tr.changes);
       case "rebuild":

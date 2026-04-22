@@ -66,6 +66,8 @@ interface HarnessOptions {
   liveDocs: Map<string, EditorDocumentText>;
   refreshTree?: () => Promise<void>;
   addRecentFile?: (path: string) => void;
+  onAfterPathRemoved?: (path: string) => void | Promise<void>;
+  onAfterSave?: (path: string) => void | Promise<void>;
   requestUnsavedChangesDecision?: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
@@ -79,6 +81,8 @@ function createHarness({
   liveDocs: initialLiveDocs,
   refreshTree = async () => {},
   addRecentFile = () => {},
+  onAfterPathRemoved,
+  onAfterSave,
   requestUnsavedChangesDecision = async () => "discard",
 }: HarnessOptions): HarnessRef {
   const runtime = createEditorSessionRuntime();
@@ -101,6 +105,8 @@ function createHarness({
     fs,
     refreshTree,
     addRecentFile,
+    onAfterPathRemoved,
+    onAfterSave,
     requestUnsavedChangesDecision,
     runtime,
   });
@@ -366,6 +372,7 @@ describe("createEditorSessionPersistence", () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const refreshTree = vi.fn(async () => {});
     const addRecentFile = vi.fn();
+    const onAfterPathRemoved = vi.fn();
     const ref = createHarness({
       fs,
       currentDocument: {
@@ -378,6 +385,7 @@ describe("createEditorSessionPersistence", () => {
       liveDocs: createDocumentMap({ "draft.md": "hello" }),
       refreshTree,
       addRecentFile,
+      onAfterPathRemoved,
     });
 
     await ref.result.handleRename("draft.md", "notes/final.md");
@@ -396,6 +404,7 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.buffers.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
     expect(ref.runtime.liveDocs.has("draft.md")).toBe(false);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("notes/final.md") ?? emptyEditorDocument)).toBe("hello");
+    expect(onAfterPathRemoved).toHaveBeenCalledWith("draft.md");
   });
 
   it("remaps a clean active file inside a renamed folder", async () => {
@@ -405,6 +414,7 @@ describe("createEditorSessionPersistence", () => {
     });
     const refreshTree = vi.fn(async () => {});
     const addRecentFile = vi.fn();
+    const onAfterPathRemoved = vi.fn();
     const ref = createHarness({
       fs,
       currentDocument: {
@@ -417,6 +427,7 @@ describe("createEditorSessionPersistence", () => {
       liveDocs: createDocumentMap({ "notes/draft.md": "saved" }),
       refreshTree,
       addRecentFile,
+      onAfterPathRemoved,
     });
 
     await ref.result.handleRename("notes", "archive");
@@ -436,6 +447,7 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.buffers.get("archive/draft.md") ?? emptyEditorDocument)).toBe("saved");
     expect(ref.runtime.liveDocs.has("notes/draft.md")).toBe(false);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("archive/draft.md") ?? emptyEditorDocument)).toBe("saved");
+    expect(onAfterPathRemoved).toHaveBeenCalledWith("notes/draft.md");
   });
 
   it("remaps and saves a dirty active file inside a renamed folder", async () => {
@@ -485,6 +497,7 @@ describe("createEditorSessionPersistence", () => {
   it("clears the current session when deleting a parent directory", async () => {
     const fs = new MemoryFileSystem({ "notes/draft.md": "hello" });
     const refreshTree = vi.fn(async () => {});
+    const onAfterPathRemoved = vi.fn();
     const ref = createHarness({
       fs,
       currentDocument: {
@@ -496,6 +509,7 @@ describe("createEditorSessionPersistence", () => {
       buffers: createDocumentMap({ "notes/draft.md": "hello" }),
       liveDocs: createDocumentMap({ "notes/draft.md": "hello" }),
       refreshTree,
+      onAfterPathRemoved,
     });
 
     await ref.result.handleDelete("notes");
@@ -510,6 +524,7 @@ describe("createEditorSessionPersistence", () => {
     expect(ref.runtime.getEditorDoc()).toBe("");
     expect(ref.runtime.buffers.has("notes/draft.md")).toBe(false);
     expect(ref.runtime.liveDocs.has("notes/draft.md")).toBe(false);
+    expect(onAfterPathRemoved).toHaveBeenCalledWith("notes/draft.md");
   });
 
   it("cancels deleting a dirty active file when unsaved changes are canceled", async () => {
@@ -632,6 +647,8 @@ describe("createEditorSessionPersistence", () => {
     });
     const refreshTree = vi.fn(async () => {});
     const addRecentFile = vi.fn();
+    const onAfterPathRemoved = vi.fn();
+    const onAfterSave = vi.fn();
     const ref = createHarness({
       fs,
       currentDocument: {
@@ -644,6 +661,8 @@ describe("createEditorSessionPersistence", () => {
       liveDocs: createDocumentMap({ "main.md": edited }),
       refreshTree,
       addRecentFile,
+      onAfterPathRemoved,
+      onAfterSave,
     });
 
     await ref.result.saveAs();
@@ -662,5 +681,7 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.buffers.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
     expect(ref.runtime.liveDocs.has("main.md")).toBe(false);
     expect(editorDocumentToString(ref.runtime.liveDocs.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
+    expect(onAfterSave).toHaveBeenCalledWith("copy.md");
+    expect(onAfterPathRemoved).toHaveBeenCalledWith("main.md");
   });
 });

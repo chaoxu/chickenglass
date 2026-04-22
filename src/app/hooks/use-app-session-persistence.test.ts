@@ -2,6 +2,7 @@ import { act, createElement, type FC, type Dispatch, type SetStateAction } from 
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileEntry } from "../file-manager";
+import type { HotExitBackupStore } from "../hot-exit-backups";
 import type { WindowState } from "../window-state";
 import { useAppSessionPersistence } from "./use-app-session-persistence";
 
@@ -41,8 +42,32 @@ function createFileTree(path: string, children?: FileEntry[]): FileEntry {
   };
 }
 
+function createRecoveryStore(overrides?: Partial<HotExitBackupStore>): HotExitBackupStore {
+  return {
+    writeBackup: vi.fn(async () => ({
+      bytes: 100,
+      contentHash: "hash",
+      id: "id",
+      name: "draft.md",
+      path: "draft.md",
+      projectKey: "project",
+      projectRoot: "/project",
+      updatedAt: 100,
+    })),
+    listBackups: vi.fn(async () => []),
+    readBackup: vi.fn(async () => null),
+    deleteBackup: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
 interface TestRef {
   openFileCalls: string[];
+  restoreDocumentFromRecoveryCalls: Array<{
+    baselineHash?: string;
+    content: string;
+    path: string;
+  }>;
   setSidebarCollapsedCalls: boolean[];
   setSidebarWidthCalls: number[];
 }
@@ -56,9 +81,11 @@ function createHarness(deps: {
   sidebarCollapsed?: boolean;
   sidebarWidth?: number;
   openFileShouldReject?: boolean;
+  hotExitBackupStore?: HotExitBackupStore | null;
 }): { Harness: FC; ref: TestRef } {
   const ref: TestRef = {
     openFileCalls: [],
+    restoreDocumentFromRecoveryCalls: [],
     setSidebarCollapsedCalls: [],
     setSidebarWidthCalls: [],
   };
@@ -79,6 +106,7 @@ function createHarness(deps: {
       listChildren: deps.listChildren,
       workspaceRequestRef: deps.workspaceRequestRef,
       workspace: {
+        projectRoot: deps.windowState.projectRoot,
         windowState: deps.windowState,
         saveWindowState: deps.saveWindowState ?? vi.fn(),
         startupComplete: true,
@@ -98,7 +126,19 @@ function createHarness(deps: {
             throw new Error("openFile failed");
           }
         },
+        restoreDocumentFromRecovery: async (
+          path: string,
+          content: string,
+          options?: { baselineHash?: string },
+        ) => {
+          ref.restoreDocumentFromRecoveryCalls.push({
+            baselineHash: options?.baselineHash,
+            content,
+            path,
+          });
+        },
       },
+      hotExitBackupStore: deps.hotExitBackupStore,
     });
     return null;
   };
@@ -550,6 +590,182 @@ describe("useAppSessionPersistence", () => {
 
     // Stale result must not be opened
     expect(ref.openFileCalls).not.toContain("docs/new-file.md");
+  });
+
+  it("restores a confirmed hot-exit backup before normal document restore", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const recoveryStore = createRecoveryStore({
+      listBackups: vi.fn(async () => [{
+        bytes: 100,
+        contentHash: "hash",
+        id: "backup-id",
+        name: "draft.md",
+        path: "draft.md",
+        projectKey: "project",
+        projectRoot: "/project",
+        updatedAt: 100,
+      }]),
+      readBackup: vi.fn(async () => ({
+        version: 1 as const,
+        id: "backup-id",
+        projectRoot: "/project",
+        projectKey: "project",
+        path: "draft.md",
+        name: "draft.md",
+        content: "recovered draft",
+        contentHash: "hash",
+        baselineHash: "baseline",
+        createdAt: 50,
+        updatedAt: 100,
+      })),
+    });
+    const windowState = createMockWindowState({
+      projectRoot: "/project",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("draft.md"),
+      hotExitBackupStore: recoveryStore,
+      workspaceRequestRef: { current: 0 },
+      windowState,
+    });
+
+    act(() => {
+      root.render(createElement(Harness));
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.restoreDocumentFromRecoveryCalls).toEqual([{
+        baselineHash: "baseline",
+        path: "draft.md",
+        content: "recovered draft",
+      }]);
+    });
+    expect(ref.openFileCalls).toEqual([]);
+    expect(confirm).toHaveBeenCalledWith('Recover unsaved changes for "draft.md"?');
+    confirm.mockRestore();
+  });
+
+  it("keeps the backup and continues normal restore when recovery is skipped", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const recoveryStore = createRecoveryStore({
+      listBackups: vi.fn(async () => [{
+        bytes: 100,
+        contentHash: "hash",
+        id: "backup-id",
+        name: "draft.md",
+        path: "draft.md",
+        projectKey: "project",
+        projectRoot: "/project",
+        updatedAt: 100,
+      }]),
+      readBackup: vi.fn(async () => {
+        throw new Error("should not read skipped backup");
+      }),
+    });
+    const windowState = createMockWindowState({
+      projectRoot: "/project",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("draft.md"),
+      hotExitBackupStore: recoveryStore,
+      workspaceRequestRef: { current: 0 },
+      windowState,
+    });
+
+    act(() => {
+      root.render(createElement(Harness));
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.openFileCalls).toContain("draft.md");
+    });
+    expect(ref.restoreDocumentFromRecoveryCalls).toEqual([]);
+    expect(recoveryStore.readBackup).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("continues normal restore when the hot-exit backup store fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const recoveryStore = createRecoveryStore({
+      listBackups: vi.fn(async () => {
+        throw new Error("recovery unavailable");
+      }),
+    });
+    const windowState = createMockWindowState({
+      projectRoot: "/project",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("draft.md"),
+      hotExitBackupStore: recoveryStore,
+      workspaceRequestRef: { current: 0 },
+      windowState,
+    });
+
+    act(() => {
+      root.render(createElement(Harness));
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.openFileCalls).toContain("draft.md");
+    });
+    expect(ref.restoreDocumentFromRecoveryCalls).toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[session] failed to restore hot-exit backup:",
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
+  });
+
+  it("continues normal restore when the selected hot-exit backup cannot be read", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const recoveryStore = createRecoveryStore({
+      listBackups: vi.fn(async () => [{
+        bytes: 100,
+        contentHash: "hash",
+        id: "backup-id",
+        name: "draft.md",
+        path: "draft.md",
+        projectKey: "project",
+        projectRoot: "/project",
+        updatedAt: 100,
+      }]),
+      readBackup: vi.fn(async () => {
+        throw new Error("backup unreadable");
+      }),
+    });
+    const windowState = createMockWindowState({
+      projectRoot: "/project",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+      sidebarWidth: 220,
+    });
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("draft.md"),
+      hotExitBackupStore: recoveryStore,
+      workspaceRequestRef: { current: 0 },
+      windowState,
+    });
+
+    act(() => {
+      root.render(createElement(Harness));
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.openFileCalls).toContain("draft.md");
+    });
+    expect(ref.restoreDocumentFromRecoveryCalls).toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[session] failed to restore hot-exit backup:",
+      expect.any(Error),
+    );
+    confirm.mockRestore();
+    consoleError.mockRestore();
   });
 
   it("stops calling listChildren after workspace generation changes mid-search", async () => {

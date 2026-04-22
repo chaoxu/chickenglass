@@ -54,7 +54,13 @@ export interface AppEditorShellDeps {
   /** Callback to record a newly opened path in the recent-files list. */
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
-  onAfterSave?: () => void;
+  onAfterSave?: (path: string) => void | Promise<void>;
+  /** Callback fired when an old document path should no longer retain side data. */
+  onAfterPathRemoved?: (path: string) => void | Promise<void>;
+  /** Callback fired after explicit discard of dirty edits. */
+  onAfterDiscard?: (path: string) => void | Promise<void>;
+  /** Flush the pending hot-exit backup before shutdown. */
+  flushPendingHotExitBackup?: () => Promise<void>;
   /** Flush a pending autosave before replacing, closing, or shutting down the active document. */
   flushPendingAutoSave?: (
     reason: AutoSaveFlushReason,
@@ -213,6 +219,9 @@ export function useAppEditorShell({
   refreshTree,
   addRecentFile,
   onAfterSave,
+  onAfterPathRemoved,
+  onAfterDiscard,
+  flushPendingHotExitBackup,
   flushPendingAutoSave,
   requestUnsavedChangesDecision,
 }: AppEditorShellDeps): AppEditorShellController {
@@ -227,6 +236,8 @@ export function useAppEditorShell({
     refreshTree,
     addRecentFile,
     onAfterSave,
+    onAfterPathRemoved,
+    onAfterDiscard,
     requestUnsavedChangesDecision,
   });
   const {
@@ -341,27 +352,48 @@ export function useAppEditorShell({
     settings.autoSaveInterval,
   ]);
 
+  const flushCurrentHotExitBackup = useCallback(async () => {
+    if (!currentPath || !isPathDirty(currentPath) || !flushPendingHotExitBackup) {
+      return;
+    }
+    await flushPendingHotExitBackup();
+  }, [currentPath, flushPendingHotExitBackup, isPathDirty]);
+
   const openFile = useCallback(async (path: string) => {
     if (path !== currentPath) {
       runEditorTransaction("search-navigation", () => undefined);
+      await flushCurrentHotExitBackup();
       await flushDirtyCurrentDocument("navigation");
     }
     await sessionOpenFile(path);
-  }, [currentPath, flushDirtyCurrentDocument, runEditorTransaction, sessionOpenFile]);
+  }, [
+    currentPath,
+    flushCurrentHotExitBackup,
+    flushDirtyCurrentDocument,
+    runEditorTransaction,
+    sessionOpenFile,
+  ]);
 
   const openFileWithContent = useCallback(async (name: string, content: string) => {
     runEditorTransaction("search-navigation", () => undefined);
+    await flushCurrentHotExitBackup();
     await flushDirtyCurrentDocument("navigation");
     await sessionOpenFileWithContent(name, content);
-  }, [flushDirtyCurrentDocument, runEditorTransaction, sessionOpenFileWithContent]);
+  }, [
+    flushCurrentHotExitBackup,
+    flushDirtyCurrentDocument,
+    runEditorTransaction,
+    sessionOpenFileWithContent,
+  ]);
 
   const closeCurrentFile = useCallback(async (options?: { discard?: boolean }) => {
     runEditorTransaction("save", () => undefined);
     if (!options?.discard) {
+      await flushCurrentHotExitBackup();
       await flushDirtyCurrentDocument("navigation");
     }
     return session.closeCurrentFile(options);
-  }, [flushDirtyCurrentDocument, runEditorTransaction, session]);
+  }, [flushCurrentHotExitBackup, flushDirtyCurrentDocument, runEditorTransaction, session]);
 
   const saveAs = useCallback(async () => {
     runEditorTransaction("save", () => undefined);
@@ -370,9 +402,10 @@ export function useAppEditorShell({
 
   const handleWindowCloseRequest = useCallback(async () => {
     runEditorTransaction("save", () => undefined);
+    await flushCurrentHotExitBackup();
     await flushDirtyCurrentDocument("shutdown");
     return session.handleWindowCloseRequest();
-  }, [flushDirtyCurrentDocument, runEditorTransaction, session]);
+  }, [flushCurrentHotExitBackup, flushDirtyCurrentDocument, runEditorTransaction, session]);
 
   const navigation = useEditorNavigation({ openFile, isPathOpen, currentPath });
   const {

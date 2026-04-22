@@ -30,7 +30,9 @@ export interface EditorSessionPersistenceOptions {
   refreshTree: (changedPath?: string) => Promise<void>;
   addRecentFile: (path: string) => void;
   /** Lightweight callback fired after every successful save (not tree refresh). */
-  onAfterSave?: () => void;
+  onAfterSave?: (path: string) => void | Promise<void>;
+  /** Callback fired when an old document path should no longer retain side data. */
+  onAfterPathRemoved?: (path: string) => void | Promise<void>;
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
@@ -75,9 +77,28 @@ export function createEditorSessionPersistence({
   refreshTree,
   addRecentFile,
   onAfterSave,
+  onAfterPathRemoved,
   requestUnsavedChangesDecision,
   runtime,
 }: EditorSessionPersistenceOptions): EditorSessionPersistence {
+  const notifyAfterSave = (path: string) => {
+    if (!onAfterSave) {
+      return;
+    }
+    void Promise.resolve().then(() => onAfterSave(path)).catch((error: unknown) => {
+      console.error("[session] after-save callback failed:", error);
+    });
+  };
+
+  const notifyAfterPathRemoved = (path: string) => {
+    if (!onAfterPathRemoved) {
+      return;
+    }
+    void Promise.resolve().then(() => onAfterPathRemoved(path)).catch((error: unknown) => {
+      console.error("[session] after-path-removed callback failed:", error);
+    });
+  };
+
   const writeDocumentSnapshot = async (
     targetPath: string,
     doc: string,
@@ -168,15 +189,6 @@ export function createEditorSessionPersistence({
     return doc;
   };
 
-  const knownDiskHash = (path: string): string => {
-    const pipelineHash = runtime.pipeline.getLastSavedHash(path);
-    if (pipelineHash !== undefined) {
-      return pipelineHash;
-    }
-    const bufferedDoc = runtime.buffers.get(path) ?? emptyEditorDocument;
-    return fnv1aHash(editorDocumentToString(bufferedDoc));
-  };
-
   const saveCurrentDocument = async (): Promise<boolean> => {
     const currentPath = runtime.getCurrentPath();
     if (!currentPath) return true;
@@ -193,7 +205,7 @@ export function createEditorSessionPersistence({
       return {
         content: editorDocumentToString(doc),
         createTargetIfMissing: runtime.newDocumentPaths.has(currentPath),
-        expectedBaselineHash: knownDiskHash(currentPath),
+        expectedBaselineHash: runtime.getPathBaselineHash(currentPath) ?? undefined,
       };
     });
 
@@ -223,7 +235,7 @@ export function createEditorSessionPersistence({
         ),
         savedRevisionIsCurrent ? { editorDoc: result.savedContent } : undefined,
       );
-      onAfterSave?.();
+      notifyAfterSave(currentPath);
       return savedRevisionIsCurrent;
     }
     return false;
@@ -311,7 +323,11 @@ export function createEditorSessionPersistence({
       const newDir = newPath.substring(0, Math.max(0, newPath.lastIndexOf("/")));
       // Same-directory rename: scoped refresh. Cross-directory: full refresh.
       await refreshTree(oldDir === newDir ? newPath : undefined);
+      const oldCurrentPath = runtime.getCurrentPath();
       const renamedCurrentPath = renameBuffers(oldPath, newPath);
+      if (oldCurrentPath && renamedCurrentPath && oldCurrentPath !== renamedCurrentPath) {
+        notifyAfterPathRemoved(oldCurrentPath);
+      }
       addRecentFile(renamedCurrentPath ?? newPath);
     } catch (e: unknown) {
       console.error("[session] rename failed:", e);
@@ -366,6 +382,7 @@ export function createEditorSessionPersistence({
       runtime.pipeline.clear(documentAfterDeleteDecision.path);
       runtime.buffers.delete(documentAfterDeleteDecision.path);
       runtime.liveDocs.delete(documentAfterDeleteDecision.path);
+      notifyAfterPathRemoved(documentAfterDeleteDecision.path);
       runtime.commit(
         clearSessionDocument(runtime.getState(), documentAfterDeleteDecision.path),
         { editorDoc: "" },
@@ -410,6 +427,10 @@ export function createEditorSessionPersistence({
           }),
           { editorDoc: doc },
         );
+        notifyAfterSave(relativePath);
+        if (relativePath !== currentPath) {
+          notifyAfterPathRemoved(currentPath);
+        }
         addRecentFile(relativePath);
         await refreshTree(relativePath);
       } catch (e: unknown) {

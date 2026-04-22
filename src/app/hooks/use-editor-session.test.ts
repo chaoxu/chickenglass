@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import { MemoryFileSystem } from "../file-manager";
+import { fnv1aHash } from "../save-pipeline";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { UseEditorSessionReturn } from "./use-editor-session";
 
@@ -73,6 +74,11 @@ function createHarness(
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision> = async () => "discard",
+  callbacks: {
+    onAfterDiscard?: (path: string) => void | Promise<void>;
+    onAfterPathRemoved?: (path: string) => void | Promise<void>;
+    onAfterSave?: (path: string) => void | Promise<void>;
+  } = {},
 ): { Harness: FC; ref: HarnessRef } {
   const ref: HarnessRef = {
     result: null as unknown as UseEditorSessionReturn,
@@ -85,6 +91,9 @@ function createHarness(
       fs,
       refreshTree: async () => {},
       addRecentFile: () => {},
+      onAfterDiscard: callbacks.onAfterDiscard,
+      onAfterPathRemoved: callbacks.onAfterPathRemoved,
+      onAfterSave: callbacks.onAfterSave,
       requestUnsavedChangesDecision,
     });
     return null;
@@ -344,6 +353,54 @@ describe("useEditorSession", () => {
     expect(ref.result.externalConflict).toBeNull();
   });
 
+  it("restores hot-exit recovery content as dirty even when it matches disk", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "persisted" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+      await ref.result.restoreDocumentFromRecovery("draft.md", "persisted");
+    });
+
+    expect(ref.result.getCurrentDocText()).toBe("persisted");
+    expect(ref.result.currentDocument).toEqual({
+      path: "draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+  });
+
+  it("restores hot-exit recovery against changed disk as an external conflict", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "external edit" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.restoreDocumentFromRecovery("draft.md", "recovered edit", {
+        baselineHash: fnv1aHash("original saved"),
+      });
+    });
+
+    expect(ref.result.getCurrentDocText()).toBe("recovered edit");
+    expect(ref.result.currentDocument).toEqual({
+      path: "draft.md",
+      name: "draft.md",
+      dirty: true,
+    });
+    expect(ref.result.externalConflict).toEqual({
+      kind: "modified",
+      path: "draft.md",
+    });
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("external edit");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+  });
+
   it("cleans up the actual current document after an async open when the path changed mid-flight", async () => {
     const reads = {
       "slow.md": createDeferred<string>(),
@@ -415,6 +472,31 @@ describe("useEditorSession", () => {
     await expect(fs.readFile("note.md")).resolves.toBe("Old note\n");
     expect(ref.result.editorDoc).toBe(edited);
     expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("notifies after a successful save with the saved path", async () => {
+    const onAfterSave = vi.fn();
+    const fs = new MemoryFileSystem({ "main.md": "# Main\n" });
+    const { Harness, ref } = createHarness(
+      fs,
+      async () => "discard",
+      { onAfterSave },
+    );
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("main.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# Main changed\n"));
+    });
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    expect(onAfterSave).toHaveBeenCalledWith("main.md");
   });
 
   it("syncExternalChange suppresses watcher events caused by the session's own save", async () => {
@@ -674,6 +756,35 @@ describe("useEditorSession", () => {
     expect(ref.result.editorDoc).toBe("hello");
     expect(ref.result.getCurrentDocText()).toBe("hello!");
     expect(ref.result.currentDocument?.dirty).toBe(true);
+  });
+
+  it("notifies after dirty edits are explicitly discarded during file switch", async () => {
+    const onAfterDiscard = vi.fn();
+    const fs = new MemoryFileSystem({
+      "draft.md": "hello",
+      "other.md": "world",
+    });
+    const { Harness, ref } = createHarness(
+      fs,
+      async () => "discard",
+      { onAfterDiscard },
+    );
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local draft"));
+    });
+
+    await act(async () => {
+      await ref.result.openFile("other.md");
+    });
+
+    expect(onAfterDiscard).toHaveBeenCalledWith("draft.md");
+    expect(ref.result.currentPath).toBe("other.md");
   });
 
   it("rejects real save-as failures instead of treating them like cancel", async () => {

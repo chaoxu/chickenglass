@@ -10,6 +10,7 @@ pub mod export;
 pub mod fs;
 pub mod path;
 pub mod perf;
+pub mod recovery;
 pub mod shell;
 pub mod state;
 pub mod watch;

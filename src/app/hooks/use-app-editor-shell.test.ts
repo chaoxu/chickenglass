@@ -41,6 +41,7 @@ interface HarnessOptions {
     reason: AutoSaveFlushReason,
     options?: AutoSaveFlushOptions,
   ) => Promise<void>;
+  flushPendingHotExitBackup?: () => Promise<void>;
   requestUnsavedChangesDecision?: () => Promise<"save" | "discard" | "cancel">;
   settings?: Partial<Settings>;
 }
@@ -80,6 +81,7 @@ function createHarness(
       refreshTree: async () => {},
       addRecentFile: () => {},
       flushPendingAutoSave: options.flushPendingAutoSave,
+      flushPendingHotExitBackup: options.flushPendingHotExitBackup,
       requestUnsavedChangesDecision:
         options.requestUnsavedChangesDecision ?? (async () => "discard"),
     });
@@ -385,6 +387,7 @@ describe("useAppEditorShell", () => {
 
   it("does not force autosave before switching files when autosave is off", async () => {
     const flushPendingAutoSave = vi.fn(async () => {});
+    const flushPendingHotExitBackup = vi.fn(async () => {});
     const requestUnsavedChangesDecision = vi
       .fn<() => Promise<"save" | "discard" | "cancel">>()
       .mockResolvedValue("cancel");
@@ -394,6 +397,7 @@ describe("useAppEditorShell", () => {
         "b.md": "# B\n",
       },
       flushPendingAutoSave,
+      flushPendingHotExitBackup,
       requestUnsavedChangesDecision,
       settings: { autoSaveInterval: 0 },
     });
@@ -413,6 +417,7 @@ describe("useAppEditorShell", () => {
     });
 
     expect(flushPendingAutoSave).not.toHaveBeenCalled();
+    expect(flushPendingHotExitBackup).toHaveBeenCalledTimes(1);
     expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
     expect(ref.result.currentPath).toBe("a.md");
     await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
@@ -485,6 +490,40 @@ describe("useAppEditorShell", () => {
     expect(flushPendingAutoSave).not.toHaveBeenCalled();
     expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
     await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
+  });
+
+  it("flushes hot-exit backup before window close even when autosave is off", async () => {
+    const flushPendingAutoSave = vi.fn(async () => {});
+    const flushPendingHotExitBackup = vi.fn(async () => {});
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("cancel");
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+      flushPendingAutoSave,
+      flushPendingHotExitBackup,
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    await act(async () => {
+      await ref.result.handleWindowCloseRequest();
+    });
+
+    expect(flushPendingHotExitBackup).toHaveBeenCalledTimes(1);
+    expect(flushPendingAutoSave).not.toHaveBeenCalled();
   });
 
   it("does not persist a target mode override when search navigation is canceled", async () => {

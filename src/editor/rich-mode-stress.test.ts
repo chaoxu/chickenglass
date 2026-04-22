@@ -211,6 +211,30 @@ const tableModeSwitchRegressionOps: readonly EditOp[] = [
   { type: "mode", mode: "rich" },
 ];
 
+const mathDecorationDeleteRegressionOps: readonly EditOp[] = [
+  { type: "move", pos: 2085 },
+  { type: "move", pos: 408 },
+  { type: "insert", text: "%+:p P;" },
+  { type: "mode", mode: "rich" },
+  { type: "snippet", snippet: "| A | B |\n|---|---|\n| 1 | 2 |\n" },
+  { type: "insert", text: "6n2" },
+  { type: "delete", count: 7 },
+  { type: "snippet", snippet: "$$\n  y = mx + b\n$$\n" },
+  { type: "delete", count: 8 },
+  { type: "newline" },
+  { type: "delete", count: 3 },
+  { type: "insert", text: "&6\"A" },
+  { type: "newline" },
+  { type: "move", pos: 1698 },
+  { type: "newline" },
+  { type: "delete", count: 4 },
+  { type: "move", pos: 11 },
+  { type: "insert", text: "2bNKX2_9>%" },
+  { type: "insert", text: "-c`O%D\\\\vHb" },
+  { type: "snippet", snippet: "[^footnote]: Note text.\n" },
+  { type: "newline" },
+];
+
 // ── Apply + invariant checking ───────────────────────────────────────────────
 
 /** Apply an operation. Throws on dispatch failure — no exceptions are swallowed. */
@@ -361,6 +385,22 @@ describe("rich-mode stress", { timeout: 60_000 }, () => {
 
     for (let i = 0; i < tableModeSwitchRegressionOps.length; i++) {
       const op = tableModeSwitchRegressionOps[i];
+      applyOp(view, op);
+      checkInvariants(view, i, op);
+    }
+
+    cleanupEditor(view, parent);
+    activeView = undefined;
+    activeParent = undefined;
+  });
+
+  it("keeps math decorations in bounds after deleting around stale math ranges", () => {
+    const { view, parent } = createMountedEditor(SEED_DOCUMENTS[2]);
+    activeView = view;
+    activeParent = parent;
+
+    for (let i = 0; i < mathDecorationDeleteRegressionOps.length; i++) {
+      const op = mathDecorationDeleteRegressionOps[i];
       applyOp(view, op);
       checkInvariants(view, i, op);
     }

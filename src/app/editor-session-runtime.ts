@@ -12,7 +12,7 @@ import {
   getCurrentSessionDocument,
 } from "./editor-session-model";
 import { createActiveDocumentSignal, type ActiveDocumentSignal } from "./active-document-signal";
-import { SavePipeline, type SaveSnapshot } from "./save-pipeline";
+import { fnv1aHash, SavePipeline, type SaveSnapshot } from "./save-pipeline";
 
 export interface EditorSessionSnapshot {
   currentDocument: SessionDocument | null;
@@ -46,6 +46,7 @@ export interface EditorSessionRuntime {
   getCurrentPath: () => string | null;
   getEditorDoc: () => string;
   getCurrentDocText: () => string;
+  getPathBaselineHash: (path: string) => string | null;
   hasPath: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   commit: (nextState: EditorSessionState, options?: CommitSessionStateOptions) => void;
@@ -142,6 +143,17 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     getCurrentPath: () => state.currentDocument?.path ?? null,
     getEditorDoc: () => editorDoc,
     getCurrentDocText: () => documentForPath(state.currentDocument?.path ?? null, liveDocs, buffers),
+    getPathBaselineHash: (path) => {
+      if (newDocumentPaths.has(path)) {
+        return null;
+      }
+      const pipelineHash = pipeline.getLastSavedHash(path);
+      if (pipelineHash !== undefined) {
+        return pipelineHash;
+      }
+      const bufferedDoc = buffers.get(path);
+      return bufferedDoc ? fnv1aHash(editorDocumentToString(bufferedDoc)) : null;
+    },
     hasPath: (path) => hasSessionPath(state, path),
     isPathDirty: (path) => getCurrentSessionDocument(state)?.path === path
       && getCurrentSessionDocument(state)?.dirty === true,

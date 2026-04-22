@@ -26,6 +26,7 @@ import type {
 } from "./hooks/use-auto-save";
 import { useAutoSave } from "./hooks/use-auto-save";
 import { useDialogs } from "./hooks/use-dialogs";
+import { useHotExitBackups } from "./hooks/use-hot-exit-backups";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import { type SidebarLayoutController, useSidebarLayout } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
@@ -114,11 +115,19 @@ function AppInner() {
   const workspace = useAppWorkspaceSession(fs);
   const sidebarLayout = useSidebarLayout();
   const autoSaveFlushRef = useRef<UseAutoSaveReturn["flushPendingAutoSave"] | null>(null);
+  const deleteHotExitBackupRef = useRef<((path: string) => void) | null>(null);
+  const flushHotExitBackupRef = useRef<(() => Promise<void>) | null>(null);
   const flushPendingAutoSave = useCallback(async (
     reason: AutoSaveFlushReason,
     options?: AutoSaveFlushOptions,
   ) => {
     await autoSaveFlushRef.current?.(reason, options);
+  }, []);
+  const deleteHotExitBackup = useCallback((path: string) => {
+    deleteHotExitBackupRef.current?.(path);
+  }, []);
+  const flushPendingHotExitBackup = useCallback(async () => {
+    await flushHotExitBackupRef.current?.();
   }, []);
 
   const editor = useAppEditorShell({
@@ -126,6 +135,10 @@ function AppInner() {
     settings: workspace.settings,
     refreshTree: workspace.refreshTree,
     addRecentFile: workspace.addRecentFile,
+    onAfterSave: deleteHotExitBackup,
+    onAfterPathRemoved: deleteHotExitBackup,
+    onAfterDiscard: deleteHotExitBackup,
+    flushPendingHotExitBackup,
     flushPendingAutoSave,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
   });
@@ -142,6 +155,16 @@ function AppInner() {
     },
   );
   autoSaveFlushRef.current = autoSave.flushPendingAutoSave;
+
+  const hotExitBackups = useHotExitBackups({
+    activeDocumentSignal: editor.activeDocumentSignal,
+    currentDocument: editor.currentDocument,
+    getCurrentBaselineHash: editor.getCurrentBaselineHash,
+    getCurrentDocText: editor.getCurrentDocText,
+    projectRoot: workspace.projectRoot,
+  });
+  deleteHotExitBackupRef.current = hotExitBackups.deleteBackup;
+  flushHotExitBackupRef.current = hotExitBackups.flushBackup;
 
   // Stable reference for lazy child loading — used by default-doc search
   // and session persistence so their effects don't re-fire unnecessarily.

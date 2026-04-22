@@ -42,6 +42,11 @@ export interface EditorSessionService {
   handleProgrammaticDocChange: (path: string, doc: string) => void;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
+  restoreDocumentFromRecovery: (
+    path: string,
+    content: string,
+    options?: { baselineHash?: string },
+  ) => Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
   keepExternalConflict: (path: string) => Promise<void>;
@@ -59,6 +64,7 @@ export interface EditorSessionServiceOptions {
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
   runtime: EditorSessionRuntime;
+  onAfterDiscard?: (path: string) => void | Promise<void>;
   saveCurrentDocument: () => Promise<boolean>;
 }
 
@@ -89,8 +95,18 @@ export function createEditorSessionService({
   addRecentFile,
   requestUnsavedChangesDecision,
   runtime,
+  onAfterDiscard,
   saveCurrentDocument,
 }: EditorSessionServiceOptions): EditorSessionService {
+  const notifyAfterDiscard = (path: string) => {
+    if (!onAfterDiscard) {
+      return;
+    }
+    void Promise.resolve().then(() => onAfterDiscard(path)).catch((error: unknown) => {
+      console.error("[session] after-discard callback failed:", error);
+    });
+  };
+
   const clearPathBuffers = (path: string) => {
     runtime.pipeline.clear(path);
     runtime.buffers.delete(path);
@@ -131,6 +147,7 @@ export function createEditorSessionService({
         ? { editorDoc: editorDocumentToString(savedDoc) }
         : undefined,
     );
+    notifyAfterDiscard(path);
   };
 
   const prepareCurrentDocumentForTransition = async (
@@ -411,6 +428,45 @@ export function createEditorSessionService({
     );
   };
 
+  const restoreDocumentFromRecovery = async (
+    path: string,
+    content: string,
+    options?: { baselineHash?: string },
+  ) => {
+    let restoredConflict: { kind: "deleted" | "modified"; path: string } | null = null;
+    try {
+      await openFile(path);
+    } catch (_error: unknown) {
+      await openFileWithContent(path, content);
+      if (options?.baselineHash) {
+        restoredConflict = { kind: "deleted", path };
+      }
+    }
+
+    const recoveredDoc = createEditorDocumentText(content);
+    runtime.liveDocs.set(path, recoveredDoc);
+    runtime.pipeline.bumpRevision(path);
+    runtime.activeDocumentSignal.publish(path);
+    if (!restoredConflict && options?.baselineHash) {
+      const currentBaselineHash = runtime.getPathBaselineHash(path);
+      if (currentBaselineHash && currentBaselineHash !== options.baselineHash) {
+        runtime.externalConflictBaselines.set(
+          path,
+          runtime.buffers.get(path) ?? emptyEditorDocument,
+        );
+        restoredConflict = { kind: "modified", path };
+      }
+    }
+
+    const dirtyState = markSessionDocumentDirty(runtime.getState(), path, true);
+    runtime.commit(
+      restoredConflict
+        ? setExternalDocumentConflict(dirtyState, restoredConflict)
+        : dirtyState,
+      { editorDoc: content },
+    );
+  };
+
   const reloadFile = async (path: string) => {
     if (!runtime.hasPath(path)) return;
 
@@ -526,6 +582,8 @@ export function createEditorSessionService({
     if (!options?.discard) {
       const canClose = await prepareCurrentDocumentForTransition("close-file");
       if (!canClose) return false;
+    } else if (currentDocument.dirty) {
+      notifyAfterDiscard(currentDocument.path);
     }
 
     clearPathBuffers(currentDocument.path);
@@ -550,6 +608,7 @@ export function createEditorSessionService({
     handleProgrammaticDocChange,
     openFile,
     openFileWithContent,
+    restoreDocumentFromRecovery,
     reloadFile,
     syncExternalChange,
     keepExternalConflict,
