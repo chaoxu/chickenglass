@@ -34,8 +34,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Install Pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+        env:
+          REQUIRE_PANDOC: "1"
 
   # ── Production app: build + required browser subset ───────────────────────
   merged-app-browser:

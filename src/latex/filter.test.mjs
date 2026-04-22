@@ -9,6 +9,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FILTER_PATH = resolve(__dirname, "filter.lua");
 const hasPandoc = spawnSync("pandoc", ["--version"], { encoding: "utf8" }).status === 0;
 
+if (process.env.REQUIRE_PANDOC === "1" && !hasPandoc) {
+  throw new Error("Pandoc is required for LaTeX filter tests when REQUIRE_PANDOC=1");
+}
+
 function runPandoc(markdown) {
   const result = spawnSync(
     "pandoc",
