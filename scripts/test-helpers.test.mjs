@@ -6,6 +6,7 @@ import {
   isLoopbackAppUrl,
   normalizeConnectEditorOptions,
   resolveTextAnchorInDocument,
+  waitForDebugBridge,
   waitForAppUrl,
 } from "./test-helpers.mjs";
 
@@ -60,6 +61,42 @@ describe("test helpers browser harness", () => {
       "5174",
       "--strictPort",
     ]);
+  });
+
+  it("times out readiness promises after debug globals appear", async () => {
+    let evaluateCalls = 0;
+    const page = {
+      waitForFunction: vi.fn(async () => {}),
+      evaluate: vi.fn(async () => {
+        evaluateCalls += 1;
+        if (evaluateCalls === 1) {
+          return new Promise(() => {});
+        }
+        return {
+          readyState: "complete",
+          globals: {
+            __app: true,
+            __editor: true,
+            __cmView: true,
+            __cmDebug: true,
+            __cfDebug: true,
+            lexicalEditor: true,
+          },
+        };
+      }),
+      title: vi.fn(async () => "Coflat"),
+      url: vi.fn(() => "http://localhost:5173/"),
+      context: vi.fn(() => ({ browser: () => null })),
+    };
+
+    await expect(waitForDebugBridge(page, { timeout: 10 })).rejects.toThrow(
+      "debug bridge readiness timed out after 10ms",
+    );
+    expect(page.waitForFunction).toHaveBeenCalledWith(expect.any(Function), {
+      timeout: 10,
+      polling: 100,
+    });
+    expect(page.evaluate).toHaveBeenCalledTimes(2);
   });
 });
 

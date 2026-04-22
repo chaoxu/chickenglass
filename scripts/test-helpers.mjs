@@ -1885,13 +1885,17 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
       ),
       { timeout, polling: 100 },
     );
-    await page.evaluate(async () => {
-      await Promise.all([
-        window.__app?.ready,
-        window.__editor?.ready,
-        window.__cfDebug?.ready,
-      ].filter(Boolean));
-    });
+    await withTimeout(
+      page.evaluate(async () => {
+        await Promise.all([
+          window.__app?.ready,
+          window.__editor?.ready,
+          window.__cfDebug?.ready,
+        ].filter(Boolean));
+      }),
+      timeout,
+      `debug bridge readiness timed out after ${timeout}ms`,
+    );
   } catch (error) {
     const title = await page.title().catch(() => "");
     const diagnostics = await page.evaluate(() => {
