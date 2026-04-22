@@ -30,7 +30,7 @@
  * Evaluated 2026-03-19, issue #194.
  */
 
-import { memo, useMemo, type ReactNode } from "react";
+import { memo, type ReactNode, useMemo } from "react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -136,6 +136,7 @@ export function CommandPalette({
             {items.map((cmd) => (
               <CommandItem
                 key={cmd.id}
+                data-command-id={cmd.id}
                 value={`${cmd.label} ${cmd.category ?? ""}`}
                 onSelect={() => {
                   onOpenChange(false);

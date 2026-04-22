@@ -1,21 +1,21 @@
-import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { Bug } from "lucide-react";
-import { markdownEditorModes, type EditorMode } from "../../editor-display-mode";
-import { computeDocStats, type DocStats } from "../writing-stats";
-import { cn } from "../lib/utils";
-import { useEditorTelemetry } from "../stores/editor-telemetry-store";
-import { buildInfo } from "../build-info";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
+  type DebugLaneWindowState,
   readWindowDebugLaneState,
   subscribeWindowDebugLaneState,
   toggleWindowDebugLane,
-  type DebugLaneWindowState,
 } from "../../editor/debug-lane-state";
+import { type EditorMode, markdownEditorModes } from "../../editor-display-mode";
 import {
+  type ActiveDocumentSignal,
   EMPTY_ACTIVE_DOCUMENT_SNAPSHOT,
   unsubscribeNoop,
-  type ActiveDocumentSignal,
 } from "../active-document-signal";
+import { buildInfo } from "../build-info";
+import { cn } from "../lib/utils";
+import { useEditorTelemetry } from "../stores/editor-telemetry-store";
+import { computeDocStats, type DocStats } from "../writing-stats";
 import { ConfigButton } from "./status-bar-config";
 import { DebugButton } from "./status-bar-debug";
 import { FpsIndicator } from "./status-bar-fps";
@@ -207,6 +207,7 @@ export function StatusBar({
           {onOpenPalette && (
             <button
               type="button"
+              data-testid="command-palette-button"
               aria-label="Command Palette (⇧⌘P)"
               onClick={onOpenPalette}
               className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors"

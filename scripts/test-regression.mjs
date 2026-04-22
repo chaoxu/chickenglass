@@ -13,11 +13,12 @@
  *   pnpm test:browser
  *   node scripts/test-regression.mjs [--browser managed|cdp] [--headed] [--filter headings,math]
  *   node scripts/test-regression.mjs --scenario smoke
+ *   node scripts/test-regression.mjs --scenario lexical
  */
 
 import console from "node:console";
 import { readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
@@ -30,6 +31,11 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
 const SMOKE_FILTER = ["mode-switch", "index-open-rich-render", "headings", "math-render"];
+const LEXICAL_FILTER = ["lexical-smoke"];
+const SCENARIO_FILTERS = new Map([
+  ["smoke", SMOKE_FILTER],
+  ["lexical", LEXICAL_FILTER],
+]);
 
 function normalizeCliArgs(args) {
   return args.filter((arg) => arg !== "--");
@@ -44,12 +50,14 @@ function resolveFilter({ filterArg, scenarioArg }) {
     return [];
   }
 
-  if (scenarioArg === "smoke") {
-    return SMOKE_FILTER;
+  const scenarioFilter = SCENARIO_FILTERS.get(scenarioArg);
+  if (scenarioFilter) {
+    return scenarioFilter;
   }
 
+  const scenarios = [...SCENARIO_FILTERS.keys()].join(", ");
   throw new Error(
-    `Unknown browser regression scenario "${scenarioArg}". Available scenarios: smoke`,
+    `Unknown browser regression scenario "${scenarioArg}". Available scenarios: ${scenarios}`,
   );
 }
 
@@ -86,6 +94,20 @@ async function loadTests(filter) {
   return tests;
 }
 
+async function waitForRegressionBridge(page, timeout) {
+  await page.waitForFunction(
+    () =>
+      Boolean(
+        window.__app?.openFile &&
+          window.__app?.setMode &&
+          window.__app?.getMode &&
+          window.__editor?.getDoc,
+      ),
+    null,
+    { timeout, polling: 100 },
+  );
+}
+
 async function main() {
   const args = normalizeCliArgs(process.argv.slice(2));
   const { getFlag, getIntFlag } = createArgParser(args);
@@ -103,6 +125,7 @@ async function main() {
   try {
     session = await openBrowserSession(args, { timeoutFallback: timeout });
     page = session.page;
+    await waitForRegressionBridge(page, timeout);
   } catch (err) {
     console.error("Failed to open the browser regression harness.");
     console.error("Managed mode starts the app server automatically for localhost URLs.");

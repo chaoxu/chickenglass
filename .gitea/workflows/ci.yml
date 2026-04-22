@@ -67,18 +67,65 @@ jobs:
       - run: pnpm build:app
       - name: Run merged-app browser subset
         run: |
-          pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/coflats-preview.log 2>&1 &
+          set -u
+          artifacts_dir=/tmp/coflats-browser-artifacts
+          preview_log="$artifacts_dir/preview.log"
+          chrome_log="$artifacts_dir/chrome.log"
+          mkdir -p "$artifacts_dir"
+
+          pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort > "$preview_log" 2>&1 &
           server_pid=$!
-          trap 'kill $server_pid' EXIT
+          browser_pid=""
+          cleanup() {
+            if [ -n "$browser_pid" ]; then
+              kill "$browser_pid" 2>/dev/null || true
+            fi
+            kill "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:4173 >/dev/null; then
               break
             fi
             sleep 1
           done
-          curl -fsS http://127.0.0.1:4173 >/dev/null
-          pnpm test:browser:merged-app -- --url http://127.0.0.1:4173 --browser managed --timeout 30000
-          pnpm test:browser:lexical -- --url http://127.0.0.1:4173 --browser managed --timeout 30000
+          if ! curl -fsS http://127.0.0.1:4173 >/dev/null; then
+            node scripts/ci-browser-diagnostics.mjs collect --url http://127.0.0.1:4173 --out-dir "$artifacts_dir" --preview-log "$preview_log" --label preview-startup
+            exit 1
+          fi
+
+          node scripts/ci-browser-diagnostics.mjs launch --url http://127.0.0.1:4173 --port 9322 --profile /tmp/coflats-ci-browser-profile > "$chrome_log" 2>&1 &
+          browser_pid=$!
+          if ! node scripts/ci-browser-diagnostics.mjs wait --url http://127.0.0.1:4173 --port 9322 --timeout 30000; then
+            node scripts/ci-browser-diagnostics.mjs collect --url http://127.0.0.1:4173 --port 9322 --out-dir "$artifacts_dir" --preview-log "$preview_log" --label browser-startup || true
+            exit 1
+          fi
+
+          browser_status=0
+          failing_command=""
+          pnpm test:browser:merged-app -- --url http://127.0.0.1:4173 --browser cdp --timeout 30000 || {
+            browser_status=$?
+            failing_command="test:browser:merged-app"
+          }
+          if [ "$browser_status" -eq 0 ]; then
+            pnpm test:browser:lexical -- --url http://127.0.0.1:4173 --browser cdp --timeout 30000 || {
+              browser_status=$?
+              failing_command="test:browser:lexical"
+            }
+          fi
+
+          if [ "$browser_status" -ne 0 ]; then
+            node scripts/ci-browser-diagnostics.mjs collect --url http://127.0.0.1:4173 --port 9322 --out-dir "$artifacts_dir" --preview-log "$preview_log" --label "$failing_command" || true
+          fi
+          exit "$browser_status"
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics
+          path: /tmp/coflats-browser-artifacts
+          if-no-files-found: ignore
 
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:

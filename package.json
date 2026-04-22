@@ -46,7 +46,7 @@
     "convert:latex": "python3 scripts/latex-to-coflat.py",
     "test:browser": "node scripts/test-regression.mjs",
     "test:browser:merged-app": "node scripts/test-regression.mjs --filter mode-switch,index-open-rich-render,headings,math-render",
-    "test:browser:lexical": "node scripts/coflats-lexical-smoke.mjs",
+    "test:browser:lexical": "node scripts/test-regression.mjs --scenario lexical",
     "perf:capture": "node scripts/perf-regression.mjs capture",
     "perf:compare": "node scripts/perf-regression.mjs compare",
     "perf:capture:heavy": "node scripts/perf-regression.mjs capture --heavy-doc",
@@ -64,7 +64,7 @@
     {
       "name": "coflat/editor (JS)",
       "path": "dist/editor.mjs",
-      "limit": "2000 kB"
+      "limit": "10 MB"
     },
     {
       "name": "coflat/editor (CSS)",

@@ -105,26 +105,20 @@ async function ensureSidenoteLabelsVisible(page) {
   if (hasDefinitionLabel) return;
 
   await page.evaluate(() => {
-    const button = Array.from(document.querySelectorAll("button")).find((candidate) =>
-      candidate.getAttribute("aria-label")?.includes("Command Palette")
-    );
+    const button = document.querySelector('[data-testid="command-palette-button"]');
     if (!(button instanceof HTMLButtonElement)) {
       throw new Error("missing command palette button");
     }
     button.click();
   });
   await page.waitForFunction(
-    () => Array.from(document.querySelectorAll("[cmdk-item]")).some((candidate) =>
-      candidate.textContent?.includes("Toggle Sidenote Margin")
-    ),
+    () => Boolean(document.querySelector('[data-command-id="view.toggle-sidenotes"]')),
     { timeout: 5000 },
   );
   await page.evaluate(() => {
-    const item = Array.from(document.querySelectorAll("[cmdk-item]")).find((candidate) =>
-      candidate.textContent?.includes("Toggle Sidenote Margin")
-    );
+    const item = document.querySelector('[data-command-id="view.toggle-sidenotes"]');
     if (!(item instanceof HTMLElement)) {
-      throw new Error("missing Toggle Sidenote Margin command");
+      throw new Error("missing view.toggle-sidenotes command");
     }
     item.click();
   });

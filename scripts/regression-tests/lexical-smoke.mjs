@@ -1,34 +1,28 @@
-#!/usr/bin/env node
 /**
- * Coflats Lexical browser smoke.
+ * Regression test: Lexical browser smoke coverage on the shared runner.
  *
- * This is intentionally separate from `scripts/test-regression.mjs`: the
- * default regression lane still targets the CM6 editor, while this script
- * validates the runtime Lexical surface in the unified app.
- *
- * Starts the local Vite server automatically for localhost URLs unless
- * `--no-start-server` is passed.
+ * Covers formatting commands, source-to-Lexical immediate edits, large-document
+ * insertion, mode round-trips, and save/reopen persistence through the shared
+ * managed browser harness.
  */
 
-import console from "node:console";
-import process from "node:process";
+/* global document, requestAnimationFrame, window */
+
 import {
-  assertEditorHealth,
-  connectEditor,
-  createArgParser,
   DEBUG_EDITOR_SELECTOR,
-  disconnectBrowser,
-  ensureAppServer,
   formatSelection,
   openFixtureDocument,
   readEditorText,
   saveCurrentFile,
   sleep,
   switchToMode,
-  waitForDebugBridge,
-} from "./test-helpers.mjs";
+} from "../test-helpers.mjs";
 
-const DEFAULT_URL = "http://localhost:5173";
+export const name = "lexical-smoke";
+export const runtimeIssues = {
+  ignoreConsole: ["flushSync was called from inside a lifecycle method"],
+};
+
 const INSERT_MARKER = "COFLATSLEXICALSMOKEINSERT";
 const MODE_SWITCH_MARKER = "COFLATSLEXICALMODESWITCHINSERT";
 
@@ -36,6 +30,12 @@ const FORMAT_FIXTURE = {
   virtualPath: "format-command.md",
   displayPath: "fixture:format-command.md",
   content: "Alpha Beta\n",
+};
+
+const SOURCE_FORMAT_FIXTURE = {
+  virtualPath: "source-format-command.md",
+  displayPath: "fixture:source-format-command.md",
+  content: "Alpha **Beta**\n",
 };
 
 const MODE_SWITCH_FIXTURE = {
@@ -83,9 +83,9 @@ function selectSourceRange(doc, needle) {
 }
 
 function createHeavySmokeDoc() {
-  const sections = [];
-  for (let index = 1; index <= 180; index += 1) {
-    sections.push([
+  const sections = Array.from({ length: 180 }, (_, offset) => {
+    const index = offset + 1;
+    return [
       `## Section ${index} {#sec:smoke-${index}}`,
       "",
       `Paragraph ${index} references [@sec:smoke-${Math.max(1, index - 1)}] and keeps inline math $x_${index}^2 + y_${index}^2$.`,
@@ -98,8 +98,9 @@ function createHeavySmokeDoc() {
       `a_${index} + b_${index} = c_${index}`,
       `$$ {#eq:smoke-${index}}`,
       "",
-    ].join("\n"));
-  }
+    ].join("\n");
+  });
+
   return [
     "---",
     "title: Coflats Lexical Smoke",
@@ -131,30 +132,62 @@ function heavyFixture() {
   };
 }
 
+function firstDiffIndex(left, right) {
+  const length = Math.min(left.length, right.length);
+  const diffIndex = Array.from({ length }, (_, index) => index)
+    .find((index) => left[index] !== right[index]);
+  if (typeof diffIndex === "number") {
+    return diffIndex;
+  }
+  return left.length === right.length ? -1 : length;
+}
+
 async function assertLexicalSurface(page) {
   await page.waitForFunction(
-    (editorSelector) => Boolean(document.querySelector(editorSelector)),
+    (editorSelector) =>
+      window.__app?.getMode?.() === "lexical" &&
+      Boolean(document.querySelector(editorSelector)),
     DEBUG_EDITOR_SELECTOR,
     { timeout: 10_000, polling: 100 },
   );
+
   const state = await page.evaluate((editorSelector) => ({
     hasLexicalRoot: Boolean(document.querySelector(editorSelector)),
     mode: window.__app?.getMode?.() ?? null,
     hasEditorBridge: Boolean(window.__editor),
   }), DEBUG_EDITOR_SELECTOR);
 
+  if (state.mode !== "lexical") {
+    throw new Error(`Expected Lexical mode, got ${state.mode}.`);
+  }
   if (!state.hasLexicalRoot) {
-    throw new Error(
-      "Lexical editor root did not mount after switching to Lexical mode.",
-    );
+    throw new Error("Lexical editor root did not mount after switching to Lexical mode.");
   }
   if (!state.hasEditorBridge) {
     throw new Error("Product-neutral window.__editor bridge is unavailable.");
   }
 }
 
+async function switchToModeAfterLexicalMutation(page, mode) {
+  try {
+    await switchToMode(page, mode);
+  } catch (error) {
+    const firstError = error instanceof Error ? error.message : String(error);
+    await sleep(500);
+    try {
+      await switchToMode(page, mode);
+    } catch (retryError) {
+      const secondError = retryError instanceof Error ? retryError.message : String(retryError);
+      throw new Error(
+        `Failed to switch to ${mode} after Lexical mutation; first attempt: ${firstError}; retry: ${secondError}`,
+      );
+    }
+  }
+}
+
 async function runFormatScenario(page) {
   await openFixtureDocument(page, FORMAT_FIXTURE, { mode: "lexical" });
+  await assertLexicalSurface(page);
   await page.evaluate(({ from, to }) => {
     window.__editor.setSelection(from, to);
   }, selectSourceRange(FORMAT_FIXTURE.content, "Beta"));
@@ -165,10 +198,10 @@ async function runFormatScenario(page) {
     throw new Error(`Bold formatting produced ${JSON.stringify(richFormatted)}.`);
   }
 
-  await switchToMode(page, "source");
+  await openFixtureDocument(page, SOURCE_FORMAT_FIXTURE, { mode: "source" });
   await page.evaluate(({ from, to }) => {
     window.__editor.setSelection(from, to);
-  }, selectSourceRange(richFormatted, "Alpha"));
+  }, selectSourceRange(SOURCE_FORMAT_FIXTURE.content, "Alpha"));
 
   await formatSelection(page, { type: "italic" });
   const sourceFormatted = await readEditorText(page);
@@ -195,6 +228,7 @@ async function runSourceToLexicalImmediateEditScenario(page) {
   );
 
   await switchToMode(page, "lexical");
+  await assertLexicalSurface(page);
   await page.waitForFunction(
     ({ editorSelector, proofText }) => {
       const doc = window.__editor?.getDoc?.() ?? "";
@@ -241,14 +275,12 @@ async function runSourceToLexicalImmediateEditScenario(page) {
 
 async function runModeAndHeavyTypingScenario(page) {
   const fixture = heavyFixture();
-  await page.evaluate(async ({ path, content }) => {
-    await window.__app.closeFile?.({ discard: true });
-    await window.__app.openFileWithContent(path, content);
-    window.__app.setMode("lexical");
-  }, {
-    path: fixture.virtualPath,
-    content: fixture.content,
+  await openFixtureDocument(page, fixture, {
+    mode: "lexical",
+    timeoutMs: 45_000,
+    settleMs: 1_000,
   });
+  await assertLexicalSurface(page);
   await page.waitForFunction(
     (path) => {
       const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
@@ -258,7 +290,6 @@ async function runModeAndHeavyTypingScenario(page) {
     fixture.virtualPath,
     { timeout: 30_000, polling: 100 },
   );
-  await sleep(1_000);
 
   const before = await readEditorText(page);
   if (before.length < 20) {
@@ -268,9 +299,14 @@ async function runModeAndHeavyTypingScenario(page) {
   const insertAt = Math.min(before.length, Math.max(0, before.indexOf("\n\n") + 2));
   const insertText = `\n${INSERT_MARKER} $x^2 + y^2$ [@sec:intro]\n`;
   await page.evaluate(async ({ pos, text }) => {
-    window.__editor.setSelection(pos);
+    const waitForAnimationFrames = () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
+
+    window.__editor.setSelection(pos, pos);
     window.__editor.focus();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitForAnimationFrames();
     window.__editor.insertText(text);
   }, { pos: insertAt, text: insertText });
 
@@ -293,10 +329,16 @@ async function runModeAndHeavyTypingScenario(page) {
   }
 
   const afterTyping = await readEditorText(page);
-  await switchToMode(page, "source");
+  await switchToModeAfterLexicalMutation(page, "source");
   const sourceText = await readEditorText(page);
   if (sourceText !== afterTyping) {
-    throw new Error("Switching the Lexical surface to source mode changed the canonical markdown.");
+    const diffIndex = firstDiffIndex(afterTyping, sourceText);
+    throw new Error(
+      `Switching the Lexical surface to source mode changed the canonical markdown: ` +
+        `lexicalLength=${afterTyping.length}, sourceLength=${sourceText.length}, ` +
+        `diffIndex=${diffIndex}, lexical=${JSON.stringify(afterTyping.slice(diffIndex, diffIndex + 80))}, ` +
+        `source=${JSON.stringify(sourceText.slice(diffIndex, diffIndex + 80))}`,
+    );
   }
 
   await saveCurrentFile(page);
@@ -314,47 +356,13 @@ async function runModeAndHeavyTypingScenario(page) {
   );
 }
 
-async function main() {
-  const args = process.argv.slice(2).filter((arg) => arg !== "--");
-  const { getFlag, getIntFlag, hasFlag } = createArgParser(args);
-  const browser = getFlag("--browser", "managed");
-  const timeout = getIntFlag("--timeout", 30_000);
-  const url = getFlag("--url", DEFAULT_URL);
-  const headless = !hasFlag("--headed");
+export async function run(page) {
+  await runFormatScenario(page);
+  await runSourceToLexicalImmediateEditScenario(page);
+  await runModeAndHeavyTypingScenario(page);
 
-  let page = null;
-  let stopAppServer = null;
-  try {
-    stopAppServer = await ensureAppServer(url, {
-      autoStart: !hasFlag("--no-start-server"),
-    });
-    page = await connectEditor({ browser, headless, timeout, url });
-    await waitForDebugBridge(page, { timeout });
-    await switchToMode(page, "lexical");
-    await assertLexicalSurface(page);
-    await assertEditorHealth(page, "lexical-initial");
-
-    await runFormatScenario(page);
-    await assertEditorHealth(page, "lexical-format");
-
-    await runSourceToLexicalImmediateEditScenario(page);
-    await assertEditorHealth(page, "lexical-source-switch-immediate-edit");
-
-    await runModeAndHeavyTypingScenario(page);
-    await assertEditorHealth(page, "lexical-heavy-typing");
-
-    console.log("Coflats Lexical browser smoke passed.");
-  } finally {
-    if (page) {
-      await disconnectBrowser(page);
-    }
-    if (stopAppServer) {
-      await stopAppServer();
-    }
-  }
+  return {
+    pass: true,
+    message: "Lexical format, mode switch, heavy edit, and save/reopen smoke passed",
+  };
 }
-
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(1);
-});

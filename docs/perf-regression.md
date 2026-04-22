@@ -153,6 +153,17 @@ Per-step timing uses `performance.now()` around each synchronous `view.dispatch(
 
 You can override the supported heavy-doc budgets with `--debug-timeout-ms`, `--open-timeout-ms`, and `--post-open-settle-ms` when a fixture needs different automation limits.
 
+## Runtime Latency Budgets
+
+Runtime latency is the performance budget that matters for editor work. Bundle size is a packaging guardrail only; the standalone editor JS limit is intentionally generous at 10 MB so local optimization work stays focused on open, typing, mode-switch, semantic-analysis, and scroll latency.
+
+Use these default targets when filing or closing performance issues:
+
+- Typing bursts in Rich mode should keep per-edit render and semantic hot-path spans under a single frame budget on the preferred heavy fixture.
+- Stepped and jump scroll scenarios should not regress Rich mode against its own baseline, and Source mode should remain the comparison lane for isolating Rich rendering overhead.
+- Open and mode-switch scenarios should include both total scenario time and the largest frontend/backend spans in the report.
+- Any exception to these targets needs before/after numbers and a concrete reason, not a bundle-size argument.
+
 ## Notes
 
 - Reloading between iterations is intentional. It avoids state bleed between runs.

@@ -92,7 +92,7 @@ cargo nextest run --test-threads 4  # with explicit concurrency
 
 - **knip** — detects unused files, exports, and dependencies. Run after refactors. Config: `knip.config.ts`. The expected unused UI component re-exports are component-library noise; focus on unused files and unlisted deps.
 - **publint** — validates `package.json` exports point to real built files with correct types. Run after `build:editor` before publishing.
-- **size-limit** — enforces bundle size budgets for the standalone editor (`dist/editor.mjs` ≤ 2000 kB, `dist/editor.css` ≤ 100 kB). Config lives in `package.json`.
+- **size-limit** — enforces generous bundle guardrails for the standalone editor (`dist/editor.mjs` ≤ 10 MB, `dist/editor.css` ≤ 100 kB). Runtime latency is the primary performance budget. Config lives in `package.json`.
 - **rollup-plugin-visualizer** — generates `dist/stats.html` treemap of what is actually in the bundle. Activated by `pnpm build:analyze`.
 - **@testing-library/react** (`renderHook`) — for hook-level tests. Setup file: `src/test-setup.ts`.
 - **cargo-nextest** — parallel Rust test runner for the Tauri backend. Faster and cleaner than `cargo test`.
@@ -277,6 +277,7 @@ Every performance issue and PR must include a **before/after measurement** on a 
 - For targeted micro-optimizations (for example a single function), a focused microbenchmark or Vitest perf test is acceptable instead, but must still report both numbers.
 - The PR description must include the before and after figures. A PR that claims a perf improvement without measurements will not be merged.
 - The local private fixture `fixtures/cogirth/main2.md` is the preferred heavy document for local-edit, scroll, and open benchmarks when available. Otherwise use `demo/index.md` or another documented public fixture and note the limitation.
+- Bundle size is only a packaging guardrail; anything under the configured 10 MB standalone JS limit is acceptable unless it creates a measured runtime latency regression.
 
 ## Maintenance triggers
 

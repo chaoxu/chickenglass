@@ -19,12 +19,12 @@ import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
-import { createArgParser } from "./devx-cli.mjs";
 import {
   DEBUG_EDITOR_SELECTOR,
   MODE_BUTTON_SELECTOR,
 } from "../src/debug/debug-bridge-contract.js";
+import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 
 export { createArgParser, DEBUG_EDITOR_SELECTOR, MODE_BUTTON_SELECTOR };
 
@@ -1677,7 +1677,11 @@ export async function withRuntimeIssueCapture(page, run, options = {}) {
 
   const onConsole = (msg) => {
     if (msg.type() !== "error") return;
-    const text = msg.text();
+    const location = typeof msg.location === "function" ? msg.location() : {};
+    const locationText = location.url
+      ? ` (${location.url}:${location.lineNumber}:${location.columnNumber})`
+      : "";
+    const text = `${msg.text()}${locationText}`;
     if (issueMatches(text, ignoreConsole)) return;
     issues.push({ source: "console", text });
   };

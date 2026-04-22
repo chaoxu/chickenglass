@@ -62,7 +62,8 @@ which Coflat 2-only files still fit the merged architecture.
   - Product-neutral `__editor` bridge in `useAppDebug`.
   - Test-helper support for Lexical document reads, selections, formatting, and
     readiness promises.
-  - `scripts/coflats-lexical-smoke.mjs`.
+  - Shared browser-regression Lexical smoke in
+    `scripts/regression-tests/lexical-smoke.mjs`.
 
 ### Already Represented By Current Coflats Code
 

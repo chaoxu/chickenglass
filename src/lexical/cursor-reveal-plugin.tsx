@@ -15,8 +15,7 @@
  *   the text is re-parsed via the same adapter — valid syntax becomes
  *   the original kind of node, anything else stays plain text.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $addUpdateTag,
@@ -33,57 +32,25 @@ import {
   COMMAND_PRIORITY_LOW,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
-  SELECTION_CHANGE_COMMAND,
-  TextNode,
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
+  SELECTION_CHANGE_COMMAND,
+  TextNode,
 } from "lexical";
-
-import {
-  REVEAL_PRESENTATION,
-  REVEAL_MODE,
-  type RevealPresentation,
-  type RevealMode,
-} from "./reveal-mode";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   PARAGRAPH_REVEAL_ADAPTERS,
-  REVEAL_ADAPTERS,
   pickRevealSubject,
+  REVEAL_ADAPTERS,
   type RevealAdapter,
 } from "./cursor-reveal-adapters";
-import { $isInlineMathNode } from "./nodes/inline-math-node";
-import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
-import { $isInlineImageNode } from "./nodes/inline-image-node";
-import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { $isReferenceNode } from "./nodes/reference-node";
 import {
-  COFLAT_NESTED_EDIT_TAG,
-  COFLAT_REVEAL_COMMIT_TAG,
-  COFLAT_REVEAL_UI_TAG,
-} from "./update-tags";
-import {
+  type CursorRevealOpenRequest,
   createRevealOpenRequest,
   findRevealAdapter,
   OPEN_CURSOR_REVEAL_COMMAND,
-  type CursorRevealOpenRequest,
 } from "./cursor-reveal-controller";
-import {
-  activateCursorReveal,
-  beginCursorRevealClose,
-  beginCursorRevealCommit,
-  clearClosedCursorReveal,
-  clearCursorRevealUserIntent,
-  consumeCursorRevealUserIntent,
-  createCursorRevealIdle,
-  finishCursorRevealClose,
-  getCursorRevealSession,
-  isCursorRevealOpening,
-  markCursorRevealUserIntent,
-  openCursorReveal,
-  shouldSuppressCursorRevealOpen,
-  type CursorRevealMachineState,
-} from "./cursor-reveal-machine";
 import {
   domSelectionInsideRevealText,
   getDomSelectionOffsetInsideRevealText,
@@ -102,15 +69,47 @@ import {
   InlineRevealChrome,
   type InlineRevealChromeState,
 } from "./cursor-reveal-inline-presentation";
-import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
+import {
+  activateCursorReveal,
+  beginCursorRevealClose,
+  beginCursorRevealCommit,
+  type CursorRevealMachineState,
+  clearClosedCursorReveal,
+  clearCursorRevealUserIntent,
+  consumeCursorRevealUserIntent,
+  createCursorRevealIdle,
+  finishCursorRevealClose,
+  getCursorRevealSession,
+  isCursorRevealOpening,
+  markCursorRevealUserIntent,
+  openCursorReveal,
+  shouldSuppressCursorRevealOpen,
+} from "./cursor-reveal-machine";
 import { setCursorRevealActive } from "./cursor-reveal-state";
+import { useRegisterEmbeddedFieldFlush } from "./embedded-field-flush-registry";
+import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
+import { $isInlineImageNode } from "./nodes/inline-image-node";
+import { $isInlineMathNode } from "./nodes/inline-math-node";
+import { $isRawBlockNode } from "./nodes/raw-block-node";
+import { $isReferenceNode } from "./nodes/reference-node";
+import {
+  REVEAL_MODE,
+  REVEAL_PRESENTATION,
+  type RevealMode,
+  type RevealPresentation,
+} from "./reveal-mode";
 import {
   REVEAL_SOURCE_TEXT_STYLE,
 } from "./reveal-source-style";
+import {
+  COFLAT_NESTED_EDIT_TAG,
+  COFLAT_REVEAL_COMMIT_TAG,
+  COFLAT_REVEAL_UI_TAG,
+} from "./update-tags";
 
 // Re-exports kept so existing unit tests can continue importing the
 // pure markdown helpers from this module.
-export { wrapWithSpecs, unwrapSource } from "./cursor-reveal-adapters";
+export { unwrapSource, wrapWithSpecs } from "./cursor-reveal-adapters";
 
 export function CursorRevealPlugin({
   editorMode,
@@ -321,7 +320,7 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
       }}
       onCommit={() => {
         commitDraft(state, draft);
-        flushSync(() => setState(null));
+        setState(null);
       }}
       onDraftChange={setDraft}
       state={state}
