@@ -209,6 +209,36 @@ describe("LexicalRichMarkdownEditor nested history", () => {
     }
   });
 
+  it("keeps sequential handle inserts in rich mode aligned with the tracked selection", async () => {
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "Alpha Beta",
+      onTextChange,
+    });
+
+    try {
+      act(() => {
+        editor.handle.setSelection(5);
+        editor.handle.insertText("1");
+        editor.handle.insertText("2");
+        editor.handle.insertText("3");
+      });
+
+      await waitFor(() => {
+        expect(editor.handle.getDoc()).toBe("Alpha123 Beta");
+      });
+      expect(onTextChange).toHaveBeenLastCalledWith("Alpha123 Beta");
+      expect(editor.handle.getSelection()).toEqual({
+        anchor: 8,
+        focus: 8,
+        from: 8,
+        to: 8,
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("preserves undo history across editable blur/focus toggles", async () => {
     const editor = await mountEditor();
 

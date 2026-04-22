@@ -765,7 +765,7 @@ export function MarkdownEditorHandlePlugin({
         }
         lexicalSelection.insertText(text);
         inserted = true;
-      }, { discrete: true });
+      }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
       if (!inserted) {
         return null;
       }
@@ -776,6 +776,40 @@ export function MarkdownEditorHandlePlugin({
         currentDoc.slice(actualSelection.to),
       ].join("");
       const nextOffset = actualSelection.from + text.length;
+      return {
+        nextDoc,
+        nextSelection: createMarkdownSelection(nextOffset, nextOffset, nextDoc.length),
+      };
+    };
+
+    const insertTextIntoTrackedRichSelection = (
+      currentDoc: string,
+      text: string,
+    ): { readonly nextDoc: string; readonly nextSelection: MarkdownEditorSelection } | null => {
+      const trackedSelection = createMarkdownSelection(
+        selectionRef.current.anchor,
+        selectionRef.current.focus,
+        currentDoc.length,
+      );
+      let inserted = false;
+      editor.update(() => {
+        const lexicalSelection = $getSelection();
+        if (!$isRangeSelection(lexicalSelection)) {
+          return;
+        }
+        lexicalSelection.insertText(text);
+        inserted = true;
+      }, { discrete: true, tag: SKIP_SCROLL_INTO_VIEW_TAG });
+      if (!inserted) {
+        return null;
+      }
+
+      const nextDoc = [
+        currentDoc.slice(0, trackedSelection.from),
+        text,
+        currentDoc.slice(trackedSelection.to),
+      ].join("");
+      const nextOffset = trackedSelection.from + text.length;
       return {
         nextDoc,
         nextSelection: createMarkdownSelection(nextOffset, nextOffset, nextDoc.length),
@@ -838,7 +872,10 @@ export function MarkdownEditorHandlePlugin({
       peekDoc: readDocumentSnapshot,
       peekSelection: readSelectionSnapshot,
       insertText: (text) => {
-        const currentDoc = readFreshDocument();
+        const richTrackedDoc = editorModeRef.current === "source" || !selectionSnapshotFreshRef.current
+          ? null
+          : readSelectionDocumentSnapshot();
+        const currentDoc = richTrackedDoc ?? readFreshDocument();
         const selection = createMarkdownSelection(
           selectionRef.current.anchor,
           selectionRef.current.focus,
@@ -867,11 +904,25 @@ export function MarkdownEditorHandlePlugin({
           return;
         }
 
+        if (richTrackedDoc !== null) {
+          const trackedInsert = insertTextIntoTrackedRichSelection(richTrackedDoc, text);
+          if (trackedInsert) {
+            selectionRef.current = trackedInsert.nextSelection;
+            selectionSnapshotFreshRef.current = true;
+            onSelectionChange?.(trackedInsert.nextSelection);
+            publishDocumentSnapshot(trackedInsert.nextDoc);
+            cacheRichDocumentSnapshot(trackedInsert.nextDoc);
+            return;
+          }
+        }
+
         const richInsert = insertTextIntoRichSelection(currentDoc, text);
         if (richInsert) {
           selectionRef.current = richInsert.nextSelection;
+          selectionSnapshotFreshRef.current = true;
           onSelectionChange?.(richInsert.nextSelection);
           publishDocumentSnapshot(richInsert.nextDoc);
+          cacheRichDocumentSnapshot(richInsert.nextDoc);
           return;
         }
 
@@ -933,7 +984,10 @@ export function MarkdownEditorHandlePlugin({
             nextSelection.focus,
           );
           if (!moved) {
+            selectionSnapshotFreshRef.current = false;
             scrollSourcePositionIntoView(editor, editor.getRootElement(), nextSelection.from);
+          } else {
+            selectionSnapshotFreshRef.current = true;
           }
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
