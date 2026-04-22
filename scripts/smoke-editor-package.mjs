@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +30,7 @@ function parsePackJson(output) {
 }
 
 try {
-  const dryRunOutput = run("npm", ["pack", "--dry-run", "--json"], repoRoot);
+  const dryRunOutput = run("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], repoRoot);
   const [dryRunInfo] = parsePackJson(dryRunOutput);
 
   if (!dryRunInfo) {
@@ -71,7 +71,11 @@ try {
     throw new Error("dist/editor.d.ts still references repo-internal source paths");
   }
 
-  const packOutput = run("npm", ["pack", "--json", "--pack-destination", tmpRoot], repoRoot);
+  const packOutput = run(
+    "npm",
+    ["pack", "--json", "--pack-destination", tmpRoot, "--ignore-scripts"],
+    repoRoot,
+  );
   const [packInfo] = parsePackJson(packOutput);
 
   if (!packInfo) {
