@@ -7,6 +7,7 @@ import {
   $createTextNode,
   $getRoot,
   $isElementNode,
+  type LexicalNode,
 } from "lexical";
 import { describe, expect, it } from "vitest";
 
@@ -19,7 +20,27 @@ import {
 } from "./markdown";
 import { $isHeadingAttributeNode } from "./nodes/heading-attribute-node";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
+import { $isReferenceNode } from "./nodes/reference-node";
 import { $isTableNode } from "./nodes/table-node";
+
+function collectReferenceRaws(node: LexicalNode, raws: string[] = []): string[] {
+  if ($isReferenceNode(node)) {
+    raws.push(node.getRaw());
+    return raws;
+  }
+  if ($isElementNode(node)) {
+    for (const child of node.getChildren()) {
+      collectReferenceRaws(child, raws);
+    }
+  }
+  return raws;
+}
+
+function importedReferenceRaws(markdown: string): string[] {
+  const editor = createHeadlessCoflatEditor();
+  setLexicalMarkdown(editor, markdown);
+  return editor.getEditorState().read(() => collectReferenceRaws($getRoot()));
+}
 
 describe("coflat lexical markdown", () => {
   it("round-trips frontmatter macros without doubling backslashes", () => {
@@ -87,6 +108,28 @@ describe("coflat lexical markdown", () => {
 
   it("round-trips citations and footnote refs inside formatted text spans", () => {
     const markdown = "**[@cormen2009] reference** and *[^note] footnote*.";
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("imports reference tokens with the shared grammar", () => {
+    const markdown =
+      "See @sec:intro/motivation, @o'brien2020, [@thm:main; @eq:sum; @fig:plot], [@doe2020, p. 12; @roe2021, ch. 3], @fig:plot. and @sec:results:.";
+
+    expect(importedReferenceRaws(markdown)).toEqual([
+      "@sec:intro/motivation",
+      "@o'brien2020",
+      "[@thm:main; @eq:sum; @fig:plot]",
+      "[@doe2020, p. 12; @roe2021, ch. 3]",
+      "@fig:plot",
+      "@sec:results",
+    ]);
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
+  it("does not import narrative references inside malformed bracket clusters", () => {
+    const markdown = "No [see @id] or [@id; see @other], yes [@id].";
+
+    expect(importedReferenceRaws(markdown)).toEqual(["[@id]"]);
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 

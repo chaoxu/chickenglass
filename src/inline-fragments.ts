@@ -3,7 +3,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { markdownExtensions } from "./parser";
 import { MARK_NODES } from "./render/render-core";
 import {
-  extractReferenceCluster,
+  matchBracketedReference,
   NARRATIVE_REFERENCE_RE,
 } from "./semantics/reference-parts";
 
@@ -79,15 +79,14 @@ function buildLinkChildren(node: SyntaxNode, doc: string): readonly InlineFragme
 
 function buildLinkFragment(node: SyntaxNode, doc: string): InlineFragment {
   const raw = doc.slice(node.from, node.to);
-  const crossRefMatch = /^\[@([^\]]+)\]$/.exec(raw);
-  if (crossRefMatch) {
-    const { ids, locators } = extractReferenceCluster(crossRefMatch[1]);
+  const referenceMatch = matchBracketedReference(raw);
+  if (referenceMatch) {
     return {
       kind: "reference",
       parenthetical: true,
-      rawText: raw.slice(1, -1),
-      ids,
-      locators,
+      rawText: referenceMatch.raw,
+      ids: referenceMatch.ids,
+      locators: referenceMatch.locators,
     };
   }
 

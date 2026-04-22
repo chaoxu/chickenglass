@@ -1,37 +1,20 @@
-export interface ReferenceClusterParts {
-  readonly ids: readonly string[];
-  readonly locators: readonly (string | undefined)[];
-}
+import {
+  BRACKETED_REFERENCE_EXACT_RE,
+  extractReferenceCluster,
+  NARRATIVE_REFERENCE_GLOBAL_RE,
+  type ReferenceClusterParts,
+} from "../lib/reference-grammar";
+
+export type { ReferenceClusterParts };
 
 export interface BracketedReferenceMatch extends ReferenceClusterParts {
   readonly raw: string;
 }
 
-export const BRACKETED_REFERENCE_RE =
-  /^\[@([a-zA-Z0-9_][\w:./''-]*(?:,[^;\]]*)?(?:\s*;\s*@[a-zA-Z0-9_][\w:./''-]*(?:,[^;\]]*)?)*)\]$/;
+export const BRACKETED_REFERENCE_RE = BRACKETED_REFERENCE_EXACT_RE;
 
-export const NARRATIVE_REFERENCE_RE = /(?<![[@\w])@([a-zA-Z0-9_][\w:./''-]*\w)/g;
-
-export function extractReferenceCluster(raw: string): ReferenceClusterParts {
-  const ids: string[] = [];
-  const locators: (string | undefined)[] = [];
-
-  for (const part of raw.split(";")) {
-    const trimmed = part.trim();
-    const key = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
-    const commaIdx = key.indexOf(",");
-    if (commaIdx >= 0) {
-      ids.push(key.slice(0, commaIdx).trim());
-      const locator = key.slice(commaIdx + 1).trim();
-      locators.push(locator || undefined);
-    } else {
-      ids.push(key.trim());
-      locators.push(undefined);
-    }
-  }
-
-  return { ids, locators };
-}
+export const NARRATIVE_REFERENCE_RE = NARRATIVE_REFERENCE_GLOBAL_RE;
+export { extractReferenceCluster };
 
 export function matchBracketedReference(raw: string): BracketedReferenceMatch | null {
   const match = BRACKETED_REFERENCE_RE.exec(raw);

@@ -1,3 +1,17 @@
+import {
+  BRACKETED_REFERENCE_EXACT_RE,
+  BRACKETED_REFERENCE_GLOBAL_RE,
+  BRACKETED_REFERENCE_IMPORT_RE,
+  BRACKETED_REFERENCE_SHORTCUT_RE,
+  NARRATIVE_REFERENCE_EXACT_RE,
+  NARRATIVE_REFERENCE_GLOBAL_RE,
+  NARRATIVE_REFERENCE_IMPORT_RE,
+  NARRATIVE_REFERENCE_SHORTCUT_RE,
+  parseReferenceClusterBody,
+} from "./reference-grammar";
+
+const BRACKETED_REFERENCE_CANDIDATE_GLOBAL_RE = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/g;
+
 export interface ReferenceToken {
   readonly bracketed: boolean;
   readonly clusterFrom: number;
@@ -17,63 +31,54 @@ export interface ParsedReferenceToken {
   readonly locators: readonly (string | undefined)[];
 }
 
-export const BRACKETED_REFERENCE_GLOBAL_RE = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/g;
-export const BRACKETED_REFERENCE_IMPORT_RE = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]/;
-export const BRACKETED_REFERENCE_SHORTCUT_RE = /\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]$/;
-export const BRACKETED_REFERENCE_EXACT_RE = /^\[(?:[^\]\n\\]|\\.)*?@[^\]\n]*\]$/;
-export const NARRATIVE_REFERENCE_GLOBAL_RE = /(?<![\w@])@([A-Za-z0-9_](?:[\w.:-]*\w)?)(?![\w@])/g;
-export const NARRATIVE_REFERENCE_IMPORT_RE = /(?<![\w@])@([A-Za-z0-9_](?:[\w.:-]*\w)?)(?![\w@])/;
-export const NARRATIVE_REFERENCE_SHORTCUT_RE = /(?<![\w@])@([A-Za-z0-9_](?:[\w.:-]*\w)?)(?![\w@])$/;
-export const NARRATIVE_REFERENCE_EXACT_RE = /^@[A-Za-z0-9_](?:[\w.:-]*\w)?$/;
-
-function trimTrailingReferencePunctuation(id: string): string {
-  return id.replace(/\.+$/, "");
+export interface ReferenceRevealToken {
+  readonly bracketed: boolean;
+  readonly from: number;
+  readonly source: string;
+  readonly to: number;
 }
 
-function normalizeLocator(locator: string): string | undefined {
-  return locator.replace(/^[\s;,:-]+|[\s;,:-]+$/g, "").replace(/\s+/g, " ").trim() || undefined;
-}
+export {
+  BRACKETED_REFERENCE_EXACT_RE,
+  BRACKETED_REFERENCE_GLOBAL_RE,
+  BRACKETED_REFERENCE_IMPORT_RE,
+  BRACKETED_REFERENCE_SHORTCUT_RE,
+  NARRATIVE_REFERENCE_EXACT_RE,
+  NARRATIVE_REFERENCE_GLOBAL_RE,
+  NARRATIVE_REFERENCE_IMPORT_RE,
+  NARRATIVE_REFERENCE_SHORTCUT_RE,
+};
 
 export function scanReferenceTokens(text: string): ReferenceToken[] {
   const references: ReferenceToken[] = [];
   const coveredRanges: Array<{ from: number; to: number }> = [];
 
-  for (const match of text.matchAll(BRACKETED_REFERENCE_GLOBAL_RE)) {
+  for (const match of text.matchAll(BRACKETED_REFERENCE_CANDIDATE_GLOBAL_RE)) {
     const raw = match[0];
     const clusterFrom = match.index ?? 0;
     const clusterTo = clusterFrom + raw.length;
     const body = raw.slice(1, -1);
-    let clusterIndex = 0;
+    const parts = BRACKETED_REFERENCE_EXACT_RE.test(raw)
+      ? parseReferenceClusterBody(body)
+      : null;
 
-    for (const refMatch of body.matchAll(NARRATIVE_REFERENCE_GLOBAL_RE)) {
-      const id = trimTrailingReferencePunctuation(refMatch[1] ?? "");
-      if (!id) {
-        continue;
+    if (parts) {
+      for (const [clusterIndex, part] of parts.entries()) {
+        const tokenFrom = clusterFrom + 1 + part.markerFrom;
+        const tokenTo = clusterFrom + 1 + part.markerTo;
+        references.push({
+          bracketed: true,
+          clusterFrom,
+          clusterIndex,
+          clusterTo,
+          from: tokenFrom,
+          id: part.id,
+          labelFrom: tokenFrom + 1,
+          labelTo: tokenTo,
+          locator: part.locator,
+          to: tokenTo,
+        });
       }
-      const relativeFrom = refMatch.index ?? 0;
-      const tokenFrom = clusterFrom + 1 + relativeFrom;
-      const tokenTo = tokenFrom + 1 + id.length;
-      const nextRelativeFrom = relativeFrom + refMatch[0].length;
-      const nextReference = body
-        .slice(nextRelativeFrom)
-        .search(NARRATIVE_REFERENCE_IMPORT_RE);
-      const locatorSlice = nextReference >= 0
-        ? body.slice(nextRelativeFrom, nextRelativeFrom + nextReference)
-        : body.slice(nextRelativeFrom);
-
-      references.push({
-        bracketed: true,
-        clusterFrom,
-        clusterIndex,
-        clusterTo,
-        from: tokenFrom,
-        id,
-        labelFrom: tokenFrom + 1,
-        labelTo: tokenTo,
-        locator: normalizeLocator(locatorSlice),
-        to: tokenTo,
-      });
-      clusterIndex += 1;
     }
 
     coveredRanges.push({ from: clusterFrom, to: clusterTo });
@@ -87,7 +92,7 @@ export function scanReferenceTokens(text: string): ReferenceToken[] {
       }
     }
 
-    const id = trimTrailingReferencePunctuation(match[1] ?? "");
+    const id = match[1] ?? "";
     if (!id) {
       continue;
     }
@@ -106,6 +111,37 @@ export function scanReferenceTokens(text: string): ReferenceToken[] {
   }
 
   return references.sort((left, right) => left.from - right.from);
+}
+
+export function scanReferenceRevealTokens(text: string): ReferenceRevealToken[] {
+  const reveals: ReferenceRevealToken[] = [];
+  const seenBracketedClusters = new Set<string>();
+
+  for (const token of scanReferenceTokens(text)) {
+    if (token.bracketed) {
+      const key = `${token.clusterFrom}:${token.clusterTo}`;
+      if (seenBracketedClusters.has(key)) {
+        continue;
+      }
+      seenBracketedClusters.add(key);
+      reveals.push({
+        bracketed: true,
+        from: token.clusterFrom,
+        source: text.slice(token.clusterFrom, token.clusterTo),
+        to: token.clusterTo,
+      });
+      continue;
+    }
+
+    reveals.push({
+      bracketed: false,
+      from: token.from,
+      source: text.slice(token.from, token.to),
+      to: token.to,
+    });
+  }
+
+  return reveals.sort((left, right) => left.from - right.from);
 }
 
 export function parseReferenceToken(raw: string): ParsedReferenceToken | null {

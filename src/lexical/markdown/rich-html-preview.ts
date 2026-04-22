@@ -8,6 +8,7 @@ import katex from "katex";
 
 import { buildKatexOptions } from "../../lib/katex-options";
 import { parseFrontmatter, type FrontmatterConfig } from "../../lib/frontmatter";
+import { scanReferenceRevealTokens } from "../../lib/reference-tokens";
 import {
   buildPreviewFencedDivRaw,
   collectSpecialBlockRanges,
@@ -16,8 +17,6 @@ import {
 } from "./block-syntax";
 import { createFencedDivViewModel } from "./fenced-div-view-model";
 import {
-  BRACKETED_REFERENCE_RE,
-  NARRATIVE_REFERENCE_RE,
   renderReferenceDisplay,
   type RenderCitations,
 } from "./reference-display";
@@ -165,18 +164,22 @@ function injectReferenceMarkup(
   renderIndex: RenderIndex,
   citations?: RenderCitations,
 ): string {
-  const placeholders: string[] = [];
-  let next = markdown.replace(BRACKETED_REFERENCE_RE, (raw) => {
-    const placeholder = `__COFLAT_REF_${placeholders.length}__`;
-    placeholders.push(`<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(raw, renderIndex, citations))}</span>`);
-    return placeholder;
-  });
+  const tokens = scanReferenceRevealTokens(markdown);
+  if (tokens.length === 0) {
+    return markdown;
+  }
 
-  next = next.replace(NARRATIVE_REFERENCE_RE, (raw: string) =>
-    `<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(raw, renderIndex, citations))}</span>`);
-
-  return next.replace(/__COFLAT_REF_(\d+)__/g, (_raw, indexText: string) =>
-    placeholders[Number(indexText)] ?? "");
+  const html: string[] = [];
+  let cursor = 0;
+  for (const token of tokens) {
+    html.push(markdown.slice(cursor, token.from));
+    html.push(
+      `<span class="${LEXICAL_NODE_CLASS.REFERENCE}">${encodeHtml(renderReferenceDisplay(token.source, renderIndex, citations))}</span>`,
+    );
+    cursor = token.to;
+  }
+  html.push(markdown.slice(cursor));
+  return html.join("");
 }
 
 function renderMarkdownChunk(markdown: string, options: RichHtmlOptions): string {

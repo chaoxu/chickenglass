@@ -50,6 +50,7 @@ import {
   BRACKETED_REFERENCE_SHORTCUT_RE,
   NARRATIVE_REFERENCE_IMPORT_RE,
   NARRATIVE_REFERENCE_SHORTCUT_RE,
+  scanReferenceRevealTokens,
 } from "../lib/reference-tokens";
 import { getInlineTextFormatSpecs } from "./runtime";
 import {
@@ -327,10 +328,43 @@ function createInlineTokenTransformer(
   };
 }
 
+function textOffsetWithinParent(node: LexicalNode): number | null {
+  const parent = node.getParent();
+  if (!parent) {
+    return null;
+  }
+
+  let offset = 0;
+  let sibling = node.getPreviousSibling();
+  while (sibling) {
+    offset += sibling.getTextContent().length;
+    sibling = sibling.getPreviousSibling();
+  }
+  return offset;
+}
+
+function shouldReplaceReferenceMatch(node: TextNode, raw: string): boolean {
+  const parent = node.getParent();
+  const from = textOffsetWithinParent(node);
+  if (!parent || from === null) {
+    return scanReferenceRevealTokens(raw).some((token) =>
+      token.from === 0 && token.to === raw.length && token.source === raw
+    );
+  }
+
+  const to = from + raw.length;
+  return scanReferenceRevealTokens(parent.getTextContent()).some((token) =>
+    token.from === from && token.to === to && token.source === raw
+  );
+}
+
 const bracketedReferenceTransformer = createInlineTokenTransformer(
   [ReferenceNode],
   (node) => ($isReferenceNode(node) ? node.getRaw() : null),
   (node, match) => {
+    if (!shouldReplaceReferenceMatch(node, match[0])) {
+      return;
+    }
     node.replace($createReferenceNode(match[0], node.getFormat()));
   },
   BRACKETED_REFERENCE_IMPORT_RE,
@@ -342,6 +376,9 @@ const narrativeReferenceTransformer = createInlineTokenTransformer(
   [ReferenceNode],
   (node) => ($isReferenceNode(node) ? node.getRaw() : null),
   (node, match) => {
+    if (!shouldReplaceReferenceMatch(node, match[0])) {
+      return;
+    }
     node.replace($createReferenceNode(match[0], node.getFormat()));
   },
   NARRATIVE_REFERENCE_IMPORT_RE,

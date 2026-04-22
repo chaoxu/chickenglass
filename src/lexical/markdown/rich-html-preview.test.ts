@@ -17,8 +17,17 @@ const renderIndex: RenderIndex = {
       label: "Equation (1)",
       shortLabel: "(1)",
     }],
+    ["sec:intro/motivation", {
+      kind: "heading",
+      label: "Section 1.1",
+      shortLabel: "Section 1.1",
+    }],
   ]),
 };
+
+function referenceMarkupCount(html: string): number {
+  return html.match(/cf-lexical-reference/g)?.length ?? 0;
+}
 
 describe("rich-html-preview", () => {
   it("renders frontmatter titles into preview chrome", () => {
@@ -49,6 +58,25 @@ describe("rich-html-preview", () => {
     expect(html).toContain("cf-lexical-reference");
     expect(html).toContain("cf-lexical-display-math-label");
     expect(html).toContain("(1)");
+  });
+
+  it("uses the shared reference grammar for preview markup", () => {
+    const html = renderMarkdownRichHtml(
+      "See [see @eq:sum], [@eq:sum; see @other], [@eq:sum], and @sec:intro/motivation.",
+      {
+        citations: {
+          store: new Map(),
+        },
+        renderIndex,
+        resolveAssetUrl: (targetPath) => targetPath,
+      },
+    );
+
+    expect(referenceMarkupCount(html)).toBe(2);
+    expect(html).toContain("[see @eq:sum]");
+    expect(html).toContain("[@eq:sum; see @other]");
+    expect(html).toContain("(1)");
+    expect(html).toContain("Section 1.1");
   });
 
   it("rewrites PDF image targets through resolveAssetUrl", () => {

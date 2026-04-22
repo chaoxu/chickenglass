@@ -149,6 +149,21 @@ describe("document semantics analyzers", () => {
     ]);
   });
 
+  it("does not analyze narrative references inside malformed bracket clusters", () => {
+    const doc = "No [see @id] or [@id; see @other], yes [@id] and @sec:intro/motivation.\n";
+    const tree = parser.parse(doc);
+
+    const refs = analyzeReferences(stringTextSource(doc), tree);
+
+    expect(refs.map((ref) => ({
+      bracketed: ref.bracketed,
+      ids: ref.ids,
+    }))).toEqual([
+      { bracketed: true, ids: ["id"] },
+      { bracketed: false, ids: ["sec:intro/motivation"] },
+    ]);
+  });
+
   it("includes equations and references in canonical document analysis", () => {
     const doc = "$$x^2$$ {#eq:first}\n\nSee [@eq:first]\n";
     const tree = parser.parse(doc);

@@ -1,7 +1,7 @@
 import type { Tree } from "@lezer/common";
 import { NODE } from "../../constants/node-types";
+import { scanReferenceTokens } from "../../lib/reference-tokens";
 import type { FencedDivSemantics, MathSemantics, ReferenceSemantics, TextSource } from "../document";
-import { NARRATIVE_REFERENCE_RE } from "../reference-parts";
 import {
   collectFencedDiv,
   collectFootnoteDef,
@@ -57,9 +57,9 @@ function shouldDescendIntoStructuralNode(name: string): boolean {
 }
 
 /**
- * Collect narrative `@id` references within a window by running
- * {@link NARRATIVE_REFERENCE_RE} on the window text and filtering out
- * matches that fall inside any excluded range (code, math, links).
+ * Collect narrative `@id` references within a window by using the shared
+ * reference scanner and filtering out matches that fall inside any excluded
+ * range (code, math, links).
  *
  * One character of document context before the window is included so
  * the regex lookbehind `(?<![[@\w])` works correctly at the boundary.
@@ -76,12 +76,14 @@ export function collectNarrativeRefsInWindow(
     return;
   }
 
-  NARRATIVE_REFERENCE_RE.lastIndex = prefixLen;
-  let match: RegExpExecArray | null;
   let exIdx = 0;
-  while ((match = NARRATIVE_REFERENCE_RE.exec(text)) !== null) {
-    const from = range.from - prefixLen + match.index;
-    const to = from + match[0].length;
+  for (const token of scanReferenceTokens(text)) {
+    if (token.bracketed || token.from < prefixLen) {
+      continue;
+    }
+
+    const from = range.from - prefixLen + token.from;
+    const to = range.from - prefixLen + token.to;
 
     // Linear sweep: advance past excluded ranges that end before this match.
     while (exIdx < excludedRanges.length && excludedRanges[exIdx].to <= from) {
@@ -99,7 +101,7 @@ export function collectNarrativeRefsInWindow(
       from,
       to,
       bracketed: false,
-      ids: [match[1]],
+      ids: [token.id],
       locators: [undefined],
     });
   }

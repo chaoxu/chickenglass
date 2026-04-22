@@ -2,8 +2,8 @@ import { HEADING_TRAILING_ATTRIBUTES_RE, parseHeadingLine } from "../../app/mark
 import { findNextInlineMathSource } from "../../lib/inline-math-source";
 import { MARKDOWN_IMAGE_IMPORT_RE } from "../../lib/markdown-image";
 import {
-  BRACKETED_REFERENCE_IMPORT_RE,
-  NARRATIVE_REFERENCE_IMPORT_RE,
+  scanReferenceRevealTokens,
+  type ReferenceRevealToken,
 } from "../../lib/reference-tokens";
 import { findTableCellSpans } from "../../lib/table-inline-span";
 import {
@@ -255,34 +255,21 @@ function parseFootnoteReferenceAt(
 }
 
 function parseReferenceAt(
-  source: string,
   from: number,
   to: number,
+  referenceRevealsByFrom: ReadonlyMap<number, ReferenceRevealToken>,
 ): ParsedSourceRevealToken | null {
-  const bracketed = anchoredMatch(BRACKETED_REFERENCE_IMPORT_RE, source, from, to);
-  if (bracketed) {
-    return {
-      adapterId: "reference",
-      from,
-      kind: "reveal",
-      source: bracketed[0],
-      to: from + bracketed[0].length,
-    };
-  }
-
-  if (from > 0 && /[\w@]/.test(source[from - 1] ?? "")) {
+  const reveal = referenceRevealsByFrom.get(from);
+  if (!reveal || reveal.to > to) {
     return null;
   }
-  const narrative = anchoredMatch(NARRATIVE_REFERENCE_IMPORT_RE, source, from, to);
-  return narrative
-    ? {
-        adapterId: "reference",
-        from,
-        kind: "reveal",
-        source: narrative[0],
-        to: from + narrative[0].length,
-      }
-    : null;
+  return {
+    adapterId: "reference",
+    from,
+    kind: "reveal",
+    source: reveal.source,
+    to: reveal.to,
+  };
 }
 
 const FORMAT_CANDIDATES = [
@@ -355,6 +342,7 @@ function parseSpecialInlineAt(
   from: number,
   to: number,
   formats: readonly InlineTextFormatFamily[],
+  referenceRevealsByFrom: ReadonlyMap<number, ReferenceRevealToken>,
 ): { readonly tokens: readonly ParsedSourceToken[]; readonly to: number } | null {
   const formatted = parseFormatAt(source, from, to, formats);
   if (formatted) {
@@ -396,7 +384,7 @@ function parseSpecialInlineAt(
     return { tokens: [footnote], to: footnote.to };
   }
 
-  const reference = parseReferenceAt(source, from, to);
+  const reference = parseReferenceAt(from, to, referenceRevealsByFrom);
   if (reference) {
     return { tokens: [reference], to: reference.to };
   }
@@ -434,6 +422,18 @@ function parseInlineSegment(
   formats: readonly InlineTextFormatFamily[],
 ): readonly ParsedSourceToken[] {
   const tokens: ParsedSourceToken[] = [];
+  const referenceRevealsByFrom = new Map(
+    scanReferenceRevealTokens(source.slice(from, to)).map((reveal) => {
+      const absoluteFrom = from + reveal.from;
+      const absoluteTo = from + reveal.to;
+      return [absoluteFrom, {
+        ...reveal,
+        from: absoluteFrom,
+        source: source.slice(absoluteFrom, absoluteTo),
+        to: absoluteTo,
+      }] as const;
+    }),
+  );
   let cursor = from;
   let textFrom = from;
 
@@ -445,7 +445,7 @@ function parseInlineSegment(
   };
 
   while (cursor < to) {
-    const parsed = parseSpecialInlineAt(source, cursor, to, formats);
+    const parsed = parseSpecialInlineAt(source, cursor, to, formats, referenceRevealsByFrom);
     if (parsed) {
       flushText(cursor);
       tokens.push(...parsed.tokens);
