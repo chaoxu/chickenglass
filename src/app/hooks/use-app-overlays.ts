@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   dispatchFormatEvent,
   type FormatEventDetail,
   type HeadingFormatLevel,
   type SimpleFormatEventType,
 } from "../../constants/events";
-import { BackgroundIndexer } from "../../index";
+import { BackgroundIndexer, type IndexFileSnapshot } from "../../index";
 import { documentAnalysisField } from "../../state/document-analysis";
 import { useDevSettings } from "../../state/dev-settings";
 import {
@@ -119,6 +119,8 @@ const LABEL_ACTION_MESSAGE =
   "Place the cursor on a local label definition or reference in the current document.";
 const ACTIVE_SEARCH_REINDEX_DEBOUNCE_MS = 120;
 const ACTIVE_SEARCH_REINDEX_IDLE_TIMEOUT_MS = 1_000;
+const SEARCH_INDEX_FILE_READ_CONCURRENCY = 8;
+const SEARCH_INDEX_BULK_UPDATE_BATCH_SIZE = 25;
 
 type IdleTaskHandle = number;
 type IdleTaskDeadline = {
@@ -186,6 +188,57 @@ function dispatchFormatDetail(detail: FormatEventDetail): void {
   dispatchFormatEvent(detail.type);
 }
 
+function yieldSearchIndexBatch(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
+}
+
+async function readSearchIndexFiles({
+  fs,
+  paths,
+  currentPath,
+  activeSearchDoc,
+  activeSearchAnalysis,
+  isCancelled,
+}: {
+  readonly fs: FileSystem;
+  readonly paths: readonly string[];
+  readonly currentPath: string | null;
+  readonly activeSearchDoc: string;
+  readonly activeSearchAnalysis: IndexFileSnapshot["analysis"] | undefined;
+  readonly isCancelled: () => boolean;
+}): Promise<IndexFileSnapshot[] | null> {
+  const files = new Array<IndexFileSnapshot>(paths.length);
+  let nextIndex = 0;
+
+  async function readWorker(): Promise<void> {
+    while (!isCancelled()) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= paths.length) {
+        return;
+      }
+
+      const path = paths[index];
+      files[index] = path === currentPath
+        ? {
+            file: path,
+            content: activeSearchDoc,
+            analysis: activeSearchAnalysis,
+          }
+        : {
+            file: path,
+            content: await fs.readFile(path),
+          };
+    }
+  }
+
+  const workerCount = Math.min(SEARCH_INDEX_FILE_READ_CONCURRENCY, paths.length);
+  await Promise.all(Array.from({ length: workerCount }, () => readWorker()));
+  return isCancelled() ? null : files;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAppOverlays({
@@ -210,6 +263,23 @@ export function useAppOverlays({
     ),
     [dialogs.searchOpen, editor.currentPath, searchSyncRevision, editor.getCurrentDocText],
   );
+  const latestActiveSearchSnapshotRef = useRef<{
+    path: string | null;
+    doc: string;
+    analysis: IndexFileSnapshot["analysis"] | undefined;
+  }>({
+    path: editor.currentPath,
+    doc: activeSearchDoc,
+    analysis: activeSearchAnalysis,
+  });
+
+  useEffect(() => {
+    latestActiveSearchSnapshotRef.current = {
+      path: editor.currentPath,
+      doc: activeSearchDoc,
+      analysis: activeSearchAnalysis,
+    };
+  }, [editor.currentPath, activeSearchDoc, activeSearchAnalysis]);
 
   useEffect(() => {
     setLabelBacklinks(null);
@@ -247,29 +317,48 @@ export function useAppOverlays({
       try {
         const tree = await fs.listTree();
         const markdownPaths = collectSearchableMarkdownPaths(tree);
-        const files = await Promise.all(
-          markdownPaths.map(async (path) => ({
-            file: path,
-            content:
-              path === editor.currentPath
-                ? activeSearchDoc
-                : await fs.readFile(path),
-            analysis:
-              path === editor.currentPath
-                ? activeSearchAnalysis
-                : undefined,
-          })),
-        );
+        const searchablePathSet = new Set(markdownPaths);
+        const files = await readSearchIndexFiles({
+          fs,
+          paths: markdownPaths,
+          currentPath: editor.currentPath,
+          activeSearchDoc,
+          activeSearchAnalysis,
+          isCancelled: () => cancelled,
+        });
+
+        if (files === null) {
+          return;
+        }
 
         if (!cancelled) {
-          await measureAsync(
+          const indexedEntries = await measureAsync(
             "search.index.bulkUpdate",
-            () => indexer.bulkUpdate(files),
+            () => indexer.bulkUpdateChunked(files, {
+              batchSize: SEARCH_INDEX_BULK_UPDATE_BATCH_SIZE,
+              shouldCancel: () => cancelled,
+              yieldAfterBatch: yieldSearchIndexBatch,
+            }),
             {
               category: "search",
               detail: `${files.length} files`,
             },
           );
+          if (indexedEntries === null || cancelled) {
+            return;
+          }
+
+          const latestActiveSearchSnapshot = latestActiveSearchSnapshotRef.current;
+          if (
+            latestActiveSearchSnapshot.path !== null &&
+            searchablePathSet.has(latestActiveSearchSnapshot.path)
+          ) {
+            await indexer.updateFile(
+              latestActiveSearchSnapshot.path,
+              latestActiveSearchSnapshot.doc,
+              latestActiveSearchSnapshot.analysis,
+            );
+          }
           setSearchVersion((version) => version + 1);
         }
       } catch (error: unknown) {

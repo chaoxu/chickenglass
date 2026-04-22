@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearDocumentAnalysisCache,
   getCachedDocumentAnalysis,
@@ -698,5 +698,49 @@ describe("BackgroundIndexer", () => {
     const fileIndex = await indexer.getFileIndex("doc.md");
     expect(fileIndex?.references).toHaveLength(1);
     expect(fileIndex?.references[0]?.ids).toEqual(["ref"]);
+  });
+
+  it("yields between chunked bulkUpdate batches", async () => {
+    const indexer = new BackgroundIndexer();
+    const yieldAfterBatch = vi.fn(async () => {});
+
+    const totalEntries = await indexer.bulkUpdateChunked([
+      { file: "a.md", content: "# A" },
+      { file: "b.md", content: "# B" },
+      { file: "c.md", content: "# C" },
+      { file: "d.md", content: "# D" },
+      { file: "e.md", content: "# E" },
+    ], {
+      batchSize: 2,
+      yieldAfterBatch,
+    });
+
+    expect(totalEntries).toBe(5);
+    expect(yieldAfterBatch).toHaveBeenCalledTimes(2);
+    await expect(indexer.getFileIndex("a.md")).resolves.toBeDefined();
+    await expect(indexer.getFileIndex("e.md")).resolves.toBeDefined();
+  });
+
+  it("leaves the previous snapshot intact when a chunked bulkUpdate is cancelled", async () => {
+    const indexer = new BackgroundIndexer();
+    await indexer.bulkUpdate([{ file: "old.md", content: "# Old" }]);
+
+    let cancelChecks = 0;
+    const totalEntries = await indexer.bulkUpdateChunked([
+      { file: "new-a.md", content: "# New A" },
+      { file: "new-b.md", content: "# New B" },
+    ], {
+      batchSize: 1,
+      shouldCancel: () => {
+        cancelChecks += 1;
+        return cancelChecks > 1;
+      },
+      yieldAfterBatch: async () => {},
+    });
+
+    expect(totalEntries).toBeNull();
+    await expect(indexer.getFileIndex("old.md")).resolves.toBeDefined();
+    await expect(indexer.getFileIndex("new-a.md")).resolves.toBeUndefined();
+    await expect(indexer.getFileIndex("new-b.md")).resolves.toBeUndefined();
   });
 });

@@ -30,6 +30,33 @@ import type {
 } from "./query-api";
 import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
 
+export interface IndexFileSnapshot {
+  readonly file: string;
+  readonly content: string;
+  readonly analysis?: FileIndexAnalysisInput;
+}
+
+export interface ChunkedBulkUpdateOptions {
+  readonly batchSize?: number;
+  readonly yieldAfterBatch?: () => Promise<void>;
+  readonly shouldCancel?: () => boolean;
+}
+
+const DEFAULT_CHUNKED_BULK_UPDATE_BATCH_SIZE = 25;
+
+function normalizeChunkedBatchSize(batchSize: number | undefined): number {
+  if (batchSize === undefined) {
+    return DEFAULT_CHUNKED_BULK_UPDATE_BATCH_SIZE;
+  }
+  return Math.max(1, Math.floor(batchSize));
+}
+
+function yieldAfterMacrotask(): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, 0);
+  });
+}
+
 /**
  * Document indexer that runs extraction and queries on the main thread.
  *
@@ -115,11 +142,7 @@ export class BackgroundIndexer {
    * Returns the total entry count in the rebuilt index.
    */
   async bulkUpdate(
-    files: ReadonlyArray<{
-      file: string;
-      content: string;
-      analysis?: FileIndexAnalysisInput;
-    }>,
+    files: ReadonlyArray<IndexFileSnapshot>,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.bulkUpdate(${files.length} files): indexer is disposed`);
     const nextFiles = new Map<string, FileIndex>();
@@ -128,6 +151,56 @@ export class BackgroundIndexer {
       const fileIndex = extractFileIndex(content, file, analysis);
       nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
+    }
+    this.files = nextFiles;
+    return totalEntries;
+  }
+
+  /**
+   * Rebuild the index from an exact file snapshot while yielding between
+   * batches. This keeps large project-wide rebuilds responsive without
+   * changing the final replacement semantics of `bulkUpdate()`.
+   *
+   * Returns `null` if `shouldCancel()` becomes true before the new snapshot is
+   * committed, leaving the previous index untouched.
+   */
+  async bulkUpdateChunked(
+    files: ReadonlyArray<IndexFileSnapshot>,
+    options: ChunkedBulkUpdateOptions = {},
+  ): Promise<number | null> {
+    if (this.disposed) {
+      throw new Error(`Indexer.bulkUpdateChunked(${files.length} files): indexer is disposed`);
+    }
+    const batchSize = normalizeChunkedBatchSize(options.batchSize);
+    const yieldAfterBatch = options.yieldAfterBatch ?? yieldAfterMacrotask;
+    const shouldCancel = options.shouldCancel ?? (() => false);
+    const nextFiles = new Map<string, FileIndex>();
+    let totalEntries = 0;
+
+    for (let index = 0; index < files.length; index += 1) {
+      if (this.disposed) {
+        throw new Error(`Indexer.bulkUpdateChunked(${files.length} files): indexer is disposed`);
+      }
+      if (shouldCancel()) {
+        return null;
+      }
+
+      const { file, content, analysis } = files[index];
+      const fileIndex = extractFileIndex(content, file, analysis);
+      nextFiles.set(file, fileIndex);
+      totalEntries += fileIndex.entries.length;
+
+      const processedCount = index + 1;
+      if (processedCount < files.length && processedCount % batchSize === 0) {
+        await yieldAfterBatch();
+      }
+    }
+
+    if (this.disposed) {
+      throw new Error(`Indexer.bulkUpdateChunked(${files.length} files): indexer is disposed`);
+    }
+    if (shouldCancel()) {
+      return null;
     }
     this.files = nextFiles;
     return totalEntries;

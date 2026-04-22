@@ -41,4 +41,8 @@ export {
   removeFileFromIndex,
 } from "./extract";
 
-export { BackgroundIndexer } from "./indexer";
+export {
+  BackgroundIndexer,
+  type ChunkedBulkUpdateOptions,
+  type IndexFileSnapshot,
+} from "./indexer";

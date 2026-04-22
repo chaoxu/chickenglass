@@ -302,7 +302,7 @@ describe("useAppOverlays", () => {
   });
 
   it("builds the search index from markdown files, using live editor text for the active file", async () => {
-    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdate");
+    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdateChunked");
     const view = createSearchIndexView("# Live draft\n");
     const activeAnalysis = view.state.field(documentAnalysisField);
     const {
@@ -349,8 +349,49 @@ describe("useAppOverlays", () => {
     expect(editor.currentPath).toBe("notes/current.md");
   });
 
+  it("limits concurrent search index file reads", async () => {
+    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdateChunked");
+    const files = Object.fromEntries(
+      Array.from({ length: 24 }, (_, index) => [
+        `notes/file-${index}.md`,
+        `# File ${index}\n`,
+      ]),
+    );
+    const {
+      props,
+      fs,
+    } = await createHookProps({
+      files,
+      dialogs: { searchOpen: true },
+    });
+    const originalReadFile = fs.readFile.bind(fs);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.spyOn(fs, "readFile").mockImplementation(async (path) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await Promise.resolve();
+      try {
+        return await originalReadFile(path);
+      } finally {
+        inFlight -= 1;
+      }
+    });
+
+    renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: props,
+    });
+
+    await vi.waitFor(() => {
+      expect(bulkUpdateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(8);
+  });
+
   it("resyncs the active markdown file and bumps searchVersion on active-document edits while search is open", async () => {
-    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdate");
+    const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdateChunked");
     const updateFileSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFile");
     const view = createSearchIndexView("# Current\n");
     const {
