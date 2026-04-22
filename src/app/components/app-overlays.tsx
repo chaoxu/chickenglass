@@ -15,6 +15,7 @@ import type { AppOverlayController } from "../hooks/use-app-overlays";
 import { useSearchPanelController } from "../hooks/use-search-panel-controller";
 import type { UseUnsavedChangesDialogReturn } from "../hooks/use-unsaved-changes-dialog";
 import { getAppSearchMode } from "../search";
+import { defaultEditorPluginMetadata } from "../../editor/editor-plugin-metadata";
 
 interface AppOverlaysProps {
   dialogs: UseDialogsReturn;
@@ -80,7 +81,10 @@ export function AppOverlays({
         onUpdateSetting={workspace.updateSetting}
         theme={workspace.theme}
         onSetTheme={workspace.setTheme}
-        plugins={editor.editorMode === "lexical" ? [] : editor.pluginManager.getPlugins()}
+        plugins={defaultEditorPluginMetadata.map((plugin) => ({
+          plugin,
+          enabled: workspace.settings.enabledPlugins[plugin.id] ?? plugin.defaultEnabled,
+        }))}
       />
       <AboutDialog open={dialogs.aboutOpen} onClose={dialogs.closeAbout} />
       <ShortcutsDialog

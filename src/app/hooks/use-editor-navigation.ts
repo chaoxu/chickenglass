@@ -12,7 +12,7 @@
  */
 
 import { useRef, useEffect, useCallback } from "react";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 
 /** Dependencies injected from the shell into the navigation hook. */
 export interface EditorNavigationDeps {

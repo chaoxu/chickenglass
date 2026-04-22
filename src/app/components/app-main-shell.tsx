@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
 import { DebugSidebarProvider } from "./debug-sidebar";
-import { EditorPane } from "./editor-pane";
 import { ExternalConflictBanner } from "./external-conflict-banner";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
@@ -13,6 +12,12 @@ import { isLexicalEditorMode } from "../../editor-display-mode";
 const LexicalEditorPane = lazy(() =>
   import("./lexical-editor-pane").then((module) => ({
     default: module.LexicalEditorPane,
+  })),
+);
+
+const EditorPane = lazy(() =>
+  import("./editor-pane").then((module) => ({
+    default: module.EditorPane,
   })),
 );
 
@@ -107,25 +112,27 @@ export function AppMainShell({
             />
           </Suspense>
         ) : currentPath ? (
-          <EditorPane
-            doc={editor.editorDoc}
-            docPath={currentPath}
-            projectConfig={workspace.projectConfig}
-            theme={workspace.resolvedTheme}
-            fs={fs}
-            pluginManager={editor.pluginManager}
-            sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
-            onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
-            onDocChange={editor.handleDocChange}
-            onProgrammaticDocChange={(doc) => {
-              editor.handleProgrammaticDocChange(currentPath, doc);
-            }}
-            onStateChange={editor.handleEditorStateChange}
-            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-            onDocumentReady={editor.handleEditorDocumentReady}
-            editorMode={cm6EditorMode}
-          />
+          <Suspense fallback={<div className="flex-1 bg-[var(--cf-bg)]" />}>
+            <EditorPane
+              doc={editor.editorDoc}
+              docPath={currentPath}
+              projectConfig={workspace.projectConfig}
+              theme={workspace.resolvedTheme}
+              fs={fs}
+              settings={workspace.settings}
+              sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+              onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
+              onDocChange={editor.handleDocChange}
+              onProgrammaticDocChange={(doc) => {
+                editor.handleProgrammaticDocChange(currentPath, doc);
+              }}
+              onStateChange={editor.handleEditorStateChange}
+              onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+              onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+              onDocumentReady={editor.handleEditorDocumentReady}
+              editorMode={cm6EditorMode}
+            />
+          </Suspense>
         ) : (
           <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
             Open a file to start editing

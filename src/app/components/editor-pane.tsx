@@ -1,5 +1,5 @@
 import { useRef, useMemo, useState, useEffect } from "react";
-import { EditorView } from "@codemirror/view";
+import { EditorView, lineNumbers } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
 import { useEditorStateTracking } from "../hooks/use-editor-state-tracking";
@@ -18,8 +18,18 @@ import {
 import { blockCounterField } from "../../state/block-counter";
 import { mathMacrosField } from "../../state/math-macros";
 import { bibDataField } from "../../citations/citation-render";
-import type { EditorMode } from "../../editor";
+import {
+  defaultEditorPlugins,
+  EditorPluginManager,
+  lineNumbersCompartment,
+  setEditorMode,
+  tabSizeCompartment,
+  tabSizeExtension,
+  type EditorMode,
+  wordWrapCompartment,
+} from "../../editor";
 import { serializeMacros } from "../../render/render-core";
+import type { Settings } from "../lib/types";
 
 const EMPTY_MACROS: Record<string, string> = {};
 const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
@@ -30,6 +40,7 @@ const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   layoutChangeFrom: -1,
 };
 export interface EditorPaneProps extends UseEditorOptions {
+  settings: Settings;
   sidenotesCollapsed?: boolean;
   onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   onStateChange?: (state: UseEditorReturn) => void;
@@ -42,17 +53,27 @@ export interface EditorPaneProps extends UseEditorOptions {
   editorMode?: EditorMode;
 }
 
+function toCm6EditorMode(mode: EditorMode | undefined): EditorMode {
+  return mode === "source" ? "source" : "rich";
+}
+
 export function EditorPane({
   onStateChange,
   onDocumentReady,
+  settings,
   sidenotesCollapsed,
   onSidenotesCollapsedChange,
   onHeadingsChange,
   onDiagnosticsChange,
-  editorMode: _editorMode,
+  editorMode,
   ...editorOptions
 }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [pluginManager] = useState(() => {
+    const manager = new EditorPluginManager();
+    defaultEditorPlugins.forEach((plugin) => manager.register(plugin));
+    return manager;
+  });
   const [sidenoteInvalidation, setSidenoteInvalidation] = useState<SidenoteInvalidation>(
     EMPTY_SIDENOTE_INVALIDATION,
   );
@@ -147,6 +168,7 @@ export function EditorPane({
     ...editorOptions,
     onDocumentReady,
     extensions,
+    pluginManager,
   });
 
   const { view } = editorState;
@@ -154,6 +176,36 @@ export function EditorPane({
   useEditorStateTracking(editorState, onStateChange);
   useSidenotesAutoCollapse(view, sidenotesCollapsed, onSidenotesCollapsedChange);
   useFootnoteTooltip(view, sidenotesCollapsed);
+
+  useEffect(() => {
+    const activeView = view ?? null;
+    for (const { plugin, enabled } of pluginManager.getPlugins()) {
+      const settingEnabled = settings.enabledPlugins[plugin.id];
+      if (settingEnabled !== undefined && settingEnabled !== enabled) {
+        pluginManager.setEnabled(activeView, plugin.id, settingEnabled);
+      }
+    }
+  }, [settings.enabledPlugins, view, pluginManager]);
+
+  useEffect(() => {
+    if (!view) return;
+    view.dispatch({
+      effects: [
+        wordWrapCompartment.reconfigure(
+          settings.wordWrap ? EditorView.lineWrapping : [],
+        ),
+        lineNumbersCompartment.reconfigure(
+          settings.showLineNumbers ? lineNumbers() : [],
+        ),
+        tabSizeCompartment.reconfigure(tabSizeExtension(settings.tabSize)),
+      ],
+    });
+  }, [view, settings.wordWrap, settings.showLineNumbers, settings.tabSize]);
+
+  useEffect(() => {
+    if (!view) return;
+    setEditorMode(view, toCm6EditorMode(editorMode));
+  }, [view, editorMode]);
 
   // When a hidden sidebar panel is shown again, push one fresh snapshot
   // without waiting for the next semantic revision.

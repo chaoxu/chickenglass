@@ -1,33 +1,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  insertImageFromPicker,
-  setEditorMode,
-  wordWrapCompartment,
-  lineNumbersCompartment,
-  tabSizeCompartment,
-  tabSizeExtension,
-  defaultEditorPlugins,
-  EditorPluginManager,
-  type EditorMode as Cm6EditorMode,
-} from "../../editor";
-import {
   defaultEditorMode,
   isLexicalEditorMode,
   normalizeEditorMode,
   type EditorMode,
 } from "../../editor-display-mode";
-import { EditorView, lineNumbers } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
 import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";
 import { useEditorNavigation } from "./use-editor-navigation";
 import { useEditorTransactions } from "./use-editor-transactions";
 import type { FileSystem } from "../file-manager";
-import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
-import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
+import type { HeadingEntry } from "../heading-ancestry";
+import type { DiagnosticEntry } from "../diagnostics";
 import type { Settings } from "../lib/types";
 import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
-import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import type { ActiveDocumentSignal } from "../active-document-signal";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
@@ -37,10 +25,6 @@ interface PendingModeOverride {
   path: string;
   mode: EditorMode;
   requestId: number;
-}
-
-function toCm6EditorMode(mode: EditorMode): Cm6EditorMode {
-  return mode === "source" ? "source" : "rich";
 }
 
 /** Dependencies injected into the shell hook from the top-level app component. */
@@ -101,9 +85,6 @@ function saveErrorMessage(error: unknown): string {
  * drag-and-drop.
  */
 export interface AppEditorShellController extends UseEditorSessionReturn {
-  /** Singleton plugin manager; registers all default editor plugins on first render. */
-  pluginManager: EditorPluginManager;
-
   // --- Editor state ---
 
   /**
@@ -225,12 +206,6 @@ export function useAppEditorShell({
   flushPendingAutoSave,
   requestUnsavedChangesDecision,
 }: AppEditorShellDeps): AppEditorShellController {
-  const [pluginManager] = useState(() => {
-    const manager = new EditorPluginManager();
-    defaultEditorPlugins.forEach((plugin) => manager.register(plugin));
-    return manager;
-  });
-
   const session = useEditorSession({
     fs,
     refreshTree,
@@ -420,14 +395,6 @@ export function useAppEditorShell({
     setEditorState(state);
     editorViewRef.current = state.view;
     syncView(state.view);
-
-    if (state.view) {
-      setHeadings(extractHeadings(state.view.state));
-      setDiagnostics(extractDiagnostics(state.view.state));
-    } else {
-      setHeadings([]);
-      setDiagnostics([]);
-    }
   }, [syncView]);
 
   const handleLexicalSurfaceReady = useCallback(() => {
@@ -461,40 +428,19 @@ export function useAppEditorShell({
   const handleWatchedPathChange = useCallback((path: string) => {
     const view = editorViewRef.current;
     if (!view) return;
-    invalidateImageDataUrl(view, path);
-  }, []);
-
-  useEffect(() => {
-    const view = editorState?.view ?? null;
-    for (const { plugin, enabled } of pluginManager.getPlugins()) {
-      const settingEnabled = settings.enabledPlugins[plugin.id];
-      if (settingEnabled !== undefined && settingEnabled !== enabled) {
-        pluginManager.setEnabled(view, plugin.id, settingEnabled);
-      }
-    }
-  }, [settings.enabledPlugins, editorState?.view, pluginManager]);
-
-  // Sync wordWrap, showLineNumbers, tabSize settings to CM6 compartments
-  useEffect(() => {
-    const view = editorState?.view;
-    if (!view) return;
-    view.dispatch({
-      effects: [
-        wordWrapCompartment.reconfigure(
-          settings.wordWrap ? EditorView.lineWrapping : [],
-        ),
-        lineNumbersCompartment.reconfigure(
-          settings.showLineNumbers ? lineNumbers() : [],
-        ),
-        tabSizeCompartment.reconfigure(tabSizeExtension(settings.tabSize)),
-      ],
+    void import("../../render/image-url-cache").then(({ invalidateImageDataUrl }) => {
+      if (editorViewRef.current !== view) return;
+      invalidateImageDataUrl(view, path);
     });
-  }, [editorState?.view, settings.wordWrap, settings.showLineNumbers, settings.tabSize]);
+  }, []);
 
   const handleInsertImage = useCallback(() => {
     const view = editorState?.view;
     if (view) {
-      void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
+      void import("../../editor").then(({ insertImageFromPicker }) => {
+        if (editorViewRef.current !== view) return;
+        void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
+      });
     }
   }, [editorState?.view, editorState?.imageSaver]);
 
@@ -518,15 +464,6 @@ export function useAppEditorShell({
     return normalizeEditorMode(defaultEditorMode, isMarkdownFile);
   }, [modeOverrides, pendingModeOverride, currentPath, isMarkdownFile]);
 
-  // Sync the computed mode into the CM6 view.
-  const cm6EditorMode = toCm6EditorMode(editorMode);
-  useEffect(() => {
-    const view = editorState?.view;
-    if (!view) return;
-    if (isLexicalEditorMode(editorMode)) return;
-    setEditorMode(view, cm6EditorMode);
-  }, [editorState?.view, editorMode, cm6EditorMode]);
-
   const handleModeChange = useCallback((mode: EditorMode | string) => {
     const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
@@ -549,11 +486,6 @@ export function useAppEditorShell({
       setPendingModeOverride((previous) =>
         previous?.path === currentPath ? null : previous,
       );
-      const view = editorState?.view;
-      if (!view) return;
-      if (!isLexicalEditorMode(normalizedMode)) {
-        setEditorMode(view, toCm6EditorMode(normalizedMode));
-      }
     };
     if (flushResult.shouldDeferModeSwitch) {
       window.setTimeout(applyModeOverride, 0);
@@ -564,7 +496,6 @@ export function useAppEditorShell({
     currentPath,
     editorDoc,
     editorMode,
-    editorState?.view,
     getSessionCurrentDocText,
     isMarkdownFile,
     runEditorTransaction,
@@ -675,7 +606,6 @@ export function useAppEditorShell({
 
   return {
     ...session,
-    pluginManager,
     openFile,
     openFileWithContent,
     saveFile,

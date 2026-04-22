@@ -5,18 +5,10 @@ import {
   type HeadingFormatLevel,
   type SimpleFormatEventType,
 } from "../../constants/events";
-import { BackgroundIndexer, type IndexFileSnapshot } from "../../index";
-import { documentAnalysisField } from "../../state/document-analysis";
+import type { BackgroundIndexer, IndexFileSnapshot } from "../../index";
 import { useDevSettings } from "../../state/dev-settings";
-import {
-  type DocumentLabelBacklinksResult,
-  resolveDocumentLabelBacklinks,
-} from "../../semantics/document-label-backlinks";
-import {
-  type DocumentLabelRenameTarget,
-  prepareDocumentLabelRename,
-  resolveDocumentLabelRenameTarget,
-} from "../../semantics/document-label-rename";
+import type { DocumentLabelBacklinksResult } from "../../semantics/document-label-backlinks";
+import type { DocumentLabelRenameTarget } from "../../semantics/document-label-rename";
 import type { PaletteCommand } from "../components/command-palette";
 import type { FileSystem } from "../file-manager";
 import { basename, modKey } from "../lib/utils";
@@ -24,7 +16,6 @@ import { dispatchIfConnected } from "../lib/view-dispatch";
 import { collectSearchableMarkdownPaths } from "../search";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
-import { applyMarkdownFormatAction } from "../editor-format-actions";
 import { measureAsync } from "../perf";
 import type { UseDialogsReturn } from "./use-dialogs";
 import { type HotkeyBinding, useHotkeys } from "./use-hotkeys";
@@ -44,7 +35,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "pluginManager" | "handleInsertImage" | "editorMode"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "handleInsertImage" | "editorMode"
   >;
   onOpenFile: () => void;
   onQuit: () => void;
@@ -52,7 +43,7 @@ interface AppOverlayDeps {
 
 export interface AppOverlayController {
   commands: PaletteCommand[];
-  indexer: BackgroundIndexer;
+  indexer: BackgroundIndexer | null;
   searchVersion: number;
   openPalette: () => void;
   labelBacklinks: DocumentLabelBacklinksResult | null;
@@ -134,6 +125,7 @@ type WindowWithIdleTask = Window & {
   ) => IdleTaskHandle;
   cancelIdleCallback?: (handle: IdleTaskHandle) => void;
 };
+type EditorViewSnapshot = NonNullable<AppOverlayDeps["editor"]["editorState"]>["view"];
 
 function scheduleDebouncedIdleTask(
   task: () => void,
@@ -194,6 +186,16 @@ function yieldSearchIndexBatch(): Promise<void> {
   });
 }
 
+async function readActiveDocumentAnalysis(
+  view: EditorViewSnapshot | null | undefined,
+): Promise<IndexFileSnapshot["analysis"] | undefined> {
+  if (!view) {
+    return undefined;
+  }
+  const { documentAnalysisField } = await import("../../state/document-analysis");
+  return view.state.field(documentAnalysisField, false);
+}
+
 async function readSearchIndexFiles({
   fs,
   paths,
@@ -250,11 +252,13 @@ export function useAppOverlays({
   onOpenFile,
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
-  const [indexer] = useState(() => new BackgroundIndexer());
+  const indexerRef = useRef<BackgroundIndexer | null>(null);
+  const indexerImportRef = useRef<Promise<BackgroundIndexer> | null>(null);
+  const [indexer, setIndexer] = useState<BackgroundIndexer | null>(null);
   const [searchSyncRevision, setSearchSyncRevision] = useState(0);
   const [searchVersion, setSearchVersion] = useState(0);
   const [labelBacklinks, setLabelBacklinks] = useState<DocumentLabelBacklinksResult | null>(null);
-  const activeSearchAnalysis = editor.editorState?.view?.state.field(documentAnalysisField, false);
+  const activeSearchView = editor.editorState?.view ?? null;
   const activeSearchDoc = useMemo(
     () => (
       dialogs.searchOpen && editor.currentPath
@@ -266,20 +270,35 @@ export function useAppOverlays({
   const latestActiveSearchSnapshotRef = useRef<{
     path: string | null;
     doc: string;
-    analysis: IndexFileSnapshot["analysis"] | undefined;
+    view: EditorViewSnapshot | null;
   }>({
     path: editor.currentPath,
     doc: activeSearchDoc,
-    analysis: activeSearchAnalysis,
+    view: activeSearchView,
   });
 
   useEffect(() => {
     latestActiveSearchSnapshotRef.current = {
       path: editor.currentPath,
       doc: activeSearchDoc,
-      analysis: activeSearchAnalysis,
+      view: activeSearchView,
     };
-  }, [editor.currentPath, activeSearchDoc, activeSearchAnalysis]);
+  }, [editor.currentPath, activeSearchDoc, activeSearchView]);
+
+  const ensureIndexer = useCallback(async (): Promise<BackgroundIndexer> => {
+    if (indexerRef.current) {
+      return indexerRef.current;
+    }
+    if (!indexerImportRef.current) {
+      indexerImportRef.current = import("../../index").then((module) => {
+        const nextIndexer = new module.BackgroundIndexer();
+        indexerRef.current = nextIndexer;
+        setIndexer(nextIndexer);
+        return nextIndexer;
+      });
+    }
+    return indexerImportRef.current;
+  }, []);
 
   useEffect(() => {
     setLabelBacklinks(null);
@@ -318,6 +337,8 @@ export function useAppOverlays({
         const tree = await fs.listTree();
         const markdownPaths = collectSearchableMarkdownPaths(tree);
         const searchablePathSet = new Set(markdownPaths);
+        const activeIndexer = await ensureIndexer();
+        const activeSearchAnalysis = await readActiveDocumentAnalysis(activeSearchView);
         const files = await readSearchIndexFiles({
           fs,
           paths: markdownPaths,
@@ -334,7 +355,7 @@ export function useAppOverlays({
         if (!cancelled) {
           const indexedEntries = await measureAsync(
             "search.index.bulkUpdate",
-            () => indexer.bulkUpdateChunked(files, {
+            () => activeIndexer.bulkUpdateChunked(files, {
               batchSize: SEARCH_INDEX_BULK_UPDATE_BATCH_SIZE,
               shouldCancel: () => cancelled,
               yieldAfterBatch: yieldSearchIndexBatch,
@@ -353,10 +374,13 @@ export function useAppOverlays({
             latestActiveSearchSnapshot.path !== null &&
             searchablePathSet.has(latestActiveSearchSnapshot.path)
           ) {
-            await indexer.updateFile(
+            const latestActiveSearchAnalysis = await readActiveDocumentAnalysis(
+              latestActiveSearchSnapshot.view,
+            );
+            await activeIndexer.updateFile(
               latestActiveSearchSnapshot.path,
               latestActiveSearchSnapshot.doc,
-              latestActiveSearchSnapshot.analysis,
+              latestActiveSearchAnalysis,
             );
           }
           setSearchVersion((version) => version + 1);
@@ -375,7 +399,8 @@ export function useAppOverlays({
     dialogs.searchOpen,
     workspace.fileTree,
     fs,
-    indexer,
+    ensureIndexer,
+    activeSearchView,
   ]);
 
   useEffect(() => {
@@ -392,7 +417,11 @@ export function useAppOverlays({
     const cancelScheduledSync = scheduleDebouncedIdleTask(() => {
       void measureAsync(
         "search.index.updateFile",
-        () => indexer.updateFile(currentPath, activeSearchDoc, activeSearchAnalysis),
+        async () => {
+          const activeIndexer = await ensureIndexer();
+          const activeSearchAnalysis = await readActiveDocumentAnalysis(activeSearchView);
+          return activeIndexer.updateFile(currentPath, activeSearchDoc, activeSearchAnalysis);
+        },
         {
           category: "search",
           detail: currentPath,
@@ -416,10 +445,10 @@ export function useAppOverlays({
     };
   }, [
     dialogs.searchOpen,
-    indexer,
+    ensureIndexer,
     editor.currentPath,
     activeSearchDoc,
-    activeSearchAnalysis,
+    activeSearchView,
     searchSyncRevision,
   ]);
 
@@ -468,13 +497,21 @@ export function useAppOverlays({
   }, [editor]);
 
   const applyFormat = useCallback((detail: FormatEventDetail) => {
-    const handled = applyMarkdownFormatAction({
-      editorHandle: editor.getLexicalEditorHandle(),
-      getCurrentDocText: editor.getCurrentDocText,
-    }, detail);
-    if (!handled) {
+    const editorHandle = editor.getLexicalEditorHandle();
+    if (!editorHandle) {
       dispatchFormatDetail(detail);
+      return;
     }
+
+    void import("../editor-format-actions").then(({ applyMarkdownFormatAction }) => {
+      const handled = applyMarkdownFormatAction({
+        editorHandle,
+        getCurrentDocText: editor.getCurrentDocText,
+      }, detail);
+      if (!handled) {
+        dispatchFormatDetail(detail);
+      }
+    });
   }, [editor]);
 
   const applySimpleFormat = useCallback((type: SimpleFormatEventType) => {
@@ -492,20 +529,25 @@ export function useAppOverlays({
       return;
     }
 
-    const lookup = resolveDocumentLabelBacklinks(view.state);
-    if (lookup.kind === "ready") {
-      setLabelBacklinks(lookup.result);
-      return;
-    }
-
-    if (lookup.kind === "duplicate") {
-      window.alert(
-        `Local label "${lookup.id}" is defined more than once in this document. Resolve the duplicate label before showing references.`,
+    void (async () => {
+      const { resolveDocumentLabelBacklinks } = await import(
+        "../../semantics/document-label-backlinks"
       );
-      return;
-    }
+      const lookup = resolveDocumentLabelBacklinks(view.state);
+      if (lookup.kind === "ready") {
+        setLabelBacklinks(lookup.result);
+        return;
+      }
 
-    window.alert(LABEL_ACTION_MESSAGE);
+      if (lookup.kind === "duplicate") {
+        window.alert(
+          `Local label "${lookup.id}" is defined more than once in this document. Resolve the duplicate label before showing references.`,
+        );
+        return;
+      }
+
+      window.alert(LABEL_ACTION_MESSAGE);
+    })();
   }, [editor.currentPath, editor.editorState?.view]);
 
   const handleRenameDocumentLabel = useCallback(() => {
@@ -515,59 +557,65 @@ export function useAppOverlays({
       return;
     }
 
-    const lookup = resolveDocumentLabelRenameTarget(view.state);
-    if (lookup.kind === "duplicate") {
-      window.alert(duplicateRenameMessage(lookup.id));
-      return;
-    }
-    if (lookup.kind === "none") {
+    void (async () => {
+      const {
+        prepareDocumentLabelRename,
+        resolveDocumentLabelRenameTarget,
+      } = await import("../../semantics/document-label-rename");
+      const lookup = resolveDocumentLabelRenameTarget(view.state);
+      if (lookup.kind === "duplicate") {
+        window.alert(duplicateRenameMessage(lookup.id));
+        return;
+      }
+      if (lookup.kind === "none") {
+        window.alert(LABEL_ACTION_MESSAGE);
+        return;
+      }
+
+      const target = lookup.target;
+      const promptedId = window.prompt(
+        renamePromptMessage(target),
+        target.definition.id,
+      );
+      if (promptedId === null || promptedId === target.definition.id) {
+        return;
+      }
+
+      const rename = prepareDocumentLabelRename(view.state, promptedId);
+      if (rename.kind === "ready") {
+        if (rename.changes.length === 0) return;
+        if (dispatchIfConnected(
+          view,
+          { changes: [...rename.changes], scrollIntoView: true },
+          { context: "[rename-label] dispatch failed:" },
+        )) {
+          view.focus();
+          window.requestAnimationFrame(() => {
+            if (view.dom.isConnected) {
+              view.focus();
+            }
+          });
+        }
+        return;
+      }
+
+      if (rename.kind === "duplicate") {
+        window.alert(duplicateRenameMessage(rename.id));
+        return;
+      }
+      if (rename.kind === "invalid") {
+        if (rename.validation.reason === "collision") {
+          window.alert(
+            `Local label "${rename.validation.id}" already exists in this document. Choose a different id.`,
+          );
+        } else {
+          window.alert(renameValidationMessage(promptedId));
+        }
+        return;
+      }
+
       window.alert(LABEL_ACTION_MESSAGE);
-      return;
-    }
-
-    const target = lookup.target;
-    const promptedId = window.prompt(
-      renamePromptMessage(target),
-      target.definition.id,
-    );
-    if (promptedId === null || promptedId === target.definition.id) {
-      return;
-    }
-
-    const rename = prepareDocumentLabelRename(view.state, promptedId);
-    if (rename.kind === "ready") {
-      if (rename.changes.length === 0) return;
-      if (dispatchIfConnected(
-        view,
-        { changes: [...rename.changes], scrollIntoView: true },
-        { context: "[rename-label] dispatch failed:" },
-      )) {
-        view.focus();
-        window.requestAnimationFrame(() => {
-          if (view.dom.isConnected) {
-            view.focus();
-          }
-        });
-      }
-      return;
-    }
-
-    if (rename.kind === "duplicate") {
-      window.alert(duplicateRenameMessage(rename.id));
-      return;
-    }
-    if (rename.kind === "invalid") {
-      if (rename.validation.reason === "collision") {
-        window.alert(
-          `Local label "${rename.validation.id}" already exists in this document. Choose a different id.`,
-        );
-      } else {
-        window.alert(renameValidationMessage(promptedId));
-      }
-      return;
-    }
-
-    window.alert(LABEL_ACTION_MESSAGE);
+    })();
   }, [editor.currentPath, editor.editorState?.view]);
 
   // ── Single command registry ──────────────────────────────────────────────

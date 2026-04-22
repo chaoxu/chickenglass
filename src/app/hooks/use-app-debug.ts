@@ -23,7 +23,6 @@ import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { useDevSettings } from "../../state/dev-settings";
 import { clearInteractionLog, getInteractionLog } from "../../lexical/interaction-trace";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
-import { applyMarkdownFormatAction } from "../editor-format-actions";
 import { planMarkdownFormat } from "../format-markdown";
 import {
   debugEmitFileChangedCommand,
@@ -195,11 +194,18 @@ export function useAppDebug({
   };
 
   const formatEditorSelection = (detail: FormatEventDetail): boolean => {
-    const handled = applyMarkdownFormatAction({
-      editorHandle: getEditorHandle(),
-      getCurrentDocText,
-    }, detail);
-    if (handled) return true;
+    const handle = getEditorHandle();
+    if (handle) {
+      const plan = planMarkdownFormat(
+        getCurrentDocText(),
+        handle.getSelection(),
+        detail,
+      );
+      handle.applyChanges(plan.changes);
+      handle.setSelection(plan.selection.anchor, plan.selection.focus);
+      handle.focus();
+      return true;
+    }
     const view = getCmView();
     if (!view) return false;
     const selection = view.state.selection.main;

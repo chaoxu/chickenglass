@@ -152,9 +152,6 @@ function createEditorHarness(
       closeCurrentFile: vi.fn(async () => true),
       hasDirtyDocument: false,
       editorMode: "cm6-rich",
-      pluginManager: {
-        getPlugins: vi.fn(() => []),
-      } as unknown as UseAppOverlaysProps["editor"]["pluginManager"],
       handleInsertImage: vi.fn(),
     },
     activeDocumentSignal,
@@ -624,13 +621,15 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "format.bold").action();
     });
 
-    expect(applyChanges).toHaveBeenCalledWith([{
-      from: 6,
-      to: 10,
-      insert: "**beta**",
-    }]);
-    expect(setSelection).toHaveBeenCalledWith(8, 12);
-    expect(focus).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(applyChanges).toHaveBeenCalledWith([{
+        from: 6,
+        to: 10,
+        insert: "**beta**",
+      }]);
+      expect(setSelection).toHaveBeenCalledWith(8, 12);
+      expect(focus).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("renames a local label through the hook command flow", async () => {
@@ -670,8 +669,10 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "edit.rename-local-label").action();
     });
 
-    expect(promptSpy).toHaveBeenCalledTimes(1);
-    expect(view.state.doc.toString()).toBe(expectedDoc);
+    await vi.waitFor(() => {
+      expect(promptSpy).toHaveBeenCalledTimes(1);
+      expect(view.state.doc.toString()).toBe(expectedDoc);
+    });
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
@@ -703,10 +704,12 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "edit.rename-local-label").action();
     });
 
-    expect(promptSpy).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Local label "dup" is defined more than once in this document. Resolve the duplicate label before renaming it.',
-    );
+    await vi.waitFor(() => {
+      expect(promptSpy).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Local label "dup" is defined more than once in this document. Resolve the duplicate label before renaming it.',
+      );
+    });
   });
 
   it("alerts on invalid rename targets without dispatching changes", async () => {
@@ -736,10 +739,12 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "edit.rename-local-label").action();
     });
 
-    expect(promptSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Local label "sec:overview" already exists in this document. Choose a different id.',
-    );
+    await vi.waitFor(() => {
+      expect(promptSpy).toHaveBeenCalledTimes(1);
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Local label "sec:overview" already exists in this document. Choose a different id.',
+      );
+    });
     expect(view.state.doc.toString()).toBe(originalDoc);
   });
 
@@ -767,9 +772,11 @@ describe("useAppOverlays", () => {
       getCommand(result.current.commands, "edit.rename-local-label").action();
     });
 
-    expect(promptSpy).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith(
-      "Place the cursor on a local label definition or reference in the current document.",
-    );
+    await vi.waitFor(() => {
+      expect(promptSpy).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledWith(
+        "Place the cursor on a local label definition or reference in the current document.",
+      );
+    });
   });
 });

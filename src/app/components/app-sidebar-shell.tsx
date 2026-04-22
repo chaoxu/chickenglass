@@ -1,6 +1,6 @@
+import { lazy, Suspense } from "react";
 import { Diagnostics } from "./diagnostics";
 import { FileTree } from "./file-tree";
-import { Outline } from "./outline";
 import { RuntimeLogs } from "./runtime-logs";
 import {
   Sidebar,
@@ -15,6 +15,12 @@ import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
 import type { SidebarLayoutController, SidebarTab } from "../hooks/use-sidebar-layout";
 import { isRuntimeLogPanelEnabled } from "../runtime-logger";
+
+const Outline = lazy(() =>
+  import("./outline").then((module) => ({
+    default: module.Outline,
+  })),
+);
 
 interface AppSidebarShellProps {
   sidebarLayout: Pick<
@@ -83,7 +89,15 @@ export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
               />
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">
-              <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
+              <Suspense
+                fallback={
+                  <div className="px-3 py-2 text-xs text-[var(--cf-muted)] italic">
+                    No headings
+                  </div>
+                }
+              >
+                <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
+              </Suspense>
             </TabsContent>
             <TabsContent value="diagnostics" className="min-h-full">
               <Diagnostics diagnostics={editor.diagnostics} onSelect={editor.handleOutlineSelect} />

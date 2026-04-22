@@ -2,7 +2,7 @@ import type React from "react";
 
 import type { Theme } from "./theme-manager";
 import type { WritingTheme } from "./themes";
-import { applyThemePreset, clearThemePreset, themePresets } from "../editor";
+import { applyThemePreset, clearThemePreset, themePresets } from "../editor/theme-config";
 
 export type ResolvedTheme = "light" | "dark";
 
