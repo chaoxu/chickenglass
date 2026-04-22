@@ -1,5 +1,6 @@
 import {
   openRegressionDocument,
+  screenshot,
   scrollToText,
   settleEditorLayout,
 } from "../test-helpers.mjs";
@@ -94,7 +95,7 @@ async function capturePreviewTokenShot(page, rowLabel, selector) {
     { rowLabel, selector },
   );
   if (!rect) return null;
-  return page.screenshot({ clip: clip(rect) });
+  return screenshot(page, { clip: clip(rect) });
 }
 
 async function captureActiveTokenShot(page, rowLabel, selector) {
@@ -116,7 +117,7 @@ async function captureActiveTokenShot(page, rowLabel, selector) {
     { rowLabel, selector },
   );
   if (!rect) return null;
-  return page.screenshot({ clip: clip(rect) });
+  return screenshot(page, { clip: clip(rect) });
 }
 
 async function checkFirstRichClickEntersEditWithParity(page, rowLabel, selector) {
