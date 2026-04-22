@@ -1,7 +1,7 @@
 import { type Extension, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { bibDataField } from "../citations/citation-render";
+import { bibDataField } from "../state/bib-data";
 import {
   createMarkdownLanguageExtensions,
 } from "../editor/base-editor-extensions";

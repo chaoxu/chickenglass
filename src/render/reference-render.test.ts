@@ -4,7 +4,7 @@ import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { markdownToHtml } from "../app/markdown-to-html";
 import type { CslJsonItem } from "../citations/bibtex-parser";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
 import { frontmatterField } from "../editor/frontmatter-state";

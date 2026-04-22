@@ -24,13 +24,11 @@ import {
 } from "../index/crossref-resolver";
 import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
 import { ensureCitationsRegistered } from "../citations/citation-registration";
-import {
-  type BibStore,
-  CitationWidget,
-} from "../citations/citation-render";
+import { CitationWidget } from "../citations/citation-render";
 import {
   type CslProcessor,
 } from "../citations/csl-processor";
+import type { BibStore } from "../state/bib-data";
 import {
   CrossrefWidget,
   ClusteredCrossrefWidget,

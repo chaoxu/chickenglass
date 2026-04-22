@@ -20,7 +20,7 @@ import {
   sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
 import { createInlineEditor } from "./inline-editor";
-import { bibDataField } from "../citations/citation-render";
+import { bibDataField } from "../state/bib-data";
 import { documentAnalysisField } from "../state/document-analysis";
 import { referenceRenderPlugin } from "../render/reference-render";
 import { CSS } from "../constants/css-classes";

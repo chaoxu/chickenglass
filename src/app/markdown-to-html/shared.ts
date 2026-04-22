@@ -2,7 +2,7 @@ import { parser as baseParser } from "@lezer/markdown";
 import type { InlineRenderSurface } from "../../inline-surface";
 import { htmlRenderExtensions } from "../../parser";
 import { renderKatexToHtml } from "../../render/inline-shared";
-import type { BibStore } from "../../citations/citation-render";
+import type { BibStore } from "../../state/bib-data";
 import type { CitationBacklink, CslProcessor } from "../../citations/csl-processor";
 import type { DocumentSemantics } from "../../semantics/document";
 import type { BlockCounterEntry } from "../../lib/types";

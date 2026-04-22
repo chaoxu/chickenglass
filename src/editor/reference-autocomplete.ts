@@ -12,7 +12,7 @@ import { EditorView, type ViewUpdate } from "@codemirror/view";
 import {
   buildCitationPreviewContent,
 } from "../citations/citation-preview";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CSS } from "../constants/css-classes";
 import { findAncestor } from "../lib/syntax-tree-helpers";
 import { getReferencePresentationModel } from "../references/presentation";

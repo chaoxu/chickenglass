@@ -8,7 +8,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import {

@@ -5,7 +5,7 @@ import {
   COMPACT_CITATION_BACKLINK_TEXT,
 } from "../../citations/bibliography-backlinks";
 import { formatBibEntry, sortBibEntries } from "../../citations/bibliography";
-import type { BibStore } from "../../citations/citation-render";
+import type { BibStore } from "../../state/bib-data";
 import type { CitationBacklink } from "../../citations/csl-processor";
 import { sanitizeCslHtml } from "../../render/inline-shared";
 import { CSS } from "../../constants/css-classes";

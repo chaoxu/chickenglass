@@ -15,12 +15,6 @@ import { SimpleTextReferenceWidget } from "../render/render-core";
 import { CSS } from "../constants/css-classes";
 import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import type { BibStore } from "../state/bib-data";
-export {
-  type BibData,
-  type BibStore,
-  bibDataEffect,
-  bibDataField,
-} from "../state/bib-data";
 
 /**
  * Widget that renders a citation reference.
@@ -39,17 +33,6 @@ export class CitationWidget extends SimpleTextReferenceWidget {
       text,
       ariaLabel: ids.join("; "),
     });
-  }
-}
-
-/**
- * @deprecated Use `new CitationWidget(text, [id], true)` instead.
- *
- * Kept for backwards compatibility with external consumers and tests.
- */
-export class NarrativeCitationWidget extends CitationWidget {
-  constructor(text: string, id: string) {
-    super(text, [id], true);
   }
 }
 

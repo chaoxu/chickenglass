@@ -10,7 +10,7 @@ import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import * as referenceCatalogModule from "../semantics/reference-catalog";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import type { BlockPlugin } from "../plugins/plugin-types";
 import {

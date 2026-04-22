@@ -25,7 +25,7 @@ import {
   type FrontmatterState,
 } from "../../editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
-import { bibDataEffect, bibDataField } from "../../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../../state/bib-data";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";

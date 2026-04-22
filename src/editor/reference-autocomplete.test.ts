@@ -6,7 +6,7 @@ import {
 import { EditorState } from "@codemirror/state";
 import { afterEach, describe, expect, it } from "vitest";
 import { CslProcessor } from "../citations/csl-processor";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import {
   defaultPlugins,
 } from "../plugins";

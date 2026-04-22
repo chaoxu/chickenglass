@@ -17,7 +17,7 @@ import {
 } from "../../state/document-analysis";
 import { blockCounterField } from "../../state/block-counter";
 import { mathMacrosField } from "../../state/math-macros";
-import { bibDataField } from "../../citations/citation-render";
+import { bibDataField } from "../../state/bib-data";
 import {
   defaultEditorPlugins,
   EditorPluginManager,

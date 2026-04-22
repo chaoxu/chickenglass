@@ -2,7 +2,6 @@ import { describe, expect, it, afterEach, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { type CslJsonItem } from "./bibtex-parser";
-import { bibDataEffect, bibDataField } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
 import { CSS } from "../constants/css-classes";
 import defaultCslStyle from "./ieee.csl?raw";
@@ -14,7 +13,6 @@ import {
   makeBibStore,
 } from "../test-utils";
 import {
-  collectCitedIds,
   formatBibEntry,
   sortBibEntries,
   BibliographyWidget,
@@ -22,6 +20,7 @@ import {
   buildBibliographyDecorations,
   bibliographyPlugin,
 } from "./bibliography";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { documentSemanticsField } from "../state/document-analysis";
 
 const karger: CslJsonItem = {
@@ -61,55 +60,6 @@ const ieeeCslEntryHtml = [
   '<div class="csl-right-inline">D. R. Karger, <i>JACM</i>, 2000.</div>',
   "</div>",
 ].join("");
-
-describe("collectCitedIds", () => {
-  it("collects ids from parenthetical citations", () => {
-    const ids = collectCitedIds("See [@karger2000] and [@stein2001].", store);
-    expect(ids).toEqual(["karger2000", "stein2001"]);
-  });
-
-  it("collects ids from multiple citations in brackets", () => {
-    const ids = collectCitedIds("See [@karger2000; @stein2001].", store);
-    expect(ids).toEqual(["karger2000", "stein2001"]);
-  });
-
-  it("deduplicates ids", () => {
-    const ids = collectCitedIds(
-      "See [@karger2000] and again [@karger2000].",
-      store,
-    );
-    expect(ids).toEqual(["karger2000"]);
-  });
-
-  it("collects ids from narrative citations", () => {
-    const ids = collectCitedIds("As @karger2000 showed.", store);
-    expect(ids).toEqual(["karger2000"]);
-  });
-
-  it("ignores ids not in the store", () => {
-    const ids = collectCitedIds("See [@unknown2020].", store);
-    expect(ids).toEqual([]);
-  });
-
-  it("returns empty for no citations", () => {
-    expect(collectCitedIds("No citations.", store)).toEqual([]);
-  });
-
-  describe("negative / edge-case", () => {
-    it("returns empty for empty string", () => {
-      expect(collectCitedIds("", store)).toEqual([]);
-    });
-
-    it("returns empty when store is empty", () => {
-      const emptyStore = makeBibStore([]);
-      expect(collectCitedIds("See [@karger2000].", emptyStore)).toEqual([]);
-    });
-
-    it("handles malformed citation-like text without crashing", () => {
-      expect(collectCitedIds("[@]", store)).toEqual([]);
-    });
-  });
-});
 
 describe("formatBibEntry", () => {
   it("formats a journal article", () => {

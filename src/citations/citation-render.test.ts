@@ -7,12 +7,10 @@ import { createTestView, makeBibStore } from "../test-utils";
 import {
   findCitations,
   CitationWidget,
-  NarrativeCitationWidget,
-  bibDataEffect,
-  bibDataField,
 } from "./citation-render";
 import { CslProcessor } from "./csl-processor";
 import { referenceRenderPlugin } from "../render/reference-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { documentSemanticsField } from "../state/document-analysis";
 
 const karger: CslJsonItem = {
@@ -172,23 +170,6 @@ describe("CitationWidget", () => {
     const a = new CitationWidget("(Karger, 2000)", ["karger2000"]);
     const b = new CitationWidget("(Stein, 2001)", ["stein2001"]);
     expect(a.eq(b)).toBe(false);
-  });
-});
-
-describe("NarrativeCitationWidget", () => {
-  it("creates a span with narrative citation text", () => {
-    const widget = new NarrativeCitationWidget("Karger (2000)", "karger2000");
-    const el = widget.toDOM();
-    expect(el.tagName).toBe("SPAN");
-    expect(el.className).toContain(CSS.citation);
-    expect(el.className).toBe(CSS.citationNarrative);
-    expect(el.textContent).toBe("Karger (2000)");
-  });
-
-  it("eq returns true for same text", () => {
-    const a = new NarrativeCitationWidget("Karger (2000)", "karger2000");
-    const b = new NarrativeCitationWidget("Karger (2000)", "karger2000");
-    expect(a.eq(b)).toBe(true);
   });
 });
 

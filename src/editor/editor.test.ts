@@ -9,7 +9,7 @@ import { frontmatterField } from "./frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";
-import { bibDataField } from "../citations/citation-render";
+import { bibDataField } from "../state/bib-data";
 import { documentLabelGraphField } from "../state/document-label-graph";
 import { imageUrlField } from "../state/image-url";
 import { pdfPreviewField } from "../state/pdf-preview";

@@ -8,7 +8,7 @@
 import { useRef, useCallback } from "react";
 import type { EditorView } from "@codemirror/view";
 import type { CslJsonItem } from "../../citations/bibtex-parser";
-import { bibDataEffect, type BibStore } from "../../citations/citation-render";
+import { type BibStore, bibDataEffect } from "../../state/bib-data";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { logCatchError } from "../lib/log-catch-error";

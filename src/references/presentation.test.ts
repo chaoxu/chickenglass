@@ -9,7 +9,7 @@ import { createPluginRegistryField } from "../state/plugin-registry";
 import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../state/document-analysis";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import {
   applyStateEffects,

@@ -31,26 +31,7 @@ import {
   documentAnalysisField,
   getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
-import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
-
-/**
- * Collect all citation ids referenced in the document text.
- * Returns a deduplicated set of ids in order of first appearance.
- *
- * @deprecated Prefer `collectCitedIdsFromReferenceIndex(analysis.referenceIndex, store)`
- * when document analysis is already available.
- */
-export function collectCitedIds(
-  text: string,
-  store: BibStore,
-  documentPath?: string,
-): string[] {
-  return collectCitedIdsFromReferenceIndex(
-    getDocumentAnalysis(text, documentPath).referenceIndex,
-    store,
-  );
-}
 
 /**
  * Format a bibliography entry as a text string.

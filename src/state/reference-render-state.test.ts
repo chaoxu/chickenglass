@@ -10,7 +10,7 @@ import { documentSemanticsField } from "./document-analysis";
 import { blockCounterField } from "./block-counter";
 import { createPluginRegistryField } from "./plugin-registry";
 import type { BlockPlugin } from "./block-plugin";
-import { bibDataEffect, bibDataField } from "../citations/citation-render";
+import { bibDataEffect, bibDataField } from "./bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import {
   createCslFixture,
