@@ -7,19 +7,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { parseChromeArgs } from "./chrome-common.mjs";
 import {
-  PERF_REPORT_VERSION,
   buildPerfRegressionReport,
   comparePerfRegressionReports,
+  PERF_REPORT_VERSION,
 } from "./perf-regression-lib.mjs";
 import {
   assertEditorHealth,
   connectEditor,
   createArgParser,
   disconnectBrowser,
-  ensureAppServer,
   EXTERNAL_DEMO_ROOT,
   EXTERNAL_FIXTURE_ROOT,
+  ensureAppServer,
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
@@ -28,7 +29,6 @@ import {
   switchToMode,
   waitForDebugBridge,
 } from "./test-helpers.mjs";
-import { parseChromeArgs } from "./chrome-common.mjs";
 
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
@@ -982,10 +982,14 @@ Options:
 `);
 }
 
-function parseCliArgs(argv = process.argv.slice(2)) {
+function normalizeCliArgs(args) {
+  return args.filter((arg) => arg !== "--");
+}
+
+export function parseCliArgs(argv = process.argv.slice(2)) {
   const hasExplicitCommand = argv[0] === "capture" || argv[0] === "compare";
   const command = hasExplicitCommand ? argv[0] : "capture";
-  const options = hasExplicitCommand ? argv.slice(1) : argv;
+  const options = normalizeCliArgs(hasExplicitCommand ? argv.slice(1) : argv);
 
   return {
     command,

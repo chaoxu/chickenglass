@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   availableTypingBurstCases,
-  TYPING_BURST_CASES,
-  TYPING_BURST_REQUIRED_METRICS,
   comparisonFailureRows,
   findTypingBurstPositions,
+  parseCliArgs,
   resolvePerfRuntimeOptions,
   scenarios,
+  TYPING_BURST_CASES,
+  TYPING_BURST_REQUIRED_METRICS,
   typingBurstMetrics,
 } from "./perf-regression.mjs";
 
@@ -107,6 +108,27 @@ Final prose line.
       fixtureOpenTimeoutMs: 45000,
       postOpenSettleMs: 800,
     });
+  });
+
+  it("honors flags passed through pnpm script separators", () => {
+    const parsed = parseCliArgs([
+      "capture",
+      "--",
+      "--scenario",
+      "open-index",
+      "--iterations",
+      "1",
+      "--warmup",
+      "0",
+      "--output",
+      "/tmp/open-index.json",
+    ]);
+
+    expect(parsed.command).toBe("capture");
+    expect(parsed.getFlag("--scenario")).toBe("open-index");
+    expect(parsed.getIntFlag("--iterations", 3)).toBe(1);
+    expect(parsed.getIntFlag("--warmup", 1)).toBe(0);
+    expect(parsed.getFlag("--output")).toBe("/tmp/open-index.json");
   });
 
   it("formats missing metric comparisons as failures", () => {

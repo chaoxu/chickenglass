@@ -114,6 +114,12 @@ jobs:
               failing_command="test:browser:lexical"
             }
           fi
+          if [ "$browser_status" -eq 0 ]; then
+            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser cdp --debug-timeout-ms 30000 --output "$artifacts_dir/perf-open-index.json" || {
+              browser_status=$?
+              failing_command="perf:capture open-index"
+            }
+          fi
 
           if [ "$browser_status" -ne 0 ]; then
             node scripts/ci-browser-diagnostics.mjs collect --url http://127.0.0.1:4173 --port 9322 --out-dir "$artifacts_dir" --preview-log "$preview_log" --label "$failing_command" || true
