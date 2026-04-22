@@ -33,11 +33,12 @@ export const name = "session-soak";
 const CYCLES = 2;
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';
-const ORIGINAL_MAIN2 = resolveFixtureDocument("cogirth/main2.md").content;
-const ORIGINAL_REFERENCE_AUTOCOMPLETE =
-  resolveFixtureDocument("cogirth/reference-autocomplete.md").content;
 
 export async function run(page) {
+  const originalMain2 = resolveFixtureDocument("cogirth/main2.md").content;
+  const originalReferenceAutocomplete =
+    resolveFixtureDocument("cogirth/reference-autocomplete.md").content;
+
   const { value, issues } = await withRuntimeIssueCapture(page, async () => {
     let operations = 0;
 
@@ -50,7 +51,7 @@ export async function run(page) {
         page,
         {
           path: "cogirth/main2.md",
-          content: ORIGINAL_MAIN2,
+          content: originalMain2,
         },
         async () => {
           await scrollToText(page, "# Main Results");
@@ -104,7 +105,7 @@ export async function run(page) {
         page,
         {
           path: "cogirth/reference-autocomplete.md",
-          content: ORIGINAL_REFERENCE_AUTOCOMPLETE,
+          content: originalReferenceAutocomplete,
         },
         async () => {
           await focusEditorEnd(page);
