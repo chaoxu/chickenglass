@@ -61,8 +61,14 @@ export function useEditorTransactions({
         shouldDeferModeSwitch: true,
       };
     }
+    if (freshDoc !== editorDoc) {
+      handleDocumentSnapshot(freshDoc);
+      return {
+        shouldDeferModeSwitch: true,
+      };
+    }
     return {
-      shouldDeferModeSwitch: freshDoc !== editorDoc,
+      shouldDeferModeSwitch: false,
     };
   }, [
     currentPath,

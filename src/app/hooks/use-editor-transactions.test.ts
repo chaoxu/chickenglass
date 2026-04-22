@@ -184,7 +184,7 @@ describe("useEditorTransactions", () => {
     expect(result.value).toBe("");
   });
 
-  it("defers mode switches when React editor state has not caught up", () => {
+  it("syncs the mount snapshot when React editor state has not caught up", () => {
     const handle = createHandle("# A edited\n");
     const {
       Harness,
@@ -210,6 +210,7 @@ describe("useEditorTransactions", () => {
       expect(result.intent).toBe(intent);
       expect(result.flush.shouldDeferModeSwitch).toBe(true);
     }
-    expect(handleDocumentSnapshot).not.toHaveBeenCalled();
+    expect(handleDocumentSnapshot).toHaveBeenCalledTimes(intents.length);
+    expect(handleDocumentSnapshot).toHaveBeenCalledWith("# A edited\n");
   });
 });

@@ -132,6 +132,11 @@ function heavyFixture() {
 }
 
 async function assertLexicalSurface(page) {
+  await page.waitForFunction(
+    (editorSelector) => Boolean(document.querySelector(editorSelector)),
+    DEBUG_EDITOR_SELECTOR,
+    { timeout: 10_000, polling: 100 },
+  );
   const state = await page.evaluate((editorSelector) => ({
     hasLexicalRoot: Boolean(document.querySelector(editorSelector)),
     mode: window.__app?.getMode?.() ?? null,
@@ -310,7 +315,7 @@ async function runModeAndHeavyTypingScenario(page) {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
   const { getFlag, getIntFlag, hasFlag } = createArgParser(args);
   const browser = getFlag("--browser", "managed");
   const timeout = getIntFlag("--timeout", 30_000);
