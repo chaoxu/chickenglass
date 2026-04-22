@@ -227,6 +227,7 @@ async function main() {
         if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
           console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
           console.error("\nChrome disconnected mid-test. Aborting remaining tests.");
+          results.push({ name: test.name, pass: false, message: "Chrome disconnected", elapsed });
           failed++;
           break;
         }
