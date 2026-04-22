@@ -236,12 +236,47 @@ export function parseStructuredDisplayMathRaw(raw: string): ParsedDisplayMathBlo
   }
 
   if (firstLine.startsWith("\\[")) {
+    const openingIndex = raw.indexOf("\\[");
+    const sameLineClosingIndex = lines.length === 1
+      ? raw.indexOf("\\]", openingIndex + 2)
+      : -1;
+    if (sameLineClosingIndex >= 0) {
+      const label = parseDisplayMathLabelSuffix(
+        raw.slice(sameLineClosingIndex + 2),
+        sameLineClosingIndex + 2,
+      );
+      const bodyMarkdown = raw.slice(openingIndex + 2, sameLineClosingIndex);
+
+      return {
+        body: bodyMarkdown.trim(),
+        bodyMarkdown,
+        closingDelimiter: "\\]",
+        id: label?.id,
+        labelFrom: label?.labelFrom,
+        labelSuffix: label?.labelSuffix ?? "",
+        labelTo: label?.labelTo,
+        openingDelimiter: "\\[",
+      };
+    }
+
+    const closingLine = lines[lines.length - 1] ?? "";
+    const closingLineOffset = raw.length - closingLine.length;
+    const closingDelimiterMatch = closingLine.match(/^\s*\\\]/);
+    const labelOffset = closingLineOffset + (closingDelimiterMatch?.[0].length ?? 0);
+    const label = parseDisplayMathLabelSuffix(
+      closingLine.slice(closingDelimiterMatch?.[0].length ?? 0),
+      labelOffset,
+    );
+    const bodyMarkdown = lines.slice(1, -1).join("\n");
+
     return {
-      body: lines.slice(1, -1).join("\n").trim(),
-      bodyMarkdown: lines.slice(1, -1).join("\n"),
+      body: bodyMarkdown.trim(),
+      bodyMarkdown,
       closingDelimiter: "\\]",
-      id: undefined,
-      labelSuffix: "",
+      id: label?.id,
+      labelFrom: label?.labelFrom,
+      labelSuffix: label?.labelSuffix ?? "",
+      labelTo: label?.labelTo,
       openingDelimiter: "\\[",
     };
   }

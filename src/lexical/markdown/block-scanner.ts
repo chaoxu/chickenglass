@@ -7,8 +7,9 @@ export const FENCED_DIV_START_RE = /^\s*(:{3,})(.*)$/;
 export const DISPLAY_MATH_DOLLAR_START_RE = /^\s*\$\$(?!\$).*$/;
 export const DISPLAY_MATH_DOLLAR_EMPTY_START_RE = /^\s*\$\$\s*$/;
 export const DISPLAY_MATH_DOLLAR_END_RE = /^\s*\$\$\s*(?:\{#[A-Za-z][\w.:-]*\})?\s*$/;
+export const DISPLAY_MATH_BRACKET_BLOCK_START_RE = /^\s*\\\[/;
 export const DISPLAY_MATH_BRACKET_START_RE = /^\s*\\\[\s*$/;
-export const DISPLAY_MATH_BRACKET_END_RE = /^\s*\\\]\s*$/;
+export const DISPLAY_MATH_BRACKET_END_RE = /^\s*\\\]\s*(?:\{#[A-Za-z][\w.:-]*\})?\s*$/;
 export const RAW_EQUATION_START_RE = /^\s*\\begin\{equation\*?\}(?:\s*\\label\{[A-Za-z][\w.:-]*\})?\s*$/;
 export const RAW_EQUATION_END_RE = /^\s*\\end\{equation\*?\}\s*$/;
 export const IMAGE_BLOCK_START_RE = MARKDOWN_IMAGE_LINE_RE;
@@ -61,6 +62,10 @@ function isDisplayMathDollarClosingSuffix(text: string): boolean {
   return /^\s*(?:\{#[A-Za-z][\w.:-]*\})?\s*$/.test(text);
 }
 
+function isDisplayMathBracketClosingSuffix(text: string): boolean {
+  return /^\s*(?:\{#[A-Za-z][\w.:-]*\})?\s*$/.test(text);
+}
+
 function computeLineOffsets(lines: readonly string[]): number[] {
   const offsets: number[] = [];
   let offset = 0;
@@ -109,7 +114,13 @@ export function matchDisplayMathEndLine(
     }
   }
 
-  if (DISPLAY_MATH_BRACKET_START_RE.test(startLine)) {
+  if (DISPLAY_MATH_BRACKET_BLOCK_START_RE.test(startLine)) {
+    const sameLineEnd = startLine.indexOf("\\]", startLine.indexOf("\\[") + 2);
+    if (sameLineEnd !== -1) {
+      return isDisplayMathBracketClosingSuffix(startLine.slice(sameLineEnd + 2))
+        ? startLineIndex
+        : -1;
+    }
     for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
       if (DISPLAY_MATH_BRACKET_END_RE.test(lines[lineIndex] ?? "")) {
         return lineIndex;

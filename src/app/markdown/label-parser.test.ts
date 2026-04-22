@@ -73,6 +73,42 @@ describe("extractMarkdownEquations", () => {
     ]);
   });
 
+  it("extracts labels from backslash display math attributes", () => {
+    const doc = [
+      "Before",
+      "\\[",
+      "x + y",
+      "\\] {#eq:sum}",
+      "After",
+    ].join("\n");
+
+    expect(extractMarkdownEquations(doc)).toEqual([
+      {
+        from: doc.indexOf("\\["),
+        id: "eq:sum",
+        labelFrom: doc.indexOf("eq:sum"),
+        labelTo: doc.indexOf("eq:sum") + "eq:sum".length,
+        text: "x + y",
+        to: doc.indexOf("\nAfter"),
+      },
+    ]);
+  });
+
+  it("extracts single-line backslash display-math attribute labels", () => {
+    const doc = "\\[x + y\\] {#eq:sum}";
+
+    expect(extractMarkdownEquations(doc)).toEqual([
+      {
+        from: 0,
+        id: "eq:sum",
+        labelFrom: doc.indexOf("eq:sum"),
+        labelTo: doc.indexOf("eq:sum") + "eq:sum".length,
+        text: "x + y",
+        to: doc.length,
+      },
+    ]);
+  });
+
   it("ignores non-equation display-math attributes", () => {
     expect(extractMarkdownEquations("$$x + y$$ {#fig:plot}")).toEqual([
       {

@@ -78,7 +78,7 @@ import {
   createTableNodeFromMarkdown as createTableNodeFromMarkdownInner,
 } from "./markdown/table-lexical";
 import {
-  DISPLAY_MATH_BRACKET_START_RE,
+  DISPLAY_MATH_BRACKET_BLOCK_START_RE,
   DISPLAY_MATH_DOLLAR_START_RE,
   FENCED_DIV_START_RE,
   FOOTNOTE_DEFINITION_START_RE,
@@ -192,13 +192,13 @@ displayMathDollarTransformer.regExpStart = DISPLAY_MATH_DOLLAR_START_RE;
 const displayMathBracketTransformer = createRawBlockTransformer(
   "display-math",
   (lines, startLineIndex) => {
-    if (!DISPLAY_MATH_BRACKET_START_RE.test(lines[startLineIndex])) {
+    if (!DISPLAY_MATH_BRACKET_BLOCK_START_RE.test(lines[startLineIndex])) {
       return -1;
     }
     return matchDisplayMathEndLine(lines, startLineIndex);
   },
 );
-displayMathBracketTransformer.regExpStart = DISPLAY_MATH_BRACKET_START_RE;
+displayMathBracketTransformer.regExpStart = DISPLAY_MATH_BRACKET_BLOCK_START_RE;
 
 const rawEquationTransformer = createRawBlockTransformer(
   "display-math",

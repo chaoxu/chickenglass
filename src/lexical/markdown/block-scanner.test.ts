@@ -94,6 +94,27 @@ describe("block-scanner", () => {
     ]);
   });
 
+  it("recognizes labeled backslash display math consistently with import", () => {
+    expect(collectSourceBlockRanges("Before\n\n\\[\nx + y\n\\] {#eq:sum}\n\nAfter").map((range) => ({
+      raw: range.raw,
+      variant: range.variant,
+    }))).toEqual([
+      {
+        raw: "\\[\nx + y\n\\] {#eq:sum}",
+        variant: "display-math",
+      },
+    ]);
+    expect(collectSourceBlockRanges("Before\n\n\\[x + y\\] {#eq:sum}\n\nAfter").map((range) => ({
+      raw: range.raw,
+      variant: range.variant,
+    }))).toEqual([
+      {
+        raw: "\\[x + y\\] {#eq:sum}",
+        variant: "display-math",
+      },
+    ]);
+  });
+
   it("keeps longer fenced divs whole when they contain shorter nested fences", () => {
     const markdown = [
       ':::: {.theorem title="Outer"}',
@@ -127,5 +148,6 @@ describe("block-scanner", () => {
     expect(isDisplayMathDollarExpansionLine("$$")).toBe(true);
     expect(isDisplayMathDollarExpansionLine("$$x + y$$")).toBe(false);
     expect(isDisplayMathBracketExpansionLine("\\[")).toBe(true);
+    expect(isDisplayMathBracketExpansionLine("\\[x + y\\]")).toBe(false);
   });
 });

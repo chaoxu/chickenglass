@@ -124,6 +124,39 @@ describe("block-syntax", () => {
     ].join("\n"));
   });
 
+  it("parses and serializes backslash display math labels", () => {
+    const parsed = parseStructuredDisplayMathRaw([
+      "\\[",
+      "x + y",
+      "\\] {#eq:sum}",
+    ].join("\n"));
+
+    expect(parsed).toMatchObject({
+      body: "x + y",
+      bodyMarkdown: "x + y",
+      id: "eq:sum",
+      labelSuffix: "{#eq:sum}",
+      openingDelimiter: "\\[",
+    });
+    expect(serializeDisplayMathRaw(parsed, "x + y + z")).toBe([
+      "\\[",
+      "x + y + z",
+      "\\] {#eq:sum}",
+    ].join("\n"));
+  });
+
+  it("parses single-line backslash display math labels", () => {
+    const parsed = parseStructuredDisplayMathRaw("\\[x + y\\] {#eq:sum}");
+
+    expect(parsed).toMatchObject({
+      body: "x + y",
+      bodyMarkdown: "x + y",
+      id: "eq:sum",
+      labelSuffix: "{#eq:sum}",
+      openingDelimiter: "\\[",
+    });
+  });
+
   it("parses raw LaTeX equation environments", () => {
     const parsed = parseStructuredDisplayMathRaw([
       "\\begin{equation}\\label{eq:sum}",
