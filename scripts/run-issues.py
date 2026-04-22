@@ -38,6 +38,7 @@ MAIN_BRANCH = "main"
 DEFAULT_MAX_PARALLEL = 4
 MAX_PARALLEL_CAP = 8
 DEFERRED_LABEL = "deferred"
+TEA_REPO = "chaoxu/coflat"
 DEFAULT_WORKER_TIMEOUT = 30 * 60  # 30 minutes
 STALL_THRESHOLD_SECONDS = 5 * 60  # 5 minutes
 STALL_WARN_INTERVAL = 2 * 60     # warn at most every 2 minutes per worker
@@ -110,7 +111,6 @@ def _shutdown_handler(signum: int, _frame: types.FrameType | None) -> None:
     try:
         subprocess.run(["git", "merge", "--abort"], cwd=REPO_ROOT, capture_output=True, check=False)
         subprocess.run(["git", "checkout", MAIN_BRANCH], cwd=REPO_ROOT, capture_output=True, check=False)
-        subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=REPO_ROOT, capture_output=True, check=False)
     except OSError:
         pass
 
@@ -150,6 +150,28 @@ def run_cmd(
 def git(*args: str, cwd: Path | None = None, check: bool = True) -> str:
     """Run a git command and return stdout."""
     return run_cmd(["git", *args], cwd=cwd, check=check).stdout.strip()
+
+
+def _tracked_status_lines(cwd: Path | None = None) -> list[str]:
+    """Return tracked git status lines, ignoring untracked files."""
+    status = git("status", "--short", cwd=cwd)
+    return [line for line in status.splitlines() if not line.startswith("??")]
+
+
+def abort_generated_merge_state(task: IssueTask, reason: str) -> None:
+    """Abort an orchestrator-created merge and stop if generated state remains."""
+    log(reason, "WARN")
+    git("merge", "--abort", check=False)
+    tracked = _tracked_status_lines()
+    if tracked:
+        task.status = "failed"
+        task.error = (
+            f"{reason}; main worktree still has generated merge changes. "
+            "Resolve manually before rerunning."
+        )
+        for line in tracked:
+            log(f"  {line}", "ERROR")
+        raise RuntimeError(task.error)
 
 
 _LOG_SYMBOLS = {"INFO": ".", "OK": "+", "WARN": "!", "ERROR": "X", "RUN": ">"}
@@ -202,23 +224,46 @@ def _worktree_commit_count(task: IssueTask, baseline_sha: str) -> int:
 # ---------------------------------------------------------------------------
 
 def fetch_issue(number: int) -> IssueTask:
-    """Fetch a single issue from GitHub."""
-    result = run_cmd(["gh", "issue", "view", str(number), "--json", "number,title,body"])
+    """Fetch a single issue from local Gitea."""
+    result = run_cmd([
+        "tea", "issues", "--repo", TEA_REPO, "--output", "json",
+        "--fields", "index,title,body", str(number),
+    ])
     data = json.loads(result.stdout)
-    return IssueTask(number=data["number"], title=data["title"], body=data.get("body", ""))
+    return IssueTask(number=int(data["index"]), title=data["title"], body=data.get("body", ""))
+
+
+def _label_names(raw_labels: object) -> set[str]:
+    """Normalize label data returned by tea issue list/detail JSON output."""
+    if isinstance(raw_labels, str):
+        return {label for label in re.split(r"[\s,]+", raw_labels.strip()) if label}
+    if isinstance(raw_labels, list):
+        names: set[str] = set()
+        for label in raw_labels:
+            if isinstance(label, str):
+                names.add(label)
+            elif isinstance(label, dict):
+                name = label.get("name")
+                if isinstance(name, str):
+                    names.add(name)
+        return names
+    return set()
 
 
 def fetch_all_open_issues() -> list[IssueTask]:
-    """Fetch all open non-deferred issues from GitHub."""
-    result = run_cmd(["gh", "issue", "list", "--state", "open", "--json", "number,title,body,labels", "--limit", "500"])
+    """Fetch all open non-deferred issues from local Gitea."""
+    result = run_cmd([
+        "tea", "issues", "--repo", TEA_REPO, "--state", "open", "--output", "json",
+        "--fields", "index,title,body,labels", "--limit", "500",
+    ])
     all_issues = json.loads(result.stdout)
     tasks = []
     for i in all_issues:
-        labels = {lbl.get("name", "") for lbl in i.get("labels", [])}
+        labels = _label_names(i.get("labels", []))
         if DEFERRED_LABEL in labels:
-            log(f"Skipping #{i['number']}: {i['title']} (deferred)", "INFO")
+            log(f"Skipping #{i['index']}: {i['title']} (deferred)", "INFO")
             continue
-        tasks.append(IssueTask(number=i["number"], title=i["title"], body=i.get("body", "")))
+        tasks.append(IssueTask(number=int(i["index"]), title=i["title"], body=i.get("body", "")))
     return tasks
 
 
@@ -230,8 +275,7 @@ def preflight(state: RunState) -> None:
     """Verify the repo is in a clean state before starting."""
     log_header("PREFLIGHT")
 
-    status = git("status", "--short")
-    tracked = [line for line in status.splitlines() if not line.startswith("??")]
+    tracked = _tracked_status_lines()
     if tracked:
         log("Uncommitted tracked changes found:", "ERROR")
         for line in tracked:
@@ -251,11 +295,11 @@ def preflight(state: RunState) -> None:
     log(f"Baseline main SHA: {state.baseline_main_sha[:7]}", "OK")
 
     log("Running typecheck...", "RUN")
-    run_cmd(["npx", "tsc", "--noEmit"])
+    run_cmd(["pnpm", "typecheck"])
     log("Typecheck passed", "OK")
 
     log("Running tests...", "RUN")
-    run_cmd(["npm", "run", "test"])
+    run_cmd(["pnpm", "test"])
     log("Tests passed", "OK")
 
 
@@ -294,7 +338,7 @@ CRITICAL ISOLATION RULES:
 - Run pwd before your first edit to confirm you are in the worktree.
 
 TASK:
-Implement GitHub issue #{task.number}: {task.title}
+Implement Gitea issue #{task.number}: {task.title}
 
 ISSUE BODY:
 {task.body}
@@ -304,8 +348,8 @@ INSTRUCTIONS:
 2. Implement the feature described in the issue.
 3. Write tests where appropriate.
 4. Run verification:
-   - npx tsc --noEmit (must pass)
-   - npm run test (must pass)
+   - pnpm typecheck (must pass)
+   - pnpm test (must pass)
 5. Commit with conventional format:
    {_commit_prefix(task.title)}: {_clean_title(task.title)}
 
@@ -403,9 +447,7 @@ def verify_worker_result(task: IssueTask, state: RunState) -> None:
         task.status = "failed"
         task.error = "ISOLATION ESCAPE: worker committed to main branch"
         log(task.error, "ERROR")
-        git("checkout", MAIN_BRANCH)
-        git("reset", "--hard", state.baseline_main_sha)
-        log(f"Reset main to baseline {state.baseline_main_sha[:7]}", "WARN")
+        log("Main was left untouched; inspect manually before rerunning.", "WARN")
         return
 
     actual = git("branch", "--show-current", cwd=task.worktree)
@@ -430,7 +472,7 @@ def verify_worker_result(task: IssueTask, state: RunState) -> None:
     log(f"#{task.number} done: {head_sha[:7]}", "OK")
 
     log(f"Typechecking #{task.number}...", "RUN")
-    result = run_cmd(["npx", "tsc", "--noEmit"], cwd=task.worktree, check=False)
+    result = run_cmd(["pnpm", "typecheck"], cwd=task.worktree, check=False)
     if result.returncode != 0:
         task.status = "failed"
         task.error = f"Typecheck failed:\n{result.stderr[:500]}"
@@ -439,7 +481,7 @@ def verify_worker_result(task: IssueTask, state: RunState) -> None:
     log(f"#{task.number} typecheck passed", "OK")
 
     log(f"Testing #{task.number}...", "RUN")
-    result = run_cmd(["npm", "run", "test"], cwd=task.worktree, check=False)
+    result = run_cmd(["pnpm", "test"], cwd=task.worktree, check=False)
     if result.returncode != 0:
         task.status = "failed"
         task.error = f"Tests failed:\n{result.stderr[:500]}"
@@ -462,7 +504,13 @@ def merge_task(task: IssueTask, state: RunState) -> None:
 
     git("checkout", MAIN_BRANCH)
     git("merge", "--abort", check=False)
-    git("reset", "--hard", "HEAD")
+    tracked = _tracked_status_lines()
+    if tracked:
+        task.status = "failed"
+        task.error = "Main worktree has tracked changes before merge"
+        for line in tracked:
+            log(f"  {line}", "ERROR")
+        raise RuntimeError(task.error)
 
     result = run_cmd(["git", "merge", "--squash", task.branch], check=False)
     if result.returncode != 0:
@@ -475,7 +523,7 @@ def merge_task(task: IssueTask, state: RunState) -> None:
             task.error = f"Merge failed: {result.stderr[:200] if result.stderr else 'unknown error'}"
         task.status = "failed"
         log(task.error, "ERROR")
-        git("reset", "--hard", "HEAD")
+        abort_generated_merge_state(task, f"Aborting generated merge for #{task.number}")
         return
 
     git("add", "-A")
@@ -488,20 +536,19 @@ def merge_task(task: IssueTask, state: RunState) -> None:
     prefix = _commit_prefix(task.title)
     clean = _clean_title(task.title)
     commit_msg = f"{prefix}: {clean}\n\nCloses #{task.number}\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+    log("Post-merge typecheck...", "RUN")
+    result = run_cmd(["pnpm", "typecheck"], check=False)
+    if result.returncode != 0:
+        log(f"Post-merge typecheck FAILED for #{task.number}", "ERROR")
+        task.status = "failed"
+        task.error = "Post-merge typecheck failed"
+        abort_generated_merge_state(task, f"Aborting generated merge for #{task.number}")
+        return
+    log("Post-merge typecheck passed", "OK")
+
     git("commit", "-m", commit_msg)
     merged_sha = git("rev-parse", "HEAD")
     log(f"#{task.number} merged: {merged_sha[:7]}", "OK")
-
-    log("Post-merge typecheck...", "RUN")
-    result = run_cmd(["npx", "tsc", "--noEmit"], check=False)
-    if result.returncode != 0:
-        log(f"Post-merge typecheck FAILED for #{task.number}", "ERROR")
-        log("Removing bad merge commit...", "WARN")
-        git("reset", "--hard", "HEAD~1")
-        task.status = "failed"
-        task.error = "Post-merge typecheck failed — merge removed"
-        return
-    log("Post-merge typecheck passed", "OK")
 
     task.status = "merged"
     state.merged_shas.append(merged_sha)
@@ -522,7 +569,7 @@ def push_and_cleanup(state: RunState, no_push: bool = False) -> None:
         return
 
     log("Running final tests...", "RUN")
-    result = run_cmd(["npm", "run", "test"], check=False)
+    result = run_cmd(["pnpm", "test"], check=False)
     if result.returncode != 0:
         log("Final tests FAILED — not pushing", "ERROR")
         log("Merged commits are on local main — inspect with: git log --oneline -10", "WARN")
@@ -533,7 +580,7 @@ def push_and_cleanup(state: RunState, no_push: bool = False) -> None:
     if no_push:
         log("--no-push: skipping push. Inspect results:", "WARN")
         log(f"  git log --oneline -{len(merged) + 1}", "INFO")
-        log(f"  npm run dev  # then open http://localhost:5173", "INFO")
+        log("  pnpm dev  # then open http://localhost:5173", "INFO")
         log(f"  git push origin {MAIN_BRANCH}  # when satisfied", "INFO")
         cleanup_worktrees(state)
         return
