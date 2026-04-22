@@ -1,12 +1,39 @@
-import { describe, expect, it } from "vitest";
-import {
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const browserReproMocks = vi.hoisted(() => {
+  const page = {
+    reload: vi.fn(async () => {}),
+  };
+
+  return {
+    page,
+    connectEditor: vi.fn(async () => page),
+    waitForDebugBridge: vi.fn(async () => {}),
+  };
+});
+
+vi.mock("./test-helpers.mjs", async () => {
+  const actual = await vi.importActual("./test-helpers.mjs");
+  return {
+    ...actual,
+    connectEditor: browserReproMocks.connectEditor,
+    waitForDebugBridge: browserReproMocks.waitForDebugBridge,
+  };
+});
+
+const {
   diffSessionSummaries,
   extractReplayActions,
+  openBrowserPage,
   parseSessionEvents,
   summarizeSessionEvents,
-} from "./browser-repro.mjs";
+} = await import("./browser-repro.mjs");
 
 describe("browser repro helpers", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("extracts replayable key and pointer actions from a session log", () => {
     const events = parseSessionEvents(`
 {"type":"key","detail":{"key":"a","metaKey":false,"ctrlKey":false,"altKey":false,"shiftKey":false}}
@@ -166,5 +193,31 @@ describe("browser repro helpers", () => {
       "selection",
       "render",
     ]);
+  });
+
+  it("reuses the parsed timeout after reloading the CDP page", async () => {
+    await openBrowserPage([
+      "--browser",
+      "cdp",
+      "--port",
+      "9333",
+      "--timeout",
+      "42000",
+      "--url",
+      "http://localhost:5174",
+    ]);
+
+    expect(browserReproMocks.connectEditor).toHaveBeenCalledWith({
+      browser: "cdp",
+      headless: false,
+      port: 9333,
+      timeout: 42000,
+      url: "http://localhost:5174",
+    });
+    expect(browserReproMocks.page.reload).toHaveBeenCalledWith({ waitUntil: "load" });
+    expect(browserReproMocks.waitForDebugBridge).toHaveBeenCalledWith(
+      browserReproMocks.page,
+      { timeout: 42000 },
+    );
   });
 });

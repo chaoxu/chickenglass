@@ -643,7 +643,7 @@ function maybeWriteOutput(path, payload) {
   console.log(text);
 }
 
-async function openBrowserPage(argv) {
+export async function openBrowserPage(argv) {
   const { getIntFlag } = createArgParser(argv);
   const chromeArgs = parseChromeArgs(argv, { browser: "managed" });
   const timeout = getIntFlag("--timeout", 15000);
@@ -659,7 +659,7 @@ async function openBrowserPage(argv) {
     await page.reload({ waitUntil: "load" });
   }
 
-  await waitForDebugBridge(page);
+  await waitForDebugBridge(page, { timeout });
   return page;
 }
 
