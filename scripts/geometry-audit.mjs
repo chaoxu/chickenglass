@@ -66,6 +66,7 @@ Options:
   --headed                           Show the Playwright-owned browser window
   --port <n>                         CDP port for Chrome for Testing
   --url <url>                        App URL Chrome is already running against
+  --timeout <ms>                     Browser/debug bridge timeout (default: 15000)
   --json                             Print JSON instead of a text report
 `);
 }
@@ -298,15 +299,17 @@ async function main(argv = process.argv.slice(2)) {
   );
   const line = getIntFlag("--line", fixture.defaultLine ?? requestedFixture.defaultLine);
   const radius = getIntFlag("--radius", 3);
+  const timeout = getIntFlag("--timeout", 15000);
 
   const page = await connectEditor({
     browser: chromeArgs.browser,
     headless: chromeArgs.headless,
     port: chromeArgs.port,
+    timeout,
     url: chromeArgs.url,
   });
   try {
-    await waitForDebugBridge(page);
+    await waitForDebugBridge(page, { timeout });
     await openFixtureDocument(page, fixture, { mode: "rich" });
     await assertEditorHealth(page, "geometry-audit: fixture-open", {
       maxVisibleDialogs: 2,

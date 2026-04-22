@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findReverseScrollJump,
   formatCursorScrollReport,
+  resolveCursorScrollTimeout,
 } from "./cursor-scroll-regression.mjs";
 
 const baseEntry = (overrides = {}) => ({
@@ -121,5 +122,13 @@ describe("cursor scroll regression", () => {
     expect(report).toContain("scrollTop 21228 -> 21536 (+308px)");
     expect(report).toContain("::: {.proof}");
     expect(report).toContain("hidden=true");
+  });
+
+  it("parses the browser/debug bridge timeout flag", () => {
+    expect(resolveCursorScrollTimeout(["--timeout", "42000"])).toBe(42000);
+    expect(resolveCursorScrollTimeout([])).toBe(15000);
+    expect(() => resolveCursorScrollTimeout(["--timeout", "15s"])).toThrow(
+      "Invalid integer value for --timeout: 15s",
+    );
   });
 });

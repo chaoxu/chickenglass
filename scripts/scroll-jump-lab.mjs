@@ -24,9 +24,12 @@ function getFlag(name, fallback = undefined) {
 function getIntFlag(name, fallback) {
   const raw = getFlag(name, undefined);
   if (raw === undefined) return fallback;
+  if (!/^-?\d+$/.test(raw.trim())) {
+    throw new Error(`Invalid integer value for ${name}: ${raw}`);
+  }
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid integer for ${name}: ${raw}`);
+    throw new Error(`Invalid integer value for ${name}: ${raw}`);
   }
   return parsed;
 }
@@ -113,16 +116,18 @@ async function main() {
   const stepCount = getIntFlag("--step-count", DEFAULT_STEP_COUNT);
   const settleMs = getIntFlag("--settle-ms", DEFAULT_SETTLE_MS);
   const bottomOffsetPx = getIntFlag("--bottom-offset-px", DEFAULT_BOTTOM_OFFSET_PX);
+  const timeout = getIntFlag("--timeout", 15000);
   const simulateWheel = hasFlag("--simulate-wheel");
 
   const page = await connectEditor({
     browser: "managed",
     headless: !hasFlag("--headed"),
+    timeout,
     url,
   });
 
   try {
-    await waitForDebugBridge(page);
+    await waitForDebugBridge(page, { timeout });
     await target.open(page);
     await sleep(700);
 

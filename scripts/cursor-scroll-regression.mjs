@@ -177,10 +177,16 @@ Options:
   --settle-ms <n>             Extra settle time after each move (default: 150)
   --context-radius <n>        Nearby document lines to include (default: 2)
   --min-reverse-scroll-px <n> Reverse-scroll threshold in px (default: 120)
+  --timeout <ms>              Browser/debug bridge timeout (default: 15000)
   --assert-clean              Exit non-zero if a reverse jump is found
   --expect-anomaly            Exit non-zero if no reverse jump is found
   --json                      Print the report as JSON
 `);
+}
+
+export function resolveCursorScrollTimeout(argv) {
+  const { getIntFlag } = createArgParser(argv);
+  return getIntFlag("--timeout", 15000);
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -199,15 +205,17 @@ export async function main(argv = process.argv.slice(2)) {
   if (direction !== "up" && direction !== "down") {
     throw new Error(`Unsupported direction "${direction}". Use up or down.`);
   }
+  const timeout = resolveCursorScrollTimeout(argv);
 
   const page = await connectEditor({
     browser: chromeArgs.browser,
     headless: chromeArgs.headless,
     port: chromeArgs.port,
+    timeout,
     url: chromeArgs.url,
   });
   try {
-    await waitForDebugBridge(page);
+    await waitForDebugBridge(page, { timeout });
     await sleep(500);
 
     const result = await runCursorScrollRegression(page, {
