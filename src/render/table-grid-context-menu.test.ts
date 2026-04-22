@@ -1,4 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
+import { forceParsing } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ContextMenuItem } from "../lib/context-menu";
@@ -29,12 +30,14 @@ afterEach(() => {
 });
 
 function makeView(): EditorView {
-  return createTestView(DOC, {
+  const nextView = createTestView(DOC, {
     extensions: [
       markdown({ extensions: markdownExtensions }),
       tableDiscoveryField,
     ],
   });
+  forceParsing(nextView, nextView.state.doc.length, 5000);
+  return nextView;
 }
 
 function getTable(target: EditorView): TableRange {
