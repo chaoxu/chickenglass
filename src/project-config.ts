@@ -40,8 +40,7 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
   const { config } = parseFrontmatter(wrapped);
 
   // ProjectConfig excludes title (title is always per-file)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { title, ...projectConfig } = config;
+  const { title: _title, ...projectConfig } = config;
   return projectConfig;
 }
 
