@@ -21,4 +21,56 @@ describe("document module", () => {
     expect(html).toContain(`class="${CSS.bibliography}"`);
     expect(html.indexOf(`class="${CSS.bibliography}"`)).toBeGreaterThan(html.indexOf("<p>See "));
   });
+
+  it("resolves cross-references inside task list items", () => {
+    const html = markdownToHtml([
+      "# Intro {#sec:intro}",
+      "",
+      "- [ ] See [@sec:intro].",
+    ].join("\n"), {
+      sectionNumbers: true,
+    });
+
+    expect(html).toContain("<li><input");
+    expect(html).toContain('href="#sec:intro"');
+    expect(html).toContain("Section 1");
+  });
+
+  it("resolves cross-references inside footnote definitions", () => {
+    const html = markdownToHtml([
+      "# Intro {#sec:intro}",
+      "",
+      "See note.[^n]",
+      "",
+      "[^n]: See [@sec:intro].",
+    ].join("\n"), {
+      sectionNumbers: true,
+    });
+
+    expect(html).toContain('id="fn-n"');
+    expect(html).toContain('href="#sec:intro"');
+    expect(html).toContain("Section 1");
+  });
+
+  it("applies image URL overrides inside task list items", () => {
+    const html = markdownToHtml("- [ ] ![Plot](images/plot.png)", {
+      documentPath: "notes/main.md",
+      imageUrlOverrides: new Map([
+        ["notes/images/plot.png", "https://cdn.example.test/plot.png"],
+      ]),
+    });
+
+    expect(html).toContain('<img src="https://cdn.example.test/plot.png" alt="Plot">');
+  });
+
+  it("applies image URL overrides inside footnote definitions", () => {
+    const html = markdownToHtml("See note.[^plot]\n\n[^plot]: ![Plot](images/plot.png)", {
+      documentPath: "notes/main.md",
+      imageUrlOverrides: new Map([
+        ["notes/images/plot.png", "https://cdn.example.test/plot.png"],
+      ]),
+    });
+
+    expect(html).toContain('<img src="https://cdn.example.test/plot.png" alt="Plot">');
+  });
 });

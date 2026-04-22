@@ -3,7 +3,7 @@ import { readBracedLabelId } from "../../parser/label-utils";
 import { BLOCK_MANIFEST_ENTRIES, EXCLUDED_FROM_FALLBACK } from "../../constants/block-manifest";
 import { CSS } from "../../constants/css-classes";
 import { capitalize } from "../../lib/utils";
-import { escapeHtml, renderMath, type WalkContext } from "./shared";
+import { escapeHtml, renderMath, type InlineContext, type WalkContext } from "./shared";
 import { renderChildren, renderDocumentInline, renderInlineWithSurface } from "./inline";
 
 export function renderNode(node: SyntaxNode, context: WalkContext): string {
@@ -147,16 +147,7 @@ function renderListItem(node: SyntaxNode, context: WalkContext): string {
       }
       const contentStart = taskMarker ? taskMarker.to + 1 : child.from;
       const taskContent = context.doc.slice(contentStart, child.to).trim();
-      parts.push(renderInlineWithSurface(taskContent, {
-        doc: taskContent,
-        macros: context.macros,
-        bibliography: context.bibliography,
-        citedIds: context.citedIds,
-        nextCitationOccurrence: context.nextCitationOccurrence,
-        cslProcessor: context.cslProcessor,
-        blockCounters: context.blockCounters,
-        surface: "document-body",
-      }));
+      parts.push(renderInlineWithSurface(taskContent, documentBodyInlineContext(taskContent, context)));
       child = child.nextSibling;
       continue;
     }
@@ -285,19 +276,42 @@ function renderFootnoteDef(node: SyntaxNode, context: WalkContext): string {
   if (!footnote) return "";
 
   const content = footnote.content
-    ? `<p>${renderInlineWithSurface(footnote.content, {
-        doc: footnote.content,
-        macros: context.macros,
-        bibliography: context.bibliography,
-        citedIds: context.citedIds,
-        nextCitationOccurrence: context.nextCitationOccurrence,
-        cslProcessor: context.cslProcessor,
-        blockCounters: context.blockCounters,
-        surface: "document-body",
-      })}</p>`
+    ? `<p>${renderInlineWithSurface(footnote.content, documentBodyInlineContext(footnote.content, context))}</p>`
     : "";
 
   return `<div class="footnote" id="fn-${escapeHtml(footnote.id)}"><sup>${escapeHtml(footnote.id)}</sup> ${content}</div>`;
+}
+
+function documentBodyInlineContext(
+  doc: string,
+  context: WalkContext,
+): Pick<
+  InlineContext,
+  | "doc"
+  | "macros"
+  | "bibliography"
+  | "citedIds"
+  | "nextCitationOccurrence"
+  | "cslProcessor"
+  | "blockCounters"
+  | "surface"
+  | "semantics"
+  | "documentPath"
+  | "imageUrlOverrides"
+> {
+  return {
+    doc,
+    macros: context.macros,
+    bibliography: context.bibliography,
+    citedIds: context.citedIds,
+    nextCitationOccurrence: context.nextCitationOccurrence,
+    cslProcessor: context.cslProcessor,
+    blockCounters: context.blockCounters,
+    surface: "document-body",
+    semantics: context.semantics,
+    documentPath: context.documentPath,
+    imageUrlOverrides: context.imageUrlOverrides,
+  };
 }
 
 function renderTable(node: SyntaxNode, context: WalkContext): string {
