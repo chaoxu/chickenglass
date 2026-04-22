@@ -247,13 +247,13 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 This repo is hosted on a local Gitea instance at `http://localhost:3001`. Use the **`tea`** CLI (not `gh`, not raw curl) for all issue/PR interactions:
 
 ```bash
-tea issues                             # list open issues (default verb is list)
-tea issues --state closed              # list closed issues
-tea issues --state closed --limit 30
-tea issues create --title "..." --description "..."
-tea pulls                              # list pull requests
-tea pr create --title "..." --base main --head <branch>
-tea logins                             # show configured logins (default: coflat / chaoxu)
+tea issues --repo chaoxu/coflat                             # list open issues (default verb is list)
+tea issues --repo chaoxu/coflat --state closed              # list closed issues
+tea issues --repo chaoxu/coflat --state closed --limit 30
+tea issues --repo chaoxu/coflat create --title "..." --description "..."
+tea pulls --repo chaoxu/coflat                              # list pull requests
+tea pr --repo chaoxu/coflat create --title "..." --base main --head <branch>
+tea logins                                                  # show configured logins (default: coflat / chaoxu)
 ```
 
 `tea` is already logged in. The default login points to `http://localhost:3001` as user `chaoxu`.

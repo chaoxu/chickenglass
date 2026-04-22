@@ -3,9 +3,9 @@
  * Launch Playwright's bundled Chrome for Testing in app mode with a fixed CDP port.
  *
  * Usage:
- *   npm run chrome:app               # visible app-mode preview on port 9322
- *   npm run chrome:app -- --url http://127.0.0.1:4173
- *   npm run chrome:cdp               # launch/reuse without macOS activation
+ *   pnpm chrome:app               # visible app-mode preview on port 9322
+ *   pnpm chrome:app -- --url http://127.0.0.1:4173
+ *   pnpm chrome:cdp               # launch/reuse without macOS activation
  *
  * This command is the repo-standard local browser-debug facility:
  * - always targets Playwright's bundled Chrome for Testing

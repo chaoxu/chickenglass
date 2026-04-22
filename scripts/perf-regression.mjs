@@ -958,8 +958,8 @@ export const scenarios = {
 
 function printUsage() {
   console.log(`Usage:
-  npm run perf:capture -- --scenario open-index --output output/perf/open-index.json
-  npm run perf:compare -- --scenario open-index --baseline output/perf/open-index.json
+  pnpm perf:capture -- --scenario open-index --output output/perf/open-index.json
+  pnpm perf:compare -- --scenario open-index --baseline output/perf/open-index.json
 
 Options:
   --scenario <name>        One of: ${Object.keys(scenarios).join(", ")}

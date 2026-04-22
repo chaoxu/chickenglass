@@ -78,7 +78,7 @@
 
 ## Testing
 
-- ALWAYS test before claiming fixed. Use the managed browser harness when possible. For product-neutral checks, use `__editor` and `__app`; for CM6-only investigations, use `pnpm dev` + `pnpm chrome` + `__cmDebug.dump()`; for Coflat 2 checks, use `pnpm dev:coflat2` + `pnpm test:browser:coflat2`. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
+- ALWAYS test before claiming fixed. Use the managed browser harness when possible. For product-neutral checks, use `__editor` and `__app`; for CM6-only investigations, use `pnpm dev` + `pnpm chrome` + `__cmDebug.dump()`. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
 - Always open `index.md` in the browser to verify rendering. It opens by default on startup. If a feature you changed is not covered by `index.md`, add a test case to it.
 - **Visual changes require browser verification before closing an issue.** Any change that affects CSS, rendering, decorations, themes, or layout MUST be verified in the live browser (via CDP) before closing the issue or claiming it's fixed. If browser verification is not possible, explicitly alert the user that visual verification was not done. Never close a visual issue based only on "build passes" or "tests pass."
 - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.
@@ -100,8 +100,8 @@
 ## Workflow gates
 
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
-- **Issue tracking uses Gitea** (`tea` CLI). Forge at `http://localhost:3001`, repo `chaoxu/coflat`. Use `tea issue list`, `tea issue close N`, etc. GitHub mirror kept as `github` remote.
-- **Closure gate before every issue close** (`tea issue close`): Two PreToolUse hooks enforce this:
+- **Issue tracking uses Gitea** (`tea` CLI). Forge at `http://localhost:3001`, repo `chaoxu/coflat`. Use `tea issues --repo chaoxu/coflat`, `tea pulls --repo chaoxu/coflat`, `tea pr --repo chaoxu/coflat create`, `tea issues --repo chaoxu/coflat close N`, etc. GitHub mirror kept as `github` remote.
+- **Closure gate before every issue close** (`tea issues --repo chaoxu/coflat close`): Two PreToolUse hooks enforce this:
   1. `closure-gate.sh` -- blocks issue close unless `.claude/state/closure-verified-N` exists AND contains valid JSON with `{"verdict": "COMPLETE", "criteria": [...]}`. The marker is consumed on close.
   2. `closure-marker-guard.sh` -- blocks any Bash command that touches `closure-verified` files. Markers can only be created via the Write tool by a completeness review agent.
   - The completeness review agent must write the marker with structured JSON after verifying all acceptance criteria in the actual codebase.

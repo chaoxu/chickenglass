@@ -2,10 +2,10 @@
 /**
  * Connect to the running Chrome for Testing instance via CDP and run a quick test.
  *
- * Requires: npm run chrome:app (or chrome:cdp) running first.
+ * Requires: pnpm chrome:app (or chrome:cdp) running first.
  *
  * Usage:
- *   npm run chrome:test
+ *   pnpm chrome:test
  *   node scripts/test-chrome.mjs --port 9322
  */
 
@@ -19,7 +19,7 @@ const { port, url } = parseChromeArgs();
 const browser = await connectToChrome(port);
 if (!browser) {
   console.error(`Failed to connect to CDP on port ${port}.`);
-  console.error("Make sure Chrome is running: npm run chrome:app");
+  console.error("Make sure Chrome is running: pnpm chrome:app");
   process.exit(1);
 }
 

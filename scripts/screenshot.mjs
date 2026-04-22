@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/screenshot.mjs [file] [--output path.png]
  *
- * Requires: npm run chrome (CDP on port 9322) running first.
+ * Requires: pnpm chrome (CDP on port 9322) running first.
  */
 
 import process from "node:process";
@@ -26,7 +26,7 @@ let page;
 try {
   page = await connectEditor(undefined, { url });
 } catch {
-  console.error("Cannot connect to CDP.\nMake sure Chrome is running: npm run chrome");
+  console.error("Cannot connect to CDP.\nMake sure Chrome is running: pnpm chrome");
   process.exit(1);
 }
 

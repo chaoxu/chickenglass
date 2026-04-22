@@ -17,7 +17,7 @@ function withoutGitEnv(env = process.env) {
 
 function usage() {
   return `Usage:
-  npm run dev:worktree -- <name> [--base <ref>] [--branch <branch>] [--path <path>] [--fetch]
+  pnpm dev:worktree -- <name> [--base <ref>] [--branch <branch>] [--path <path>] [--fetch]
 
 Options:
   --base <ref>              Git ref to branch from (default: HEAD)
@@ -28,8 +28,8 @@ Options:
   --help                    Show this help
 
 Examples:
-  npm run dev:worktree -- perf-444
-  npm run dev:worktree -- perf-444 --base origin/main --fetch
+  pnpm dev:worktree -- perf-444
+  pnpm dev:worktree -- perf-444 --base origin/main --fetch
   node scripts/dev-worktree.mjs perf-444 --branch codex/perf-444
 `;
 }
@@ -201,7 +201,7 @@ function printSummary(result) {
   } else if (existsSync(join(result.repoRoot, "node_modules"))) {
     console.log("Dependencies: repo node_modules already available in worktree");
   } else {
-    console.log("Dependencies: run 'npm install' inside the worktree");
+    console.log("Dependencies: run 'pnpm install' inside the worktree");
   }
 
   if (result.rootDirty) {
