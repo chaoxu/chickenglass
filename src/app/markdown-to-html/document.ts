@@ -10,7 +10,7 @@ import {
   registerCitationsWithProcessor,
 } from "../../citations/csl-processor";
 import { renderNode } from "./blocks";
-import { renderBibliography } from "./references";
+import { hasLocalCrossrefTarget, renderBibliography } from "./references";
 import {
   mdParser,
   type MarkdownToHtmlOptions,
@@ -33,12 +33,16 @@ export function markdownToHtml(
     : undefined);
 
   if (options?.bibliography && cslProcessor) {
-    const matches = collectCitationMatches(semantics.references, options.bibliography);
+    const matches = collectCitationMatches(semantics.references, options.bibliography, {
+      isLocalTarget: (id) => hasLocalCrossrefTarget(id, semantics, options.blockCounters),
+    });
     registerCitationsWithProcessor(matches, cslProcessor);
   }
 
   const citationBacklinkIndex = options?.bibliography
-    ? collectCitationBacklinkIndexFromReferences(semantics.references, options.bibliography)
+    ? collectCitationBacklinkIndexFromReferences(semantics.references, options.bibliography, {
+        isLocalTarget: (id) => hasLocalCrossrefTarget(id, semantics, options.blockCounters),
+      })
     : undefined;
 
   const context: WalkContext = {

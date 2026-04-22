@@ -429,6 +429,18 @@ interface IdLookup {
   has(id: string): boolean;
 }
 
+interface CitationCollectionOptions {
+  readonly isLocalTarget?: (id: string) => boolean;
+}
+
+function isCitationId(
+  id: string,
+  store: IdLookup,
+  options?: CitationCollectionOptions,
+): boolean {
+  return store.has(id) && !options?.isLocalTarget?.(id);
+}
+
 /**
  * Filter references against a bibliography store, returning only the
  * citation-relevant ids and locators from each reference that has at least
@@ -441,14 +453,15 @@ interface IdLookup {
 export function collectCitationMatches(
   references: readonly RefWithIds[],
   store: IdLookup,
+  options?: CitationCollectionOptions,
 ): Array<{ ids: string[]; locators: (string | undefined)[] }> {
   return references
-    .filter((ref) => ref.ids.some((id) => store.has(id)))
+    .filter((ref) => ref.ids.some((id) => isCitationId(id, store, options)))
     .map((ref) => {
       const ids: string[] = [];
       const locators: Array<string | undefined> = [];
       ref.ids.forEach((id, index) => {
-        if (!store.has(id)) return;
+        if (!isCitationId(id, store, options)) return;
         ids.push(id);
         locators.push(ref.locators[index]);
       });
@@ -521,12 +534,14 @@ export function collectCitationBacklinksFromReferences(
 export function collectCitationBacklinkIndexFromReferences(
   references: readonly RefWithIds[],
   store: IdLookup,
+  options?: CitationCollectionOptions,
 ): CitationBacklinkIndex {
   const backlinks = new Map<string, CitationBacklink[]>();
   let occurrence = 0;
 
   for (const ref of references) {
-    const ids = ref.ids.filter((id, index, arr) => store.has(id) && arr.indexOf(id) === index);
+    const ids = ref.ids.filter((id, index, arr) =>
+      isCitationId(id, store, options) && arr.indexOf(id) === index);
     if (ids.length === 0) continue;
 
     occurrence += 1;

@@ -43,6 +43,17 @@ export function resolveCrossrefLabel(
   return id;
 }
 
+export function hasLocalCrossrefTarget(
+  id: string,
+  semantics?: CitationRenderContext["semantics"],
+  blockCounters?: ReadonlyMap<string, BlockCounterEntry>,
+): boolean {
+  if (blockCounters?.has(id)) return true;
+  if (!semantics) return false;
+  if (semantics.equationById.has(id)) return true;
+  return semantics.headings.some((heading) => heading.id === id);
+}
+
 function trackCitedIds(
   ids: readonly string[],
   bibliography?: BibStore,
@@ -80,9 +91,10 @@ export function renderCitationCluster(
     semantics,
     nextCitationOccurrence,
   } = citationContext;
-  const knownCount = bibliography
-    ? ids.filter((id) => bibliography.has(id)).length
-    : 0;
+  const isCitationId = (id: string) =>
+    Boolean(bibliography?.has(id) && !hasLocalCrossrefTarget(id, semantics, blockCounters));
+  const citationIds = ids.filter(isCitationId);
+  const knownCount = citationIds.length;
 
   if (knownCount === 0) {
     const parts = ids.map((id) => {
@@ -92,8 +104,8 @@ export function renderCitationCluster(
     return ids.length === 1 ? parts[0] : parts.join("; ");
   }
 
-  trackCitedIds(ids, bibliography, citedIds);
-  const anchorId = nextCitationAnchorId(ids, bibliography, nextCitationOccurrence);
+  trackCitedIds(citationIds, bibliography, citedIds);
+  const anchorId = nextCitationAnchorId(citationIds, bibliography, nextCitationOccurrence);
   const anchorAttr = anchorId ? ` id="${anchorId}"` : "";
 
   if (bibliography && knownCount === ids.length && cslProcessor) {
@@ -106,7 +118,7 @@ export function renderCitationCluster(
   }
 
   const parts = ids.map((id, index) => {
-    if (bibliography?.has(id) && cslProcessor) {
+    if (isCitationId(id) && cslProcessor) {
       const rendered = cslProcessor.cite(
         [id],
         locators ? [locators[index]] : undefined,
@@ -131,8 +143,15 @@ export function renderNarrativeReference(
     bibliography,
     citedIds,
     cslProcessor,
+    blockCounters,
+    semantics,
     nextCitationOccurrence,
   } = citationContext;
+  if (hasLocalCrossrefTarget(id, semantics, blockCounters)) {
+    const label = resolveCrossrefLabel(id, semantics, blockCounters);
+    return `<a class="cross-ref" href="#${escapeHtml(id)}">${escapeHtml(label)}</a>`;
+  }
+
   if (bibliography?.has(id)) {
     trackCitedIds([id], bibliography, citedIds);
     const anchorId = nextCitationAnchorId([id], bibliography, nextCitationOccurrence);

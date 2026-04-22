@@ -640,6 +640,88 @@ describe("markdownToHtml", () => {
     expect(html).toContain(`class="${CSS.citation}"`);
   });
 
+  it("prefers local cross-reference targets over bibliography id collisions", () => {
+    const blockCounters = new Map<string, BlockCounterEntry>([
+      ["thm-main", { type: "theorem", title: "Theorem", number: 3 }],
+    ]);
+    const bibliography = new Map<string, CslJsonItem>([
+      ["thm-main", { id: "thm-main", type: "article-journal", title: "Colliding theorem" }],
+      ["eq:energy", { id: "eq:energy", type: "article-journal", title: "Colliding equation" }],
+      ["sec:intro", { id: "sec:intro", type: "article-journal", title: "Colliding heading" }],
+    ]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Collision [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Collision.</span>']),
+    } as unknown as CslProcessor;
+    const doc = [
+      "# Intro {#sec:intro}",
+      "",
+      "$$",
+      "E = mc^2",
+      "$$ {#eq:energy}",
+      "",
+      "See [@thm-main], [@eq:energy], [@sec:intro], and @sec:intro.",
+    ].join("\n");
+
+    const html = markdownToHtml(doc, {
+      bibliography,
+      blockCounters,
+      cslProcessor: fakeCsl,
+      sectionNumbers: true,
+    });
+
+    expect(html).toContain('href="#thm-main"');
+    expect(html).toContain("Theorem 3");
+    expect(html).toContain('href="#eq:energy"');
+    expect(html).toContain("Eq. (1)");
+    expect(html).toContain('href="#sec:intro"');
+    expect(html).toContain("Section 1");
+    expect(fakeCsl.cite).not.toHaveBeenCalled();
+    expect(fakeCsl.citeNarrative).not.toHaveBeenCalled();
+    expect(fakeCsl.bibliography).not.toHaveBeenCalled();
+    expect(html).not.toContain(`class="${CSS.bibliography}"`);
+  });
+
+  it("filters local collision ids out of mixed CSL clusters", () => {
+    const blockCounters = new Map<string, BlockCounterEntry>([
+      ["thm-main", { type: "theorem", title: "Theorem", number: 3 }],
+    ]);
+    const bibliography = new Map<string, CslJsonItem>([
+      ["thm-main", { id: "thm-main", type: "article-journal", title: "Colliding theorem" }],
+      ["cormen2009", {
+        id: "cormen2009",
+        type: "book",
+        author: [{ family: "Cormen", given: "Thomas H." }],
+        title: "Introduction to Algorithms",
+        issued: { "date-parts": [[2009]] },
+      }],
+    ]);
+    const fakeCsl = {
+      registerCitations: vi.fn(),
+      cite: vi.fn(() => "[1]"),
+      citeNarrative: vi.fn(() => "Cormen [1]"),
+      bibliography: vi.fn(() => ['<span class="csl-entry">[1] Cormen.</span>']),
+    } as unknown as CslProcessor;
+
+    const html = markdownToHtml("See [@thm-main; @cormen2009].", {
+      bibliography,
+      blockCounters,
+      cslProcessor: fakeCsl,
+    });
+
+    expect(html).toContain('href="#thm-main"');
+    expect(html).toContain("Theorem 3");
+    expect(fakeCsl.registerCitations).toHaveBeenCalledWith([
+      { ids: ["cormen2009"], locators: [undefined] },
+    ]);
+    expect(fakeCsl.cite).toHaveBeenCalledWith(["cormen2009"], [undefined]);
+    expect(fakeCsl.bibliography).toHaveBeenCalledWith(["cormen2009"]);
+    expect(html).toContain(`class="${CSS.bibliography}"`);
+    expect(html).not.toContain("Colliding theorem");
+  });
+
   // Regression (#399): blockCounters takes priority over equation semantics
   // when both are present (unlikely but verifies resolution order).
   it("block counter takes priority over equation label for same id", () => {
