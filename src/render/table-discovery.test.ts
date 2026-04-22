@@ -1,7 +1,8 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, StateEffect } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
+import { ensureFullSyntaxTree } from "../test-utils";
 import {
   computePendingTableParse,
   computePendingTableParseTarget,
@@ -41,14 +42,19 @@ function table(from: number, to: number): TableRange {
 }
 
 function makeDiscoveryState(doc: string): EditorState {
-  return EditorState.create({
+  const parsedState = EditorState.create({
     doc,
     extensions: [
       markdown({ extensions: markdownExtensions }),
-      tableDiscoveryField,
-      tableDiscoveryPendingParseField,
     ],
   });
+  ensureFullSyntaxTree(parsedState);
+  return parsedState.update({
+    effects: StateEffect.appendConfig.of([
+      tableDiscoveryField,
+      tableDiscoveryPendingParseField,
+    ]),
+  }).state;
 }
 
 describe("findPipePositions", () => {

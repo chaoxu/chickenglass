@@ -1,4 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
+import { forceParsing } from "@codemirror/language";
 import {
   Decoration,
   type DecorationSet,
@@ -38,6 +39,7 @@ function createCheckboxView(doc: string, cursorPos: number): CheckboxPluginProbe
     cursorPos,
     extensions: [markdown({ extensions: markdownExtensions }), checkboxRenderPlugin],
   });
+  forceParsing(view, view.state.doc.length, 5000);
   const plugin = getCheckboxPlugin();
   // Warm up the first dispatch after construction to clear JSDOM's spurious
   // focusChanged signal before each assertion inspects rebuild behavior.

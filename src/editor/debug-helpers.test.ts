@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
+import { forceParsing } from "@codemirror/language";
 import { createDebugHelpers } from "./debug-helpers";
 import { createEditor, toggleTreeView } from "./editor";
 
@@ -16,6 +17,7 @@ function createMountedEditor(doc = "# Test\n"): EditorView {
   const parent = document.createElement("div");
   document.body.appendChild(parent);
   const view = createEditor({ parent, doc });
+  forceParsing(view, view.state.doc.length, 5000);
   mountedViews.push(view);
   return view;
 }
