@@ -51,6 +51,7 @@ export async function run(page) {
     // Document doesn't have crossrefs — test is inconclusive but not a failure
     return {
       pass: true,
+      skipped: true,
       message: `No crossref syntax found in ${openedPath} (test skipped — add [@...] to exercise)`,
     };
   }

@@ -30,6 +30,7 @@ export async function run(page) {
   if (!hasFootnoteSyntax) {
     return {
       pass: true,
+      skipped: true,
       message: `No footnote syntax found in ${openedPath} (test skipped — add [^id] to exercise)`,
     };
   }

@@ -197,7 +197,10 @@ async function main() {
         const elapsed = Date.now() - startTime;
         const suffix = result.message ? ` — ${result.message}` : "";
 
-        if (result.pass) {
+        if (result.skipped) {
+          console.log(`  SKIP  ${test.name} (${elapsed}ms)${suffix}`);
+          skipped++;
+        } else if (result.pass) {
           console.log(`  PASS  ${test.name} (${elapsed}ms)${suffix}`);
           passed++;
         } else {
@@ -205,7 +208,13 @@ async function main() {
           failed++;
         }
 
-        results.push({ name: test.name, pass: result.pass, message: result.message, elapsed });
+        results.push({
+          name: test.name,
+          pass: result.pass,
+          skipped: Boolean(result.skipped),
+          message: result.message,
+          elapsed,
+        });
       } catch (err) {
         const elapsed = Date.now() - startTime;
         if (err.message?.includes("Missing fixture for")) {
