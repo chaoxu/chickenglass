@@ -36,8 +36,17 @@ jobs:
           cache: pnpm
       - name: Install Pandoc
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc
+          if command -v pandoc >/dev/null 2>&1; then
+            pandoc --version
+          elif command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y pandoc
+          elif command -v brew >/dev/null 2>&1; then
+            brew install pandoc
+          else
+            echo "Pandoc is required but neither apt-get nor brew is available." >&2
+            exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
         env:
