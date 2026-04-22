@@ -103,8 +103,8 @@ Configured in `lefthook.yml`, installed automatically on `pnpm install` via the 
 
 | Hook | Runs | Commands |
 |---|---|---|
-| `pre-commit` | on every commit (parallel) | `pnpm lint`, `pnpm typecheck` |
-| `pre-push` | on every push | `pnpm test` |
+| `pre-commit` | on every commit | `pnpm biome lint {staged_files}` for staged TS/JS/JSON files |
+| `pre-push` | on every push (parallel) | `pnpm typecheck`, `pnpm test` |
 
 Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only do that intentionally.
 
