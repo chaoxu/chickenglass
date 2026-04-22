@@ -9,6 +9,8 @@
  * CJK text and other non-Latin scripts correctly without regex heuristics.
  */
 
+import type { Text } from "@codemirror/state";
+
 import { parseFrontmatter } from "../parser/frontmatter";
 import { READING_WPM } from "../constants";
 
@@ -16,6 +18,7 @@ const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 const sentenceSegmenter = new Intl.Segmenter(undefined, {
   granularity: "sentence",
 });
+const WORD_COUNT_BUFFER_LIMIT = 16_384;
 
 /** Computed document statistics. */
 export interface DocStats {
@@ -46,6 +49,27 @@ function countWords(text: string): number {
   return count;
 }
 
+function countWordsInTextRange(doc: Text, from: number): number {
+  let count = 0;
+  let buffer = "";
+  const flush = () => {
+    if (buffer.length === 0) {
+      return;
+    }
+    count += countWords(buffer);
+    buffer = "";
+  };
+  const cursor = doc.iterRange(from);
+  while (!cursor.next().done) {
+    buffer += cursor.value;
+    if (cursor.lineBreak && buffer.length >= WORD_COUNT_BUFFER_LIMIT) {
+      flush();
+    }
+  }
+  flush();
+  return count;
+}
+
 /** Count sentences using Intl.Segmenter, ignoring whitespace-only segments. */
 function countSentences(text: string): number {
   let count = 0;
@@ -61,6 +85,27 @@ function getBody(text: string): string {
   return end >= 0 ? text.slice(end) : text;
 }
 
+function isFrontmatterDelimiterLine(text: string): boolean {
+  return text.slice(0, 3) === "---" && text.slice(3).trim().length === 0;
+}
+
+function getTextBodyStart(doc: Text): number {
+  const firstLine = doc.line(1);
+  if (!isFrontmatterDelimiterLine(firstLine.text) || doc.lines < 2) {
+    return 0;
+  }
+
+  for (let lineNumber = 2; lineNumber <= doc.lines; lineNumber += 1) {
+    const line = doc.line(lineNumber);
+    if (!isFrontmatterDelimiterLine(line.text)) {
+      continue;
+    }
+    return line.number < doc.lines ? line.to + 1 : line.to;
+  }
+
+  return 0;
+}
+
 /**
  * Cheap live counters for the status-bar hot path.
  *
@@ -70,6 +115,14 @@ function getBody(text: string): string {
 export function computeLiveStats(text: string): { words: number; chars: number } {
   const body = getBody(text);
   return { words: countWords(body), chars: body.length };
+}
+
+export function computeLiveStatsFromText(doc: Text): { words: number; chars: number } {
+  const bodyStart = getTextBodyStart(doc);
+  return {
+    words: countWordsInTextRange(doc, bodyStart),
+    chars: doc.length - bodyStart,
+  };
 }
 
 /** Compute full document statistics from raw markdown text. */

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { computeDocStats, computeLiveStats } from "./writing-stats";
+import { Text } from "@codemirror/state";
+
+import { computeDocStats, computeLiveStats, computeLiveStatsFromText } from "./writing-stats";
 
 describe("computeDocStats", () => {
   it("ignores YAML frontmatter when counting words", () => {
@@ -89,5 +91,61 @@ describe("computeLiveStats", () => {
     const live = computeLiveStats("Hello world.");
     // computeLiveStats returns only { words, chars }
     expect(Object.keys(live).sort()).toEqual(["chars", "words"]);
+  });
+});
+
+describe("computeLiveStatsFromText", () => {
+  it("matches string live stats without materializing the full document", () => {
+    const text = [
+      "---",
+      "title: Test",
+      "math:",
+      "  \\R: \"\\\\mathbb{R}\"",
+      "---",
+      "One two.",
+      "",
+      "Hello 世界!",
+    ].join("\n");
+
+    expect(computeLiveStatsFromText(Text.of(text.split("\n")))).toEqual(computeLiveStats(text));
+  });
+
+  it("leaves non-frontmatter leading rules alone", () => {
+    const text = ["--- not frontmatter", "Still body text."].join("\n");
+
+    expect(computeLiveStatsFromText(Text.of(text.split("\n")))).toEqual(computeLiveStats(text));
+  });
+
+  it("handles frontmatter without a body", () => {
+    const text = ["---", "title: Empty", "---"].join("\n");
+
+    expect(computeLiveStatsFromText(Text.of(text.split("\n")))).toEqual({ words: 0, chars: 0 });
+  });
+
+  it("strips malformed frontmatter by delimiter boundaries", () => {
+    const text = ["---", "title: [broken", "---", "Body text."].join("\n");
+
+    expect(computeLiveStatsFromText(Text.of(text.split("\n")))).toEqual(computeLiveStats(text));
+  });
+
+  it("matches string stats across long, mixed-language lines", () => {
+    const text = [
+      "alpha_beta_gamma_delta_epsilon_zeta_eta_theta_iota_kappa_lambda_mu",
+      "Hello 世界 and citation [@thm:main-upper] on the same line.",
+      "URL-ish text https://example.test/path-to-resource should stay consistent.",
+    ].join("\n");
+
+    expect(computeLiveStatsFromText(Text.of(text.split("\n")))).toEqual(computeLiveStats(text));
+  });
+
+  it("matches string stats when buffered word counting flushes across many lines", () => {
+    const body = Array.from(
+      { length: 700 },
+      (_, index) => `line ${index} has alpha beta gamma and 世界 tokens`,
+    ).join("\n");
+    const text = ["---", "title: Large", "---", body].join("\n");
+
+    expect(body.length).toBeGreaterThan(16_384);
+    expect(computeLiveStatsFromText(Text.of(text.split("\n")))).toEqual(computeLiveStats(text));
   });
 });

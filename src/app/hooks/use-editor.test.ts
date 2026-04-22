@@ -1,5 +1,6 @@
 import { act, createElement, useRef, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { Text } from "@codemirror/state";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileSystem } from "../file-manager";
@@ -205,6 +206,41 @@ describe("useEditor", () => {
     });
 
     expect(useEditorTelemetryStore.getState().wordCount).toBeGreaterThan(initialWordCount);
+  });
+
+  it("does not stringify the whole CM6 document for debounced live stats", () => {
+    vi.useFakeTimers();
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: ["---", "title: Draft", "---", "hello world"].join("\n"),
+        docPath: "draft.md",
+      }));
+    });
+
+    const initialWordCount = useEditorTelemetryStore.getState().wordCount;
+
+    act(() => {
+      ref.state.view?.dispatch({
+        changes: { from: ref.state.view.state.doc.length, insert: "\nagain" },
+      });
+    });
+
+    const toStringSpy = vi.spyOn(Text.prototype, "toString");
+    try {
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(toStringSpy).not.toHaveBeenCalled();
+      expect(useEditorTelemetryStore.getState().wordCount).toBeGreaterThan(initialWordCount);
+    } finally {
+      toStringSpy.mockRestore();
+    }
   });
 
   it("preserves selection and scroll when a save sync rerender matches the live editor doc", () => {

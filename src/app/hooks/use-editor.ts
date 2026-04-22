@@ -29,7 +29,7 @@ import { bibDataEffect, bibDataField } from "../../state/bib-data";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { ProjectConfig } from "../project-config";
 import type { FileSystem } from "../file-manager";
-import { computeLiveStats } from "../writing-stats";
+import { computeLiveStats, computeLiveStatsFromText } from "../writing-stats";
 import { useEditorScroll } from "./use-editor-scroll";
 import { useEditorDebugBridge } from "./use-editor-debug-bridge";
 import { useEditorDocumentServices } from "./use-editor-document-services";
@@ -237,8 +237,7 @@ export function useEditor(
             return;
           }
           pendingWordCountDocRef.current = null;
-          const docStr = pendingDoc.toString();
-          const { words, chars } = computeLiveStats(docStr);
+          const { words, chars } = computeLiveStatsFromText(pendingDoc);
           useEditorTelemetryStore.getState().setLiveCounts(words, chars);
           wordCountTimerRef.current = null;
         }, 300);
