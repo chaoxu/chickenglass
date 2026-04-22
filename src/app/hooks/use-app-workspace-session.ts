@@ -142,6 +142,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
+  const fullTreeRefreshGenerationRef = useRef(0);
+  const scopedRefreshGenerationRef = useRef(new Map<string, number>());
 
   const clearRestoredProjectState = useCallback(() => {
     setProjectRoot(null);
@@ -203,23 +205,32 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     // Scoped refresh: reload only the parent directory of the changed path.
     if (changedPath !== undefined && fs.listChildren) {
       const dir = parentDir(changedPath);
+      const fullTreeGenerationAtStart = fullTreeRefreshGenerationRef.current;
+      const scopedGeneration = (scopedRefreshGenerationRef.current.get(dir) ?? 0) + 1;
+      scopedRefreshGenerationRef.current.set(dir, scopedGeneration);
+      const scopedRefreshIsCurrent = () =>
+        requestId === workspaceRequestRef.current
+        && fullTreeGenerationAtStart === fullTreeRefreshGenerationRef.current
+        && scopedRefreshGenerationRef.current.get(dir) === scopedGeneration;
       try {
         const children = await measureAsync(
           "sidebar.file_tree_dir",
           () => fs.listChildren?.(dir) as Promise<FileEntry[]>,
           { category: "sidebar", detail: dir },
         );
-        if (requestId !== workspaceRequestRef.current) return;
+        if (!scopedRefreshIsCurrent()) return;
         setFileTree((prev) => prev ? replaceChildrenInTree(prev, dir, children) : prev);
         return;
       } catch (e: unknown) {
-        if (requestId !== workspaceRequestRef.current) return;
+        if (!scopedRefreshIsCurrent()) return;
         console.error("[workspace] scoped tree refresh failed, falling back to full refresh", e);
       }
     }
 
     // Full recursive load so expanded folders keep their children and
     // consumers (export, default-doc) still see the complete tree.
+    const fullTreeGeneration = fullTreeRefreshGenerationRef.current + 1;
+    fullTreeRefreshGenerationRef.current = fullTreeGeneration;
     try {
       const [tree, nextProjectConfig] = await Promise.all([
         measureAsync("sidebar.file_tree", () => fs.listTree(), {
@@ -234,10 +245,16 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       if (requestId !== workspaceRequestRef.current) {
         return;
       }
+      if (fullTreeRefreshGenerationRef.current !== fullTreeGeneration) {
+        return;
+      }
       setFileTree(tree);
       setProjectConfig(nextProjectConfig);
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) {
+        return;
+      }
+      if (fullTreeRefreshGenerationRef.current !== fullTreeGeneration) {
         return;
       }
       console.error("[workspace] failed to list file tree", e);

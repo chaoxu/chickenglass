@@ -616,6 +616,77 @@ describe("refreshTree scoped refresh", () => {
     expect(docsNode?.children?.map((c) => c.name)).toEqual(["a.md", "b.md"]);
   });
 
+  it("does not let an older scoped refresh overwrite newer children for the same directory", async () => {
+    const firstDocs = createDeferred<FileEntry[]>();
+    const secondDocs = createDeferred<FileEntry[]>();
+    const rootChildren: FileEntry[] = [
+      {
+        name: "docs",
+        path: "docs",
+        isDirectory: true,
+        children: [{ name: "a.md", path: "docs/a.md", isDirectory: false }],
+      },
+    ];
+    let docsCallCount = 0;
+    const fs: FileSystem = {
+      listTree: async () => ({ name: "project", path: "", isDirectory: true, children: rootChildren }),
+      listChildren: async (path: string) => {
+        if (path === "") return rootChildren;
+        if (path !== "docs") return [];
+        docsCallCount += 1;
+        return docsCallCount === 1 ? firstDocs.promise : secondDocs.promise;
+      },
+      readFile: async () => "",
+      writeFile: async () => {},
+      createFile: async () => {},
+      exists: async () => false,
+      renameFile: async () => {},
+      createDirectory: async () => {},
+      deleteFile: async () => {},
+      writeFileBinary: async () => {},
+      readFileBinary: async () => new Uint8Array(),
+    };
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    let firstRefresh!: Promise<void>;
+    let secondRefresh!: Promise<void>;
+    await act(async () => {
+      firstRefresh = ref.refreshTree("docs/a.md");
+      await Promise.resolve();
+      secondRefresh = ref.refreshTree("docs/b.md");
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      secondDocs.resolve([
+        { name: "a.md", path: "docs/a.md", isDirectory: false },
+        { name: "b.md", path: "docs/b.md", isDirectory: false },
+      ]);
+      await secondRefresh;
+    });
+
+    await act(async () => {
+      firstDocs.resolve([
+        { name: "a.md", path: "docs/a.md", isDirectory: false },
+        { name: "stale.md", path: "docs/stale.md", isDirectory: false },
+      ]);
+      await firstRefresh;
+    });
+
+    const docsNode = ref.fileTree?.children?.find((c) => c.name === "docs");
+    expect(docsNode?.children?.map((c) => c.name)).toEqual(["a.md", "b.md"]);
+  });
+
   it("refreshes root when changed path has no parent directory", async () => {
     const fs = createScopedFs();
     const { Harness, ref } = createHarness(fs);
