@@ -15,7 +15,7 @@
 
 import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { Compartment, EditorSelection, type Extension } from "@codemirror/state";
+import { Compartment, EditorSelection, type Extension, type Text } from "@codemirror/state";
 
 import {
   createEditor,
@@ -194,6 +194,7 @@ export function useEditor(
   }
 
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingWordCountDocRef = useRef<Text | null>(null);
 
   // ── Create / destroy editor once per mount ────────────────────────────────
   useEffect(() => {
@@ -225,11 +226,18 @@ export function useEditor(
         }
 
         // Debounced word count → Zustand store (no React setState)
+        pendingWordCountDocRef.current = update.state.doc;
         if (wordCountTimerRef.current !== null) {
           clearTimeout(wordCountTimerRef.current);
         }
         wordCountTimerRef.current = setTimeout(() => {
-          const docStr = update.state.doc.toString();
+          const pendingDoc = pendingWordCountDocRef.current;
+          if (!pendingDoc) {
+            wordCountTimerRef.current = null;
+            return;
+          }
+          pendingWordCountDocRef.current = null;
+          const docStr = pendingDoc.toString();
           const { words, chars } = computeLiveStats(docStr);
           useEditorTelemetryStore.getState().setLiveCounts(words, chars);
           wordCountTimerRef.current = null;
@@ -271,6 +279,7 @@ export function useEditor(
         clearTimeout(wordCountTimerRef.current);
         wordCountTimerRef.current = null;
       }
+      pendingWordCountDocRef.current = null;
       telemetry.reset();
       resetServicesRef.current();
       debugBridge.clearDebugView(newView);

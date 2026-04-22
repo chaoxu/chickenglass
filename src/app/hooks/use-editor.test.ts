@@ -7,6 +7,7 @@ import { MemoryFileSystem } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { UseEditorReturn } from "./use-editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
+import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 const { useEditor } = await import("./use-editor");
 
@@ -43,6 +44,7 @@ describe("useEditor", () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.useRealTimers();
   });
 
   it("keeps the same EditorView instance when switching documents", () => {
@@ -172,6 +174,37 @@ describe("useEditor", () => {
     });
 
     expect(ref.state.view?.state.doc.toString()).toBe("hello!");
+  });
+
+  it("debounces live stats updates after CM6 document edits", () => {
+    vi.useFakeTimers();
+    const ref: HarnessRef = {
+      state: null as unknown as UseEditorReturn,
+    };
+    const Harness = createHarness(ref);
+
+    act(() => {
+      root.render(createElement(Harness, {
+        doc: "hello world",
+        docPath: "draft.md",
+      }));
+    });
+
+    const initialWordCount = useEditorTelemetryStore.getState().wordCount;
+
+    act(() => {
+      ref.state.view?.dispatch({
+        changes: { from: 11, insert: " again" },
+      });
+    });
+
+    expect(useEditorTelemetryStore.getState().wordCount).toBe(initialWordCount);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(useEditorTelemetryStore.getState().wordCount).toBeGreaterThan(initialWordCount);
   });
 
   it("preserves selection and scroll when a save sync rerender matches the live editor doc", () => {
