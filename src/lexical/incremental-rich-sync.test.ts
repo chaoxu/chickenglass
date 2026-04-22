@@ -62,6 +62,42 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
+  it("replaces a later paragraph without targeting the blank separator node", () => {
+    const previousMarkdown = "Alpha\n\nSecond paragraph.";
+    const nextMarkdown = "Alpha\n\nSecond changed.";
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result).toMatchObject({
+      applied: true,
+      blockFrom: previousMarkdown.indexOf("Second"),
+      nextBlockSource: "Second changed.",
+      nextBlockTo: nextMarkdown.length,
+    });
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    const nextKeys = readTopLevelKeys(editor);
+    expect(nextKeys[0]).toBe(previousKeys[0]);
+    expect(nextKeys[1]).toBe(previousKeys[1]);
+    expect(nextKeys[2]).not.toBe(previousKeys[2]);
+  });
+
+  it("replaces a paragraph directly after a heading", () => {
+    const previousMarkdown = "# Heading\nSecond paragraph.";
+    const nextMarkdown = "# Heading\nSecond changed.";
+    const { result, editor } = applyIncrementalChange(previousMarkdown, nextMarkdown);
+
+    expect(result).toMatchObject({
+      applied: true,
+      blockFrom: previousMarkdown.indexOf("Second"),
+      nextBlockSource: "Second changed.",
+      nextBlockTo: nextMarkdown.length,
+    });
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+  });
+
   it("replaces one affected raw block and leaves sibling blocks intact", () => {
     const previousMarkdown = [
       "::: {.theorem #thm:sample title=\"Sample\"}",

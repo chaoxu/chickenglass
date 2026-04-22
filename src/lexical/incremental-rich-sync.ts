@@ -27,6 +27,8 @@ interface IncrementalSyncBlockRange extends IncrementalSyncBlockRangeBase {
   readonly index: number;
 }
 
+const ATX_HEADING_LINE_RE = /^\s{0,3}#{1,6}(?:\s|$)/;
+
 function computeLineOffsets(lines: readonly string[]): number[] {
   const offsets: number[] = [];
   let offset = 0;
@@ -60,7 +62,9 @@ function collectIncrementalSyncBlockRanges(markdown: string): IncrementalSyncBlo
   const ranges: IncrementalSyncBlockRangeBase[] = [];
 
   for (let lineIndex = 0; lineIndex < lines.length;) {
-    if ((lines[lineIndex] ?? "").trim().length === 0) {
+    const line = lines[lineIndex] ?? "";
+    if (line.trim().length === 0) {
+      ranges.push(rangeFromLineSpan(lines, lineOffsets, lineIndex, lineIndex));
       lineIndex += 1;
       continue;
     }
@@ -72,10 +76,17 @@ function collectIncrementalSyncBlockRanges(markdown: string): IncrementalSyncBlo
       continue;
     }
 
+    if (ATX_HEADING_LINE_RE.test(line)) {
+      ranges.push(rangeFromLineSpan(lines, lineOffsets, lineIndex, lineIndex));
+      lineIndex += 1;
+      continue;
+    }
+
     const startLineIndex = lineIndex;
     while (
       lineIndex + 1 < lines.length
       && (lines[lineIndex + 1] ?? "").trim().length > 0
+      && !ATX_HEADING_LINE_RE.test(lines[lineIndex + 1] ?? "")
       && !sourceBlocksByStartLine.has(lineIndex + 1)
     ) {
       lineIndex += 1;
