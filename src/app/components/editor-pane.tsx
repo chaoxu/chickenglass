@@ -1,4 +1,5 @@
-import { useRef, useMemo, useState, useEffect } from "react";
+import { useRef, useMemo, useState, useEffect, useCallback } from "react";
+import type { EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -9,15 +10,18 @@ import { useLatest } from "../hooks/use-latest";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
 import { computeSidenoteInvalidation } from "./sidenote-invalidation";
+import {
+  createDiagnosticsSidebarChangeChecker,
+  createHeadingSidebarMetadata,
+  sameHeadingSidebarMetadata,
+  type HeadingSidebarMetadata,
+} from "./editor-pane-sidebar-tracking";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import {
   documentSemanticsField,
-  getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
 } from "../../state/document-analysis";
-import { blockCounterField } from "../../state/block-counter";
-import { bibDataField } from "../../state/bib-data";
 import {
   defaultEditorPlugins,
   EditorPluginManager,
@@ -78,6 +82,43 @@ export function EditorPane({
   const onHeadingsChangeRef = useLatest(onHeadingsChange);
   const onDiagnosticsChangeRef = useLatest(onDiagnosticsChange);
   const sidenotesCollapsedRef = useLatest(sidenotesCollapsed);
+  const headingFlushHandleRef = useRef<number | null>(null);
+  const pendingHeadingStateRef = useRef<EditorState | null>(null);
+  const lastPublishedHeadingMetadataRef = useRef<readonly HeadingSidebarMetadata[]>([]);
+  const diagnosticsFlushHandleRef = useRef<number | null>(null);
+  const pendingDiagnosticsStateRef = useRef<EditorState | null>(null);
+  const diagnosticsChanged = useMemo(() => createDiagnosticsSidebarChangeChecker(), []);
+
+  const publishHeadings = useCallback((state: EditorState, force = false) => {
+    const callback = onHeadingsChangeRef.current;
+    if (!callback) return;
+    const headings = extractHeadings(state);
+    const nextMetadata = createHeadingSidebarMetadata(headings);
+    if (!force && sameHeadingSidebarMetadata(lastPublishedHeadingMetadataRef.current, nextMetadata)) {
+      return;
+    }
+    lastPublishedHeadingMetadataRef.current = nextMetadata;
+    callback(headings);
+  }, []);
+
+  const publishDiagnostics = useCallback((state: EditorState) => {
+    const callback = onDiagnosticsChangeRef.current;
+    if (!callback) return;
+    callback(extractDiagnostics(state));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (headingFlushHandleRef.current !== null) {
+        window.clearTimeout(headingFlushHandleRef.current);
+        headingFlushHandleRef.current = null;
+      }
+      if (diagnosticsFlushHandleRef.current !== null) {
+        window.clearTimeout(diagnosticsFlushHandleRef.current);
+        diagnosticsFlushHandleRef.current = null;
+      }
+    };
+  }, []);
 
   // CM6 extension that detects heading-slice revision changes and
   // pushes fresh headings into React.  Created once (stable reference)
@@ -91,31 +132,33 @@ export function EditorPane({
       const rev = getDocumentAnalysisSliceRevision(analysis, "headings");
       if (rev === lastRev) return;
       lastRev = rev;
-      onHeadingsChangeRef.current?.(extractHeadings(update.state));
+      pendingHeadingStateRef.current = update.state;
+      if (headingFlushHandleRef.current !== null) return;
+      headingFlushHandleRef.current = window.setTimeout(() => {
+        headingFlushHandleRef.current = null;
+        const state = pendingHeadingStateRef.current;
+        if (!state) return;
+        publishHeadings(state);
+      }, 0);
     });
-  }, []);
+  }, [publishHeadings]);
 
   // CM6 extension that detects semantic or bibliography changes and
   // pushes fresh diagnostics into React.
   const diagnosticTrackingExtension = useMemo(() => {
-    let lastAnalysisRev: number | undefined;
-    let lastBibRev: number | undefined;
     return EditorView.updateListener.of((update) => {
       if (!onDiagnosticsChangeRef.current) return;
-      const analysis = update.state.field(documentSemanticsField, false);
-      if (!analysis) return;
-      const analysisRev = getDocumentAnalysisRevision(analysis);
-      const bibState = update.state.field(bibDataField, false);
-      const bibRev = bibState?.processorRevision;
-      const blockCountersChanged =
-        update.startState.field(blockCounterField, false)
-        !== update.state.field(blockCounterField, false);
-      if (analysisRev === lastAnalysisRev && bibRev === lastBibRev && !blockCountersChanged) return;
-      lastAnalysisRev = analysisRev;
-      lastBibRev = bibRev;
-      onDiagnosticsChangeRef.current?.(extractDiagnostics(update.state));
+      if (!diagnosticsChanged(update.startState, update.state)) return;
+      pendingDiagnosticsStateRef.current = update.state;
+      if (diagnosticsFlushHandleRef.current !== null) return;
+      diagnosticsFlushHandleRef.current = window.setTimeout(() => {
+        diagnosticsFlushHandleRef.current = null;
+        const state = pendingDiagnosticsStateRef.current;
+        if (!state) return;
+        publishDiagnostics(state);
+      }, 0);
     });
-  }, []);
+  }, [diagnosticsChanged, publishDiagnostics]);
 
   const sidenoteTrackingExtension = useMemo(() => {
     return EditorView.updateListener.of((update) => {
@@ -187,14 +230,24 @@ export function EditorPane({
   // without waiting for the next semantic revision.
   useEffect(() => {
     if (view && onHeadingsChange) {
-      onHeadingsChange(extractHeadings(view.state));
+      if (headingFlushHandleRef.current !== null) {
+        window.clearTimeout(headingFlushHandleRef.current);
+        headingFlushHandleRef.current = null;
+      }
+      pendingHeadingStateRef.current = view.state;
+      publishHeadings(view.state, true);
     }
-  }, [onHeadingsChange, view]);
+  }, [onHeadingsChange, publishHeadings, view]);
   useEffect(() => {
     if (view && onDiagnosticsChange) {
-      onDiagnosticsChange(extractDiagnostics(view.state));
+      if (diagnosticsFlushHandleRef.current !== null) {
+        window.clearTimeout(diagnosticsFlushHandleRef.current);
+        diagnosticsFlushHandleRef.current = null;
+      }
+      pendingDiagnosticsStateRef.current = view.state;
+      publishDiagnostics(view.state);
     }
-  }, [onDiagnosticsChange, view]);
+  }, [onDiagnosticsChange, publishDiagnostics, view]);
 
   // Extract headings for breadcrumbs and outline
   const headings = view ? extractHeadings(view.state) : [];
