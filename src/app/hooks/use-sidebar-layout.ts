@@ -1,6 +1,7 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import type { SidebarTab } from "../../lib/debug-types";
 
-export type SidebarTab = "files" | "outline" | "diagnostics" | "runtime";
+export type { SidebarTab } from "../../lib/debug-types";
 
 export interface SidebarLayoutController {
   sidebarCollapsed: boolean;

@@ -46,38 +46,7 @@ export const BOUNDARY_RULES = [
     name: "src/debug must not depend on app/editor/runtime surfaces",
     from: ["debug"],
     to: ["app", "editor", "lexical"],
-    allow: [
-      {
-        file: "src/debug/debug-bridge-contract.d.ts",
-        target: "src/app/hooks/use-sidebar-layout.ts",
-        reason: "#1376 tracks moving debug bridge contract types to neutral owners",
-      },
-      {
-        file: "src/debug/debug-bridge-contract.d.ts",
-        target: "src/app/hooks/use-editor-scroll.ts",
-        reason: "#1376 tracks moving debug bridge contract types to neutral owners",
-      },
-      {
-        file: "src/debug/debug-bridge-contract.d.ts",
-        target: "src/lexical/interaction-trace.ts",
-        reason: "#1376 tracks moving debug bridge contract types to neutral owners",
-      },
-      {
-        file: "src/debug/debug-bridge-contract.d.ts",
-        target: "src/lexical/markdown-editor-types.ts",
-        reason: "#1376 tracks moving debug bridge contract types to neutral owners",
-      },
-      {
-        file: "src/debug/debug-bridge-contract.d.ts",
-        target: "src/editor/index.ts",
-        reason: "#1376 tracks moving debug bridge contract types to neutral owners",
-      },
-      {
-        file: "src/debug/session-recorder.ts",
-        target: "src/editor/debug-helpers.ts",
-        reason: "#1376 tracks moving debug bridge contract types to neutral owners",
-      },
-    ],
+    allow: [],
   },
   {
     name: "src/lexical/runtime must not import app/editor/render modules",
@@ -108,14 +77,9 @@ export const ALLOWED_SOURCE_CYCLES = [
   {
     reason: "#1378 tracks breaking editor mode/keybinding cycles",
     files: [
-      "src/debug/session-recorder.ts",
       "src/editor/block-type-picker.ts",
-      "src/editor/debug-helpers.ts",
-      "src/editor/debug-panel.ts",
-      "src/editor/debug-timeline.ts",
       "src/editor/editor.ts",
       "src/editor/keybindings.ts",
-      "src/editor/vertical-motion.ts",
     ],
   },
 ];

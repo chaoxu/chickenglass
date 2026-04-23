@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DebugRenderState } from "../editor";
+import type { DebugRenderState } from "../lib/debug-types";
 import {
   _compactDebugContextForEventForTest as compactDebugContextForEvent,
   _sanitizeDebugEventDetailForTest as sanitizeDebugEventDetail,

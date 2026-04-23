@@ -1,9 +1,9 @@
-import type { DebugDocumentState } from "./debug-bridge-contract.js";
 import type {
+  DebugDocumentState,
   DebugRenderState,
   SelectionInfo,
-} from "../editor/debug-helpers";
-import type { StructureEditTarget } from "../state/cm-structure-edit";
+  StructureEditTarget,
+} from "../lib/debug-types";
 
 const DEBUG_SESSION_STORAGE_KEY = "coflat-debug-session-id";
 const DEBUG_SESSION_EVENTS_STORAGE_KEY = "coflat-debug-session-events";

@@ -5,27 +5,9 @@
  * and window.__cfDebug.interactionLog (reads).
  */
 
-export interface InteractionTraceEntry {
-  /** Unix timestamp (ms). */
-  ts: number;
-  type: "click" | "input" | "scroll-jump";
-  /** Lexical node `__type` (e.g. "inline-math", "paragraph"). */
-  nodeType: string | null;
-  /** Lexical node key. */
-  nodeKey: string | null;
-  /** Short DOM selector summary of the event target. */
-  target: string;
-  clientX?: number;
-  clientY?: number;
-  editorX?: number | null;
-  editorY?: number | null;
-  scrollBefore: number;
-  scrollAfter: number;
-  /** Whether a click handler returned true/default-prevented. */
-  handled: boolean;
-  inputType?: string;
-  data?: string | null;
-}
+import type { InteractionTraceEntry } from "../lib/debug-types";
+
+export type { InteractionTraceEntry } from "../lib/debug-types";
 
 const MAX_ENTRIES = 50;
 const buffer: InteractionTraceEntry[] = [];

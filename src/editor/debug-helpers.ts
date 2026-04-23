@@ -47,6 +47,16 @@ import {
   measureShellSurfaceSnapshot,
   type ShellSurfaceSnapshot,
 } from "./shell-surface-model";
+import type {
+  DebugRenderState,
+  SelectionInfo,
+  VisibleRawFencedOpener,
+} from "../lib/debug-types";
+export type {
+  DebugRenderState,
+  SelectionInfo,
+  VisibleRawFencedOpener,
+} from "../lib/debug-types";
 
 interface DivInfo {
   readonly from: number;
@@ -63,23 +73,6 @@ interface LineInfo {
 }
 
 type FenceStatus = Pick<LineInfo, "line" | "height" | "hidden" | "classes">;
-
-export interface VisibleRawFencedOpener {
-  readonly line: number | null;
-  readonly text: string;
-  readonly classes: string[];
-}
-
-export interface DebugRenderState {
-  readonly renderedBlockHeaders: number;
-  readonly inlineMath: number;
-  readonly displayMath: number;
-  readonly citations: number;
-  readonly crossrefs: number;
-  readonly tables: number;
-  readonly figures: number;
-  readonly visibleRawFencedOpeners: readonly VisibleRawFencedOpener[];
-}
 
 interface DebugSnapshot {
   readonly divs: DivInfo[];
@@ -104,16 +97,6 @@ interface SemanticDebugInfo {
     readonly mathRegions: number;
     readonly references: number;
   };
-}
-
-export interface SelectionInfo {
-  readonly anchor: number;
-  readonly head: number;
-  readonly from: number;
-  readonly to: number;
-  readonly empty: boolean;
-  readonly line: number;
-  readonly col: number;
 }
 
 export interface DebugHelpers {

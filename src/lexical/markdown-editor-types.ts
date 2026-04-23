@@ -1,11 +1,7 @@
 import type { EditorDocumentChange } from "../lib/editor-doc-change";
+import type { MarkdownEditorSelection } from "../lib/debug-types";
 
-export interface MarkdownEditorSelection {
-  readonly anchor: number;
-  readonly focus: number;
-  readonly from: number;
-  readonly to: number;
-}
+export type { MarkdownEditorSelection } from "../lib/debug-types";
 
 export interface MarkdownEditorHandle {
   applyChanges: (changes: readonly EditorDocumentChange[]) => void;

@@ -14,6 +14,7 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
+import type { ScrollGuardEvent } from "../../lib/debug-types";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 /**
@@ -28,18 +29,7 @@ const HEIGHT_CORRECTION_THRESHOLD = 256;
 const MAX_SCROLL_GUARD_EVENTS = 100;
 const SCROLL_GUARD_RELEASE_THRESHOLD = 64;
 
-export interface ScrollGuardEvent {
-  readonly timestamp: number;
-  readonly wheelDeltaY: number;
-  readonly previousTop: number;
-  readonly correctedTop: number;
-  readonly observedTop: number;
-  readonly previousHeight: number;
-  readonly currentHeight: number;
-  readonly paddingBottom: number;
-  readonly preservedMaxScrollTop: number;
-  readonly observedMaxScrollTop: number;
-}
+export type { ScrollGuardEvent } from "../../lib/debug-types";
 
 const scrollGuardEvents: ScrollGuardEvent[] = [];
 

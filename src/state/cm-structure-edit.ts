@@ -21,60 +21,22 @@ import { focusEffect } from "./editor-focus";
 import { frontmatterField } from "./frontmatter-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
 import { findCodeShellAt } from "./shell-ownership";
-
-export interface FencedStructureEditTarget {
-  readonly kind: "fenced-opener";
-  readonly openFenceFrom: number;
-  readonly editFrom: number;
-  readonly editTo: number;
-  readonly revealFrom: number;
-  readonly revealTo: number;
-  readonly className: string;
-  readonly title: string | null;
-}
-
-export interface FrontmatterStructureEditTarget {
-  readonly kind: "frontmatter";
-  readonly from: 0;
-  readonly to: number;
-  readonly title: string | null;
-}
-
-export interface CodeFenceStructureEditTarget {
-  readonly kind: "code-fence";
-  readonly from: number;
-  readonly to: number;
-  readonly openFenceFrom: number;
-  readonly openFenceTo: number;
-  readonly closeFenceFrom: number;
-  readonly closeFenceTo: number;
-  readonly marker: string;
-  readonly language: string;
-}
-
-export interface FootnoteLabelStructureEditTarget {
-  readonly kind: "footnote-label";
-  readonly id: string;
-  readonly from: number;
-  readonly to: number;
-  readonly labelFrom: number;
-  readonly labelTo: number;
-}
-
-export interface DisplayMathStructureEditTarget {
-  readonly kind: "display-math";
-  readonly from: number;
-  readonly to: number;
-  readonly contentFrom: number;
-  readonly contentTo: number;
-}
-
-export type StructureEditTarget =
-  | FencedStructureEditTarget
-  | FrontmatterStructureEditTarget
-  | CodeFenceStructureEditTarget
-  | FootnoteLabelStructureEditTarget
-  | DisplayMathStructureEditTarget;
+import type {
+  CodeFenceStructureEditTarget,
+  DisplayMathStructureEditTarget,
+  FencedStructureEditTarget,
+  FootnoteLabelStructureEditTarget,
+  FrontmatterStructureEditTarget,
+  StructureEditTarget,
+} from "../lib/debug-types";
+export type {
+  CodeFenceStructureEditTarget,
+  DisplayMathStructureEditTarget,
+  FencedStructureEditTarget,
+  FootnoteLabelStructureEditTarget,
+  FrontmatterStructureEditTarget,
+  StructureEditTarget,
+} from "../lib/debug-types";
 
 export const setStructureEditTargetEffect =
   StateEffect.define<StructureEditTarget | null>();

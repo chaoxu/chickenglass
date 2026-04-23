@@ -1,18 +1,18 @@
 import type { FormatEventDetail } from "../constants/events";
 import type { EditorMode } from "../editor-display-mode";
-import type { SidebarTab } from "../app/hooks/use-sidebar-layout";
-import type { ScrollGuardEvent } from "../app/hooks/use-editor-scroll";
+import type {
+  DebugDocumentState,
+  DebugRenderState,
+  InteractionTraceEntry,
+  MarkdownEditorSelection,
+  ScrollGuardEvent,
+  SidebarTab,
+} from "../lib/debug-types";
+export type { DebugDocumentState } from "../lib/debug-types";
 import type {
   DebugSessionCapture,
   DebugSessionRecorderStatus,
 } from "./session-recorder";
-import type {
-  InteractionTraceEntry,
-} from "../lexical/interaction-trace";
-import type {
-  MarkdownEditorSelection,
-} from "../lexical/markdown-editor-types";
-import type { DebugRenderState } from "../editor";
 
 export const CORE_DEBUG_GLOBAL_NAMES: readonly ["__app", "__cfDebug"];
 export const DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES: readonly ["__app", "__editor", "__cfDebug"];
@@ -29,12 +29,6 @@ export const DEBUG_BRIDGE_DOC_ENTRIES: readonly (readonly [string, string])[];
 export function formatDebugBridgeDocs(
   entries?: readonly (readonly [string, string])[],
 ): string;
-
-export interface DebugDocumentState {
-  path: string;
-  name: string;
-  dirty: boolean;
-}
 
 export type DebugProjectFile =
   | { path: string; kind: "text"; content: string }
