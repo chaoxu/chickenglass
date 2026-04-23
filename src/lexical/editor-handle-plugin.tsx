@@ -1,7 +1,9 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  COMMAND_PRIORITY_LOW,
   type EditorUpdateOptions,
   type LexicalEditor,
+  SELECTION_CHANGE_COMMAND,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from "lexical";
 import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
@@ -93,6 +95,7 @@ export function LexicalEditorHandlePlugin({
   const selectionSnapshotFreshRef = useRef(false);
   const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
   const richSelectionDomInsertFailedRef = useRef(false);
+  const suppressRichSelectionPublishRef = useRef(false);
   const canonicalFallbackSelectionRef = useRef<MarkdownEditorSelection | null>(null);
   const cacheRichDocumentSnapshot = useCallback((markdown: string) => {
     if (editorModeRef.current === "source") {
@@ -117,6 +120,63 @@ export function LexicalEditorHandlePlugin({
     selectionRef,
     selectionSnapshotFreshRef,
   });
+
+  useEffect(() => {
+    const publishSelection = () => {
+      if (
+        suppressRichSelectionPublishRef.current
+        || editorModeRef.current === "source"
+        || deferredRichSyncDocRef.current !== null
+        || richSelectionDomInsertFailedRef.current
+        || (!readInactiveRichSelection && !canReadLiveSelectionFromEditor(editor))
+      ) {
+        return;
+      }
+
+      const currentDoc = pendingLocalEchoDocRef.current ?? lastCommittedDocRef.current;
+      const nextSelection = readEmbeddedInlineDomSelection(currentDoc)
+        ?? readSourceSelectionFromLexicalSelection(editor, {
+          fallback: selectionRef.current,
+          markdown: currentDoc,
+        });
+      if (!nextSelection || sameSelection(selectionRef.current, nextSelection)) {
+        return;
+      }
+
+      selectionRef.current = nextSelection;
+      selectionSnapshotFreshRef.current = true;
+      onSelectionChange?.(nextSelection);
+    };
+
+    const unregisterSelectionCommand = editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        publishSelection();
+        return false;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+    const unregisterUpdateListener = editor.registerUpdateListener(() => {
+      if (selectionSnapshotFreshRef.current) {
+        selectionSnapshotFreshRef.current = false;
+        return;
+      }
+      publishSelection();
+    });
+    return () => {
+      unregisterSelectionCommand();
+      unregisterUpdateListener();
+    };
+  }, [
+    deferredRichSyncDocRef,
+    editor,
+    editorModeRef,
+    lastCommittedDocRef,
+    onSelectionChange,
+    pendingLocalEchoDocRef,
+    readInactiveRichSelection,
+    selectionRef,
+  ]);
 
   useEffect(() => {
     if (!onEditorReady) {
@@ -453,6 +513,7 @@ export function LexicalEditorHandlePlugin({
             selectSourceOffsetsInLexicalRoot(nextSelection.anchor, nextSelection.focus);
           }, { discrete: true, tag: tags });
         } else {
+          suppressRichSelectionPublishRef.current = true;
           const moved = selectSourceOffsetsInRichLexicalRoot(
             editor,
             currentDoc,
@@ -478,6 +539,9 @@ export function LexicalEditorHandlePlugin({
             richSelectionDomInsertFailedRef.current = !selectionMatches;
             canonicalFallbackSelectionRef.current = selectionMatches ? null : nextSelection;
           }
+          queueMicrotask(() => {
+            suppressRichSelectionPublishRef.current = false;
+          });
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },
@@ -564,4 +628,3 @@ export function RichLexicalEditorHandlePlugin({
     />
   );
 }
-

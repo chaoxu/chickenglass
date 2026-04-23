@@ -483,7 +483,9 @@ export function LexicalMarkdownEditor({
                           : onKeyDown}
                         onMouseUp={editable
                           ? (event: ReactMouseEvent<HTMLDivElement>) => {
-                              syncSelectionFromEventTarget(event.target);
+                              if (window.getSelection()?.isCollapsed !== false) {
+                                syncSelectionFromEventTarget(event.target);
+                              }
                               repairBlankClickSelection(event.currentTarget, event);
                             }
                           : undefined}

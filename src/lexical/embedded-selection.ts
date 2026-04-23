@@ -19,18 +19,6 @@ export function readEmbeddedInlineDomSelection(doc: string): MarkdownEditorSelec
   if (!root || !rawBlock || !root.contains(anchorNode) || !root.contains(focusNode)) {
     return null;
   }
-  const selectedText = selection.toString();
-  if (selectedText) {
-    const boldNeedle = `**${selectedText}**`;
-    const boldFrom = doc.indexOf(boldNeedle);
-    if (boldFrom >= 0 && doc.indexOf(boldNeedle, boldFrom + boldNeedle.length) < 0) {
-      return createMarkdownSelection(
-        boldFrom + 2,
-        boldFrom + 2 + selectedText.length,
-        doc.length,
-      );
-    }
-  }
   const sourceFrom = readSourceFrom(rawBlock);
   const sourceTo = readSourceTo(rawBlock);
   const visibleSelection = readVisibleTextDomSelection(root);
@@ -58,4 +46,3 @@ export function readEmbeddedInlineDomSelection(doc: string): MarkdownEditorSelec
     doc.length,
   );
 }
-

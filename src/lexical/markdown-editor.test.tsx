@@ -20,7 +20,7 @@ import { MemoryFileSystem } from "../app/file-manager";
 import { setActiveEditor } from "./active-editor-tracker";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
-import { RAW_BLOCK_SOURCE_SELECTOR } from "./source-position-contract";
+import { HEADING_SOURCE_SELECTOR, RAW_BLOCK_SOURCE_SELECTOR } from "./source-position-contract";
 
 type MarkdownEditorProps = ComponentProps<typeof LexicalMarkdownEditor>;
 const DEMO_INDEX_MD = readFileSync("demo/index.md", "utf8");
@@ -439,6 +439,147 @@ describe("LexicalMarkdownEditor mode round-trip (issue #99)", () => {
 });
 
 describe("LexicalMarkdownEditor rich selection bridge", () => {
+  it("publishes live rich caret movement with source offsets", async () => {
+    const onSelectionChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "Alpha Beta",
+      editorMode: "lexical",
+      onSelectionChange,
+    });
+
+    try {
+      onSelectionChange.mockClear();
+      act(() => {
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected first paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected first text node");
+          }
+          text.select(3, 3);
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(onSelectionChange).toHaveBeenLastCalledWith({
+          anchor: 3,
+          focus: 3,
+          from: 3,
+          to: 3,
+        });
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("publishes live rich range selections with source offsets", async () => {
+    const onSelectionChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "Alpha Beta",
+      editorMode: "lexical",
+      onSelectionChange,
+    });
+
+    try {
+      onSelectionChange.mockClear();
+      act(() => {
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected first paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected first text node");
+          }
+          text.select(6, 10);
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(onSelectionChange).toHaveBeenLastCalledWith({
+          anchor: 6,
+          focus: 10,
+          from: 6,
+          to: 10,
+        });
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("does not collapse a non-collapsed rich selection on mouseup", async () => {
+    const onSelectionChange = vi.fn();
+    const editor = await mountEditor({
+      doc: "# Alpha Beta",
+      editorMode: "lexical",
+      onSelectionChange,
+    });
+
+    try {
+      const maybeHeading = await waitFor(() => {
+        const nextHeading = editor.editor.getRootElement()?.querySelector<HTMLElement>(
+          HEADING_SOURCE_SELECTOR,
+        );
+        expect(nextHeading).not.toBeNull();
+        return nextHeading;
+      });
+      if (!maybeHeading) {
+        throw new Error("expected heading");
+      }
+      const heading = maybeHeading;
+      const textWalker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+      const headingTextNode = textWalker.nextNode();
+      if (!headingTextNode?.textContent || headingTextNode.textContent.length < 10) {
+        throw new Error("expected heading text");
+      }
+
+      onSelectionChange.mockClear();
+      act(() => {
+        editor.editor.update(() => {
+          const firstBlock = $getRoot().getFirstChild();
+          if (!$isElementNode(firstBlock)) {
+            throw new Error("expected first heading");
+          }
+          const text = firstBlock.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected heading text node");
+          }
+          text.select(6, 10);
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        const selection = onSelectionChange.mock.lastCall?.[0];
+        expect(selection?.from).toBeLessThan(selection?.to ?? 0);
+      });
+      const publishedRange = onSelectionChange.mock.lastCall?.[0];
+
+      const domRange = document.createRange();
+      domRange.setStart(headingTextNode, 6);
+      domRange.setEnd(headingTextNode, 10);
+      const domSelection = window.getSelection();
+      domSelection?.removeAllRanges();
+      domSelection?.addRange(domRange);
+      expect(domSelection?.isCollapsed).toBe(false);
+
+      act(() => {
+        fireEvent.mouseUp(heading);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(onSelectionChange.mock.lastCall?.[0]).toEqual(publishedRange);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      editor.unmount();
+    }
+  });
+
   it("keeps the source selection at the deletion point after rich prose deletion", async () => {
     const doc = [
       "Alpha bravo charlie delta.",

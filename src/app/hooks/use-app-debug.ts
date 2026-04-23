@@ -209,7 +209,7 @@ export function useAppDebug({
     const handle = getEditorHandle();
     if (handle) {
       const plan = planMarkdownFormat(
-        getCurrentDocText(),
+        handle.getDoc(),
         handle.getSelection(),
         detail,
       );

@@ -7,6 +7,7 @@ import {
   $isElementNode,
   $isNodeSelection,
   $isRangeSelection,
+  $isTextNode,
   $setSelection,
   CLICK_COMMAND,
   UNDO_COMMAND,
@@ -505,6 +506,72 @@ describe("StructureEditProvider selection ownership", () => {
 });
 
 describe("__editor selection bridge (rich mode)", () => {
+  it("publishes live rich caret movement with source offsets", async () => {
+    const onSelectionChange = vi.fn();
+    const editor = await mountEditor({ doc: "Alpha Beta", onSelectionChange });
+
+    try {
+      onSelectionChange.mockClear();
+      act(() => {
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected text node");
+          }
+          text.select(3, 3);
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(onSelectionChange).toHaveBeenLastCalledWith({
+          anchor: 3,
+          focus: 3,
+          from: 3,
+          to: 3,
+        });
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
+  it("publishes live rich range selections with source offsets", async () => {
+    const onSelectionChange = vi.fn();
+    const editor = await mountEditor({ doc: "Alpha Beta", onSelectionChange });
+
+    try {
+      onSelectionChange.mockClear();
+      act(() => {
+        editor.editor.update(() => {
+          const paragraph = $getRoot().getFirstChild();
+          if (!$isElementNode(paragraph)) {
+            throw new Error("expected paragraph");
+          }
+          const text = paragraph.getFirstChild();
+          if (!$isTextNode(text)) {
+            throw new Error("expected text node");
+          }
+          text.select(6, 10);
+        }, { discrete: true });
+      });
+
+      await waitFor(() => {
+        expect(onSelectionChange).toHaveBeenLastCalledWith({
+          anchor: 6,
+          focus: 10,
+          from: 6,
+          to: 10,
+        });
+      });
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("setSelection moves the Lexical selection for a prose document with no tagged blocks", async () => {
     const editor = await mountEditor({ doc: "plain prose only" });
 
