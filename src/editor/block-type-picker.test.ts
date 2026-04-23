@@ -123,6 +123,10 @@ function triggerThirdColon(view: EditorView): boolean {
   return handled;
 }
 
+function waitForTick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 afterEach(() => {
   for (const v of views) v.destroy();
   views.length = 0;
@@ -429,7 +433,7 @@ describe("picker UI", () => {
     const handled = triggerThirdColon(view);
     expect(handled).toBe(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForTick();
 
     expect(isPickerVisible()).toBe(true);
     const picker = document.querySelector(".cf-block-picker");
@@ -445,8 +449,64 @@ describe("picker UI", () => {
       cancelable: true,
     }));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForTick();
 
     expect(isPickerVisible()).toBe(false);
+  });
+
+  it("closes cleanly when picker coordinates are unavailable", async () => {
+    const view = makePickerUiView("");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    view.coordsAtPos = () => null;
+
+    try {
+      const handled = triggerThirdColon(view);
+      expect(handled).toBe(true);
+
+      await waitForTick();
+
+      expect(isPickerVisible()).toBe(false);
+      const picker = document.querySelector(".cf-block-picker");
+      expect(picker?.querySelector("[cmdk-root]")).toBeNull();
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("resets picker state across rapid reopen", async () => {
+    const firstView = makePickerUiView("");
+    const secondView = makePickerUiView("");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    stubCoordsAtPos(firstView);
+    stubCoordsAtPos(secondView);
+
+    try {
+      expect(triggerThirdColon(firstView)).toBe(true);
+      await waitForTick();
+
+      const picker = document.querySelector(".cf-block-picker");
+      const firstInput = picker?.querySelector(".cf-block-picker-input") as HTMLInputElement | null;
+      expect(firstInput).not.toBeNull();
+      if (!firstInput) throw new Error("expected the first picker input to exist");
+      firstInput.value = "zzz";
+      firstInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitForTick();
+      expect(firstInput?.value).toBe("zzz");
+
+      expect(triggerThirdColon(secondView)).toBe(true);
+      await waitForTick();
+
+      const reopenedPicker = document.querySelector(".cf-block-picker");
+      const reopenedInput = reopenedPicker?.querySelector(
+        ".cf-block-picker-input",
+      ) as HTMLInputElement | null;
+      expect(reopenedInput).not.toBeNull();
+      expect(reopenedInput?.value).toBe("");
+      expect(document.querySelectorAll("[cmdk-root]")).toHaveLength(1);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

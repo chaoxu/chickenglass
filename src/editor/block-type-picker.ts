@@ -151,11 +151,7 @@ interface BlockPickerMenuProps {
   readonly onClose: () => void;
 }
 
-function BlockPickerMenu({
-  entries,
-  onSelect,
-  onClose,
-}: BlockPickerMenuProps) {
+function BlockPickerMenu({ entries, onSelect, onClose }: BlockPickerMenuProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useLayoutEffect(() => {
@@ -217,9 +213,14 @@ function BlockPickerMenu({
 }
 
 function renderPickerMenu(props: BlockPickerMenuProps | null): void {
-  if (!pickerRoot && props === null) return;
+  if (props === null) {
+    if (!pickerRoot) return;
+    pickerRoot.unmount();
+    pickerRoot = null;
+    return;
+  }
   flushSync(() => {
-    getPickerRoot().render(props === null ? null : createElement(BlockPickerMenu, props));
+    getPickerRoot().render(createElement(BlockPickerMenu, props));
   });
 }
 
@@ -248,6 +249,12 @@ function showPicker(
     view,
     ancestorFences,
   };
+  const coords = view.coordsAtPos(lineFrom);
+  if (!coords) {
+    hidePicker();
+    return;
+  }
+
   renderPickerMenu({
     entries,
     onSelect: (blockType) => {
@@ -259,13 +266,6 @@ function showPicker(
       view.focus();
     },
   });
-
-  // Position using a virtual anchor at the cursor position
-  const coords = view.coordsAtPos(lineFrom);
-  if (!coords) {
-    hidePicker();
-    return;
-  }
 
   const virtualAnchor = {
     getBoundingClientRect: () => ({
