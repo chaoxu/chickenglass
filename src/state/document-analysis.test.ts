@@ -5,11 +5,39 @@ import {
   getFrontendPerfSnapshot,
 } from "../lib/perf";
 import { createEditorState } from "../test-utils";
-import { documentAnalysisField } from "./document-analysis";
+import {
+  documentAnalysisField,
+  editorStateTextSource,
+} from "./document-analysis";
 
 describe("documentAnalysisField perf spans", () => {
   beforeEach(() => {
     clearFrontendPerf();
+  });
+
+  it("records create and syntax-tree spans for initial analysis", () => {
+    const state = createEditorState("# Alpha\n\nBody\n", {
+      extensions: [markdown(), documentAnalysisField],
+    });
+    void state.field(documentAnalysisField);
+
+    const spanNames = getFrontendPerfSnapshot().recent.map((record) => record.name);
+    expect(spanNames).toContain("cm6.documentAnalysis.create");
+    expect(spanNames).toContain("cm6.documentAnalysis.ensureSyntaxTree");
+  });
+
+  it("records text materialization after repeated text-source slices", () => {
+    const state = createEditorState("# Alpha\n\nBody\n", {
+      extensions: [markdown()],
+    });
+    const source = editorStateTextSource(state);
+
+    for (let i = 0; i < 8; i += 1) {
+      source.slice(0, source.length);
+    }
+
+    const spanNames = getFrontendPerfSnapshot().recent.map((record) => record.name);
+    expect(spanNames).toContain("cm6.documentAnalysis.text.materialize");
   });
 
   it("records update and slice merge spans for semantic updates", () => {

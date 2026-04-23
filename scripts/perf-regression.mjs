@@ -1031,6 +1031,22 @@ export const scenarios = {
       );
     },
   },
+  "open-cogirth-main2": {
+    description: "Reload the app and open fixtures/cogirth/main2.md in Rich mode, falling back to demo/index.md when the private fixture is unavailable.",
+    defaultSettleMs: 700,
+    run: async (page, runtimeOptions) => {
+      const fixture = resolveFixtureDocumentWithFallback(
+        SCROLL_FIXTURE,
+        PUBLIC_SCROLL_FALLBACK,
+      );
+      await openFixtureDocument(page, fixture, {
+        mode: "cm6-rich",
+        project: "full-project",
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+        settleMs: runtimeOptions.postOpenSettleMs,
+      });
+    },
+  },
   "mode-cycle-index": {
     description: "Reload the app, open demo/index.md, then cycle Source/Lexical/CM6 Rich.",
     defaultSettleMs: 500,

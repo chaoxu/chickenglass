@@ -134,6 +134,15 @@ describe("perf regression scenarios", () => {
     }
   });
 
+  it("registers a heavy cogirth open scenario for document-analysis open work", () => {
+    expect(scenarios["open-cogirth-main2"]).toMatchObject({
+      defaultSettleMs: 700,
+    });
+    expect(scenarios["open-cogirth-main2"].description).toContain(
+      "fixtures/cogirth/main2.md",
+    );
+  });
+
   it("emits the required typing metrics for each document position", () => {
     const metrics = typingBurstMetrics("index", "after_frontmatter", {
       wallMs: 120,
