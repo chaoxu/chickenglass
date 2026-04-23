@@ -1,18 +1,25 @@
-import { type Text } from "@codemirror/state";
+import { syntaxTree } from "@codemirror/language";
+import { type EditorState } from "@codemirror/state";
 import { type EditorView, ViewPlugin } from "@codemirror/view";
-import { CSS } from "../constants/css-classes";
 import {
   type TableRange,
   findTablesInState,
 } from "../state/table-discovery";
-import { resolveLiveWidgetSourceRange } from "../render/source-widget";
+import { documentAnalysisField } from "../state/document-analysis";
+import { frontmatterField } from "../state/frontmatter-state";
+import {
+  isStandaloneImageLine,
+  readMarkdownImageContent,
+} from "../state/markdown-image";
+
+export type HiddenWidgetStopKind = "frontmatter" | "display-math" | "block-image";
 
 export interface HiddenWidgetStop {
+  readonly kind: HiddenWidgetStopKind;
   readonly from: number;
   readonly to: number;
   readonly startLine: number;
   readonly endLine: number;
-  readonly element: HTMLElement;
 }
 
 export interface TableStopCandidate {
@@ -30,156 +37,96 @@ export interface WidgetStopIndex {
   readonly tableStopsBySpan: readonly TableStopCandidate[];
 }
 
-interface CachedWidgetStopIndex {
-  doc: Text;
-  visibleKey: string;
-  dirty: boolean;
-  observer: MutationObserver | null;
-  index: WidgetStopIndex;
-}
-
-interface VisibleRange {
+export interface NavigationStopQueryRange {
   readonly from: number;
   readonly to: number;
 }
 
-const emptyWidgetStopIndex: WidgetStopIndex = {
-  hiddenStopsForward: [],
-  hiddenStopsBackward: [],
-  hiddenStopsBySpan: [],
-  tableStopsForward: [],
-  tableStopsBackward: [],
-  tableStopsBySpan: [],
-};
-
-const widgetStopIndexCache = new WeakMap<EditorView, CachedWidgetStopIndex>();
+const widgetStopIndexCache = new WeakMap<EditorState, WidgetStopIndex>();
 
 export const widgetStopIndexCleanupExtension = ViewPlugin.fromClass(class {
-  constructor(readonly view: EditorView) {}
+  constructor(readonly _view: EditorView) {}
 
   destroy(): void {
-    disposeWidgetStopIndex(this.view);
+    // State-keyed canonical indexes are held in a WeakMap and need no DOM cleanup.
   }
 });
 
-function visibleRangesKey(
-  view: EditorView,
-  extraRanges: readonly VisibleRange[],
-): string {
-  const ranges = view.visibleRanges.length > 0
-    ? view.visibleRanges
-    : [view.viewport];
-  return [...ranges, ...extraRanges].map((range) => `${range.from}:${range.to}`).join("|");
-}
-
-function currentVisibleRanges(
-  view: EditorView,
-  extraRanges: readonly VisibleRange[],
-): readonly VisibleRange[] {
-  const ranges = view.visibleRanges.length > 0 ? view.visibleRanges : [view.viewport];
-  return [...ranges, ...extraRanges];
-}
-
-function rangeOverlapsVisibleRanges(
+function hiddenStopFromRange(
+  state: EditorState,
+  kind: HiddenWidgetStopKind,
   from: number,
   to: number,
-  ranges: readonly VisibleRange[],
-): boolean {
-  for (const range of ranges) {
-    if (to < range.from) continue;
-    if (from > range.to) continue;
-    return true;
-  }
-  return false;
+): HiddenWidgetStop | null {
+  const safeFrom = Math.max(0, Math.min(from, state.doc.length));
+  const safeTo = Math.max(safeFrom, Math.min(to, state.doc.length));
+  if (safeTo < safeFrom) return null;
+  const endPos = safeTo > safeFrom ? safeTo - 1 : safeFrom;
+  return {
+    kind,
+    from: safeFrom,
+    to: safeTo,
+    startLine: state.doc.lineAt(safeFrom).number,
+    endLine: state.doc.lineAt(endPos).number,
+  };
 }
 
-function parseWidgetSourcePos(value: string | undefined): number | null {
-  if (!value) return null;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) ? parsed : null;
+function collectFrontmatterStop(state: EditorState): HiddenWidgetStop | null {
+  const frontmatter = state.field(frontmatterField, false);
+  if (!frontmatter || frontmatter.end <= 0) return null;
+  return hiddenStopFromRange(state, "frontmatter", 0, frontmatter.end);
 }
 
-function isInlineVerticalMotionStopElement(
-  el: HTMLElement,
-): boolean {
-  return el.classList.contains(CSS.mathInline) ||
-    el.classList.contains(CSS.crossref) ||
-    el.classList.contains(CSS.citation) ||
-    el.classList.contains(CSS.linkRendered) ||
-    el.classList.contains(CSS.referenceSource) ||
-    el.classList.contains(CSS.mathSource) ||
-    el.classList.contains(CSS.sourceDelimiter) ||
-    el.classList.contains(CSS.inlineEditor) ||
-    el.classList.contains(CSS.footnoteInline);
+function collectDisplayMathStops(state: EditorState): readonly HiddenWidgetStop[] {
+  const analysis = state.field(documentAnalysisField, false);
+  if (!analysis) return [];
+  return analysis.analysis.mathRegions
+    .filter((region) => region.isDisplay)
+    .map((region) => hiddenStopFromRange(state, "display-math", region.from, region.to))
+    .filter((stop): stop is HiddenWidgetStop => stop !== null);
 }
 
-function readWidgetSourceRange(
-  view: EditorView,
-  el: HTMLElement,
-): { readonly from: number; readonly to: number } | null {
-  const liveRange = resolveLiveWidgetSourceRange(view, el);
-  if (liveRange) return liveRange;
-
-  const from = parseWidgetSourcePos(el.dataset.sourceFrom);
-  const to = parseWidgetSourcePos(el.dataset.sourceTo);
-  if (from === null || to === null || from < 0 || to < from) return null;
-  return { from, to };
-}
-
-function collectHiddenWidgetStops(
-  view: EditorView,
-  visibleRanges: readonly VisibleRange[],
-): readonly HiddenWidgetStop[] {
+function collectBlockImageStops(state: EditorState): readonly HiddenWidgetStop[] {
   const seen = new Set<string>();
   const stops: HiddenWidgetStop[] = [];
-  const doc = view.state.doc;
-
-  for (const el of view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from][data-source-to]")) {
-    if (isInlineVerticalMotionStopElement(el)) continue;
-
-    const range = readWidgetSourceRange(view, el);
-    if (!range) continue;
-    const from = Math.min(range.from, doc.length);
-    const to = Math.min(range.to, doc.length);
-    if (to < from || !rangeOverlapsVisibleRanges(from, to, visibleRanges)) continue;
-
-    const key = `${from}:${to}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const endPos = to > from ? to - 1 : from;
-    stops.push({
-      from,
-      to,
-      startLine: doc.lineAt(from).number,
-      endLine: doc.lineAt(endPos).number,
-      element: el,
-    });
-  }
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name !== "Image") return;
+      if (!readMarkdownImageContent(state, node.node)) return;
+      if (!isStandaloneImageLine(state, node.from, node.to)) return;
+      const key = `${node.from}:${node.to}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      const stop = hiddenStopFromRange(state, "block-image", node.from, node.to);
+      if (stop) stops.push(stop);
+      return false;
+    },
+  });
 
   return stops;
 }
 
 function collectTableStops(
-  view: EditorView,
-  visibleRanges: readonly VisibleRange[],
+  state: EditorState,
 ): readonly TableStopCandidate[] {
-  return findTablesInState(view.state)
-    .filter((table) => rangeOverlapsVisibleRanges(table.from, table.to, visibleRanges))
+  return findTablesInState(state)
     .map((table) => ({
       table,
       startLine: table.startLineNumber,
-      endLine: view.state.doc.lineAt(Math.max(table.from, table.to - 1)).number,
+      endLine: state.doc.lineAt(Math.max(table.from, table.to - 1)).number,
     }));
 }
 
 function buildWidgetStopIndex(
-  view: EditorView,
-  extraRanges: readonly VisibleRange[],
+  state: EditorState,
 ): WidgetStopIndex {
-  const visibleRanges = currentVisibleRanges(view, extraRanges);
-  const hiddenStops = collectHiddenWidgetStops(view, visibleRanges);
-  const tableStops = collectTableStops(view, visibleRanges);
+  const frontmatterStop = collectFrontmatterStop(state);
+  const hiddenStops = [
+    ...(frontmatterStop ? [frontmatterStop] : []),
+    ...collectDisplayMathStops(state),
+    ...collectBlockImageStops(state),
+  ];
+  const tableStops = collectTableStops(state);
 
   return {
     hiddenStopsForward: [...hiddenStops].sort((left, right) => {
@@ -213,58 +160,21 @@ function buildWidgetStopIndex(
   };
 }
 
-function ensureDomObserver(
-  view: EditorView,
-  cached: CachedWidgetStopIndex,
-): void {
-  if (cached.observer || typeof MutationObserver === "undefined") return;
-
-  const observer = new MutationObserver((mutations) => {
-    if (mutations.some((mutation) => mutation.type === "childList")) {
-      cached.dirty = true;
-    }
-  });
-  observer.observe(view.contentDOM, { childList: true, subtree: true });
-  cached.observer = observer;
-}
-
 export function disposeWidgetStopIndex(view: EditorView): void {
-  const cached = widgetStopIndexCache.get(view);
-  cached?.observer?.disconnect();
-  widgetStopIndexCache.delete(view);
+  // Compatibility hook for callers that previously disposed DOM observers.
+  // The canonical index is keyed by EditorState and is garbage-collected.
+  void view;
 }
 
 export function getWidgetStopIndex(
   view: EditorView,
-  extraRanges: readonly VisibleRange[] = [],
+  _extraRanges: readonly NavigationStopQueryRange[] = [],
 ): WidgetStopIndex {
-  if (!view.dom.isConnected) return emptyWidgetStopIndex;
-
-  const cached = widgetStopIndexCache.get(view);
-  const visibleKey = visibleRangesKey(view, extraRanges);
-  if (
-    cached &&
-    !cached.dirty &&
-    cached.doc === view.state.doc &&
-    cached.visibleKey === visibleKey
-  ) {
-    return cached.index;
-  }
-
-  const nextCached: CachedWidgetStopIndex = cached ?? {
-    doc: view.state.doc,
-    visibleKey,
-    dirty: false,
-    observer: null,
-    index: emptyWidgetStopIndex,
-  };
-  nextCached.doc = view.state.doc;
-  nextCached.visibleKey = visibleKey;
-  nextCached.dirty = false;
-  nextCached.index = buildWidgetStopIndex(view, extraRanges);
-  ensureDomObserver(view, nextCached);
-  widgetStopIndexCache.set(view, nextCached);
-  return nextCached.index;
+  const cached = widgetStopIndexCache.get(view.state);
+  if (cached) return cached;
+  const index = buildWidgetStopIndex(view.state);
+  widgetStopIndexCache.set(view.state, index);
+  return index;
 }
 
 export function firstHiddenWidgetStopBetweenLines(

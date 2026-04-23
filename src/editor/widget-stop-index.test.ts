@@ -1,30 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
 import { type TableRange } from "../state/table-discovery";
 import { createTestView } from "../test-utils";
+import { createMarkdownLanguageExtensions } from "./base-editor-extensions";
 import {
-  disposeWidgetStopIndex,
   type HiddenWidgetStop,
+  type HiddenWidgetStopKind,
   type WidgetStopIndex,
   firstHiddenWidgetStopBetweenLines,
   getWidgetStopIndex,
   firstTableStopBetweenLines,
   hiddenWidgetStopAtPos,
   tableStopAtPos,
-  widgetStopIndexCleanupExtension,
 } from "./widget-stop-index";
+import { frontmatterField } from "./frontmatter-state";
+import { documentAnalysisField } from "../state/document-analysis";
+import { tableDiscoveryField } from "../state/table-discovery";
 
 function hiddenStop(
   from: number,
   to: number,
   startLine: number,
   endLine: number,
+  kind: HiddenWidgetStopKind = "display-math",
 ): HiddenWidgetStop {
   return {
+    kind,
     from,
     to,
     startLine,
     endLine,
-    element: document.createElement("div"),
   };
 }
 
@@ -113,52 +117,131 @@ describe("widget stop index queries", () => {
     expect(tableStopAtPos(index, 210)).toBe(secondTable);
   });
 
-  it("disconnects the DOM observer when the editor view is destroyed", () => {
-    const originalMutationObserver = globalThis.MutationObserver;
-    const globalWithMutationObserver = globalThis as typeof globalThis & {
-      MutationObserver?: typeof MutationObserver;
-    };
-    const instances: Array<{
-      observe: ReturnType<typeof vi.fn>;
-      disconnect: ReturnType<typeof vi.fn>;
-    }> = [];
-    const FakeMutationObserver = class {
-      observe = vi.fn();
-      disconnect = vi.fn();
-      takeRecords = () => [];
-
-      constructor() {
-        instances.push(this);
-      }
-    } as unknown as typeof MutationObserver;
-    globalWithMutationObserver.MutationObserver = FakeMutationObserver;
-
-    const view = createTestView("hello", {
-      extensions: widgetStopIndexCleanupExtension,
+  it("builds frontmatter stops from state without rendered DOM widgets", () => {
+    const view = createTestView("---\ntitle: Demo\n---\n\nBody", {
+      extensions: [frontmatterField],
       focus: false,
     });
 
     try {
-      const observerCountBeforeIndex = instances.length;
+      const stop = getWidgetStopIndex(view).hiddenStopsForward[0];
+
+      expect(stop).toMatchObject({
+        kind: "frontmatter",
+        from: 0,
+        startLine: 1,
+        endLine: 3,
+      });
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("builds offscreen display-math stops from semantic state", () => {
+    const doc = [
+      "# Start",
+      ...Array.from({ length: 80 }, (_, index) => `line ${index + 1}`),
+      "$$",
+      "x^2",
+      "$$",
+      "after",
+    ].join("\n");
+    const view = createTestView(doc, {
+      extensions: [...createMarkdownLanguageExtensions(), documentAnalysisField],
+      focus: false,
+    });
+
+    try {
+      const stop = getWidgetStopIndex(view).hiddenStopsForward.find((candidate) =>
+        candidate.kind === "display-math"
+      );
+
+      expect(stop).toBeDefined();
+      expect(stop?.startLine).toBe(82);
+      expect(stop?.endLine).toBe(84);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("maps canonical stops through document edits by rebuilding from the next EditorState", () => {
+    const doc = ["before", "$$", "x", "$$"].join("\n");
+    const view = createTestView(doc, {
+      extensions: [...createMarkdownLanguageExtensions(), documentAnalysisField],
+      focus: false,
+    });
+
+    try {
+      const before = getWidgetStopIndex(view).hiddenStopsForward.find((candidate) =>
+        candidate.kind === "display-math"
+      );
+      view.dispatch({ changes: { from: 0, insert: "inserted\n" } });
+      const after = getWidgetStopIndex(view).hiddenStopsForward.find((candidate) =>
+        candidate.kind === "display-math"
+      );
+
+      expect(before?.from).toBe("before\n".length);
+      expect(after?.from).toBe("inserted\nbefore\n".length);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("builds block image and table stops from parser/state instead of data-source DOM", () => {
+    const doc = [
+      "![Alt](image.png)",
+      "",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+    ].join("\n");
+    const view = createTestView(doc, {
+      extensions: [...createMarkdownLanguageExtensions(), tableDiscoveryField],
+      focus: false,
+    });
+
+    try {
+      const index = getWidgetStopIndex(view);
+      const imageStop = index.hiddenStopsForward.find((candidate) =>
+        candidate.kind === "block-image"
+      );
+
+      expect(imageStop).toMatchObject({
+        from: 0,
+        to: "![Alt](image.png)".length,
+        startLine: 1,
+        endLine: 1,
+      });
+      expect(index.tableStopsForward[0]?.startLine).toBe(3);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("does not create a MutationObserver or scan data-source DOM as the primary index", () => {
+    const view = createTestView("![Alt](image.png)", {
+      extensions: [...createMarkdownLanguageExtensions()],
+      focus: false,
+    });
+    const originalMutationObserver = globalThis.MutationObserver;
+    const observer = vi.fn();
+    Object.defineProperty(globalThis, "MutationObserver", {
+      configurable: true,
+      value: observer,
+    });
+    const query = vi.spyOn(view.contentDOM, "querySelectorAll");
+
+    try {
       getWidgetStopIndex(view);
 
-      const [widgetObserver] = instances.slice(observerCountBeforeIndex);
-      expect(widgetObserver).toBeDefined();
-      expect(widgetObserver?.observe).toHaveBeenCalledWith(view.contentDOM, {
-        childList: true,
-        subtree: true,
-      });
-
-      view.destroy();
-
-      expect(widgetObserver?.disconnect).toHaveBeenCalledTimes(1);
+      expect(observer).not.toHaveBeenCalled();
+      expect(query).not.toHaveBeenCalledWith("[data-source-from][data-source-to]");
     } finally {
-      disposeWidgetStopIndex(view);
-      if (originalMutationObserver) {
-        globalWithMutationObserver.MutationObserver = originalMutationObserver;
-      } else {
-        Reflect.deleteProperty(globalWithMutationObserver, "MutationObserver");
-      }
+      view.destroy();
+      Object.defineProperty(globalThis, "MutationObserver", {
+        configurable: true,
+        value: originalMutationObserver,
+      });
     }
   });
 });

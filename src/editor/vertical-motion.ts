@@ -1,8 +1,6 @@
 import { EditorSelection, type SelectionRange } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
-import { CSS } from "../constants/css-classes";
 import { getLineElement } from "../render/render-core";
-import { documentAnalysisField } from "../state/document-analysis";
 import { type TableRange } from "../state/table-discovery";
 import { appendDebugTimelineEvent } from "./debug-timeline";
 import {
@@ -259,53 +257,6 @@ function activateTableStop(
     : view.state.doc.lineAt(Math.max(table.from, table.to - 1)).number;
 }
 
-function activateDisplayMathStopBetweenLines(
-  view: EditorView,
-  fromLine: number,
-  targetLine: number,
-  forward: boolean,
-): number | null {
-  const hiddenLineStart = Math.min(fromLine, targetLine) + 1;
-  const hiddenLineEnd = Math.max(fromLine, targetLine) - 1;
-  if (hiddenLineStart > hiddenLineEnd) return null;
-
-  const analysis = view.state.field(documentAnalysisField, false);
-  if (!analysis) return null;
-
-  const matching = analysis.mathRegions
-    .filter((region) => region.isDisplay)
-    .map((region) => ({
-      region,
-      startLine: view.state.doc.lineAt(region.from).number,
-      endLine: view.state.doc.lineAt(region.to).number,
-    }))
-    .filter((candidate) =>
-      candidate.endLine >= hiddenLineStart && candidate.startLine <= hiddenLineEnd
-    );
-
-  if (matching.length === 0) return null;
-
-  matching.sort((left, right) => {
-    if (forward) {
-      if (left.startLine !== right.startLine) return left.startLine - right.startLine;
-      return left.region.from - right.region.from;
-    }
-    if (left.endLine !== right.endLine) return right.endLine - left.endLine;
-    return right.region.to - left.region.to;
-  });
-
-  const chosen = matching[0]?.region;
-  if (!chosen) return null;
-
-  const probePos = forward ? chosen.contentFrom : chosen.contentTo;
-  const target = createStructureEditTargetAt(view.state, probePos);
-  if (target?.kind !== "display-math") return null;
-
-  const anchor = forward ? target.contentFrom : target.contentTo;
-  if (!activateStructureEditTarget(view, target, anchor)) return null;
-  return view.state.doc.lineAt(anchor).number;
-}
-
 function activateHiddenWidgetStop(
   view: EditorView,
   stop: HiddenWidgetStop,
@@ -322,14 +273,6 @@ function activateHiddenWidgetStop(
   }
   if (target && activateStructureEditAt(view, targetPos)) {
     return view.state.doc.lineAt(view.state.selection.main.head).number;
-  }
-
-  if (dispatchWidgetKeyboardEntry(stop.element, {
-    direction: forward ? "down" : "up",
-    sourceFrom: stop.from,
-    sourceTo: stop.to,
-  })) {
-    return lineForStop;
   }
 
   view.dispatch({
@@ -731,9 +674,7 @@ export function moveVerticallyInRichView(
     forward,
   );
   if (hiddenWidgetStop) {
-    const correctedTargetLine = hiddenWidgetStop.element.classList.contains(CSS.mathDisplay)
-      ? activateDisplayMathStopBetweenLines(view, before.line, rawTargetLine, forward)
-      : activateHiddenWidgetStop(view, hiddenWidgetStop, forward);
+    const correctedTargetLine = activateHiddenWidgetStop(view, hiddenWidgetStop, forward);
     if (correctedTargetLine !== null) {
       recordVerticalMotionGuardEvent(view, {
         kind: "visible-line-jump",
@@ -774,9 +715,7 @@ export function moveVerticallyInRichView(
 
   const landedWidgetStop = hiddenWidgetStopAtPos(widgetStops, normalizedNextRange.head);
   if (landedWidgetStop) {
-    const correctedTargetLine = landedWidgetStop.element.classList.contains(CSS.mathDisplay)
-      ? activateDisplayMathStopBetweenLines(view, before.line, rawTargetLine, forward)
-      : activateHiddenWidgetStop(view, landedWidgetStop, forward);
+    const correctedTargetLine = activateHiddenWidgetStop(view, landedWidgetStop, forward);
     if (correctedTargetLine !== null) {
       recordVerticalMotionGuardEvent(view, {
         kind: "visible-line-jump",

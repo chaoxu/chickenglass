@@ -6,6 +6,16 @@ export interface MarkdownImageContent {
   readonly src: string;
 }
 
+export function isStandaloneImageLine(
+  state: EditorState,
+  from: number,
+  to: number,
+): boolean {
+  const line = state.doc.lineAt(from);
+  const imageText = state.sliceDoc(from, to);
+  return line.text.trim() === imageText;
+}
+
 export function readMarkdownImageContent(
   state: EditorState,
   node: SyntaxNode,

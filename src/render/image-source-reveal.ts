@@ -8,20 +8,12 @@ import type { Decoration } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { editorFocusField } from "./focus-state";
 import { addInlineRevealSourceMetricsInSubtree } from "./markdown-inline-source";
+import { isStandaloneImageLine } from "../state/markdown-image";
+export { isStandaloneImageLine } from "../state/markdown-image";
 
 export interface ActiveImageSourceTarget {
   readonly from: number;
   readonly to: number;
-}
-
-export function isStandaloneImageLine(
-  state: EditorState,
-  from: number,
-  to: number,
-): boolean {
-  const line = state.doc.lineAt(from);
-  const imageText = state.sliceDoc(from, to);
-  return line.text.trim() === imageText;
 }
 
 export function activeSourceTargetsEqual(

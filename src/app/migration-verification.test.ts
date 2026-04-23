@@ -1426,6 +1426,20 @@ describe("#1370 — shared editor hit-testing policy", () => {
   });
 });
 
+describe("#1367 — canonical navigation stops", () => {
+  it("keeps vertical-motion stops state-derived instead of DOM-scanned", () => {
+    const stopIndex = fileText("src/editor/widget-stop-index.ts");
+    const verticalMotion = fileText("src/editor/vertical-motion.ts");
+
+    expect(stopIndex).toContain("WeakMap<EditorState, WidgetStopIndex>");
+    expect(stopIndex).toContain('"frontmatter" | "display-math" | "block-image"');
+    expect(stopIndex).not.toContain('querySelectorAll<HTMLElement>("[data-source-from][data-source-to]")');
+    expect(stopIndex).not.toContain("MutationObserver");
+    expect(stopIndex).not.toContain("readonly element");
+    expect(verticalMotion).not.toContain("CSS.mathDisplay");
+  });
+});
+
 describe("#315 — editor session subsystem", () => {
   it("extracts the editor session model and pure session actions", () => {
     expect(fileExists("src/app/editor-session-model.ts")).toBe(true);
