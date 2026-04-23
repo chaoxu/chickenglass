@@ -2,6 +2,7 @@ import { EditorView } from "@codemirror/view";
 import {
   createInlineEditorController,
 } from "../inline-editor";
+import { coarseHitTestPosition, preciseHitTestPosition } from "../lib/editor-hit-test";
 import type { InlineReferenceRenderContext } from "./inline-render";
 import { showWidgetContextMenu, applyTableMutation } from "./table-actions";
 import {
@@ -563,15 +564,16 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
       if (useClickPlacement) {
         requestAnimationFrame(() => {
           if (getActiveInlineEditor()?.view !== editorView) return;
-          const pos = editorView.posAtCoords({ x: clickX, y: clickY });
-          if (pos !== null) {
-            applyInitialSelection(pos);
+          const point = { x: clickX, y: clickY };
+          const precise = preciseHitTestPosition(editorView, point);
+          if (precise) {
+            applyInitialSelection(precise.pos);
             return;
           }
 
-          const coarsePos = editorView.posAtCoords({ x: clickX, y: clickY }, false);
-          if (coarsePos !== null) {
-            applyInitialSelection(coarsePos);
+          const coarse = coarseHitTestPosition(editorView, point);
+          if (coarse) {
+            applyInitialSelection(coarse.pos);
             return;
           }
 

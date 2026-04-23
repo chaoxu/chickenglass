@@ -1,4 +1,5 @@
 import { EditorView } from "@codemirror/view";
+import { preciseHitTestPosition } from "../lib/editor-hit-test";
 import { containsPos } from "../lib/range-helpers";
 import { getCellBounds } from "./table-cell-geometry";
 import { findPipePositions } from "./table-discovery";
@@ -43,7 +44,7 @@ export function guardTableGridMousePosition(
   const cell = getCellBounds(cellLine, pipes).find((candidate) => candidate.col === col);
   if (!cell) return null;
 
-  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  const pos = preciseHitTestPosition(view, { x: event.clientX, y: event.clientY })?.pos ?? null;
   if (pos !== null && containsPos(cell, pos)) return null;
 
   return cell.to;

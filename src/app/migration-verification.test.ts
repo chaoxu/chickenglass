@@ -1415,6 +1415,17 @@ describe("#1363 — CM6 rich render composition root", () => {
   });
 });
 
+describe("#1370 — shared editor hit-testing policy", () => {
+  it("routes rich selection, table guards, and debug capture through one hit-test helper", () => {
+    expect(fileExists("src/lib/editor-hit-test.ts")).toBe(true);
+    expect(importsModule("src/editor/rich-mouse-selection.ts", "../lib/editor-hit-test")).toBe(true);
+    expect(importsModule("src/editor/debug-panel.ts", "../lib/editor-hit-test")).toBe(true);
+    expect(importsModule("src/render/table-grid-click-guard.ts", "../lib/editor-hit-test")).toBe(true);
+    expect(importsModule("src/render/table-render.ts", "../lib/editor-hit-test")).toBe(true);
+    expect(importsModule("src/render/table-widget.ts", "../lib/editor-hit-test")).toBe(true);
+  });
+});
+
 describe("#315 — editor session subsystem", () => {
   it("extracts the editor session model and pure session actions", () => {
     expect(fileExists("src/app/editor-session-model.ts")).toBe(true);

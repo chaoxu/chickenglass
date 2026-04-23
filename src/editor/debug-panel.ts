@@ -1,6 +1,10 @@
 import { Transaction, type Extension, type Text } from "@codemirror/state";
 import { type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import type { FencedDivInfo } from "../fenced-block/model";
+import {
+  editorElementFromPoint,
+  editorHitTestSnapshot,
+} from "../lib/editor-hit-test";
 import { frontmatterField } from "./frontmatter-state";
 import { getActiveStructureEditTarget } from "../state/cm-structure-edit";
 import { getVerticalMotionGuardEvents } from "./vertical-motion";
@@ -62,83 +66,6 @@ function caretDetail(view: EditorView, pos: number): {
     top: coords.top,
     bottom: coords.bottom,
   };
-}
-
-function safePosAtDOM(
-  view: EditorView,
-  node: Node,
-  offset: number,
-): number | null {
-  try {
-    return view.posAtDOM(node, offset);
-  } catch (_error) {
-    return null;
-  }
-}
-
-function lineBoundaryInfo(
-  view: EditorView,
-  target: EventTarget | null,
-): {
-  readonly lineFromPos: number | null;
-  readonly lineFromLine: number | null;
-  readonly lineToPos: number | null;
-  readonly lineToLine: number | null;
-} {
-  const line = target instanceof HTMLElement
-    ? target.closest<HTMLElement>(".cm-line")
-    : null;
-  if (!line) {
-    return {
-      lineFromPos: null,
-      lineFromLine: null,
-      lineToPos: null,
-      lineToLine: null,
-    };
-  }
-
-  const lineFromPos = safePosAtDOM(view, line, 0);
-  const lineToPos = safePosAtDOM(view, line, line.childNodes.length) ?? lineFromPos;
-  return {
-    lineFromPos,
-    lineFromLine: lineFromPos === null ? null : view.state.doc.lineAt(lineFromPos).number,
-    lineToPos,
-    lineToLine: lineToPos === null ? null : view.state.doc.lineAt(lineToPos).number,
-  };
-}
-
-function domCaretPosAtPoint(
-  view: EditorView,
-  x: number,
-  y: number,
-): { readonly pos: number | null; readonly line: number | null } {
-  const doc = document as Document & {
-    caretPositionFromPoint?: (
-      x: number,
-      y: number,
-    ) => { readonly offsetNode: Node; readonly offset: number } | null;
-    caretRangeFromPoint?: (x: number, y: number) => Range | null;
-  };
-
-  const caretPosition = doc.caretPositionFromPoint?.(x, y);
-  if (caretPosition && view.contentDOM.contains(caretPosition.offsetNode)) {
-    const pos = safePosAtDOM(view, caretPosition.offsetNode, caretPosition.offset);
-    return {
-      pos,
-      line: pos === null ? null : view.state.doc.lineAt(pos).number,
-    };
-  }
-
-  const caretRange = doc.caretRangeFromPoint?.(x, y);
-  if (caretRange && view.contentDOM.contains(caretRange.startContainer)) {
-    const pos = safePosAtDOM(view, caretRange.startContainer, caretRange.startOffset);
-    return {
-      pos,
-      line: pos === null ? null : view.state.doc.lineAt(pos).number,
-    };
-  }
-
-  return { pos: null, line: null };
 }
 
 function describeBlock(view: EditorView, div: FencedDivInfo): string {
@@ -398,13 +325,12 @@ class DebugPanelView {
         x: event.clientX,
         y: event.clientY,
       };
-      const precisePos = this.view.posAtCoords(coords);
-      const imprecisePos = this.view.posAtCoords(coords, false);
-      const line = precisePos === null ? null : this.view.state.doc.lineAt(precisePos).number;
+      const hitTest = editorHitTestSnapshot(this.view, coords, event.target);
+      const precisePos = hitTest.precise?.pos ?? null;
+      const imprecisePos = hitTest.coarse?.pos ?? null;
+      const line = hitTest.precise?.line ?? null;
       const contentRect = this.view.contentDOM.getBoundingClientRect();
-      const hit = document.elementFromPoint(event.clientX, event.clientY);
-      const lineBoundary = lineBoundaryInfo(this.view, event.target);
-      const domCaret = domCaretPosAtPoint(this.view, event.clientX, event.clientY);
+      const hit = editorElementFromPoint(this.view, coords);
       appendDebugTimelineEvent(this.view, {
         timestamp: Date.now(),
         type: "pointer",
@@ -416,15 +342,15 @@ class DebugPanelView {
           editorX: event.clientX - contentRect.left,
           editorY: event.clientY - contentRect.top,
           precisePos,
-          preciseLine: precisePos === null ? null : this.view.state.doc.lineAt(precisePos).number,
+          preciseLine: hitTest.precise?.line ?? null,
           imprecisePos,
-          impreciseLine: imprecisePos === null ? null : this.view.state.doc.lineAt(imprecisePos).number,
-          domCaretPos: domCaret.pos,
-          domCaretLine: domCaret.line,
-          lineFromPos: lineBoundary.lineFromPos,
-          lineFromLine: lineBoundary.lineFromLine,
-          lineToPos: lineBoundary.lineToPos,
-          lineToLine: lineBoundary.lineToLine,
+          impreciseLine: hitTest.coarse?.line ?? null,
+          domCaretPos: hitTest.domCaret?.pos ?? null,
+          domCaretLine: hitTest.domCaret?.line ?? null,
+          lineFromPos: hitTest.lineBounds?.from ?? null,
+          lineFromLine: hitTest.lineBounds?.fromLine ?? null,
+          lineToPos: hitTest.lineBounds?.to ?? null,
+          lineToLine: hitTest.lineBounds?.toLine ?? null,
           line,
           shiftKey: event.shiftKey,
           metaKey: event.metaKey,

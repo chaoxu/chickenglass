@@ -2,6 +2,16 @@ import type { EditorSelection } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import {
+  clampToLineBounds,
+  coarseHitTestPositionAndSide,
+  domCaretHitTestPosition,
+  editorElementFromPoint,
+  editorElementsFromPoint,
+  lineBoundsForElement,
+  lineElementAtPoint,
+  type EditorLineBounds,
+} from "../lib/editor-hit-test";
+import {
   buildPointerSelection,
   isPlainPrimaryMouseEvent,
   type PointerSelectionTarget,
@@ -11,119 +21,38 @@ function isRichLikeMode(view: EditorView): boolean {
   return !view.dom.classList.contains(CSS.sourceMode);
 }
 
-function safePosAtDOM(
-  view: EditorView,
-  node: Node,
-  offset: number,
-): number | null {
-  try {
-    return view.posAtDOM(node, offset);
-  } catch (_error) {
-    return null;
-  }
-}
-
-function elementFromPoint(
-  root: Document,
-  x: number,
-  y: number,
-): Element | null {
-  const hit = root.elementFromPoint(x, y);
-  return hit;
-}
-
-function lineElementFromTarget(
-  target: EventTarget | null,
-): HTMLElement | null {
-  return target instanceof HTMLElement
-    ? target.closest<HTMLElement>(".cm-line")
-    : null;
-}
-
-function lineElementAtPoint(
-  view: EditorView,
-  x: number,
-  y: number,
-  target: EventTarget | null,
-): HTMLElement | null {
-  const fromTarget = lineElementFromTarget(target);
-  if (fromTarget) return fromTarget;
-  const fromPoint = elementFromPoint(view.dom.ownerDocument, x, y);
-  return lineElementFromTarget(fromPoint);
-}
-
-function lineBounds(
-  view: EditorView,
-  line: HTMLElement,
-): { from: number; to: number } | null {
-  const from = safePosAtDOM(view, line, 0);
-  if (from === null) return null;
-  const to = safePosAtDOM(view, line, line.childNodes.length) ?? from;
-  return { from, to };
-}
-
-function clampToLine(bounds: { from: number; to: number }, pos: number): number {
-  return Math.max(bounds.from, Math.min(bounds.to, pos));
-}
-
 function domCaretTargetAtPoint(
   view: EditorView,
   x: number,
   y: number,
   line: HTMLElement,
-  bounds: { from: number; to: number },
+  bounds: EditorLineBounds,
 ): PointerSelectionTarget | null {
-  const doc = view.dom.ownerDocument as Document & {
-    caretPositionFromPoint?: (
-      x: number,
-      y: number,
-    ) => { readonly offsetNode: Node; readonly offset: number } | null;
-    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  const hit = domCaretHitTestPosition(view, { x, y }, { within: line, bounds });
+  if (!hit) return null;
+  return {
+    pos: hit.pos,
+    assoc: hit.pos <= bounds.from ? 1 : hit.pos >= bounds.to ? -1 : 1,
   };
-
-  const caretPosition = doc.caretPositionFromPoint?.(x, y);
-  if (caretPosition && line.contains(caretPosition.offsetNode)) {
-    const pos = safePosAtDOM(view, caretPosition.offsetNode, caretPosition.offset);
-    if (pos !== null) {
-      return {
-        pos: clampToLine(bounds, pos),
-        assoc: pos <= bounds.from ? 1 : pos >= bounds.to ? -1 : 1,
-      };
-    }
-  }
-
-  const caretRange = doc.caretRangeFromPoint?.(x, y);
-  if (caretRange && line.contains(caretRange.startContainer)) {
-    const pos = safePosAtDOM(view, caretRange.startContainer, caretRange.startOffset);
-    if (pos !== null) {
-      return {
-        pos: clampToLine(bounds, pos),
-        assoc: pos <= bounds.from ? 1 : pos >= bounds.to ? -1 : 1,
-      };
-    }
-  }
-
-  return null;
 }
 
 function coordTargetAtPoint(
   view: EditorView,
   x: number,
   y: number,
-  bounds: { from: number; to: number },
+  bounds: EditorLineBounds,
 ): PointerSelectionTarget | null {
-  const resolved = view.posAndSideAtCoords({ x, y }, false);
+  const resolved = coarseHitTestPositionAndSide(view, { x, y }, bounds);
   if (!resolved) return null;
-  if (resolved.pos < bounds.from || resolved.pos > bounds.to) return null;
   return {
-    pos: clampToLine(bounds, resolved.pos),
+    pos: clampToLineBounds(bounds, resolved.pos),
     assoc: resolved.assoc,
   };
 }
 
 function fallbackTargetForLine(
   line: HTMLElement,
-  bounds: { from: number; to: number },
+  bounds: EditorLineBounds,
   x: number,
 ): PointerSelectionTarget {
   const text = (line.textContent ?? "").trim();
@@ -144,9 +73,9 @@ function resolveVisibleLineTarget(
   y: number,
   target: EventTarget | null,
 ): PointerSelectionTarget | null {
-  const line = lineElementAtPoint(view, x, y, target);
+  const line = lineElementAtPoint(view, { x, y }, target);
   if (!line) return null;
-  const bounds = lineBounds(view, line);
+  const bounds = lineBoundsForElement(view, line);
   if (!bounds) return null;
   return (
     coordTargetAtPoint(view, x, y, bounds)
@@ -173,7 +102,7 @@ function hasVisibleLineUnderPoint(
   x: number,
   y: number,
 ): boolean {
-  return view.dom.ownerDocument.elementsFromPoint(x, y)
+  return editorElementsFromPoint(view, { x, y })
     .some((element) => element instanceof HTMLElement && view.contentDOM.contains(element) && element.classList.contains("cm-line"));
 }
 
@@ -187,7 +116,7 @@ function startsOnRenderedMath(
     ? target.closest<HTMLElement>(`.${CSS.mathInline}`)
     : null;
   if (direct) return true;
-  const fromPoint = elementFromPoint(view.dom.ownerDocument, x, y);
+  const fromPoint = editorElementFromPoint(view, { x, y });
   return fromPoint instanceof HTMLElement
     ? Boolean(fromPoint.closest(`.${CSS.mathInline}`))
     : false;
@@ -203,7 +132,7 @@ function startsOnWidgetOwnedSurface(
     ? target.closest<HTMLElement>("[data-source-from]")
     : null;
   if (direct && !direct.classList.contains("cm-line")) return true;
-  const fromPoint = elementFromPoint(view.dom.ownerDocument, x, y);
+  const fromPoint = editorElementFromPoint(view, { x, y });
   return fromPoint instanceof HTMLElement
     ? Boolean(fromPoint.closest("[data-source-from]:not(.cm-line)"))
     : false;

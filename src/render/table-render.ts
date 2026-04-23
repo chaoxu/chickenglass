@@ -29,6 +29,7 @@ import {
   getTableReferenceRenderDependencySignature,
   tableReferenceRenderDependenciesChanged,
 } from "../state/reference-render-state";
+import { preciseHitTestPosition } from "../lib/editor-hit-test";
 import {
   findTableAtCursor,
   findTablesInState,
@@ -321,7 +322,7 @@ const tableDecorationField = createDecorationStateField({
 const tableContextMenuHandler: Extension = EditorView.domEventHandlers({
   contextmenu(event: MouseEvent, view: EditorView) {
     const tables = findTablesInView(view);
-    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    const pos = preciseHitTestPosition(view, { x: event.clientX, y: event.clientY })?.pos ?? null;
     if (pos === null) return false;
     const table = findTableAtCursor(tables, pos);
     if (!table) return false;
