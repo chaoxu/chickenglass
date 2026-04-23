@@ -8,7 +8,7 @@ export function domTextOffsetWithin(root: HTMLElement, node: Node, offset: numbe
   range.selectNodeContents(root);
   try {
     range.setEnd(node, offset);
-  } catch {
+  } catch (_error) {
     return null;
   }
   return range.toString().length;

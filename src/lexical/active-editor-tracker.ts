@@ -11,7 +11,7 @@ export function getActiveEditor(): LexicalEditor | null {
     let stillAttached = false;
     try {
       stillAttached = activeEditor.getRootElement()?.isConnected ?? false;
-    } catch {
+    } catch (_error) {
       stillAttached = true;
     }
     if (!stillAttached) {

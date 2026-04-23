@@ -258,7 +258,7 @@ function parseLocalEvents(): PendingEvent[] {
           && typeof (event as PendingEvent).summary === "string"
         ))
       : [];
-  } catch {
+  } catch (_error) {
     return [];
   }
 }
@@ -375,7 +375,7 @@ export async function flushDebugSessionEvents(): Promise<void> {
         disableDebugRecorderTransport();
       }
     }
-  } catch {
+  } catch (_error) {
     disableDebugRecorderTransport();
   } finally {
     flushInFlight = false;

@@ -88,7 +88,7 @@ async function discardDirtyPerfState(page) {
       }
       try {
         await app.closeFile({ discard: true });
-      } catch {
+      } catch (_error) {
         // Ignore cleanup failures — the next run will reload from scratch.
       }
     });

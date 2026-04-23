@@ -27,7 +27,7 @@ function terminateChild(child, signal = "SIGTERM") {
 
   try {
     process.kill(-child.pid, signal);
-  } catch {
+  } catch (_error) {
     child.kill(signal);
   }
 }

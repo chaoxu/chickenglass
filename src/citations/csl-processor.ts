@@ -327,7 +327,7 @@ export class CslProcessor {
         }
         return authorOnly;
       }
-    } catch {
+    } catch (_error) {
       // author-only not supported by this style — fall through to suppress-author
     }
 

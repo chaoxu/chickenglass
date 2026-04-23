@@ -44,7 +44,7 @@ function collectSourceFiles(dirs: string[]): string[] {
     const dirPath = join(SRC_ROOT, dir);
     try {
       walk(dirPath, files);
-    } catch {
+    } catch (_error) {
       // Directory may not exist.
     }
   }
@@ -56,7 +56,7 @@ function collectSourceFiles(dirs: string[]): string[] {
         files.push(full);
       }
     }
-  } catch {
+  } catch (_error) {
     // skip
   }
   return files;

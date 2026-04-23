@@ -68,7 +68,7 @@ export function ensureProfileDir(profileDir) {
     prefs.profile.exited_cleanly = true;
     prefs.profile.exit_type = "Normal";
     writeFileSync(prefsPath, JSON.stringify(prefs));
-  } catch {
+  } catch (_error) {
     writeFileSync(prefsPath, JSON.stringify({
       session: { restore_on_startup: 4, startup_urls: [] },
       profile: { exited_cleanly: true, exit_type: "Normal" },
@@ -80,7 +80,7 @@ export function ensureProfileDir(profileDir) {
 export async function connectToChrome(port) {
   try {
     return await chromium.connectOverCDP(`http://localhost:${port}`);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }
@@ -89,7 +89,7 @@ function normalizeTargetUrl(targetUrl) {
   if (!targetUrl) return null;
   try {
     return new URL(targetUrl);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }
@@ -107,7 +107,7 @@ export function scorePageCandidate(url, { targetUrl } = {}) {
   let candidate;
   try {
     candidate = new URL(url);
-  } catch {
+  } catch (_error) {
     return Number.NEGATIVE_INFINITY;
   }
 
@@ -154,7 +154,7 @@ export async function inspectBrowserPages(browser, options = {}) {
             options.predicate(page),
             sleep(250).then(() => false),
           ]));
-        } catch {
+        } catch (_error) {
           predicateMatch = false;
         }
       }

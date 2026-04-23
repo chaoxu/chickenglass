@@ -155,7 +155,7 @@ function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
       if (view.state.doc.lineAt(pos).number === lineNum) {
         return el;
       }
-    } catch {
+    } catch (_error) {
       continue;
     }
   }
@@ -170,7 +170,7 @@ function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
     if (!(el instanceof HTMLElement)) return null;
     const pos = view.posAtDOM(el, 0);
     return view.state.doc.lineAt(pos).number === lineNum ? el : null;
-  } catch {
+  } catch (_error) {
     return null;
   }
 }
@@ -196,7 +196,7 @@ function isElementVisibleInViewport(el: Element): boolean {
 function lineNumberAtElement(view: EditorView, el: HTMLElement): number | null {
   try {
     return view.state.doc.lineAt(view.posAtDOM(el, 0)).number;
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

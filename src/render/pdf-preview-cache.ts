@@ -101,7 +101,7 @@ export async function requestPdfPreview(
     } else {
       safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
     }
-  } catch {
+  } catch (_error) {
     safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
   } finally {
     pendingPaths.delete(path);
@@ -112,7 +112,7 @@ function safeDispatch(view: EditorView, update: PdfPreviewUpdate): void {
   if (!view.dom.isConnected) return;
   try {
     view.dispatch({ effects: pdfPreviewEffect.of(update) });
-  } catch {
+  } catch (_error) {
     // View disconnected between guard and dispatch — expected race
   }
 }
@@ -121,7 +121,7 @@ function safeRemove(view: EditorView, path: string): void {
   if (!view.dom.isConnected) return;
   try {
     view.dispatch({ effects: pdfPreviewRemoveEffect.of(path) });
-  } catch {
+  } catch (_error) {
     // View disconnected between guard and dispatch — expected race
   }
 }

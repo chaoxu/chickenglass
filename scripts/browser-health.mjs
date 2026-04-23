@@ -223,7 +223,7 @@ function normalizeUrlForDoctor(url) {
       origin: parsed.origin,
       pathname,
     };
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

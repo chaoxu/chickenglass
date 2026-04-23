@@ -122,7 +122,7 @@ export function resolveLiveWidgetSourceRange(
         to: Math.min(view.state.doc.length, liveFrom + sourceLength),
       };
     }
-  } catch {
+  } catch (_error) {
     // Fall through to the last known source range.
   }
 

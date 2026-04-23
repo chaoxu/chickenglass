@@ -23,7 +23,7 @@ async function readLocalImageDataUrl(
       if (next) {
         return next;
       }
-    } catch {
+    } catch (_error) {
       // Try the next candidate.
     }
   }
@@ -103,7 +103,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
             setKind("ready");
           }
           return;
-        } catch {
+        } catch (_error) {
           // Try the next candidate.
         }
       }

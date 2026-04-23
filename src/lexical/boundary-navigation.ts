@@ -43,7 +43,7 @@ function isDomSelectionAtEdge(rootChild: HTMLElement, isBackward: boolean): bool
     const beforeLength = beforeRange.toString().length;
     const totalLength = rootChild.textContent?.length ?? 0;
     return isBackward ? beforeLength === 0 : beforeLength === totalLength;
-  } catch {
+  } catch (_error) {
     return false;
   }
 }

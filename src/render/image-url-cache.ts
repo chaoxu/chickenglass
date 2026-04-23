@@ -86,7 +86,7 @@ export async function requestImageDataUrl(
 
     dataUrlCache.set(path, dataUrl);
     safeDispatch(view, { path, entry: { status: "ready" } });
-  } catch {
+  } catch (_error) {
     if (!isCurrentGeneration(path, generation)) return;
     safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
   } finally {
@@ -100,7 +100,7 @@ function safeDispatch(view: EditorView, update: ImageUrlUpdate): void {
   if (!view.dom.isConnected) return;
   try {
     view.dispatch({ effects: imageUrlEffect.of(update) });
-  } catch {
+  } catch (_error) {
     // View disconnected between guard and dispatch.
   }
 }
@@ -109,7 +109,7 @@ function safeRemove(view: EditorView, path: string): void {
   if (!view.dom.isConnected) return;
   try {
     view.dispatch({ effects: imageUrlRemoveEffect.of(path) });
-  } catch {
+  } catch (_error) {
     // View disconnected between guard and dispatch.
   }
 }

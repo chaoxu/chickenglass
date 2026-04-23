@@ -144,7 +144,7 @@ function collectVisibleLineGeometry(
     let pos: number;
     try {
       pos = view.posAtDOM(node, 0);
-    } catch {
+    } catch (_error) {
       continue;
     }
     const line = view.state.doc.lineAt(pos);

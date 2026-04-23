@@ -268,7 +268,7 @@ class MathPreviewPlugin implements PluginValue {
 
       const rect = range.getBoundingClientRect();
       return isVisibleRect(rect) ? rectToAnchorRect(rect) : null;
-    } catch {
+    } catch (_error) {
       return null;
     }
   }
@@ -292,7 +292,7 @@ class MathPreviewPlugin implements PluginValue {
         bottom: toCoords.bottom,
         left: fromCoords.left,
       });
-    } catch {
+    } catch (_error) {
       return null;
     }
   }

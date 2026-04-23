@@ -166,7 +166,7 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
                 macros,
                 region.isDisplay ? "htmlAndMathml" : "html",
               );
-            } catch {
+            } catch (_error) {
               // KaTeX parse error — skip; the widget will show the error on render.
             }
           }

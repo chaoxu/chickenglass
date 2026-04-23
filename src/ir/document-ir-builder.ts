@@ -41,7 +41,7 @@ function extractMetadata(docText: string): DocumentMetadata {
   let parsed: unknown;
   try {
     parsed = parseYaml(extracted.raw);
-  } catch {
+  } catch (_error) {
     // Invalid YAML should not block the rest of the IR.
     return { raw: {} };
   }

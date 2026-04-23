@@ -82,7 +82,7 @@ export async function waitForAppUrl(
       if (response.ok || response.status < 500) {
         return;
       }
-    } catch {
+    } catch (_error) {
       // Retry until the timeout expires.
     }
 
@@ -97,7 +97,7 @@ export function isLoopbackAppUrl(url) {
     const parsed = new URL(url);
     return (parsed.protocol === "http:" || parsed.protocol === "https:")
       && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
-  } catch {
+  } catch (_error) {
     return false;
   }
 }
@@ -113,7 +113,7 @@ async function isAppServerReachable(url) {
   try {
     await waitForAppUrl(url, { timeout: 750, intervalMs: 150 });
     return true;
-  } catch {
+  } catch (_error) {
     return false;
   }
 }
@@ -430,7 +430,7 @@ export async function disconnectBrowser(page) {
     }
 
     await page.context().browser()?.close();
-  } catch {
+  } catch (_error) {
     // Ignore disconnect errors: the browser may already be closed.
   }
 }

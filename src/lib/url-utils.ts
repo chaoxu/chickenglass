@@ -38,7 +38,7 @@ export function isSafeUrl(url: string): boolean {
     // safe base and inherit its https: protocol, passing the allowlist.
     const parsed = new URL(cleaned, "https://placeholder.invalid");
     return SAFE_PROTOCOLS.has(parsed.protocol);
-  } catch {
+  } catch (_error) {
     // Malformed URLs that the URL constructor rejects are blocked.
     return false;
   }

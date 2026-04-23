@@ -30,7 +30,7 @@ async function getPdfjsLib(): Promise<typeof import("pdfjs-dist")> {
       try {
         const workerUrl = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
         mod.GlobalWorkerOptions.workerSrc = workerUrl.default;
-      } catch {
+      } catch (_error) {
         // Worker unavailable — pdfjs falls back to main-thread parsing
       }
       return mod;
@@ -92,7 +92,7 @@ export async function rasterizePdfPage1(
     } finally {
       await pdf.destroy();
     }
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

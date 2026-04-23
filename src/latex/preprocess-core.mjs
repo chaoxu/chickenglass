@@ -128,7 +128,7 @@ export function hoistMathMacros(markdown) {
   let doc;
   try {
     doc = parseYaml(raw);
-  } catch {
+  } catch (_error) {
     return markdown;
   }
   if (!doc || typeof doc !== "object" || !doc.math || typeof doc.math !== "object") {

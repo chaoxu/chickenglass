@@ -38,7 +38,7 @@ function currentLineClasses(view: EditorView): string[] {
     }
     if (!(node instanceof HTMLElement)) return [];
     return Array.from(node.classList).filter((name) => name.startsWith("cf-"));
-  } catch {
+  } catch (_error) {
     return [];
   }
 }
@@ -52,7 +52,7 @@ function caretDetail(view: EditorView, pos: number): {
   let coords: ReturnType<EditorView["coordsAtPos"]>;
   try {
     coords = view.coordsAtPos(pos, view.state.selection.main.assoc || 1);
-  } catch {
+  } catch (_error) {
     return null;
   }
   if (!coords) return null;
@@ -71,7 +71,7 @@ function safePosAtDOM(
 ): number | null {
   try {
     return view.posAtDOM(node, offset);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

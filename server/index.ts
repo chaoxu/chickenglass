@@ -50,13 +50,13 @@ async function serveStatic(
     const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
     res.writeHead(200, { "Content-Type": contentType });
     res.end(data);
-  } catch {
+  } catch (_error) {
     // SPA fallback: serve index.html for missing files
     try {
       const indexData = await fs.readFile(path.join(distDir, "index.html"));
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(indexData);
-    } catch {
+    } catch (_error) {
       res.writeHead(404);
       res.end("Not Found");
     }
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     projectDir = await fs.realpath(projectDir);
-  } catch {
+  } catch (_error) {
     console.error(`Error: directory not found: ${projectDir}`);
     process.exit(1);
   }

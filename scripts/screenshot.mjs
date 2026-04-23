@@ -22,7 +22,7 @@ const file = getPositionals()[0] ?? "index.md";
 let session;
 try {
   session = await openBrowserSession(args, { defaultBrowser: "cdp" });
-} catch {
+} catch (_error) {
   console.error("Cannot connect to CDP.\nMake sure Chrome is running: pnpm chrome");
   process.exit(1);
 }

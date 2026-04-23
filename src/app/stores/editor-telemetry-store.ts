@@ -81,7 +81,7 @@ export const useEditorTelemetryStore = create<EditorTelemetryStore>()(
           cursorLine: line.number,
           cursorCol: pos - line.from + 1,
         });
-      } catch {
+      } catch (_error) {
         // Stale offset after doc change — use defaults.
         set({ cursorPos: pos, cursorLine: 1, cursorCol: 1 });
       }
@@ -96,7 +96,7 @@ export const useEditorTelemetryStore = create<EditorTelemetryStore>()(
             const position = getTextPosition(doc, cursorPos);
             next.cursorLine = position.line;
             next.cursorCol = position.col;
-          } catch {
+          } catch (_error) {
             next.cursorLine = 1;
             next.cursorCol = 1;
           }

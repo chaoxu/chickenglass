@@ -290,7 +290,7 @@ export function getDomSelectionOffsetInsideRevealText(text: string): number | nu
   range.selectNodeContents(element);
   try {
     range.setEnd(anchor, selection?.anchorOffset ?? 0);
-  } catch {
+  } catch (_error) {
     return null;
   }
   return range.toString().length;

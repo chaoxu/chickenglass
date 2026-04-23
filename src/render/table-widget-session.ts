@@ -39,7 +39,7 @@ let activePreviewCell: ActivePreviewCell | null = null;
 function focusWithoutScrolling(element: HTMLElement): void {
   try {
     element.focus({ preventScroll: true });
-  } catch {
+  } catch (_error) {
     element.focus();
   }
 }

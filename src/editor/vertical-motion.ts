@@ -199,7 +199,7 @@ function safeCoordsAtPos(
 ): { left: number; right: number; top: number; bottom: number } | null {
   try {
     return view.coordsAtPos(pos, assoc);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

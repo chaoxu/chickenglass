@@ -47,7 +47,7 @@ function lexicalNodeForTarget(
         }
       });
     }
-  } catch {
+  } catch (_error) {
     // Node resolution can fail for detached DOM — that's fine.
   }
   return { nodeKey, nodeType };

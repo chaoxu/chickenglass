@@ -59,7 +59,7 @@ class CodeBlockHoverPlugin {
     let pos: number;
     try {
       pos = this.view.posAtDOM(lineEl, 0);
-    } catch {
+    } catch (_error) {
       // DOM node may be detached after a view update; clear the stale hover.
       this.clearHoveredHeader();
       return;

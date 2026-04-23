@@ -87,7 +87,7 @@ function getCurrentWindowLabel(): string | null {
   try {
     const internals = (window as Window & { __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } } }).__TAURI_INTERNALS__;
     return internals?.metadata?.currentWindow?.label ?? null;
-  } catch {
+  } catch (_error) {
     return null;
   }
 }
@@ -147,7 +147,7 @@ function consumeWindowLaunchStateFromUrl(): Partial<WindowState> | null {
   let url: URL;
   try {
     url = new URL(window.location.href);
-  } catch {
+  } catch (_error) {
     return null;
   }
 
@@ -161,7 +161,7 @@ function consumeWindowLaunchStateFromUrl(): Partial<WindowState> | null {
   url.searchParams.delete(WINDOW_LAUNCH_FILE_PARAM);
   try {
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  } catch {
+  } catch (_error) {
     // best-effort: keep startup robust even if history is unavailable
   }
 

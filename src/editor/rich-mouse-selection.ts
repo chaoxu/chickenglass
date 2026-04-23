@@ -18,7 +18,7 @@ function safePosAtDOM(
 ): number | null {
   try {
     return view.posAtDOM(node, offset);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

@@ -19,7 +19,7 @@ function isWithinRoot(rootDir: string, candidatePath: string): boolean {
 function decodeRequestPath(requestPath: string): string | null {
   try {
     return decodeURIComponent(requestPath);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }
@@ -141,7 +141,7 @@ export function isAllowedFileApiOrigin(
   try {
     const origin = new URL(originHeader);
     return origin.protocol === `${protocol}:` && origin.host === host;
-  } catch {
+  } catch (_error) {
     return false;
   }
 }

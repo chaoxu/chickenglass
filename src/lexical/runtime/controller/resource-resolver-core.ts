@@ -36,7 +36,7 @@ async function readFirstAvailableTextFile(
   for (const candidate of candidates) {
     try {
       return await fs.readFile(candidate);
-    } catch {
+    } catch (_error) {
       // Try the next candidate.
     }
   }

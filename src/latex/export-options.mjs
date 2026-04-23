@@ -19,7 +19,7 @@ export function parseLatexFrontmatterConfig(markdown) {
   let parsed;
   try {
     parsed = parseYaml(lines.slice(1, closeIndex).join("\n"));
-  } catch {
+  } catch (_error) {
     return {};
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

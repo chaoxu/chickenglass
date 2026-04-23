@@ -256,7 +256,7 @@ function createSearchRegExp(
 
   try {
     return new RegExp(source, flags);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }
@@ -292,7 +292,7 @@ function createReplacementRegExp(
   const flags = `${REPLACEMENT_REGEXP_BASE_FLAGS}${options.caseSensitive ? "" : "i"}y`;
   try {
     return new RegExp(query, flags);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

@@ -311,7 +311,7 @@ export class MemoryFileSystem implements FileSystem {
       if (resp.ok) {
         return new Uint8Array(await resp.arrayBuffer());
       }
-    } catch {
+    } catch (_error) {
       // fetch failed — fall through to error
     }
     throw new Error(`File not found: ${path}`);

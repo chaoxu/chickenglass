@@ -113,7 +113,7 @@ function resolveLiveMathRegion(
 
   try {
     addPos(view.posAtDOM(el));
-  } catch {
+  } catch (_error) {
     // Ignore stale DOM nodes during transient redraws.
   }
 
@@ -121,7 +121,7 @@ function resolveLiveMathRegion(
   if (widgetRoot && widgetRoot !== el) {
     try {
       addPos(view.posAtDOM(widgetRoot));
-    } catch {
+    } catch (_error) {
       // Ignore stale DOM nodes during transient redraws.
     }
   }

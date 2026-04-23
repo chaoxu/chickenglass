@@ -15,7 +15,7 @@ function captureScrollAnchorSafely(
 ): ScrollAnchorSnapshot | null {
   try {
     return captureScrollAnchor(view);
-  } catch {
+  } catch (_error) {
     return null;
   }
 }

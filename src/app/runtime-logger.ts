@@ -140,7 +140,7 @@ function safeJsonStringify(value: unknown): string {
       return candidate;
     });
     return serialized ?? "undefined";
-  } catch {
+  } catch (_error) {
     return Object.prototype.toString.call(value);
   }
 }
