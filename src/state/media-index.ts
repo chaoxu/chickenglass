@@ -1,4 +1,4 @@
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import {
   type ChangeSet,
   type EditorState,
@@ -24,6 +24,7 @@ import {
 import { readMarkdownImageContent } from "./markdown-image";
 
 type MediaCache = ReadonlyMap<string, unknown>;
+const LOCAL_MEDIA_INDEX_PARSE_TIMEOUT_MS = 1_000;
 
 export interface LocalMediaReference {
   readonly from: number;
@@ -87,9 +88,14 @@ export function collectLocalMediaReferencesInRanges(
   if (ranges.length === 0) return [];
   const refs: LocalMediaReference[] = [];
   const seen = new Set<string>();
+  const targetTo = ranges.reduce((maxTo, range) => Math.max(maxTo, range.to), 0);
+  const tree = measureSync(
+    "cm6.mediaIndex.ensureSyntaxTree",
+    () => ensureSyntaxTree(state, targetTo, LOCAL_MEDIA_INDEX_PARSE_TIMEOUT_MS) ?? syntaxTree(state),
+  );
 
   for (const range of ranges) {
-    syntaxTree(state).iterate({
+    tree.iterate({
       from: range.from,
       to: range.to,
       enter(node) {

@@ -32,11 +32,12 @@ describe("LexicalEditorPane renderer registration", () => {
     vi.useRealTimers();
     vi.resetModules();
     const registry = await import("../../lexical/nodes/renderer-registry");
+    const bootstrap = await import("./lexical-editor-pane-bootstrap");
     registry._resetRenderersForTest();
 
     expect(registry._hasRegisteredRenderersForTest()).toBe(false);
 
-    await import("./lexical-editor-pane");
+    bootstrap.ensureLexicalEditorPaneBootstrapped();
 
     expect(registry._hasRegisteredRenderersForTest()).toBe(true);
   });

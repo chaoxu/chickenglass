@@ -16,12 +16,9 @@ import type { EditorDocumentChange } from "../../lib/editor-doc-change";
 import { REVEAL_MODE, type RevealMode } from "../../lexical/reveal-mode";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
-import { registerCoflatDecoratorRenderers } from "../../lexical/renderers/block-renderers";
 import type { ProjectConfig } from "../../project-config";
 import { getDocumentAnalysisSnapshot } from "../../semantics/incremental/cached-document-analysis";
 import { getDocumentAnalysisSliceRevision } from "../../semantics/incremental/engine";
-
-registerCoflatDecoratorRenderers();
 
 interface LexicalEditorPaneProps {
   readonly doc: string;

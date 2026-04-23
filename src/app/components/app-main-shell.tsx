@@ -9,11 +9,14 @@ import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 import { isLexicalEditorMode } from "../../editor-display-mode";
 
-const LexicalEditorPane = lazy(() =>
-  import("./lexical-editor-pane").then((module) => ({
+const LexicalEditorPane = lazy(async () => {
+  const bootstrap = await import("./lexical-editor-pane-bootstrap");
+  bootstrap.ensureLexicalEditorPaneBootstrapped();
+  const module = await import("./lexical-editor-pane");
+  return {
     default: module.LexicalEditorPane,
-  })),
-);
+  };
+});
 
 const EditorPane = lazy(() =>
   import("./editor-pane").then((module) => ({
