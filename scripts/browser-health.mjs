@@ -1,6 +1,10 @@
 /* global window */
 
 import { sleep, waitForDebugBridge } from "./browser-lifecycle.mjs";
+import {
+  DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+  DEBUG_EDITOR_SELECTOR,
+} from "../src/debug/debug-bridge-contract.js";
 
 function issueMatches(text, patterns) {
   return patterns.some((pattern) =>
@@ -105,10 +109,12 @@ export async function collectEditorHealth(page, options = {}) {
     const visibleCount = (selector) =>
       [...document.querySelectorAll(selector)].filter((el) => isVisible(el)).length;
 
+    const missingRequiredGlobals = limits.requiredGlobals.filter((name) => !window[name]);
     const hasCmBridge = Boolean(window.__cmView && window.__cmDebug);
-    if (!window.__app) issues.push("missing window.__app");
+    for (const name of missingRequiredGlobals) {
+      issues.push(`missing window.${name}`);
+    }
     if (!window.__editor && !hasCmBridge) issues.push("missing editor debug bridge");
-    if (!window.__cfDebug) issues.push("missing window.__cfDebug");
 
     const view = window.__cmView;
     const mode = window.__app?.getMode?.() ?? null;
@@ -186,6 +192,7 @@ export async function collectEditorHealth(page, options = {}) {
     maxVisibleDialogs,
     maxVisibleHoverPreviews,
     maxAutocompleteTooltips,
+    requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
   });
 }
 
@@ -236,22 +243,23 @@ function assertDoctorUrl(currentUrl, targetUrl) {
 }
 
 async function collectBrowserDoctorState(page) {
-  return page.evaluate(() => {
+  return page.evaluate(({ editorSelector, requiredGlobals }) => {
     const overlay = document.querySelector("vite-error-overlay");
     const overlayText = overlay?.shadowRoot?.textContent ?? overlay?.textContent ?? "";
     return {
       debugGlobals: {
-        __app: Boolean(window.__app),
-        __cfDebug: Boolean(window.__cfDebug),
+        ...Object.fromEntries(requiredGlobals.map((name) => [name, Boolean(window[name])])),
         __cmView: Boolean(window.__cmView),
-        __editor: Boolean(window.__editor),
-        lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
+        lexicalEditor: Boolean(document.querySelector(editorSelector)),
       },
       readyState: document.readyState,
       title: document.title,
       url: window.location.href,
       viteErrorOverlay: overlayText.trim(),
     };
+  }, {
+    editorSelector: DEBUG_EDITOR_SELECTOR,
+    requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
   });
 }
 

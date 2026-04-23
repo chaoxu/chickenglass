@@ -36,6 +36,7 @@ import {
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useDevSettings } from "../state/dev-settings";
+import type { DebugProjectFile } from "../debug/debug-bridge-contract.js";
 
 interface FixtureProjectFileSystem extends FileSystem {
   replaceAll(entries: readonly MemoryFileSystemEntry[]): void;
@@ -185,7 +186,7 @@ function AppInner() {
     }
 
     return async (
-      files: readonly import("./hooks/use-app-debug").DebugProjectFile[],
+      files: readonly DebugProjectFile[],
       initialPath?: string,
     ) => {
       await editor.closeCurrentFile({ discard: true });

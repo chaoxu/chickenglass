@@ -34,31 +34,17 @@ import {
   getDebugBridgeReadyPromise,
   markDebugBridgeReady,
 } from "../../debug/debug-bridge-ready";
+import type {
+  AppDebugBridge,
+  CfDebugBridge,
+  DebugDocumentState,
+  DebugProjectFile,
+  EditorDebugBridgeGlobal,
+  TauriSmokeBridge,
+  TauriSmokeWindowState,
+} from "../../debug/debug-bridge-contract.js";
 
-export interface DebugDocumentState {
-  path: string;
-  name: string;
-  dirty: boolean;
-}
-
-export type DebugProjectFile =
-  | { path: string; kind: "text"; content: string }
-  | { path: string; kind: "binary"; base64: string };
-
-interface TauriSmokeWindowState {
-  projectRoot: string | null;
-  currentDocument: DebugDocumentState | null;
-  dirty: boolean;
-  startupComplete: boolean;
-  restoredProjectRoot: string | null;
-  mode: EditorMode;
-  backendProjectRoot: string | null;
-  backendProjectGeneration: number | null;
-  watcherRoot: string | null;
-  watcherGeneration: number | null;
-  watcherActive: boolean;
-  lastFocusedWindow: string | null;
-}
+export type { DebugDocumentState, DebugProjectFile };
 
 interface AppDebugDeps {
   openProject: (path: string) => Promise<boolean>;
@@ -300,7 +286,7 @@ export function useAppDebug({
   ]);
 
   useEffect(() => {
-    window.__app = {
+    const appBridge = {
       ready: getDebugBridgeReadyPromise("app"),
       openFile: async (path) => {
         recordDebugSessionEvent({
@@ -389,9 +375,10 @@ export function useAppDebug({
       getProjectRoot: () => projectRoot,
       getCurrentDocument: () => currentDocument,
       isDirty: () => hasDirtyDocument,
-    };
+    } satisfies AppDebugBridge;
+    window.__app = appBridge;
     markDebugBridgeReady("app");
-    window.__editor = {
+    const editorBridge = {
       ready: getDebugBridgeReadyPromise("editor"),
       focus: focusEditor,
       getDoc: readEditorDoc,
@@ -402,9 +389,10 @@ export function useAppDebug({
       setDoc: setEditorDoc,
       setSelection: setEditorSelection,
       formatSelection: formatEditorSelection,
-    };
+    } satisfies EditorDebugBridgeGlobal;
+    window.__editor = editorBridge;
     markDebugBridgeReady("editor");
-    window.__cfDebug = {
+    const cfDebugBridge = {
       ready: getDebugBridgeReadyPromise("cfDebug"),
       perfSummary: getCombinedPerfSnapshot,
       printPerfSummary,
@@ -423,10 +411,11 @@ export function useAppDebug({
           currentDocument: options?.includeDocument === false ? null : getCurrentDocText(),
         }),
       clearSession: clearDebugSessionEvents,
-    };
+    } satisfies CfDebugBridge;
+    window.__cfDebug = cfDebugBridge;
     markDebugBridgeReady("cfDebug");
     if (import.meta.env.DEV && isTauri()) {
-      window.__tauriSmoke = {
+      const tauriSmokeBridge = {
         openProject,
         openFile,
         requestNativeClose,
@@ -450,7 +439,8 @@ export function useAppDebug({
         },
         simulateExternalChange: (relativePath: string, treeChanged?: boolean) =>
           debugEmitFileChangedCommand(relativePath, treeChanged),
-      };
+      } satisfies TauriSmokeBridge;
+      window.__tauriSmoke = tauriSmokeBridge;
     } else {
       delete window.__tauriSmoke;
     }

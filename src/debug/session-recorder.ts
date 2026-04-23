@@ -1,4 +1,4 @@
-import type { DebugDocumentState } from "../app/hooks/use-app-debug";
+import type { DebugDocumentState } from "./debug-bridge-contract.js";
 import type {
   DebugRenderState,
   SelectionInfo,

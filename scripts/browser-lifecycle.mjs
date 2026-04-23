@@ -5,6 +5,11 @@ import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
 import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
+import {
+  DEBUG_BRIDGE_READY_PROMISES,
+  DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+  DEBUG_EDITOR_SELECTOR,
+} from "../src/debug/debug-bridge-contract.js";
 
 const DEFAULT_PORT = 9322;
 const DEFAULT_APP_URL = "http://localhost:5173";
@@ -22,12 +27,14 @@ function formatInspectablePages(pages) {
 
 async function pageHasDebugBridge(page) {
   return page.evaluate(
-    () => Boolean(
-      window.__app
-        && window.__editor
-        && window.__cfDebug
-        && (window.__cmView || document.querySelector("[data-testid='lexical-editor']")),
+    ({ editorSelector, requiredGlobals }) => Boolean(
+      requiredGlobals.every((name) => Boolean(window[name]))
+        && (window.__cmView || document.querySelector(editorSelector)),
     ),
+    {
+      editorSelector: DEBUG_EDITOR_SELECTOR,
+      requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+    },
   ).catch(() => false);
 }
 
@@ -253,12 +260,16 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
 }
 
 async function waitForDebugBridgeReady(page, timeout) {
-  const readiness = await page.evaluate(async (timeoutMs) => {
-    const sources = [
-      { name: "__app.ready", promise: window.__app?.ready },
-      { name: "__editor.ready", promise: window.__editor?.ready },
-      { name: "__cfDebug.ready", promise: window.__cfDebug?.ready },
-    ].filter((source) => source.promise && typeof source.promise.then === "function");
+  const readiness = await page.evaluate(async ({ readyPromises, timeoutMs }) => {
+    const sources = readyPromises
+      .map((entry) => {
+        const host = window[entry.globalName];
+        return {
+          name: `${entry.globalName}.${entry.propertyName}`,
+          promise: host?.[entry.propertyName],
+        };
+      })
+      .filter((source) => source.promise && typeof source.promise.then === "function");
     const state = new Map(sources.map((source) => [source.name, "pending"]));
 
     if (sources.length === 0) {
@@ -305,7 +316,10 @@ async function waitForDebugBridgeReady(page, timeout) {
     return Promise.race([readyPromise, timeoutPromise]).finally(() => {
       clearTimeout(timeoutId);
     });
-  }, timeout);
+  }, {
+    readyPromises: DEBUG_BRIDGE_READY_PROMISES,
+    timeoutMs: timeout,
+  });
 
   if (readiness.status === "timeout") {
     throw new Error(
@@ -321,28 +335,28 @@ async function waitForDebugBridgeReady(page, timeout) {
 }
 
 async function collectDebugBridgeDiagnostics(page) {
-  return page.evaluate(() => {
-    const globals = {
-      __app: Boolean(window.__app),
-      __editor: Boolean(window.__editor),
-      __cmView: Boolean(window.__cmView),
-      __cmDebug: Boolean(window.__cmDebug),
-      __cfDebug: Boolean(window.__cfDebug),
-      lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
-    };
-    const readyGlobals = [
-      { name: "__app.ready", promise: window.__app?.ready },
-      { name: "__editor.ready", promise: window.__editor?.ready },
-      { name: "__cfDebug.ready", promise: window.__cfDebug?.ready },
-    ];
+  return page.evaluate(({ editorSelector, readyPromises, requiredGlobals }) => {
+    const globals = Object.fromEntries(
+      requiredGlobals.map((name) => [name, Boolean(window[name])]),
+    );
+    globals.__cmView = Boolean(window.__cmView);
+    globals.__cmDebug = Boolean(window.__cmDebug);
+    globals.lexicalEditor = Boolean(document.querySelector(editorSelector));
     return {
       readyState: document.readyState,
       globals,
-      readiness: readyGlobals.map((entry) => ({
-        name: entry.name,
-        present: Boolean(entry.promise && typeof entry.promise.then === "function"),
+      readiness: readyPromises.map((entry) => ({
+        name: `${entry.globalName}.${entry.propertyName}`,
+        present: Boolean(
+          window[entry.globalName]?.[entry.propertyName]
+            && typeof window[entry.globalName][entry.propertyName].then === "function",
+        ),
       })),
     };
+  }, {
+    editorSelector: DEBUG_EDITOR_SELECTOR,
+    readyPromises: DEBUG_BRIDGE_READY_PROMISES,
+    requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
   }).catch((evaluateError) => ({
     readyState: "<unavailable>",
     globals: {},
@@ -362,12 +376,14 @@ async function collectDebugBridgeDiagnostics(page) {
 export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
   try {
     await page.waitForFunction(
-      () => Boolean(
-        window.__app
-          && window.__editor
-          && window.__cfDebug
-          && (window.__cmView || document.querySelector("[data-testid='lexical-editor']")),
+      ({ editorSelector, requiredGlobals }) => Boolean(
+        requiredGlobals.every((name) => Boolean(window[name]))
+          && (window.__cmView || document.querySelector(editorSelector)),
       ),
+      {
+        editorSelector: DEBUG_EDITOR_SELECTOR,
+        requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+      },
       { timeout, polling: 100 },
     );
     await waitForDebugBridgeReady(page, timeout);
@@ -376,10 +392,10 @@ export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
     const diagnostics = await collectDebugBridgeDiagnostics(page);
     const browser = page.context().browser();
     const pages = browser ? await inspectBrowserPages(browser, {}) : [];
-    const missingGlobals = ["__app", "__editor", "__cfDebug"]
+    const missingGlobals = DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES
       .filter((name) => !diagnostics.globals[name]);
     if (!diagnostics.globals.__cmView && !diagnostics.globals.lexicalEditor) {
-      missingGlobals.push("__cmView or lexicalEditor");
+      missingGlobals.push(`__cmView or ${DEBUG_EDITOR_SELECTOR}`);
     }
     const pendingReady = diagnostics.readiness
       ?.filter((entry) => entry.present)

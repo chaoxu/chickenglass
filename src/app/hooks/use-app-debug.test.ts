@@ -31,6 +31,7 @@ vi.mock("../tauri-client/debug", () => ({
 }));
 
 const { useAppDebug } = await import("./use-app-debug");
+const { DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES } = await import("../../debug/debug-bridge-contract.js");
 
 const openProject = vi.fn(async (_path: string) => true);
 const openFile = vi.fn(async (_path: string) => {});
@@ -119,6 +120,9 @@ describe("useAppDebug", () => {
     await expect(window.__app?.ready).resolves.toBeUndefined();
     await expect(window.__editor?.ready).resolves.toBeUndefined();
     await expect(window.__cfDebug?.ready).resolves.toBeUndefined();
+    expect(
+      DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES.every((name) => Boolean(window[name])),
+    ).toBe(true);
     expect(window.__editor?.getDoc()).toBe("# Notes");
     expect(window.__cfDebug?.interactionLog).toBeDefined();
     expect(window.__cfDebug?.exportSession()).toMatchObject({

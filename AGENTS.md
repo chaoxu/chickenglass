@@ -130,52 +130,69 @@ CM6 and Lexical. Use `__cmView` / `__cmDebug` only for CM6-specific rendering,
 parser, geometry, and scroll investigations.
 
 ```
-__cmView                     — CM6 EditorView (dispatch, state, focus)
-__cmDebug.tree()             — FencedDiv nodes from the Lezer syntax tree
-__cmDebug.treeString()       — full syntax tree as readable string
-__cmDebug.fences()           — closing fence visibility for all blocks
-__cmDebug.line(73)           — DOM state of a specific line
-__cmDebug.selection()        — current selection (anchor, head, from, to, line, col)
-__cmDebug.history()          — undo/redo depth
-__cmDebug.structure()        — active explicit structure-edit target (or null)
-__cmDebug.geometry()         — measured visible-line + shell-surface geometry snapshot
-__cmDebug.renderState()      — compact visible rich-render snapshot (raw fenced openers, rendered headers, rich-widget counts)
-__cmDebug.motionGuards()     — recent vertical-motion guard events
-__cmDebug.dump()             — combined snapshot (tree + fences + cursor + focus)
-__cmDebug.activateStructureAtCursor() — open structure editing at the current cursor
-__cmDebug.clearStructure()   — clear the active structure-edit target
-__cmDebug.clearMotionGuards() — clear recorded vertical-motion guard events
-__cmDebug.moveVertically("up") — rich-mode vertical move with reverse-scroll guard
-__cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
-__app.openFile("posts/x.md") — open any file by path (app's real function)
-__app.setMode("lexical")     — switch editor mode (cm6-rich/lexical/source)
-__app.showSidebarPanel("diagnostics") — open a specific sidebar panel
-__app.getSidebarState()      — current sidebar { collapsed, tab }
-__app.saveFile()             — save current file
-__app.getProjectRoot()       — current project root path (or null)
-__app.getCurrentDocument()   — current doc {path, name, dirty} (or null)
-__app.isDirty()              — whether any open document has unsaved changes
-__app.ready                  — resolves after the app debug bridge is connected
-__editor.ready               — resolves after the product-neutral editor bridge is connected
-__editor.getDoc()            — current document text for CM6 or Lexical
-__editor.setDoc(text)        — replace current document text through the active editor
-__editor.insertText(text)    — insert text through the active editor
-__editor.setSelection(a, f)  — set active editor selection
-__editor.formatSelection(detail) — format current selection through the active editor
-__cfDebug.ready              — resolves after performance/debug helpers are connected
-__cfDebug.toggleFps()        — toggle the status-bar FPS meter
-__cfDebug.togglePerfPanel()  — toggle the floating perf debug panel
-__cfDebug.renderState()      — proxy to the current visible rich-render snapshot
-__cfDebug.recorderStatus()   — debug recorder queue/connectivity/capture-mode snapshot
-__cfDebug.captureState("label") — combined selection/render/raw-fence/structure snapshot + recorder event
-__cfDebug.interactionLog()   — recent Lexical interaction trace entries
-__cfDebug.clearInteractionLog() — clear Lexical interaction trace entries
-__cfDebug.exportSession()    — export locally recorded debug session events
-__cfDebug.clearSession()     — clear locally recorded debug session events
-__tauriSmoke.openProject("/abs/path") — dev-only Tauri helper to switch project roots deterministically
-__tauriSmoke.getWindowState()         — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
+__cmView                                        — CM6 EditorView (dispatch, state, focus)
+__cmDebug.tree()                                — FencedDiv nodes from the Lezer syntax tree
+__cmDebug.treeString()                          — full syntax tree as readable string
+__cmDebug.fences()                              — closing fence visibility for all blocks
+__cmDebug.line(73)                              — DOM state of a specific line
+__cmDebug.selection()                           — current selection (anchor, head, from, to, line, col)
+__cmDebug.history()                             — undo/redo depth
+__cmDebug.structure()                           — active explicit structure-edit target (or null)
+__cmDebug.geometry()                            — measured visible-line + shell-surface geometry snapshot
+__cmDebug.renderState()                         — compact visible rich-render snapshot (raw fenced openers, rendered headers, rich-widget counts)
+__cmDebug.motionGuards()                        — recent vertical-motion guard events
+__cmDebug.dump()                                — combined snapshot (tree + fences + cursor + focus)
+__cmDebug.activateStructureAtCursor()           — open structure editing at the current cursor
+__cmDebug.clearStructure()                      — clear the active structure-edit target
+__cmDebug.clearMotionGuards()                   — clear recorded vertical-motion guard events
+__cmDebug.moveVertically("up")                  — rich-mode vertical move with reverse-scroll guard
+__cmDebug.toggleTreeView()                      — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
+__app.openFile("posts/x.md")                    — open any file by path (app's real function)
+__app.hasFile("posts/x.md")                     — whether a project file exists
+__app.openFileWithContent(name, content)        — open generated content as an editor document
+__app.loadFixtureProject(files, initialPath)    — load an in-memory fixture project for tests
+__app.closeFile({ discard })                    — close the active document
+__app.setSearchOpen(true)                       — open or close app search
+__app.setMode("lexical")                        — switch editor mode (cm6-rich/lexical/source)
+__app.showSidebarPanel("diagnostics")           — open a specific sidebar panel
+__app.getSidebarState()                         — current sidebar { collapsed, tab }
+__app.saveFile()                                — save current file
+__app.getProjectRoot()                          — current project root path (or null)
+__app.getCurrentDocument()                      — current doc {path, name, dirty} (or null)
+__app.isDirty()                                 — whether any open document has unsaved changes
+__app.ready                                     — resolves after the app debug bridge is connected
+__editor.ready                                  — resolves after the product-neutral editor bridge is connected
+__editor.focus()                                — focus the active editor surface
+__editor.getDoc()                               — current document text for CM6 or Lexical
+__editor.setDoc(text)                           — replace current document text through the active editor
+__editor.peekDoc()                              — current document text without forcing editor focus
+__editor.getSelection()                         — current active editor selection
+__editor.peekSelection()                        — current editor selection without forcing editor focus
+__editor.insertText(text)                       — insert text through the active editor
+__editor.setSelection(a, f)                     — set active editor selection
+__editor.formatSelection(detail)                — format current selection through the active editor
+__cfDebug.ready                                 — resolves after performance/debug helpers are connected
+__cfDebug.perfSummary()                         — current frontend performance span summary
+__cfDebug.printPerfSummary()                    — print frontend performance summary to the console
+__cfDebug.clearPerf()                           — clear frontend performance spans
+__cfDebug.toggleFps()                           — toggle the status-bar FPS meter
+__cfDebug.togglePerfPanel()                     — toggle the floating perf debug panel
+__cfDebug.scrollGuards()                        — recent scroll guard events
+__cfDebug.clearScrollGuards()                   — clear recent scroll guard events
+__cfDebug.renderState()                         — proxy to the current visible rich-render snapshot
+__cfDebug.recorderStatus()                      — debug recorder queue/connectivity/capture-mode snapshot
+__cfDebug.captureState("label")                 — combined selection/render/raw-fence/structure snapshot + recorder event
+__cfDebug.interactionLog()                      — recent Lexical interaction trace entries
+__cfDebug.clearInteractionLog()                 — clear Lexical interaction trace entries
+__cfDebug.exportSession()                       — export locally recorded debug session events
+__cfDebug.clearSession()                        — clear locally recorded debug session events
+__tauriSmoke.openProject("/abs/path")           — dev-only Tauri helper to switch project roots deterministically
+__tauriSmoke.openFile("/abs/path")              — dev-only Tauri helper to open a file
+__tauriSmoke.requestNativeClose()               — dev-only Tauri helper to request native close handling
+__tauriSmoke.listWindows()                      — dev-only Tauri helper to list app windows
+__tauriSmoke.getWindowState()                   — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
 __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
-__fencedDivDebug = true      — toggle fenced div parser tracing
+__fencedDivDebug = true                         — toggle fenced div parser tracing
 ```
 
 Playwright helpers: `scripts/test-helpers.mjs` — `connectEditor()`, `waitForDebugBridge()`, `readEditorText()`, `formatSelection()`, `openFile()`, `getTreeDivs()`, `checkFences()`, `getGeometrySnapshot()`, `getRenderState()`, `captureDebugState()`, `dump()`, `setCursor()`, `jumpToTextAnchor()`, `scrollTo()`.

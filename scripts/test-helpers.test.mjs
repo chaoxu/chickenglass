@@ -98,10 +98,16 @@ describe("test helpers browser harness", () => {
     await expect(waitForDebugBridge(page, { timeout: 10 })).rejects.toThrow(
       `pending: ${expectedPending}`,
     );
-    expect(page.waitForFunction).toHaveBeenCalledWith(expect.any(Function), {
-      timeout: 10,
-      polling: 100,
-    });
+    expect(page.waitForFunction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        requiredGlobals: ["__app", "__editor", "__cfDebug"],
+      }),
+      {
+        timeout: 10,
+        polling: 100,
+      },
+    );
     expect(page.evaluate).toHaveBeenCalledTimes(2);
   });
 
@@ -134,8 +140,8 @@ describe("test helpers browser harness", () => {
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
       title: vi.fn(async () => "Coflat"),
       url: vi.fn(() => "http://localhost:5173/"),
-      waitForFunction: vi.fn(async (fn) => {
-        expect(fn()).toBe(true);
+      waitForFunction: vi.fn(async (fn, arg) => {
+        expect(fn(arg)).toBe(true);
       }),
     };
 

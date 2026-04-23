@@ -1,6 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { screenshot } from "./browser-screenshot.mjs";
+import {
+  DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+  DEBUG_EDITOR_SELECTOR,
+} from "../src/debug/debug-bridge-contract.js";
 
 export const DEFAULT_BROWSER_ARTIFACT_ROOT = "/tmp/coflat-browser-artifacts";
 
@@ -45,7 +49,7 @@ export function resolveBrowserArtifactDir({
 }
 
 async function collectDebugState(page, label) {
-  return page.evaluate(async (snapshotLabel) => {
+  return page.evaluate(async ({ editorSelector, requiredGlobals, snapshotLabel }) => {
     const truncate = (value, maxLength = 4000) => {
       if (typeof value !== "string") return value;
       return value.length > maxLength
@@ -94,12 +98,10 @@ async function collectDebugState(page, label) {
         structure: window.__cmDebug?.structure?.() ?? null,
       })),
       debugGlobals: safe(() => ({
-        __app: Boolean(window.__app),
-        __cfDebug: Boolean(window.__cfDebug),
+        ...Object.fromEntries(requiredGlobals.map((name) => [name, Boolean(window[name])])),
         __cmDebug: Boolean(window.__cmDebug),
         __cmView: Boolean(window.__cmView),
-        __editor: Boolean(window.__editor),
-        lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
+        lexicalEditor: Boolean(document.querySelector(editorSelector)),
       })),
       dom: safe(() => ({
         activeElement: document.activeElement
@@ -125,7 +127,11 @@ async function collectDebugState(page, label) {
         selection: safe(() => window.__editor?.getSelection?.() ?? null),
       },
     };
-  }, label);
+  }, {
+    editorSelector: DEBUG_EDITOR_SELECTOR,
+    requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+    snapshotLabel: label,
+  });
 }
 
 function writeJson(path, value) {
