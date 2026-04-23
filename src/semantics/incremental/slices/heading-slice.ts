@@ -1,4 +1,4 @@
-import type { HeadingSemantics } from "../../document";
+import type { HeadingSemantics } from "../../document-model";
 import {
   firstOverlapIndex,
   rangesOverlap,

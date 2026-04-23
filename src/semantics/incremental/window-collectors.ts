@@ -15,7 +15,7 @@ import type {
   MathSemantics,
   ReferenceSemantics,
   TextSource,
-} from "../document";
+} from "../document-model";
 import {
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,

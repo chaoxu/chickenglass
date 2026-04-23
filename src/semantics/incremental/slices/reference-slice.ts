@@ -1,4 +1,4 @@
-import type { ReferenceSemantics } from "../../document";
+import type { ReferenceSemantics } from "../../document-model";
 import {
   rangesOverlap,
   type PositionMapper,

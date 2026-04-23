@@ -4,7 +4,7 @@ import type {
   HeadingSemantics,
   ReferenceSemantics,
   TextSource,
-} from "../semantics/document";
+} from "../semantics/document-model";
 import type { PositionMapper } from "../semantics/incremental/merge-utils";
 import {
   formatBlockReferenceLabel,

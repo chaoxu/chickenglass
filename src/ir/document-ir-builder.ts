@@ -1,7 +1,7 @@
 import type { Tree } from "@lezer/common";
 import { extractRawFrontmatter } from "../parser/frontmatter";
 import { parse as parseYaml } from "yaml";
-import type { DocumentAnalysis, TextSource } from "../semantics/document";
+import type { DocumentAnalysis, TextSource } from "../semantics/document-model";
 import type {
   BlockNode,
   DocumentIR,

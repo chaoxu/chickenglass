@@ -57,23 +57,6 @@ export const BOUNDARY_RULES = [
 ];
 
 export const ALLOWED_SOURCE_CYCLES = [
-  {
-    reason: "#1377 tracks breaking the document/incremental semantics cycle",
-    files: [
-      "src/ir/document-ir-builder.ts",
-      "src/references/classifier.ts",
-      "src/semantics/document.ts",
-      "src/semantics/incremental/engine.ts",
-      "src/semantics/incremental/slices/equation-slice.ts",
-      "src/semantics/incremental/slices/fenced-div-slice.ts",
-      "src/semantics/incremental/slices/footnote-slice.ts",
-      "src/semantics/incremental/slices/heading-slice.ts",
-      "src/semantics/incremental/slices/math-slice.ts",
-      "src/semantics/incremental/slices/reference-slice.ts",
-      "src/semantics/incremental/window-collectors.ts",
-      "src/semantics/incremental/window-extractor.ts",
-    ],
-  },
 ];
 
 function toPosixPath(filePath) {

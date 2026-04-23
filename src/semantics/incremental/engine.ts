@@ -10,7 +10,7 @@ import type {
   DocumentAnalysis,
   FencedDivSemantics,
   TextSource,
-} from "../document";
+} from "../document-model";
 import {
   buildEquationSlice,
   mergeEquationSlice,
@@ -53,7 +53,7 @@ import {
 } from "./merge-utils";
 import { compareRangesByFromThenTo } from "../../lib/range-order";
 import type { DirtyWindow, SemanticDelta } from "./types";
-import type { ReferenceSemantics } from "../document";
+import type { ReferenceSemantics } from "../document-model";
 import {
   collectNarrativeRefsInWindow,
   computeNarrativeExtractionRange,

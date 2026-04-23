@@ -1,4 +1,4 @@
-import type { EquationSemantics } from "../../document";
+import type { EquationSemantics } from "../../document-model";
 import {
   firstOverlapIndex,
   rangesOverlap,

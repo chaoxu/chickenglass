@@ -3,7 +3,7 @@ import type {
   FootnoteReference,
   FootnoteSemantics,
   OrderedFootnoteEntry,
-} from "../../document";
+} from "../../document-model";
 import {
   replaceOverlappingRanges,
   rangesOverlap,

@@ -1,5 +1,5 @@
 import type { Tree } from "@lezer/common";
-import { stringTextSource } from "../semantics/document";
+import { stringTextSource } from "../semantics/document-model";
 import { createDocumentArtifacts } from "../semantics/incremental/engine";
 import type { DocumentIR } from "./types";
 

@@ -1,5 +1,5 @@
 import { ChangeSet } from "@codemirror/state";
-import { type DocumentAnalysis, stringTextSource } from "../document";
+import { type DocumentAnalysis, stringTextSource } from "../document-model";
 import { markdownSemanticsParser } from "../markdown-parser";
 import { coalesceChangedRanges } from "./dirty-windows";
 import {

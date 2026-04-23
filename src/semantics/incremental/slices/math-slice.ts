@@ -1,5 +1,5 @@
 import type { Tree } from "@lezer/common";
-import type { MathSemantics, TextSource } from "../../document";
+import type { MathSemantics, TextSource } from "../../document-model";
 import {
   rangesOverlap,
   replaceOverlappingRanges,
