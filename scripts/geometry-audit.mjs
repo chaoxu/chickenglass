@@ -4,11 +4,12 @@ import console from "node:console";
 import process from "node:process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { assertEditorHealth } from "./browser-health.mjs";
+import { sleep } from "./browser-lifecycle.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 import {
-  assertEditorHealth,
   clearStructure,
-  createArgParser,
   EXTERNAL_FIXTURE_ROOT,
   getGeometrySnapshot,
   openFixtureDocument,
@@ -17,8 +18,7 @@ import {
   scrollTo,
   setCursor,
   settleEditorLayout,
-  sleep,
-} from "./test-helpers.mjs";
+} from "./editor-test-helpers.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");

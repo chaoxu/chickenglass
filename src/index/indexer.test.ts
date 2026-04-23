@@ -6,6 +6,7 @@ import {
 } from "../semantics/incremental/cached-document-analysis";
 import { analyzeMarkdownDocument } from "../semantics/markdown-analysis";
 import * as incrementalEngine from "../semantics/incremental/engine";
+import type { DocumentAnalysisSnapshot } from "../semantics/incremental/engine";
 import {
   extractFileIndex,
   getFileIndexAnalysis,
@@ -45,14 +46,14 @@ describe("cached document analysis", () => {
     const after = getCachedDocumentAnalysis("# Title\n\nParagraph with [@ref].\n", before);
 
     expect(after.version).toBe(before.version + 1);
-    expect(incrementalEngine.getDocumentAnalysisRevision(after.analysis)).toBe(
-      incrementalEngine.getDocumentAnalysisRevision(before.analysis) + 1,
+    expect(incrementalEngine.getDocumentAnalysisRevision(after.snapshot)).toBe(
+      incrementalEngine.getDocumentAnalysisRevision(before.snapshot) + 1,
     );
-    expect(incrementalEngine.getDocumentAnalysisSliceRevision(after.analysis, "references")).toBe(
-      incrementalEngine.getDocumentAnalysisSliceRevision(before.analysis, "references") + 1,
+    expect(incrementalEngine.getDocumentAnalysisSliceRevision(after.snapshot, "references")).toBe(
+      incrementalEngine.getDocumentAnalysisSliceRevision(before.snapshot, "references") + 1,
     );
-    expect(incrementalEngine.getDocumentAnalysisSliceRevision(after.analysis, "headings")).toBe(
-      incrementalEngine.getDocumentAnalysisSliceRevision(before.analysis, "headings"),
+    expect(incrementalEngine.getDocumentAnalysisSliceRevision(after.snapshot, "headings")).toBe(
+      incrementalEngine.getDocumentAnalysisSliceRevision(before.snapshot, "headings"),
     );
   });
 
@@ -400,7 +401,7 @@ See [@eq:class] for the class equation.`;
       const artifacts = analyzeMarkdownDocument(content, "paper.md");
       const result = extractFileIndex(content, "paper.md", artifacts);
 
-      expect(getFileIndexAnalysis(result)).toBe(artifacts.analysis);
+      expect(getFileIndexAnalysis(result)).toBe(artifacts.analysisSnapshot);
       const indexedTargets = result.entries
         .map((entry) => ({
           type: entry.type,
@@ -455,7 +456,7 @@ See [@eq:class] for the class equation.`;
           content: "chapter.md",
         }),
       ]);
-      expect(getFileIndexAnalysis(result)).toBe(artifacts.analysis);
+      expect(getFileIndexAnalysis(result)).toBe(artifacts.analysisSnapshot);
     });
   });
 });
@@ -570,7 +571,7 @@ New definition.
     const updated = updateFileInIndex(files, "doc.md", "# Title\n\nParagraph with [@ref].\n");
     const afterAnalysis = requireFileAnalysis(updated.get("doc.md"));
 
-    expect(beforeAnalysis).toBe(adoptedAnalysis);
+    expect((beforeAnalysis as DocumentAnalysisSnapshot).analysis).toBe(adoptedAnalysis);
     expect(incrementalEngine.getDocumentAnalysisRevision(afterAnalysis)).toBe(
       incrementalEngine.getDocumentAnalysisRevision(beforeAnalysis) + 1,
     );

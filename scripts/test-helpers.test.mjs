@@ -10,6 +10,7 @@ import {
   waitForDebugBridge,
   waitForAppUrl,
 } from "./test-helpers.mjs";
+import { splitCliCommand } from "./devx-cli.mjs";
 
 describe("test helpers browser harness", () => {
   afterEach(() => {
@@ -205,5 +206,23 @@ describe("createArgParser", () => {
         "http://localhost:5174",
       ]).getPositionals(),
     ).toEqual(["index.md"]);
+  });
+});
+
+describe("splitCliCommand", () => {
+  it("normalizes npm -- separators and extracts known subcommands", () => {
+    expect(splitCliCommand(["--", "compare", "--scenario", "open-index"], ["capture", "compare"], "capture")).toEqual({
+      command: "compare",
+      options: ["--scenario", "open-index"],
+      hasExplicitCommand: true,
+    });
+  });
+
+  it("falls back to the default command when no known subcommand is present", () => {
+    expect(splitCliCommand(["--scenario", "open-index"], ["capture", "compare"], "capture")).toEqual({
+      command: "capture",
+      options: ["--scenario", "open-index"],
+      hasExplicitCommand: false,
+    });
   });
 });

@@ -19,8 +19,13 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, extname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { assertEditorHealth } from "./browser-health.mjs";
+import {
+  sleep,
+  waitForDebugBridge,
+} from "./browser-lifecycle.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
-import { createArgParser } from "./devx-cli.mjs";
+import { createArgParser, splitCliCommand } from "./devx-cli.mjs";
 import {
   closeBrowserSession,
   openBrowserSession,
@@ -31,7 +36,6 @@ import {
   PERF_REPORT_VERSION,
 } from "./perf-regression-lib.mjs";
 import {
-  assertEditorHealth,
   EXTERNAL_DEMO_ROOT,
   EXTERNAL_FIXTURE_ROOT,
   hasFixtureDocument,
@@ -39,10 +43,8 @@ import {
   PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
-  sleep,
   switchToMode,
-  waitForDebugBridge,
-} from "./test-helpers.mjs";
+} from "./editor-test-helpers.mjs";
 
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
@@ -1287,14 +1289,8 @@ Native scenarios such as html-export-pandoc skip Vite/Playwright and run local t
 `);
 }
 
-function normalizeCliArgs(args) {
-  return args.filter((arg) => arg !== "--");
-}
-
 export function parseCliArgs(argv = process.argv.slice(2)) {
-  const hasExplicitCommand = argv[0] === "capture" || argv[0] === "compare";
-  const command = hasExplicitCommand ? argv[0] : "capture";
-  const options = normalizeCliArgs(hasExplicitCommand ? argv.slice(1) : argv);
+  const { command, options } = splitCliCommand(argv, ["capture", "compare"], "capture");
 
   return {
     command,

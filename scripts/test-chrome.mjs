@@ -11,8 +11,8 @@
 
 import console from "node:console";
 import process from "node:process";
+import { screenshot } from "./browser-screenshot.mjs";
 import { connectToChrome, findAppPage, inspectBrowserPages, parseChromeArgs } from "./chrome-common.mjs";
-import { screenshot } from "./test-helpers.mjs";
 
 const { port, url } = parseChromeArgs();
 

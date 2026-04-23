@@ -375,4 +375,113 @@ describe("perf regression reports", () => {
       maxDelta: 7,
     });
   });
+
+  it("keeps metric max-only outliers from failing without supporting mean movement", () => {
+    const baseline = {
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.wall_ms.rankdecrease.near_end",
+          unit: "ms",
+          meanValue: 111.26,
+          maxValue: 112.1,
+        },
+      ],
+    };
+    const current = {
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.wall_ms.rankdecrease.near_end",
+          unit: "ms",
+          meanValue: 114.14,
+          maxValue: 129.8,
+        },
+      ],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.1,
+      minDeltaMs: 2,
+    });
+
+    expect(result.regressions).toHaveLength(0);
+    expect(result.metrics[0]).toMatchObject({
+      status: "ok",
+      meanDelta: 2.88,
+      maxDelta: 17.7,
+    });
+  });
+
+  it("keeps standalone scheduler metrics diagnostic while input-to-idle remains gated", () => {
+    const baseline = {
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.idle_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 2,
+          maxValue: 4,
+        },
+        {
+          name: "typing.settle_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 12,
+          maxValue: 15,
+        },
+        {
+          name: "typing.input_to_idle_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 100,
+          maxValue: 110,
+        },
+      ],
+    };
+    const current = {
+      frontend: [],
+      backend: [],
+      metrics: [
+        {
+          name: "typing.idle_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 8,
+          maxValue: 10,
+        },
+        {
+          name: "typing.settle_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 18,
+          maxValue: 25,
+        },
+        {
+          name: "typing.input_to_idle_ms.cogirth_main2.inline_math",
+          unit: "ms",
+          meanValue: 120,
+          maxValue: 132,
+        },
+      ],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.1,
+      minDeltaMs: 2,
+    });
+
+    expect(result.metrics.find((entry) => entry.name.startsWith("typing.idle_ms."))).toMatchObject({
+      status: "ok",
+      meanDelta: 6,
+    });
+    expect(result.metrics.find((entry) => entry.name.startsWith("typing.settle_ms."))).toMatchObject({
+      status: "ok",
+      meanDelta: 6,
+    });
+    expect(result.regressions).toHaveLength(1);
+    expect(result.regressions[0]).toMatchObject({
+      name: "typing.input_to_idle_ms.cogirth_main2.inline_math",
+      status: "regressed",
+    });
+  });
 });

@@ -13,9 +13,9 @@ export function parseChromeArgs(
   argv = process.argv.slice(2),
   defaults = {},
 ) {
-  const { getFlag, hasFlag } = createArgParser(argv);
+  const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
 
-  const port = Number.parseInt(getFlag("--port", "9322"), 10);
+  const port = getIntFlag("--port", 9322);
   const url = getFlag("--url", defaults.url ?? "http://localhost:5173");
   const profileName = getFlag("--profile", defaults.profileName ?? "app");
   const browser = getFlag("--browser", defaults.browser ?? "cdp");

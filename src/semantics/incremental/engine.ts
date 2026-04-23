@@ -36,6 +36,7 @@ import {
   buildMathSlice,
   computeMathOverhangRanges,
   expandDirtyMathExtractions,
+  mapMathRegionUpdate,
   mergeMathSlice,
   type MathSlice,
 } from "./slices/math-slice";
@@ -81,18 +82,19 @@ export interface DocumentAnalysisRevisionInfo {
 
 export interface DocumentArtifacts {
   readonly analysis: DocumentAnalysis;
+  readonly analysisSnapshot: DocumentAnalysisSnapshot;
   readonly ir: DocumentIR;
 }
 
 type DocumentAnalysisBase = Omit<DocumentAnalysis, "referenceIndex">;
 
-interface FencedDivSlice {
+export interface FencedDivSlice {
   readonly fencedDivs: readonly FencedDivSemantics[];
   readonly fencedDivByFrom: ReadonlyMap<number, FencedDivSemantics>;
   readonly structureRanges: readonly { readonly from: number; readonly to: number }[];
 }
 
-interface DocumentAnalysisSlices {
+export interface DocumentAnalysisSlices {
   readonly headingSlice: HeadingSlice;
   readonly footnoteSlice: FootnoteSlice;
   readonly fencedDivSlice: FencedDivSlice;
@@ -146,7 +148,7 @@ const SLICE_REGISTRY: readonly SliceRegistryEntry[] = [
   })),
 ];
 
-interface InternalDocumentAnalysisState extends DocumentAnalysisSlices {
+export interface IncrementalDocumentAnalysisState extends DocumentAnalysisSlices {
   readonly revisions: DocumentAnalysisRevisionInfo;
   readonly excludedRanges: readonly ExcludedRange[];
   readonly referenceIndex: ReferenceIndexModel;
@@ -163,11 +165,10 @@ const ZERO_REVISION_INFO: DocumentAnalysisRevisionInfo = Object.freeze({
   slices: ZERO_SLICE_REVISIONS,
 });
 
-const analysisStateSymbol = Symbol("documentAnalysisState");
-
-type DocumentAnalysisWithInternalState = DocumentAnalysis & {
-  readonly [analysisStateSymbol]?: InternalDocumentAnalysisState;
-};
+export interface DocumentAnalysisSnapshot extends DocumentAnalysis {
+  readonly analysis: DocumentAnalysis;
+  readonly incrementalState: IncrementalDocumentAnalysisState;
+}
 
 function createPositionMapper(
   delta: Pick<SemanticDelta, "mapOldToNew">,
@@ -225,24 +226,56 @@ function buildSlicesAndExcludedRanges(doc: TextSource, tree: Tree): FullBuildRes
   };
 }
 
-function getInternalState(
-  analysis: DocumentAnalysis,
-): InternalDocumentAnalysisState | undefined {
-  return (analysis as DocumentAnalysisWithInternalState)[analysisStateSymbol];
+function isDocumentAnalysisSnapshot(
+  value: DocumentAnalysis | DocumentAnalysisSnapshot,
+): value is DocumentAnalysisSnapshot {
+  return (
+    "analysis" in value
+    && "incrementalState" in value
+    && value.analysis !== undefined
+  );
 }
 
-function withInternalState(
+function createDocumentAnalysisSnapshotValue(
   analysis: DocumentAnalysis,
-  state: InternalDocumentAnalysisState,
-): DocumentAnalysis {
-  Object.defineProperty(analysis, analysisStateSymbol, {
-    value: state,
+  incrementalState: IncrementalDocumentAnalysisState,
+): DocumentAnalysisSnapshot {
+  const snapshot = { ...analysis } as DocumentAnalysisSnapshot;
+  Object.defineProperties(snapshot, {
+    analysis: {
+      value: analysis,
+    },
+    incrementalState: {
+      value: incrementalState,
+    },
   });
-  return analysis;
+  return snapshot;
+}
+
+function snapshotFor(
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
+): DocumentAnalysisSnapshot | undefined {
+  return isDocumentAnalysisSnapshot(analysis) ? analysis : undefined;
+}
+
+export function createDocumentAnalysisSnapshotFromAnalysis(
+  doc: TextSource,
+  tree: Tree,
+  analysis: DocumentAnalysis,
+): DocumentAnalysisSnapshot {
+  const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
+  const referenceIndex = analysis.referenceIndex;
+  const revisions = ZERO_REVISION_INFO;
+  return createDocumentAnalysisSnapshotValue(analysis, {
+    ...slices,
+    revisions,
+    excludedRanges,
+    referenceIndex,
+  });
 }
 
 function buildRevisionInfo(
-  previous: InternalDocumentAnalysisState | undefined,
+  previous: IncrementalDocumentAnalysisState | undefined,
   slices: DocumentAnalysisSlices,
 ): DocumentAnalysisRevisionInfo {
   if (!previous) {
@@ -264,7 +297,7 @@ function buildRevisionInfo(
 }
 
 function sameSlices(
-  previous: InternalDocumentAnalysisState,
+  previous: IncrementalDocumentAnalysisState,
   next: DocumentAnalysisSlices,
 ): boolean {
   return SLICE_REGISTRY.every(({ sliceKey }) =>
@@ -273,7 +306,7 @@ function sameSlices(
 }
 
 function sameReferenceIndexInputs(
-  previous: InternalDocumentAnalysisState,
+  previous: IncrementalDocumentAnalysisState,
   next: DocumentAnalysisSlices,
 ): boolean {
   return (
@@ -365,7 +398,7 @@ function sameReferenceIndexReferenceMetadata(
 }
 
 function canMapReferenceIndexInputs(
-  previous: InternalDocumentAnalysisState,
+  previous: IncrementalDocumentAnalysisState,
   next: DocumentAnalysisSlices,
 ): boolean {
   return (
@@ -396,13 +429,13 @@ function buildDocumentAnalysisBase(
 }
 
 function finalizeDocumentAnalysis(
-  previous: DocumentAnalysis | undefined,
+  previous: DocumentAnalysisSnapshot | undefined,
   slices: DocumentAnalysisSlices,
   excludedRanges: readonly ExcludedRange[],
   doc: TextSource,
   referenceIndexOverride?: ReferenceIndexModel,
-): DocumentAnalysis {
-  const previousState = previous ? getInternalState(previous) : undefined;
+): DocumentAnalysisSnapshot {
+  const previousState = previous?.incrementalState;
   if (
     previous && previousState
     && sameSlices(previousState, slices)
@@ -424,7 +457,7 @@ function finalizeDocumentAnalysis(
     referenceIndex,
   };
 
-  return withInternalState(analysis, {
+  return createDocumentAnalysisSnapshotValue(analysis, {
     ...slices,
     revisions,
     excludedRanges,
@@ -432,23 +465,33 @@ function finalizeDocumentAnalysis(
   });
 }
 
-export function createDocumentAnalysis(
+export function createDocumentAnalysisSnapshot(
   doc: TextSource,
   tree: Tree,
-): DocumentAnalysis {
+): DocumentAnalysisSnapshot {
   const { slices, excludedRanges } = buildSlicesAndExcludedRanges(doc, tree);
   return finalizeDocumentAnalysis(undefined, slices, excludedRanges, doc);
 }
 
+export function createDocumentAnalysis(
+  doc: TextSource,
+  tree: Tree,
+): DocumentAnalysis {
+  return createDocumentAnalysisSnapshot(doc, tree).analysis;
+}
+
 export function buildDocumentArtifacts(
-  analysis: DocumentAnalysis,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
   doc: TextSource,
   tree: Tree,
 ): DocumentArtifacts {
+  const snapshot = snapshotFor(analysis)
+    ?? createDocumentAnalysisSnapshotFromAnalysis(doc, tree, analysis);
   return {
-    analysis,
+    analysis: snapshot.analysis,
+    analysisSnapshot: snapshot,
     ir: buildDocumentIR({
-      analysis,
+      analysis: snapshot.analysis,
       doc,
       docText: doc.slice(0, doc.length),
       tree,
@@ -460,7 +503,7 @@ export function createDocumentArtifacts(
   doc: TextSource,
   tree: Tree,
 ): DocumentArtifacts {
-  return buildDocumentArtifacts(createDocumentAnalysis(doc, tree), doc, tree);
+  return buildDocumentArtifacts(createDocumentAnalysisSnapshot(doc, tree), doc, tree);
 }
 
 function mapExcludedRanges(
@@ -604,7 +647,7 @@ function windowsTouchSortedRanges(
 }
 
 function classifyStructuralExtraction(
-  previousState: InternalDocumentAnalysisState,
+  previousState: IncrementalDocumentAnalysisState,
   delta: SemanticDelta,
 ): "skip" | "paragraph" | "full" {
   if (!delta.plainInlineTextOnlyChange) {
@@ -665,16 +708,13 @@ function mapFencedDivsOnly(
   return changed ? mapped : previous;
 }
 
-export function updateDocumentAnalysis(
-  previous: DocumentAnalysis,
+export function updateDocumentAnalysisSnapshot(
+  previous: DocumentAnalysisSnapshot,
   doc: TextSource,
   tree: Tree,
   delta: SemanticDelta,
-): DocumentAnalysis {
-  const previousState = getInternalState(previous);
-  if (!previousState) {
-    return createDocumentAnalysis(doc, tree);
-  }
+): DocumentAnalysisSnapshot {
+  const previousState = previous.incrementalState;
 
   if (!delta.docChanged) {
     if (!delta.syntaxTreeChanged && !delta.globalInvalidation) {
@@ -751,12 +791,14 @@ export function updateDocumentAnalysis(
   const fencedDivSlice = mergedFencedDivs === previousState.fencedDivSlice.fencedDivs
     ? previousState.fencedDivSlice
     : createFencedDivSlice(mergedFencedDivs);
+  const mappedMathRegions = mapMathRegionUpdate(previousState.mathSlice, delta);
   const mathDirtyExtractions = expandDirtyMathExtractions(
     previousState.mathSlice,
     delta,
     dirtyExtractions,
     doc,
     tree,
+    mappedMathRegions,
   );
   const mathSlice = mergeMathSlice(
     previousState.mathSlice,
@@ -764,6 +806,7 @@ export function updateDocumentAnalysis(
     mathDirtyExtractions,
     doc,
     tree,
+    mappedMathRegions,
   );
   // When a large mapped math region (e.g. BigUnclosed $$…EOF) overlaps a dirty
   // window and is removed, its tail may contain equations that are not covered
@@ -773,6 +816,7 @@ export function updateDocumentAnalysis(
     previousState.mathSlice,
     delta,
     dirtyExtractions.map((e) => e.window),
+    mappedMathRegions,
   );
   const equationDirtyExtractions = mathOverhangRanges.length === 0
     ? (useParagraphStructuralExtraction ? [] : dirtyExtractions)
@@ -851,6 +895,31 @@ export function updateDocumentAnalysis(
   }, excludedRanges, doc, referenceIndex);
 }
 
+export function updateDocumentAnalysis(
+  previous: DocumentAnalysisSnapshot,
+  doc: TextSource,
+  tree: Tree,
+  delta: SemanticDelta,
+): DocumentAnalysisSnapshot;
+export function updateDocumentAnalysis(
+  previous: DocumentAnalysis,
+  doc: TextSource,
+  tree: Tree,
+  delta: SemanticDelta,
+): DocumentAnalysis;
+export function updateDocumentAnalysis(
+  previous: DocumentAnalysis | DocumentAnalysisSnapshot,
+  doc: TextSource,
+  tree: Tree,
+  delta: SemanticDelta,
+): DocumentAnalysis | DocumentAnalysisSnapshot {
+  const snapshot = snapshotFor(previous);
+  if (!snapshot) {
+    return createDocumentAnalysis(doc, tree);
+  }
+  return updateDocumentAnalysisSnapshot(snapshot, doc, tree, delta);
+}
+
 export function updateDocumentArtifacts(
   previous: DocumentArtifacts,
   doc: TextSource,
@@ -858,26 +927,26 @@ export function updateDocumentArtifacts(
   delta: SemanticDelta,
 ): DocumentArtifacts {
   return buildDocumentArtifacts(
-    updateDocumentAnalysis(previous.analysis, doc, tree, delta),
+    updateDocumentAnalysisSnapshot(previous.analysisSnapshot, doc, tree, delta),
     doc,
     tree,
   );
 }
 
 export function getDocumentAnalysisRevisionInfo(
-  analysis: DocumentAnalysis,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
 ): DocumentAnalysisRevisionInfo {
-  return getInternalState(analysis)?.revisions ?? ZERO_REVISION_INFO;
+  return snapshotFor(analysis)?.incrementalState.revisions ?? ZERO_REVISION_INFO;
 }
 
 export function getDocumentAnalysisRevision(
-  analysis: DocumentAnalysis,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
 ): number {
   return getDocumentAnalysisRevisionInfo(analysis).revision;
 }
 
 export function getDocumentAnalysisSliceRevision(
-  analysis: DocumentAnalysis,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
   slice: DocumentAnalysisSliceName,
 ): number {
   return getDocumentAnalysisRevisionInfo(analysis).slices[slice];

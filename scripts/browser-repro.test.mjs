@@ -16,8 +16,8 @@ const browserReproMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("./test-helpers.mjs", async () => {
-  const actual = await vi.importActual("./test-helpers.mjs");
+vi.mock("./browser-lifecycle.mjs", async () => {
+  const actual = await vi.importActual("./browser-lifecycle.mjs");
   return {
     ...actual,
     connectEditor: browserReproMocks.connectEditor,

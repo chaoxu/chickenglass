@@ -4,10 +4,12 @@ import { markdownSemanticsParser } from "../markdown-parser";
 import { coalesceChangedRanges } from "./dirty-windows";
 import {
   buildDocumentArtifacts,
-  createDocumentAnalysis,
+  createDocumentAnalysisSnapshotFromAnalysis,
+  createDocumentAnalysisSnapshot,
   createDocumentArtifacts,
+  type DocumentAnalysisSnapshot,
   type DocumentArtifacts,
-  updateDocumentAnalysis,
+  updateDocumentAnalysisSnapshot,
   updateDocumentArtifacts,
 } from "./engine";
 import type { RawChangedRange, SemanticDelta } from "./types";
@@ -16,6 +18,7 @@ export interface CachedDocumentAnalysis {
   readonly version: number;
   readonly text: string;
   readonly analysis: DocumentAnalysis;
+  readonly snapshot: DocumentAnalysisSnapshot;
 }
 
 export interface CachedDocumentArtifacts {
@@ -39,41 +42,48 @@ export function getCachedDocumentAnalysis(
   const doc = stringTextSource(text);
   const tree = markdownSemanticsParser.parse(text);
   if (!previous) {
+    const snapshot = createDocumentAnalysisSnapshot(doc, tree);
     return {
       version: 0,
       text,
-      analysis: createDocumentAnalysis(doc, tree),
+      analysis: snapshot.analysis,
+      snapshot,
     };
   }
 
+  const snapshot = updateDocumentAnalysisSnapshot(
+    previous.snapshot,
+    doc,
+    tree,
+    buildTextSemanticDelta(previous.text, text),
+  );
   return {
     version: previous.version + 1,
     text,
-    analysis: updateDocumentAnalysis(
-      previous.analysis,
-      doc,
-      tree,
-      buildTextSemanticDelta(previous.text, text),
-    ),
+    analysis: snapshot.analysis,
+    snapshot,
   };
 }
 
 export function rememberCachedDocumentAnalysis(
   text: string,
-  analysis: DocumentAnalysis,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
   previous?: CachedDocumentAnalysis,
 ): CachedDocumentAnalysis {
-  if (previous?.text === text && previous.analysis === analysis) {
+  const adoptedAnalysis = unwrapCachedAnalysis(analysis);
+  if (previous?.text === text && previous.analysis === adoptedAnalysis) {
     return previous;
   }
 
+  const snapshot = adoptDocumentAnalysisSnapshot(text, analysis);
   return {
     version:
       previous && previous.text !== text
         ? previous.version + 1
         : previous?.version ?? 0,
     text,
-    analysis,
+    analysis: snapshot.analysis,
+    snapshot,
   };
 }
 
@@ -126,12 +136,12 @@ function getCachedDocumentArtifactsFromAnalysis(
     return {
       version: previous.version,
       text,
-      artifacts: buildDocumentArtifacts(previous.analysis, doc, tree),
+      artifacts: buildDocumentArtifacts(previous.snapshot, doc, tree),
     };
   }
 
-  const analysis = updateDocumentAnalysis(
-    previous.analysis,
+  const snapshot = updateDocumentAnalysisSnapshot(
+    previous.snapshot,
     doc,
     tree,
     buildTextSemanticDelta(previous.text, text),
@@ -139,7 +149,7 @@ function getCachedDocumentArtifactsFromAnalysis(
   return {
     version: previous.version + 1,
     text,
-    artifacts: buildDocumentArtifacts(analysis, doc, tree),
+    artifacts: buildDocumentArtifacts(snapshot, doc, tree),
   };
 }
 
@@ -152,9 +162,16 @@ export function getDocumentAnalysis(
   text: string,
   cacheKey?: string,
 ): DocumentAnalysis {
+  return getDocumentAnalysisSnapshot(text, cacheKey).analysis;
+}
+
+export function getDocumentAnalysisSnapshot(
+  text: string,
+  cacheKey?: string,
+): DocumentAnalysisSnapshot {
   const normalizedCacheKey = normalizeCacheKey(cacheKey);
   if (!normalizedCacheKey) {
-    return getCachedDocumentAnalysis(text).analysis;
+    return getCachedDocumentAnalysis(text).snapshot;
   }
 
   const cached = getCachedDocumentAnalysis(
@@ -163,7 +180,7 @@ export function getDocumentAnalysis(
   );
   setSharedCachedDocumentAnalysis(normalizedCacheKey, cached);
   invalidateSharedDocumentArtifacts(normalizedCacheKey, cached);
-  return cached.analysis;
+  return cached.snapshot;
 }
 
 /**
@@ -194,12 +211,20 @@ export function getDocumentArtifacts(
 
 export function rememberDocumentAnalysis(
   text: string,
-  analysis: DocumentAnalysis,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
   cacheKey?: string,
 ): DocumentAnalysis {
+  return rememberDocumentAnalysisSnapshot(text, analysis, cacheKey).analysis;
+}
+
+export function rememberDocumentAnalysisSnapshot(
+  text: string,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
+  cacheKey?: string,
+): DocumentAnalysisSnapshot {
   const normalizedCacheKey = normalizeCacheKey(cacheKey);
   if (!normalizedCacheKey) {
-    return analysis;
+    return adoptDocumentAnalysisSnapshot(text, analysis);
   }
 
   const cached = rememberCachedDocumentAnalysis(
@@ -209,12 +234,37 @@ export function rememberDocumentAnalysis(
   );
   setSharedCachedDocumentAnalysis(normalizedCacheKey, cached);
   invalidateSharedDocumentArtifacts(normalizedCacheKey, cached);
-  return cached.analysis;
+  return cached.snapshot;
 }
 
 export function clearDocumentAnalysisCache(): void {
   sharedDocumentAnalysisCache.clear();
   sharedDocumentArtifactsCache.clear();
+}
+
+function unwrapCachedAnalysis(
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
+): DocumentAnalysis {
+  return isCachedAnalysisSnapshot(analysis) ? analysis.analysis : analysis;
+}
+
+function isCachedAnalysisSnapshot(
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
+): analysis is DocumentAnalysisSnapshot {
+  return "analysis" in analysis && "incrementalState" in analysis;
+}
+
+function adoptDocumentAnalysisSnapshot(
+  text: string,
+  analysis: DocumentAnalysis | DocumentAnalysisSnapshot,
+): DocumentAnalysisSnapshot {
+  if (isCachedAnalysisSnapshot(analysis)) {
+    return analysis;
+  }
+
+  const doc = stringTextSource(text);
+  const tree = markdownSemanticsParser.parse(text);
+  return createDocumentAnalysisSnapshotFromAnalysis(doc, tree, analysis);
 }
 
 function buildTextSemanticDelta(
@@ -310,6 +360,7 @@ function setSharedCachedDocumentArtifacts(
     version: cached.version,
     text: cached.text,
     analysis: cached.artifacts.analysis,
+    snapshot: cached.artifacts.analysisSnapshot,
   });
 
   if (sharedDocumentArtifactsCache.size <= MAX_SHARED_DOCUMENT_ANALYSIS_ENTRIES) {

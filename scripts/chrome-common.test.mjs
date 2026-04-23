@@ -38,4 +38,10 @@ describe("chrome common page scoring", () => {
     expect(parseChromeArgs(["--headed"], { browser: "managed" }).headless).toBe(false);
     expect(parseChromeArgs(["--headless"], { browser: "cdp" }).headless).toBe(true);
   });
+
+  it("rejects invalid port values through the shared integer parser", () => {
+    expect(() => parseChromeArgs(["--port", "9322x"])).toThrow(
+      "Invalid integer value for --port: 9322x",
+    );
+  });
 });

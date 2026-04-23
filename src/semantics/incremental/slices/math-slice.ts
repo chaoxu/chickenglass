@@ -16,6 +16,11 @@ export interface MathSlice {
   readonly mathRegions: readonly MathSemantics[];
 }
 
+export interface MappedMathRegionUpdate {
+  readonly all: readonly MathSemantics[];
+  readonly retained: readonly MathSemantics[];
+}
+
 export interface DirtyMathWindowExtraction {
   readonly window: Pick<DirtyWindow, "fromNew" | "toNew">;
   readonly structural: Pick<StructuralWindowExtraction, "mathRegions">;
@@ -143,13 +148,13 @@ function mathRegionTouchesRawChanges(
   );
 }
 
-function mapMathRegions(
-  values: readonly MathSemantics[],
+export function mapMathRegionUpdate(
+  previous: MathSlice,
   delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
-  dropTouched = true,
-): readonly MathSemantics[] {
+): MappedMathRegionUpdate {
+  const values = previous.mathRegions;
   if (values.length === 0 || delta.rawChangedRanges.length === 0) {
-    return values;
+    return { all: values, retained: values };
   }
 
   const changes = deltaMapper(delta);
@@ -161,25 +166,35 @@ function mapMathRegions(
   }
 
   if (startIndex === values.length) {
-    return values;
+    return { all: values, retained: values };
   }
 
-  let changed = false;
-  const mapped = startIndex === 0 ? [] : values.slice(0, startIndex);
+  let allChanged = false;
+  let retainedChanged = false;
+  const allMapped = startIndex === 0 ? [] : values.slice(0, startIndex);
+  const retainedMapped = startIndex === 0 ? [] : values.slice(0, startIndex);
   for (let index = startIndex; index < values.length; index += 1) {
     const value = values[index];
-    if (dropTouched && mathRegionTouchesRawChanges(value, delta)) {
-      changed = true;
-      continue;
-    }
+    const touched = mathRegionTouchesRawChanges(value, delta);
     const next = shiftedChange && value.from >= shiftedChange.toOld
       ? shiftMathSemantics(value, shiftedChange.delta)
       : mapMathSemantics(value, changes);
-    if (next !== value) changed = true;
-    mapped.push(next);
+    if (next !== value) {
+      allChanged = true;
+      retainedChanged = true;
+    }
+    allMapped.push(next);
+    if (touched) {
+      retainedChanged = true;
+      continue;
+    }
+    retainedMapped.push(next);
   }
 
-  return changed ? mapped : values;
+  return {
+    all: allChanged ? allMapped : values,
+    retained: retainedChanged ? retainedMapped : values,
+  };
 }
 
 export function createMathSlice(
@@ -249,8 +264,9 @@ export function expandDirtyMathExtractions(
   dirtyExtractions: readonly DirtyMathWindowExtraction[],
   doc: TextSource,
   tree: Tree,
+  mappedRegions: MappedMathRegionUpdate = mapMathRegionUpdate(previous, delta),
 ): readonly DirtyMathWindowExtraction[] {
-  const mappedPrevious = mapMathRegions(previous.mathRegions, delta, false);
+  const mappedPrevious = mappedRegions.all;
   let changed = false;
 
   const expanded = dirtyExtractions.map((extraction) => {
@@ -294,8 +310,9 @@ export function computeMathOverhangRanges(
   previous: MathSlice,
   delta: Pick<SemanticDelta, "mapOldToNew" | "rawChangedRanges">,
   dirtyWindows: readonly Pick<DirtyWindow, "fromNew" | "toNew">[],
+  mappedRegions: MappedMathRegionUpdate = mapMathRegionUpdate(previous, delta),
 ): readonly { readonly from: number; readonly to: number }[] {
-  const mapped = mapMathRegions(previous.mathRegions, delta, false);
+  const mapped = mappedRegions.all;
   const overhangs: { from: number; to: number }[] = [];
   for (const window of dirtyWindows) {
     const overhangTo = findOverhangTo(mapped, window);
@@ -312,8 +329,9 @@ export function mergeMathSlice(
   dirtyExtractions: readonly DirtyMathWindowExtraction[],
   doc: TextSource,
   tree: Tree,
+  mappedRegions: MappedMathRegionUpdate = mapMathRegionUpdate(previous, delta),
 ): MathSlice {
-  let mathRegions = mapMathRegions(previous.mathRegions, delta);
+  let mathRegions = mappedRegions.retained;
 
   for (const { window, structural } of dirtyExtractions) {
     const overhangTo = findOverhangTo(mathRegions, window);

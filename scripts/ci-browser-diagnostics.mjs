@@ -12,8 +12,8 @@ import { join, resolve } from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "playwright";
+import { screenshot } from "./browser-screenshot.mjs";
 import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
-import { screenshot } from "./test-helpers.mjs";
 
 function parseArgs(argv) {
   const flags = new Map();

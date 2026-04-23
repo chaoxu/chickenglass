@@ -1,12 +1,12 @@
 import console from "node:console";
-import { parseChromeArgs } from "./chrome-common.mjs";
-import { createArgParser } from "./devx-cli.mjs";
 import {
   connectEditor,
   disconnectBrowser,
   ensureAppServer,
   waitForDebugBridge,
-} from "./test-helpers.mjs";
+} from "./browser-lifecycle.mjs";
+import { parseChromeArgs } from "./chrome-common.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 
 /**
  * Open a script-owned browser session and, for managed localhost sessions,

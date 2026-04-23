@@ -10,17 +10,17 @@ import {
   openBrowserPage,
   openBrowserSession,
 } from "./devx-browser-session.mjs";
+import { assertEditorHealth } from "./browser-health.mjs";
+import { sleep } from "./browser-lifecycle.mjs";
+import { createArgParser, splitCliCommand } from "./devx-cli.mjs";
 import {
-  assertEditorHealth,
   captureDebugState,
-  createArgParser,
   jumpToTextAnchor,
   openFixtureDocument,
   openFile,
   setCursor,
-  sleep,
   switchToMode,
-} from "./test-helpers.mjs";
+} from "./editor-test-helpers.mjs";
 
 export { openBrowserPage, openBrowserSession };
 
@@ -758,7 +758,7 @@ async function runDiffCommand(argv) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const [command, ...rest] = argv;
+  const { command, options: rest } = splitCliCommand(argv, ["capture", "replay", "diff"]);
   if (!command || command === "--help" || command === "-h") {
     printUsage();
     return;

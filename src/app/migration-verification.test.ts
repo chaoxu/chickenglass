@@ -884,9 +884,11 @@ describe("#266 — Playwright mode switching helper", () => {
 
   it("test helpers export switchToMode", () => {
     const helpers = fileText("scripts/test-helpers.mjs");
-    expect(helpers).toContain("export async function switchToMode");
-    expect(helpers).toContain("window.__app.setMode");
-    expect(helpers).toContain("app debug bridge unavailable");
+    const editorHelpers = fileText("scripts/editor-test-helpers.mjs");
+    expect(helpers).toContain('export * from "./editor-test-helpers.mjs"');
+    expect(editorHelpers).toContain("export async function switchToMode");
+    expect(editorHelpers).toContain("window.__app.setMode");
+    expect(editorHelpers).toContain("app debug bridge unavailable");
   });
 });
 

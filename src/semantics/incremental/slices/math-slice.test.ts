@@ -9,6 +9,7 @@ import { buildSemanticDelta } from "../semantic-delta";
 import { extractStructuralWindow } from "../window-extractor";
 import {
   buildMathSlice,
+  mapMathRegionUpdate,
   mapMathSemantics,
   mergeMathSlice,
   type DirtyMathWindowExtraction,
@@ -109,6 +110,31 @@ describe("math slice", () => {
     expect(after.mathRegions[1]).not.toBe(before.mathRegions[1]);
     expect(after.mathRegions[1].latex).toBe("w");
     expect(after.mathRegions[2]).toBe(before.mathRegions[2]);
+  });
+
+  it("precomputes mapped and retained math regions for one incremental update", () => {
+    const doc = [
+      "Alpha $x$.",
+      "",
+      "Beta $y$.",
+      "",
+      "Gamma $z$.",
+    ].join("\n");
+    const beforeState = createState(doc);
+    const before = analyzeMathSlice(beforeState);
+    const insertAt = doc.indexOf("Beta $y$.") + "Beta ".length;
+    const tr = beforeState.update({
+      changes: { from: insertAt, insert: "wide " },
+    });
+    const mapped = mapMathRegionUpdate(before, buildSemanticDelta(tr));
+
+    expect(mapped.all).toHaveLength(3);
+    expect(mapped.retained).toHaveLength(2);
+    expect(mapped.all[0]).toBe(before.mathRegions[0]);
+    expect(mapped.retained[0]).toBe(before.mathRegions[0]);
+    expect(mapped.all[1].latex).toBe("y");
+    expect(mapped.retained[1].latex).toBe("z");
+    expect(mapped.retained[1].from).toBe(before.mathRegions[2].from + "wide ".length);
   });
 
   it("preserves untouched math identities across unrelated edits", () => {

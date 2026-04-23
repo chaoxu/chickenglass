@@ -22,11 +22,9 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
 import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
-import {
-  createArgParser,
-  resetEditorState,
-} from "./test-helpers.mjs";
+import { resetEditorState } from "./editor-test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
@@ -36,10 +34,6 @@ const SCENARIO_FILTERS = new Map([
   ["smoke", SMOKE_FILTER],
   ["lexical", LEXICAL_FILTER],
 ]);
-
-function normalizeCliArgs(args) {
-  return args.filter((arg) => arg !== "--");
-}
 
 function resolveFilter({ filterArg, scenarioArg }) {
   if (filterArg) {

@@ -3,11 +3,12 @@ import { type EditorState, StateField, type Transaction } from "@codemirror/stat
 
 import type { DocumentAnalysis, TextSource } from "../semantics/document";
 import {
-  createDocumentAnalysis,
+  createDocumentAnalysisSnapshot,
+  type DocumentAnalysisSnapshot,
   getDocumentAnalysisRevision,
   getDocumentAnalysisRevisionInfo,
   getDocumentAnalysisSliceRevision,
-  updateDocumentAnalysis,
+  updateDocumentAnalysisSnapshot,
   type DocumentAnalysisRevisionInfo,
   type DocumentAnalysisSliceName,
   type DocumentAnalysisSliceRevisions,
@@ -78,9 +79,9 @@ function completeSyntaxTree(state: EditorState) {
 }
 
 function updateDocumentAnalysisForTransaction(
-  value: DocumentAnalysis,
+  value: DocumentAnalysisSnapshot,
   tr: Transaction,
-): DocumentAnalysis {
+): DocumentAnalysisSnapshot {
   const delta = buildSemanticDelta(tr);
   if (!delta.docChanged && !delta.syntaxTreeChanged && !delta.globalInvalidation) {
     return value;
@@ -90,7 +91,7 @@ function updateDocumentAnalysisForTransaction(
     const doc = editorStateTextSource(tr.state);
     const tree = syntaxTree(tr.state);
     return measureSync("cm6.documentAnalysis.update.sliceMerge", () =>
-      updateDocumentAnalysis(value, doc, tree, delta)
+      updateDocumentAnalysisSnapshot(value, doc, tree, delta)
     );
   });
 }
@@ -104,10 +105,10 @@ function updateDocumentAnalysisForTransaction(
  * non-CM6 preview renderers stay CM6-free and call
  * `analyzeDocumentSemantics()` directly.
  */
-export const documentAnalysisField = StateField.define<DocumentAnalysis>({
+export const documentAnalysisField = StateField.define<DocumentAnalysisSnapshot>({
   create(state) {
     return measureSync("cm6.documentAnalysis.create", () =>
-      createDocumentAnalysis(editorStateTextSource(state), completeSyntaxTree(state))
+      createDocumentAnalysisSnapshot(editorStateTextSource(state), completeSyntaxTree(state))
     );
   },
 
@@ -117,6 +118,12 @@ export const documentAnalysisField = StateField.define<DocumentAnalysis>({
 });
 
 export const documentSemanticsField = documentAnalysisField;
+
+export function documentAnalysisFromSnapshot(
+  snapshot: DocumentAnalysisSnapshot | null | undefined,
+): DocumentAnalysis | undefined {
+  return snapshot?.analysis;
+}
 
 export {
   getDocumentAnalysisRevision,

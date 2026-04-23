@@ -37,14 +37,19 @@ describe("shared document analysis cache", () => {
       "# Title\n\nParagraph with [@ref].\n",
       path,
     );
+    const afterArtifacts = getDocumentArtifacts(
+      "# Title\n\nParagraph with [@ref].\n",
+      path,
+    );
 
-    expect(getDocumentAnalysisRevision(after)).toBe(
+    expect(after).toBe(afterArtifacts.analysis);
+    expect(getDocumentAnalysisRevision(afterArtifacts.analysisSnapshot)).toBe(
       getDocumentAnalysisRevision(external) + 1,
     );
-    expect(getDocumentAnalysisSliceRevision(after, "references")).toBe(
+    expect(getDocumentAnalysisSliceRevision(afterArtifacts.analysisSnapshot, "references")).toBe(
       getDocumentAnalysisSliceRevision(external, "references") + 1,
     );
-    expect(getDocumentAnalysisSliceRevision(after, "headings")).toBe(
+    expect(getDocumentAnalysisSliceRevision(afterArtifacts.analysisSnapshot, "headings")).toBe(
       getDocumentAnalysisSliceRevision(external, "headings"),
     );
   });
@@ -100,11 +105,11 @@ describe("cached document artifacts", () => {
     );
 
     expect(after.version).toBe(before.version + 1);
-    expect(getDocumentAnalysisRevision(after.artifacts.analysis)).toBe(
-      getDocumentAnalysisRevision(before.artifacts.analysis) + 1,
+    expect(getDocumentAnalysisRevision(after.artifacts.analysisSnapshot)).toBe(
+      getDocumentAnalysisRevision(before.artifacts.analysisSnapshot) + 1,
     );
-    expect(getDocumentAnalysisSliceRevision(after.artifacts.analysis, "references")).toBe(
-      getDocumentAnalysisSliceRevision(before.artifacts.analysis, "references") + 1,
+    expect(getDocumentAnalysisSliceRevision(after.artifacts.analysisSnapshot, "references")).toBe(
+      getDocumentAnalysisSliceRevision(before.artifacts.analysisSnapshot, "references") + 1,
     );
     expect(after.artifacts.ir.references[0]?.ids).toEqual(["ref"]);
   });

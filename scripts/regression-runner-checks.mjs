@@ -2,7 +2,7 @@ import {
   assertEditorHealth,
   formatRuntimeIssues,
   withRuntimeIssueCapture,
-} from "./test-helpers.mjs";
+} from "./browser-health.mjs";
 
 function normalizeRuntimeIssueOptions(test) {
   if (test.runtimeIssues === false) {

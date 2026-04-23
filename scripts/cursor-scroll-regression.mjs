@@ -4,17 +4,17 @@ import console from "node:console";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { assertEditorHealth } from "./browser-health.mjs";
+import { sleep } from "./browser-lifecycle.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 import {
-  assertEditorHealth,
-  createArgParser,
   EXTERNAL_FIXTURE_ROOT,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocumentWithFallback,
-  sleep,
   traceVerticalCursorMotion,
-} from "./test-helpers.mjs";
+} from "./editor-test-helpers.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");

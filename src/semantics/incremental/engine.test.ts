@@ -10,7 +10,9 @@ import { buildSemanticDelta } from "./semantic-delta";
 import type { SemanticDelta } from "./types";
 import {
   createDocumentAnalysis,
+  createDocumentAnalysisSnapshot,
   createDocumentArtifacts,
+  type DocumentAnalysisSnapshot,
   getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
   updateDocumentArtifacts,
@@ -29,7 +31,7 @@ function fullTree(state: EditorState) {
 }
 
 function analyze(state: EditorState) {
-  return createDocumentAnalysis(editorStateTextSource(state), fullTree(state));
+  return createDocumentAnalysisSnapshot(editorStateTextSource(state), fullTree(state));
 }
 
 function analyzeArtifacts(state: EditorState) {
@@ -72,15 +74,10 @@ function isInternalStateProbe(value: unknown): value is InternalStateProbe {
   return isRecord(fencedDivSlice) && Array.isArray(fencedDivSlice.structureRanges);
 }
 
-function getInternalStateProbe(analysis: DocumentAnalysis): InternalStateProbe {
-  const symbolRecord = analysis as DocumentAnalysis & {
-    readonly [key: symbol]: unknown;
-  };
-  for (const symbol of Object.getOwnPropertySymbols(analysis)) {
-    const value = symbolRecord[symbol];
-    if (isInternalStateProbe(value)) {
-      return value;
-    }
+function getInternalStateProbe(analysis: DocumentAnalysisSnapshot): InternalStateProbe {
+  const value = analysis.incrementalState;
+  if (isInternalStateProbe(value)) {
+    return value;
   }
   throw new Error("expected incremental analysis internal state");
 }
@@ -681,7 +678,9 @@ describe("incremental document analysis engine", () => {
   });
 
   it("keeps revisions off the public enumerable DocumentAnalysis shape", () => {
-    const analysis = analyze(createState("Alpha $x$."));
+    const state = createState("Alpha $x$.");
+    const analysis = createDocumentAnalysis(editorStateTextSource(state), fullTree(state));
+    const snapshot = analyze(state);
 
     expect(Object.keys(analysis).sort()).toEqual([
       "equationById",
@@ -697,6 +696,9 @@ describe("incremental document analysis engine", () => {
       "references",
     ]);
     expect("revision" in analysis).toBe(false);
+    expect("incrementalState" in snapshot).toBe(true);
+    expect(Object.keys(snapshot)).not.toContain("incrementalState");
+    expect(snapshot.analysis).toBeDefined();
   });
 
   it("caches equation numbering keys without exposing them as enumerable state", () => {
@@ -704,7 +706,7 @@ describe("incremental document analysis engine", () => {
       "$$x$$ {#eq:first}",
       "",
       "$$y$$ {#eq:second}",
-    ].join("\n")));
+    ].join("\n"))).analysis;
 
     const cacheKey = getEquationNumbersCacheKey(analysis);
     const descriptor = Object.getOwnPropertyDescriptor(analysis, "equationNumbersCacheKey");

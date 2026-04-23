@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { sleep } from "./browser-lifecycle.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 import {
-  createArgParser,
   openFixtureDocument,
   openRegressionDocument,
-  sleep,
-} from "./test-helpers.mjs";
+} from "./editor-test-helpers.mjs";
 
 const DEFAULT_URL = "http://localhost:5173";
 const DEFAULT_STEP_PX = 90;

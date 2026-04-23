@@ -9,8 +9,8 @@ import {
 } from "../semantics/document";
 import type { DocumentArtifacts } from "../semantics/incremental/engine";
 import {
-  getDocumentAnalysis,
-  rememberDocumentAnalysis,
+  getDocumentAnalysisSnapshot,
+  rememberDocumentAnalysisSnapshot,
 } from "../semantics/incremental/cached-document-analysis";
 import {
   buildDocumentReferenceCatalog,
@@ -43,13 +43,13 @@ function resolveAnalysis(
   analysis: FileIndexAnalysisInput | undefined,
 ): DocumentSemantics {
   if (!analysis) {
-    return getDocumentAnalysis(content, file);
+    return getDocumentAnalysisSnapshot(content, file);
   }
 
   const documentAnalysis = isDocumentArtifacts(analysis)
-    ? analysis.analysis
+    ? analysis.analysisSnapshot
     : analysis;
-  return rememberDocumentAnalysis(content, documentAnalysis, file);
+  return rememberDocumentAnalysisSnapshot(content, documentAnalysis, file);
 }
 
 function isDocumentArtifacts(

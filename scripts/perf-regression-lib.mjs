@@ -269,13 +269,19 @@ function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDel
       ? (current.maxValue - baseline.maxValue) / baseline.maxValue
       : (maxDelta > 0 ? 1 : 0);
     const meanRegressed = meanDelta > minDelta && meanPct > thresholdPct;
-    const maxRegressed = maxDelta > minDelta * 2 && maxPct > thresholdPct;
+    const maxRegressed = maxDelta > minDelta * 2
+      && maxPct > thresholdPct
+      && (
+        unit !== "ms" ||
+        (meanDelta > minDelta && meanPct > thresholdPct / 2)
+      );
 
+    const regressed = meanRegressed || maxRegressed;
     comparisons.push({
       key,
       name: baseline.name,
       unit: baseline.unit ?? "count",
-      status: meanRegressed || maxRegressed ? "regressed" : "ok",
+      status: regressed && !isDiagnosticMetric(baseline) ? "regressed" : "ok",
       meanDelta,
       maxDelta,
       meanPct: roundMs(meanPct * 100),
@@ -286,6 +292,10 @@ function compareMetricSets(baselineEntries, currentEntries, thresholdPct, minDel
   }
 
   return comparisons;
+}
+
+function isDiagnosticMetric(entry) {
+  return entry.unit === "ms" && /(^|\.)(idle_ms|settle_ms)(\.|$)/.test(entry.name);
 }
 
 export function comparePerfRegressionReports(

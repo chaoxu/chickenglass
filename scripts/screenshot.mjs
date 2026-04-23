@@ -9,8 +9,10 @@
  */
 
 import process from "node:process";
+import { screenshot } from "./browser-screenshot.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
-import { createArgParser, openFile, screenshot } from "./test-helpers.mjs";
+import { createArgParser } from "./devx-cli.mjs";
+import { openFile } from "./editor-test-helpers.mjs";
 
 const args = process.argv.slice(2);
 const { getFlag, getPositionals } = createArgParser(args);

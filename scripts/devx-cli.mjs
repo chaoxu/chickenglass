@@ -108,6 +108,38 @@ export function parseCliArgs(argv = process.argv.slice(2), options = {}) {
   return { flags, positionals };
 }
 
+export function normalizeCliArgs(args = process.argv.slice(2)) {
+  return args.filter((arg) => arg !== "--");
+}
+
+export function splitCliCommand(
+  argv = process.argv.slice(2),
+  knownCommands = [],
+  defaultCommand = undefined,
+) {
+  const normalized = normalizeCliArgs(argv);
+  const [first, ...rest] = normalized;
+  if (first && knownCommands.includes(first)) {
+    return {
+      command: first,
+      options: rest,
+      hasExplicitCommand: true,
+    };
+  }
+  if (defaultCommand !== undefined) {
+    return {
+      command: defaultCommand,
+      options: normalized,
+      hasExplicitCommand: false,
+    };
+  }
+  return {
+    command: first,
+    options: rest,
+    hasExplicitCommand: false,
+  };
+}
+
 /**
  * Create a small parser for script CLIs.
  *
