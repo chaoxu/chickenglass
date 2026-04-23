@@ -3,8 +3,20 @@
 /* global window */
 
 import console from "node:console";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, extname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parseChromeArgs } from "./chrome-common.mjs";
@@ -24,6 +36,7 @@ import {
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
+  resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
   sleep,
   switchToMode,
@@ -87,6 +100,23 @@ const DEFAULT_POST_OPEN_SETTLE_MS = 200;
 const HEAVY_DOC_DEBUG_BRIDGE_TIMEOUT_MS = 45000;
 const HEAVY_DOC_FIXTURE_OPEN_TIMEOUT_MS = 45000;
 const HEAVY_DOC_POST_OPEN_SETTLE_MS = 800;
+const LATEX_PANDOC_FROM = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
+const PANDOC_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
+const HTML_EXPORT_SUPPORT_EXTENSIONS = new Set([
+  ".bib",
+  ".csl",
+  ".css",
+  ".gif",
+  ".jpeg",
+  ".jpg",
+  ".json",
+  ".png",
+  ".svg",
+  ".txt",
+  ".webp",
+  ".yaml",
+  ".yml",
+]);
 const SCROLL_FIXTURE = {
   displayPath: "fixtures/cogirth/main2.md",
   virtualPath: "cogirth/main2.md",
@@ -119,6 +149,12 @@ export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
   "lexical.typing.source_span_index_work_ms",
   "lexical.typing.source_span_index_count",
   "lexical.typing.input_to_semantic_ms",
+];
+
+export const HTML_EXPORT_PANDOC_REQUIRED_METRICS = [
+  "export.html.wall_ms",
+  "export.html.input_bytes",
+  "export.html.output_bytes",
 ];
 
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
@@ -193,7 +229,34 @@ export const TYPING_BURST_CASES = [
 ];
 const TYPING_BURST_INSERT_COUNT = 100;
 
+export const HTML_EXPORT_PANDOC_CASES = [
+  {
+    key: "index",
+    displayPath: "demo/index.md",
+    virtualPath: "index.md",
+    candidates: [
+      resolve(REPO_ROOT, "demo/index.md"),
+      resolve(EXTERNAL_DEMO_ROOT, "index.md"),
+    ],
+  },
+  {
+    key: "cogirth_main2",
+    displayPath: "fixtures/cogirth/main2.md",
+    virtualPath: "cogirth/main2.md",
+    candidates: [
+      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
+      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
+    ],
+  },
+];
+
 export function availableTypingBurstCases(caseDefinitions = TYPING_BURST_CASES) {
+  return caseDefinitions.filter((caseDef) => hasFixtureDocument(caseDef));
+}
+
+export function availableHtmlExportPandocCases(
+  caseDefinitions = HTML_EXPORT_PANDOC_CASES,
+) {
   return caseDefinitions.filter((caseDef) => hasFixtureDocument(caseDef));
 }
 
@@ -334,6 +397,10 @@ function resolveTypingBurstFixture(caseDef) {
     resolvedPath,
     content: readFileSync(resolvedPath, "utf8"),
   };
+}
+
+function resolveHtmlExportPandocFixture(caseDef) {
+  return resolveFixtureDocument(caseDef);
 }
 
 function resolveScrollFixture() {
@@ -699,7 +766,242 @@ function lexicalTypingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CA
   return metricNames;
 }
 
+function htmlExportPandocRequiredMetricNames(
+  caseDefinitions = HTML_EXPORT_PANDOC_CASES,
+) {
+  const metricNames = [];
+  for (const caseDef of caseDefinitions) {
+    for (const metricName of HTML_EXPORT_PANDOC_REQUIRED_METRICS) {
+      metricNames.push(`${metricName}.${caseDef.key}`);
+    }
+  }
+  return metricNames;
+}
+
+function inferProjectRootFromVirtualPath(resolvedPath, virtualPath) {
+  const parts = virtualPath.split("/").filter(Boolean);
+  let projectRoot = dirname(resolvedPath);
+  for (let index = 1; index < parts.length; index += 1) {
+    projectRoot = dirname(projectRoot);
+  }
+  return projectRoot;
+}
+
+function copySupportTree(sourceDir, targetDir, fixturePath) {
+  if (!existsSync(sourceDir)) {
+    return;
+  }
+
+  mkdirSync(targetDir, { recursive: true });
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) {
+      continue;
+    }
+
+    const sourcePath = resolve(sourceDir, entry.name);
+    const targetPath = resolve(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      copySupportTree(sourcePath, targetPath, fixturePath);
+      continue;
+    }
+
+    if (
+      entry.isFile()
+      && (
+        sourcePath === fixturePath
+        || HTML_EXPORT_SUPPORT_EXTENSIONS.has(extname(entry.name).toLowerCase())
+      )
+    ) {
+      mkdirSync(dirname(targetPath), { recursive: true });
+      copyFileSync(sourcePath, targetPath);
+    }
+  }
+}
+
+function copySupportFiles(sourceDir, targetDir) {
+  if (!existsSync(sourceDir)) {
+    return;
+  }
+
+  mkdirSync(targetDir, { recursive: true });
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (
+      entry.isFile()
+      && HTML_EXPORT_SUPPORT_EXTENSIONS.has(extname(entry.name).toLowerCase())
+    ) {
+      copyFileSync(resolve(sourceDir, entry.name), resolve(targetDir, entry.name));
+    }
+  }
+}
+
+function prepareHtmlExportPandocFixture(caseDef) {
+  const fixture = resolveHtmlExportPandocFixture(caseDef);
+  const sourceProjectRoot = inferProjectRootFromVirtualPath(
+    fixture.resolvedPath,
+    fixture.virtualPath,
+  );
+  const sourceDir = dirname(fixture.resolvedPath);
+  const tempProjectRoot = mkdtempSync(join(tmpdir(), "coflat-html-export-perf-"));
+  const tempSourcePath = resolve(tempProjectRoot, fixture.virtualPath);
+  const tempSourceDir = dirname(tempSourcePath);
+  const outputPath = resolve(tempProjectRoot, "exports", `${fixture.key}.html`);
+
+  mkdirSync(tempSourceDir, { recursive: true });
+  copyFileSync(fixture.resolvedPath, tempSourcePath);
+  copySupportTree(sourceDir, tempSourceDir, fixture.resolvedPath);
+  if (sourceDir !== sourceProjectRoot) {
+    copySupportFiles(sourceProjectRoot, tempProjectRoot);
+  }
+  mkdirSync(dirname(outputPath), { recursive: true });
+
+  return {
+    ...fixture,
+    tempProjectRoot,
+    tempSourcePath,
+    tempSourceDir,
+    outputPath,
+    content: readFileSync(tempSourcePath, "utf8"),
+    inputBytes: statSync(tempSourcePath).size,
+  };
+}
+
+function buildPandocResourcePath(projectRoot, sourceDir) {
+  const paths = [sourceDir];
+  if (sourceDir !== projectRoot) {
+    paths.push(projectRoot);
+  }
+  return paths.join(delimiter);
+}
+
+export function buildHtmlExportPandocArgs(projectRoot, sourceDir, outputPath) {
+  const resourcePath = buildPandocResourcePath(projectRoot, sourceDir);
+  return [
+    `--from=${LATEX_PANDOC_FROM}`,
+    "--to=html5",
+    "--standalone",
+    "--wrap=preserve",
+    "--katex",
+    "--section-divs",
+    "--filter=pandoc-crossref",
+    "--citeproc",
+    "--metadata=link-citations=true",
+    `--resource-path=${resourcePath}`,
+    `--output=${outputPath}`,
+  ];
+}
+
+function assertCommandAvailable(command, args, installHint, commandRunner) {
+  const result = commandRunner(command, args, {
+    encoding: "utf8",
+    maxBuffer: PANDOC_MAX_BUFFER_BYTES,
+  });
+  if (result.error) {
+    throw new Error(
+      `Missing required command "${command}" for html-export-pandoc. ${installHint}`,
+    );
+  }
+  if (result.status !== 0) {
+    const stderr = String(result.stderr ?? "").trim();
+    throw new Error(
+      `Preflight command "${command} ${args.join(" ")}" failed for html-export-pandoc.${
+        stderr ? ` ${stderr}` : ""
+      }`,
+    );
+  }
+}
+
+export function preflightHtmlExportPandoc({
+  commandRunner = spawnSync,
+} = {}) {
+  assertCommandAvailable(
+    "pandoc",
+    ["--version"],
+    "Install Pandoc or add it to PATH.",
+    commandRunner,
+  );
+  assertCommandAvailable(
+    "pandoc-crossref",
+    ["--version"],
+    "Install pandoc-crossref or add it to PATH. The scenario passes --filter=pandoc-crossref to match Tauri HTML export.",
+    commandRunner,
+  );
+}
+
+function runPandocHtmlExport(caseDef) {
+  const fixture = prepareHtmlExportPandocFixture(caseDef);
+  try {
+    const args = buildHtmlExportPandocArgs(
+      fixture.tempProjectRoot,
+      fixture.tempSourceDir,
+      fixture.outputPath,
+    );
+    const start = process.hrtime.bigint();
+    const result = spawnSync("pandoc", args, {
+      cwd: fixture.tempSourceDir,
+      encoding: "utf8",
+      input: fixture.content,
+      maxBuffer: PANDOC_MAX_BUFFER_BYTES,
+    });
+    const wallMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+
+    if (result.error) {
+      throw new Error(
+        `Failed to start Pandoc HTML export for ${fixture.displayPath}: ${result.error.message}`,
+      );
+    }
+    if (result.status !== 0) {
+      const stderr = String(result.stderr ?? "").trim();
+      throw new Error(
+        `Pandoc HTML export failed for ${fixture.displayPath}: ${stderr || `exit ${result.status}`}`,
+      );
+    }
+
+    return {
+      key: fixture.key,
+      wallMs,
+      inputBytes: fixture.inputBytes,
+      outputBytes: statSync(fixture.outputPath).size,
+    };
+  } finally {
+    rmSync(fixture.tempProjectRoot, { recursive: true, force: true });
+  }
+}
+
+export function htmlExportPandocMetrics(caseKey, result) {
+  const withContext = (name) => `${name}.${caseKey}`;
+  return [
+    { name: withContext("export.html.wall_ms"), unit: "ms", value: result.wallMs },
+    {
+      name: withContext("export.html.input_bytes"),
+      unit: "bytes",
+      value: result.inputBytes,
+    },
+    {
+      name: withContext("export.html.output_bytes"),
+      unit: "bytes",
+      value: result.outputBytes,
+    },
+  ];
+}
+
 export const scenarios = {
+  "html-export-pandoc": {
+    description: "Run the native Pandoc-backed HTML export path against demo/index.md and the preferred heavy fixture when available.",
+    runtime: "native",
+    defaultSettleMs: 0,
+    requiredMetrics: htmlExportPandocRequiredMetricNames(
+      availableHtmlExportPandocCases(),
+    ),
+    preflight: preflightHtmlExportPandoc,
+    run: async () => {
+      const metrics = [];
+      for (const testCase of availableHtmlExportPandocCases()) {
+        const result = runPandocHtmlExport(testCase);
+        metrics.push(...htmlExportPandocMetrics(testCase.key, result));
+      }
+      return { metrics };
+    },
+  },
   "open-index": {
     description: "Reload the app and open demo/index.md in Rich mode.",
     defaultSettleMs: 400,
@@ -979,6 +1281,8 @@ Options:
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
   --no-start-server        Do not auto-start Vite for managed localhost runs
+
+Native scenarios such as html-export-pandoc skip Vite/Playwright and run local tooling directly.
 `);
 }
 
@@ -1032,6 +1336,37 @@ async function runScenarioSamples(
       });
     }
     await discardDirtyPerfState(page);
+  }
+
+  return snapshots;
+}
+
+async function runNativeScenarioSamples(
+  scenarioName,
+  iterations,
+  warmup,
+  settleMs,
+  runtimeOptions,
+) {
+  const scenario = scenarios[scenarioName];
+  if (!scenario) {
+    throw new Error(`Unknown scenario "${scenarioName}".`);
+  }
+
+  scenario.preflight?.(runtimeOptions);
+
+  const snapshots = [];
+  const totalRuns = warmup + iterations;
+  for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
+    const scenarioResult = await scenario.run(null, runtimeOptions);
+    await sleep(settleMs);
+    if (runIndex >= warmup) {
+      snapshots.push({
+        frontend: { summaries: [] },
+        backend: { summaries: [] },
+        metrics: scenarioResult?.metrics ?? [],
+      });
+    }
   }
 
   return snapshots;
@@ -1166,33 +1501,46 @@ export async function main(argv = process.argv.slice(2)) {
   process.once("SIGTERM", onSigterm);
 
   try {
-    stopAppServer = await ensureAppServer(chromeArgs.url, {
-      autoStart: !options.includes("--no-start-server"),
-    });
-    page = await connectEditor({
-      browser: chromeArgs.browser,
-      headless: chromeArgs.headless,
-      port: chromeArgs.port,
-      timeout: runtimeOptions.debugBridgeTimeoutMs,
-      url: chromeArgs.url,
-    });
-    const appUrl = getFlag("--url") ?? page.url();
-    const snapshots = await runScenarioSamples(
-      page,
-      scenarioName,
-      iterations,
-      warmup,
-      settleMs,
-      appUrl,
-      runtimeOptions,
-    );
+    let appUrl = null;
+    let snapshots;
+    if (scenario.runtime === "native") {
+      snapshots = await runNativeScenarioSamples(
+        scenarioName,
+        iterations,
+        warmup,
+        settleMs,
+        runtimeOptions,
+      );
+    } else {
+      stopAppServer = await ensureAppServer(chromeArgs.url, {
+        autoStart: !options.includes("--no-start-server"),
+      });
+      page = await connectEditor({
+        browser: chromeArgs.browser,
+        headless: chromeArgs.headless,
+        port: chromeArgs.port,
+        timeout: runtimeOptions.debugBridgeTimeoutMs,
+        url: chromeArgs.url,
+      });
+      appUrl = getFlag("--url") ?? page.url();
+      snapshots = await runScenarioSamples(
+        page,
+        scenarioName,
+        iterations,
+        warmup,
+        settleMs,
+        appUrl,
+        runtimeOptions,
+      );
+    }
+
     const report = buildPerfRegressionReport({
       scenario: scenarioName,
       iterations,
       warmup,
       settleMs,
       requiredMetrics: scenario.requiredMetrics ?? [],
-      chromePort: chromeArgs.port,
+      chromePort: scenario.runtime === "native" ? null : chromeArgs.port,
       appUrl,
       snapshots,
     });

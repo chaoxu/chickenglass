@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  availableHtmlExportPandocCases,
   availableTypingBurstCases,
+  buildHtmlExportPandocArgs,
   comparisonFailureRows,
   findTypingBurstPositions,
+  HTML_EXPORT_PANDOC_CASES,
+  HTML_EXPORT_PANDOC_REQUIRED_METRICS,
+  htmlExportPandocMetrics,
   parseCliArgs,
+  preflightHtmlExportPandoc,
   resolvePerfRuntimeOptions,
   scenarios,
   TYPING_BURST_CASES,
@@ -12,6 +18,94 @@ import {
 } from "./perf-regression.mjs";
 
 describe("perf regression scenarios", () => {
+  it("registers html-export-pandoc as a native scenario with export metrics", () => {
+    const availableCases = availableHtmlExportPandocCases().map(({ key, displayPath }) => ({
+      key,
+      displayPath,
+    }));
+
+    expect(scenarios["html-export-pandoc"]).toMatchObject({
+      runtime: "native",
+      defaultSettleMs: 0,
+    });
+    expect(HTML_EXPORT_PANDOC_CASES.map(({ key, displayPath }) => ({ key, displayPath }))).toEqual([
+      { key: "index", displayPath: "demo/index.md" },
+      { key: "cogirth_main2", displayPath: "fixtures/cogirth/main2.md" },
+    ]);
+    expect(availableCases).toContainEqual({ key: "index", displayPath: "demo/index.md" });
+    expect(scenarios["html-export-pandoc"].requiredMetrics).toContain(
+      "export.html.wall_ms.index",
+    );
+    expect(scenarios["html-export-pandoc"].requiredMetrics).toContain(
+      "export.html.input_bytes.index",
+    );
+    expect(scenarios["html-export-pandoc"].requiredMetrics).toContain(
+      "export.html.output_bytes.index",
+    );
+
+    if (availableCases.some(({ key }) => key === "cogirth_main2")) {
+      expect(scenarios["html-export-pandoc"].requiredMetrics).toContain(
+        "export.html.wall_ms.cogirth_main2",
+      );
+    } else {
+      expect(scenarios["html-export-pandoc"].requiredMetrics).not.toContain(
+        "export.html.wall_ms.cogirth_main2",
+      );
+    }
+  });
+
+  it("builds the HTML export Pandoc command shape used by Tauri export", () => {
+    const args = buildHtmlExportPandocArgs(
+      "/tmp/coflat-project",
+      "/tmp/coflat-project/notes",
+      "/tmp/coflat-project/exports/out.html",
+    );
+
+    expect(args).toEqual([
+      "--from=markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark",
+      "--to=html5",
+      "--standalone",
+      "--wrap=preserve",
+      "--katex",
+      "--section-divs",
+      "--filter=pandoc-crossref",
+      "--citeproc",
+      "--metadata=link-citations=true",
+      `--resource-path=/tmp/coflat-project/notes${process.platform === "win32" ? ";" : ":"}/tmp/coflat-project`,
+      "--output=/tmp/coflat-project/exports/out.html",
+    ]);
+  });
+
+  it("emits the required HTML export Pandoc metrics", () => {
+    const metrics = htmlExportPandocMetrics("index", {
+      wallMs: 42,
+      inputBytes: 1024,
+      outputBytes: 4096,
+    });
+
+    expect(metrics).toEqual([
+      { name: "export.html.wall_ms.index", unit: "ms", value: 42 },
+      { name: "export.html.input_bytes.index", unit: "bytes", value: 1024 },
+      { name: "export.html.output_bytes.index", unit: "bytes", value: 4096 },
+    ]);
+    expect(metrics.map((entry) => entry.name.split(".").slice(0, 3).join("."))).toEqual(
+      HTML_EXPORT_PANDOC_REQUIRED_METRICS,
+    );
+  });
+
+  it("preflights missing pandoc-crossref with a clear error", () => {
+    const commandRunner = (command) => {
+      if (command === "pandoc") {
+        return { status: 0, stdout: "pandoc 3", stderr: "" };
+      }
+      return { error: new Error("ENOENT"), status: null, stderr: "" };
+    };
+
+    expect(() => preflightHtmlExportPandoc({ commandRunner })).toThrow(
+      'Missing required command "pandoc-crossref" for html-export-pandoc',
+    );
+  });
+
   it("registers typing-rich-burst with the expected benchmark docs and required metrics", () => {
     const availableCases = availableTypingBurstCases().map(({ key, displayPath }) => ({ key, displayPath }));
     expect(scenarios["typing-rich-burst"]).toMatchObject({

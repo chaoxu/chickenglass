@@ -23,6 +23,8 @@ pnpm dev
 
 The perf script owns its browser session by default. If you need to compare against the manual app window, pass `--browser cdp` and launch `pnpm chrome` separately.
 
+Native scenarios do not use the browser or app server. `html-export-pandoc` runs local Pandoc directly and preflights both `pandoc` and `pandoc-crossref` before measurement.
+
 For heavy private fixtures, use the supported heavy-doc mode instead of ad hoc timeout tweaks:
 
 ```bash
@@ -72,6 +74,8 @@ pnpm perf:capture -- \
 
 ## Built-In Scenarios
 
+- `html-export-pandoc`
+  Run the native Pandoc-backed HTML export path against `demo/index.md` and, when available, `fixtures/cogirth/main2.md`. This scenario skips Vite/Playwright, copies each fixture into `/tmp/coflat-*`, invokes Pandoc with the same HTML argument shape as `src-tauri/src/commands/export.rs`, and reports `export.html.wall_ms`, `export.html.input_bytes`, and `export.html.output_bytes` for each fixture.
 - `open-index`
   Reload app, open `index.md` in Rich mode.
 - `open-heavy-post`
@@ -152,6 +156,26 @@ The scroll scenarios report custom metrics alongside the usual frontend/backend 
 Per-step timing uses `performance.now()` around each synchronous `view.dispatch()` call, so values measure the CM6 update/render cost directly. A 16 ms `setTimeout` between steps yields the event loop without blocking on `requestAnimationFrame` (which stalls in non-interactive CDP windows). Comparing Rich vs Source isolates rendering overhead. The `--min-delta-ms` threshold applies to ms-valued scroll metrics the same way it applies to frontend/backend spans.
 
 You can override the supported heavy-doc budgets with `--debug-timeout-ms`, `--open-timeout-ms`, and `--post-open-settle-ms` when a fixture needs different automation limits.
+
+## HTML Export Scenario
+
+Use `html-export-pandoc` for export latency measurements without faking Tauri/browser state:
+
+```bash
+pnpm perf:capture -- \
+  --scenario html-export-pandoc \
+  --iterations 3 \
+  --warmup 1 \
+  --output output/perf/html-export-pandoc.json
+```
+
+The scenario runs:
+
+- `pandoc --version`
+- `pandoc-crossref --version`
+- `pandoc --from=markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark --to=html5 --standalone --wrap=preserve --katex --section-divs --filter=pandoc-crossref --citeproc --metadata=link-citations=true --resource-path=<source-dir[:project-root]> --output=<temp-output>`
+
+Fixture markdown is copied to a temporary `/tmp/coflat-html-export-perf-*` project and sent to Pandoc over stdin, matching the Tauri export command shape. The reported `wall_ms` measures the Pandoc process only; fixture copying and preflight are outside the timed section. `input_bytes` and `output_bytes` are emitted as scenario metrics so export size changes appear alongside timing changes.
 
 ## Runtime Latency Budgets
 
