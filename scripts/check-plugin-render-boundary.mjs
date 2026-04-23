@@ -177,14 +177,6 @@ export const ALLOWED_SOURCE_CYCLES = [
       "src/editor/vertical-motion.ts",
     ],
   },
-  {
-    reason: "#1394 tracks breaking the Tauri perf client cycle",
-    files: [
-      "src/app/perf.ts",
-      "src/app/tauri-client/make-command.ts",
-      "src/app/tauri-client/perf.ts",
-    ],
-  },
 ];
 
 function toPosixPath(filePath) {

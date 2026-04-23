@@ -1,4 +1,4 @@
-import type { PerfSnapshot } from "../perf";
+import type { PerfSnapshot } from "../../lib/perf";
 import { tauriCommandRaw } from "./make-command";
 
 export const getPerfSnapshotCommand = tauriCommandRaw<PerfSnapshot>("get_perf_snapshot");

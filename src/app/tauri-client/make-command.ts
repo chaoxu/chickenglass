@@ -9,12 +9,24 @@
  *   tauriArgs<ReturnType>("command_name")((a, b) => ({ a, b }))  // with args
  */
 
-import { invokeWithPerf } from "../perf";
+import { measureAsync } from "../../lib/perf";
 import { invokeTauriCommandRaw } from "./core";
+
+function invokeTauriCommandWithPerf<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  return measureAsync(`tauri.invoke.${command}`, async () => {
+    return invokeTauriCommandRaw<T>(command, args);
+  }, {
+    category: "tauri",
+    detail: command,
+  });
+}
 
 /** Create a zero-arg Tauri command wrapper with perf instrumentation. */
 export function tauriCommand<R>(name: string): () => Promise<R> {
-  return () => invokeWithPerf<R>(name);
+  return () => invokeTauriCommandWithPerf<R>(name);
 }
 
 /**
@@ -28,7 +40,7 @@ export function tauriArgs<R>(name: string) {
   return function <A extends unknown[]>(
     mapArgs: (...args: A) => Record<string, unknown>,
   ): (...args: A) => Promise<R> {
-    return (...args: A) => invokeWithPerf<R>(name, mapArgs(...args));
+    return (...args: A) => invokeTauriCommandWithPerf<R>(name, mapArgs(...args));
   };
 }
 
