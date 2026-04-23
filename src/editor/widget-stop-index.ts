@@ -1,5 +1,5 @@
 import { type Text } from "@codemirror/state";
-import { type EditorView } from "@codemirror/view";
+import { type EditorView, ViewPlugin } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
 import {
   type TableRange,
@@ -53,6 +53,14 @@ const emptyWidgetStopIndex: WidgetStopIndex = {
 };
 
 const widgetStopIndexCache = new WeakMap<EditorView, CachedWidgetStopIndex>();
+
+export const widgetStopIndexCleanupExtension = ViewPlugin.fromClass(class {
+  constructor(readonly view: EditorView) {}
+
+  destroy(): void {
+    disposeWidgetStopIndex(this.view);
+  }
+});
 
 function visibleRangesKey(
   view: EditorView,
@@ -218,6 +226,12 @@ function ensureDomObserver(
   });
   observer.observe(view.contentDOM, { childList: true, subtree: true });
   cached.observer = observer;
+}
+
+export function disposeWidgetStopIndex(view: EditorView): void {
+  const cached = widgetStopIndexCache.get(view);
+  cached?.observer?.disconnect();
+  widgetStopIndexCache.delete(view);
 }
 
 export function getWidgetStopIndex(

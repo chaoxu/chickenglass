@@ -1,12 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type TableRange } from "../state/table-discovery";
+import { createTestView } from "../test-utils";
 import {
+  disposeWidgetStopIndex,
   type HiddenWidgetStop,
   type WidgetStopIndex,
   firstHiddenWidgetStopBetweenLines,
+  getWidgetStopIndex,
   firstTableStopBetweenLines,
   hiddenWidgetStopAtPos,
   tableStopAtPos,
+  widgetStopIndexCleanupExtension,
 } from "./widget-stop-index";
 
 function hiddenStop(
@@ -108,5 +112,53 @@ describe("widget stop index queries", () => {
     expect(firstTableStopBetweenLines(index, 25, 10, false)).toBe(secondTable);
     expect(tableStopAtPos(index, 210)).toBe(secondTable);
   });
-});
 
+  it("disconnects the DOM observer when the editor view is destroyed", () => {
+    const originalMutationObserver = globalThis.MutationObserver;
+    const globalWithMutationObserver = globalThis as typeof globalThis & {
+      MutationObserver?: typeof MutationObserver;
+    };
+    const instances: Array<{
+      observe: ReturnType<typeof vi.fn>;
+      disconnect: ReturnType<typeof vi.fn>;
+    }> = [];
+    const FakeMutationObserver = class {
+      observe = vi.fn();
+      disconnect = vi.fn();
+      takeRecords = () => [];
+
+      constructor() {
+        instances.push(this);
+      }
+    } as unknown as typeof MutationObserver;
+    globalWithMutationObserver.MutationObserver = FakeMutationObserver;
+
+    const view = createTestView("hello", {
+      extensions: widgetStopIndexCleanupExtension,
+      focus: false,
+    });
+
+    try {
+      const observerCountBeforeIndex = instances.length;
+      getWidgetStopIndex(view);
+
+      const [widgetObserver] = instances.slice(observerCountBeforeIndex);
+      expect(widgetObserver).toBeDefined();
+      expect(widgetObserver?.observe).toHaveBeenCalledWith(view.contentDOM, {
+        childList: true,
+        subtree: true,
+      });
+
+      view.destroy();
+
+      expect(widgetObserver?.disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeWidgetStopIndex(view);
+      if (originalMutationObserver) {
+        globalWithMutationObserver.MutationObserver = originalMutationObserver;
+      } else {
+        Reflect.deleteProperty(globalWithMutationObserver, "MutationObserver");
+      }
+    }
+  });
+});

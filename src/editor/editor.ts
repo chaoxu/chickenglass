@@ -51,6 +51,7 @@ import { richClipboardOutputFilter } from "./rich-clipboard";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
 import { coflatDarkTheme, coflatTheme } from "./theme";
+import { widgetStopIndexCleanupExtension } from "./widget-stop-index";
 
 const fallbackDocument = "# Untitled\n";
 
@@ -133,6 +134,7 @@ function editorChromeExtensions(isDark: boolean): Extension[] {
     headingFold,
     listOutlinerExtension,
     editorKeybindings,
+    widgetStopIndexCleanupExtension,
     richMouseSelectionStyle,
     blockTypePickerExtension,
     debugLaneCompartment.of(defaultDebugLaneExtensions),
