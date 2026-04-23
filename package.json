@@ -19,7 +19,7 @@
     "dev:show": "vite --mode show --host localhost --port 5173 --strictPort",
     "preview": "vite preview --host 0.0.0.0",
     "dev:worktree": "node scripts/dev-worktree.mjs",
-    "dev:browser": "vite & sleep 2 && pnpm run chrome && wait",
+    "dev:browser": "node scripts/dev-browser.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json",

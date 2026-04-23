@@ -21,7 +21,9 @@ export function parseChromeArgs(
   const browser = getFlag("--browser", defaults.browser ?? "cdp");
   const activate = hasFlag("--no-activate")
     ? false
-    : hasFlag("--activate");
+    : hasFlag("--activate")
+      ? true
+      : defaults.activate ?? false;
   const headless = hasFlag("--headed")
     ? false
     : hasFlag("--headless")

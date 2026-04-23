@@ -64,6 +64,10 @@ export function buildFocusedVitestArgs(extraArgs = []) {
   return [...DEFAULT_ARGS, ...extraArgs];
 }
 
+export function resolvePnpmCommand(platform = process.platform) {
+  return platform === "win32" ? "pnpm.cmd" : "pnpm";
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const missingPaths = findMissingExplicitPaths(argv);
   if (missingPaths.length > 0) {
@@ -101,7 +105,7 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     for (const runArgs of runs) {
       const exitCode = await new Promise((resolve, reject) => {
-        child = spawn("pnpm", buildFocusedVitestArgs(runArgs), {
+        child = spawn(resolvePnpmCommand(), buildFocusedVitestArgs(runArgs), {
           stdio: "inherit",
           detached: process.platform !== "win32",
           env: {

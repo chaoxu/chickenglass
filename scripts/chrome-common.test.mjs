@@ -39,6 +39,11 @@ describe("chrome common page scoring", () => {
     expect(parseChromeArgs(["--headless"], { browser: "cdp" }).headless).toBe(true);
   });
 
+  it("lets launchers choose their default activation behavior", () => {
+    expect(parseChromeArgs([], { activate: true }).activate).toBe(true);
+    expect(parseChromeArgs(["--no-activate"], { activate: true }).activate).toBe(false);
+  });
+
   it("rejects invalid port values through the shared integer parser", () => {
     expect(() => parseChromeArgs(["--port", "9322x"])).toThrow(
       "Invalid integer value for --port: 9322x",

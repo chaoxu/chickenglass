@@ -4,6 +4,7 @@ import {
   buildFocusedVitestArgs,
   findMissingExplicitPaths,
   partitionFocusedVitestArgs,
+  resolvePnpmCommand,
 } from "./focused-vitest.mjs";
 
 describe("focused vitest wrapper", () => {
@@ -45,5 +46,11 @@ describe("focused vitest wrapper", () => {
         (path) => path === "src/render/reference-render.test.ts",
       ),
     ).toEqual(["src/state/change-detection.test.ts"]);
+  });
+
+  it("spawns pnpm through the platform-specific executable", () => {
+    expect(resolvePnpmCommand("darwin")).toBe("pnpm");
+    expect(resolvePnpmCommand("linux")).toBe("pnpm");
+    expect(resolvePnpmCommand("win32")).toBe("pnpm.cmd");
   });
 });
