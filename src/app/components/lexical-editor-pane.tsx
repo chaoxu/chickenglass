@@ -48,6 +48,7 @@ function toRevealMode(mode: EditorMode | undefined): RevealMode {
 interface LexicalPaneDerivedState {
   readonly chars: number;
   readonly diagnostics: DiagnosticEntry[];
+  readonly diagnosticsEnabled: boolean;
   readonly doc: string;
   readonly headings: HeadingEntry[];
   readonly words: number;
@@ -61,6 +62,10 @@ interface LexicalPaneLiveCounts {
 interface LexicalPaneSemanticState {
   readonly diagnostics: DiagnosticEntry[];
   readonly headings: HeadingEntry[];
+}
+
+interface LexicalSemanticDeriveOptions {
+  readonly includeDiagnostics: boolean;
 }
 
 type IdleTaskHandle = number;
@@ -131,7 +136,10 @@ function deriveLexicalLiveCounts(doc: string): LexicalPaneLiveCounts {
   };
 }
 
-function deriveLexicalSemanticState(doc: string): LexicalPaneSemanticState {
+function deriveLexicalSemanticState(
+  doc: string,
+  options: LexicalSemanticDeriveOptions,
+): LexicalPaneSemanticState {
   return measureSync("lexical.deriveSemanticState", () => {
     const snapshot = buildDocumentLabelParseSnapshot(doc);
     const headings = measureSync(
@@ -145,16 +153,19 @@ function deriveLexicalSemanticState(doc: string): LexicalPaneSemanticState {
       })),
       { category: "lexical", detail: `${snapshot.headings.length} headings` },
     );
-    const graph = measureSync(
-      "lexical.deriveLabelGraph",
-      () => buildDocumentLabelGraph(doc, snapshot),
-      { category: "lexical", detail: `${snapshot.references.length} refs` },
-    );
-    const diagnostics = measureSync(
-      "lexical.deriveDiagnostics",
-      () => extractDiagnosticsFromGraph(graph),
-      { category: "lexical", detail: `${graph.references.length} refs` },
-    );
+    let diagnostics: DiagnosticEntry[] = [];
+    if (options.includeDiagnostics) {
+      const graph = measureSync(
+        "lexical.deriveLabelGraph",
+        () => buildDocumentLabelGraph(doc, snapshot),
+        { category: "lexical", detail: `${snapshot.references.length} refs` },
+      );
+      diagnostics = measureSync(
+        "lexical.deriveDiagnostics",
+        () => extractDiagnosticsFromGraph(graph),
+        { category: "lexical", detail: `${graph.references.length} refs` },
+      );
+    }
 
     return {
       diagnostics,
@@ -163,14 +174,18 @@ function deriveLexicalSemanticState(doc: string): LexicalPaneSemanticState {
   }, { category: "lexical", detail: `${doc.length} chars` });
 }
 
-function deriveLexicalPaneState(doc: string): LexicalPaneDerivedState {
+function deriveLexicalPaneState(
+  doc: string,
+  options: LexicalSemanticDeriveOptions,
+): LexicalPaneDerivedState {
   return measureSync("lexical.derivePaneState", () => {
     const counts = deriveLexicalLiveCounts(doc);
-    const semanticState = deriveLexicalSemanticState(doc);
+    const semanticState = deriveLexicalSemanticState(doc, options);
 
     return {
       chars: counts.chars,
       diagnostics: semanticState.diagnostics,
+      diagnosticsEnabled: options.includeDiagnostics,
       doc,
       headings: semanticState.headings,
       words: counts.words,
@@ -205,7 +220,9 @@ export function LexicalEditorPane({
   theme: _theme,
   ...editorOptions
 }: LexicalEditorPaneProps) {
-  const [initialDerivedState] = useState(() => deriveLexicalPaneState(editorOptions.doc));
+  const [initialDerivedState] = useState(() => deriveLexicalPaneState(editorOptions.doc, {
+    includeDiagnostics: Boolean(onDiagnosticsChange),
+  }));
   const derivedStateRef = useRef(initialDerivedState);
   const callbacksRef = useRef({
     onDiagnosticsChange,
@@ -227,19 +244,17 @@ export function LexicalEditorPane({
   });
   const lexicalMode = toRevealMode(editorMode);
 
-  useEffect(() => {
-    callbacksRef.current = {
-      onDiagnosticsChange,
-      onHeadingsChange,
-    };
-  }, [onDiagnosticsChange, onHeadingsChange]);
+  const shouldDeriveDiagnostics = useCallback(
+    () => Boolean(callbacksRef.current.onDiagnosticsChange),
+    [],
+  );
 
-  const getDerivedState = useCallback((doc: string) => {
+  const getDerivedState = useCallback((doc: string, includeDiagnostics: boolean) => {
     const cached = derivedStateRef.current;
-    if (cached.doc === doc) {
+    if (cached.doc === doc && cached.diagnosticsEnabled === includeDiagnostics) {
       return cached;
     }
-    const nextState = deriveLexicalPaneState(doc);
+    const nextState = deriveLexicalPaneState(doc, { includeDiagnostics });
     derivedStateRef.current = nextState;
     return nextState;
   }, []);
@@ -258,7 +273,7 @@ export function LexicalEditorPane({
   }, []);
 
   const applyImmediateDerivedState = useCallback((doc: string) => {
-    const derivedState = getDerivedState(doc);
+    const derivedState = getDerivedState(doc, shouldDeriveDiagnostics());
     setHeadings(derivedState.headings);
     useEditorTelemetryStore.getState().setLiveCounts(
       derivedState.words,
@@ -266,7 +281,22 @@ export function LexicalEditorPane({
     );
     callbacksRef.current.onHeadingsChange?.(derivedState.headings);
     callbacksRef.current.onDiagnosticsChange?.(derivedState.diagnostics);
-  }, [getDerivedState]);
+  }, [getDerivedState, shouldDeriveDiagnostics]);
+
+  useEffect(() => {
+    const previousCallbacks = callbacksRef.current;
+    callbacksRef.current = {
+      onDiagnosticsChange,
+      onHeadingsChange,
+    };
+    const diagnosticsSubscriberChanged = onDiagnosticsChange !== undefined
+      && onDiagnosticsChange !== previousCallbacks.onDiagnosticsChange;
+    const headingsSubscriberChanged = onHeadingsChange !== undefined
+      && onHeadingsChange !== previousCallbacks.onHeadingsChange;
+    if (diagnosticsSubscriberChanged || headingsSubscriberChanged) {
+      applyImmediateDerivedState(currentDocRef.current);
+    }
+  }, [applyImmediateDerivedState, onDiagnosticsChange, onHeadingsChange]);
 
   const scheduleLiveCounts = useCallback((doc: string, version: number) => {
     if (liveCountsTimerRef.current !== null) {
@@ -303,7 +333,9 @@ export function LexicalEditorPane({
         if (docVersionRef.current !== version) {
           return;
         }
-        const semanticState = deriveLexicalSemanticState(doc);
+        const semanticState = deriveLexicalSemanticState(doc, {
+          includeDiagnostics: shouldDeriveDiagnostics(),
+        });
         if (docVersionRef.current !== version) {
           return;
         }
@@ -312,7 +344,7 @@ export function LexicalEditorPane({
         callbacksRef.current.onDiagnosticsChange?.(semanticState.diagnostics);
       });
     }, LEXICAL_SEMANTIC_DERIVE_DEBOUNCE_MS);
-  }, []);
+  }, [shouldDeriveDiagnostics]);
 
   useEffect(() => {
     docVersionRef.current += 1;

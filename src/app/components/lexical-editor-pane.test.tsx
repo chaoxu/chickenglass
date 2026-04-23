@@ -123,6 +123,90 @@ describe("LexicalEditorPane derived state scheduling", () => {
       expect.objectContaining({ text: expect.stringContaining("Second") }),
     ]);
   });
+
+  it("skips diagnostics derivation when diagnostics callback is absent", async () => {
+    vi.resetModules();
+    const perf = await import("../perf");
+    const measureSyncSpy = vi.spyOn(perf, "measureSync");
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const onHeadingsChange = vi.fn();
+
+    render(
+      <LexicalEditorPane
+        doc="# Initial\n\none two"
+        onHeadingsChange={onHeadingsChange}
+      />,
+    );
+
+    const initialLabelGraphCalls = countPerfCalls(
+      measureSyncSpy,
+      "lexical.deriveLabelGraph",
+    );
+    const initialDiagnosticsCalls = countPerfCalls(
+      measureSyncSpy,
+      "lexical.deriveDiagnostics",
+    );
+    onHeadingsChange.mockClear();
+
+    act(() => {
+      lexicalEditorPaneState.props?.onTextChange("# Updated\n\none two three four");
+      vi.advanceTimersByTime(LEXICAL_TEST_LIVE_DEBOUNCE_MS);
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(onHeadingsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ text: expect.stringContaining("Updated") }),
+    ]);
+    expect(countPerfCalls(
+      measureSyncSpy,
+      "lexical.deriveLabelGraph",
+    )).toBe(initialLabelGraphCalls);
+    expect(countPerfCalls(
+      measureSyncSpy,
+      "lexical.deriveDiagnostics",
+    )).toBe(initialDiagnosticsCalls);
+  });
+
+  it("publishes current diagnostics from the current unsaved doc when the diagnostics callback appears", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const diagnostics = vi.fn();
+    const view = render(
+      <LexicalEditorPane
+        doc="# Initial\n\none two"
+      />,
+    );
+
+    expect(diagnostics).not.toHaveBeenCalled();
+
+    act(() => {
+      lexicalEditorPaneState.props?.onTextChange("# Initial\n\nSee [@sec:missing].");
+    });
+
+    view.rerender(
+      <LexicalEditorPane
+        doc="# Initial\n\none two"
+        onDiagnosticsChange={diagnostics}
+      />,
+    );
+
+    expect(diagnostics).toHaveBeenCalledWith([
+      expect.objectContaining({
+        message: "Unresolved reference \"@sec:missing\"",
+      }),
+    ]);
+  });
 });
 
 const LEXICAL_TEST_LIVE_DEBOUNCE_MS = 300;
+
+function countPerfCalls(
+  spy: {
+    mock: {
+      calls: ReadonlyArray<readonly [string, ...unknown[]]>;
+    };
+  },
+  name: string,
+): number {
+  return spy.mock.calls.filter(([metricName]) => metricName === name).length;
+}
