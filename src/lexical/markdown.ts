@@ -622,15 +622,21 @@ export function createLexicalInitialEditorState(markdown: string): InitialEditor
 export function setLexicalMarkdown(
   editor: LexicalEditor,
   markdown: string,
-  options?: Pick<EditorUpdateOptions, "tag">,
+  options?: {
+    readonly discrete?: boolean;
+    readonly tag?: EditorUpdateOptions["tag"];
+  },
 ): void {
   measureSync("lexical.setLexicalMarkdown", () => {
+    const updateOptions: EditorUpdateOptions = {
+      tag: options?.tag,
+    };
+    if (options?.discrete ?? true) {
+      updateOptions.discrete = true;
+    }
     editor.update(() => {
       $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
-    }, {
-      discrete: true,
-      tag: options?.tag,
-    });
+    }, updateOptions);
   }, { category: "lexical", detail: `${markdown.length} chars` });
 }
 

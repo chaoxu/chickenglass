@@ -15,7 +15,6 @@ import {
   useState,
   type FocusEvent as ReactFocusEvent,
 } from "react";
-import { flushSync } from "react-dom";
 
 import {
   type EmbeddedFieldFamily,
@@ -203,12 +202,6 @@ export function EmbeddedFieldEditor({
     draft.resetDraft(doc, { clearPending: true });
     requestedFocusRef.current = focusRequest;
     setFocusRequestVersion((version) => version + 1);
-    if (focusRequest === "pointer") {
-      flushSync(() => {
-        setActive(true);
-      });
-      return;
-    }
     setActive(true);
   }, [doc, draft]);
 

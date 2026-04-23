@@ -1,5 +1,4 @@
 import { createElement } from "react";
-import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import {
   ContextMenu as RadixContextMenu,
@@ -176,33 +175,33 @@ export class ContextMenu {
     document.body.appendChild(this.host);
     this.root = createRoot(this.host);
 
-    flushSync(() => {
-      this.root.render(
-        createElement(ContextMenuView, {
-          items,
-          x,
-          y,
-          onDismiss: () => this.dismiss(),
-          setTriggerEl: (node) => {
-            this.triggerEl = node;
-          },
-        }),
-      );
-    });
-
-    if (!this.triggerEl) {
-      this.dismiss();
-      throw new Error("Failed to mount context menu trigger");
-    }
-
-    this.triggerEl.dispatchEvent(
-      new MouseEvent("contextmenu", {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        buttons: 2,
-        clientX: x,
-        clientY: y,
+    this.root.render(
+      createElement(ContextMenuView, {
+        items,
+        x,
+        y,
+        onDismiss: () => this.dismiss(),
+        setTriggerEl: (node) => {
+          this.triggerEl = node;
+          if (!node) {
+            return;
+          }
+          queueMicrotask(() => {
+            if (this.dismissed || this.triggerEl !== node) {
+              return;
+            }
+            node.dispatchEvent(
+              new MouseEvent("contextmenu", {
+                bubbles: true,
+                cancelable: true,
+                button: 2,
+                buttons: 2,
+                clientX: x,
+                clientY: y,
+              }),
+            );
+          });
+        },
       }),
     );
   }

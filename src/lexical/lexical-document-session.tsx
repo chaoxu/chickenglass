@@ -434,6 +434,7 @@ export function LexicalDocumentSyncPlugin({
       editor,
       doc,
       {
+        discrete: false,
         tag: preservePendingLocalHistory
           ? [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG]
           : COFLAT_DOCUMENT_SYNC_TAG,
@@ -527,11 +528,12 @@ export function LexicalSourceBridgePlugin({
       nextDoc.length,
     );
     const mergeHistory = pendingLocalEchoDoc !== null || (modeChanged && !docChanged);
-    const syncOptions = {
-      tag: mergeHistory
-        ? [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG]
-        : COFLAT_DOCUMENT_SYNC_TAG,
-    };
+	    const syncOptions = {
+	      discrete: false,
+	      tag: mergeHistory
+	        ? [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG]
+	        : COFLAT_DOCUMENT_SYNC_TAG,
+	    };
 
     selectionRef.current = nextSelection;
     lastCommittedDocRef.current = nextDoc;

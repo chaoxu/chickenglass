@@ -19,9 +19,6 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "lexical-smoke";
-export const runtimeIssues = {
-  ignoreConsole: ["flushSync was called from inside a lifecycle method"],
-};
 
 const INSERT_MARKER = "COFLATSLEXICALSMOKEINSERT";
 const MODE_SWITCH_MARKER = "COFLATSLEXICALMODESWITCHINSERT";
