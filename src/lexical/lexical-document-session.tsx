@@ -33,7 +33,6 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
-import { applyIncrementalRichDocumentSync } from "./incremental-rich-sync";
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { parseStructuredFencedDivRaw } from "./markdown/block-syntax";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
@@ -43,7 +42,6 @@ import {
   mapVisibleTextOffsetToMarkdown,
   readSourceSelectionFromLexicalSelection,
   scrollSourcePositionIntoView,
-  selectSourceOffsetsInRichLexicalNode,
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-position-plugin";
 import {
@@ -63,9 +61,9 @@ import {
   COFLAT_REVEAL_COMMIT_TAG,
   COFLAT_REVEAL_UI_TAG,
 } from "./update-tags";
+import { useDeferredRichDocumentSync } from "./use-deferred-rich-document-sync";
 
 const RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
-const DEFERRED_RICH_DOCUMENT_SYNC_MS = 75;
 
 export function sameSelection(
   left: MarkdownEditorSelection,
@@ -648,12 +646,31 @@ export function LexicalEditorHandlePlugin({
   const embeddedFieldFlushRegistry = useEmbeddedFieldFlushRegistry();
   const selectionSnapshotFreshRef = useRef(false);
   const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
-  const deferredRichSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const deferredRichSyncRequestRef = useRef(0);
-  const deferredRichSyncDocRef = useRef<string | null>(null);
-  const deferredRichSyncBaseDocRef = useRef<string | null>(null);
   const richSelectionDomInsertFailedRef = useRef(false);
   const canonicalFallbackSelectionRef = useRef<MarkdownEditorSelection | null>(null);
+  const cacheRichDocumentSnapshot = useCallback((markdown: string) => {
+    if (editorModeRef.current === "source") {
+      return;
+    }
+    richMarkdownSnapshotRef.current = {
+      editorState: editor.getEditorState(),
+      markdown,
+    };
+  }, [editor, editorModeRef]);
+  const {
+    applyDeferredRichDocumentSync,
+    clearDeferredRichDocumentSync,
+    pendingDocRef: deferredRichSyncDocRef,
+    scheduleDeferredRichDocumentSync,
+  } = useDeferredRichDocumentSync({
+    cacheRichDocumentSnapshot,
+    canonicalFallbackSelectionRef,
+    editor,
+    editorModeRef,
+    richSelectionDomInsertFailedRef,
+    selectionRef,
+    selectionSnapshotFreshRef,
+  });
 
   useEffect(() => {
     if (!onEditorReady) {
@@ -673,97 +690,6 @@ export function LexicalEditorHandlePlugin({
         markdown,
       };
       return markdown;
-    };
-
-    const cacheRichDocumentSnapshot = (markdown: string) => {
-      if (editorModeRef.current === "source") {
-        return;
-      }
-      richMarkdownSnapshotRef.current = {
-        editorState: editor.getEditorState(),
-        markdown,
-      };
-    };
-
-    const clearDeferredRichDocumentSync = () => {
-      deferredRichSyncRequestRef.current += 1;
-      const timer = deferredRichSyncTimerRef.current;
-      if (timer !== null) {
-        clearTimeout(timer);
-        deferredRichSyncTimerRef.current = null;
-      }
-    };
-
-    const applyDeferredRichDocumentSync = () => {
-      const nextDoc = deferredRichSyncDocRef.current;
-      if (nextDoc === null || editorModeRef.current === "source") {
-        clearDeferredRichDocumentSync();
-        deferredRichSyncDocRef.current = null;
-        deferredRichSyncBaseDocRef.current = null;
-        return;
-      }
-
-      clearDeferredRichDocumentSync();
-      deferredRichSyncDocRef.current = null;
-      const previousDoc = deferredRichSyncBaseDocRef.current;
-      deferredRichSyncBaseDocRef.current = null;
-      const nextSelection = createMarkdownSelection(
-        selectionRef.current.anchor,
-        selectionRef.current.focus,
-        nextDoc.length,
-      );
-      selectionRef.current = nextSelection;
-      const syncOptions = {
-        tag: [HISTORY_MERGE_TAG, COFLAT_DOCUMENT_SYNC_TAG],
-      };
-      const incrementalSyncResult = previousDoc !== null
-        ? applyIncrementalRichDocumentSync(editor, previousDoc, nextDoc, syncOptions)
-        : { applied: false as const };
-      if (!incrementalSyncResult.applied) {
-        setLexicalMarkdown(editor, nextDoc, syncOptions);
-      }
-      let moved = false;
-      if (
-        incrementalSyncResult.applied
-        && nextSelection.from >= incrementalSyncResult.blockFrom
-        && nextSelection.to <= incrementalSyncResult.nextBlockTo
-      ) {
-        moved = selectSourceOffsetsInRichLexicalNode(
-          editor,
-          incrementalSyncResult.nodeKey,
-          incrementalSyncResult.nextBlockSource,
-          incrementalSyncResult.blockFrom,
-          nextSelection.anchor,
-          nextSelection.focus,
-        );
-      }
-      if (!moved) {
-        moved = selectSourceOffsetsInRichLexicalRoot(
-          editor,
-          nextDoc,
-          nextSelection.anchor,
-          nextSelection.focus,
-        );
-      }
-      selectionSnapshotFreshRef.current = moved;
-      richSelectionDomInsertFailedRef.current = !moved;
-      canonicalFallbackSelectionRef.current = moved ? null : nextSelection;
-      cacheRichDocumentSnapshot(nextDoc);
-    };
-
-    const scheduleDeferredRichDocumentSync = (nextDoc: string, previousDoc: string) => {
-      if (deferredRichSyncDocRef.current === null) {
-        deferredRichSyncBaseDocRef.current = previousDoc;
-      }
-      deferredRichSyncDocRef.current = nextDoc;
-      clearDeferredRichDocumentSync();
-      const request = deferredRichSyncRequestRef.current;
-      deferredRichSyncTimerRef.current = setTimeout(() => {
-        if (deferredRichSyncRequestRef.current !== request) {
-          return;
-        }
-        applyDeferredRichDocumentSync();
-      }, DEFERRED_RICH_DOCUMENT_SYNC_MS);
     };
 
     const readDocumentSnapshot = () =>
@@ -1111,16 +1037,16 @@ export function LexicalEditorHandlePlugin({
       },
     }, editor);
 
-    return () => {
-      clearDeferredRichDocumentSync();
-      deferredRichSyncDocRef.current = null;
-    };
+    return undefined;
   }, [
+    applyDeferredRichDocumentSync,
+    cacheRichDocumentSnapshot,
+    clearDeferredRichDocumentSync,
     editor,
     editorModeRef,
     embeddedFieldFlushRegistry,
-    cancelRichDocumentSnapshot,
     canonicalBridgeEchoRef,
+    cancelRichDocumentSnapshot,
     focusOwnerRef,
     flushRichDocumentSnapshot,
     lastCommittedDocRef,
