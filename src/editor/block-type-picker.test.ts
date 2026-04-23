@@ -509,4 +509,30 @@ describe("picker UI", () => {
       consoleError.mockRestore();
     }
   });
+
+  it("tears down the picker cleanly when the owning view is destroyed", async () => {
+    const view = makePickerUiView("");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    stubCoordsAtPos(view);
+
+    try {
+      expect(triggerThirdColon(view)).toBe(true);
+      await waitForTick();
+      expect(isPickerVisible()).toBe(true);
+
+      const viewIndex = views.indexOf(view);
+      if (viewIndex >= 0) {
+        views.splice(viewIndex, 1);
+      }
+      view.destroy();
+      await waitForTick();
+
+      expect(isPickerVisible()).toBe(false);
+      const picker = document.querySelector(".cf-block-picker");
+      expect(picker?.querySelector("[cmdk-root]")).toBeNull();
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
 });
