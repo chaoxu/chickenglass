@@ -28,7 +28,11 @@ import { useAutoSave } from "./hooks/use-auto-save";
 import { useDialogs } from "./hooks/use-dialogs";
 import { useHotExitBackups } from "./hooks/use-hot-exit-backups";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
-import { type SidebarLayoutController, useSidebarLayout } from "./hooks/use-sidebar-layout";
+import {
+  type SidebarLayoutController,
+  type SidebarTab,
+  useSidebarLayout,
+} from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useDevSettings } from "../state/dev-settings";
@@ -231,6 +235,14 @@ function AppInner() {
     getCurrentDocText: editor.getCurrentDocText,
     getLexicalEditorHandle: editor.getLexicalEditorHandle,
     setSearchOpen: dialogs.setSearchOpen,
+    showSidebarPanel: (panel: SidebarTab) => {
+      sidebarLayout.setSidebarTab(panel);
+      sidebarLayout.setSidebarCollapsed(false);
+    },
+    getSidebarState: () => ({
+      collapsed: sidebarLayout.sidebarCollapsed,
+      tab: sidebarLayout.sidebarTab,
+    }),
     requestNativeClose: fileDialogs.handleQuitRequest,
     setMode: editor.handleModeChange,
     getMode: () => editor.editorMode,

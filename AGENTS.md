@@ -147,6 +147,8 @@ __cmDebug.moveVertically("up") — rich-mode vertical move with reverse-scroll g
 __cmDebug.toggleTreeView()   — toggle live Lezer tree panel (@overleaf/codemirror-tree-view)
 __app.openFile("posts/x.md") — open any file by path (app's real function)
 __app.setMode("lexical")     — switch editor mode (cm6-rich/lexical/source)
+__app.showSidebarPanel("diagnostics") — open a specific sidebar panel
+__app.getSidebarState()      — current sidebar { collapsed, tab }
 __app.saveFile()             — save current file
 __app.getProjectRoot()       — current project root path (or null)
 __app.getCurrentDocument()   — current doc {path, name, dirty} (or null)

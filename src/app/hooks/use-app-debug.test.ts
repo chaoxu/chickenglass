@@ -41,6 +41,8 @@ const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
 const getCurrentDocText = vi.fn(() => "# Notes");
 const getLexicalEditorHandle = vi.fn(() => null);
 const setSearchOpen = vi.fn((_open: boolean) => {});
+const showSidebarPanel = vi.fn((_panel: string) => {});
+const getSidebarState = vi.fn(() => ({ collapsed: false, tab: "files" as const }));
 const requestNativeClose = vi.fn(async () => {});
 const setMode = vi.fn((_mode: string) => {});
 const getMode = vi.fn(() => "cm6-rich" as const);
@@ -56,6 +58,8 @@ const Harness: FC = () => {
     getCurrentDocText,
     getLexicalEditorHandle,
     setSearchOpen,
+    showSidebarPanel,
+    getSidebarState,
     requestNativeClose,
     setMode,
     getMode,
@@ -89,6 +93,9 @@ describe("useAppDebug", () => {
     getLexicalEditorHandle.mockClear();
     getLexicalEditorHandle.mockReturnValue(null);
     setSearchOpen.mockClear();
+    showSidebarPanel.mockClear();
+    getSidebarState.mockClear();
+    getSidebarState.mockReturnValue({ collapsed: false, tab: "files" });
     requestNativeClose.mockClear();
     setMode.mockClear();
     getMode.mockClear();

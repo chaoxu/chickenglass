@@ -43,6 +43,7 @@ import {
   PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
+  showSidebarPanel,
   switchToMode,
 } from "./editor-test-helpers.mjs";
 
@@ -158,6 +159,11 @@ export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
   "lexical.typing.source_span_index_work_ms",
   "lexical.typing.source_span_index_count",
   "lexical.typing.input_to_semantic_ms",
+];
+
+export const LEXICAL_SIDEBAR_OPEN_REQUIRED_METRICS = [
+  "lexical.sidebar_open.wall_ms",
+  "lexical.sidebar_open.publish_ms",
 ];
 
 export const HTML_EXPORT_PANDOC_REQUIRED_METRICS = [
@@ -518,6 +524,69 @@ async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
     "getLoadedLexicalDocumentText",
     async () => window.__editor.getDoc(),
   );
+}
+
+async function measureLexicalSidebarOpen(page, panel) {
+  return evaluateStep(page, "measureLexicalSidebarOpen", async (nextPanel) => {
+    const findSummary = (summaries, name) =>
+      summaries.find((summary) => summary.name === name) ?? null;
+    const waitForAnimationFrames = () =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitForSidebarPanel = async () => {
+      const settleStart = performance.now();
+      while (performance.now() - settleStart < 2_000) {
+        const sidebar = window.__app?.getSidebarState?.();
+        if (!sidebar || (!sidebar.collapsed && sidebar.tab === nextPanel)) {
+          return;
+        }
+        await sleepInPage(25);
+      }
+      throw new Error(`Sidebar panel "${nextPanel}" did not become active.`);
+    };
+
+    if (!window.__app?.showSidebarPanel) {
+      throw new Error("window.__app.showSidebarPanel is unavailable.");
+    }
+    const beforePerfSnapshot = await window.__cfDebug.perfSummary();
+    const beforePerfSummaries = beforePerfSnapshot.frontend.summaries;
+    const beforePublishCount = findSummary(
+      beforePerfSummaries,
+      "lexical.publishDiagnostics",
+    )?.count ?? 0;
+    const startAt = performance.now();
+    window.__app.showSidebarPanel(nextPanel);
+    await waitForSidebarPanel();
+    await waitForAnimationFrames();
+    const wallMs = performance.now() - startAt;
+
+    let publishMs = null;
+    const timeoutMs = 5000;
+    while (performance.now() - startAt < timeoutMs) {
+      const perfSnapshot = await window.__cfDebug.perfSummary();
+      const perfSummaries = perfSnapshot.frontend.summaries;
+      const publishSummary = findSummary(
+        perfSummaries,
+        "lexical.publishDiagnostics",
+      );
+      const publishCount = publishSummary?.count ?? 0;
+      if (publishCount > beforePublishCount && publishSummary) {
+        publishMs = Math.max(0, publishSummary.lastEndedAt - startAt);
+        break;
+      }
+      await sleepInPage(25);
+    }
+
+    if (publishMs === null) {
+      throw new Error(`Lexical sidebar panel "${nextPanel}" did not publish within 5000ms.`);
+    }
+
+    return {
+      panel: nextPanel,
+      publishMs,
+      wallMs,
+    };
+  }, panel);
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {
@@ -1258,6 +1327,22 @@ export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
   ];
 }
 
+export function lexicalSidebarOpenMetrics(caseKey, panelKey, result) {
+  const withContext = (name) => `${name}.${caseKey}.${panelKey}`;
+  return [
+    {
+      name: withContext("lexical.sidebar_open.wall_ms"),
+      unit: "ms",
+      value: result.wallMs,
+    },
+    {
+      name: withContext("lexical.sidebar_open.publish_ms"),
+      unit: "ms",
+      value: result.publishMs,
+    },
+  ];
+}
+
 function typingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
   const metricNames = [];
   for (const caseDef of caseDefinitions) {
@@ -1277,6 +1362,16 @@ function lexicalTypingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CA
       for (const metricName of LEXICAL_TYPING_BURST_REQUIRED_METRICS) {
         metricNames.push(`${metricName}.${caseDef.key}.${positionKey}`);
       }
+    }
+  }
+  return metricNames;
+}
+
+function lexicalSidebarOpenRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
+  const metricNames = [];
+  for (const caseDef of caseDefinitions) {
+    for (const metricName of LEXICAL_SIDEBAR_OPEN_REQUIRED_METRICS) {
+      metricNames.push(`${metricName}.${caseDef.key}.diagnostics`);
     }
   }
   return metricNames;
@@ -1728,6 +1823,36 @@ export const scenarios = {
             ),
           );
         }
+      }
+      return { metrics };
+    },
+  },
+  "lexical-sidebar-open-diagnostics": {
+    description: "Measure Lexical diagnostics publication when the sidebar opens from a non-tracking panel.",
+    defaultSettleMs: 300,
+    requiredMetrics: lexicalSidebarOpenRequiredMetricNames(availableTypingBurstCases()),
+    run: async (page, runtimeOptions) => {
+      const metrics = [];
+      for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
+        await showSidebarPanel(page, "files");
+        await openCleanLexicalDocument(
+          page,
+          testCase,
+          runtimeOptions,
+        );
+        const beforeSummaries = await getFrontendPerfSummaries(page);
+        const result = await measureLexicalSidebarOpen(page, "diagnostics");
+        const afterSummaries = await getFrontendPerfSummaries(page);
+        metrics.push(
+          ...lexicalSidebarOpenMetrics(testCase.key, "diagnostics", result),
+          ...frontendSpanDeltaMetrics(
+            "lexical.sidebar_open",
+            testCase.key,
+            "diagnostics",
+            beforeSummaries,
+            afterSummaries,
+          ),
+        );
       }
       return { metrics };
     },

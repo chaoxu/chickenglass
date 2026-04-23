@@ -13,6 +13,7 @@ import type { EditorView } from "@codemirror/view";
 import type { DebugHelpers, DebugRenderState } from "../editor";
 import type { EditorMode } from "../editor-display-mode";
 import type { DebugDocumentState, DebugProjectFile } from "../app/hooks/use-app-debug";
+import type { SidebarTab } from "../app/hooks/use-sidebar-layout";
 import type { ScrollGuardEvent } from "../app/hooks/use-editor-scroll";
 import type {
   DebugSessionCapture,
@@ -58,6 +59,11 @@ declare global {
       saveFile: () => Promise<void>;
       closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
       setSearchOpen: (open: boolean) => void;
+      showSidebarPanel: (panel: SidebarTab) => void;
+      getSidebarState: () => {
+        collapsed: boolean;
+        tab: SidebarTab;
+      };
       setMode: (mode: EditorMode | string) => void;
       getMode: () => EditorMode;
       getProjectRoot: () => string | null;

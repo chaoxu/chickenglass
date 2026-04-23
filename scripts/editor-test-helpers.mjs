@@ -504,6 +504,49 @@ export async function switchToMode(page, mode) {
 }
 
 /**
+ * Open a sidebar panel through the app debug bridge and wait for a settled frame.
+ *
+ * @param {import("playwright").Page} page
+ * @param {"files" | "outline" | "diagnostics" | "runtime"} panel
+ */
+export async function showSidebarPanel(page, panel) {
+  const changedViaApp = await page.evaluate(async (nextPanel) => {
+    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitForAnimationFrames = () =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const bridgeStart = performance.now();
+    while (performance.now() - bridgeStart < 15_000) {
+      if (window.__app?.showSidebarPanel && window.__app?.getSidebarState) {
+        break;
+      }
+      await sleepInPage(50);
+    }
+    if (!window.__app?.showSidebarPanel || !window.__app?.getSidebarState) {
+      return null;
+    }
+    window.__app.showSidebarPanel(nextPanel);
+    const settleStart = performance.now();
+    while (performance.now() - settleStart < 2_000) {
+      const sidebar = window.__app.getSidebarState();
+      if (!sidebar.collapsed && sidebar.tab === nextPanel) {
+        await waitForAnimationFrames();
+        return nextPanel;
+      }
+      await sleepInPage(25);
+    }
+    return window.__app.getSidebarState().tab;
+  }, panel);
+
+  if (changedViaApp === null) {
+    throw new Error(`Failed to show sidebar panel ${panel}; app debug bridge unavailable.`);
+  }
+  if (changedViaApp !== panel) {
+    throw new Error(`Failed to show sidebar panel ${panel}; current tab is ${changedViaApp}.`);
+  }
+  await sleep(150);
+}
+
+/**
  * Open the app-level search panel and wait for its input to appear.
  *
  * @param {import("playwright").Page} page

@@ -176,6 +176,16 @@ Use p95 numbers when judging typing feel. Mean hides sticky edits; max can be a
 single scheduling outlier. p95 is usually the best "bad but normal keystroke"
 signal.
 
+`lexical-sidebar-open-diagnostics` measures the Lexical diagnostics publication
+path when the sidebar flips from a non-tracking panel to `diagnostics`. It uses
+the same fixture set as the typing burst lane and emits:
+
+- `lexical.sidebar_open.wall_ms` for the UI flip through the first settled frame
+- `lexical.sidebar_open.publish_ms` for the first observed diagnostics
+  publication after the panel opens, including cached republish paths
+- `lexical.sidebar_open.span_*` delta metrics for the frontend Lexical spans
+  attributed to that panel-open action
+
 ## Scroll Scenarios
 
 The `scroll-step-rich`, `scroll-jump-rich`, and `scroll-step-source` scenarios prefer a heavy mathematical document (`fixtures/cogirth/main2.md`) when that local private fixture is available. Otherwise use the public `demo/index.md` baseline and note the limitation.

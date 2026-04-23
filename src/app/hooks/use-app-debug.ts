@@ -24,6 +24,7 @@ import { useDevSettings } from "../../state/dev-settings";
 import { clearInteractionLog, getInteractionLog } from "../../lexical/interaction-trace";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { planMarkdownFormat } from "../format-markdown";
+import type { SidebarTab } from "./use-sidebar-layout";
 import {
   debugEmitFileChangedCommand,
   debugGetNativeStateCommand,
@@ -73,6 +74,11 @@ interface AppDebugDeps {
   getCurrentDocText: () => string;
   getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   setSearchOpen: (open: boolean) => void;
+  showSidebarPanel: (panel: SidebarTab) => void;
+  getSidebarState: () => {
+    collapsed: boolean;
+    tab: SidebarTab;
+  };
   requestNativeClose: () => Promise<void>;
   setMode: (mode: EditorMode | string) => void;
   getMode: () => EditorMode;
@@ -94,6 +100,8 @@ export function useAppDebug({
   getCurrentDocText,
   getLexicalEditorHandle,
   setSearchOpen,
+  showSidebarPanel,
+  getSidebarState,
   requestNativeClose,
   setMode,
   getMode,
@@ -358,6 +366,16 @@ export function useAppDebug({
         });
         setSearchOpen(open);
       },
+      showSidebarPanel: (panel) => {
+        recordDebugSessionEvent({
+          timestamp: Date.now(),
+          type: "app",
+          summary: `showSidebarPanel ${panel}`,
+          detail: { panel },
+        });
+        showSidebarPanel(panel);
+      },
+      getSidebarState,
       setMode: (nextMode) => {
         recordDebugSessionEvent({
           timestamp: Date.now(),
@@ -455,6 +473,8 @@ export function useAppDebug({
     getCurrentDocText,
     getLexicalEditorHandle,
     setSearchOpen,
+    showSidebarPanel,
+    getSidebarState,
     requestNativeClose,
     setMode,
     getMode,

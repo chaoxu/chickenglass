@@ -10,7 +10,9 @@ import {
   HTML_EXPORT_PANDOC_CASES,
   HTML_EXPORT_PANDOC_REQUIRED_METRICS,
   htmlExportPandocMetrics,
+  LEXICAL_SIDEBAR_OPEN_REQUIRED_METRICS,
   LEXICAL_TYPING_BURST_REQUIRED_METRICS,
+  lexicalSidebarOpenMetrics,
   lexicalTypingBurstMetrics,
   parseCliArgs,
   preflightHtmlExportPandoc,
@@ -134,6 +136,30 @@ describe("perf regression scenarios", () => {
     } else {
       expect(scenarios["typing-rich-burst"].requiredMetrics).not.toContain(
         "typing.wall_ms.cogirth_main2.inline_math",
+      );
+    }
+  });
+
+  it("registers the Lexical diagnostics sidebar-open scenario with required metrics", () => {
+    const availableCases = availableTypingBurstCases().map(({ key, displayPath }) => ({ key, displayPath }));
+    expect(scenarios["lexical-sidebar-open-diagnostics"]).toMatchObject({
+      defaultSettleMs: 300,
+      description: expect.stringContaining("diagnostics"),
+    });
+    expect(availableCases).toContainEqual({ key: "index", displayPath: "demo/index.md" });
+    expect(scenarios["lexical-sidebar-open-diagnostics"].requiredMetrics).toContain(
+      "lexical.sidebar_open.wall_ms.index.diagnostics",
+    );
+    expect(scenarios["lexical-sidebar-open-diagnostics"].requiredMetrics).toContain(
+      "lexical.sidebar_open.publish_ms.index.diagnostics",
+    );
+    if (availableCases.some(({ key }) => key === "cogirth_main2")) {
+      expect(scenarios["lexical-sidebar-open-diagnostics"].requiredMetrics).toContain(
+        "lexical.sidebar_open.wall_ms.cogirth_main2.diagnostics",
+      );
+    } else {
+      expect(scenarios["lexical-sidebar-open-diagnostics"].requiredMetrics).not.toContain(
+        "lexical.sidebar_open.wall_ms.cogirth_main2.diagnostics",
       );
     }
   });
@@ -327,6 +353,20 @@ describe("perf regression scenarios", () => {
       { name: "lexical.typing.deferred_sync_count.index.near_end", unit: "count", value: 0 },
       { name: "lexical.typing.incremental_sync_count.index.near_end", unit: "count", value: 0 },
     ]));
+  });
+
+  it("emits Lexical sidebar-open metrics for diagnostics publication", () => {
+    const metrics = lexicalSidebarOpenMetrics("index", "diagnostics", {
+      wallMs: 24,
+      publishMs: 82,
+    });
+
+    expect(metrics).toEqual([
+      { name: "lexical.sidebar_open.wall_ms.index.diagnostics", unit: "ms", value: 24 },
+      { name: "lexical.sidebar_open.publish_ms.index.diagnostics", unit: "ms", value: 82 },
+    ]);
+    const metricPrefixes = metrics.map((entry) => entry.name.split(".").slice(0, 3).join("."));
+    expect(metricPrefixes).toEqual(expect.arrayContaining(LEXICAL_SIDEBAR_OPEN_REQUIRED_METRICS));
   });
 
   it("computes input_to_semantic from the slower of canonical and semantic completion", () => {

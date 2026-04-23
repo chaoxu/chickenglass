@@ -300,12 +300,22 @@ export function LexicalEditorPane({
     const { force = false } = options;
     setHeadings(semanticState.headings);
     if (force || publishedHeadingsRef.current !== semanticState.headings) {
-      callbacksRef.current.onHeadingsChange?.(semanticState.headings);
+      measureSync("lexical.publishHeadings", () => {
+        callbacksRef.current.onHeadingsChange?.(semanticState.headings);
+      }, {
+        category: "lexical",
+        detail: `${semanticState.headings.length} headings`,
+      });
       publishedHeadingsRef.current = semanticState.headings;
     }
     if (callbacksRef.current.onDiagnosticsChange) {
       if (force || publishedDiagnosticsRef.current !== semanticState.diagnostics) {
-        callbacksRef.current.onDiagnosticsChange(semanticState.diagnostics);
+        measureSync("lexical.publishDiagnostics", () => {
+          callbacksRef.current.onDiagnosticsChange?.(semanticState.diagnostics);
+        }, {
+          category: "lexical",
+          detail: `${semanticState.diagnostics.length} diagnostics`,
+        });
       }
       publishedDiagnosticsRef.current = semanticState.diagnostics;
       return;
