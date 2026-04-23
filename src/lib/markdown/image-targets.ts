@@ -1,5 +1,5 @@
 import { parser as baseParser } from "@lezer/markdown";
-import { htmlRenderExtensions } from "../parser";
+import { htmlRenderExtensions } from "../../parser";
 
 const previewParser = baseParser.configure(htmlRenderExtensions);
 

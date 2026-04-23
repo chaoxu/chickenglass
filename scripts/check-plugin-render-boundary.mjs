@@ -28,25 +28,13 @@ export const BOUNDARY_RULES = [
     name: "src/lib must stay neutral",
     from: ["lib"],
     to: ["app", "citations", "editor", "lexical", "plugins", "render"],
-    allow: [
-      {
-        file: "src/lib/context-menu.ts",
-        target: "src/app/components/ui/context-menu.tsx",
-        reason: "#1375 tracks moving the app UI context-menu dependency out of lib",
-      },
-    ],
+    allow: [],
   },
   {
     name: "src/render must not import app modules",
     from: ["render"],
     to: ["app"],
-    allow: [
-      {
-        file: "src/render/hover-preview-media.ts",
-        target: "src/app/pdf-image-previews.ts",
-        reason: "#1374 tracks moving collectImageTargets out of the app layer",
-      },
-    ],
+    allow: [],
   },
   {
     name: "src/citations must not import app/render/runtime modules",

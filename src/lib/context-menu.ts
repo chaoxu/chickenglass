@@ -6,7 +6,7 @@ import {
   ContextMenuItem as RadixContextMenuItem,
   ContextMenuSeparator as RadixContextMenuSeparator,
   ContextMenuTrigger as RadixContextMenuTrigger,
-} from "../app/components/ui/context-menu";
+} from "./ui/context-menu";
 
 const CONTEXT_MENU_STYLE_ID = "cf-imperative-context-menu-style";
 

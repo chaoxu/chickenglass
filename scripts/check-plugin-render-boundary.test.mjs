@@ -241,6 +241,39 @@ describe("import boundary checker", () => {
     ]);
   });
 
+  it("rejects src/render imports from app modules", () => {
+    const repoRoot = "/repo";
+    const renderFile = path.join(repoRoot, "src", "render", "hover-preview-media.ts");
+
+    expect(
+      findBoundaryViolations(
+        [
+          {
+            filePath: renderFile,
+            sourceText: 'import { x } from "../app/pdf-image-previews";',
+          },
+        ],
+        repoRoot,
+        [
+          {
+            name: "render neutral",
+            from: ["render"],
+            to: ["app"],
+            allow: [],
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        filePath: renderFile,
+        line: 1,
+        rule: "render neutral",
+        specifier: "../app/pdf-image-previews",
+        targetPath: null,
+      },
+    ]);
+  });
+
   it("ignores test files when enforcing production boundary rules", () => {
     const repoRoot = "/repo";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectImageTargets } from "./pdf-image-previews";
+import { collectImageTargets } from "./image-targets";
 
 describe("collectImageTargets", () => {
   it("collects image URLs in document order", () => {
