@@ -45,6 +45,7 @@ import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { DocumentChangeBridgeProvider } from "./document-change-bridge";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
+import { LexicalEditorHandlePlugin } from "./editor-handle-plugin";
 import {
   DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
@@ -66,7 +67,6 @@ import {
   lexicalMarkdownTheme,
 } from "./markdown";
 import {
-  LexicalEditorHandlePlugin,
   LexicalSourceBridgePlugin,
   sameSelection,
   shouldIgnoreMarkdownEditorChange,

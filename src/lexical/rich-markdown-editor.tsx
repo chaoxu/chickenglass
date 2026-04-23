@@ -38,6 +38,7 @@ import {
   repairBlankClickSelection,
   ViewportTrackingPlugin,
 } from "./editor-surface-shared";
+import { RichLexicalEditorHandlePlugin } from "./editor-handle-plugin";
 import {
   EmbeddedFieldFlushProvider,
 } from "./embedded-field-flush-registry";
@@ -53,7 +54,6 @@ import {
 } from "./markdown";
 import {
   LexicalDocumentSyncPlugin,
-  RichLexicalEditorHandlePlugin,
   useLexicalDocumentSessionController,
 } from "./lexical-document-session";
 import type {

@@ -48,10 +48,6 @@ export {
   shouldIgnoreMarkdownEditorChange,
 } from "./document-session-helpers";
 export { readEmbeddedInlineDomSelection } from "./embedded-selection";
-export {
-  LexicalEditorHandlePlugin,
-  RichLexicalEditorHandlePlugin,
-} from "./editor-handle-plugin";
 
 export interface LexicalDocumentSessionController {
   readonly initialDocRef: MutableRefObject<string>;
