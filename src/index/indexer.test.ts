@@ -30,6 +30,17 @@ function requireFileAnalysis(
   return analysis as NonNullable<ReturnType<typeof getFileIndexAnalysis>>;
 }
 
+function createDeferredPromise<T>(): {
+  readonly promise: Promise<T>;
+  resolve(value: T | PromiseLike<T>): void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   clearDocumentAnalysisCache();
 });
@@ -699,6 +710,45 @@ describe("BackgroundIndexer", () => {
     const fileIndex = await indexer.getFileIndex("doc.md");
     expect(fileIndex?.references).toHaveLength(1);
     expect(fileIndex?.references[0]?.ids).toEqual(["ref"]);
+  });
+
+  it("defers single-file updates until the owner yield completes", async () => {
+    const indexer = new BackgroundIndexer();
+    await indexer.updateFile("doc.md", "# Before");
+
+    const yieldGate = createDeferredPromise<void>();
+    const updatePromise = indexer.updateFileDeferred("doc.md", "# After", undefined, {
+      yieldBeforeUpdate: () => yieldGate.promise,
+    });
+
+    await expect(indexer.getFileIndex("doc.md")).resolves.toMatchObject({
+      sourceText: "# Before",
+    });
+
+    yieldGate.resolve();
+
+    await expect(updatePromise).resolves.toBe(1);
+    await expect(indexer.getFileIndex("doc.md")).resolves.toMatchObject({
+      sourceText: "# After",
+    });
+  });
+
+  it("leaves the previous file snapshot intact when a deferred single-file update is cancelled", async () => {
+    const indexer = new BackgroundIndexer();
+    await indexer.updateFile("doc.md", "# Before");
+
+    let cancelled = false;
+    const updatedEntries = await indexer.updateFileDeferred("doc.md", "# After", undefined, {
+      shouldCancel: () => cancelled,
+      yieldBeforeUpdate: async () => {
+        cancelled = true;
+      },
+    });
+
+    expect(updatedEntries).toBeNull();
+    await expect(indexer.getFileIndex("doc.md")).resolves.toMatchObject({
+      sourceText: "# Before",
+    });
   });
 
   it("yields between chunked bulkUpdate batches", async () => {

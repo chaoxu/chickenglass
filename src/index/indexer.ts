@@ -42,6 +42,11 @@ export interface ChunkedBulkUpdateOptions {
   readonly shouldCancel?: () => boolean;
 }
 
+export interface DeferredUpdateFileOptions {
+  readonly shouldCancel?: () => boolean;
+  readonly yieldBeforeUpdate?: () => Promise<void>;
+}
+
 const DEFAULT_CHUNKED_BULK_UPDATE_BATCH_SIZE = 25;
 
 function normalizeChunkedBatchSize(batchSize: number | undefined): number {
@@ -90,6 +95,40 @@ export class BackgroundIndexer {
     analysis?: FileIndexAnalysisInput,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
+    this.files = updateFileInIndex(this.files, file, content, analysis);
+    return this.files.get(file)?.entries.length ?? 0;
+  }
+
+  /**
+   * Update a single file after yielding once so stale active-file sync work can
+   * be cancelled before extraction begins.
+   *
+   * Returns `null` if `shouldCancel()` becomes true before the update commits,
+   * leaving the previous file snapshot intact.
+   */
+  async updateFileDeferred(
+    file: string,
+    content: string,
+    analysis?: FileIndexAnalysisInput,
+    options: DeferredUpdateFileOptions = {},
+  ): Promise<number | null> {
+    if (this.disposed) {
+      throw new Error(`Indexer.updateFileDeferred("${file}"): indexer is disposed`);
+    }
+    const shouldCancel = options.shouldCancel ?? (() => false);
+    const yieldBeforeUpdate = options.yieldBeforeUpdate ?? yieldAfterMacrotask;
+    if (shouldCancel()) {
+      return null;
+    }
+
+    await yieldBeforeUpdate();
+
+    if (this.disposed) {
+      throw new Error(`Indexer.updateFileDeferred("${file}"): indexer is disposed`);
+    }
+    if (shouldCancel()) {
+      return null;
+    }
     this.files = updateFileInIndex(this.files, file, content, analysis);
     return this.files.get(file)?.entries.length ?? 0;
   }

@@ -36,6 +36,8 @@ describe("SidenoteMargin layout timing", () => {
   let anchorTops: Map<number, number>;
   let view: EditorView;
   let offsetHeightDescriptor: PropertyDescriptor | undefined;
+  let offsetHeightReadCount: number;
+  let lineBlockAtMock: ReturnType<typeof vi.fn>;
   const requestAnimationFrameMock = vi.fn((_callback: FrameRequestCallback) => 1);
 
   beforeEach(() => {
@@ -60,12 +62,14 @@ describe("SidenoteMargin layout timing", () => {
     vi.stubGlobal("requestAnimationFrame", requestAnimationFrameMock);
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
     requestAnimationFrameMock.mockClear();
+    offsetHeightReadCount = 0;
 
     offsetHeightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
       configurable: true,
       get() {
         if (this instanceof HTMLDivElement && this.classList.contains(CSS.sidenoteEntry)) {
+          offsetHeightReadCount += 1;
           const match = this.textContent?.match(/h=(\d+)/);
           return match ? Number(match[1]) : 0;
         }
@@ -82,15 +86,16 @@ describe("SidenoteMargin layout timing", () => {
       [10, 10],
       [20, 20],
     ]);
+    lineBlockAtMock = vi.fn((pos: number) => ({
+      from: pos,
+      top: anchorTops.get(pos) ?? 0,
+    }));
     view = {
       scrollDOM: scroller,
       state: {
         field: () => undefined,
       },
-      lineBlockAt: (pos: number) => ({
-        from: pos,
-        top: anchorTops.get(pos) ?? 0,
-      }),
+      lineBlockAt: lineBlockAtMock,
       focus: vi.fn(),
       dispatch: vi.fn(),
     } as unknown as EditorView;
@@ -151,5 +156,57 @@ describe("SidenoteMargin layout timing", () => {
 
     expect(requestAnimationFrameMock).not.toHaveBeenCalled();
     expect(getEntryTops()).toEqual(["30px", "78px"]);
+  });
+
+  it("reuses cached anchors and positions for typing invalidations with no layout signal", () => {
+    renderMargin({
+      revision: 1,
+      footnotesChanged: false,
+      macrosChanged: false,
+      globalLayoutChanged: false,
+      layoutChangeFrom: -1,
+    });
+
+    lineBlockAtMock.mockClear();
+    offsetHeightReadCount = 0;
+
+    renderMargin({
+      revision: 2,
+      footnotesChanged: false,
+      macrosChanged: false,
+      globalLayoutChanged: false,
+      layoutChangeFrom: -1,
+    });
+
+    expect(lineBlockAtMock).not.toHaveBeenCalled();
+    expect(offsetHeightReadCount).toBe(0);
+    expect(getEntryTops()).toEqual(["10px", "58px"]);
+  });
+
+  it("refreshes anchors from the first affected sidenote on same-height reflow", () => {
+    renderMargin({
+      revision: 1,
+      footnotesChanged: false,
+      macrosChanged: false,
+      globalLayoutChanged: false,
+      layoutChangeFrom: -1,
+    });
+
+    anchorTops.set(20, 80);
+    lineBlockAtMock.mockClear();
+    offsetHeightReadCount = 0;
+
+    renderMargin({
+      revision: 2,
+      footnotesChanged: false,
+      macrosChanged: false,
+      globalLayoutChanged: false,
+      layoutChangeFrom: 15,
+    });
+
+    expect(lineBlockAtMock).toHaveBeenNthCalledWith(1, 15);
+    expect(lineBlockAtMock).toHaveBeenNthCalledWith(2, 20);
+    expect(offsetHeightReadCount).toBe(2);
+    expect(getEntryTops()).toEqual(["10px", "80px"]);
   });
 });

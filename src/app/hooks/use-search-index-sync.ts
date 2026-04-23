@@ -53,6 +53,13 @@ function sameActiveSearchSnapshot(
   return left.path === right.path && left.doc === right.doc && left.view === right.view;
 }
 
+function isStaleActiveSearchSnapshot(
+  snapshot: ActiveSearchSnapshot,
+  latestSnapshotRef: { readonly current: ActiveSearchSnapshot },
+): boolean {
+  return !sameActiveSearchSnapshot(snapshot, latestSnapshotRef.current);
+}
+
 function scheduleDebouncedIdleTask(
   task: () => void,
 ): () => void {
@@ -279,11 +286,23 @@ export function useSearchIndexSync({
             if (latestAnalysisResult.stale || cancelled) {
               return;
             }
-            await activeIndexer.updateFile(
+            const updatedEntries = await activeIndexer.updateFileDeferred(
               latestCurrentPath,
               latestActiveSearchSnapshot.doc,
               latestAnalysisResult.analysis,
+              {
+                shouldCancel: () => (
+                  cancelled
+                  || isStaleActiveSearchSnapshot(
+                    latestActiveSearchSnapshot,
+                    latestActiveSearchSnapshotRef,
+                  )
+                ),
+              },
             );
+            if (updatedEntries === null) {
+              return;
+            }
           }
           setSearchVersion((version) => version + 1);
         }
@@ -336,10 +355,16 @@ export function useSearchIndexSync({
           if (activeSearchAnalysis.stale) {
             return null;
           }
-          return activeIndexer.updateFile(
+          return activeIndexer.updateFileDeferred(
             currentPath,
             syncSnapshot.doc,
             activeSearchAnalysis.analysis,
+            {
+              shouldCancel: () => (
+                cancelled
+                || isStaleActiveSearchSnapshot(syncSnapshot, latestActiveSearchSnapshotRef)
+              ),
+            },
           );
         },
         {
@@ -347,8 +372,8 @@ export function useSearchIndexSync({
           detail: currentPath,
         },
       )
-        .then(() => {
-          if (!cancelled) {
+        .then((updatedEntries) => {
+          if (!cancelled && updatedEntries !== null) {
             setSearchVersion((version) => version + 1);
           }
         })

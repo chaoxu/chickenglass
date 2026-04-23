@@ -435,7 +435,7 @@ describe("useAppOverlays", () => {
 
   it("resyncs the active markdown file and bumps searchVersion on active-document edits while search is open", async () => {
     const bulkUpdateSpy = vi.spyOn(BackgroundIndexer.prototype, "bulkUpdateChunked");
-    const updateFileSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFile");
+    const updateFileDeferredSpy = vi.spyOn(BackgroundIndexer.prototype, "updateFileDeferred");
     const view = createSearchIndexView("# Current\n");
     const {
       props,
@@ -462,7 +462,7 @@ describe("useAppOverlays", () => {
     });
 
     const getCurrentDocText = vi.mocked(props.editor.getCurrentDocText);
-    const initialUpdateCount = updateFileSpy.mock.calls.length;
+    const initialUpdateCount = updateFileDeferredSpy.mock.calls.length;
     const initialSearchVersion = result.current.searchVersion;
     const initialDocReadCount = getCurrentDocText.mock.calls.length;
 
@@ -475,16 +475,21 @@ describe("useAppOverlays", () => {
     expect(getCurrentDocText).toHaveBeenCalledTimes(initialDocReadCount);
 
     await vi.waitFor(() => {
-      expect(updateFileSpy).toHaveBeenCalledTimes(initialUpdateCount + 1);
+      expect(updateFileDeferredSpy).toHaveBeenCalledTimes(initialUpdateCount + 1);
       expect(result.current.searchVersion).toBeGreaterThan(initialSearchVersion);
     });
 
     const updatedAnalysis = view.state.field(documentAnalysisField);
-    expect(updateFileSpy.mock.calls.at(-1)).toEqual([
+    expect(updateFileDeferredSpy.mock.calls.at(-1)?.slice(0, 3)).toEqual([
       "notes/current.md",
       "# Updated live draft\n",
       updatedAnalysis,
     ]);
+    expect(updateFileDeferredSpy.mock.calls.at(-1)?.[3]).toEqual(
+      expect.objectContaining({
+        shouldCancel: expect.any(Function),
+      }),
+    );
   });
 
   it("clears open label backlinks when the active path changes", async () => {

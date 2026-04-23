@@ -44,5 +44,6 @@ export {
 export {
   BackgroundIndexer,
   type ChunkedBulkUpdateOptions,
+  type DeferredUpdateFileOptions,
   type IndexFileSnapshot,
 } from "./indexer";

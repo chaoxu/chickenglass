@@ -8,6 +8,7 @@ import { useFootnoteTooltip } from "../hooks/use-footnote-tooltip";
 import { useLatest } from "../hooks/use-latest";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
+import { computeSidenoteInvalidation } from "./sidenote-invalidation";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
 import {
@@ -16,7 +17,6 @@ import {
   getDocumentAnalysisSliceRevision,
 } from "../../state/document-analysis";
 import { blockCounterField } from "../../state/block-counter";
-import { mathMacrosField } from "../../state/math-macros";
 import { bibDataField } from "../../state/bib-data";
 import {
   defaultEditorPlugins,
@@ -28,10 +28,8 @@ import {
   type EditorMode,
   wordWrapCompartment,
 } from "../../editor";
-import { serializeMacros } from "../../render/render-core";
 import type { Settings } from "../lib/types";
 
-const EMPTY_MACROS: Record<string, string> = {};
 const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   revision: 0,
   footnotesChanged: false,
@@ -122,34 +120,12 @@ export function EditorPane({
   const sidenoteTrackingExtension = useMemo(() => {
     return EditorView.updateListener.of((update) => {
       if (sidenotesCollapsedRef.current) return;
-
-      const beforeAnalysis = update.startState.field(documentSemanticsField, false);
-      const afterAnalysis = update.state.field(documentSemanticsField, false);
-      if (!afterAnalysis) return;
-
-      const footnotesChanged = beforeAnalysis?.footnotes !== afterAnalysis.footnotes;
-      const beforeMacros = update.startState.field(mathMacrosField, false) ?? EMPTY_MACROS;
-      const afterMacros = update.state.field(mathMacrosField, false) ?? EMPTY_MACROS;
-      const macrosChanged = beforeMacros !== afterMacros
-        && serializeMacros(beforeMacros) !== serializeMacros(afterMacros);
-      let layoutChangeFrom = -1;
-      if (update.docChanged) {
-        update.changes.iterChangedRanges((_fromA, _toA, fromB) => {
-          if (layoutChangeFrom === -1 || fromB < layoutChangeFrom) {
-            layoutChangeFrom = fromB;
-          }
-        });
-      }
-      const globalLayoutChanged = !update.docChanged && update.heightChanged;
-
-      if (!footnotesChanged && !macrosChanged && layoutChangeFrom === -1 && !globalLayoutChanged) return;
+      const invalidation = computeSidenoteInvalidation(update);
+      if (!invalidation) return;
 
       setSidenoteInvalidation((previous) => ({
         revision: previous.revision + 1,
-        footnotesChanged,
-        macrosChanged,
-        globalLayoutChanged,
-        layoutChangeFrom,
+        ...invalidation,
       }));
     });
   }, []);
