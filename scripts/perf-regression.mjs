@@ -766,6 +766,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const beforeDeferredTotalMs = deferredSyncBefore?.totalMs ?? 0;
       const beforeIncrementalCount = incrementalSyncBefore?.count ?? 0;
       const beforeIncrementalTotalMs = incrementalSyncBefore?.totalMs ?? 0;
+      const expectedLength = beforeLength + count;
       const observationStart = performance.now();
       const wallStart = observationStart;
       for (let i = 0; i < count; i += 1) {
@@ -778,6 +779,8 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const visualSyncStart = performance.now();
       let deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
       let incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
+      let finalLength = readCanonicalDoc().length;
+      let syncFreeVisualUpdate = false;
       while (performance.now() - visualSyncStart < 3000) {
         if (
           (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
@@ -785,22 +788,26 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         ) {
           break;
         }
+        if (finalLength >= expectedLength) {
+          syncFreeVisualUpdate = true;
+          break;
+        }
         await sleepInPage(25);
         deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
         incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
+        finalLength = readCanonicalDoc().length;
       }
-      const visualSyncMs = performance.now() - visualSyncStart;
+      const visualSyncMs = syncFreeVisualUpdate ? 0 : performance.now() - visualSyncStart;
 
-      const expectedLength = beforeLength + count;
       const canonicalStart = performance.now();
       while (performance.now() - canonicalStart < 5000) {
-        if (readCanonicalDoc().length >= expectedLength) {
+        if (finalLength >= expectedLength) {
           break;
         }
         await sleepInPage(0);
+        finalLength = readCanonicalDoc().length;
       }
-      const canonicalMs = performance.now() - canonicalStart;
-      const finalLength = readCanonicalDoc().length;
+      const canonicalMs = syncFreeVisualUpdate ? 0 : performance.now() - canonicalStart;
       if (finalLength < expectedLength) {
         throw new Error(
           `Lexical bridge insert did not update canonical markdown: expected length >= ${expectedLength}, got ${finalLength}.`,
@@ -828,17 +835,19 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
       longTaskRecorder.disconnect();
 
-      const deferredSyncStart = performance.now();
-      while (performance.now() - deferredSyncStart < 3000) {
-        if (
-          (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
-          || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
-        ) {
-          break;
+      if (!syncFreeVisualUpdate) {
+        const deferredSyncStart = performance.now();
+        while (performance.now() - deferredSyncStart < 3000) {
+          if (
+            (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
+            || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
+          ) {
+            break;
+          }
+          await sleepInPage(25);
+          deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+          incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
         }
-        await sleepInPage(25);
-        deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
-        incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
       }
       const deferredSyncCount = Math.max(0, (deferredSyncAfter?.count ?? 0) - beforeDeferredCount);
       const deferredSyncWorkMs = Math.max(

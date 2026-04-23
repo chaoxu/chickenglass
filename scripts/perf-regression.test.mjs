@@ -281,6 +281,53 @@ describe("perf regression scenarios", () => {
     expect(metrics.every((entry) => entry.value !== undefined)).toBe(true);
   });
 
+  it("keeps visual sync metrics present when a bridge insert stays sync-free", () => {
+    const metrics = lexicalTypingBurstMetrics("index", "near_end", {
+      insertCount: 100,
+      wallMs: 180,
+      wallPerCharMs: 1.8,
+      meanInsertMs: 1.4,
+      p95InsertMs: 2.9,
+      maxInsertMs: 7,
+      canonicalMs: 0,
+      visualSyncMs: 0,
+      semanticMs: 24,
+      semanticWorkMs: 6,
+      semanticWorkCount: 1,
+      getMarkdownWorkMs: 8,
+      getMarkdownWorkCount: 2,
+      publishSnapshotWorkMs: 10,
+      publishSnapshotWorkCount: 1,
+      settleMs: 16,
+      deferredSyncWorkMs: 0,
+      deferredSyncCount: 0,
+      incrementalSyncWorkMs: 0,
+      incrementalSyncCount: 0,
+      sourceSpanIndexWorkMs: 5,
+      sourceSpanIndexCount: 1,
+      inputToSemanticMs: 220,
+      inputToSemanticPerCharMs: 2.2,
+      longTaskSupported: 1,
+      longTaskCount: 0,
+      longTaskTotalMs: 0,
+      longTaskMaxMs: 0,
+      postIdleWindowMs: 500,
+      postIdleLongTaskCount: 0,
+      postIdleLongTaskTotalMs: 0,
+      postIdleLongTaskMaxMs: 0,
+      postIdleLagSamples: 12,
+      postIdleLagMeanMs: 0.3,
+      postIdleLagP95Ms: 0.8,
+      postIdleLagMaxMs: 1.1,
+    });
+
+    expect(metrics).toEqual(expect.arrayContaining([
+      { name: "lexical.typing.visual_sync_ms.index.near_end", unit: "ms", value: 0 },
+      { name: "lexical.typing.deferred_sync_count.index.near_end", unit: "count", value: 0 },
+      { name: "lexical.typing.incremental_sync_count.index.near_end", unit: "count", value: 0 },
+    ]));
+  });
+
   it("emits position-scoped frontend span deltas for typing attribution", () => {
     const metrics = frontendSpanDeltaMetrics(
       "typing",

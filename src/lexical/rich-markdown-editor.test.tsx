@@ -664,6 +664,31 @@ describe("__editor selection bridge (rich mode)", () => {
     }
   });
 
+  it("does not require rich sync spans for direct bridge inserts", async () => {
+    const doc = "Alpha Beta";
+    const insertAt = doc.indexOf(" Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+    const restoreGeometry = installZeroGeometryMocks();
+
+    try {
+      clearFrontendPerf();
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.handle.insertText("1");
+      });
+
+      expect(onTextChange).toHaveBeenLastCalledWith("Alpha1 Beta");
+      expect(editor.handle.getDoc()).toBe("Alpha1 Beta");
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(0);
+    } finally {
+      editor.unmount();
+      restoreGeometry();
+      clearFrontendPerf();
+    }
+  });
+
   it("incrementally syncs coalesced bridge inserts inside raw blocks", async () => {
     const doc = [
       "::: {.theorem #thm:sample title=\"Sample\"}",
