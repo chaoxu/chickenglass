@@ -62,8 +62,12 @@ import {
 import { useDeferredRichDocumentSync } from "./use-deferred-rich-document-sync";
 import {
   useRichDocumentSnapshotPublisher,
-  type RichMarkdownSnapshot,
 } from "./use-rich-document-snapshot-publisher";
+
+interface RichMarkdownSnapshot {
+  readonly editorState: ReturnType<LexicalEditor["getEditorState"]>;
+  readonly markdown: string;
+}
 
 export function sameSelection(
   left: MarkdownEditorSelection,
