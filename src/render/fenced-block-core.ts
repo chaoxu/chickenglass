@@ -168,6 +168,7 @@ export function createFencedBlockDecorationField(
     extraShouldRebuild?: (tr: Transaction) => boolean;
     selectionShouldRebuild?: (tr: Transaction) => boolean;
     rebuildOnTreeChange?: boolean;
+    spanName?: string;
   },
 ): StateField<DecorationSet> {
   return createDecorationsField(
@@ -189,5 +190,6 @@ export function createFencedBlockDecorationField(
       );
     },
     true,
+    options?.spanName,
   );
 }

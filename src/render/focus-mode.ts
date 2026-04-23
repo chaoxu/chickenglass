@@ -195,5 +195,6 @@ export const focusModeExtension: Extension = [
     mapDecorations(decorations, update) {
       return update.docChanged ? decorations.map(update.changes) : decorations;
     },
+    spanName: "cm6.focusModeDecorations",
   }),
 ];

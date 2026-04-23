@@ -228,6 +228,27 @@ describe("createDecorationsField", () => {
     expect(buildCount).toBe(0);
     expect(updated.field(field)).toBe(state.field(field));
   });
+
+  it("records create and update spans when a spanName is provided", () => {
+    const field = createDecorationsField(
+      () => Decoration.none,
+      undefined,
+      false,
+      "cm6.testDecorations",
+    );
+
+    view = createTestView("hello", { extensions: [markdown(), field] });
+    const afterCreate = getFrontendPerfSnapshot().recent.map((record) => record.name);
+    expect(afterCreate).toContain("cm6.testDecorations.create");
+
+    clearFrontendPerf();
+    const updated = view.state.update({ changes: { from: 0, insert: "x" } }).state;
+    expect(updated.field(field)).toBe(Decoration.none);
+
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.testDecorations.update",
+    );
+  });
 });
 
 describe("createDecorationStateField", () => {

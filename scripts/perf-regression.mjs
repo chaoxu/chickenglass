@@ -69,6 +69,11 @@ async function getPerfSnapshot(page) {
   return evaluateStep(page, "getPerfSnapshot", async () => window.__cfDebug.perfSummary());
 }
 
+async function getFrontendPerfSummaries(page) {
+  const snapshot = await getPerfSnapshot(page);
+  return snapshot.frontend?.summaries ?? [];
+}
+
 async function getSemanticRevisionInfo(page) {
   return page.evaluate(() => window.__cmDebug.semantics());
 }
@@ -231,6 +236,7 @@ export const TYPING_BURST_CASES = [
   },
 ];
 const TYPING_BURST_INSERT_COUNT = 100;
+const POST_TYPING_IDLE_OBSERVATION_MS = 500;
 
 export const HTML_EXPORT_PANDOC_CASES = [
   {
@@ -387,6 +393,38 @@ export function findTypingBurstPositions(text, positionKeys = DEFAULT_TYPING_BUR
   return positions;
 }
 
+export function frontendSpanDeltaMetrics(
+  metricPrefix,
+  caseKey,
+  positionKey,
+  beforeSummaries,
+  afterSummaries,
+) {
+  const beforeByName = new Map(beforeSummaries.map((entry) => [entry.name, entry]));
+  return afterSummaries
+    .flatMap((after) => {
+      const before = beforeByName.get(after.name);
+      const countDelta = Math.max(0, (after.count ?? 0) - (before?.count ?? 0));
+      const totalDeltaMs = Math.max(0, (after.totalMs ?? 0) - (before?.totalMs ?? 0));
+      if (countDelta === 0 && totalDeltaMs === 0) {
+        return [];
+      }
+      return [
+        {
+          name: `${metricPrefix}.span_total_ms.${after.name}.${caseKey}.${positionKey}`,
+          unit: "ms",
+          value: totalDeltaMs,
+        },
+        {
+          name: `${metricPrefix}.span_count.${after.name}.${caseKey}.${positionKey}`,
+          unit: "count",
+          value: countDelta,
+        },
+      ];
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function resolveTypingBurstFixture(caseDef) {
   const resolvedPath = caseDef.candidates.find((candidate) => existsSync(candidate));
   if (!resolvedPath) {
@@ -465,9 +503,19 @@ async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
 }
 
 async function measureTypingBurst(page, anchor, insertCount) {
-  return evaluateStep(page, "measureTypingBurst", async ({ nextAnchor, count }) => {
+  return evaluateStep(page, "measureTypingBurst", async ({
+    nextAnchor,
+    count,
+    postIdleObservationMs,
+  }) => {
     const mean = (values) =>
       values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+    const percentile = (values, percentileValue) => {
+      if (values.length === 0) return 0;
+      const sorted = [...values].sort((left, right) => left - right);
+      const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
+      return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+    };
     const waitForIdle = () =>
       new Promise((resolve) => {
         if (typeof window.requestIdleCallback === "function") {
@@ -476,14 +524,73 @@ async function measureTypingBurst(page, anchor, insertCount) {
         }
         setTimeout(resolve, 0);
       });
+    const createLongTaskRecorder = () => {
+      const entries = [];
+      const supported = Boolean(
+        typeof PerformanceObserver === "function"
+        && PerformanceObserver.supportedEntryTypes?.includes("longtask"),
+      );
+      let observer = null;
+      if (supported) {
+        observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            entries.push({ startTime: entry.startTime, duration: entry.duration });
+          }
+        });
+        observer.observe({ type: "longtask", buffered: false });
+      }
+      const summarize = (from, to = Number.POSITIVE_INFINITY) => {
+        const matched = entries.filter((entry) =>
+          entry.startTime >= from && entry.startTime < to
+        );
+        const durations = matched.map((entry) => entry.duration);
+        return {
+          count: matched.length,
+          totalMs: durations.reduce((sum, value) => sum + value, 0),
+          maxMs: Math.max(...durations, 0),
+        };
+      };
+      return {
+        supported,
+        disconnect() {
+          observer?.disconnect();
+        },
+        summarize,
+      };
+    };
+    const measureEventLoopLag = async (durationMs) => {
+      const expectedFrameMs = 1000 / 60;
+      const values = [];
+      const end = performance.now() + durationMs;
+      let last = performance.now();
+      while (performance.now() < end) {
+        const now = await new Promise((resolve) => {
+          if (typeof requestAnimationFrame === "function") {
+            requestAnimationFrame((timestamp) => resolve(timestamp));
+            return;
+          }
+          setTimeout(() => resolve(performance.now()), 16);
+        });
+        values.push(Math.max(0, now - last - expectedFrameMs));
+        last = now;
+      }
+      return {
+        samples: values.length,
+        meanMs: mean(values),
+        p95Ms: percentile(values, 95),
+        maxMs: Math.max(...values, 0),
+      };
+    };
 
     const view = window.__cmView;
     view.dispatch({ selection: { anchor: nextAnchor }, scrollIntoView: true });
     view.focus();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
+    const longTaskRecorder = createLongTaskRecorder();
     const timings = [];
-    const wallStart = performance.now();
+    const observationStart = performance.now();
+    const wallStart = observationStart;
     for (let i = 0; i < count; i += 1) {
       const pos = view.state.selection.main.anchor;
       const t0 = performance.now();
@@ -500,25 +607,58 @@ async function measureTypingBurst(page, anchor, insertCount) {
     const idleStart = performance.now();
     await waitForIdle();
     const idleMs = performance.now() - idleStart;
+    const postIdleStart = performance.now();
+    const postIdleLag = await measureEventLoopLag(postIdleObservationMs);
+    const postIdleEnd = performance.now();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const longTasks = longTaskRecorder.summarize(observationStart, postIdleStart);
+    const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
+    longTaskRecorder.disconnect();
 
     return {
+      insertCount: count,
       wallMs,
       meanDispatchMs: mean(timings),
+      p95DispatchMs: percentile(timings, 95),
       maxDispatchMs: Math.max(...timings, 0),
       settleMs,
       idleMs,
       inputToIdleMs: wallMs + settleMs + idleMs,
+      wallPerCharMs: wallMs / count,
+      inputToIdlePerCharMs: (wallMs + settleMs + idleMs) / count,
+      longTaskSupported: longTaskRecorder.supported ? 1 : 0,
+      longTaskCount: longTasks.count,
+      longTaskTotalMs: longTasks.totalMs,
+      longTaskMaxMs: longTasks.maxMs,
+      postIdleWindowMs: postIdleObservationMs,
+      postIdleLongTaskCount: postIdleLongTasks.count,
+      postIdleLongTaskTotalMs: postIdleLongTasks.totalMs,
+      postIdleLongTaskMaxMs: postIdleLongTasks.maxMs,
+      postIdleLagSamples: postIdleLag.samples,
+      postIdleLagMeanMs: postIdleLag.meanMs,
+      postIdleLagP95Ms: postIdleLag.p95Ms,
+      postIdleLagMaxMs: postIdleLag.maxMs,
     };
-  }, { nextAnchor: anchor, count: insertCount });
+  }, {
+    nextAnchor: anchor,
+    count: insertCount,
+    postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
+  });
 }
 
 async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
   return evaluateStep(
     page,
     "measureLexicalBridgeTypingBurst",
-    async ({ nextAnchor, count }) => {
+    async ({ nextAnchor, count, postIdleObservationMs }) => {
       const mean = (values) =>
         values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+      const percentile = (values, percentileValue) => {
+        if (values.length === 0) return 0;
+        const sorted = [...values].sort((left, right) => left - right);
+        const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
+        return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+      };
       const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const waitForAnimationFrames = () =>
         new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -530,6 +670,63 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
           }
           setTimeout(resolve, 0);
         });
+      const createLongTaskRecorder = () => {
+        const entries = [];
+        const supported = Boolean(
+          typeof PerformanceObserver === "function"
+          && PerformanceObserver.supportedEntryTypes?.includes("longtask"),
+        );
+        let observer = null;
+        if (supported) {
+          observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              entries.push({ startTime: entry.startTime, duration: entry.duration });
+            }
+          });
+          observer.observe({ type: "longtask", buffered: false });
+        }
+        const summarize = (from, to = Number.POSITIVE_INFINITY) => {
+          const matched = entries.filter((entry) =>
+            entry.startTime >= from && entry.startTime < to
+          );
+          const durations = matched.map((entry) => entry.duration);
+          return {
+            count: matched.length,
+            totalMs: durations.reduce((sum, value) => sum + value, 0),
+            maxMs: Math.max(...durations, 0),
+          };
+        };
+        return {
+          supported,
+          disconnect() {
+            observer?.disconnect();
+          },
+          summarize,
+        };
+      };
+      const measureEventLoopLag = async (durationMs) => {
+        const expectedFrameMs = 1000 / 60;
+        const values = [];
+        const end = performance.now() + durationMs;
+        let last = performance.now();
+        while (performance.now() < end) {
+          const now = await new Promise((resolve) => {
+            if (typeof requestAnimationFrame === "function") {
+              requestAnimationFrame((timestamp) => resolve(timestamp));
+              return;
+            }
+            setTimeout(() => resolve(performance.now()), 16);
+          });
+          values.push(Math.max(0, now - last - expectedFrameMs));
+          last = now;
+        }
+        return {
+          samples: values.length,
+          meanMs: mean(values),
+          p95Ms: percentile(values, 95),
+          maxMs: Math.max(...values, 0),
+        };
+      };
       const semanticSpanCount = async () => {
         const snapshot = await window.__cfDebug.perfSummary();
         const entry = snapshot.frontend.summaries.find(
@@ -551,7 +748,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         typeof editor.peekDoc === "function" ? editor.peekDoc() : editor.getDoc();
 
       const beforeLength = readCanonicalDoc().length;
-      const semanticCountBefore = await semanticSpanCount();
+      const semanticBefore = await frontendSummary("lexical.deriveSemanticState");
+      const semanticCountBefore = semanticBefore?.count ?? 0;
+      const getMarkdownBefore = await frontendSummary("lexical.getLexicalMarkdown");
+      const publishSnapshotBefore = await frontendSummary("lexical.publishRichDocumentSnapshot");
       const deferredSyncBefore = await frontendSummary("lexical.setLexicalMarkdown");
       const incrementalSyncBefore = await frontendSummary("lexical.incrementalRichSync");
       editor.setSelection(nextAnchor);
@@ -559,8 +759,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       await waitForAnimationFrames();
       const sourceSpanIndexBefore = await frontendSummary("lexical.createSourceSpanIndex");
 
+      const longTaskRecorder = createLongTaskRecorder();
       const timings = [];
-      const wallStart = performance.now();
+      const observationStart = performance.now();
+      const wallStart = observationStart;
       for (let i = 0; i < count; i += 1) {
         const t0 = performance.now();
         editor.insertText("1");
@@ -597,6 +799,13 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       await waitForAnimationFrames();
       await waitForIdle();
       const settleMs = performance.now() - settleStart;
+      const postIdleStart = performance.now();
+      const postIdleLag = await measureEventLoopLag(postIdleObservationMs);
+      const postIdleEnd = performance.now();
+      await sleepInPage(0);
+      const longTasks = longTaskRecorder.summarize(observationStart, postIdleStart);
+      const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
+      longTaskRecorder.disconnect();
 
       const deferredSyncStart = performance.now();
       const beforeDeferredCount = deferredSyncBefore?.count ?? 0;
@@ -638,13 +847,49 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         0,
         (sourceSpanIndexAfter?.totalMs ?? 0) - (sourceSpanIndexBefore?.totalMs ?? 0),
       );
+      const semanticAfter = await frontendSummary("lexical.deriveSemanticState");
+      const getMarkdownAfter = await frontendSummary("lexical.getLexicalMarkdown");
+      const publishSnapshotAfter = await frontendSummary("lexical.publishRichDocumentSnapshot");
+      const semanticWorkCount = Math.max(
+        0,
+        (semanticAfter?.count ?? 0) - (semanticBefore?.count ?? 0),
+      );
+      const semanticWorkMs = Math.max(
+        0,
+        (semanticAfter?.totalMs ?? 0) - (semanticBefore?.totalMs ?? 0),
+      );
+      const getMarkdownWorkCount = Math.max(
+        0,
+        (getMarkdownAfter?.count ?? 0) - (getMarkdownBefore?.count ?? 0),
+      );
+      const getMarkdownWorkMs = Math.max(
+        0,
+        (getMarkdownAfter?.totalMs ?? 0) - (getMarkdownBefore?.totalMs ?? 0),
+      );
+      const publishSnapshotWorkCount = Math.max(
+        0,
+        (publishSnapshotAfter?.count ?? 0) - (publishSnapshotBefore?.count ?? 0),
+      );
+      const publishSnapshotWorkMs = Math.max(
+        0,
+        (publishSnapshotAfter?.totalMs ?? 0) - (publishSnapshotBefore?.totalMs ?? 0),
+      );
 
       return {
+        insertCount: count,
         wallMs,
+        wallPerCharMs: wallMs / count,
         meanInsertMs: mean(timings),
+        p95InsertMs: percentile(timings, 95),
         maxInsertMs: Math.max(...timings, 0),
         canonicalMs,
         semanticMs,
+        semanticWorkCount,
+        semanticWorkMs,
+        getMarkdownWorkCount,
+        getMarkdownWorkMs,
+        publishSnapshotWorkCount,
+        publishSnapshotWorkMs,
         settleMs,
         deferredSyncCount,
         deferredSyncWorkMs,
@@ -653,20 +898,48 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         sourceSpanIndexCount,
         sourceSpanIndexWorkMs,
         inputToSemanticMs: wallMs + canonicalMs + semanticMs + settleMs,
+        inputToSemanticPerCharMs: (wallMs + canonicalMs + semanticMs + settleMs) / count,
+        longTaskSupported: longTaskRecorder.supported ? 1 : 0,
+        longTaskCount: longTasks.count,
+        longTaskTotalMs: longTasks.totalMs,
+        longTaskMaxMs: longTasks.maxMs,
+        postIdleWindowMs: postIdleObservationMs,
+        postIdleLongTaskCount: postIdleLongTasks.count,
+        postIdleLongTaskTotalMs: postIdleLongTasks.totalMs,
+        postIdleLongTaskMaxMs: postIdleLongTasks.maxMs,
+        postIdleLagSamples: postIdleLag.samples,
+        postIdleLagMeanMs: postIdleLag.meanMs,
+        postIdleLagP95Ms: postIdleLag.p95Ms,
+        postIdleLagMaxMs: postIdleLag.maxMs,
       };
     },
-    { nextAnchor: anchor, count: insertCount },
+    {
+      nextAnchor: anchor,
+      count: insertCount,
+      postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
+    },
   );
 }
 
 export function typingBurstMetrics(caseKey, positionKey, result) {
   const withContext = (name) => `${name}.${caseKey}.${positionKey}`;
   return [
+    { name: withContext("typing.insert_count"), unit: "count", value: result.insertCount },
     { name: withContext("typing.wall_ms"), unit: "ms", value: result.wallMs },
+    {
+      name: withContext("typing.wall_per_char_ms"),
+      unit: "ms",
+      value: result.wallPerCharMs,
+    },
     {
       name: withContext("typing.dispatch_mean_ms"),
       unit: "ms",
       value: result.meanDispatchMs,
+    },
+    {
+      name: withContext("typing.dispatch_p95_ms"),
+      unit: "ms",
+      value: result.p95DispatchMs,
     },
     {
       name: withContext("typing.dispatch_max_ms"),
@@ -680,17 +953,84 @@ export function typingBurstMetrics(caseKey, positionKey, result) {
       unit: "ms",
       value: result.inputToIdleMs,
     },
+    {
+      name: withContext("typing.input_to_idle_per_char_ms"),
+      unit: "ms",
+      value: result.inputToIdlePerCharMs,
+    },
+    {
+      name: withContext("typing.longtask_supported"),
+      unit: "count",
+      value: result.longTaskSupported,
+    },
+    { name: withContext("typing.longtask_count"), unit: "count", value: result.longTaskCount },
+    {
+      name: withContext("typing.longtask_total_ms"),
+      unit: "ms",
+      value: result.longTaskTotalMs,
+    },
+    {
+      name: withContext("typing.longtask_max_ms"),
+      unit: "ms",
+      value: result.longTaskMaxMs,
+    },
+    {
+      name: withContext("typing.post_idle_longtask_count"),
+      unit: "count",
+      value: result.postIdleLongTaskCount,
+    },
+    {
+      name: withContext("typing.post_idle_longtask_total_ms"),
+      unit: "ms",
+      value: result.postIdleLongTaskTotalMs,
+    },
+    {
+      name: withContext("typing.post_idle_longtask_max_ms"),
+      unit: "ms",
+      value: result.postIdleLongTaskMaxMs,
+    },
+    {
+      name: withContext("typing.post_idle_lag_samples"),
+      unit: "count",
+      value: result.postIdleLagSamples,
+    },
+    {
+      name: withContext("typing.post_idle_lag_mean_ms"),
+      unit: "ms",
+      value: result.postIdleLagMeanMs,
+    },
+    {
+      name: withContext("typing.post_idle_lag_p95_ms"),
+      unit: "ms",
+      value: result.postIdleLagP95Ms,
+    },
+    {
+      name: withContext("typing.post_idle_lag_max_ms"),
+      unit: "ms",
+      value: result.postIdleLagMaxMs,
+    },
   ];
 }
 
 export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
   const withContext = (name) => `${name}.${caseKey}.${positionKey}`;
   return [
+    { name: withContext("lexical.typing.insert_count"), unit: "count", value: result.insertCount },
     { name: withContext("lexical.typing.wall_ms"), unit: "ms", value: result.wallMs },
+    {
+      name: withContext("lexical.typing.wall_per_char_ms"),
+      unit: "ms",
+      value: result.wallPerCharMs,
+    },
     {
       name: withContext("lexical.typing.insert_mean_ms"),
       unit: "ms",
       value: result.meanInsertMs,
+    },
+    {
+      name: withContext("lexical.typing.insert_p95_ms"),
+      unit: "ms",
+      value: result.p95InsertMs,
     },
     {
       name: withContext("lexical.typing.insert_max_ms"),
@@ -706,6 +1046,36 @@ export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
       name: withContext("lexical.typing.semantic_ms"),
       unit: "ms",
       value: result.semanticMs,
+    },
+    {
+      name: withContext("lexical.typing.semantic_work_ms"),
+      unit: "ms",
+      value: result.semanticWorkMs,
+    },
+    {
+      name: withContext("lexical.typing.semantic_work_count"),
+      unit: "count",
+      value: result.semanticWorkCount,
+    },
+    {
+      name: withContext("lexical.typing.get_markdown_work_ms"),
+      unit: "ms",
+      value: result.getMarkdownWorkMs,
+    },
+    {
+      name: withContext("lexical.typing.get_markdown_work_count"),
+      unit: "count",
+      value: result.getMarkdownWorkCount,
+    },
+    {
+      name: withContext("lexical.typing.publish_snapshot_work_ms"),
+      unit: "ms",
+      value: result.publishSnapshotWorkMs,
+    },
+    {
+      name: withContext("lexical.typing.publish_snapshot_work_count"),
+      unit: "count",
+      value: result.publishSnapshotWorkCount,
     },
     {
       name: withContext("lexical.typing.deferred_sync_work_ms"),
@@ -741,6 +1111,66 @@ export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
       name: withContext("lexical.typing.input_to_semantic_ms"),
       unit: "ms",
       value: result.inputToSemanticMs,
+    },
+    {
+      name: withContext("lexical.typing.input_to_semantic_per_char_ms"),
+      unit: "ms",
+      value: result.inputToSemanticPerCharMs,
+    },
+    {
+      name: withContext("lexical.typing.longtask_supported"),
+      unit: "count",
+      value: result.longTaskSupported,
+    },
+    {
+      name: withContext("lexical.typing.longtask_count"),
+      unit: "count",
+      value: result.longTaskCount,
+    },
+    {
+      name: withContext("lexical.typing.longtask_total_ms"),
+      unit: "ms",
+      value: result.longTaskTotalMs,
+    },
+    {
+      name: withContext("lexical.typing.longtask_max_ms"),
+      unit: "ms",
+      value: result.longTaskMaxMs,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_longtask_count"),
+      unit: "count",
+      value: result.postIdleLongTaskCount,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_longtask_total_ms"),
+      unit: "ms",
+      value: result.postIdleLongTaskTotalMs,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_longtask_max_ms"),
+      unit: "ms",
+      value: result.postIdleLongTaskMaxMs,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_lag_samples"),
+      unit: "count",
+      value: result.postIdleLagSamples,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_lag_mean_ms"),
+      unit: "ms",
+      value: result.postIdleLagMeanMs,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_lag_p95_ms"),
+      unit: "ms",
+      value: result.postIdleLagP95Ms,
+    },
+    {
+      name: withContext("lexical.typing.post_idle_lag_max_ms"),
+      unit: "ms",
+      value: result.postIdleLagMaxMs,
     },
   ];
 }
@@ -1157,8 +1587,19 @@ export const scenarios = {
             testCase,
             runtimeOptions,
           );
+          const beforeSummaries = await getFrontendPerfSummaries(page);
           const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
-          metrics.push(...typingBurstMetrics(testCase.key, positionKey, result));
+          const afterSummaries = await getFrontendPerfSummaries(page);
+          metrics.push(
+            ...typingBurstMetrics(testCase.key, positionKey, result),
+            ...frontendSpanDeltaMetrics(
+              "typing",
+              testCase.key,
+              positionKey,
+              beforeSummaries,
+              afterSummaries,
+            ),
+          );
         }
       }
       return { metrics };
@@ -1186,12 +1627,23 @@ export const scenarios = {
             testCase,
             runtimeOptions,
           );
+          const beforeSummaries = await getFrontendPerfSummaries(page);
           const result = await measureLexicalBridgeTypingBurst(
             page,
             position.anchor,
             TYPING_BURST_INSERT_COUNT,
           );
-          metrics.push(...lexicalTypingBurstMetrics(testCase.key, positionKey, result));
+          const afterSummaries = await getFrontendPerfSummaries(page);
+          metrics.push(
+            ...lexicalTypingBurstMetrics(testCase.key, positionKey, result),
+            ...frontendSpanDeltaMetrics(
+              "lexical.typing",
+              testCase.key,
+              positionKey,
+              beforeSummaries,
+              afterSummaries,
+            ),
+          );
         }
       }
       return { metrics };
@@ -1389,12 +1841,14 @@ function printReportSummary(report) {
   const topFrontend = report.frontend.slice(0, 8).map((entry) => ({
     name: entry.name,
     avgMs: entry.meanAvgMs,
+    p95Ms: entry.p95AvgMs,
     maxMs: entry.worstMaxMs,
     samples: entry.samples,
   }));
   const topBackend = report.backend.slice(0, 8).map((entry) => ({
     name: entry.name,
     avgMs: entry.meanAvgMs,
+    p95Ms: entry.p95AvgMs,
     maxMs: entry.worstMaxMs,
     samples: entry.samples,
   }));
@@ -1416,6 +1870,8 @@ function printReportSummary(report) {
       name: entry.name,
       unit: entry.unit,
       mean: entry.meanValue,
+      p50: entry.p50Value,
+      p95: entry.p95Value,
       max: entry.maxValue,
       samples: entry.samples,
     })));

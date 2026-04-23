@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DebugRenderState } from "../editor";
 import {
   _compactDebugContextForEventForTest as compactDebugContextForEvent,
   _sanitizeDebugEventDetailForTest as sanitizeDebugEventDetail,
+  clearDebugSessionEvents,
+  flushDebugSessionEvents,
+  getDebugSessionRecorderStatus,
+  recordDebugSessionEvent,
 } from "./session-recorder";
 
 const renderState: DebugRenderState = {
@@ -24,6 +28,11 @@ const structureState = {
 } as const;
 
 describe("session-recorder capture policy", () => {
+  afterEach(() => {
+    clearDebugSessionEvents();
+    vi.unstubAllGlobals();
+  });
+
   it("drops heavy render context for scroll events but keeps structure state", () => {
     const compacted = compactDebugContextForEvent("scroll", {
       document: {
@@ -164,5 +173,22 @@ describe("session-recorder capture policy", () => {
       base64Length: 6,
     });
     expect(detail.files[1]).not.toHaveProperty("base64");
+  });
+
+  it("does not requeue a failed debug transport flush forever", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("offline"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    recordDebugSessionEvent({
+      timestamp: Date.now(),
+      type: "snapshot",
+      summary: "manual snapshot",
+    });
+    expect(getDebugSessionRecorderStatus().queued).toBe(1);
+
+    await flushDebugSessionEvents();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getDebugSessionRecorderStatus().queued).toBe(0);
   });
 });

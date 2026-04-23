@@ -585,5 +585,6 @@ export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
         click: openRenderedLinkAtEvent,
       },
     },
+    spanName: "cm6.markdownRender",
   },
 );

@@ -275,6 +275,8 @@ export function buildSidenoteDecorations(state: EditorState): DecorationSet {
 const sidenoteDecorationField = createDecorationsField(
   (state) => buildSidenoteDecorations(state),
   sidenoteDecorationShouldRebuild,
+  false,
+  "cm6.sidenoteDecorations",
 );
 
 export { sidenoteDecorationField };

@@ -81,7 +81,7 @@ pnpm perf:capture -- \
 - `open-heavy-post`
   Reload app, open `posts/2020-07-11-yotta-savings-and-covering-designs.md`.
 - `mode-cycle-index`
-  Reload app, open `index.md`, then cycle `Source -> Read -> Rich`.
+  Reload app, open `index.md`, then cycle `Source -> Lexical -> CM6 Rich`.
 - `local-edit-index`
   Reload app, open `index.md`, then apply a local inline-math edit and report semantic revision churn.
 - `typing-rich-burst`
@@ -119,6 +119,57 @@ All perf scenarios now run the shared `assertEditorHealth()` check from
 captured. That keeps the perf lane from passing when the editor is fast but the
 debug bridge, selection bounds, syntax tree, or semantic revision info are
 broken.
+
+## Typing Metrics
+
+`typing-rich-burst` is a stress benchmark, not a literal single-keystroke
+measurement. Each measured position inserts `100` one-character edits through
+back-to-back editor dispatches, then waits for render/idle settling. The total
+burst size is emitted as `typing.insert_count`.
+
+The main CM6 typing metrics are:
+
+- `typing.dispatch_mean_ms` / `typing.dispatch_p95_ms` / `typing.dispatch_max_ms`
+  measure the synchronous CM6 `view.dispatch()` cost for each inserted
+  character inside the burst.
+- `typing.wall_ms` measures the wall-clock time for the full 100-character
+  burst loop.
+- `typing.settle_ms` waits for two animation frames after the burst.
+- `typing.idle_ms` waits for `requestIdleCallback` (or a zero-delay timeout
+  fallback).
+- `typing.input_to_idle_ms` is `wall_ms + settle_ms + idle_ms` for the whole
+  burst. This is the best end-to-end "the editor is done reacting" number, but
+  it is not a single-character latency.
+- `typing.wall_per_char_ms` and `typing.input_to_idle_per_char_ms` normalize
+  the burst totals by `typing.insert_count` so changes are easier to compare.
+- `typing.span_total_ms.<span>.<case>.<position>` and
+  `typing.span_count.<span>.<case>.<position>` are measured immediately around
+  each typing burst. Use these for attribution; the top-level frontend span
+  table can also include document-open/setup work from the scenario.
+- `typing.longtask_*` reports browser Long Tasks during the burst plus normal
+  settle/idle waits. Long Tasks are main-thread blocks of roughly 50ms or more.
+- `typing.post_idle_*` observes the first 500ms after the editor reports idle.
+  Post-idle long tasks or high `post_idle_lag_*` frame-cadence lag indicate CPU
+  work is still trapped after the user has stopped typing.
+
+`typing-lexical-bridge-burst` follows the same 100-character burst shape and
+adds Lexical-specific sync metrics:
+
+- `lexical.typing.insert_mean_ms` / `lexical.typing.insert_p95_ms` /
+  `lexical.typing.insert_max_ms` measure each `editor.insertText()` call.
+- `lexical.typing.canonical_ms` waits until canonical markdown catches up.
+- `lexical.typing.semantic_ms` waits for semantic derivation after the edit.
+  It includes scheduled/debounced readiness time, so compare it with
+  `lexical.typing.semantic_work_ms`.
+- `lexical.typing.semantic_work_ms`, `get_markdown_work_ms`, and
+  `publish_snapshot_work_ms` measure actual attributed Lexical work during the
+  burst window.
+- `lexical.typing.input_to_semantic_ms` is the whole burst plus canonical and
+  semantic settling. The `_per_char_ms` companion normalizes by insert count.
+
+Use p95 numbers when judging typing feel. Mean hides sticky edits; max can be a
+single scheduling outlier. p95 is usually the best "bad but normal keystroke"
+signal.
 
 ## Scroll Scenarios
 

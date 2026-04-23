@@ -5,9 +5,12 @@ import {
   buildHtmlExportPandocArgs,
   comparisonFailureRows,
   findTypingBurstPositions,
+  frontendSpanDeltaMetrics,
   HTML_EXPORT_PANDOC_CASES,
   HTML_EXPORT_PANDOC_REQUIRED_METRICS,
   htmlExportPandocMetrics,
+  LEXICAL_TYPING_BURST_REQUIRED_METRICS,
+  lexicalTypingBurstMetrics,
   parseCliArgs,
   preflightHtmlExportPandoc,
   resolvePerfRuntimeOptions,
@@ -145,25 +148,175 @@ describe("perf regression scenarios", () => {
 
   it("emits the required typing metrics for each document position", () => {
     const metrics = typingBurstMetrics("index", "after_frontmatter", {
+      insertCount: 100,
       wallMs: 120,
+      wallPerCharMs: 1.2,
       meanDispatchMs: 1.2,
+      p95DispatchMs: 2.8,
       maxDispatchMs: 4.8,
       settleMs: 16,
       idleMs: 8,
       inputToIdleMs: 144,
+      inputToIdlePerCharMs: 1.44,
+      longTaskSupported: 1,
+      longTaskCount: 2,
+      longTaskTotalMs: 110,
+      longTaskMaxMs: 70,
+      postIdleWindowMs: 500,
+      postIdleLongTaskCount: 0,
+      postIdleLongTaskTotalMs: 0,
+      postIdleLongTaskMaxMs: 0,
+      postIdleLagSamples: 20,
+      postIdleLagMeanMs: 0.4,
+      postIdleLagP95Ms: 1.2,
+      postIdleLagMaxMs: 2.4,
     });
 
     expect(metrics).toEqual([
+      { name: "typing.insert_count.index.after_frontmatter", unit: "count", value: 100 },
       { name: "typing.wall_ms.index.after_frontmatter", unit: "ms", value: 120 },
+      { name: "typing.wall_per_char_ms.index.after_frontmatter", unit: "ms", value: 1.2 },
       { name: "typing.dispatch_mean_ms.index.after_frontmatter", unit: "ms", value: 1.2 },
+      { name: "typing.dispatch_p95_ms.index.after_frontmatter", unit: "ms", value: 2.8 },
       { name: "typing.dispatch_max_ms.index.after_frontmatter", unit: "ms", value: 4.8 },
       { name: "typing.settle_ms.index.after_frontmatter", unit: "ms", value: 16 },
       { name: "typing.idle_ms.index.after_frontmatter", unit: "ms", value: 8 },
       { name: "typing.input_to_idle_ms.index.after_frontmatter", unit: "ms", value: 144 },
+      { name: "typing.input_to_idle_per_char_ms.index.after_frontmatter", unit: "ms", value: 1.44 },
+      { name: "typing.longtask_supported.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "typing.longtask_count.index.after_frontmatter", unit: "count", value: 2 },
+      { name: "typing.longtask_total_ms.index.after_frontmatter", unit: "ms", value: 110 },
+      { name: "typing.longtask_max_ms.index.after_frontmatter", unit: "ms", value: 70 },
+      { name: "typing.post_idle_longtask_count.index.after_frontmatter", unit: "count", value: 0 },
+      { name: "typing.post_idle_longtask_total_ms.index.after_frontmatter", unit: "ms", value: 0 },
+      { name: "typing.post_idle_longtask_max_ms.index.after_frontmatter", unit: "ms", value: 0 },
+      { name: "typing.post_idle_lag_samples.index.after_frontmatter", unit: "count", value: 20 },
+      { name: "typing.post_idle_lag_mean_ms.index.after_frontmatter", unit: "ms", value: 0.4 },
+      { name: "typing.post_idle_lag_p95_ms.index.after_frontmatter", unit: "ms", value: 1.2 },
+      { name: "typing.post_idle_lag_max_ms.index.after_frontmatter", unit: "ms", value: 2.4 },
     ]);
-    expect(metrics.map((entry) => entry.name.split(".").slice(0, 2).join("."))).toEqual(
-      TYPING_BURST_REQUIRED_METRICS,
+    const metricPrefixes = metrics.map((entry) => entry.name.split(".").slice(0, 2).join("."));
+    expect(metricPrefixes).toEqual(expect.arrayContaining(TYPING_BURST_REQUIRED_METRICS));
+    expect(metrics.every((entry) => entry.value !== undefined)).toBe(true);
+  });
+
+  it("emits normalized Lexical typing metrics for burst interpretation", () => {
+    const metrics = lexicalTypingBurstMetrics("index", "after_frontmatter", {
+      insertCount: 100,
+      wallMs: 200,
+      wallPerCharMs: 2,
+      meanInsertMs: 1.5,
+      p95InsertMs: 3,
+      maxInsertMs: 8,
+      canonicalMs: 20,
+      semanticMs: 30,
+      semanticWorkMs: 7,
+      semanticWorkCount: 1,
+      getMarkdownWorkMs: 9,
+      getMarkdownWorkCount: 2,
+      publishSnapshotWorkMs: 11,
+      publishSnapshotWorkCount: 1,
+      settleMs: 16,
+      deferredSyncWorkMs: 4,
+      deferredSyncCount: 1,
+      incrementalSyncWorkMs: 5,
+      incrementalSyncCount: 1,
+      sourceSpanIndexWorkMs: 6,
+      sourceSpanIndexCount: 1,
+      inputToSemanticMs: 266,
+      inputToSemanticPerCharMs: 2.66,
+      longTaskSupported: 1,
+      longTaskCount: 3,
+      longTaskTotalMs: 190,
+      longTaskMaxMs: 90,
+      postIdleWindowMs: 500,
+      postIdleLongTaskCount: 1,
+      postIdleLongTaskTotalMs: 60,
+      postIdleLongTaskMaxMs: 60,
+      postIdleLagSamples: 20,
+      postIdleLagMeanMs: 0.5,
+      postIdleLagP95Ms: 1.4,
+      postIdleLagMaxMs: 3,
+    });
+
+    expect(metrics).toEqual([
+      { name: "lexical.typing.insert_count.index.after_frontmatter", unit: "count", value: 100 },
+      { name: "lexical.typing.wall_ms.index.after_frontmatter", unit: "ms", value: 200 },
+      { name: "lexical.typing.wall_per_char_ms.index.after_frontmatter", unit: "ms", value: 2 },
+      { name: "lexical.typing.insert_mean_ms.index.after_frontmatter", unit: "ms", value: 1.5 },
+      { name: "lexical.typing.insert_p95_ms.index.after_frontmatter", unit: "ms", value: 3 },
+      { name: "lexical.typing.insert_max_ms.index.after_frontmatter", unit: "ms", value: 8 },
+      { name: "lexical.typing.canonical_ms.index.after_frontmatter", unit: "ms", value: 20 },
+      { name: "lexical.typing.semantic_ms.index.after_frontmatter", unit: "ms", value: 30 },
+      { name: "lexical.typing.semantic_work_ms.index.after_frontmatter", unit: "ms", value: 7 },
+      { name: "lexical.typing.semantic_work_count.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.get_markdown_work_ms.index.after_frontmatter", unit: "ms", value: 9 },
+      { name: "lexical.typing.get_markdown_work_count.index.after_frontmatter", unit: "count", value: 2 },
+      { name: "lexical.typing.publish_snapshot_work_ms.index.after_frontmatter", unit: "ms", value: 11 },
+      { name: "lexical.typing.publish_snapshot_work_count.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.deferred_sync_work_ms.index.after_frontmatter", unit: "ms", value: 4 },
+      { name: "lexical.typing.deferred_sync_count.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.incremental_sync_work_ms.index.after_frontmatter", unit: "ms", value: 5 },
+      { name: "lexical.typing.incremental_sync_count.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.source_span_index_work_ms.index.after_frontmatter", unit: "ms", value: 6 },
+      { name: "lexical.typing.source_span_index_count.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.input_to_semantic_ms.index.after_frontmatter", unit: "ms", value: 266 },
+      { name: "lexical.typing.input_to_semantic_per_char_ms.index.after_frontmatter", unit: "ms", value: 2.66 },
+      { name: "lexical.typing.longtask_supported.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.longtask_count.index.after_frontmatter", unit: "count", value: 3 },
+      { name: "lexical.typing.longtask_total_ms.index.after_frontmatter", unit: "ms", value: 190 },
+      { name: "lexical.typing.longtask_max_ms.index.after_frontmatter", unit: "ms", value: 90 },
+      { name: "lexical.typing.post_idle_longtask_count.index.after_frontmatter", unit: "count", value: 1 },
+      { name: "lexical.typing.post_idle_longtask_total_ms.index.after_frontmatter", unit: "ms", value: 60 },
+      { name: "lexical.typing.post_idle_longtask_max_ms.index.after_frontmatter", unit: "ms", value: 60 },
+      { name: "lexical.typing.post_idle_lag_samples.index.after_frontmatter", unit: "count", value: 20 },
+      { name: "lexical.typing.post_idle_lag_mean_ms.index.after_frontmatter", unit: "ms", value: 0.5 },
+      { name: "lexical.typing.post_idle_lag_p95_ms.index.after_frontmatter", unit: "ms", value: 1.4 },
+      { name: "lexical.typing.post_idle_lag_max_ms.index.after_frontmatter", unit: "ms", value: 3 },
+    ]);
+    const metricPrefixes = metrics.map((entry) => entry.name.split(".").slice(0, 3).join("."));
+    expect(metricPrefixes).toEqual(expect.arrayContaining(LEXICAL_TYPING_BURST_REQUIRED_METRICS));
+    expect(metrics.every((entry) => entry.value !== undefined)).toBe(true);
+  });
+
+  it("emits position-scoped frontend span deltas for typing attribution", () => {
+    const metrics = frontendSpanDeltaMetrics(
+      "typing",
+      "index",
+      "after_frontmatter",
+      [
+        { name: "cm6.documentAnalysis.update", count: 4, totalMs: 10 },
+        { name: "cm6.markdownRender.incrementalDoc", count: 1, totalMs: 2 },
+      ],
+      [
+        { name: "cm6.documentAnalysis.update", count: 9, totalMs: 18.5 },
+        { name: "cm6.markdownRender.incrementalDoc", count: 1, totalMs: 2 },
+        { name: "cm6.referenceRender.map", count: 2, totalMs: 1.25 },
+      ],
     );
+
+    expect(metrics).toEqual([
+      {
+        name: "typing.span_count.cm6.documentAnalysis.update.index.after_frontmatter",
+        unit: "count",
+        value: 5,
+      },
+      {
+        name: "typing.span_count.cm6.referenceRender.map.index.after_frontmatter",
+        unit: "count",
+        value: 2,
+      },
+      {
+        name: "typing.span_total_ms.cm6.documentAnalysis.update.index.after_frontmatter",
+        unit: "ms",
+        value: 8.5,
+      },
+      {
+        name: "typing.span_total_ms.cm6.referenceRender.map.index.after_frontmatter",
+        unit: "ms",
+        value: 1.25,
+      },
+    ]);
   });
 
   it("picks prose and semantic hotspot typing positions deterministically", () => {

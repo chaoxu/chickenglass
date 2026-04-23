@@ -138,7 +138,10 @@ function createSearchHighlight(): Extension {
     return result;
   }
 
-  return createSimpleViewPlugin(buildFn, { shouldUpdate });
+  return createSimpleViewPlugin(buildFn, {
+    shouldUpdate,
+    spanName: "cm6.searchHighlights",
+  });
 }
 
 interface SearchHighlightUpdateState {

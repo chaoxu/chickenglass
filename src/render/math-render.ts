@@ -60,6 +60,7 @@ import { createChangeChecker } from "../state/change-detection";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import { planSemanticSensitiveUpdate } from "./view-plugin-factories";
 import { rangeIntersectsRanges } from "./viewport-diff";
+import { measureSync } from "../lib/perf";
 
 export { renderKatexToHtml } from "./inline-shared";
 export {
@@ -613,31 +614,38 @@ const mathDecorationField = createDecorationStateField({
 
     switch (updatePlan.kind) {
       case "keep":
-        return tr.docChanged && docChangeCanShiftDecorationSet(value, tr)
-          ? value.map(tr.changes)
-          : value;
+        return measureSync("cm6.mathDecorations.keep", () =>
+          tr.docChanged && docChangeCanShiftDecorationSet(value, tr)
+            ? value.map(tr.changes)
+            : value
+        );
       case "map":
-        return value.map(tr.changes);
+        return measureSync("cm6.mathDecorations.map", () => value.map(tr.changes));
       case "rebuild":
-        return rebuildMathDecorations(tr.state);
+        return measureSync(
+          "cm6.mathDecorations.rebuild",
+          () => rebuildMathDecorations(tr.state),
+        );
       case "dirty": {
-        const mapped = value.map(tr.changes);
-        const dirtyRegions = collectDirtyMathRegions(regionsAfter, updatePlan.dirtyRanges);
-        let next = mapped;
-        for (const range of updatePlan.dirtyRanges) {
-          next = next.update({
-            filterFrom: range.from,
-            filterTo: range.to,
-            filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
-          });
-        }
-        if (dirtyRegions.length > 0) {
-          next = next.update({
-            add: buildMathRangesForRegions(tr.state, dirtyRegions),
-            sort: true,
-          });
-        }
-        return next;
+        return measureSync("cm6.mathDecorations.dirty", () => {
+          const mapped = value.map(tr.changes);
+          const dirtyRegions = collectDirtyMathRegions(regionsAfter, updatePlan.dirtyRanges);
+          let next = mapped;
+          for (const range of updatePlan.dirtyRanges) {
+            next = next.update({
+              filterFrom: range.from,
+              filterTo: range.to,
+              filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
+            });
+          }
+          if (dirtyRegions.length > 0) {
+            next = next.update({
+              add: buildMathRangesForRegions(tr.state, dirtyRegions),
+              sort: true,
+            });
+          }
+          return next;
+        });
       }
     }
   },

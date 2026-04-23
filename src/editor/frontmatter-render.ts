@@ -79,6 +79,7 @@ const frontmatterDecorationField = createDecorationsField(
   buildDecorations,
   frontmatterShouldRebuild,
   true, // map on docChanged — frontmatter decorations depend on structure, not text
+  "cm6.frontmatterDecorations",
 );
 
 /**

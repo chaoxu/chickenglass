@@ -424,6 +424,7 @@ export const referenceRenderPlugin: Extension = createSemanticSensitiveViewPlugi
     dirtyRangeFn: (update) => computeReferenceDirtyRanges(update),
     mapDecorations: (decorations, update) =>
       mappedDecorationsWithFreshWidgetSources(decorations, update.changes),
+    spanName: "cm6.referenceRender",
   },
 );
 

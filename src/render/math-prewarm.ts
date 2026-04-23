@@ -6,6 +6,7 @@ import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { mathMacrosField } from "../state/math-macros";
 import { serializeMacros } from "./source-widget";
 import { rangesOverlap } from "../lib/range-helpers";
+import { measureSync } from "../lib/perf";
 
 function scheduleIdle(callback: (deadline?: IdleDeadline) => void): void {
   if (typeof requestIdleCallback === "function") {
@@ -145,33 +146,35 @@ export const mathPrewarmPlugin: Extension = ViewPlugin.fromClass(
       let index = 0;
 
       const processChunk = (deadline?: IdleDeadline) => {
-        if (this.generation !== generation) return;
+        measureSync("cm6.mathPrewarm.chunk", () => {
+          if (this.generation !== generation) return;
 
-        const start = performance.now();
-        while (index < regions.length) {
-          if (
-            deadline
-              ? deadline.timeRemaining() < 1
-              : performance.now() - start > PREWARM_BUDGET_MS
-          ) {
-            break;
+          const start = performance.now();
+          while (index < regions.length) {
+            if (
+              deadline
+                ? deadline.timeRemaining() < 1
+                : performance.now() - start > PREWARM_BUDGET_MS
+            ) {
+              break;
+            }
+            const region = regions[index++];
+            try {
+              renderKatexToHtml(
+                region.latex,
+                region.isDisplay,
+                macros,
+                region.isDisplay ? "htmlAndMathml" : "html",
+              );
+            } catch {
+              // KaTeX parse error — skip; the widget will show the error on render.
+            }
           }
-          const region = regions[index++];
-          try {
-            renderKatexToHtml(
-              region.latex,
-              region.isDisplay,
-              macros,
-              region.isDisplay ? "htmlAndMathml" : "html",
-            );
-          } catch {
-            // KaTeX parse error — skip; the widget will show the error on render.
-          }
-        }
 
-        if (index < regions.length && this.generation === generation) {
-          scheduleIdle(processChunk);
-        }
+          if (index < regions.length && this.generation === generation) {
+            scheduleIdle(processChunk);
+          }
+        });
       };
 
       scheduleIdle(processChunk);

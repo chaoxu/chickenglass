@@ -1,31 +1,45 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { EditorView } from "@codemirror/view";
 import {
-  cacheBlockWidgetHeight,
-  estimatedBlockWidgetHeight,
+  observeBlockWidgetHeight,
+  type BlockWidgetHeightBinding,
 } from "./block-widget-height";
 
-describe("block-widget-height", () => {
-  it("returns -1 when no measured height is cached", () => {
-    expect(estimatedBlockWidgetHeight(new Map(), "math")).toBe(-1);
+describe("observeBlockWidgetHeight", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("stores rounded heights and reports them as estimates", () => {
-    const cache = new Map<string, number>();
-    expect(cacheBlockWidgetHeight(cache, "math", 57.6)).toBe(true);
-    expect(estimatedBlockWidgetHeight(cache, "math")).toBe(58);
-  });
+  it("stops retrying detached containers after a bounded number of frames", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("ResizeObserver", undefined);
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
 
-  it("ignores invalid measurements", () => {
-    const cache = new Map<string, number>();
-    expect(cacheBlockWidgetHeight(cache, "math", 0)).toBe(false);
-    expect(cacheBlockWidgetHeight(cache, "math", Number.NaN)).toBe(false);
-    expect(estimatedBlockWidgetHeight(cache, "math")).toBe(-1);
-  });
+    const binding: BlockWidgetHeightBinding = {
+      resizeObserver: null,
+      resizeMeasureFrame: null,
+    };
+    const container = document.createElement("div");
 
-  it("does not churn for effectively unchanged heights", () => {
-    const cache = new Map<string, number>();
-    expect(cacheBlockWidgetHeight(cache, "math", 58.2)).toBe(true);
-    expect(cacheBlockWidgetHeight(cache, "math", 58.4)).toBe(false);
-    expect(estimatedBlockWidgetHeight(cache, "math")).toBe(58);
+    observeBlockWidgetHeight(
+      binding,
+      container,
+      {} as EditorView,
+      new Map(),
+      "detached",
+    );
+
+    for (let index = 0; index < 16; index += 1) {
+      const callback = callbacks.shift();
+      if (!callback) break;
+      callback(performance.now());
+    }
+
+    expect(callbacks).toHaveLength(0);
+    expect(binding.resizeMeasureFrame).toBeNull();
   });
 });

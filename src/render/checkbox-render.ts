@@ -156,5 +156,6 @@ export const checkboxRenderPlugin: Extension = createIncrementalDecorationsViewP
       return !update.docChanged
         && syntaxTree(update.state) !== syntaxTree(update.startState);
     },
+    spanName: "cm6.checkboxRender",
   },
 );

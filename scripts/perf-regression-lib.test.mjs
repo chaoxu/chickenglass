@@ -92,6 +92,9 @@ describe("perf regression reports", () => {
     expect(report.frontend[0]).toMatchObject({
       name: "open_file.read",
       meanAvgMs: 30,
+      p50AvgMs: 20,
+      p95AvgMs: 40,
+      p99AvgMs: 40,
       worstMaxMs: 45,
       meanLastMs: 32.5,
       meanCount: 1,
@@ -100,6 +103,8 @@ describe("perf regression reports", () => {
     expect(report.backend[0]).toMatchObject({
       name: "tauri.read_file",
       meanAvgMs: 10.5,
+      p50AvgMs: 10,
+      p95AvgMs: 11,
       worstMaxMs: 12,
       samples: 2,
     });
@@ -107,6 +112,9 @@ describe("perf regression reports", () => {
       name: "semantic.changed_slice_count",
       unit: "count",
       meanValue: 1.5,
+      p50Value: 1,
+      p95Value: 2,
+      p99Value: 2,
       maxValue: 2,
       samples: 2,
     });

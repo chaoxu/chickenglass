@@ -1,7 +1,14 @@
-export const PERF_REPORT_VERSION = 3;
+export const PERF_REPORT_VERSION = 4;
 
 function roundMs(value) {
   return Number(value.toFixed(3));
+}
+
+function percentile(values, percentileValue) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
 }
 
 function aggregateSnapshotEntries(entries) {
@@ -18,6 +25,7 @@ function aggregateSnapshotEntries(entries) {
       worstMaxMs: 0,
       totalLastMs: 0,
       totalCount: 0,
+      avgValues: [],
     };
 
     group.samples += 1;
@@ -25,6 +33,7 @@ function aggregateSnapshotEntries(entries) {
     group.worstMaxMs = Math.max(group.worstMaxMs, entry.maxMs);
     group.totalLastMs += entry.lastMs;
     group.totalCount += entry.count;
+    group.avgValues.push(entry.avgMs);
     grouped.set(key, group);
   }
 
@@ -35,6 +44,9 @@ function aggregateSnapshotEntries(entries) {
       name: group.name,
       samples: group.samples,
       meanAvgMs: roundMs(group.totalAvgMs / group.samples),
+      p50AvgMs: roundMs(percentile(group.avgValues, 50)),
+      p95AvgMs: roundMs(percentile(group.avgValues, 95)),
+      p99AvgMs: roundMs(percentile(group.avgValues, 99)),
       worstMaxMs: roundMs(group.worstMaxMs),
       meanLastMs: roundMs(group.totalLastMs / group.samples),
       meanCount: roundMs(group.totalCount / group.samples),
@@ -53,11 +65,13 @@ function aggregateMetricEntries(entries) {
       samples: 0,
       totalValue: 0,
       maxValue: 0,
+      values: [],
     };
 
     group.samples += 1;
     group.totalValue += entry.value;
     group.maxValue = Math.max(group.maxValue, entry.value);
+    group.values.push(entry.value);
     grouped.set(key, group);
   }
 
@@ -67,6 +81,9 @@ function aggregateMetricEntries(entries) {
       unit: group.unit,
       samples: group.samples,
       meanValue: roundMs(group.totalValue / group.samples),
+      p50Value: roundMs(percentile(group.values, 50)),
+      p95Value: roundMs(percentile(group.values, 95)),
+      p99Value: roundMs(percentile(group.values, 99)),
       maxValue: roundMs(group.maxValue),
     }))
     .sort((left, right) => right.meanValue - left.meanValue);

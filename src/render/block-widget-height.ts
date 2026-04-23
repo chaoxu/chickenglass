@@ -6,6 +6,8 @@ export interface BlockWidgetHeightBinding {
   resizeMeasureFrame: number | null;
 }
 
+const MAX_DETACHED_MEASURE_ATTEMPTS = 8;
+
 export function estimatedBlockWidgetHeight(
   cache: ReadonlyMap<string, number>,
   key: string,
@@ -54,12 +56,19 @@ export function observeBlockWidgetHeight(
   key: string,
 ): void {
   clearBlockWidgetHeightBinding(binding);
+  let detachedMeasureAttempts = 0;
 
   const measure = (): void => {
     if (!container.isConnected) {
+      binding.resizeMeasureFrame = null;
+      if (detachedMeasureAttempts >= MAX_DETACHED_MEASURE_ATTEMPTS) {
+        return;
+      }
+      detachedMeasureAttempts += 1;
       binding.resizeMeasureFrame = requestAnimationFrame(measure);
       return;
     }
+    detachedMeasureAttempts = 0;
     binding.resizeMeasureFrame = null;
     const changed = cacheBlockWidgetHeight(
       cache,

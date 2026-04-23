@@ -10,6 +10,7 @@ import {
 } from "@codemirror/view";
 import {
   createCursorSensitiveViewPlugin,
+  createIncrementalDecorationsViewPlugin,
   createSemanticSensitiveViewPlugin,
   createSimpleViewPlugin,
   cursorSensitiveShouldUpdate,
@@ -22,6 +23,10 @@ import {
   getDecorationSpecs,
 } from "../test-utils";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
+import {
+  clearFrontendPerf,
+  getFrontendPerfSnapshot,
+} from "../lib/perf";
 
 /**
  * Build a minimal ViewUpdate stub for testing shouldUpdate predicates.
@@ -114,6 +119,24 @@ describe("createSimpleViewPlugin", () => {
     buildCount = 0;
     view.dispatch({ changes: { from: 0, insert: "x" } });
     expect(buildCount).toBe(1);
+  });
+
+  it("records create and rebuild spans when a spanName is provided", () => {
+    clearFrontendPerf();
+    const ext = createSimpleViewPlugin(
+      () => Decoration.none,
+      { spanName: "cm6.simpleTest" },
+    );
+    view = createTestView("test", { extensions: [markdown(), ext] });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.simpleTest.create",
+    );
+
+    clearFrontendPerf();
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.simpleTest.rebuild",
+    );
   });
 });
 
@@ -339,6 +362,7 @@ describe("createCursorSensitiveViewPlugin", () => {
       },
       {
         selectionCheck: () => false,
+        contextChangeRanges: () => [],
         docChangeRanges: (update) => {
           const dirtyRanges: { from: number; to: number }[] = [];
           update.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
@@ -691,6 +715,35 @@ describe("createCursorSensitiveViewPlugin", () => {
     view = createTestView("hello", { extensions: [markdown(), ext] });
     expect(skipResult).toBe(false);
   });
+
+  it("records create and incremental doc spans when a spanName is provided", () => {
+    clearFrontendPerf();
+    const ext = createCursorSensitiveViewPlugin(
+      () => [],
+      {
+        selectionCheck: () => false,
+        contextChangeRanges: () => [],
+        docChangeRanges: (update) => {
+          const dirtyRanges: { from: number; to: number }[] = [];
+          update.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+            dirtyRanges.push({ from: fromB, to: toB });
+          });
+          return dirtyRanges;
+        },
+        spanName: "cm6.cursorTest",
+      },
+    );
+    view = createTestView("hello", { extensions: [markdown(), ext] });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.cursorTest.create",
+    );
+
+    clearFrontendPerf();
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.cursorTest.incrementalDoc",
+    );
+  });
 });
 
 describe("createSemanticSensitiveViewPlugin", () => {
@@ -823,5 +876,59 @@ describe("createSemanticSensitiveViewPlugin", () => {
       "base:0-1",
       "context:2-3",
     ]);
+  });
+
+  it("records create and map spans when a spanName is provided", () => {
+    clearFrontendPerf();
+    const ext = createSemanticSensitiveViewPlugin(
+      () => Decoration.none,
+      {
+        collectRanges: () => [],
+        semanticChanged: () => false,
+        dirtyRangeFn: () => [],
+        spanName: "cm6.semanticTest",
+      },
+    );
+    view = createTestView("abcd", { extensions: [markdown(), ext] });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.semanticTest.create",
+    );
+
+    clearFrontendPerf();
+    view.dispatch({ changes: { from: 0, insert: "!" } });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.semanticTest.map",
+    );
+  });
+});
+
+describe("createIncrementalDecorationsViewPlugin", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("records create and incremental doc spans when a spanName is provided", () => {
+    clearFrontendPerf();
+    const ext = createIncrementalDecorationsViewPlugin(
+      () => Decoration.none,
+      {
+        incrementalRanges: () => [{ from: 0, to: 1 }],
+        collectRanges: () => [],
+        spanName: "cm6.incrementalTest",
+      },
+    );
+    view = createTestView("abcd", { extensions: [markdown(), ext] });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.incrementalTest.create",
+    );
+
+    clearFrontendPerf();
+    view.dispatch({ changes: { from: 0, insert: "!" } });
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.incrementalTest.incrementalDoc",
+    );
   });
 });

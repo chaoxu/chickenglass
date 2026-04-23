@@ -322,6 +322,7 @@ const blockDecorationField = createFencedBlockDecorationField(buildBlockDecorati
   extraShouldRebuild: blockDecorationInputsChanged,
   selectionShouldRebuild: activeShellStartsChanged,
   rebuildOnTreeChange: false,
+  spanName: "cm6.blockPluginDecorations",
 });
 
 /** Exported for unit testing decoration logic without a browser. */

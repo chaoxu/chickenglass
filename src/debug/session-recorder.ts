@@ -65,6 +65,7 @@ let nextSequence = 0;
 let flushTimer: number | null = null;
 let flushInFlight = false;
 let connected = false;
+let transportDisabled = false;
 let lifecycleHooksInstalled = false;
 const pendingEvents: PendingEvent[] = [];
 
@@ -228,6 +229,19 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+function canUseDebugRecorderTransport(): boolean {
+  return isBrowser() && import.meta.env.DEV && !transportDisabled;
+}
+
+function disableDebugRecorderTransport(): void {
+  transportDisabled = true;
+  connected = false;
+  if (flushTimer !== null) {
+    window.clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+}
+
 function parseLocalEvents(): PendingEvent[] {
   if (!isBrowser()) return [];
   try {
@@ -288,7 +302,7 @@ function ensureLifecycleHooks(): void {
 }
 
 function scheduleFlush(): void {
-  if (!isBrowser() || flushTimer !== null) return;
+  if (!canUseDebugRecorderTransport() || flushTimer !== null) return;
   flushTimer = window.setTimeout(() => {
     flushTimer = null;
     void flushDebugSessionEvents();
@@ -310,6 +324,11 @@ export function recordDebugSessionEvent(
     seq: ++nextSequence,
   };
 
+  if (!canUseDebugRecorderTransport()) {
+    persistLocalEvents([pendingEvent]);
+    return;
+  }
+
   pendingEvents.push(pendingEvent);
 
   if (pendingEvents.length >= MAX_BATCH_SIZE) {
@@ -329,6 +348,11 @@ function snapshotSummary(capture: DebugSessionCapture): string {
 
 export async function flushDebugSessionEvents(): Promise<void> {
   if (!isBrowser() || flushInFlight || pendingEvents.length === 0) return;
+  if (!canUseDebugRecorderTransport()) {
+    const batch = pendingEvents.splice(0, pendingEvents.length);
+    persistLocalEvents(batch);
+    return;
+  }
   flushInFlight = true;
   const batch = pendingEvents.splice(0, pendingEvents.length);
   persistLocalEvents(batch);
@@ -347,14 +371,15 @@ export async function flushDebugSessionEvents(): Promise<void> {
     });
     connected = response.ok;
     if (!response.ok) {
-      pendingEvents.unshift(...batch);
+      if (response.status === 404 || response.status === 405 || response.status === 501) {
+        disableDebugRecorderTransport();
+      }
     }
   } catch {
-    connected = false;
-    pendingEvents.unshift(...batch);
+    disableDebugRecorderTransport();
   } finally {
     flushInFlight = false;
-    if (pendingEvents.length > 0) {
+    if (pendingEvents.length > 0 && canUseDebugRecorderTransport()) {
       scheduleFlush();
     }
   }
@@ -387,6 +412,12 @@ export function exportDebugSessionEvents({
 export function clearDebugSessionEvents(): void {
   if (!isBrowser()) return;
   pendingEvents.length = 0;
+  transportDisabled = false;
+  connected = false;
+  if (flushTimer !== null) {
+    window.clearTimeout(flushTimer);
+    flushTimer = null;
+  }
   window.localStorage.removeItem(DEBUG_SESSION_EVENTS_STORAGE_KEY);
 }
 

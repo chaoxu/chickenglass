@@ -68,10 +68,12 @@ export function createDecorationsField(
   builder: (state: EditorState) => DecorationSet,
   shouldRebuild?: (tr: Transaction) => boolean,
   mapOnDocChanged?: boolean,
+  spanName?: string,
 ): StateField<DecorationSet> {
   const predicate = shouldRebuild ?? defaultShouldRebuild;
 
   return createDecorationStateField({
+    spanName,
     create(state) {
       return builder(state);
     },

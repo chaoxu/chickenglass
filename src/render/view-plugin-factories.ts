@@ -14,6 +14,7 @@ import {
   ViewPlugin,
 } from "@codemirror/view";
 import { buildDecorations } from "./decoration-core";
+import { measureSync } from "../lib/perf";
 import {
   diffVisibleRanges,
   isPositionInRanges,
@@ -92,6 +93,14 @@ function collectDecorationStartsInRanges(
 }
 
 const NO_SKIP = () => false;
+
+function measurePluginBranch<T>(
+  spanName: string | undefined,
+  branch: string,
+  task: () => T,
+): T {
+  return spanName ? measureSync(`${spanName}.${branch}`, task) : task();
+}
 
 /**
  * Collect function signature for cursor-sensitive view plugins.
@@ -220,6 +229,7 @@ export function createIncrementalDecorationsViewPlugin<
       update: ViewUpdate,
     ) => DecorationSet;
     pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+    spanName?: string;
   },
 ): Extension {
   const mapDecorations = options.mapDecorations
@@ -231,7 +241,7 @@ export function createIncrementalDecorationsViewPlugin<
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildFn(view);
+      this.decorations = measurePluginBranch(options.spanName, "create", () => buildFn(view));
     }
 
     update(update: ViewUpdate): void {
@@ -239,38 +249,62 @@ export function createIncrementalDecorationsViewPlugin<
         tr.annotation(programmaticDocumentChangeAnnotation) === true
       );
       if (programmaticDocRewrite) {
-        this.decorations = buildFn(update.view);
+        this.decorations = measurePluginBranch(
+          options.spanName,
+          "rebuild",
+          () => buildFn(update.view),
+        );
         return;
       }
 
       if (options.shouldRebuild?.(update)) {
-        this.decorations = buildFn(update.view);
+        this.decorations = measurePluginBranch(
+          options.spanName,
+          "rebuild",
+          () => buildFn(update.view),
+        );
         return;
       }
 
       const dirtyRanges = options.incrementalRanges(update);
       if (dirtyRanges === null) {
-        this.decorations = buildFn(update.view);
+        this.decorations = measurePluginBranch(
+          options.spanName,
+          "rebuild",
+          () => buildFn(update.view),
+        );
         return;
       }
 
-      let nextDecorations = mapDecorations(this.decorations, update);
-      if (dirtyRanges.length > 0) {
-        nextDecorations = filterDecorationSetInRanges(
-          nextDecorations,
-          dirtyRanges,
-          (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
+      if (dirtyRanges.length === 0) {
+        this.decorations = measurePluginBranch(
+          options.spanName,
+          "map",
+          () => mapDecorations(this.decorations, update),
         );
-        const items = options.collectRanges(update.view, dirtyRanges);
-        if (items.length > 0) {
-          nextDecorations = nextDecorations.update({
-            add: items,
-            sort: true,
-          });
-        }
+        return;
       }
 
-      this.decorations = nextDecorations;
+      this.decorations = measurePluginBranch(
+        options.spanName,
+        update.docChanged ? "incrementalDoc" : "incrementalContext",
+        () => {
+          let nextDecorations = mapDecorations(this.decorations, update);
+          nextDecorations = filterDecorationSetInRanges(
+            nextDecorations,
+            dirtyRanges,
+            (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
+          );
+          const items = options.collectRanges(update.view, dirtyRanges);
+          if (items.length > 0) {
+            nextDecorations = nextDecorations.update({
+              add: items,
+              sort: true,
+            });
+          }
+          return nextDecorations;
+        },
+      );
     }
   }
 
@@ -293,6 +327,7 @@ export function createCursorSensitiveViewPlugin(
     onViewportOnly?: "incremental" | "skip";
     extraRebuildCheck?: (update: ViewUpdate) => boolean;
     pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+    spanName?: string;
   },
 ): Extension {
   class CursorSensitivePlugin implements PluginValue {
@@ -300,11 +335,17 @@ export function createCursorSensitiveViewPlugin(
     private coveredRanges!: VisibleRange[];
 
     constructor(view: EditorView) {
-      this.rebuild(view);
+      const items = measurePluginBranch(options?.spanName, "create", () =>
+        collectFn(view, view.visibleRanges, NO_SKIP)
+      );
+      this.decorations = buildDecorations(items);
+      this.coveredRanges = snapshotRanges(view.visibleRanges);
     }
 
     private rebuild(view: EditorView): void {
-      const items = collectFn(view, view.visibleRanges, NO_SKIP);
+      const items = measurePluginBranch(options?.spanName, "rebuild", () =>
+        collectFn(view, view.visibleRanges, NO_SKIP)
+      );
       this.decorations = buildDecorations(items);
       this.coveredRanges = snapshotRanges(view.visibleRanges);
     }
@@ -361,27 +402,33 @@ export function createCursorSensitiveViewPlugin(
     }
 
     private incrementalViewportUpdate(update: ViewUpdate): void {
-      this.updateVisibleRanges(update.view, this.decorations, this.coveredRanges, []);
+      measurePluginBranch(options?.spanName, "viewport", () => {
+        this.updateVisibleRanges(update.view, this.decorations, this.coveredRanges, []);
+      });
     }
 
     private incrementalDocUpdate(
       update: ViewUpdate,
       dirtyRanges: readonly VisibleRange[],
     ): void {
-      const mappedCoveredRanges = mapVisibleRanges(this.coveredRanges, update.changes);
-      this.updateVisibleRanges(
-        update.view,
-        this.decorations.map(update.changes),
-        mappedCoveredRanges,
-        dirtyRanges,
-      );
+      measurePluginBranch(options?.spanName, "incrementalDoc", () => {
+        const mappedCoveredRanges = mapVisibleRanges(this.coveredRanges, update.changes);
+        this.updateVisibleRanges(
+          update.view,
+          this.decorations.map(update.changes),
+          mappedCoveredRanges,
+          dirtyRanges,
+        );
+      });
     }
 
     private incrementalContextUpdate(
       update: ViewUpdate,
       dirtyRanges: readonly VisibleRange[],
     ): void {
-      this.updateVisibleRanges(update.view, this.decorations, this.coveredRanges, dirtyRanges);
+      measurePluginBranch(options?.spanName, "incrementalContext", () => {
+        this.updateVisibleRanges(update.view, this.decorations, this.coveredRanges, dirtyRanges);
+      });
     }
 
     update(update: ViewUpdate): void {
@@ -493,6 +540,7 @@ export function createSemanticSensitiveViewPlugin<
       update: ViewUpdate,
     ) => DecorationSet;
     pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+    spanName?: string;
   },
 ): Extension {
   const mapDecorations = options.mapDecorations
@@ -504,34 +552,36 @@ export function createSemanticSensitiveViewPlugin<
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildFn(view);
+      this.decorations = measurePluginBranch(options.spanName, "create", () => buildFn(view));
     }
 
     private rebuild(view: EditorView): void {
-      this.decorations = buildFn(view);
+      this.decorations = measurePluginBranch(options.spanName, "rebuild", () => buildFn(view));
     }
 
     private updateDirtyRanges(
       update: ViewUpdate,
       dirtyRanges: readonly T[],
     ): void {
-      let nextDecorations = mapDecorations(this.decorations, update);
-      if (dirtyRanges.length > 0) {
-        nextDecorations = filterDecorationSetInRanges(
-          nextDecorations,
-          dirtyRanges,
-          (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
-        );
-        const items = options.collectRanges(update.view, dirtyRanges);
-        if (items.length > 0) {
-          nextDecorations = nextDecorations.update({
-            add: items,
-            sort: true,
-          });
+      this.decorations = measurePluginBranch(options.spanName, "dirty", () => {
+        let nextDecorations = mapDecorations(this.decorations, update);
+        if (dirtyRanges.length > 0) {
+          nextDecorations = filterDecorationSetInRanges(
+            nextDecorations,
+            dirtyRanges,
+            (from, to) => !rangeIntersectsRanges(from, to, dirtyRanges),
+          );
+          const items = options.collectRanges(update.view, dirtyRanges);
+          if (items.length > 0) {
+            nextDecorations = nextDecorations.update({
+              add: items,
+              sort: true,
+            });
+          }
         }
-      }
 
-      this.decorations = nextDecorations;
+        return nextDecorations;
+      });
     }
 
     update(update: ViewUpdate): void {
@@ -559,7 +609,11 @@ export function createSemanticSensitiveViewPlugin<
         case "keep":
           return;
         case "map":
-          this.decorations = mapDecorations(this.decorations, update);
+          this.decorations = measurePluginBranch(
+            options.spanName,
+            "map",
+            () => mapDecorations(this.decorations, update),
+          );
           return;
         case "rebuild":
           this.rebuild(update.view);
@@ -585,6 +639,7 @@ export function createSimpleViewPlugin(
   options?: {
     shouldUpdate?: (update: ViewUpdate) => boolean;
     pluginSpec?: Omit<PluginSpec<PluginValue>, "decorations">;
+    spanName?: string;
   },
 ): Extension {
   const shouldUpdate = options?.shouldUpdate ?? defaultShouldUpdate;
@@ -593,12 +648,16 @@ export function createSimpleViewPlugin(
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildFn(view);
+      this.decorations = measurePluginBranch(options?.spanName, "create", () => buildFn(view));
     }
 
     update(update: ViewUpdate): void {
       if (shouldUpdate(update)) {
-        this.decorations = buildFn(update.view);
+        this.decorations = measurePluginBranch(
+          options?.spanName,
+          "rebuild",
+          () => buildFn(update.view),
+        );
       }
     }
   }

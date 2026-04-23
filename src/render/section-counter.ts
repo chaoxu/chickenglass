@@ -66,6 +66,7 @@ const sectionNumberField = createDecorationsField(
   buildSectionDecorations,
   sectionShouldRebuild,
   true, // map on docChanged — section numbers depend on heading structure, not text
+  "cm6.sectionNumberDecorations",
 );
 
 /** CM6 extension that adds hierarchical section numbers to headings. */
