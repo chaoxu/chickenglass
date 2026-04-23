@@ -1,4 +1,4 @@
-import { $getRoot } from "lexical";
+import { $getRoot, $isElementNode, type LexicalNode } from "lexical";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,11 +10,31 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
+import { $isReferenceNode } from "./nodes/reference-node";
 
 function readTopLevelKeys(editor: ReturnType<typeof createHeadlessCoflatEditor>): string[] {
   return editor.getEditorState().read(() =>
     $getRoot().getChildren().map((node) => node.getKey())
   );
+}
+
+function countReferenceNodes(editor: ReturnType<typeof createHeadlessCoflatEditor>): number {
+  return editor.getEditorState().read(() => {
+    let count = 0;
+    const visit = (node: LexicalNode) => {
+      if (!$isElementNode(node)) {
+        return;
+      }
+      for (const child of node.getChildren()) {
+        if ($isReferenceNode(child)) {
+          count += 1;
+        }
+        visit(child);
+      }
+    };
+    visit($getRoot());
+    return count;
+  });
 }
 
 function applyIncrementalChange(previousMarkdown: string, nextMarkdown: string): {
@@ -60,6 +80,81 @@ describe("applyIncrementalRichDocumentSync", () => {
 
     expect(result.applied).toBe(true);
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+  });
+
+  it("updates mapped text spans inside rich paragraphs without replacing the paragraph", () => {
+    const prose = Array.from({ length: 90 }, (_, index) => `word${index}`).join(" ");
+    const previousMarkdown = `${prose} $x$ Tail [@ref].`;
+    const insertAt = previousMarkdown.indexOf("word30") + "word30".length;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, insertAt),
+      "1",
+      previousMarkdown.slice(insertAt),
+    ].join("");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    expect(readTopLevelKeys(editor)[0]).toBe(previousKeys[0]);
+  });
+
+  it("updates inline math reveal source without replacing the paragraph", () => {
+    const previousMarkdown = "Let $G = (V, E)$ be connected.";
+    const insertAt = previousMarkdown.indexOf("G") + 1;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, insertAt),
+      "1",
+      previousMarkdown.slice(insertAt),
+    ].join("");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    expect(readTopLevelKeys(editor)[0]).toBe(previousKeys[0]);
+  });
+
+  it("updates reference reveal source without replacing the paragraph", () => {
+    const previousMarkdown = "See [@thm:main] for details.";
+    const insertAt = previousMarkdown.indexOf("main") + "main".length;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, insertAt),
+      "-upper",
+      previousMarkdown.slice(insertAt),
+    ].join("");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    expect(readTopLevelKeys(editor)[0]).toBe(previousKeys[0]);
+  });
+
+  it("reparses when a text-span edit creates a reference token", () => {
+    const prose = Array.from({ length: 90 }, (_, index) => `word${index}`).join(" ");
+    const previousMarkdown = `${prose} [ @ref] tail.`;
+    const insertAt = previousMarkdown.indexOf("[ @ref]") + 1;
+    const nextMarkdown = previousMarkdown.slice(0, insertAt) + previousMarkdown.slice(insertAt + 1);
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    expect(readTopLevelKeys(editor)[0]).not.toBe(previousKeys[0]);
+    expect(countReferenceNodes(editor)).toBe(1);
   });
 
   it("updates a later plain paragraph without targeting the blank separator node", () => {
