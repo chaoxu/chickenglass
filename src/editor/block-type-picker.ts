@@ -30,7 +30,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { fenceOperationAnnotation } from "../plugins";
 import type { PluginRegistryState } from "../state/plugin-registry-core";
-import { editorModeField } from "./editor";
+import { editorModeField } from "./editor-mode-state";
 import { BLOCK_MANIFEST_ENTRIES } from "../constants/block-manifest";
 import { pluginRegistryField } from "../state/plugin-registry";
 

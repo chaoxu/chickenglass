@@ -74,14 +74,6 @@ export const ALLOWED_SOURCE_CYCLES = [
       "src/semantics/incremental/window-extractor.ts",
     ],
   },
-  {
-    reason: "#1378 tracks breaking editor mode/keybinding cycles",
-    files: [
-      "src/editor/block-type-picker.ts",
-      "src/editor/editor.ts",
-      "src/editor/keybindings.ts",
-    ],
-  },
 ];
 
 function toPosixPath(filePath) {

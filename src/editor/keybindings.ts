@@ -12,7 +12,7 @@ import { MODE_CHANGE_EVENT } from "../constants/events";
 import { getClosingFenceRanges } from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
-import { editorModeField, markdownEditorModes, setEditorMode } from "./editor";
+import { editorModeField, markdownEditorModes, setEditorMode } from "./editor-mode-state";
 import { clearStructureEditTarget } from "../state/cm-structure-edit";
 import { moveVerticallyInRichView } from "./vertical-motion";
 

@@ -1,17 +1,19 @@
 export { getEditorCommands, createHeadingCommands } from "./commands";
 export {
   createEditor,
-  setEditorMode,
-  editorModeField,
-  markdownEditorModes,
   tabSizeExtension,
   themeCompartment,
   wordWrapCompartment,
   lineNumbersCompartment,
   tabSizeCompartment,
   type EditorConfig,
-  type EditorMode,
 } from "./editor";
+export {
+  setEditorMode,
+  editorModeField,
+  markdownEditorModes,
+  type EditorMode,
+} from "./editor-mode-state";
 export {
   frontmatterField,
   type FrontmatterState,

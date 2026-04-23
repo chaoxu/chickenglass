@@ -1,34 +1,13 @@
-import { indentUnit, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
-import { Compartment, EditorState, type Extension, StateEffect, StateField } from "@codemirror/state";
+import { indentUnit, LanguageDescription } from "@codemirror/language";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
-import { classHighlighter } from "@lezer/highlight";
-import { bibliographyPlugin } from "../render/bibliography-render";
-import {
-  blockRenderPlugin,
-  checkboxRenderPlugin,
-  codeBlockRenderPlugin,
-  codeBlockStructureField,
-  containerAttributesPlugin,
-  fenceGuidePlugin,
-  imageRenderPlugin,
-  mathPreviewPlugin,
-  sectionNumberPlugin,
-  sidenoteRenderPlugin,
-} from "../render";
-import { referenceRenderPlugin } from "../render/reference-render";
-import { searchHighlightPlugin } from "../render/search-highlight";
-import { tableRenderPlugin } from "../render/table-render";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
-  sharedInlineRenderExtensions,
 } from "./base-editor-extensions";
 import { blockTypePickerExtension } from "./block-type-picker";
 import {
-  editableCompartment,
-  modeClassCompartment,
-  renderCompartment,
   syntaxHighlightCompartment,
   themeCompartment,
   treeViewCompartment,
@@ -41,49 +20,30 @@ import {
   renderModeExtensions,
   userSettingsExtensions,
 } from "./extension-builders";
-import { frontmatterDecoration } from "./frontmatter-render";
 import { headingFold } from "./heading-fold";
 import { editorKeybindings } from "./keybindings";
 import { listOutlinerExtension } from "./list-outliner";
+import {
+  editorModeField,
+  renderingExtensions,
+} from "./editor-mode-state";
 import { type ProjectConfig } from "./project-config";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
-import { richClipboardOutputFilter } from "./rich-clipboard";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
 import { coflatDarkTheme, coflatTheme } from "./theme";
 import { widgetStopIndexCleanupExtension } from "./widget-stop-index";
 
-const fallbackDocument = "# Untitled\n";
+export {
+  editorModeField,
+  markdownEditorModes,
+  setEditorMode,
+  type EditorMode,
+} from "./editor-mode-state";
 
-/** Compartment for the debug tree-view panel — toggled via window.__cmTreeView(). */
+const fallbackDocument = "# Untitled\n";
 const debugLaneCompartment = new Compartment();
 const defaultDebugLaneExtensions: Extension[] = [];
-
-export type EditorMode = "rich" | "source";
-
-export const markdownEditorModes: readonly EditorMode[] = ["rich", "source"];
-
-/** StateEffect used to update the tracked editor mode. */
-export const setEditorModeEffect = StateEffect.define<EditorMode>();
-
-/**
- * CM6 StateField that tracks the current editor mode.
- *
- * Updated by `setEditorMode()` via `setEditorModeEffect`. Allows any
- * code with access to the EditorView (e.g. keybindings) to read the
- * current mode without relying on module-level mutable state.
- */
-export const editorModeField = StateField.define<EditorMode>({
-  create() {
-    return "rich";
-  },
-  update(value, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(setEditorModeEffect)) return effect.value;
-    }
-    return value;
-  },
-});
 
 export {
   lineNumbersCompartment,
@@ -91,29 +51,6 @@ export {
   themeCompartment,
   wordWrapCompartment,
 } from "./compartments";
-
-/** All rendering extensions that get toggled by mode. */
-const renderingExtensions: Extension[] = [
-  frontmatterDecoration,
-  ...sharedInlineRenderExtensions,
-  imageRenderPlugin,
-  codeBlockStructureField,
-  blockRenderPlugin,
-  referenceRenderPlugin,
-  codeBlockRenderPlugin,
-  bibliographyPlugin,
-  containerAttributesPlugin,
-  richClipboardOutputFilter,
-  tableRenderPlugin,
-  checkboxRenderPlugin,
-  mathPreviewPlugin,
-  sectionNumberPlugin,
-  fenceGuidePlugin,
-  sidenoteRenderPlugin,
-  searchHighlightPlugin,
-];
-
-const sourceSyntaxHighlightingExtension = syntaxHighlighting(classHighlighter);
 
 /** Standard code-language descriptions for fenced code blocks. */
 const codeLanguageDescriptions: LanguageDescription[] = [
@@ -245,38 +182,6 @@ export function createEditor(config: EditorConfig): EditorView {
     state,
     parent: config.parent,
   });
-}
-
-/**
- * Switch the CM6 editor between rich and source modes.
- *
- * - **rich**: Typora-style — decorations active, editable (default)
- * - **source**: plain markdown — no decorations, editable
- */
-export function setEditorMode(view: EditorView, mode: EditorMode): void {
-  const effects: StateEffect<unknown>[] = [];
-
-  // Always record the new mode in the StateField so cycleEditorMode can read it.
-  effects.push(setEditorModeEffect.of(mode));
-
-  switch (mode) {
-    case "rich":
-      effects.push(renderCompartment.reconfigure(renderingExtensions));
-      effects.push(editableCompartment.reconfigure([]));
-      effects.push(modeClassCompartment.reconfigure([]));
-      effects.push(syntaxHighlightCompartment.reconfigure([]));
-      break;
-    case "source":
-      effects.push(renderCompartment.reconfigure([]));
-      effects.push(editableCompartment.reconfigure([]));
-      effects.push(modeClassCompartment.reconfigure(
-        EditorView.editorAttributes.of({ class: "cf-source-mode" }),
-      ));
-      effects.push(syntaxHighlightCompartment.reconfigure(sourceSyntaxHighlightingExtension));
-      break;
-  }
-
-  view.dispatch({ effects });
 }
 
 /** Build a tab-size extension from a numeric size (used by compartment reconfiguration). */
