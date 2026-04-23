@@ -1143,7 +1143,7 @@ describe("#376 — shared text widget primitives", () => {
   });
 
   it("routes representative widget families through the shared text helpers", () => {
-    const citations = fileText("src/citations/citation-render.ts");
+    const citations = fileText("src/render/citation-widget.ts");
     const crossrefs = fileText("src/render/crossref-render.ts");
     const codeBlockDecorations = fileText("src/render/code-block-decorations.ts");
     const sidenotes = fileText("src/render/sidenote-render.ts");

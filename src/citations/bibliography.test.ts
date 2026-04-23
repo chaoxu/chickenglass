@@ -15,11 +15,13 @@ import {
 import {
   formatBibEntry,
   sortBibEntries,
+} from "./bibliography";
+import {
   BibliographyWidget,
   bibliographyDependenciesChanged,
   buildBibliographyDecorations,
   bibliographyPlugin,
-} from "./bibliography";
+} from "../render/bibliography-render";
 import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { documentSemanticsField } from "../state/document-analysis";
 

@@ -14,6 +14,7 @@ import { isSafeUrl } from "../lib/url-utils";
 
 // Re-export from canonical shared locations
 export { buildKatexOptions } from "../lib/katex-options";
+export { sanitizeCslHtml } from "../lib/sanitize-csl-html";
 export { isSafeUrl } from "../lib/url-utils";
 
 // ── Mark nodes ──────────────────────────────────────────────────────────────
@@ -156,42 +157,7 @@ export function renderKatexToHtml(
   return sanitized;
 }
 
-// ── CSL HTML sanitizer ──────────────────────────────────────────────────────
-
-/**
- * Allowlist of HTML element names safe for CSL-formatted bibliography output.
- *
- * CSL styles produce formatting markup like `<i>`, `<b>`, `<sup>`, `<span>`.
- * Any element not in this list is stripped (its children are kept), unless it
- * is in DANGEROUS_CSL_ELEMENTS, in which case the element AND its content
- * are removed entirely.
- */
-const SAFE_CSL_ELEMENTS: readonly string[] = [
-  "a", "abbr", "b", "br", "cite", "code", "div", "em", "i", "mark",
-  "p", "q", "s", "small", "span", "strong", "sub", "sup", "u",
-];
-
-/**
- * Element names whose content must be dropped entirely, not lifted.
- *
- * `<script>` and `<style>` content is raw text in the HTML parser — if the
- * element is removed while lifting its children, the raw text leaks into the
- * parent. Remove both the element and its children.
- */
-const DANGEROUS_CSL_ELEMENTS: readonly string[] = [
-  "script", "style", "noscript", "template", "iframe", "object",
-  "embed", "form", "input", "textarea", "button", "select",
-];
-
-/**
- * Allowlist of HTML attribute names that are safe on CSL-output elements.
- *
- * `href` is included for `<a>` tags but its value is validated via `isSafeUrl`
- * in a DOMPurify `afterSanitizeAttributes` hook — see `cslPurify`.
- */
-const SAFE_CSL_ATTRIBUTES: readonly string[] = [
-  "class", "id", "href", "title",
-];
+// ── Rendered HTML sanitizer ─────────────────────────────────────────────────
 
 const DANGEROUS_RENDERED_HTML_ELEMENTS: readonly string[] = [
   "script", "style", "noscript", "template", "iframe", "object", "embed",
@@ -200,58 +166,7 @@ const DANGEROUS_RENDERED_HTML_ELEMENTS: readonly string[] = [
 const RENDERED_HTML_EXTRA_TAGS = ["semantics", "annotation"] as const;
 const RENDERED_HTML_EXTRA_ATTRIBUTES = ["encoding"] as const;
 
-/**
- * A DOMPurify instance configured for CSL bibliography HTML.
- *
- * Uses a dedicated instance (not the global singleton) so hooks and config
- * do not leak into other call sites.
- */
-let cslPurify: ReturnType<typeof createDOMPurify> | null = null;
 let renderedHtmlPurify: ReturnType<typeof createDOMPurify> | null = null;
-
-function getCslPurify(): ReturnType<typeof createDOMPurify> {
-  if (cslPurify) {
-    return cslPurify;
-  }
-  if (typeof window === "undefined") {
-    throw new Error("sanitizeCslHtml requires a browser-like window");
-  }
-
-  const purify = createDOMPurify(window);
-  purify.addHook("afterSanitizeAttributes", (node) => {
-    if (node.hasAttribute("href")) {
-      const href = node.getAttribute("href") ?? "";
-      if (!isSafeUrl(href)) {
-        node.removeAttribute("href");
-      }
-    }
-  });
-  cslPurify = purify;
-  return purify;
-}
-
-/**
- * Sanitize HTML output from the CSL/citeproc engine for safe insertion via
- * `innerHTML`.
- *
- * The CSL engine may embed user-supplied bibliographic strings (titles, names,
- * URLs) directly inside its output. This function delegates to DOMPurify with
- * a CSL-specific allowlist:
- *   - Only elements in `SAFE_CSL_ELEMENTS` are kept.
- *   - Only attributes in `SAFE_CSL_ATTRIBUTES` are kept.
- *   - Dangerous elements (script, style, iframe, etc.) are removed along with
- *     their content via `FORBID_CONTENTS`.
- *   - `href` values are validated through `isSafeUrl`.
- *
- * Returns a sanitised HTML string.
- */
-export function sanitizeCslHtml(raw: string): string {
-  return getCslPurify().sanitize(raw, {
-    ALLOWED_TAGS: [...SAFE_CSL_ELEMENTS],
-    ALLOWED_ATTR: [...SAFE_CSL_ATTRIBUTES],
-    FORBID_CONTENTS: [...DANGEROUS_CSL_ELEMENTS],
-  });
-}
 
 function isSafeImageDataUrl(url: string): boolean {
   const cleaned = url.replace(/\s/g, "");

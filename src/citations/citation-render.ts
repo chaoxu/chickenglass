@@ -1,10 +1,9 @@
 /**
- * Citation data types, state fields, widget classes, and standalone finders.
+ * Citation data types and standalone finders.
  *
  * The ViewPlugin that rendered citations has been merged into the unified
  * `referenceRenderPlugin` in `../render/reference-render.ts`. This module
- * still exports everything needed by bibliography, preview rendering,
- * CSL processor, and the unified plugin itself.
+ * Citation widgets are render-owned; this module stays model-only.
  *
  * Supports:
  * - [@id] parenthetical citations: "(Author, Year)"
@@ -12,30 +11,8 @@
  * - [@a; @b] multiple citations: "(Author1, Year1; Author2, Year2)"
  */
 
-import { CSS } from "../constants/css-classes";
-import { SimpleTextReferenceWidget } from "../render/render-core";
 import { getDocumentAnalysis } from "../semantics/incremental/cached-document-analysis";
 import type { BibStore } from "../state/bib-data";
-
-/**
- * Widget that renders a citation reference.
- *
- * Handles both parenthetical citations like "(Karger, 2000)" and narrative
- * citations like "Karger (2000)". Pass `narrative: true` for the latter.
- */
-export class CitationWidget extends SimpleTextReferenceWidget {
-  constructor(
-    text: string,
-    ids: readonly string[],
-    narrative: boolean = false,
-  ) {
-    super({
-      className: narrative ? CSS.citationNarrative : CSS.citation,
-      text,
-      ariaLabel: ids.join("; "),
-    });
-  }
-}
 
 /**
  * Match for a citation reference found in the document text.

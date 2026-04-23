@@ -9,13 +9,13 @@ import type { ReferenceClassification } from "../index/crossref-resolver";
 import type { SyntaxNode } from "@lezer/common";
 import type { InlineRenderSurface } from "../inline-surface";
 import { CSS } from "../constants/css-classes";
-import { CitationWidget } from "../citations/citation-render";
 import {
   ClusteredCrossrefWidget,
   CrossrefWidget,
   MixedClusterWidget,
   UnresolvedRefWidget,
 } from "./crossref-render";
+import { CitationWidget } from "./citation-widget";
 import {
   buildInlineFragments,
   type InlineFragment,

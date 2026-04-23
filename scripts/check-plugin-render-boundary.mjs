@@ -73,16 +73,6 @@ export const BOUNDARY_RULES = [
         target: "src/app/markdown/labels.ts",
         reason: "#1372/#1373 track removing app markdown shims from citation parsing",
       },
-      {
-        file: "src/citations/bibliography.ts",
-        target: "src/render/render-core.ts",
-        reason: "#1396 tracks splitting citation model code from render widgets",
-      },
-      {
-        file: "src/citations/citation-render.ts",
-        target: "src/render/render-core.ts",
-        reason: "#1396 tracks splitting citation model code from render widgets",
-      },
     ],
   },
   {

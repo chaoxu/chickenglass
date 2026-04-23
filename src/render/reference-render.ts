@@ -6,8 +6,8 @@
  * widget based on whether the id resolves as a block/equation crossref
  * or a bibliography citation.
  *
- * Widget classes (CrossrefWidget, CitationWidget, etc.) remain in their
- * original modules — this plugin only handles discovery and routing.
+ * Widget classes remain render-owned; this plugin only handles discovery and
+ * routing.
  */
 
 import {
@@ -24,11 +24,11 @@ import {
 } from "../index/crossref-resolver";
 import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
 import { ensureCitationsRegistered } from "../citations/citation-registration";
-import { CitationWidget } from "../citations/citation-render";
 import {
   type CslProcessor,
 } from "../citations/csl-processor";
 import type { BibStore } from "../state/bib-data";
+import { CitationWidget } from "./citation-widget";
 import {
   CrossrefWidget,
   ClusteredCrossrefWidget,

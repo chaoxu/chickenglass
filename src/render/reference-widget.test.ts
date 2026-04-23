@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CitationWidget } from "../citations/citation-render";
+import { CitationWidget } from "./citation-widget";
 import {
   ClusteredCrossrefWidget,
   CrossrefWidget,
