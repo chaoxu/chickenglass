@@ -25,6 +25,13 @@ The perf script owns its browser session by default. If you need to compare agai
 
 Native scenarios do not use the browser or app server. `html-export-pandoc` runs local Pandoc directly and preflights both `pandoc` and `pandoc-crossref` before measurement.
 
+Each capture prints an "Actionable summary" before the raw span tables. It
+combines the largest frontend/backend spans and the largest ms-valued scenario
+metrics, then attaches a stable bucket and likely owner path for common metric
+families. Use that table first when deciding where the next optimization should
+start. Compare runs also attach the same bucket/owner hints to regressed or
+missing measurements.
+
 For heavy private fixtures, use the supported heavy-doc mode instead of ad hoc timeout tweaks:
 
 ```bash

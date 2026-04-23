@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   availableHtmlExportPandocCases,
   availableTypingBurstCases,
+  actionablePerfSummaryRows,
   buildHtmlExportPandocArgs,
   comparisonFailureRows,
   finalizeLexicalBridgeObservation,
@@ -15,6 +16,7 @@ import {
   lexicalSidebarOpenMetrics,
   lexicalTypingBurstMetrics,
   parseCliArgs,
+  perfOwnerHint,
   preflightHtmlExportPandoc,
   resolvePerfRuntimeOptions,
   scenarios,
@@ -591,6 +593,62 @@ Final prose line.
         avgPct: "missing",
         maxDeltaMs: "missing",
         maxPct: "missing",
+      },
+    ]);
+  });
+
+  it("adds owner and category hints for actionable perf rows", () => {
+    expect(perfOwnerHint("lexical.incrementalRichSync.editorUpdate")).toEqual({
+      bucket: "hot-path typing",
+      owner: "src/lexical/incremental-rich-sync.ts",
+      test: expect.any(Function),
+    });
+    expect(perfOwnerHint("lexical.sidebar_open.publish_ms.index.diagnostics")).toEqual({
+      bucket: "sidebar/background work",
+      owner: "src/app/components/sidebar-semantic-state.ts",
+      test: expect.any(Function),
+    });
+
+    expect(actionablePerfSummaryRows({
+      frontend: [
+        {
+          name: "lexical.incrementalRichSync",
+          meanAvgMs: 64,
+          p95AvgMs: 70,
+          source: "frontend",
+        },
+        {
+          name: "editor.create",
+          meanAvgMs: 8,
+          p95AvgMs: 12,
+          source: "frontend",
+        },
+      ],
+      backend: [],
+      metrics: [
+        {
+          name: "lexical.typing.input_to_semantic_ms.index.after_frontmatter",
+          unit: "ms",
+          meanValue: 500,
+          p95Value: 530,
+        },
+      ],
+    }, { limit: 2 })).toEqual([
+      {
+        bucket: "hot-path typing",
+        name: "lexical.typing.input_to_semantic_ms.index.after_frontmatter",
+        owner: "src/lexical/use-deferred-rich-document-sync.ts",
+        p95: 530,
+        source: "metric",
+        value: 500,
+      },
+      {
+        bucket: "hot-path typing",
+        name: "lexical.incrementalRichSync",
+        owner: "src/lexical/incremental-rich-sync.ts",
+        p95: 70,
+        source: "frontend",
+        value: 64,
       },
     ]);
   });

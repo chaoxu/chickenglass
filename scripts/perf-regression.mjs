@@ -2062,6 +2062,7 @@ async function runNativeScenarioSamples(
 }
 
 function printReportSummary(report) {
+  const actionableRows = actionablePerfSummaryRows(report);
   const topFrontend = report.frontend.slice(0, 8).map((entry) => ({
     name: entry.name,
     avgMs: entry.meanAvgMs,
@@ -2080,6 +2081,17 @@ function printReportSummary(report) {
   console.log(`Scenario: ${report.scenario}`);
   console.log(`Iterations: ${report.iterations} (warmup ${report.warmup})`);
   console.log(`Captured at: ${report.capturedAt}`);
+  if (actionableRows.length > 0) {
+    console.log("\nActionable summary");
+    console.table(actionableRows.map((entry) => ({
+      source: entry.source,
+      bucket: entry.bucket,
+      name: entry.name,
+      valueMs: entry.value,
+      p95Ms: entry.p95,
+      owner: entry.owner,
+    })));
+  }
   if (topFrontend.length > 0) {
     console.log("\nFrontend spans");
     console.table(topFrontend);
@@ -2130,6 +2142,102 @@ export function comparisonFailureRows(result) {
   return [...spanRegressions, ...metricRegressions];
 }
 
+const PERF_OWNER_HINTS = [
+  {
+    bucket: "hot-path typing",
+    owner: "src/lexical/incremental-rich-sync.ts",
+    test: (name) => name.startsWith("lexical.incrementalRichSync"),
+  },
+  {
+    bucket: "hot-path typing",
+    owner: "src/lexical/use-deferred-rich-document-sync.ts",
+    test: (name) => name.startsWith("lexical.typing."),
+  },
+  {
+    bucket: "semantic tail",
+    owner: "src/lexical/lexical-editor-pane.tsx",
+    test: (name) =>
+      name.startsWith("lexical.deriveSemanticState")
+      || name.startsWith("lexical.createSourceSpanIndex"),
+  },
+  {
+    bucket: "sidebar/background work",
+    owner: "src/app/components/sidebar-semantic-state.ts",
+    test: (name) => name.startsWith("lexical.sidebar_open."),
+  },
+  {
+    bucket: "hot-path typing",
+    owner: "src/editor/",
+    test: (name) => name.startsWith("typing."),
+  },
+  {
+    bucket: "semantic tail",
+    owner: "src/semantics/",
+    test: (name) =>
+      name.startsWith("cm6.documentAnalysis")
+      || name.includes(".documentAnalysis."),
+  },
+  {
+    bucket: "render/scroll",
+    owner: "src/render/",
+    test: (name) => name.startsWith("scroll.") || name.includes("markdownRender"),
+  },
+  {
+    bucket: "export",
+    owner: "src-tauri/src/commands/export.rs",
+    test: (name) => name.startsWith("export.html."),
+  },
+  {
+    bucket: "citation setup",
+    owner: "src/citations/",
+    test: (name) => name.startsWith("citations."),
+  },
+];
+
+export function perfOwnerHint(name) {
+  return PERF_OWNER_HINTS.find((hint) => hint.test(name)) ?? {
+    bucket: "unclassified",
+    owner: "",
+  };
+}
+
+export function actionablePerfSummaryRows(report, { limit = 8 } = {}) {
+  const spanRows = [...(report.frontend ?? []), ...(report.backend ?? [])]
+    .filter((entry) => typeof entry.meanAvgMs === "number")
+    .sort((left, right) => right.meanAvgMs - left.meanAvgMs)
+    .slice(0, limit)
+    .map((entry) => {
+      const hint = perfOwnerHint(entry.name);
+      return {
+        bucket: hint.bucket,
+        name: entry.name,
+        owner: hint.owner,
+        p95: entry.p95AvgMs,
+        source: entry.source,
+        value: entry.meanAvgMs,
+      };
+    });
+  const metricRows = (report.metrics ?? [])
+    .filter((entry) => entry.unit === "ms" && typeof entry.meanValue === "number")
+    .sort((left, right) => right.meanValue - left.meanValue)
+    .slice(0, limit)
+    .map((entry) => {
+      const hint = perfOwnerHint(entry.name);
+      return {
+        bucket: hint.bucket,
+        name: entry.name,
+        owner: hint.owner,
+        p95: entry.p95Value,
+        source: "metric",
+        value: entry.meanValue,
+      };
+    });
+
+  return [...spanRows, ...metricRows]
+    .sort((left, right) => right.value - left.value)
+    .slice(0, limit);
+}
+
 export function printComparison(result) {
   const rows = comparisonFailureRows(result);
   if (rows.length === 0) {
@@ -2138,7 +2246,14 @@ export function printComparison(result) {
   }
 
   console.log("Perf regressions or missing measurements detected:");
-  console.table(rows);
+  console.table(rows.map((row) => {
+    const hint = perfOwnerHint(row.name);
+    return {
+      ...row,
+      bucket: hint.bucket,
+      owner: hint.owner,
+    };
+  }));
 }
 
 export async function main(argv = process.argv.slice(2)) {
