@@ -1,10 +1,13 @@
-import type { FileSystem } from "../../../app/file-manager";
 import { normalizeProjectPath, projectPathCandidatesFromDocument } from "../../../lib/project-paths";
 import { buildStaticAssetUrl } from "../../markdown/asset-resolution";
 
+export interface ProjectTextFileReader {
+  readonly readFile: (path: string) => Promise<string>;
+}
+
 export interface LexicalRenderResourceResolver {
   readonly docPath?: string;
-  readonly fs: FileSystem;
+  readonly fs: ProjectTextFileReader;
   readonly readProjectTextFile: (targetPath: string) => Promise<string | null>;
   readonly resolveAssetUrl: (targetPath: string) => string | null;
 }
@@ -27,7 +30,7 @@ function getProjectPathCandidates(
 }
 
 async function readFirstAvailableTextFile(
-  fs: FileSystem,
+  fs: ProjectTextFileReader,
   candidates: readonly string[],
 ): Promise<string | null> {
   for (const candidate of candidates) {
@@ -42,7 +45,7 @@ async function readFirstAvailableTextFile(
 }
 
 export function createLexicalRenderResourceResolver(
-  fs: FileSystem,
+  fs: ProjectTextFileReader,
   docPath?: string,
 ): LexicalRenderResourceResolver {
   return {

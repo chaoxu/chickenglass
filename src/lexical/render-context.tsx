@@ -7,13 +7,13 @@ import {
 
 import { buildDocumentLabelParseSnapshot } from "../lib/markdown/label-parser";
 import { useFileSystem } from "../app/contexts/file-system-context";
-import type { FileSystem } from "../app/file-manager";
+import { useProjectConfigResource } from "../app/hooks/use-project-config-resource";
+import type { FileSystem } from "../lib/types";
 import { measureSync } from "../lib/perf";
 import { type CitationRenderData, useCitationRenderData } from "../citations/citation-render-data";
 import { buildDocumentRuntime, type LexicalDocumentRuntime } from "./runtime/controller/document-runtime";
 import {
   useLexicalRenderResourceResolver,
-  useProjectConfigResource,
 } from "./runtime/controller/resource-resolver";
 
 /**
@@ -89,7 +89,7 @@ function LexicalRenderContextRuntimeProvider({
 }: Omit<LexicalRenderContextProviderProps, "value">) {
   const fs = useFileSystem();
   const resolver = useLexicalRenderResourceResolver(fs, docPath);
-  const projectConfig = useProjectConfigResource(resolver);
+  const projectConfig = useProjectConfigResource(fs);
   const documentSnapshot = useMemo(() => buildDocumentLabelParseSnapshot(doc), [doc]);
   const documentRuntime = useMemo(
     () => measureSync(

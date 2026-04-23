@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { MemoryFileSystem } from "../app/file-manager";
 import { createLexicalRenderResourceResolver } from "../lexical/runtime/controller/resource-resolver";
 import { buildCitationRenderData, loadBibliographyResource } from "./citation-render-data";
 
+function createTextFileReader(files: Record<string, string>) {
+  return {
+    async readFile(path: string): Promise<string> {
+      const content = files[path];
+      if (content === undefined) {
+        throw new Error(`missing file: ${path}`);
+      }
+      return content;
+    },
+  };
+}
+
 describe("loadBibliographyResource", () => {
   it("loads bibliography entries through the shared resource resolver", async () => {
-    const resolver = createLexicalRenderResourceResolver(new MemoryFileSystem({
+    const resolver = createLexicalRenderResourceResolver(createTextFileReader({
       "notes/main.md": "# Main",
       "notes/refs/library.bib": [
         "@book{cite:knuth,",

@@ -126,23 +126,7 @@ export const BOUNDARY_RULES = [
     name: "src/lexical/runtime must not import app/editor/render modules",
     from: ["lexical/runtime"],
     to: ["app", "editor", "render"],
-    allow: [
-      {
-        file: "src/lexical/runtime/controller/resource-resolver-core.ts",
-        target: "src/app/file-manager.ts",
-        reason: "#1395 tracks moving lexical runtime file-system contracts to neutral owners",
-      },
-      {
-        file: "src/lexical/runtime/controller/resource-resolver.ts",
-        target: "src/app/file-manager.ts",
-        reason: "#1395 tracks moving lexical runtime file-system contracts to neutral owners",
-      },
-      {
-        file: "src/lexical/runtime/controller/resource-resolver.ts",
-        target: "src/app/project-config.ts",
-        reason: "#1395 tracks moving lexical runtime project-config loading out to an adapter",
-      },
-    ],
+    allow: [],
   },
 ];
 

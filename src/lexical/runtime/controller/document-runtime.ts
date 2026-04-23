@@ -9,7 +9,7 @@ import { parseFrontmatter } from "../../../lib/frontmatter";
 import { type ProjectConfig, mergeConfigs } from "../../../project-config";
 import { buildFootnoteDefinitionMap } from "../../markdown/footnotes";
 import { buildRenderIndex, type RenderIndex } from "../../markdown/reference-index";
-import type { LexicalRenderResourceResolver } from "./resource-resolver";
+import type { LexicalRenderResourceResolver } from "./resource-resolver-core";
 
 export interface LexicalDocumentRuntime {
   readonly config: FrontmatterConfig;
