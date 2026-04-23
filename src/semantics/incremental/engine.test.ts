@@ -7,6 +7,7 @@ import { ensureFullSyntaxTree } from "../../test-utils";
 import { editorStateTextSource } from "../../state/document-analysis";
 import { getEquationNumbersCacheKey, type DocumentAnalysis } from "../document";
 import { buildSemanticDelta } from "./semantic-delta";
+import type { SemanticDelta } from "./types";
 import {
   createDocumentAnalysis,
   createDocumentArtifacts,
@@ -48,6 +49,56 @@ function expectAnalysisMatchesRebuild(
   expect(Array.from(after.referenceIndex.entries())).toEqual(
     Array.from(rebuilt.referenceIndex.entries()),
   );
+}
+
+interface RangeProbe {
+  readonly from: number;
+  readonly to: number;
+}
+
+interface InternalStateProbe {
+  readonly fencedDivSlice: {
+    readonly structureRanges: readonly RangeProbe[];
+  };
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isInternalStateProbe(value: unknown): value is InternalStateProbe {
+  if (!isRecord(value)) return false;
+  const fencedDivSlice = value.fencedDivSlice;
+  return isRecord(fencedDivSlice) && Array.isArray(fencedDivSlice.structureRanges);
+}
+
+function getInternalStateProbe(analysis: DocumentAnalysis): InternalStateProbe {
+  const symbolRecord = analysis as DocumentAnalysis & {
+    readonly [key: symbol]: unknown;
+  };
+  for (const symbol of Object.getOwnPropertySymbols(analysis)) {
+    const value = symbolRecord[symbol];
+    if (isInternalStateProbe(value)) {
+      return value;
+    }
+  }
+  throw new Error("expected incremental analysis internal state");
+}
+
+function identityDirtyDelta(
+  dirtyWindow: SemanticDelta["dirtyWindows"][number],
+): SemanticDelta {
+  return {
+    rawChangedRanges: [],
+    dirtyWindows: [dirtyWindow],
+    docChanged: true,
+    syntaxTreeChanged: false,
+    frontmatterChanged: false,
+    globalInvalidation: false,
+    plainInlineTextOnlyChange: true,
+    mapOldToNew: (pos) => pos,
+    mapNewToOld: (pos) => pos,
+  };
 }
 
 describe("incremental document analysis engine", () => {
@@ -699,6 +750,49 @@ describe("incremental document analysis engine", () => {
       expect(after.equations[i]).toEqual(rebuilt.equations[i]);
     }
     expect(after.mathRegions.length).toBe(rebuilt.mathRegions.length);
+  });
+
+  it("stops source-range dirty scans once ranges are past the dirty window", () => {
+    const state = createState("Plain prose before later structure.");
+    const before = analyze(state);
+    const internalState = getInternalStateProbe(before);
+    let postWindowRangeReads = 0;
+    const postWindowRanges: RangeProbe[] = Array.from({ length: 200 }, (_, index) => {
+      const from = 100 + index * 3;
+      const range: RangeProbe = { from, to: from + 1 };
+      Object.defineProperty(range, "from", {
+        get() {
+          postWindowRangeReads += 1;
+          return from;
+        },
+      });
+      return range;
+    });
+
+    Object.defineProperty(internalState.fencedDivSlice, "structureRanges", {
+      value: [
+        { from: 0, to: 4 },
+        { from: 20, to: 21 },
+        ...postWindowRanges,
+      ],
+    });
+
+    const dirtyWindow = {
+      fromOld: 10,
+      toOld: 11,
+      fromNew: 10,
+      toNew: 11,
+    };
+    const after = updateDocumentAnalysis(
+      before,
+      editorStateTextSource(state),
+      fullTree(state),
+      identityDirtyDelta(dirtyWindow),
+    );
+    const rebuilt = analyze(state);
+
+    expect(postWindowRangeReads).toBe(0);
+    expectAnalysisMatchesRebuild(after, rebuilt);
   });
 
   it("re-extracts equations in the math overhang after inserting a closing $$ (#778)", () => {

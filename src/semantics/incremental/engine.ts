@@ -50,7 +50,7 @@ import {
   replaceOverlappingRanges,
   type PositionMapper,
 } from "./merge-utils";
-import { compareRangesByToThenFrom } from "../../lib/range-order";
+import { compareRangesByFromThenTo } from "../../lib/range-order";
 import type { DirtyWindow, SemanticDelta } from "./types";
 import type { ReferenceSemantics } from "../document";
 import {
@@ -502,10 +502,11 @@ function expandDirtyWindows(
 
     // Scan forward: every candidate from `i` onward has range.to >= minTo,
     // and fromOld can only decrease during expansion, so the `to` half of
-    // the overlap condition stays satisfied.  Stop once range.from exceeds
-    // the (growing) toOld.
+    // the overlap condition stays satisfied. Stop once source-ordered ranges
+    // are past the growing toOld.
     while (i < previousRanges.length) {
       const range = previousRanges[i];
+      if (range.from > toOld) break;
       if (range.from <= toOld) {
         const mappedFrom = mapOldToNew(range.from, -1);
         const mappedTo = Math.max(mappedFrom, mapOldToNew(range.to, 1));
@@ -551,26 +552,14 @@ function collectFencedDivStructureRanges(
 ): readonly { readonly from: number; readonly to: number }[] {
   const ranges: { from: number; to: number }[] = [];
   for (const div of fencedDivs) {
+    // openFenceTo already covers the opener attributes and title; keeping only
+    // opener/closer ranges preserves non-overlapping source order.
     ranges.push({ from: div.openFenceFrom, to: div.openFenceTo });
-    if (
-      div.attrFrom !== undefined
-      && div.attrTo !== undefined
-      && div.attrFrom < div.attrTo
-    ) {
-      ranges.push({ from: div.attrFrom, to: div.attrTo });
-    }
-    if (
-      div.titleFrom !== undefined
-      && div.titleTo !== undefined
-      && div.titleFrom < div.titleTo
-    ) {
-      ranges.push({ from: div.titleFrom, to: div.titleTo });
-    }
     if (div.closeFenceFrom >= 0 && div.closeFenceFrom < div.closeFenceTo) {
       ranges.push({ from: div.closeFenceFrom, to: div.closeFenceTo });
     }
   }
-  return ranges.sort(compareRangesByToThenFrom);
+  return ranges.sort(compareRangesByFromThenTo);
 }
 
 function windowTouchesRange(
@@ -596,7 +585,11 @@ function windowTouchesSortedRanges(
     window.fromOld === window.toOld ? window.fromOld : window.fromOld + 1,
   );
   for (let current = index; current < ranges.length; current += 1) {
-    if (windowTouchesRange(ranges[current], window)) {
+    const range = ranges[current];
+    if (range.from > window.toOld) {
+      return false;
+    }
+    if (windowTouchesRange(range, window)) {
       return true;
     }
   }
