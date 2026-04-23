@@ -149,6 +149,7 @@ export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
   "lexical.typing.insert_mean_ms",
   "lexical.typing.insert_max_ms",
   "lexical.typing.canonical_ms",
+  "lexical.typing.visual_sync_ms",
   "lexical.typing.semantic_ms",
   "lexical.typing.deferred_sync_work_ms",
   "lexical.typing.deferred_sync_count",
@@ -761,6 +762,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
 
       const longTaskRecorder = createLongTaskRecorder();
       const timings = [];
+      const beforeDeferredCount = deferredSyncBefore?.count ?? 0;
+      const beforeDeferredTotalMs = deferredSyncBefore?.totalMs ?? 0;
+      const beforeIncrementalCount = incrementalSyncBefore?.count ?? 0;
+      const beforeIncrementalTotalMs = incrementalSyncBefore?.totalMs ?? 0;
       const observationStart = performance.now();
       const wallStart = observationStart;
       for (let i = 0; i < count; i += 1) {
@@ -769,6 +774,22 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         timings.push(performance.now() - t0);
       }
       const wallMs = performance.now() - wallStart;
+
+      const visualSyncStart = performance.now();
+      let deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+      let incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
+      while (performance.now() - visualSyncStart < 3000) {
+        if (
+          (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
+          || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
+        ) {
+          break;
+        }
+        await sleepInPage(25);
+        deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
+        incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
+      }
+      const visualSyncMs = performance.now() - visualSyncStart;
 
       const expectedLength = beforeLength + count;
       const canonicalStart = performance.now();
@@ -808,12 +829,6 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       longTaskRecorder.disconnect();
 
       const deferredSyncStart = performance.now();
-      const beforeDeferredCount = deferredSyncBefore?.count ?? 0;
-      const beforeDeferredTotalMs = deferredSyncBefore?.totalMs ?? 0;
-      const beforeIncrementalCount = incrementalSyncBefore?.count ?? 0;
-      const beforeIncrementalTotalMs = incrementalSyncBefore?.totalMs ?? 0;
-      let deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
-      let incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
       while (performance.now() - deferredSyncStart < 3000) {
         if (
           (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
@@ -883,6 +898,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         p95InsertMs: percentile(timings, 95),
         maxInsertMs: Math.max(...timings, 0),
         canonicalMs,
+        visualSyncMs,
         semanticMs,
         semanticWorkCount,
         semanticWorkMs,
@@ -1041,6 +1057,11 @@ export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
       name: withContext("lexical.typing.canonical_ms"),
       unit: "ms",
       value: result.canonicalMs,
+    },
+    {
+      name: withContext("lexical.typing.visual_sync_ms"),
+      unit: "ms",
+      value: result.visualSyncMs,
     },
     {
       name: withContext("lexical.typing.semantic_ms"),

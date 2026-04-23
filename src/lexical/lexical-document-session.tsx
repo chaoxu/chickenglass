@@ -65,7 +65,7 @@ import {
 } from "./update-tags";
 
 const RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
-const DEFERRED_RICH_DOCUMENT_SYNC_MS = 900;
+const DEFERRED_RICH_DOCUMENT_SYNC_MS = 75;
 
 export function sameSelection(
   left: MarkdownEditorSelection,
@@ -647,6 +647,7 @@ export function LexicalEditorHandlePlugin({
   const selectionSnapshotFreshRef = useRef(false);
   const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
   const deferredRichSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deferredRichSyncRequestRef = useRef(0);
   const deferredRichSyncDocRef = useRef<string | null>(null);
   const deferredRichSyncBaseDocRef = useRef<string | null>(null);
   const richSelectionDomInsertFailedRef = useRef(false);
@@ -683,6 +684,7 @@ export function LexicalEditorHandlePlugin({
     };
 
     const clearDeferredRichDocumentSync = () => {
+      deferredRichSyncRequestRef.current += 1;
       const timer = deferredRichSyncTimerRef.current;
       if (timer !== null) {
         clearTimeout(timer);
@@ -753,7 +755,11 @@ export function LexicalEditorHandlePlugin({
       }
       deferredRichSyncDocRef.current = nextDoc;
       clearDeferredRichDocumentSync();
+      const request = deferredRichSyncRequestRef.current;
       deferredRichSyncTimerRef.current = setTimeout(() => {
+        if (deferredRichSyncRequestRef.current !== request) {
+          return;
+        }
         applyDeferredRichDocumentSync();
       }, DEFERRED_RICH_DOCUMENT_SYNC_MS);
     };

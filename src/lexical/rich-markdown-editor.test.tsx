@@ -127,6 +127,18 @@ function getPerfSummaryCount(name: string): number {
   return getFrontendPerfSnapshot().summaries.find((entry) => entry.name === name)?.count ?? 0;
 }
 
+async function advanceFakeTimersBy(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+async function runPendingFakeTimers(): Promise<void> {
+  await act(async () => {
+    await vi.runOnlyPendingTimersAsync();
+  });
+}
+
 function installZeroGeometryMocks(): () => void {
   const textPrototype = Text.prototype as unknown as {
     getBoundingClientRect?: () => DOMRect;
@@ -250,6 +262,7 @@ describe("LexicalRichMarkdownEditor nested history", () => {
       doc: "seed",
       onTextChange,
     });
+    const restoreGeometry = installZeroGeometryMocks();
 
     try {
       act(() => {
@@ -258,6 +271,7 @@ describe("LexicalRichMarkdownEditor nested history", () => {
       await waitFor(() => expect(onTextChange).toHaveBeenCalledWith("xseed"));
     } finally {
       editor.unmount();
+      restoreGeometry();
     }
   });
 
@@ -267,6 +281,7 @@ describe("LexicalRichMarkdownEditor nested history", () => {
       doc: "Alpha Beta",
       onTextChange,
     });
+    const restoreGeometry = installZeroGeometryMocks();
 
     try {
       act(() => {
@@ -288,6 +303,7 @@ describe("LexicalRichMarkdownEditor nested history", () => {
       });
     } finally {
       editor.unmount();
+      restoreGeometry();
     }
   });
 
@@ -615,6 +631,7 @@ describe("__editor selection bridge (rich mode)", () => {
 
     try {
       clearFrontendPerf();
+      vi.useFakeTimers();
       act(() => {
         editor.handle.setSelection(insertAt);
         editor.editor.update(() => {
@@ -628,16 +645,19 @@ describe("__editor selection bridge (rich mode)", () => {
       const expectedDoc = "Alpha123 Beta";
       expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(0);
 
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1_050));
-      });
+      await advanceFakeTimersBy(40);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(0);
+
+      await runPendingFakeTimers();
 
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
       expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
       expect(getPerfSummaryCount("lexical.createNodeSourceSpanIndex")).toBeGreaterThanOrEqual(1);
       expect(editor.handle.getDoc()).toBe(expectedDoc);
     } finally {
+      vi.useRealTimers();
       editor.unmount();
       restoreGeometry();
       clearFrontendPerf();
@@ -661,6 +681,7 @@ describe("__editor selection bridge (rich mode)", () => {
 
     try {
       clearFrontendPerf();
+      vi.useFakeTimers();
       act(() => {
         editor.handle.setSelection(insertAt);
         editor.editor.update(() => {
@@ -674,16 +695,60 @@ describe("__editor selection bridge (rich mode)", () => {
       const expectedDoc = doc.replace(" Beta", "123 Beta");
       expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(0);
 
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1_050));
-      });
+      await advanceFakeTimersBy(40);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(0);
+
+      await runPendingFakeTimers();
 
       expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
       expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
       expect(getPerfSummaryCount("lexical.createNodeSourceSpanIndex")).toBeGreaterThanOrEqual(1);
       expect(editor.handle.getDoc()).toBe(expectedDoc);
     } finally {
+      vi.useRealTimers();
+      editor.unmount();
+      restoreGeometry();
+      clearFrontendPerf();
+    }
+  });
+
+  it("cancels stale pending bridge sync timers when an explicit flush applies the latest doc", async () => {
+    const doc = "Alpha Beta";
+    const insertAt = doc.indexOf(" Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+    const restoreGeometry = installZeroGeometryMocks();
+
+    try {
+      clearFrontendPerf();
+      vi.useFakeTimers();
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.editor.update(() => {
+          $setSelection(null);
+        }, { discrete: true });
+        editor.handle.insertText("1");
+      });
+
+      await advanceFakeTimersBy(40);
+      act(() => {
+        editor.handle.insertText("2");
+      });
+
+      const expectedDoc = "Alpha12 Beta";
+      expect(editor.handle.flushPendingEdits()).toBe(expectedDoc);
+      expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
+      expect(getPerfSummaryCount("lexical.setLexicalMarkdown")).toBe(0);
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
+
+      await runPendingFakeTimers();
+
+      expect(getPerfSummaryCount("lexical.incrementalRichSync")).toBe(1);
+      expect(editor.handle.getDoc()).toBe(expectedDoc);
+    } finally {
+      vi.useRealTimers();
       editor.unmount();
       restoreGeometry();
       clearFrontendPerf();

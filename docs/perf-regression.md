@@ -158,6 +158,8 @@ adds Lexical-specific sync metrics:
 - `lexical.typing.insert_mean_ms` / `lexical.typing.insert_p95_ms` /
   `lexical.typing.insert_max_ms` measure each `editor.insertText()` call.
 - `lexical.typing.canonical_ms` waits until canonical markdown catches up.
+- `lexical.typing.visual_sync_ms` measures the time from the last insert until
+  the rich surface runs its first incremental or full document sync.
 - `lexical.typing.semantic_ms` waits for semantic derivation after the edit.
   It includes scheduled/debounced readiness time, so compare it with
   `lexical.typing.semantic_work_ms`.
