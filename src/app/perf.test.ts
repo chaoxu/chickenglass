@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async () => ({
@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import {
   clearFrontendPerf,
+  disableFrontendPerf,
   getFrontendPerfSnapshot,
   measureAsync,
   measureSync,
@@ -19,6 +20,18 @@ import {
 describe("perf aggregation", () => {
   beforeEach(() => {
     clearFrontendPerf();
+  });
+
+  afterEach(() => {
+    disableFrontendPerf();
+  });
+
+  it("skips span recording while frontend perf is disabled", () => {
+    disableFrontendPerf();
+
+    measureSync("editor.create", () => 1, { category: "editor" });
+
+    expect(getFrontendPerfSnapshot().summaries).toHaveLength(0);
   });
 
   it("aggregates repeated span names", async () => {

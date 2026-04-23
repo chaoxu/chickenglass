@@ -181,6 +181,29 @@ class FrontendPerfStore {
 }
 
 const frontendPerfStore = new FrontendPerfStore();
+let frontendPerfRecordingEnabled = false;
+
+function createDisabledOperation(name: string): PerfOperationHandle {
+  return {
+    id: "disabled",
+    name,
+    measureAsync: async (_spanName, task) => task(),
+    measureSync: (_spanName, task) => task(),
+    end: () => {},
+  };
+}
+
+export function enableFrontendPerf(): void {
+  frontendPerfRecordingEnabled = true;
+}
+
+export function disableFrontendPerf(): void {
+  frontendPerfRecordingEnabled = false;
+}
+
+export function isFrontendPerfEnabled(): boolean {
+  return frontendPerfRecordingEnabled;
+}
 
 function beginMeasurement(
   name: string,
@@ -199,6 +222,9 @@ export function measureSync<T>(
   task: () => T,
   options: PerfSpanOptions = {},
 ): T {
+  if (!frontendPerfRecordingEnabled) {
+    return task();
+  }
   const finalize = beginMeasurement(name, options);
   try {
     return task();
@@ -212,6 +238,9 @@ export async function measureAsync<T>(
   task: () => Promise<T>,
   options: PerfSpanOptions = {},
 ): Promise<T> {
+  if (!frontendPerfRecordingEnabled) {
+    return await task();
+  }
   const finalize = beginMeasurement(name, options);
   try {
     return await task();
@@ -225,6 +254,9 @@ export async function withPerfOperation<T>(
   task: (operation: PerfOperationHandle) => Promise<T>,
   detail?: string,
 ): Promise<T> {
+  if (!frontendPerfRecordingEnabled) {
+    return await task(createDisabledOperation(name));
+  }
   const startedAt = nowMs();
   const operationId = `operation-${Math.random().toString(36).slice(2, 10)}`;
   const operationBase = { id: operationId, name };
@@ -247,9 +279,11 @@ export async function withPerfOperation<T>(
 }
 
 export function getFrontendPerfSnapshot(): PerfSnapshot {
+  enableFrontendPerf();
   return frontendPerfStore.snapshot();
 }
 
 export function clearFrontendPerf(): void {
+  enableFrontendPerf();
   frontendPerfStore.clear();
 }

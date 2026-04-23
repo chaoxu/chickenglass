@@ -30,7 +30,7 @@ function applyIncrementalChange(previousMarkdown: string, nextMarkdown: string):
 }
 
 describe("applyIncrementalRichDocumentSync", () => {
-  it("replaces one affected top-level paragraph and leaves sibling blocks intact", () => {
+  it("updates one plain top-level paragraph in place and leaves sibling blocks intact", () => {
     const previousMarkdown = "Alpha beta.\n\nSecond paragraph.";
     const nextMarkdown = "Alpha gamma.\n\nSecond paragraph.";
     const editor = createHeadlessCoflatEditor();
@@ -49,7 +49,7 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
     const nextKeys = readTopLevelKeys(editor);
     expect(nextKeys).toHaveLength(previousKeys.length);
-    expect(nextKeys[0]).not.toBe(previousKeys[0]);
+    expect(nextKeys[0]).toBe(previousKeys[0]);
     expect(nextKeys.slice(1)).toEqual(previousKeys.slice(1));
   });
 
@@ -62,7 +62,7 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
-  it("replaces a later paragraph without targeting the blank separator node", () => {
+  it("updates a later plain paragraph without targeting the blank separator node", () => {
     const previousMarkdown = "Alpha\n\nSecond paragraph.";
     const nextMarkdown = "Alpha\n\nSecond changed.";
     const editor = createHeadlessCoflatEditor();
@@ -81,7 +81,7 @@ describe("applyIncrementalRichDocumentSync", () => {
     const nextKeys = readTopLevelKeys(editor);
     expect(nextKeys[0]).toBe(previousKeys[0]);
     expect(nextKeys[1]).toBe(previousKeys[1]);
-    expect(nextKeys[2]).not.toBe(previousKeys[2]);
+    expect(nextKeys[2]).toBe(previousKeys[2]);
   });
 
   it("replaces a paragraph directly after a heading", () => {

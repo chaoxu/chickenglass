@@ -230,6 +230,7 @@ describe("createDecorationsField", () => {
   });
 
   it("records create and update spans when a spanName is provided", () => {
+    clearFrontendPerf();
     const field = createDecorationsField(
       () => Decoration.none,
       undefined,

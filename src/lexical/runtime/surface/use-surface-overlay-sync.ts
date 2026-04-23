@@ -51,8 +51,20 @@ export function useSurfaceOverlaySync({
 
     let raf = 0;
     let timeout = 0;
+    let disposed = false;
+
+    const clearScheduledCommit = () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+      raf = 0;
+      timeout = 0;
+    };
 
     const commit = () => {
+      clearScheduledCommit();
+      if (disposed) {
+        return;
+      }
       if (!rootElement.isConnected || !surfaceElement.isConnected) {
         onClearRef.current();
         return;
@@ -69,8 +81,10 @@ export function useSurfaceOverlaySync({
     };
 
     const sync = () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timeout);
+      if (disposed) {
+        return;
+      }
+      clearScheduledCommit();
       raf = requestAnimationFrame(commit);
       timeout = window.setTimeout(commit, fallbackDelayMs);
     };
@@ -88,12 +102,16 @@ export function useSurfaceOverlaySync({
     if (surfaceElement !== rootElement) {
       resizeObserver?.observe(surfaceElement);
     }
-    void document.fonts?.ready.then(sync).catch(() => {});
+    void document.fonts?.ready.then(() => {
+      if (!disposed) {
+        sync();
+      }
+    }).catch(() => {});
     const unsubscribe = subscribe?.(sync);
 
     return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timeout);
+      disposed = true;
+      clearScheduledCommit();
       surfaceElement.removeEventListener("scroll", sync);
       if (observeRootScroll && surfaceElement !== rootElement) {
         rootElement.removeEventListener("scroll", sync);

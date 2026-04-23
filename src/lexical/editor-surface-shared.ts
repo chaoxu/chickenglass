@@ -343,7 +343,28 @@ export function DestructiveKeySelectionSyncPlugin(): null {
 
   useEffect(() => {
     let pendingRestore: (() => void) | null = null;
+    let cleanupPendingKeyUp: (() => void) | null = null;
+    let cleanupPendingUpdateRestore: (() => void) | null = null;
+    let pendingRestoreTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearPendingRestoreTimer = () => {
+      if (pendingRestoreTimer !== null) {
+        clearTimeout(pendingRestoreTimer);
+        pendingRestoreTimer = null;
+      }
+    };
+    const clearPendingKeyUp = () => {
+      cleanupPendingKeyUp?.();
+      cleanupPendingKeyUp = null;
+    };
+    const clearPendingUpdateRestore = () => {
+      cleanupPendingUpdateRestore?.();
+      cleanupPendingUpdateRestore = null;
+    };
     const runPendingRestore = () => {
+      clearPendingRestoreTimer();
+      clearPendingKeyUp();
+      clearPendingUpdateRestore();
       const restore = pendingRestore;
       pendingRestore = null;
       restore?.();
@@ -399,6 +420,9 @@ export function DestructiveKeySelectionSyncPlugin(): null {
         pendingDestructiveVisibleOffsetByEditor.set(editor, rootCollapseOffset);
       }
       if (collapseOffset !== null) {
+        clearPendingRestoreTimer();
+        clearPendingKeyUp();
+        clearPendingUpdateRestore();
         pendingRestore = () => {
           restoreCollapsedSelectionAt(
             editor,
@@ -408,27 +432,43 @@ export function DestructiveKeySelectionSyncPlugin(): null {
         };
         const cleanupKeyUp = () => {
           root.ownerDocument.removeEventListener("keyup", restoreOnKeyUp, true);
+          if (cleanupPendingKeyUp === cleanupKeyUp) {
+            cleanupPendingKeyUp = null;
+          }
         };
         const restoreOnKeyUp = (keyUpEvent: KeyboardEvent) => {
           if (keyUpEvent.key !== event.key) {
             return;
           }
           cleanupKeyUp();
+          clearPendingRestoreTimer();
           let unregister: (() => void) | null = null;
           let fallback: ReturnType<typeof setTimeout> | null = null;
-          const restoreAfterUpdate = () => {
+          const cleanupUpdateRestore = () => {
             unregister?.();
+            unregister = null;
             if (fallback !== null) {
               clearTimeout(fallback);
               fallback = null;
             }
+            if (cleanupPendingUpdateRestore === cleanupUpdateRestore) {
+              cleanupPendingUpdateRestore = null;
+            }
+          };
+          const restoreAfterUpdate = () => {
+            cleanupUpdateRestore();
             runPendingRestore();
           };
+          cleanupPendingUpdateRestore = cleanupUpdateRestore;
           unregister = editor.registerUpdateListener(restoreAfterUpdate);
           fallback = setTimeout(restoreAfterUpdate, 100);
         };
         root.ownerDocument.addEventListener("keyup", restoreOnKeyUp, true);
-        setTimeout(runPendingRestore, 100);
+        cleanupPendingKeyUp = cleanupKeyUp;
+        pendingRestoreTimer = setTimeout(() => {
+          pendingRestoreTimer = null;
+          runPendingRestore();
+        }, 100);
       }
     };
 
@@ -439,12 +479,18 @@ export function DestructiveKeySelectionSyncPlugin(): null {
     return editor.registerRootListener((rootElement, previousRootElement) => {
       previousRootElement?.removeEventListener("keydown", handleKeyDown, true);
       previousRootElement?.removeEventListener("input", handleInput, true);
+      clearPendingRestoreTimer();
+      clearPendingKeyUp();
+      clearPendingUpdateRestore();
       if (!rootElement) {
         return;
       }
       rootElement.addEventListener("keydown", handleKeyDown, true);
       rootElement.addEventListener("input", handleInput, true);
       return () => {
+        clearPendingRestoreTimer();
+        clearPendingKeyUp();
+        clearPendingUpdateRestore();
         rootElement.removeEventListener("keydown", handleKeyDown, true);
         rootElement.removeEventListener("input", handleInput, true);
       };
