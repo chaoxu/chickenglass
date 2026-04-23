@@ -6,7 +6,7 @@
  * Declaring them here avoids unsafe `as unknown as` double-casts throughout
  * the codebase.
  *
- * See CLAUDE.md "Debug helpers" for usage documentation.
+ * See AGENTS.md / CLAUDE.md "Debug helpers" for usage documentation.
  */
 
 import type { EditorView } from "@codemirror/view";

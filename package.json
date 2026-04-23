@@ -43,6 +43,7 @@
     "chrome:app": "node scripts/launch-chrome.mjs --activate",
     "chrome:cdp": "node scripts/launch-chrome.mjs --no-activate",
     "chrome:test": "node scripts/test-chrome.mjs",
+    "doctor:browser": "node scripts/browser-doctor.mjs",
     "convert:latex": "python3 scripts/latex-to-coflat.py",
     "test:browser": "node scripts/test-regression.mjs",
     "test:browser:merged-app": "node scripts/test-regression.mjs --filter mode-switch,index-open-rich-render,headings,math-render",

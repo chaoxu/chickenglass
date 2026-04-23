@@ -10,6 +10,7 @@ export {
   MODE_BUTTON_SELECTOR,
 } from "../src/debug/debug-bridge-contract.js";
 export { createArgParser } from "./devx-cli.mjs";
+export * from "./browser-failure-artifacts.mjs";
 export * from "./browser-health.mjs";
 export * from "./browser-lifecycle.mjs";
 export * from "./browser-screenshot.mjs";

@@ -1,6 +1,6 @@
 /* global window */
 
-import { sleep } from "./browser-lifecycle.mjs";
+import { sleep, waitForDebugBridge } from "./browser-lifecycle.mjs";
 
 function issueMatches(text, patterns) {
   return patterns.some((pattern) =>
@@ -85,7 +85,7 @@ export function formatRuntimeIssues(issues, limit = 3) {
  *   maxAutocompleteTooltips?: number,
  * }} [options]
  */
-async function collectEditorHealth(page, options = {}) {
+export async function collectEditorHealth(page, options = {}) {
   const {
     maxVisibleDialogs = 0,
     maxVisibleHoverPreviews = 1,
@@ -206,4 +206,86 @@ export async function assertEditorHealth(page, label, options = {}) {
     throw new Error(`${label}: ${health.issues.join("; ")}`);
   }
   return health;
+}
+
+function normalizeUrlForDoctor(url) {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/+$/u, "") || "/";
+    return {
+      origin: parsed.origin,
+      pathname,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function assertDoctorUrl(currentUrl, targetUrl) {
+  if (!targetUrl) return;
+  const current = normalizeUrlForDoctor(currentUrl);
+  const target = normalizeUrlForDoctor(targetUrl);
+  if (!current || !target) {
+    throw new Error(`browser doctor: invalid URL state current=${currentUrl} target=${targetUrl}`);
+  }
+  if (current.origin !== target.origin || current.pathname !== target.pathname) {
+    throw new Error(
+      `browser doctor: wrong app page ${currentUrl}; expected ${targetUrl}`,
+    );
+  }
+}
+
+async function collectBrowserDoctorState(page) {
+  return page.evaluate(() => {
+    const overlay = document.querySelector("vite-error-overlay");
+    const overlayText = overlay?.shadowRoot?.textContent ?? overlay?.textContent ?? "";
+    return {
+      debugGlobals: {
+        __app: Boolean(window.__app),
+        __cfDebug: Boolean(window.__cfDebug),
+        __cmView: Boolean(window.__cmView),
+        __editor: Boolean(window.__editor),
+        lexicalEditor: Boolean(document.querySelector("[data-testid='lexical-editor']")),
+      },
+      readyState: document.readyState,
+      title: document.title,
+      url: window.location.href,
+      viteErrorOverlay: overlayText.trim(),
+    };
+  });
+}
+
+/**
+ * Run the canonical browser harness readiness check before a scenario starts.
+ *
+ * This catches the common false-failure cases early: wrong page attachment,
+ * missing debug globals, Vite error overlays, and broken editor health.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{
+ *   health?: Parameters<typeof assertEditorHealth>[2],
+ *   label?: string,
+ *   targetUrl?: string,
+ *   timeout?: number,
+ * }} [options]
+ */
+export async function runBrowserDoctor(page, options = {}) {
+  const {
+    health = {},
+    label = "browser doctor",
+    targetUrl = "",
+    timeout = 15000,
+  } = options;
+
+  assertDoctorUrl(page.url(), targetUrl);
+  await waitForDebugBridge(page, { timeout });
+  const state = await collectBrowserDoctorState(page);
+  if (state.viteErrorOverlay) {
+    throw new Error(`${label}: Vite error overlay visible: ${state.viteErrorOverlay.slice(0, 500)}`);
+  }
+  const editorHealth = await assertEditorHealth(page, label, health);
+  return {
+    ...state,
+    editorHealth,
+  };
 }

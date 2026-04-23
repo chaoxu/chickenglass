@@ -4,6 +4,7 @@ const DEFAULT_VALUE_FLAGS = new Set([
   "--anchor-offset",
   "--anchor-occurrence",
   "--anchor-text",
+  "--artifacts-dir",
   "--bottom-offset-px",
   "--browser",
   "--col",

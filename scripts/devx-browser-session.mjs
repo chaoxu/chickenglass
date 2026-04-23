@@ -1,9 +1,10 @@
 import console from "node:console";
+import { createBrowserArtifactRecorder } from "./browser-failure-artifacts.mjs";
+import { runBrowserDoctor } from "./browser-health.mjs";
 import {
   connectEditor,
   disconnectBrowser,
   ensureAppServer,
-  waitForDebugBridge,
 } from "./browser-lifecycle.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import { createArgParser } from "./devx-cli.mjs";
@@ -19,13 +20,15 @@ export async function openBrowserSession(argv = [], options = {}) {
     reloadCdp = true,
     timeoutFallback = 15000,
   } = options;
-  const { getIntFlag, hasFlag } = createArgParser(argv);
+  const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
   const chromeArgs = parseChromeArgs(argv, { browser: defaultBrowser });
   const timeout = getIntFlag("--timeout", timeoutFallback);
+  const artifactsDir = getFlag("--artifacts-dir", undefined);
   const stopAppServer = await ensureAppServer(chromeArgs.url, {
     autoStart: autoStartServer && !hasFlag("--no-start-server"),
   });
   let page = null;
+  let recorder = null;
 
   try {
     page = await connectEditor({
@@ -35,17 +38,38 @@ export async function openBrowserSession(argv = [], options = {}) {
       timeout,
       url: chromeArgs.url,
     });
+    recorder = createBrowserArtifactRecorder(page);
 
     if (reloadCdp && chromeArgs.browser === "cdp") {
       await page.reload({ waitUntil: "load" });
     }
 
-    await waitForDebugBridge(page, { timeout });
+    await runBrowserDoctor(page, {
+      label: "browser-session",
+      targetUrl: chromeArgs.url,
+      timeout,
+    });
     return {
+      artifactRecorder: recorder,
+      artifactsDir,
       page,
       stopAppServer,
     };
   } catch (error) {
+    if (page && recorder) {
+      await recorder.collect({
+        dispose: true,
+        error,
+        label: "browser-session-setup",
+        outDir: artifactsDir,
+      }).then((artifacts) => {
+        console.error(`Browser setup artifacts: ${artifacts.outDir}`);
+      }).catch((artifactError) => {
+        console.warn(
+          `Failed to collect browser setup artifacts: ${artifactError instanceof Error ? artifactError.message : String(artifactError)}`,
+        );
+      });
+    }
     if (page) {
       await disconnectBrowser(page).catch((disconnectError) => {
         console.warn(
@@ -70,6 +94,7 @@ export async function openBrowserPage(argv = [], options = {}) {
 
 export async function closeBrowserSession(session) {
   try {
+    session?.artifactRecorder?.dispose?.();
     if (session?.page) {
       await disconnectBrowser(session.page);
     }

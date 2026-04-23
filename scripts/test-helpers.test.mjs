@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   buildViteDevArgs,
+  createBrowserArtifactRecorder,
   createArgParser,
   isLoopbackAppUrl,
   normalizeConnectEditorOptions,
   resolveTextAnchorInDocument,
+  runBrowserDoctor,
   screenshot,
   waitForDebugBridge,
   waitForAppUrl,
@@ -20,6 +25,7 @@ describe("test helpers browser harness", () => {
     delete window.__cmView;
     delete window.__cmDebug;
     delete window.__cfDebug;
+    document.body.innerHTML = "";
   });
 
   it("defaults automated harnesses to a managed headless browser when requested", () => {
@@ -97,6 +103,78 @@ describe("test helpers browser harness", () => {
       polling: 100,
     });
     expect(page.evaluate).toHaveBeenCalledTimes(2);
+  });
+
+  it("browser doctor reports wrong page attachments clearly", async () => {
+    const page = {
+      url: vi.fn(() => "http://localhost:5174/"),
+    };
+
+    await expect(runBrowserDoctor(page, {
+      targetUrl: "http://localhost:5173/",
+    })).rejects.toThrow("wrong app page");
+  });
+
+  it("browser doctor reports a Vite overlay before running scenarios", async () => {
+    window.__app = {
+      getMode: () => "lexical",
+      ready: Promise.resolve(),
+    };
+    window.__editor = {
+      getDoc: () => "hello",
+      getSelection: () => ({ anchor: 0, focus: 0 }),
+      ready: Promise.resolve(),
+    };
+    window.__cfDebug = {
+      ready: Promise.resolve(),
+    };
+    document.body.innerHTML = "<vite-error-overlay>compile failed</vite-error-overlay><div data-testid='lexical-editor'></div>";
+    const page = {
+      context: vi.fn(() => ({ browser: () => null })),
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+      title: vi.fn(async () => "Coflat"),
+      url: vi.fn(() => "http://localhost:5173/"),
+      waitForFunction: vi.fn(async (fn) => {
+        expect(fn()).toBe(true);
+      }),
+    };
+
+    await expect(runBrowserDoctor(page, {
+      label: "overlay-check",
+      targetUrl: "http://localhost:5173/",
+      timeout: 10,
+    })).rejects.toThrow("Vite error overlay visible");
+  });
+});
+
+describe("browser failure artifacts", () => {
+  it("writes JSON artifacts even when debug-state evaluation fails", async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "coflat-browser-artifacts-test-"));
+    const page = {
+      evaluate: vi.fn(async () => {
+        throw new Error("page evaluate failed");
+      }),
+      off: vi.fn(),
+      on: vi.fn(),
+      screenshot: vi.fn(async () => Buffer.from("")),
+      url: vi.fn(() => "http://localhost:5173/"),
+    };
+    const recorder = createBrowserArtifactRecorder(page);
+
+    try {
+      const artifacts = await recorder.collect({
+        dispose: true,
+        error: new Error("scenario failed"),
+        label: "unit-artifact",
+        outDir,
+      });
+
+      expect(artifacts.summaryPath).toBe(join(outDir, "browser-artifacts.json"));
+      expect(existsSync(artifacts.summaryPath)).toBe(true);
+      expect(readFileSync(artifacts.summaryPath, "utf8")).toContain("page evaluate failed");
+    } finally {
+      rmSync(outDir, { force: true, recursive: true });
+    }
   });
 });
 

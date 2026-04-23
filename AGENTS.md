@@ -65,6 +65,7 @@ pnpm tauri:dev       # launch Coflats Tauri desktop app
 pnpm tauri:build     # build Coflats production desktop app bundle
 pnpm tauri:build:dmg # build Coflats macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
+pnpm doctor:browser  # verify browser harness readiness and emit failure artifacts
 pnpm perf:capture:heavy -- --scenario typing-rich-burst
                      # heavy-doc perf lane with longer open/debug budgets
 pnpm chrome          # launch Playwright Chromium with CDP on port 9322 (manual debug lane)
@@ -191,8 +192,9 @@ Prefer the managed Playwright harness for automated verification. The manual CDP
 
 Managed harness:
 1. Start `pnpm dev`.
-2. Run scripts like `pnpm test:browser`, `pnpm test:browser:lexical`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
+2. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:lexical`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
+4. Browser setup and regression failures write artifacts under `/tmp/coflat-browser-artifacts` by default. Use `--artifacts-dir /tmp/coflat-*` to force a specific output directory for a run.
 
 Manual CDP lane:
 1. Start `pnpm dev`, then `pnpm chrome` (CDP on port 9322).

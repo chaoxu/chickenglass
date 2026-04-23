@@ -88,18 +88,19 @@ async function loadTests(filter) {
   return tests;
 }
 
-async function waitForRegressionBridge(page, timeout) {
-  await page.waitForFunction(
-    () =>
-      Boolean(
-        window.__app?.openFile &&
-          window.__app?.setMode &&
-          window.__app?.getMode &&
-          window.__editor?.getDoc,
-      ),
-    null,
-    { timeout, polling: 100 },
-  );
+async function collectFailureArtifacts(session, label, error) {
+  if (!session?.artifactRecorder) return;
+  await session.artifactRecorder.collect({
+    error,
+    label,
+    outDir: session.artifactsDir,
+  }).then((artifacts) => {
+    console.error(`  Artifacts: ${artifacts.outDir}`);
+  }).catch((artifactError) => {
+    console.error(
+      `  Artifact collection failed: ${artifactError instanceof Error ? artifactError.message : String(artifactError)}`,
+    );
+  });
 }
 
 async function main() {
@@ -119,7 +120,6 @@ async function main() {
   try {
     session = await openBrowserSession(args, { timeoutFallback: timeout });
     page = session.page;
-    await waitForRegressionBridge(page, timeout);
   } catch (err) {
     console.error("Failed to open the browser regression harness.");
     console.error("Managed mode starts the app server automatically for localhost URLs.");
@@ -180,6 +180,7 @@ async function main() {
         await resetEditorState(page);
       } catch (err) {
         console.log(`  FAIL  ${test.name} (reset failed: ${err.message})`);
+        await collectFailureArtifacts(session, `reset-${test.name}`, err);
         results.push({ name: test.name, pass: false, message: `Reset failed: ${err.message}` });
         failed++;
         continue;
@@ -222,11 +223,13 @@ async function main() {
         if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
           console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
           console.error("\nChrome disconnected mid-test. Aborting remaining tests.");
+          await collectFailureArtifacts(session, `test-${test.name}`, err);
           results.push({ name: test.name, pass: false, message: "Chrome disconnected", elapsed });
           failed++;
           break;
         }
         console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}`);
+        await collectFailureArtifacts(session, `test-${test.name}`, err);
         results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, elapsed });
         failed++;
       }
