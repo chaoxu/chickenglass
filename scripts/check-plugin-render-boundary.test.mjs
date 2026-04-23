@@ -1,18 +1,22 @@
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 import {
   collectModuleSpecifiers,
+  findBoundaryViolations,
   findPluginRenderBoundaryViolations,
+  findSourceCycleViolations,
   findStateUpstreamBoundaryViolations,
+  validateBoundaryConfig,
 } from "./check-plugin-render-boundary.mjs";
 
 const packageJson = JSON.parse(
   readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
 );
 
-describe("plugin/render boundary checker", () => {
+describe("import boundary checker", () => {
   it("runs from the standard lint script used by CI", () => {
     expect(packageJson.scripts.lint).toContain("pnpm lint:boundaries");
   });
@@ -159,5 +163,124 @@ describe("plugin/render boundary checker", () => {
         repoRoot,
       ),
     ).toEqual([]);
+  });
+
+  it("flags broader neutral-layer imports and supports exact allowlists", () => {
+    const repoRoot = "/repo";
+    const libFile = path.join(repoRoot, "src", "lib", "model.ts");
+    const entries = [
+      {
+        filePath: libFile,
+        sourceText: [
+          'import { app } from "../app/service";',
+          'import { local } from "./local";',
+        ].join("\n"),
+      },
+    ];
+    const rules = [
+      {
+        name: "lib neutral",
+        from: ["lib"],
+        to: ["app"],
+        allow: [],
+      },
+    ];
+
+    expect(findBoundaryViolations(entries, repoRoot, rules)).toEqual([
+      {
+        filePath: libFile,
+        line: 1,
+        rule: "lib neutral",
+        specifier: "../app/service",
+        targetPath: null,
+      },
+    ]);
+
+    expect(findBoundaryViolations(entries, repoRoot, [{
+      ...rules[0],
+      allow: [
+        {
+          file: "src/lib/model.ts",
+          specifier: "../app/service",
+          reason: "#1 documents the temporary owner leak",
+        },
+      ],
+    }])).toEqual([]);
+  });
+
+  it("ignores test files when enforcing production boundary rules", () => {
+    const repoRoot = "/repo";
+
+    expect(
+      findBoundaryViolations(
+        [
+          {
+            filePath: path.join(repoRoot, "src", "lib", "model.test.ts"),
+            sourceText: 'import { app } from "../app/service";',
+          },
+        ],
+        repoRoot,
+        [
+          {
+            name: "lib neutral",
+            from: ["lib"],
+            to: ["app"],
+            allow: [],
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it("reports unallowlisted src import cycles", () => {
+    const repoRoot = mkdtempSync(path.join(tmpdir(), "coflat-boundary-"));
+    const srcRoot = path.join(repoRoot, "src");
+    const first = path.join(srcRoot, "first.ts");
+    const second = path.join(srcRoot, "second.ts");
+    mkdirSync(srcRoot, { recursive: true });
+    writeFileSync(first, 'import { second } from "./second";\nexport const first = second;\n');
+    writeFileSync(second, 'import { first } from "./first";\nexport const second = first;\n');
+
+    try {
+      const entries = [{ filePath: first }, { filePath: second }];
+      expect(findSourceCycleViolations(entries, repoRoot)).toEqual([[
+        "src/first.ts",
+        "src/second.ts",
+      ]]);
+      expect(findSourceCycleViolations(entries, repoRoot, [
+        {
+          reason: "#1 tracks breaking the test cycle",
+          files: ["src/first.ts", "src/second.ts"],
+        },
+      ])).toEqual([]);
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("requires narrow documented allowlists", () => {
+    expect(validateBoundaryConfig([
+      {
+        name: "bad rule",
+        from: ["lib"],
+        to: ["app"],
+        allow: [
+          { file: "src/lib/", target: "src/app/*", reason: "" },
+          { file: "src/lib/model.ts", reason: "#1 is missing a target" },
+        ],
+      },
+    ], [
+      {
+        reason: "",
+        files: ["src/a.ts"],
+      },
+    ])).toEqual([
+      "bad rule has an allowlist entry without a reason",
+      "bad rule has a broad allowlist file entry: src/lib/",
+      "bad rule has a broad allowlist target entry: src/app/*",
+      "bad rule allowlist entry for src/lib/model.ts needs target or specifier",
+      "allowed source cycle without a reason",
+      "allowed source cycle must list at least two files",
+    ]);
   });
 });
