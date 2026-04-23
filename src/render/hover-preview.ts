@@ -21,17 +21,12 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { blockCounterField, type NumberedBlock } from "../state/block-counter";
-import { frontmatterField } from "../state/frontmatter-state";
 import { imageUrlField } from "../state/image-url";
 import { mathMacrosField } from "../state/math-macros";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { renderKatex } from "./math-widget";
-import {
-  renderPreviewBlockContentToDom,
-  type PreviewBlockRenderOptions,
-} from "./preview-block-renderer";
+import { renderPreviewBlockContentToDom } from "./preview-block-renderer";
 import { createPreviewSurfaceBody } from "../preview-surface";
-import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../state/document-analysis";
 import {
   EMPTY_LOCAL_MEDIA_DEPENDENCIES,
@@ -45,6 +40,7 @@ import {
   replacePdfPreviewImages,
 } from "./hover-preview-media";
 import { type BibStore, bibDataField } from "../state/bib-data";
+import { buildPreviewBlockOptions } from "./hover-preview-block-options";
 import { pluginRegistryField } from "../state/plugin-registry";
 import { getPlugin } from "../state/plugin-registry-core";
 import { findRenderedReference } from "./reference-targeting";
@@ -162,56 +158,6 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
 }
 
 // ── Tooltip content builders ────────────────────────────────────────────────
-
-/**
- * Build block-preview render options from the current CM6 state.
- *
- * Extracts bibliography, CSL processor, and block counters so that
- * `renderPreviewBlockContentToDom` can resolve citations and cross-references
- * inside hover preview bodies (e.g. `[@cormen2009]` or `[@thm:foo]`
- * within a theorem body).
- */
-function buildPreviewBlockOptions(
-  view: EditorView,
-  macros: Record<string, string>,
-  imageUrlOverrides?: ReadonlyMap<string, string>,
-): PreviewBlockRenderOptions {
-  const { store, cslProcessor } = view.state.field(bibDataField);
-  const frontmatter = view.state.field(frontmatterField, false);
-  const analysis = view.state.field(documentAnalysisField, false);
-  const counterState = view.state.field(blockCounterField, false);
-  const registry = view.state.field(pluginRegistryField, false);
-
-  // Build plain-data block counter map from CM6 state
-  let blockCounters: Map<string, BlockCounterEntry> | undefined;
-  if (counterState) {
-    blockCounters = new Map<string, BlockCounterEntry>();
-    for (const block of counterState.blocks) {
-      if (block.id) {
-        const plugin = registry ? getPlugin(registry, block.type) : undefined;
-        blockCounters.set(block.id, {
-          type: block.type,
-          title: plugin?.title ?? block.type,
-          number: block.number,
-        });
-      }
-    }
-  }
-
-  return {
-    macros,
-    config: {
-      ...frontmatter?.config,
-      math: macros,
-    },
-    bibliography: store.size > 0 ? store : undefined,
-    cslProcessor: store.size > 0 ? cslProcessor : undefined,
-    blockCounters,
-    ...(analysis ? { referenceSemantics: analysis } : {}),
-    documentPath: view.state.facet(documentPathFacet),
-    imageUrlOverrides,
-  };
-}
 
 function buildBlockPreviewPlan(
   view: EditorView,
