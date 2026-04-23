@@ -92,7 +92,7 @@ describe("#88 — project-level KaTeX macros", () => {
     expect(mod.parseProjectConfig).toBeDefined();
   });
 
-  it("math-macros test file exists", () => {
+  it("math-macros test coverage exists", () => {
     expect(fileExists("src/render/math-macros.test.ts")).toBe(true);
   });
 });
@@ -1049,7 +1049,7 @@ describe("#1074 — plugin/render import direction", () => {
     expect(contractDoc).toContain("src/plugins/* must not import src/render/*");
     expect(contractDoc).toContain("renderDecorations");
     expect(contractDoc).toContain("src/render/plugin-adapters/");
-    expect(packageJson).toContain('"lint": "pnpm lint:boundaries && biome lint ."');
+    expect(packageJson).toContain('"lint": "pnpm lint:errors && pnpm lint:boundaries && biome lint ."');
   });
 
   it("keeps generic plugin rendering free of embed special-cases", () => {
@@ -1069,6 +1069,14 @@ describe("#1095 — fence protection owns its code-block structure dependency", 
       specifier.startsWith("../render/")
     )).toBe(false);
     expect(importsModule("src/render/code-block-render.ts", "../state/code-block-structure")).toBe(true);
+  });
+});
+
+describe("#1365 — render barrel initialization", () => {
+  it("keeps plugin render off the render-core barrel during module initialization", () => {
+    expect(importsModule("src/render/plugin-render.ts", "./render-core")).toBe(false);
+    expect(fileText("src/render/render-core.ts")).not.toContain("ORDERING NOTE");
+    expect(fileText("src/render/render-core.ts")).not.toContain("./math-macros");
   });
 });
 

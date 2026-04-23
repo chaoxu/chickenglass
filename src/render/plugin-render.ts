@@ -31,10 +31,12 @@ import {
   addSingleLineClosingFence,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
+  hideMultiLineClosingFence,
+} from "./fenced-block-core";
+import {
   editorFocusField,
   focusTracker,
-  hideMultiLineClosingFence,
-} from "./render-core";
+} from "./focus-state";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,

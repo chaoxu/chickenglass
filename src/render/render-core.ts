@@ -3,13 +3,6 @@
  *
  * High-level render plugins (which may import from editor/ or plugins/) stay in
  * the main render barrel (index.ts).
- *
- * ORDERING NOTE: fenced-block-core MUST precede math-macros.  math-macros
- * triggers a transitive import chain (frontmatter-state → document-surfaces →
- * bibliography → reference-render → crossref-resolver → plugins →
- * plugin-render) that cycles back to this barrel.  fenced-block-core must be
- * fully loaded first so createFencedBlockDecorationField is available when
- * plugin-render.ts evaluates its module-level call.
  */
 
 // ── node-collection.ts ───────────────────────────────────────────────────────
@@ -130,9 +123,6 @@ export {
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
 } from "./fenced-block-core";
-
-// ── math-macros.ts ───────────────────────────────────────────────────────────
-export { getMathMacros, mathMacrosField } from "./math-macros";
 
 // ── math-widget.ts (type exports) ────────────────────────────────────────────
 export type { MathWidget } from "./math-widget";
