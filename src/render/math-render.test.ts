@@ -20,6 +20,7 @@ import {
   setStructureEditTargetEffect,
 } from "../state/cm-structure-edit";
 import { setInlineMathViewportRangesEffect } from "./math-inline-viewport";
+import { clearFrontendPerf, getFrontendPerfSnapshot } from "../lib/perf";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
 function countWidgets(ranges: ReturnType<typeof collectMathRanges>): number {
@@ -841,6 +842,32 @@ describe("math decoration invalidation", () => {
     expect(after).not.toBe(before);
     expect(after.size).toBe(before.size);
     expect(getDecorationSpecs(after)[0].from).toBe(getDecorationSpecs(before)[0].from + 6);
+  });
+
+  it("dirty-updates active inline math instead of rebuilding all math decorations", () => {
+    const tailMath = Array.from(
+      { length: 80 },
+      (_, index) => `$x_{${index}}$`,
+    ).join(" ");
+    const doc = `Let $G = (V, E)$ be a graph.\n\n${tailMath}`;
+    const activePos = doc.indexOf(" = ") + 1;
+    const focused = createMathRenderState(doc, activePos).update({
+      effects: focusEffect.of(true),
+    }).state;
+    const before = focused.field(mathDecorationField);
+
+    clearFrontendPerf();
+    const afterState = focused.update({
+      changes: { from: activePos, to: activePos, insert: "1" },
+      selection: { anchor: activePos + 1 },
+    }).state;
+    const after = afterState.field(mathDecorationField);
+
+    const spanNames = getFrontendPerfSnapshot().recent.map((record) => record.name);
+    expect(spanNames).toContain("cm6.mathDecorations.dirty");
+    expect(spanNames).not.toContain("cm6.mathDecorations.rebuild");
+    expect(after).not.toBe(before);
+    expect(after.size).toBe(before.size);
   });
 
   it("drops inline math widgets when deleting the opening delimiter", () => {

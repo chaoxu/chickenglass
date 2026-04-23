@@ -484,6 +484,24 @@ function collectInlineViewportDirtyRanges(
   return mergeDirtyRanges(dirtyRanges);
 }
 
+function collectActiveMathDirtyRanges(
+  tr: Transaction,
+  activeChanged: boolean,
+  beforeActive: Pick<MathSemantics, "from" | "to"> | null | undefined,
+  afterActive: Pick<MathSemantics, "from" | "to"> | null | undefined,
+): DirtyRange[] {
+  if (!activeChanged) return [];
+
+  const ranges: DirtyRange[] = [];
+  if (beforeActive) {
+    ranges.push(tr.docChanged ? mapMathRegionDirtyRange(beforeActive, tr.changes) : beforeActive);
+  }
+  if (afterActive) {
+    ranges.push(afterActive);
+  }
+  return mergeDirtyRanges(ranges);
+}
+
 function equationNumberingChanged(
   before: DocumentAnalysis,
   after: DocumentAnalysis,
@@ -561,7 +579,7 @@ const mathDecorationField = createDecorationStateField({
         if (docChangeOnlyShiftsMath && !mathPositionsMayShift) return false;
         return regionsBefore !== regionsAfter || mathPositionsMayShift;
       },
-      contextChanged: () => inlineViewportChanged,
+      contextChanged: () => inlineViewportChanged || activeMathChanged,
       contextUpdateMode: "dirty-ranges",
       // Edits after every math range can keep the DecorationSet by identity.
       // The "keep" branch below still maps when the actual decoration set
@@ -571,7 +589,7 @@ const mathDecorationField = createDecorationStateField({
         if (tr.annotation(programmaticDocumentChangeAnnotation) === true) {
           return true;
         }
-        if (mathMacrosChanged(tr) || activeMathChanged) {
+        if (mathMacrosChanged(tr)) {
           return true;
         }
         if (docChangeOnlyShiftsMath) {
@@ -589,25 +607,41 @@ const mathDecorationField = createDecorationStateField({
           && equationNumberingChanged(analysisBefore, analysisAfter);
       },
       dirtyRanges: (_transaction, context) => {
-        if (!context.docChanged && inlineViewportChanged) {
-          return collectInlineViewportDirtyRanges(
-            regionsAfter,
-            beforeInlineViewport,
-            afterInlineViewport,
-          );
+        const activeDirtyRanges = collectActiveMathDirtyRanges(
+          tr,
+          activeMathChanged,
+          beforeActive,
+          afterActive,
+        );
+
+        if (!context.docChanged) {
+          const viewportDirtyRanges = inlineViewportChanged
+            ? collectInlineViewportDirtyRanges(
+              regionsAfter,
+              beforeInlineViewport,
+              afterInlineViewport,
+            )
+            : [];
+          return mergeDirtyRanges([
+            ...viewportDirtyRanges,
+            ...activeDirtyRanges,
+          ]);
         }
 
         if (!context.docChanged || !context.semanticChanged) {
-          return [];
+          return activeDirtyRanges;
         }
 
-        if (docChangeOnlyShiftsMath || mathChangeSummary.changedMathDirtyRanges.length === 0) {
-          return [];
-        }
-
+        const mathDirtyRanges =
+          docChangeOnlyShiftsMath || mathChangeSummary.changedMathDirtyRanges.length === 0
+            ? []
+            : [
+              ...dirtyRangesFromChanges(tr.changes, expandChangeRange),
+              ...mathChangeSummary.changedMathDirtyRanges,
+            ];
         return mergeDirtyRanges([
-          ...dirtyRangesFromChanges(tr.changes, expandChangeRange),
-          ...mathChangeSummary.changedMathDirtyRanges,
+          ...mathDirtyRanges,
+          ...activeDirtyRanges,
         ]);
       },
     });
