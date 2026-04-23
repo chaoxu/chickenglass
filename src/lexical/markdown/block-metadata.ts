@@ -5,6 +5,7 @@ import {
   isKnownManifestBlockType,
 } from "../../constants/block-manifest";
 import type { FrontmatterConfig } from "../../lib/frontmatter";
+export { normalizeBlockType } from "../../lib/markdown/block-types";
 
 const BLOCK_LABELS = new Map<string, string>([
   ...BLOCK_MANIFEST_ENTRIES.map((entry) => [
@@ -22,17 +23,6 @@ export function humanizeBlockType(blockType: string | undefined): string {
 
 export function isKnownBlockType(blockType: string): boolean {
   return isKnownManifestBlockType(blockType);
-}
-
-export function normalizeBlockType(blockType: string | undefined, title: string | undefined): string {
-  if (blockType) {
-    return blockType;
-  }
-  const trimmedTitle = title?.trim();
-  if (!trimmedTitle) {
-    return "block";
-  }
-  return trimmedTitle.toLowerCase().replace(/\s+/g, "-");
 }
 
 export function resolveBlockTitle(blockType: string, config?: FrontmatterConfig): string {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { DocumentLabelReference } from "../app/markdown/label-parser";
-import { buildDocumentLabelParseSnapshot } from "../app/markdown/label-parser";
+import type { DocumentLabelReference } from "../lib/markdown/label-parser";
+import { buildDocumentLabelParseSnapshot } from "../lib/markdown/label-parser";
 import { buildCitationBacklinkMap } from "./bibliography";
 import type { BibStore, CslJsonItem } from "./csl-json";
 import {

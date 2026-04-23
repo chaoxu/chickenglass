@@ -1,12 +1,12 @@
 import type { HeadingDefinition } from "./headings";
-import { extractHeadingDefinitions } from "./headings";
-import { maskMarkdownCodeSpansAndBlocks } from "./masking";
-import { measureSync } from "../perf";
-import { collectSourceBlockRanges } from "../../lexical/markdown/block-scanner";
+import { collectSourceBlockRanges } from "./block-scanner";
 import {
   parseStructuredDisplayMathRaw,
   parseStructuredFencedDivRaw,
-} from "../../lexical/markdown/block-syntax";
+} from "./block-syntax";
+import { extractHeadingDefinitions } from "./headings";
+import { maskMarkdownCodeSpansAndBlocks } from "./masking";
+import { measureSync } from "../perf";
 import { scanReferenceTokens } from "../reference-tokens";
 
 export interface DocumentLabelReference {

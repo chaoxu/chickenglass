@@ -34,16 +34,6 @@ export const BOUNDARY_RULES = [
         target: "src/app/components/ui/context-menu.tsx",
         reason: "#1375 tracks moving the app UI context-menu dependency out of lib",
       },
-      {
-        file: "src/lib/markdown/label-parser.ts",
-        target: "src/lexical/markdown/block-scanner.ts",
-        reason: "#1373 tracks moving shared label parsing off Lexical internals",
-      },
-      {
-        file: "src/lib/markdown/label-parser.ts",
-        target: "src/lexical/markdown/block-syntax.ts",
-        reason: "#1373 tracks moving shared label parsing off Lexical internals",
-      },
     ],
   },
   {
@@ -62,18 +52,7 @@ export const BOUNDARY_RULES = [
     name: "src/citations must not import app/render/runtime modules",
     from: ["citations"],
     to: ["app", "lexical", "render"],
-    allow: [
-      {
-        file: "src/citations/citation-render-data.ts",
-        target: "src/app/markdown/label-parser.ts",
-        reason: "#1372/#1373 track removing app markdown shims from citation parsing",
-      },
-      {
-        file: "src/citations/markdown-citations.ts",
-        target: "src/app/markdown/labels.ts",
-        reason: "#1372/#1373 track removing app markdown shims from citation parsing",
-      },
-    ],
+    allow: [],
   },
   {
     name: "src/debug must not depend on app/editor/runtime surfaces",

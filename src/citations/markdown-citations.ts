@@ -1,4 +1,4 @@
-import type { DocumentLabelReference } from "../app/markdown/labels";
+import type { DocumentLabelReference } from "../lib/markdown/label-parser";
 import type { BibStore } from "./bibtex-parser";
 import type { CitationBacklink, CitationCluster } from "./csl-processor";
 

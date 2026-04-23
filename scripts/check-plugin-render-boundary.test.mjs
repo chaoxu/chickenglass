@@ -208,6 +208,39 @@ describe("import boundary checker", () => {
     }])).toEqual([]);
   });
 
+  it("rejects src/lib imports from Lexical internals", () => {
+    const repoRoot = "/repo";
+    const libFile = path.join(repoRoot, "src", "lib", "markdown", "label-parser.ts");
+
+    expect(
+      findBoundaryViolations(
+        [
+          {
+            filePath: libFile,
+            sourceText: 'import { x } from "../../lexical/markdown/block-scanner";',
+          },
+        ],
+        repoRoot,
+        [
+          {
+            name: "lib neutral",
+            from: ["lib"],
+            to: ["lexical"],
+            allow: [],
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        filePath: libFile,
+        line: 1,
+        rule: "lib neutral",
+        specifier: "../../lexical/markdown/block-scanner",
+        targetPath: null,
+      },
+    ]);
+  });
+
   it("ignores test files when enforcing production boundary rules", () => {
     const repoRoot = "/repo";
 
