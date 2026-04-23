@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -19,6 +20,53 @@ function fileExists(relativePath: string): boolean {
 
 function fileText(relativePath: string): string {
   return readFileSync(resolve(ROOT, relativePath), "utf8");
+}
+
+function moduleSpecifiers(relativePath: string): string[] {
+  const filePath = resolve(ROOT, relativePath);
+  const sourceText = readFileSync(filePath, "utf8");
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const specifiers: string[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifiers.push(node.arguments[0].text);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return specifiers;
+}
+
+function importsModule(relativePath: string, specifier: string): boolean {
+  return moduleSpecifiers(relativePath).includes(specifier);
+}
+
+function importsMatching(
+  relativePath: string,
+  predicate: (specifier: string) => boolean,
+): boolean {
+  return moduleSpecifiers(relativePath).some(predicate);
 }
 
 // ─── Issue #87: Declarative block plugins from YAML ──────────────────────────
@@ -595,7 +643,7 @@ describe("#284 — FileTree controller extraction", () => {
 describe("#288 — Headless Tree explorer migration", () => {
   it("file tree controller uses Headless Tree", () => {
     const controller = fileText("src/app/hooks/use-file-tree-controller.ts");
-    expect(controller).toContain('from "@headless-tree/react"');
+    expect(importsModule("src/app/hooks/use-file-tree-controller.ts", "@headless-tree/react")).toBe(true);
     expect(controller).toContain("useTree<FileEntry>");
     expect(controller).toContain("syncDataLoaderFeature");
     expect(controller).toContain("hotkeysCoreFeature");
@@ -631,7 +679,7 @@ describe("#309 — export theme tokens", () => {
     const exportFile = fileText("src/app/export.ts");
 
     expect(mod.exportDocument).toBeDefined();
-    expect(exportFile).toContain("./tauri-client/export");
+    expect(importsModule("src/app/export.ts", "./tauri-client/export")).toBe(true);
     expect(exportFile).not.toContain("markdownToHtml");
     expect(exportFile).not.toContain("buildHtmlDocument");
     expect("_resolveExportThemeTokensForTest" in mod).toBe(false);
@@ -931,7 +979,9 @@ describe("#299 — centralized block manifest and CSS registry", () => {
     expect(specialBehaviorHandlers).toContain("specialBehaviorHandlers");
     expect(pluginRenderChrome).toContain("PluginRenderAdapter");
     expect(pluginRenderChrome).toContain("addPluginMarkerReplacement");
-    expect(decorationBuilder).not.toMatch(/from ["']\.\.\/render\//);
+    expect(importsMatching("src/plugins/decoration-builder.ts", (specifier) =>
+      specifier.startsWith("../render/")
+    )).toBe(false);
     expect(pluginRender).toContain("renderDecorations?.addBodyDecorations");
     // #374 and #1094: special-behavior dispatch remains centralized for shared cases.
     expect(specialBehaviorHandlers).toContain("applySpecialBehavior");
@@ -942,15 +992,16 @@ describe("#1092 — plugin-owned render adapter seam", () => {
   it("defines the plugin render contract without reverse imports", async () => {
     const contract = await import("../state/plugin-render-adapter");
     const contractFile = fileText("src/state/plugin-render-adapter.ts");
-    const compatibilityShim = fileText("src/plugins/plugin-render-adapter.ts");
 
     expect(contract.addPluginMarkerReplacement).toBeDefined();
     expect(contract.pushPluginHiddenDecoration).toBeDefined();
     expect(contract.pushPluginWidgetDecoration).toBeDefined();
     expect(contractFile).toContain("export interface PluginRenderAdapter");
     expect(contractFile).toContain("export interface PluginRenderWidget");
-    expect(contractFile).not.toMatch(/from "\.\.\/render\//);
-    expect(compatibilityShim).toContain("../state/plugin-render-adapter");
+    expect(importsMatching("src/state/plugin-render-adapter.ts", (specifier) =>
+      specifier.startsWith("../render/")
+    )).toBe(false);
+    expect(importsModule("src/plugins/plugin-render-adapter.ts", "../state/plugin-render-adapter")).toBe(true);
   });
 
   it("routes block chrome through the render adapter", () => {
@@ -971,18 +1022,20 @@ describe("#1092 — plugin-owned render adapter seam", () => {
     expect(renderIndex).toContain("blockRenderPlugin");
     expect(pluginsIndex).not.toContain("blockRenderPlugin");
     expect(pluginRender).toContain("pluginRenderAdapter");
-    expect(pluginRender).toContain("./plugin-adapters/chrome");
+    expect(importsModule("src/render/plugin-render.ts", "./plugin-adapters/chrome")).toBe(true);
     expect(decorationBuilder).toContain("pushPluginHiddenDecoration");
-    expect(decorationBuilder).not.toMatch(/from ["']\.\.\/render\//);
+    expect(importsMatching("src/plugins/decoration-builder.ts", (specifier) =>
+      specifier.startsWith("../render/")
+    )).toBe(false);
     expect(fileExists("src/plugins/embed-plugin.ts")).toBe(false);
     expect(chrome).toContain("PluginRenderAdapter");
     expect(chrome).toContain("adapter.createHeaderWidget");
-    expect(pluginRender).not.toContain("../render/plugin-render-adapter");
-    expect(pluginRender).not.toContain("./plugin-render-chrome");
-    expect(decorationBuilder).not.toContain("./plugin-render-chrome");
-    expect(decorationBuilder).not.toContain("./plugin-render-embed");
-    expect(chrome).toContain("../../state/plugin-render-adapter");
-    expect(chrome).not.toContain("../plugin-render-adapter");
+    expect(importsModule("src/render/plugin-render.ts", "../render/plugin-render-adapter")).toBe(false);
+    expect(importsModule("src/render/plugin-render.ts", "./plugin-render-chrome")).toBe(false);
+    expect(importsModule("src/plugins/decoration-builder.ts", "./plugin-render-chrome")).toBe(false);
+    expect(importsModule("src/plugins/decoration-builder.ts", "./plugin-render-embed")).toBe(false);
+    expect(importsModule("src/render/plugin-adapters/chrome.ts", "../../state/plugin-render-adapter")).toBe(true);
+    expect(importsModule("src/render/plugin-adapters/chrome.ts", "../plugin-render-adapter")).toBe(false);
   });
 });
 
@@ -1008,13 +1061,12 @@ describe("#1074 — plugin/render import direction", () => {
 
 describe("#1095 — fence protection owns its code-block structure dependency", () => {
   it("keeps fence protection out of render internals", () => {
-    const fenceProtection = fileText("src/plugins/fence-protection.ts");
-    const codeBlockRender = fileText("src/render/code-block-render.ts");
-
     expect(fileExists("src/state/code-block-structure.ts")).toBe(true);
-    expect(fenceProtection).toContain('../state/code-block-structure');
-    expect(fenceProtection).not.toMatch(/from "\.\.\/render\//);
-    expect(codeBlockRender).toContain('../state/code-block-structure');
+    expect(importsModule("src/plugins/fence-protection.ts", "../state/code-block-structure")).toBe(true);
+    expect(importsMatching("src/plugins/fence-protection.ts", (specifier) =>
+      specifier.startsWith("../render/")
+    )).toBe(false);
+    expect(importsModule("src/render/code-block-render.ts", "../state/code-block-structure")).toBe(true);
   });
 });
 
@@ -1182,14 +1234,13 @@ describe("#317 — typed frontend Tauri client", () => {
   });
 
   it("feature code uses the tauri-client layer instead of raw invoke strings", () => {
-    const tauriFs = fileText("src/app/tauri-fs.ts");
     const imageInsert = fileText("src/editor/image-insert.ts");
     const fileWatcher = fileText("src/app/file-watcher.ts");
     const exportModule = fileText("src/app/export.ts");
 
-    expect(tauriFs).toContain('./tauri-client/fs');
-    expect(fileWatcher).toContain("./tauri-client/watch");
-    expect(exportModule).toContain("./tauri-client/export");
+    expect(importsModule("src/app/tauri-fs.ts", "./tauri-client/fs")).toBe(true);
+    expect(importsModule("src/app/file-watcher.ts", "./tauri-client/watch")).toBe(true);
+    expect(importsModule("src/app/export.ts", "./tauri-client/export")).toBe(true);
     expect(imageInsert).not.toContain('@tauri-apps/api/core');
     expect(imageInsert).not.toContain("@tauri-apps/plugin-dialog");
     expect(fileWatcher).not.toContain('invokeWithPerf("watch_directory"');
@@ -1228,16 +1279,12 @@ describe("#308 — shared base editor extensions", () => {
   });
 
   it("keeps the shared base extension module behind the inline-editor compatibility shim", () => {
-    const editor = fileText("src/editor/editor.ts");
-    const inlineEditor = fileText("src/inline-editor.ts");
-    const inlineEditorShim = fileText("src/editor/inline-editor.ts");
-
-    expect(editor).toContain("./base-editor-extensions");
-    expect(inlineEditor).toContain("./editor/base-editor-extensions");
-    expect(inlineEditorShim).toContain('../inline-editor');
-    expect(inlineEditor).not.toContain("../parser/math-backslash");
-    expect(inlineEditor).not.toContain("../parser/highlight");
-    expect(inlineEditor).not.toContain("../parser/strikethrough");
+    expect(importsModule("src/editor/editor.ts", "./base-editor-extensions")).toBe(true);
+    expect(importsModule("src/inline-editor.ts", "./editor/base-editor-extensions")).toBe(true);
+    expect(importsModule("src/editor/inline-editor.ts", "../inline-editor")).toBe(true);
+    expect(importsModule("src/inline-editor.ts", "../parser/math-backslash")).toBe(false);
+    expect(importsModule("src/inline-editor.ts", "../parser/highlight")).toBe(false);
+    expect(importsModule("src/inline-editor.ts", "../parser/strikethrough")).toBe(false);
   });
 });
 
@@ -1294,11 +1341,10 @@ describe("#1091 — document state module contract", () => {
   });
 
   it("routes a representative renderer through a state composition module", () => {
-    const referenceRender = fileText("src/render/reference-render.ts");
     const referenceRenderState = fileText("src/state/reference-render-state.ts");
 
     expect(fileExists("src/state/reference-render-state.ts")).toBe(true);
-    expect(referenceRender).toContain("../state/reference-render-state");
+    expect(importsModule("src/render/reference-render.ts", "../state/reference-render-state")).toBe(true);
     expect(referenceRenderState).toContain("getReferenceRenderState");
     expect(referenceRenderState).toContain("referenceRenderDependenciesChanged");
   });
@@ -1322,20 +1368,14 @@ describe("#314 — document surface renderer layer", () => {
   });
 
   it("routes title, tooltip, hover, and chrome surfaces through owned render layers", () => {
-    const headingChrome = fileText("src/app/components/heading-chrome.tsx");
-    // Tooltip rendering moved to use-footnote-tooltip (T27 decomposition)
-    const footnoteTooltip = fileText("src/app/hooks/use-footnote-tooltip.ts");
-    const hoverPreview = fileText("src/render/hover-preview.ts");
     const previewBlockRenderer = fileText("src/render/preview-block-renderer.ts");
-    const pluginRenderChrome = fileText("src/render/plugin-adapters/chrome.ts");
-    const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
-    expect(headingChrome).toContain("../../document-surfaces");
-    expect(footnoteTooltip).toContain("../../document-surfaces");
-    expect(hoverPreview).toContain("./preview-block-renderer");
+    expect(importsModule("src/app/components/heading-chrome.tsx", "../../document-surfaces")).toBe(true);
+    expect(importsModule("src/app/hooks/use-footnote-tooltip.ts", "../../document-surfaces")).toBe(true);
+    expect(importsModule("src/render/hover-preview.ts", "./preview-block-renderer")).toBe(true);
     expect(previewBlockRenderer).toContain("renderInlineMarkdown");
-    expect(pluginRenderChrome).toContain("../../document-surfaces");
-    expect(frontmatterRender).toContain("../document-surfaces");
+    expect(importsModule("src/render/plugin-adapters/chrome.ts", "../../document-surfaces")).toBe(true);
+    expect(importsModule("src/editor/frontmatter-render.ts", "../document-surfaces")).toBe(true);
   });
 });
 
@@ -1355,7 +1395,7 @@ describe("#315 — editor session subsystem", () => {
     expect(appMainShell).toContain("currentPath");
     expect(appMainShell).not.toContain("TabBar");
     expect(appMainShell).not.toContain("setOpenTabs");
-    expect(sessionHook).toContain("../editor-session-runtime");
+    expect(importsModule("src/app/hooks/use-editor-session.ts", "../editor-session-runtime")).toBe(true);
     expect(sessionHook).toContain("createEditorSessionService");
     expect(runtime).toContain("createEditorSessionRuntime");
     expect(persistence).toContain("currentDocument");
@@ -1375,9 +1415,9 @@ describe("#967 — document session service", () => {
     expect(fileExists("src/app/editor-session-service.ts")).toBe(true);
     expect(fileExists("src/app/editor-session-runtime.ts")).toBe(true);
     expect(fileExists("src/app/editor-session-persistence.ts")).toBe(true);
-    expect(sessionHook).toContain("../editor-session-service");
-    expect(sessionHook).toContain("../editor-session-runtime");
-    expect(sessionHook).toContain("../editor-session-persistence");
+    expect(importsModule("src/app/hooks/use-editor-session.ts", "../editor-session-service")).toBe(true);
+    expect(importsModule("src/app/hooks/use-editor-session.ts", "../editor-session-runtime")).toBe(true);
+    expect(importsModule("src/app/hooks/use-editor-session.ts", "../editor-session-persistence")).toBe(true);
     expect(sessionHook).toContain("syncExternalChange");
     expect(sessionHook).not.toContain("buffers:");
     expect(sessionHook).not.toContain("liveDocs:");
@@ -1397,11 +1437,8 @@ describe("#316 — theme contract and surface token map", () => {
   });
 
   it("separates theme DOM application from stateful theme orchestration", () => {
-    const useTheme = fileText("src/app/hooks/use-theme.ts");
-    const themeConfig = fileText("src/editor/theme-config.ts");
-
-    expect(useTheme).toContain("../theme-dom");
-    expect(themeConfig).toContain("../theme-contract");
+    expect(importsModule("src/app/hooks/use-theme.ts", "../theme-dom")).toBe(true);
+    expect(importsModule("src/editor/theme-config.ts", "../theme-contract")).toBe(true);
   });
 });
 
