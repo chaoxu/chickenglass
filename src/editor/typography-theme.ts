@@ -61,7 +61,7 @@ export const typographyThemeStyles = {
   },
 
   /* Highlight styling (==text==) — uses --cf-mark-bg for visual parity
-   * with read mode's <mark> element (#406). */
+   * with preview-surface <mark> elements (#406). */
   ".cf-highlight": {
     backgroundColor: "var(--cf-mark-bg, rgba(255, 255, 0, 0.2))",
     borderRadius: "var(--cf-border-radius)",

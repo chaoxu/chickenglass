@@ -868,16 +868,17 @@ describe("#298 — canonical document analysis pass", () => {
 
   it("routes high-overlap consumers through shared document analysis", () => {
     const extract = fileText("src/index/extract.ts");
-    const htmlEntry = fileText("src/app/markdown-to-html.ts");
-    const htmlDocument = fileText("src/app/markdown-to-html/document.ts");
+    const previewRenderer = fileText("src/render/preview-block-renderer.ts");
     const crossrefs = fileText("src/index/crossref-resolver.ts");
     const references = fileText("src/render/reference-render.ts");
 
     expect(extract).toMatch(
       /getDocumentAnalysis|rememberDocumentAnalysis|getCachedDocumentAnalysis|rememberCachedDocumentAnalysis/,
     );
-    expect(htmlEntry).toContain('export { markdownToHtml } from "./markdown-to-html/document"');
-    expect(htmlDocument).toMatch(/analyze(?:Document|Markdown)Semantics/);
+    expect(fileExists("src/app/markdown-to-html.ts")).toBe(false);
+    expect(fileExists("src/app/markdown-to-html/document.ts")).toBe(false);
+    expect(previewRenderer).toContain("analyzeDocumentSemantics");
+    expect(previewRenderer).toContain("renderInlineMarkdown");
     expect(crossrefs).toMatch(/documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog/);
     expect(references).toMatch(
       /documentAnalysisField|getDocumentAnalysisOrRecompute|buildEditorDocumentReferenceCatalog|reference-render-state|getReferenceRenderAnalysis|getReferenceRenderState/,
@@ -1320,17 +1321,19 @@ describe("#314 — document surface renderer layer", () => {
     expect(fileExists("src/document-surfaces.ts")).toBe(true);
   });
 
-  it("routes title, tooltip, hover, and chrome surfaces through the shared surface layer", () => {
+  it("routes title, tooltip, hover, and chrome surfaces through owned render layers", () => {
     const headingChrome = fileText("src/app/components/heading-chrome.tsx");
     // Tooltip rendering moved to use-footnote-tooltip (T27 decomposition)
     const footnoteTooltip = fileText("src/app/hooks/use-footnote-tooltip.ts");
     const hoverPreview = fileText("src/render/hover-preview.ts");
+    const previewBlockRenderer = fileText("src/render/preview-block-renderer.ts");
     const pluginRenderChrome = fileText("src/render/plugin-adapters/chrome.ts");
     const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
 
     expect(headingChrome).toContain("../../document-surfaces");
     expect(footnoteTooltip).toContain("../../document-surfaces");
-    expect(hoverPreview).toContain("../document-surfaces");
+    expect(hoverPreview).toContain("./preview-block-renderer");
+    expect(previewBlockRenderer).toContain("renderInlineMarkdown");
     expect(pluginRenderChrome).toContain("../../document-surfaces");
     expect(frontmatterRender).toContain("../document-surfaces");
   });

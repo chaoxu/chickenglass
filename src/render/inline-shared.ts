@@ -1,6 +1,6 @@
 /**
  * Shared inline rendering utilities used by both the DOM renderer
- * (`inline-render.ts`) and the HTML string renderer (`markdown-to-html.ts`).
+ * (`inline-render.ts`) and rich preview renderers.
  *
  * `buildKatexOptions` and `isSafeUrl` now live in `src/lib/` as they are
  * CM6-free utilities needed across multiple layers. Re-exported here for

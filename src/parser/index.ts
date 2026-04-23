@@ -47,7 +47,7 @@ export const markdownExtensions = [
 ];
 
 /**
- * Parser extensions for the preview HTML renderer (markdown-to-html.ts).
+ * Parser extensions for in-app preview renderers.
  *
  * Same as `markdownExtensions` but WITHOUT `removeBlockquote`, so that
  * standard `>` blockquote syntax is parsed into Blockquote nodes and

@@ -11,7 +11,7 @@
  * them before bundling; they create no runtime dependency.
  *
  * Static value imports from `src/app/` utilities that are themselves
- * standalone-safe (e.g. `markdown-to-html.ts`) are not flagged here — those
+ * standalone-safe are not flagged here — those
  * are a directory-placement issue, not a coupling issue, and are tracked
  * separately for relocation.
  *

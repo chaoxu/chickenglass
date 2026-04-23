@@ -5,7 +5,7 @@
 - **Pandoc-free editing loop**: Pandoc is only for export. CM6 edits markdown through Lezer + KaTeX directly. Lexical edits a document model and serializes Pandoc-flavored markdown at the boundary.
 - **Editor surfaces are runtime-selected**: Coflats has one app shell, file IO layer, semantics pipeline, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 or Lexical editor surfaces, not in duplicated app flows.
 - **No in-app read mode**: The app exposes CM6 rich, Lexical WYSIWYG, and source modes. Do not implement, fix, or test a separate read-mode surface.
-- **HTML export is Pandoc-owned**: HTML/PDF/LaTeX export goes through the native Pandoc command boundary. `markdown-to-html.ts` is only for in-app preview/read-style surfaces; keep it CM6-free and pass data as plain objects (e.g., `BibStore`), not CM6 state fields.
+- **HTML export is Pandoc-owned**: HTML/PDF/LaTeX export goes through the native Pandoc command boundary. In-app hover and chrome previews use the shared rich preview renderer, not a standalone export-style HTML renderer.
 - **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem." Render-specific behavior follows the [Plugin Render Contract](./plugin-render-contract.md).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
 

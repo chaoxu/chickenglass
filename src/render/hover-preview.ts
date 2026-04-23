@@ -21,11 +21,15 @@ import {
   resolveCrossref,
 } from "../index/crossref-resolver";
 import { blockCounterField, type NumberedBlock } from "../state/block-counter";
+import { frontmatterField } from "../state/frontmatter-state";
 import { imageUrlField } from "../state/image-url";
 import { mathMacrosField } from "../state/math-macros";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { renderKatex } from "./math-widget";
-import { renderBlockContentToDom, type BlockContentOptions } from "../document-surfaces";
+import {
+  renderPreviewBlockContentToDom,
+  type PreviewBlockRenderOptions,
+} from "./preview-block-renderer";
 import { createPreviewSurfaceBody } from "../preview-surface";
 import { documentPathFacet, type BlockCounterEntry } from "../lib/types";
 import { documentAnalysisField } from "../state/document-analysis";
@@ -156,10 +160,10 @@ function findEquationSource(view: EditorView, id: string): string | undefined {
 // ── Tooltip content builders ────────────────────────────────────────────────
 
 /**
- * Build BlockContentOptions from the current CM6 state.
+ * Build block-preview render options from the current CM6 state.
  *
  * Extracts bibliography, CSL processor, and block counters so that
- * `renderBlockContentToDom` can resolve citations and cross-references
+ * `renderPreviewBlockContentToDom` can resolve citations and cross-references
  * inside hover preview bodies (e.g. `[@cormen2009]` or `[@thm:foo]`
  * within a theorem body).
  */
@@ -212,12 +216,14 @@ function buildBlockPreviewMediaState(
   };
 }
 
-function buildBlockContentOptions(
+function buildPreviewBlockOptions(
   view: EditorView,
   macros: Record<string, string>,
   imageUrlOverrides?: ReadonlyMap<string, string>,
-): BlockContentOptions {
+): PreviewBlockRenderOptions {
   const { store, cslProcessor } = view.state.field(bibDataField);
+  const frontmatter = view.state.field(frontmatterField, false);
+  const analysis = view.state.field(documentAnalysisField, false);
   const counterState = view.state.field(blockCounterField, false);
   const registry = view.state.field(pluginRegistryField, false);
 
@@ -239,10 +245,14 @@ function buildBlockContentOptions(
 
   return {
     macros,
+    config: {
+      ...frontmatter?.config,
+      math: macros,
+    },
     bibliography: store.size > 0 ? store : undefined,
     cslProcessor: store.size > 0 ? cslProcessor : undefined,
     blockCounters,
-    includeBibliography: false,
+    ...(analysis ? { referenceSemantics: analysis } : {}),
     documentPath: view.state.facet(documentPathFacet),
     imageUrlOverrides,
   };
@@ -370,10 +380,10 @@ function buildBlockPreviewPlan(
   return {
     buildBody: () => {
       const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
-      renderBlockContentToDom(
+      renderPreviewBlockContentToDom(
         body,
         text,
-        buildBlockContentOptions(view, macros, mediaState.imageUrlOverrides),
+        buildPreviewBlockOptions(view, macros, mediaState.imageUrlOverrides),
       );
       replacePdfPreviewImages(body, mediaState.readyPdfPreviews);
       normalizeWidePreviewContent(body);

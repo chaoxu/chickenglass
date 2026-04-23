@@ -2,7 +2,6 @@ import { markdown } from "@codemirror/lang-markdown";
 import type { ChangeSpec, EditorState } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { markdownToHtml } from "../app/markdown-to-html";
 import type { CslJsonItem } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
@@ -30,6 +29,7 @@ import {
   referenceRenderDependenciesChanged,
   referenceRenderPlugin,
 } from "./reference-render";
+import { renderPreviewBlockContentToDom } from "./preview-block-renderer";
 
 const testPlugins: readonly BlockPlugin[] = [
   makeBlockPlugin({ name: "theorem", counter: "theorem", title: "Theorem" }),
@@ -487,7 +487,7 @@ describe("collectReferenceRanges", () => {
     expect(widgetClass(ref)).toBe("MixedClusterWidget");
   });
 
-  it("re-registers shared processors after snippet rendering mutates citation order (#788)", async () => {
+  it("keeps shared processors stable after preview rendering (#788)", async () => {
     const doc = "See [@karger2000] and [@stein2001].";
     const processor = await CslProcessor.create([karger, stein]);
     view = createView(doc, doc.length);
@@ -495,7 +495,8 @@ describe("collectReferenceRanges", () => {
 
     collectReferenceRanges(view, store);
 
-    markdownToHtml("Preview [@karger2000].", {
+    const preview = document.createElement("div");
+    renderPreviewBlockContentToDom(preview, "Preview [@karger2000].", {
       bibliography: store,
       cslProcessor: processor,
     });

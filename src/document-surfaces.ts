@@ -1,5 +1,4 @@
 import type { InlineRenderSurface } from "./inline-surface";
-import { markdownToHtml, renderInline, type MarkdownToHtmlOptions } from "./app/markdown-to-html";
 import { renderInlineMarkdown } from "./render/inline-render";
 
 export type DocumentSurfaceMode = InlineRenderSurface | "document-body";
@@ -45,43 +44,7 @@ export function renderDocumentFragmentToDom(
 export function renderDocumentFragmentToHtml(
   fragment: DocumentSurfaceFragment,
 ): string {
-  return renderInline(
-    fragment.text,
-    fragment.macros,
-    resolveSurface(fragment),
-  );
-}
-
-/**
- * Options for block-content rendering, extending `MarkdownToHtmlOptions`
- * minus `sectionNumbers` (irrelevant for hover preview fragments).
- */
-export type BlockContentOptions = Pick<
-  MarkdownToHtmlOptions,
-  | "macros"
-  | "bibliography"
-  | "cslProcessor"
-  | "blockCounters"
-  | "includeBibliography"
-  | "documentPath"
-  | "imageUrlOverrides"
->;
-
-/**
- * Render markdown content with full block-level support into a DOM element.
- *
- * Unlike `renderDocumentFragmentToDom` (inline-only), this handles display
- * math, paragraphs, lists, blockquotes, and other block structures by using
- * the Lezer tree-walking HTML renderer from `markdown-to-html.ts`.
- *
- * Used by hover previews where block content (e.g. fenced div bodies
- * containing `$$...$$`) must render correctly.
- */
-export function renderBlockContentToDom(
-  container: HTMLElement,
-  text: string,
-  options?: BlockContentOptions,
-): void {
-  if (!text) return;
-  container.innerHTML = markdownToHtml(text, options);
+  const scratch = document.createElement("span");
+  renderDocumentFragmentToDom(scratch, fragment);
+  return scratch.innerHTML;
 }

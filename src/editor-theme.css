@@ -41,7 +41,7 @@
   --cf-hover: rgba(0, 0, 0, 0.08);
   --cf-active: rgba(0, 0, 0, 0.12);
 
-  /* Highlight (==text==) background — shared between editor and read mode */
+  /* Highlight (==text==) background — shared between editor and preview surfaces */
   --cf-mark-bg: rgba(255, 255, 0, 0.2);
   --cf-math-error-fg: #c00;
   --cf-math-error-bg: rgba(255, 0, 0, 0.05);
@@ -213,7 +213,7 @@
 }
 
 /* Source mode uses monospace font at a smaller size (~11pt) for raw editing.
- * Rich/read mode keeps the default 16px serif via base-theme.ts. */
+ * Rich mode keeps the default 16px serif via base-theme.ts. */
 .cf-source-mode .cm-content {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 11pt;
@@ -914,11 +914,11 @@
   background: var(--cf-hover);
 }
 
-/* ── Fenced div blocks (theorem, proof, etc.) — shared by rich & read mode ──
+/* ── Fenced div blocks (theorem, proof, etc.) — shared by rich previews ──
  * Unscoped cf-block-* rules produced by both CM6 decorations (rich mode)
- * and markdownToHtml (read mode). In rich mode, CM6's
+ * and CM6-owned preview surfaces. In rich mode, CM6's
  * EditorView.theme auto-generates equivalent font-style rules under
- * .cm-editor scope; these globals serve read mode.
+ * .cm-editor scope; these globals serve non-editor preview DOM.
  * Margin and proof ::after use :not(.cm-line) to avoid affecting CM6 lines. */
 .cf-block-theorem { font-style: var(--cf-block-theorem-style); }
 .cf-block-lemma { font-style: var(--cf-block-lemma-style); }
@@ -934,7 +934,7 @@
 .cf-block-figure { font-style: var(--cf-block-figure-style); }
 .cf-block-table { font-style: var(--cf-block-table-style); }
 
-/* Block margin — only on wrapper divs (read mode), not on
+/* Block margin — only on wrapper divs outside CM6, not on
  * CM6 .cm-line elements that carry the same cf-block-* class names.
  * All block divs carry the shared "cf-block" base class. */
 .cf-block:not(.cm-line) {
@@ -946,7 +946,7 @@
   position: relative;
 }
 
-/* QED tombstone at end of proof — outside CM6 only (read mode).
+/* QED tombstone at end of proof — outside CM6 only.
  * Rich mode uses .cf-block-qed via CM6 line decoration on the last content
  * line instead. The :not(.cm-line) guard prevents this from firing on
  * CM6 line elements that carry the cf-block-proof class. */
@@ -988,7 +988,7 @@
   max-width: 100%;
 }
 
-/* Blockquote styling — cf-block-blockquote is unscoped (shared with read mode),
+/* Blockquote styling — cf-block-blockquote is unscoped (shared with preview DOM),
  * bare blockquote stays scoped to hover preview. */
 .cf-block-blockquote {
   border-left: 3px solid var(--cf-blockquote-border);
@@ -999,7 +999,7 @@
 
 /* Block header rendered label (e.g. "Theorem 1."): bold, normal style, inline.
  * Shared class cf-block-header-rendered is used by both CM6 widgets and
- * markdownToHtml output. The base font-weight/color is set in block-theme.ts
+ * preview output. The base font-weight/color is set in block-theme.ts
  * for CM6; display and font-style reset apply globally. */
 .cf-block-header-rendered {
   display: var(--cf-block-title-display);
@@ -1009,20 +1009,20 @@
 }
 
 /* ── Cross-references & citations ──────────────────────────────────────────
- * These classes are shared between editor (CM6 widgets) and read mode HTML.
+ * These classes are shared between editor (CM6 widgets) and preview DOM.
  *
- * Synchronized class pairs (editor <-> read mode):
- *   Editor: cf-crossref           <-> Read: a.cross-ref
- *   Editor: cf-crossref-unresolved (no read mode equivalent)
- *   Editor: cf-citation           <-> Read: span.cf-citation (same class)
- *   Editor: cf-citation-narrative <-> Read: (narrative cites inline in read mode)
- *   Editor: cf-math-error         <-> Read: .math-error
- *   Editor: cf-block-header-rendered <-> Read: strong.cf-block-header-rendered
- *   Editor: cf-block-{type}       <-> Read: div.cf-block-{type}
- *   Editor: cf-math-display       <-> Read: div.cf-math-display
- *   Editor: cf-bold               <-> Read: strong.cf-bold
- *   Editor: cf-italic             <-> Read: em.cf-italic
- *   Editor: cf-strikethrough      <-> Read: del.cf-strikethrough
+ * Synchronized class pairs (editor <-> preview):
+ *   Editor: cf-crossref           <-> Preview: a.cross-ref
+ *   Editor: cf-crossref-unresolved (no preview equivalent)
+ *   Editor: cf-citation           <-> Preview: span.cf-citation (same class)
+ *   Editor: cf-citation-narrative <-> Preview: narrative cites inline
+ *   Editor: cf-math-error         <-> Preview: .math-error
+ *   Editor: cf-block-header-rendered <-> Preview: strong.cf-block-header-rendered
+ *   Editor: cf-block-{type}       <-> Preview: div.cf-block-{type}
+ *   Editor: cf-math-display       <-> Preview: div.cf-math-display
+ *   Editor: cf-bold               <-> Preview: strong.cf-bold
+ *   Editor: cf-italic             <-> Preview: em.cf-italic
+ *   Editor: cf-strikethrough      <-> Preview: del.cf-strikethrough
  *   Editor: cf-highlight          <-> Read: mark.cf-highlight
  *   Editor: cf-inline-code        <-> Read: code.cf-inline-code
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -1058,7 +1058,7 @@
   font-size: 0.85em;
 }
 
-/* Inline code — shared between editor (CM6 mark decoration), read mode,
+/* Inline code — shared between editor (CM6 mark decoration), preview DOM,
  * sidenote margin entries, hover previews, and footnote section widgets.
  * The CM6 theme (typography-theme.ts) applies the same class inside the
  * editor; this global rule covers all non-CM6 surfaces. */

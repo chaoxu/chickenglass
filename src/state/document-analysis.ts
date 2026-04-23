@@ -83,7 +83,7 @@ function completeSyntaxTree(state: EditorState) {
  * block rendering, block counters) read from this field instead of
  * independently walking the syntax tree.
  *
- * `markdown-to-html.ts` stays CM6-free and calls
+ * non-CM6 preview renderers stay CM6-free and call
  * `analyzeDocumentSemantics()` directly.
  */
 export const documentAnalysisField = StateField.define<DocumentAnalysis>({

@@ -69,9 +69,8 @@ export interface ConditionalWriteResult {
  *
  * Mirrors `NumberedBlock` from the CM6 block-counter state field but without
  * position data — only the fields needed for label formatting. Lives here so
- * that both the CM6-free preview renderer (`markdown-to-html.ts`) and the
- * editor render layer can share the type without crossing the `src/app/`
- * boundary.
+ * that preview and editor render layers can share the type without crossing
+ * app/editor boundaries.
  */
 export interface BlockCounterEntry {
   /** The plugin class name (e.g. "theorem"). */

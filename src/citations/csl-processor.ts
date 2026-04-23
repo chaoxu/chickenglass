@@ -165,7 +165,7 @@ export class CslProcessor {
   private engine: CiteprocEngine | null = null;
   private styleXml: string;
   private engineRevision = 0;
-  // Registration state is shared across rich mode, read mode, and preview
+  // Registration state is shared across rich mode and preview
   // surfaces that reuse the same processor instance.
   private registeredCitationKey: string | null = null;
   private initPromise: Promise<void> | null = null;
@@ -447,7 +447,7 @@ function isCitationId(
  * one known bib entry.
  *
  * Used by both the CM6 editor (reference-render.ts) and preview renderer
- * (markdown-to-html.ts) before CSL registration, and by the bibliography
+ * preview renderers before CSL registration, and by the bibliography
  * plugin to collect cited ids.
  */
 export function collectCitationMatches(
@@ -567,8 +567,8 @@ export function collectCitationBacklinkIndexFromReferences(
 /**
  * Register citation matches with a CSL processor in document order.
  *
- * Both the CM6 editor (citation-render.ts) and preview renderer
- * (markdown-to-html.ts) need this step so numeric styles assign numbers
+ * Both the CM6 editor (citation-render.ts) and preview renderers need this
+ * step so numeric styles assign numbers
  * in document order. Extracted here to avoid duplication.
  */
 export function registerCitationsWithProcessor(

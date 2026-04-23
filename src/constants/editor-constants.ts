@@ -12,7 +12,7 @@ export const defaultUIFontStack =
 /** Default prose stack for document content. */
 export const defaultContentFontStack = 'KaTeX_Main, "Times New Roman", serif';
 
-/** Default monospace stack, matching read mode code blocks. */
+/** Default monospace stack, matching preview code blocks. */
 export const defaultCodeFontStack = 'Monaco, "DejaVu Sans Mono", Consolas, monospace';
 
 /** UI font used throughout the app shell, theme-overridable via --cf-ui-font. */

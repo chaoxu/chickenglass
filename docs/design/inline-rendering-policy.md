@@ -9,13 +9,13 @@ rendered, degraded, or disallowed.
 
 ### `document-body`
 
-Full document rendering. Used by the CM6 rich-mode viewport and the HTML
-preview/read-mode path (`markdownToHtml`). Lexical has its own renderers, but
-shared chrome callers should follow the same surface policy. All inline
-and block constructs are rendered at full fidelity.
+Full document rendering. Used by the CM6 rich-mode viewport and shared
+hover/sidenote preview surfaces. Lexical has its own rich renderer for the
+WYSIWYG surface, but shared chrome callers should follow the same surface
+policy. All inline and block constructs are rendered at full fidelity.
 
-**Consumers:** `markdownToHtml()` preview/read-mode walker, CM6 ViewPlugins for
-paragraphs and list items.
+**Consumers:** shared preview surfaces and CM6 ViewPlugins for paragraphs and
+list items.
 
 ### `document-inline`
 
@@ -24,8 +24,6 @@ document but structurally restricted to a single line. Links, citations, and
 cross-references remain interactive.
 
 **Consumers:**
-- Heading text in read-mode previews (`renderHeading` in `markdown-to-html.ts`)
-- Fenced div titles in read-mode previews (`renderFencedDiv` in `markdown-to-html.ts`)
 - Block header widgets in rich mode (`plugin-render.ts`)
 - Frontmatter title widget in rich mode (`frontmatter-state.ts`)
 
@@ -85,9 +83,6 @@ default full-rendering mode. Both renderers define a union type internally:
 ```ts
 // src/render/inline-render.ts (DOM renderer)
 type DomInlineSurface = InlineRenderSurface | "document-body";
-
-// src/app/markdown-to-html.ts (HTML string renderer)
-type HtmlInlineSurface = InlineRenderSurface | "document-body";
 ```
 
 ### DOM renderer (`src/render/inline-render.ts`)
@@ -104,18 +99,11 @@ export function renderInlineMarkdown(
 Used by CM6 widgets that need to render inline markdown into a DOM element
 (block header labels, frontmatter title, sidenote margin, footnote section).
 
-### HTML string renderer (`src/app/markdown-to-html.ts`)
+### HTML string projection (`src/document-surfaces.ts`)
 
-```ts
-export function renderInline(
-  text: string,
-  macros?: Record<string, string>,
-  surface?: HtmlInlineSurface,  // defaults to "document-body"
-): string;
-```
-
-Used by preview surfaces and React components that set
-`dangerouslySetInnerHTML` (outline, breadcrumbs).
+`renderDocumentFragmentToHtml()` projects through the DOM renderer and returns
+the generated HTML for React chrome that needs `dangerouslySetInnerHTML`
+(outline, breadcrumbs).
 
 ### Policy selection helper (`src/inline-surface.ts`)
 
@@ -138,7 +126,7 @@ chrome-safe text. Used internally by both renderers.
    `ui-chrome-inline`.
 
 3. **No ad hoc inline subsets.** Every surface opts into one of the three
-   defined policies rather than inventing its own allowlist. New UI surfaces
+   defined policies rather than inventing their own allowlist. New UI surfaces
    should choose the appropriate tier.
 
 4. **Text content is always preserved.** Even when a node is degraded, its

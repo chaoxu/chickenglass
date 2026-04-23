@@ -6,6 +6,7 @@
  */
 
 import type { ReferenceClassification } from "../index/crossref-resolver";
+import type { SyntaxNode } from "@lezer/common";
 import type { InlineRenderSurface } from "../inline-surface";
 import { CSS } from "../constants/css-classes";
 import { CitationWidget } from "../citations/citation-render";
@@ -16,6 +17,7 @@ import {
   UnresolvedRefWidget,
 } from "./crossref-render";
 import {
+  buildInlineFragments,
   type InlineFragment,
   parseInlineFragments,
 } from "../inline-fragments";
@@ -374,4 +376,33 @@ export function renderInlineMarkdown(
 ): void {
   if (!text) return;
   renderFragments(container, parseInlineFragments(text), macros, surface, referenceContext);
+}
+
+export function renderInlineFragmentsToDom(
+  container: HTMLElement | DocumentFragment,
+  fragments: readonly InlineFragment[],
+  macros: Record<string, string> = {},
+  surface: DomInlineSurface = "document-body",
+  referenceContext?: InlineReferenceRenderContext,
+): void {
+  renderFragments(container, fragments, macros, surface, referenceContext);
+}
+
+export function renderInlineSyntaxNodeToDom(
+  container: HTMLElement | DocumentFragment,
+  node: SyntaxNode,
+  doc: string,
+  macros: Record<string, string> = {},
+  surface: DomInlineSurface = "document-body",
+  referenceContext?: InlineReferenceRenderContext,
+  rangeFrom?: number,
+  rangeTo?: number,
+): void {
+  renderInlineFragmentsToDom(
+    container,
+    buildInlineFragments(node, doc, rangeFrom, rangeTo),
+    macros,
+    surface,
+    referenceContext,
+  );
 }
