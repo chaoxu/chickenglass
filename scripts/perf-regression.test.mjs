@@ -407,7 +407,7 @@ describe("perf regression scenarios", () => {
     });
   });
 
-  it("reconciles late sync counts against the final snapshot", () => {
+  it("does not reclassify post-window sync counts as observed visual sync", () => {
     expect(finalizeLexicalBridgeObservation({
       insertCount: 100,
       wallMs: 180,
@@ -420,7 +420,45 @@ describe("perf regression scenarios", () => {
       semanticMs: 340,
       settleMs: 16,
     })).toMatchObject({
-      visualSyncMs: 3000,
+      visualSyncMs: 0,
+      visualSyncObserved: false,
+    });
+  });
+
+  it("keeps timeout-boundary visual samples distinct from late final counts", () => {
+    expect(finalizeLexicalBridgeObservation({
+      insertCount: 100,
+      wallMs: 180,
+      canonicalMs: 0,
+      visualSyncMs: 3004,
+      visualSyncObserved: true,
+      visualSyncTimeoutMs: 3000,
+      deferredSyncCount: 1,
+      incrementalSyncCount: 0,
+      semanticMs: 340,
+      settleMs: 16,
+    })).toMatchObject({
+      visualSyncMs: 3004,
+      visualSyncObserved: true,
+    });
+  });
+
+  it("measures staggered canonical and semantic completion from the same origin", () => {
+    expect(finalizeLexicalBridgeObservation({
+      insertCount: 100,
+      wallMs: 180,
+      canonicalMs: 20,
+      visualSyncMs: 90,
+      visualSyncObserved: true,
+      visualSyncTimeoutMs: 3000,
+      deferredSyncCount: 0,
+      incrementalSyncCount: 1,
+      semanticMs: 430,
+      settleMs: 16,
+    })).toMatchObject({
+      inputToSemanticMs: 626,
+      inputToSemanticPerCharMs: 6.26,
+      visualSyncMs: 90,
       visualSyncObserved: true,
     });
   });
