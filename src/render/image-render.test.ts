@@ -11,7 +11,7 @@ import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { documentPathFacet } from "../lib/types";
 import { imageUrlEffect, imageUrlField } from "../state/image-url";
-import { pdfPreviewField } from "../state/pdf-preview";
+import { pdfPreviewEffect, pdfPreviewField } from "../state/pdf-preview";
 import { createTestView, getDecorationSpecs } from "../test-utils";
 import * as mediaPreview from "./media-preview";
 import { focusEffect } from "./focus-state";
@@ -751,6 +751,33 @@ describe("imageRenderPlugin cache-only invalidation", () => {
 
     expect(resolvePreview).not.toHaveBeenCalled();
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(2);
+  });
+
+  it("rebuilds local PDF preview decorations from cache state without re-requesting", () => {
+    const doc = "![diagram](../assets/diagram.pdf)";
+    const resolvePreview = vi.spyOn(mediaPreview, "resolveLocalMediaPreview");
+
+    view = createTestView(doc, {
+      cursorPos: doc.length,
+      extensions: [
+        markdown(),
+        documentPathFacet.of("posts/math.md"),
+        imageUrlField,
+        pdfPreviewField,
+        imageRenderPlugin,
+      ],
+    });
+    resolvePreview.mockClear();
+
+    view.dispatch({
+      effects: pdfPreviewEffect.of({
+        path: "assets/diagram.pdf",
+        entry: { status: "loading" },
+      }),
+    });
+
+    expect(resolvePreview).not.toHaveBeenCalled();
+    expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(1);
   });
 
   it("requests near-viewport image previews without prefetching offscreen images", () => {

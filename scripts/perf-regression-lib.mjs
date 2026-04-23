@@ -168,7 +168,10 @@ function entryTimingRegressed(baseline, current, thresholdPct, minDeltaMs) {
     ? (current.worstMaxMs - baseline.worstMaxMs) / baseline.worstMaxMs
     : 0;
   const avgRegressed = avgDeltaMs > minDeltaMs && avgPct > thresholdPct;
-  const maxRegressed = maxDeltaMs > minDeltaMs * 2 && maxPct > thresholdPct;
+  const maxRegressed = maxDeltaMs > minDeltaMs * 2
+    && maxPct > thresholdPct
+    && avgDeltaMs > minDeltaMs
+    && avgPct > thresholdPct / 2;
   return {
     avgDeltaMs,
     maxDeltaMs,

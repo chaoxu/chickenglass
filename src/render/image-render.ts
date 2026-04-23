@@ -2,8 +2,8 @@ import {
   type ChangeSet,
   type EditorState,
   type Extension,
-  type Range,
   StateField,
+  type Range,
 } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
 import {
@@ -27,6 +27,12 @@ import {
 } from "./source-widget";
 import { ShellWidget } from "./shell-widget";
 import { imageUrlField } from "../state/image-url";
+import {
+  collectChangedLocalMediaPathsFromIndex,
+  localMediaReferenceRangesForResolvedPaths,
+  mediaIndexField,
+} from "../state/media-index";
+import { readMarkdownImageContent } from "../state/markdown-image";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { getPdfCanvas } from "./pdf-preview-cache";
 import {
@@ -36,12 +42,8 @@ import {
   type BlockWidgetHeightBinding,
 } from "./block-widget-height";
 import {
-  collectChangedLocalMediaPaths,
-  getLocalMediaPreviewDependency,
   resolveLocalMediaPreview,
   resolveLocalMediaPreviewFromState,
-  type LocalMediaDependencies,
-  type LocalMediaPreviewDependency,
   type MediaPreviewResult,
 } from "./media-preview";
 import { CSS } from "../constants/css-classes";
@@ -268,18 +270,7 @@ function readImageContent(
   state: EditorState,
   node: SyntaxNode,
 ): { alt: string; src: string } | null {
-  const urlNode = node.getChild("URL");
-  if (!urlNode) return null;
-
-  const src = state.sliceDoc(urlNode.from, urlNode.to);
-  if (!src) return null;
-
-  const marks = node.getChildren("LinkMark");
-  const alt = marks.length >= 2
-    ? state.sliceDoc(marks[0].to, marks[1].from)
-    : "";
-
-  return { alt, src };
+  return readMarkdownImageContent(state, node);
 }
 
 function mediaPreviewWidget(
@@ -309,162 +300,9 @@ interface ImageNodeInfo {
   readonly preview: MediaPreviewResult | null;
 }
 
-interface LocalMediaDependencyCounts {
-  readonly imagePaths: Map<string, number>;
-  readonly pdfPaths: Map<string, number>;
-}
-
-type ImageInfosByResolvedPath = ReadonlyMap<string, readonly ImageNodeInfo[]>;
-
 interface ImageDecorationState {
   readonly decorations: DecorationSet;
-  readonly mediaDependencies: LocalMediaDependencies;
-  readonly dependencyCounts: LocalMediaDependencyCounts;
-  readonly infosByResolvedPath: ImageInfosByResolvedPath;
   readonly activeSource: ActiveImageSourceTarget | null;
-}
-
-function createDependencyCounts(): LocalMediaDependencyCounts {
-  return {
-    imagePaths: new Map<string, number>(),
-    pdfPaths: new Map<string, number>(),
-  };
-}
-
-function cloneDependencyCounts(
-  counts: LocalMediaDependencyCounts,
-): LocalMediaDependencyCounts {
-  return {
-    imagePaths: new Map(counts.imagePaths),
-    pdfPaths: new Map(counts.pdfPaths),
-  };
-}
-
-function dependencyCountsToDependencies(
-  counts: LocalMediaDependencyCounts,
-): LocalMediaDependencies {
-  return {
-    imagePaths: new Set(counts.imagePaths.keys()),
-    pdfPaths: new Set(counts.pdfPaths.keys()),
-  };
-}
-
-function adjustDependencyCount(
-  counts: Map<string, number>,
-  path: string,
-  delta: number,
-): void {
-  const next = (counts.get(path) ?? 0) + delta;
-  if (next <= 0) {
-    counts.delete(path);
-    return;
-  }
-  counts.set(path, next);
-}
-
-function applyDependencyDelta(
-  counts: LocalMediaDependencyCounts,
-  dependency: LocalMediaPreviewDependency | null,
-  delta: number,
-): void {
-  if (!dependency) return;
-  const target = dependency.cacheKind === "pdf"
-    ? counts.pdfPaths
-    : counts.imagePaths;
-  adjustDependencyCount(target, dependency.resolvedPath, delta);
-}
-
-function getImageDependency(
-  info: ImageNodeInfo,
-): LocalMediaPreviewDependency | null {
-  return info.preview
-    ? getLocalMediaPreviewDependency(info.src, info.preview)
-    : null;
-}
-
-function imageInfoKey(info: ImageNodeInfo): string {
-  return `${info.from}:${info.to}`;
-}
-
-function addImageInfoToPathIndex(
-  index: Map<string, ImageNodeInfo[]>,
-  info: ImageNodeInfo,
-): void {
-  const dependency = getImageDependency(info);
-  if (!dependency) return;
-  const infos = index.get(dependency.resolvedPath);
-  if (infos) {
-    infos.push(info);
-    return;
-  }
-  index.set(dependency.resolvedPath, [info]);
-}
-
-function buildImageInfoPathIndex(
-  infos: readonly ImageNodeInfo[],
-): ImageInfosByResolvedPath {
-  const index = new Map<string, ImageNodeInfo[]>();
-  for (const info of infos) {
-    addImageInfoToPathIndex(index, info);
-  }
-  return index;
-}
-
-function mapImageInfoThroughChanges(
-  info: ImageNodeInfo,
-  state: EditorState,
-  changes: ChangeSet,
-): ImageNodeInfo {
-  const from = Math.max(
-    0,
-    Math.min(changes.mapPos(info.from, 1), state.doc.length),
-  );
-  const to = Math.max(
-    0,
-    Math.min(changes.mapPos(info.to, -1), state.doc.length),
-  );
-  return {
-    ...info,
-    from,
-    to: Math.max(from, to),
-  };
-}
-
-function mapImageInfoPathIndexThroughChanges(
-  index: ImageInfosByResolvedPath,
-  state: EditorState,
-  changes: ChangeSet,
-  removedInfoKeys: ReadonlySet<string>,
-): Map<string, ImageNodeInfo[]> {
-  const next = new Map<string, ImageNodeInfo[]>();
-  for (const infos of index.values()) {
-    for (const info of infos) {
-      if (removedInfoKeys.has(imageInfoKey(info))) continue;
-      addImageInfoToPathIndex(
-        next,
-        mapImageInfoThroughChanges(info, state, changes),
-      );
-    }
-  }
-  return next;
-}
-
-function collectImageNodeInfosForResolvedPathsFromIndex(
-  index: ImageInfosByResolvedPath,
-  resolvedPaths: ReadonlySet<string>,
-): ImageNodeInfo[] {
-  if (resolvedPaths.size === 0) return [];
-  const infos: ImageNodeInfo[] = [];
-  const seen = new Set<string>();
-  for (const path of resolvedPaths) {
-    for (const info of index.get(path) ?? []) {
-      const key = imageInfoKey(info);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      infos.push(info);
-    }
-  }
-  return infos;
 }
 
 function refreshImageNodeInfoPreview(
@@ -558,28 +396,14 @@ function buildImageItemsFromInfos(
   return items;
 }
 
-function buildDependencyCountsFromInfos(
-  infos: readonly ImageNodeInfo[],
-): LocalMediaDependencyCounts {
-  const counts = createDependencyCounts();
-  for (const info of infos) {
-    applyDependencyDelta(counts, getImageDependency(info), 1);
-  }
-  return counts;
-}
-
 function buildImageDecorationState(state: EditorState): ImageDecorationState {
   const infos = measureSync(
     "cm6.imageDiscovery.collectAll",
     () => collectAllImageNodeInfos(state),
   );
-  const dependencyCounts = buildDependencyCountsFromInfos(infos);
   const activeSource = getActiveImageSourceTarget(state);
   return {
     decorations: buildDecorations(buildImageItemsFromInfos(state, infos, activeSource)),
-    mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
-    dependencyCounts,
-    infosByResolvedPath: buildImageInfoPathIndex(infos),
     activeSource,
   };
 }
@@ -680,25 +504,10 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
       );
       const oldInfos = collectImageNodeInfosInRanges(tr.startState, oldDirtyRanges);
       const newInfos = collectImageNodeInfosInRanges(tr.state, newDirtyRanges);
-      const removedInfoKeys = new Set(oldInfos.map(imageInfoKey));
-      const infosByResolvedPath = mapImageInfoPathIndexThroughChanges(
-        value.infosByResolvedPath,
-        tr.state,
-        tr.changes,
-        removedInfoKeys,
-      );
       const dirtyRanges = [
         ...newDirtyRanges,
         ...oldInfos.map((info) => mapInfoRangeToDirtyRange(info, tr.state, tr.changes)),
       ];
-      const dependencyCounts = cloneDependencyCounts(value.dependencyCounts);
-      for (const info of oldInfos) {
-        applyDependencyDelta(dependencyCounts, getImageDependency(info), -1);
-      }
-      for (const info of newInfos) {
-        applyDependencyDelta(dependencyCounts, getImageDependency(info), 1);
-        addImageInfoToPathIndex(infosByResolvedPath, info);
-      }
       return {
         decorations: replaceImageDecorationsInRanges(
           tr.state,
@@ -707,24 +516,33 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
           newInfos,
           afterActiveSource,
         ),
-        mediaDependencies: dependencyCountsToDependencies(dependencyCounts),
-        dependencyCounts,
-        infosByResolvedPath,
         activeSource: afterActiveSource,
       };
     }
 
-    const changedPaths = collectChangedLocalMediaPaths(
-      value.mediaDependencies,
-      tr.startState.field(pdfPreviewField, false) || new Map<string, unknown>(),
-      tr.state.field(pdfPreviewField, false) || new Map<string, unknown>(),
-      tr.startState.field(imageUrlField, false) || new Map<string, unknown>(),
-      tr.state.field(imageUrlField, false) || new Map<string, unknown>(),
-    );
-    if (changedPaths.size > 0) {
-      const infos = collectImageNodeInfosForResolvedPathsFromIndex(
-        value.infosByResolvedPath,
+    const oldPdfCache = tr.startState.field(pdfPreviewField, false) || new Map<string, unknown>();
+    const newPdfCache = tr.state.field(pdfPreviewField, false) || new Map<string, unknown>();
+    const oldImageCache = tr.startState.field(imageUrlField, false) || new Map<string, unknown>();
+    const newImageCache = tr.state.field(imageUrlField, false) || new Map<string, unknown>();
+    const mediaCacheChanged = oldPdfCache !== newPdfCache || oldImageCache !== newImageCache;
+    if (mediaCacheChanged) {
+      const mediaIndex = tr.state.field(mediaIndexField, false);
+      if (!mediaIndex) return buildImageDecorationState(tr.state);
+      const changedPaths = collectChangedLocalMediaPathsFromIndex(
+        mediaIndex,
+        oldPdfCache,
+        newPdfCache,
+        oldImageCache,
+        newImageCache,
+      );
+      if (changedPaths.size === 0) return value;
+      const refreshRanges = localMediaReferenceRangesForResolvedPaths(
+        mediaIndex,
         changedPaths,
+      );
+      const infos = collectImageNodeInfosInRanges(
+        tr.state,
+        refreshRanges,
       ).map((info) => refreshImageNodeInfoPreview(tr.state, info));
       return {
         decorations: replaceImageDecorationsInRanges(
@@ -734,9 +552,6 @@ const imageDecorationField: StateField<ImageDecorationState> = StateField.define
           infos,
           afterActiveSource,
         ),
-        mediaDependencies: value.mediaDependencies,
-        dependencyCounts: value.dependencyCounts,
-        infosByResolvedPath: value.infosByResolvedPath,
         activeSource: afterActiveSource,
       };
     }
@@ -839,6 +654,7 @@ export { imageDecorationField as _imageDecorationFieldForTest };
 export const imageRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
+  mediaIndexField,
   imageDecorationField,
   imageRequestPlugin,
 ];

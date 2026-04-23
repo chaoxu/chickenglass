@@ -1188,9 +1188,12 @@ describe("#290 — Lezer-first markdown parsing", () => {
 
   it("image and list handling no longer regex-parse markdown markers", () => {
     const imageRender = fileText("src/render/image-render.ts");
+    const markdownImage = fileText("src/state/markdown-image.ts");
     const listOutliner = fileText("src/editor/list-outliner.ts");
 
-    expect(imageRender).toContain('node.getChild("URL")');
+    expect(imageRender).toContain("readMarkdownImageContent");
+    expect(markdownImage).toContain('node.getChild("URL")');
+    expect(markdownImage).not.toContain('/^!\\[([^\\]]*)\\]\\(([^)]*)\\)$/');
     expect(imageRender).not.toContain('/^!\\[([^\\]]*)\\]\\(([^)]*)\\)$/');
     expect(listOutliner).toContain('getChild("ListMark")');
     expect(listOutliner).not.toContain('lineText.match(/^(\\s*)([-*+])\\s/)');

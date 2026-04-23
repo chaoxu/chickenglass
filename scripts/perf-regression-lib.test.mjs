@@ -286,6 +286,45 @@ describe("perf regression reports", () => {
     expect(result.frontend[0].status).toBe("ok");
   });
 
+  it("keeps frontend span max-only outliers from failing without supporting mean movement", () => {
+    const baseline = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "editor",
+          name: "editor.create",
+          meanAvgMs: 10.1,
+          worstMaxMs: 21,
+        },
+      ],
+      backend: [],
+    };
+    const current = {
+      frontend: [
+        {
+          source: "frontend",
+          category: "editor",
+          name: "editor.create",
+          meanAvgMs: 10.09,
+          worstMaxMs: 27.3,
+        },
+      ],
+      backend: [],
+    };
+
+    const result = comparePerfRegressionReports(baseline, current, {
+      thresholdPct: 0.1,
+      minDeltaMs: 2,
+    });
+
+    expect(result.regressions).toHaveLength(0);
+    expect(result.frontend[0]).toMatchObject({
+      status: "ok",
+      avgDeltaMs: -0.01,
+      maxDeltaMs: 6.3,
+    });
+  });
+
   it("does not fail a leaf frontend span when its category total stays within budget", () => {
     const baseline = {
       frontend: [
