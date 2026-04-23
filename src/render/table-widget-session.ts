@@ -36,6 +36,14 @@ interface ActivePreviewCell {
 let activeInlineEditor: ActiveInlineEditor | null = null;
 let activePreviewCell: ActivePreviewCell | null = null;
 
+function focusWithoutScrolling(element: HTMLElement): void {
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+  }
+}
+
 export function getActiveInlineEditor(): ActiveInlineEditor | null {
   return activeInlineEditor;
 }
@@ -86,13 +94,13 @@ export function setActivePreviewCell(
   owner: TableWidgetSessionOwner,
 ): void {
   if (activePreviewCell?.cell === cell && activePreviewCell.owner === owner) {
-    cell.focus();
+    focusWithoutScrolling(cell);
     return;
   }
   clearActivePreviewCell();
   cell.classList.add("cf-table-cell-active");
   cell.tabIndex = -1;
-  cell.focus();
+  focusWithoutScrolling(cell);
   activePreviewCell = { cell, owner };
 }
 

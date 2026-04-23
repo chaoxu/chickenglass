@@ -267,11 +267,21 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     if (!rootView.dom.isConnected) return false;
 
     const doc = rootView.state.doc;
+    const baselineScrollTop = rootView.scrollDOM.scrollTop;
     const startLine = doc.lineAt(tableRange.from);
     const endLine = doc.lineAt(Math.max(tableRange.from, tableRange.to - 1));
     const targetPos = direction === "before"
       ? Math.max(0, startLine.from - 1)
       : Math.min(doc.length, endLine.to + 1);
+    const preserveDirectionalScroll = (): void => {
+      const currentScrollTop = rootView.scrollDOM.scrollTop;
+      const nextScrollTop = direction === "after"
+        ? Math.max(currentScrollTop, baselineScrollTop)
+        : Math.min(currentScrollTop, baselineScrollTop);
+      if (nextScrollTop !== currentScrollTop) {
+        rootView.scrollDOM.scrollTop = nextScrollTop;
+      }
+    };
 
     clearActivePreviewCell();
     rootView.dispatch({
@@ -279,7 +289,9 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
       scrollIntoView: false,
       userEvent: "select",
     });
+    preserveDirectionalScroll();
     rootView.focus();
+    preserveDirectionalScroll();
     requestAnimationFrame(() => {
       if (!rootView.dom.isConnected) return;
       rootView.focus();
@@ -288,6 +300,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         scrollIntoView: false,
         userEvent: "select",
       });
+      preserveDirectionalScroll();
     });
     return true;
   }

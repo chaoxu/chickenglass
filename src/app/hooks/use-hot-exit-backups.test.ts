@@ -141,13 +141,14 @@ describe("useHotExitBackups", () => {
       vi.advanceTimersByTime(500);
       content = "second";
       activeDocumentSignal.publish("main.md");
-      vi.advanceTimersByTime(999);
+      vi.advanceTimersByTime(16);
+      vi.advanceTimersByTime(900);
       await Promise.resolve();
     });
     expect(store.writeBackup).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(1);
+      vi.advanceTimersByTime(100);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -237,6 +238,7 @@ describe("useHotExitBackups", () => {
       await Promise.resolve();
       await Promise.resolve();
       activeDocumentSignal.publish("main.md");
+      vi.advanceTimersByTime(16);
       vi.advanceTimersByTime(1_000);
       await Promise.resolve();
       await Promise.resolve();
@@ -254,6 +256,7 @@ describe("useHotExitBackups", () => {
 
     await act(async () => {
       activeDocumentSignal.publish("main.md");
+      vi.advanceTimersByTime(16);
       vi.advanceTimersByTime(1_000);
       await Promise.resolve();
       await Promise.resolve();

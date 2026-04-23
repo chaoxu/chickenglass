@@ -144,6 +144,7 @@ describe("useAutoSave", () => {
     await act(async () => {
       vi.advanceTimersByTime(700);
       activeDocumentSignal.publish("notes.md");
+      vi.advanceTimersByTime(16);
       vi.advanceTimersByTime(299);
     });
     expect(onSave).not.toHaveBeenCalled();
