@@ -1353,6 +1353,17 @@ describe("#1091 — document state module contract", () => {
     expect(referenceRenderState).toContain("getReferenceRenderState");
     expect(referenceRenderState).toContain("referenceRenderDependenciesChanged");
   });
+
+  it("keeps shared document-state extension composition in src/state", () => {
+    const documentStateExtensions = fileText("src/state/document-state-extensions.ts");
+    const extensionBuilders = fileText("src/editor/extension-builders.ts");
+
+    expect(fileExists("src/state/document-state-extensions.ts")).toBe(true);
+    expect(importsModule("src/editor/editor.ts", "../state/document-state-extensions")).toBe(true);
+    expect(documentStateExtensions).toContain("coreDocumentStateExtensions");
+    expect(extensionBuilders).not.toContain("documentSemanticsField");
+    expect(extensionBuilders).not.toContain("createPluginRegistryField");
+  });
 });
 
 describe("document format instructions", () => {

@@ -2,6 +2,8 @@ import { indentUnit, LanguageDescription } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
+import { defaultPlugins } from "../plugins";
+import { coreDocumentStateExtensions } from "../state/document-state-extensions";
 import {
   createMarkdownLanguageExtensions,
   createProjectConfigExtensions,
@@ -16,7 +18,6 @@ import { emitWindowDebugLaneStateChange } from "./debug-lane-state";
 import { debugPanelExtension } from "./debug-panel";
 import type { EditorPluginManager } from "./editor-plugin";
 import {
-  coreDocumentStateExtensions,
   renderModeExtensions,
   userSettingsExtensions,
 } from "./extension-builders";
@@ -153,7 +154,7 @@ export function createEditor(config: EditorConfig): EditorView {
       syntaxHighlightCompartment.of([]),
 
       // Core document state (frontmatter, semantics, block plugins, caches)
-      ...coreDocumentStateExtensions(),
+      ...coreDocumentStateExtensions(defaultPlugins),
 
       // Reference/citation completion from semantic + bibliography state
       referenceAutocompleteExtension,
