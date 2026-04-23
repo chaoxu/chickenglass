@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
 import {
   StateEffect,
@@ -21,6 +21,10 @@ import {
   createTestView,
   getDecorationSpecs,
 } from "../test-utils";
+import {
+  clearFrontendPerf,
+  getFrontendPerfSnapshot,
+} from "../lib/perf";
 
 describe("createDecorationsField", () => {
   let view: EditorView | undefined;
@@ -229,6 +233,10 @@ describe("createDecorationsField", () => {
 describe("createDecorationStateField", () => {
   let view: EditorView | undefined;
 
+  beforeEach(() => {
+    clearFrontendPerf();
+  });
+
   afterEach(() => {
     view?.destroy();
     view = undefined;
@@ -256,6 +264,27 @@ describe("createDecorationStateField", () => {
     const updated = view.state.update({ changes: { from: 0, insert: "x" } }).state;
     expect(updateCount).toBe(1);
     expect(getDecorationSpecs(updated.field(field))[0].class).toBe("test-state-field");
+  });
+
+  it("records an update span when a spanName is provided", () => {
+    const field = createDecorationStateField({
+      spanName: "cm6.testDecorations",
+      create() {
+        return Decoration.none;
+      },
+      update() {
+        return Decoration.none;
+      },
+    });
+
+    view = createTestView("hello", { extensions: [markdown(), field] });
+    clearFrontendPerf();
+    const updated = view.state.update({ changes: { from: 0, insert: "x" } }).state;
+    expect(updated.field(field)).toBe(Decoration.none);
+
+    expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
+      "cm6.testDecorations.update",
+    );
   });
 });
 

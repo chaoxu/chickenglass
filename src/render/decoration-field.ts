@@ -51,7 +51,9 @@ export function createDecorationStateField(options: {
         : options.create(state);
     },
     update(value, tr) {
-      return options.update(value, tr);
+      return options.spanName
+        ? measureSync(`${options.spanName}.update`, () => options.update(value, tr))
+        : options.update(value, tr);
     },
     provide(field) {
       return EditorView.decorations.from(field);

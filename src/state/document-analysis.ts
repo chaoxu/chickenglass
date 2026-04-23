@@ -1,5 +1,5 @@
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
-import { type EditorState, StateField } from "@codemirror/state";
+import { type EditorState, StateField, type Transaction } from "@codemirror/state";
 
 import type { DocumentAnalysis, TextSource } from "../semantics/document";
 import {
@@ -77,6 +77,24 @@ function completeSyntaxTree(state: EditorState) {
   );
 }
 
+function updateDocumentAnalysisForTransaction(
+  value: DocumentAnalysis,
+  tr: Transaction,
+): DocumentAnalysis {
+  const delta = buildSemanticDelta(tr);
+  if (!delta.docChanged && !delta.syntaxTreeChanged && !delta.globalInvalidation) {
+    return value;
+  }
+
+  return measureSync("cm6.documentAnalysis.update", () => {
+    const doc = editorStateTextSource(tr.state);
+    const tree = syntaxTree(tr.state);
+    return measureSync("cm6.documentAnalysis.update.sliceMerge", () =>
+      updateDocumentAnalysis(value, doc, tree, delta)
+    );
+  });
+}
+
 /**
  * Shared CM6 StateField that computes document semantics once per
  * document/tree change. All CM6 renderers (section numbers, sidenotes,
@@ -94,17 +112,7 @@ export const documentAnalysisField = StateField.define<DocumentAnalysis>({
   },
 
   update(value, tr) {
-    const delta = buildSemanticDelta(tr);
-    if (!delta.docChanged && !delta.syntaxTreeChanged && !delta.globalInvalidation) {
-      return value;
-    }
-
-    return updateDocumentAnalysis(
-      value,
-      editorStateTextSource(tr.state),
-      syntaxTree(tr.state),
-      delta,
-    );
+    return updateDocumentAnalysisForTransaction(value, tr);
   },
 });
 
