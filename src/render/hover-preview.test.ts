@@ -20,6 +20,7 @@ import {
   getCachedTooltipContentForTest,
   hoverPreviewExtension,
   refIdFromElement,
+  shouldRebuildHoverPreviewContentForTest,
 } from "./hover-preview";
 
 /**
@@ -265,5 +266,11 @@ describe("tooltip content cache", () => {
 
     expect(second).not.toBe(first);
     expect(buildContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("forces a rebuild for media cache changes even when the plan key is stable", () => {
+    expect(shouldRebuildHoverPreviewContentForTest("media:key", "media:key", true)).toBe(true);
+    expect(shouldRebuildHoverPreviewContentForTest("media:key", "media:key", false)).toBe(false);
+    expect(shouldRebuildHoverPreviewContentForTest("media:key", "media:new", false)).toBe(true);
   });
 });

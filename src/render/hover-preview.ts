@@ -102,6 +102,26 @@ interface BlockPreviewPlan {
 type CrossrefPreviewVariant = "completion" | "hover";
 const EMPTY_MEDIA_CACHE: ReadonlyMap<string, unknown> = new Map();
 
+function shouldReuseTooltipContent(
+  currentPlan: Pick<TooltipPlan, "key"> | null,
+  nextPlan: Pick<TooltipPlan, "key">,
+  forceRebuild: boolean,
+): boolean {
+  return !forceRebuild && currentPlan !== null && nextPlan.key === currentPlan.key;
+}
+
+export function shouldRebuildHoverPreviewContentForTest(
+  currentKey: string | null,
+  nextKey: string,
+  forceRebuild: boolean,
+): boolean {
+  return !shouldReuseTooltipContent(
+    currentKey === null ? null : { key: currentKey },
+    { key: nextKey },
+    forceRebuild,
+  );
+}
+
 // ── Content extraction helpers ──────────────────────────────────────────────
 
 /**
@@ -766,7 +786,7 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       return;
     }
 
-    if (!forceRebuild && currentPlan && nextPlan.key === currentPlan.key) {
+    if (shouldReuseTooltipContent(currentPlan, nextPlan, forceRebuild)) {
       currentPlan = nextPlan;
       return;
     }
@@ -809,7 +829,8 @@ const hoverPreviewPlugin = ViewPlugin.define((view) => {
       const macrosChanged = beforeMacros !== afterMacros;
       const forceRebuild =
         (bibliographyChanged && currentPlan?.dependsOnBibliography === true) ||
-        (macrosChanged && currentPlan?.dependsOnMacros === true);
+        (macrosChanged && currentPlan?.dependsOnMacros === true) ||
+        localMediaChanged;
 
       if (
         localMediaChanged ||
