@@ -1,7 +1,6 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   CLEAR_HISTORY_COMMAND,
-  type EditorState,
   type EditorUpdateOptions,
   HISTORY_MERGE_TAG,
   type LexicalEditor,
@@ -15,7 +14,6 @@ import {
   type EditorDocumentChange,
 } from "../lib/editor-doc-change";
 import type { SurfaceFocusOwner } from "../state/editor-focus";
-import { measureSync } from "../lib/perf";
 import { getActiveEditor } from "./active-editor-tracker";
 import { hasCursorRevealActive } from "./cursor-reveal-state";
 import { readVisibleTextDomSelection } from "./dom-selection";
@@ -62,8 +60,10 @@ import {
   COFLAT_REVEAL_UI_TAG,
 } from "./update-tags";
 import { useDeferredRichDocumentSync } from "./use-deferred-rich-document-sync";
-
-const RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
+import {
+  useRichDocumentSnapshotPublisher,
+  type RichMarkdownSnapshot,
+} from "./use-rich-document-snapshot-publisher";
 
 export function sameSelection(
   left: MarkdownEditorSelection,
@@ -189,11 +189,6 @@ export interface LexicalDocumentSessionController {
 
 type RichChangePolicy = "markdown" | "dirty";
 
-interface RichMarkdownSnapshot {
-  readonly editorState: EditorState;
-  readonly markdown: string;
-}
-
 function isUserCommittedRichChange(
   requireUserEditFlag: boolean,
   userEditPending: boolean,
@@ -244,93 +239,21 @@ export function useLexicalDocumentSessionController({
   const sourceSelectionRef = useRef<MarkdownEditorSelection>(createMarkdownSelection(0));
   const userEditPendingRef = useRef(false);
   const focusOwnerRef = useRef(focusOwner);
-  const richSnapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const richSnapshotEditorRef = useRef<LexicalEditor | null>(null);
-  const richMarkdownSnapshotRef = useRef<RichMarkdownSnapshot | null>(null);
   const embeddedFieldFlushRegistry = useMemo(createEmbeddedFieldFlushRegistry, []);
-
-  useEffect(() => {
-    focusOwnerRef.current = focusOwner;
-  }, [focusOwner]);
-
-  const clearRichSnapshotTimer = useCallback(() => {
-    const timer = richSnapshotTimerRef.current;
-    if (timer !== null) {
-      clearTimeout(timer);
-      richSnapshotTimerRef.current = null;
-    }
-    richSnapshotEditorRef.current = null;
-  }, []);
-
-  const readRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
-    const editorState = editor.getEditorState();
-    const cached = richMarkdownSnapshotRef.current;
-    if (cached?.editorState === editorState) {
-      return cached.markdown;
-    }
-
-    const markdown = getLexicalMarkdown(editor);
-    richMarkdownSnapshotRef.current = {
-      editorState,
-      markdown,
-    };
-    return markdown;
-  }, []);
-
-  const publishRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
-    const nextDoc = measureSync(
-      "lexical.publishRichDocumentSnapshot",
-      () => readRichDocumentSnapshot(editor),
-      { category: "lexical" },
-    );
-    const changes = createMinimalEditorDocumentChanges(
-      lastCommittedDocRef.current,
-      nextDoc,
-    );
-    if (changes.length === 0) {
-      return nextDoc;
-    }
-
-    pendingLocalEchoDocRef.current = nextDoc;
-    lastCommittedDocRef.current = nextDoc;
-    onTextChange?.(nextDoc);
-    onDocChange?.(changes);
-    return nextDoc;
-  }, [
+  const {
+    cancelRichDocumentSnapshot,
+    flushRichDocumentSnapshot,
+    scheduleRichDocumentSnapshot,
+  } = useRichDocumentSnapshotPublisher({
     lastCommittedDocRef,
     onDocChange,
     onTextChange,
     pendingLocalEchoDocRef,
-    readRichDocumentSnapshot,
-  ]);
+  });
 
-  const scheduleRichDocumentSnapshot = useCallback((editor: LexicalEditor) => {
-    const timer = richSnapshotTimerRef.current;
-    if (timer !== null) {
-      clearTimeout(timer);
-    }
-    richSnapshotEditorRef.current = editor;
-    richSnapshotTimerRef.current = setTimeout(() => {
-      richSnapshotTimerRef.current = null;
-      richSnapshotEditorRef.current = null;
-      publishRichDocumentSnapshot(editor);
-    }, RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS);
-  }, [publishRichDocumentSnapshot]);
-
-  const flushRichDocumentSnapshot = useCallback(() => {
-    const editor = richSnapshotEditorRef.current;
-    if (!editor) return null;
-    clearRichSnapshotTimer();
-    return measureSync(
-      "lexical.flushRichDocumentSnapshot",
-      () => publishRichDocumentSnapshot(editor),
-      { category: "lexical" },
-    );
-  }, [clearRichSnapshotTimer, publishRichDocumentSnapshot]);
-
-  useEffect(() => () => {
-    flushRichDocumentSnapshot();
-  }, [flushRichDocumentSnapshot]);
+  useEffect(() => {
+    focusOwnerRef.current = focusOwner;
+  }, [focusOwner]);
 
   const handleRichChange = useCallback((editor: LexicalEditor, tags: Set<string>) => {
     if (shouldIgnoreMarkdownEditorChange(editor, tags)) {
@@ -397,7 +320,7 @@ export function useLexicalDocumentSessionController({
     userEditPendingRef,
     focusOwnerRef,
     embeddedFieldFlushRegistry,
-    cancelRichDocumentSnapshot: clearRichSnapshotTimer,
+    cancelRichDocumentSnapshot,
     flushRichDocumentSnapshot,
     handleRichChange,
     syncSelectionToDocLength,
