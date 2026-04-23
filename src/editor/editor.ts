@@ -3,6 +3,7 @@ import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import { defaultPlugins } from "../plugins";
+import { cm6RichRenderExtensions } from "../render/cm6-rich-render-extensions";
 import { coreDocumentStateExtensions } from "../state/document-state-extensions";
 import {
   createMarkdownLanguageExtensions,
@@ -24,10 +25,7 @@ import {
 import { headingFold } from "./heading-fold";
 import { editorKeybindings } from "./keybindings";
 import { listOutlinerExtension } from "./list-outliner";
-import {
-  editorModeField,
-  renderingExtensions,
-} from "./editor-mode-state";
+import { editorModeField } from "./editor-mode-state";
 import { type ProjectConfig } from "./project-config";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
@@ -162,7 +160,7 @@ export function createEditor(config: EditorConfig): EditorView {
       // Mode switching (render/editable/modeClass compartments)
       ...renderModeExtensions({
         editorModeField,
-        renderingExtensions,
+        renderingExtensions: cm6RichRenderExtensions,
       }),
 
       // Toggleable editor plugins (managed by EditorPluginManager)

@@ -10,18 +10,12 @@ import { markdownExtensions } from "../parser";
 import { highlightExtension } from "../parser/highlight";
 import { mathExtension } from "../parser/math-backslash";
 import { strikethroughExtension } from "../parser/strikethrough";
-import { markdownRenderPlugin } from "../render/markdown-render";
-import { mathRenderPlugin } from "../render/math-render";
+export { sharedInlineRenderExtensions } from "../render/inline-render-extensions";
 
 export const inlineMarkdownExtensions: MarkdownExtension[] = [
   mathExtension,
   highlightExtension,
   strikethroughExtension,
-];
-
-export const sharedInlineRenderExtensions: Extension[] = [
-  mathRenderPlugin,
-  markdownRenderPlugin,
 ];
 
 export function createProjectConfigExtensions(projectConfig?: ProjectConfig): Extension[] {

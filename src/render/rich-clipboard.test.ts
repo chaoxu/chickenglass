@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
-import { createEditor, setEditorMode } from "./editor";
+import { createEditor, setEditorMode } from "../editor/editor";
 
 let view: EditorView | undefined;
 

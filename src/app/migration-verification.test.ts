@@ -1155,7 +1155,7 @@ describe("#376 — shared text widget primitives", () => {
     const crossrefs = fileText("src/render/crossref-render.ts");
     const codeBlockDecorations = fileText("src/render/code-block-decorations.ts");
     const sidenotes = fileText("src/render/sidenote-render.ts");
-    const frontmatterRender = fileText("src/editor/frontmatter-render.ts");
+    const frontmatterRender = fileText("src/render/frontmatter-render.ts");
 
     expect(citations).toContain("extends SimpleTextReferenceWidget");
     expect(crossrefs).toContain("extends SimpleTextReferenceWidget");
@@ -1399,7 +1399,19 @@ describe("#314 — document surface renderer layer", () => {
     expect(importsModule("src/render/hover-preview.ts", "./preview-block-renderer")).toBe(true);
     expect(previewBlockRenderer).toContain("renderInlineMarkdown");
     expect(importsModule("src/render/plugin-adapters/chrome.ts", "../../document-surfaces")).toBe(true);
-    expect(importsModule("src/editor/frontmatter-render.ts", "../document-surfaces")).toBe(true);
+    expect(importsModule("src/render/frontmatter-render.ts", "../document-surfaces")).toBe(true);
+  });
+});
+
+describe("#1363 — CM6 rich render composition root", () => {
+  it("keeps rich-mode render ordering owned by the render subsystem", () => {
+    expect(fileExists("src/render/cm6-rich-render-extensions.ts")).toBe(true);
+    expect(importsModule("src/editor/editor.ts", "../render/cm6-rich-render-extensions")).toBe(true);
+    expect(importsModule("src/editor/editor-mode-state.ts", "../render/cm6-rich-render-extensions")).toBe(true);
+    expect(importsModule("src/editor/editor-mode-state.ts", "../render")).toBe(false);
+    expect(importsModule("src/editor/editor-mode-state.ts", "./frontmatter-render")).toBe(false);
+    expect(importsModule("src/editor/editor-mode-state.ts", "./rich-clipboard")).toBe(false);
+    expect(importsModule("src/render/cm6-rich-render-extensions.ts", "./index")).toBe(false);
   });
 });
 

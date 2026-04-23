@@ -1,32 +1,14 @@
 import { syntaxHighlighting } from "@codemirror/language";
-import { type Extension, StateEffect, StateField } from "@codemirror/state";
+import { StateEffect, StateField } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { classHighlighter } from "@lezer/highlight";
-import { bibliographyPlugin } from "../render/bibliography-render";
-import {
-  blockRenderPlugin,
-  checkboxRenderPlugin,
-  codeBlockRenderPlugin,
-  codeBlockStructureField,
-  containerAttributesPlugin,
-  fenceGuidePlugin,
-  imageRenderPlugin,
-  mathPreviewPlugin,
-  sectionNumberPlugin,
-  sidenoteRenderPlugin,
-} from "../render";
-import { referenceRenderPlugin } from "../render/reference-render";
-import { searchHighlightPlugin } from "../render/search-highlight";
-import { tableRenderPlugin } from "../render/table-render";
+import { cm6RichRenderExtensions } from "../render/cm6-rich-render-extensions";
 import {
   editableCompartment,
   modeClassCompartment,
   renderCompartment,
   syntaxHighlightCompartment,
 } from "./compartments";
-import { sharedInlineRenderExtensions } from "./base-editor-extensions";
-import { frontmatterDecoration } from "./frontmatter-render";
-import { richClipboardOutputFilter } from "./rich-clipboard";
 
 export type EditorMode = "rich" | "source";
 
@@ -46,26 +28,6 @@ export const editorModeField = StateField.define<EditorMode>({
   },
 });
 
-export const renderingExtensions: Extension[] = [
-  frontmatterDecoration,
-  ...sharedInlineRenderExtensions,
-  imageRenderPlugin,
-  codeBlockStructureField,
-  blockRenderPlugin,
-  referenceRenderPlugin,
-  codeBlockRenderPlugin,
-  bibliographyPlugin,
-  containerAttributesPlugin,
-  richClipboardOutputFilter,
-  tableRenderPlugin,
-  checkboxRenderPlugin,
-  mathPreviewPlugin,
-  sectionNumberPlugin,
-  fenceGuidePlugin,
-  sidenoteRenderPlugin,
-  searchHighlightPlugin,
-];
-
 const sourceSyntaxHighlightingExtension = syntaxHighlighting(classHighlighter);
 
 export function setEditorMode(view: EditorView, mode: EditorMode): void {
@@ -75,7 +37,7 @@ export function setEditorMode(view: EditorView, mode: EditorMode): void {
 
   switch (mode) {
     case "rich":
-      effects.push(renderCompartment.reconfigure(renderingExtensions));
+      effects.push(renderCompartment.reconfigure(cm6RichRenderExtensions));
       effects.push(editableCompartment.reconfigure([]));
       effects.push(modeClassCompartment.reconfigure([]));
       effects.push(syntaxHighlightCompartment.reconfigure([]));

@@ -5,7 +5,7 @@
  * `state.field(frontmatterField)`.
  *
  * Rendering (Typora-style title widget / YAML reveal) lives in
- * `editor/frontmatter-render.ts`.
+ * `render/frontmatter-render.ts`.
  */
 import { EditorState, StateField, type Text } from "@codemirror/state";
 

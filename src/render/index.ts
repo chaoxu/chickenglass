@@ -3,6 +3,10 @@ export * from "./render-core";
 
 // ── High-level render plugins ────────────────────────────────────────────────
 export { renderInlineMarkdown } from "./inline-render";
+export { cm6RichRenderExtensions } from "./cm6-rich-render-extensions";
+export { frontmatterDecoration, frontmatterDecorationField } from "./frontmatter-render";
+export { sharedInlineRenderExtensions } from "./inline-render-extensions";
+export { balanceHiddenFenceClipboardText, richClipboardOutputFilter } from "./rich-clipboard";
 export { markdownRenderPlugin } from "./markdown-render";
 export {
   blockRenderPlugin,
