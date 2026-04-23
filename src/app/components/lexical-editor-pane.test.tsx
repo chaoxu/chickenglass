@@ -93,7 +93,7 @@ describe("LexicalEditorPane derived state scheduling", () => {
     expect(onHeadingsChange).toHaveBeenCalledWith([
       expect.objectContaining({ text: expect.stringContaining("Updated") }),
     ]);
-    expect(onDiagnosticsChange).toHaveBeenCalledWith([]);
+    expect(onDiagnosticsChange).not.toHaveBeenCalled();
   });
 
   it("keeps only the latest scheduled semantic result", async () => {
@@ -194,6 +194,36 @@ describe("LexicalEditorPane derived state scheduling", () => {
     ]);
   });
 
+  it("resets cached semantic publication when the doc path changes but the saved doc text does not", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const diagnostics = vi.fn();
+    const view = render(
+      <LexicalEditorPane
+        docPath="notes/a.md"
+        doc="# Shared\n\nSee [@sec:one].\n"
+      />,
+    );
+
+    act(() => {
+      lexicalEditorPaneState.props?.onTextChange("# Shared\n\nSee [@sec:edited-a].\n");
+    });
+
+    view.rerender(
+      <LexicalEditorPane
+        docPath="notes/b.md"
+        doc="# Shared\n\nSee [@sec:one].\n"
+        onDiagnosticsChange={diagnostics}
+      />,
+    );
+
+    expect(diagnostics).toHaveBeenCalledWith([
+      expect.objectContaining({
+        message: "Unresolved reference \"@sec:one\"",
+      }),
+    ]);
+  });
+
   it("keeps citation ids out of lexical diagnostics without bibliography data", async () => {
     vi.resetModules();
     const { LexicalEditorPane } = await import("./lexical-editor-pane");
@@ -211,6 +241,99 @@ describe("LexicalEditorPane derived state scheduling", () => {
         message: "Unresolved reference \"@sec:missing\"",
       }),
     ]);
+  });
+
+  it("reuses heading and diagnostics projections when shared semantic slices stay unchanged", async () => {
+    vi.resetModules();
+    const perf = await import("../perf");
+    const measureSyncSpy = vi.spyOn(perf, "measureSync");
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const onHeadingsChange = vi.fn();
+    const onDiagnosticsChange = vi.fn();
+
+    render(
+      <LexicalEditorPane
+        docPath="notes/shared-slices.md"
+        doc={"# Heading\n\nplain body\n\n## Next\n\ntail body\n"}
+        onDiagnosticsChange={onDiagnosticsChange}
+        onHeadingsChange={onHeadingsChange}
+      />,
+    );
+
+    expect(onHeadingsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ text: "Heading" }),
+      expect.objectContaining({ text: "Next" }),
+    ]);
+    expect(onDiagnosticsChange).toHaveBeenCalledWith([]);
+
+    const initialHeadingDerives = countPerfCalls(measureSyncSpy, "lexical.deriveHeadings");
+    const initialDiagnosticDerives = countPerfCalls(measureSyncSpy, "lexical.deriveDiagnostics");
+    onHeadingsChange.mockClear();
+    onDiagnosticsChange.mockClear();
+
+    act(() => {
+      lexicalEditorPaneState.props?.onTextChange(
+        "# Heading\n\nplain body\n\n## Next\n\ntail body updated\n",
+      );
+      vi.advanceTimersByTime(LEXICAL_TEST_LIVE_DEBOUNCE_MS);
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(onHeadingsChange).not.toHaveBeenCalled();
+    expect(onDiagnosticsChange).not.toHaveBeenCalled();
+    expect(countPerfCalls(measureSyncSpy, "lexical.deriveDocumentAnalysis")).toBeGreaterThan(1);
+    expect(countPerfCalls(measureSyncSpy, "lexical.deriveHeadings")).toBe(initialHeadingDerives);
+    expect(countPerfCalls(measureSyncSpy, "lexical.deriveDiagnostics")).toBe(initialDiagnosticDerives);
+  });
+
+  it("recomputes diagnostics without republishing headings when only reference slices change", async () => {
+    vi.resetModules();
+    const perf = await import("../perf");
+    const measureSyncSpy = vi.spyOn(perf, "measureSync");
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const onHeadingsChange = vi.fn();
+    const onDiagnosticsChange = vi.fn();
+
+    render(
+      <LexicalEditorPane
+        docPath="notes/reference-slices.md"
+        doc={"# Heading\n\nSee [@sec:one].\n\n## Next\n\nmore body\n"}
+        onDiagnosticsChange={onDiagnosticsChange}
+        onHeadingsChange={onHeadingsChange}
+      />,
+    );
+
+    expect(onHeadingsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ text: "Heading" }),
+      expect.objectContaining({ text: "Next" }),
+    ]);
+    expect(onDiagnosticsChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        message: "Unresolved reference \"@sec:one\"",
+      }),
+    ]);
+
+    const initialHeadingDerives = countPerfCalls(measureSyncSpy, "lexical.deriveHeadings");
+    const initialDiagnosticDerives = countPerfCalls(measureSyncSpy, "lexical.deriveDiagnostics");
+    onHeadingsChange.mockClear();
+    onDiagnosticsChange.mockClear();
+
+    act(() => {
+      lexicalEditorPaneState.props?.onTextChange(
+        "# Heading\n\nSee [@sec:two].\n\n## Next\n\nmore body\n",
+      );
+      vi.advanceTimersByTime(LEXICAL_TEST_LIVE_DEBOUNCE_MS);
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(onHeadingsChange).not.toHaveBeenCalled();
+    expect(onDiagnosticsChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        message: "Unresolved reference \"@sec:two\"",
+      }),
+    ]);
+    expect(countPerfCalls(measureSyncSpy, "lexical.deriveHeadings")).toBe(initialHeadingDerives);
+    expect(countPerfCalls(measureSyncSpy, "lexical.deriveDiagnostics")).toBe(initialDiagnosticDerives + 1);
   });
 
   it("seeds the shared incremental analysis cache for a stable doc path", async () => {

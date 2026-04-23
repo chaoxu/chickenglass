@@ -15,6 +15,19 @@ export interface DiagnosticEntry {
   readonly to: number;
 }
 
+export function sameDiagnosticEntries(
+  before: readonly DiagnosticEntry[],
+  after: readonly DiagnosticEntry[],
+): boolean {
+  return before.length === after.length
+    && before.every((entry, index) => (
+      entry.severity === after[index]?.severity
+      && entry.message === after[index]?.message
+      && entry.from === after[index]?.from
+      && entry.to === after[index]?.to
+    ));
+}
+
 type ReferenceLookup = Pick<ReadonlyMap<string, unknown>, "has">;
 
 interface AnalysisDiagnosticOptions {
