@@ -20,6 +20,11 @@ import { delimiter, dirname, extname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parseChromeArgs } from "./chrome-common.mjs";
+import { createArgParser } from "./devx-cli.mjs";
+import {
+  closeBrowserSession,
+  openBrowserSession,
+} from "./devx-browser-session.mjs";
 import {
   buildPerfRegressionReport,
   comparePerfRegressionReports,
@@ -27,12 +32,8 @@ import {
 } from "./perf-regression-lib.mjs";
 import {
   assertEditorHealth,
-  connectEditor,
-  createArgParser,
-  disconnectBrowser,
   EXTERNAL_DEMO_ROOT,
   EXTERNAL_FIXTURE_ROOT,
-  ensureAppServer,
   hasFixtureDocument,
   openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
@@ -1470,8 +1471,8 @@ export async function main(argv = process.argv.slice(2)) {
     hasFlag: (flag) => options.includes(flag),
   });
 
+  let browserSession = null;
   let page;
-  let stopAppServer = null;
   let shuttingDown = false;
   const cleanup = async () => {
     if (shuttingDown) {
@@ -1482,13 +1483,14 @@ export async function main(argv = process.argv.slice(2)) {
       try {
         await discardDirtyPerfState(page);
       } finally {
-        await disconnectBrowser(page);
+        await closeBrowserSession(browserSession);
+        browserSession = null;
         page = null;
       }
     }
-    if (stopAppServer) {
-      await stopAppServer();
-      stopAppServer = null;
+    if (browserSession) {
+      await closeBrowserSession(browserSession);
+      browserSession = null;
     }
   };
   const onSigint = () => {
@@ -1512,16 +1514,12 @@ export async function main(argv = process.argv.slice(2)) {
         runtimeOptions,
       );
     } else {
-      stopAppServer = await ensureAppServer(chromeArgs.url, {
-        autoStart: !options.includes("--no-start-server"),
+      browserSession = await openBrowserSession(options, {
+        defaultBrowser: "managed",
+        reloadCdp: false,
+        timeoutFallback: runtimeOptions.debugBridgeTimeoutMs,
       });
-      page = await connectEditor({
-        browser: chromeArgs.browser,
-        headless: chromeArgs.headless,
-        port: chromeArgs.port,
-        timeout: runtimeOptions.debugBridgeTimeoutMs,
-        url: chromeArgs.url,
-      });
+      page = browserSession.page;
       appUrl = getFlag("--url") ?? page.url();
       snapshots = await runScenarioSamples(
         page,
