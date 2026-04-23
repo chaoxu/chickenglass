@@ -160,7 +160,8 @@ adds Lexical-specific sync metrics:
 - `lexical.typing.canonical_ms` waits until canonical markdown catches up.
 - `lexical.typing.visual_sync_ms` measures the time from the last insert until
   the rich surface runs its first incremental or full document sync. When the
-  bridge keeps the rich surface current without emitting either sync span, this
+  bridge still emits no `lexical.setLexicalMarkdown` or
+  `lexical.incrementalRichSync` span by the end of the sync wait window, this
   metric is `0` and the sync-count metrics remain `0`.
 - `lexical.typing.semantic_ms` waits for semantic derivation after the edit.
   It includes scheduled/debounced readiness time, so compare it with

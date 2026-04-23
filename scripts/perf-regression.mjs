@@ -166,6 +166,18 @@ export const HTML_EXPORT_PANDOC_REQUIRED_METRICS = [
   "export.html.output_bytes",
 ];
 
+export function finalizeLexicalBridgeObservation(result) {
+  const visualSyncMs = result.visualSyncObserved ? result.visualSyncMs : 0;
+  const inputToSemanticMs =
+    result.wallMs + Math.max(result.canonicalMs, result.semanticMs) + result.settleMs;
+  return {
+    ...result,
+    visualSyncMs,
+    inputToSemanticMs,
+    inputToSemanticPerCharMs: inputToSemanticMs / result.insertCount,
+  };
+}
+
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
 
 async function runSteppedScroll(page) {
@@ -648,7 +660,7 @@ async function measureTypingBurst(page, anchor, insertCount) {
 }
 
 async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
-  return evaluateStep(
+  const result = await evaluateStep(
     page,
     "measureLexicalBridgeTypingBurst",
     async ({ nextAnchor, count, postIdleObservationMs }) => {
@@ -728,17 +740,8 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
           maxMs: Math.max(...values, 0),
         };
       };
-      const semanticSpanCount = async () => {
-        const snapshot = await window.__cfDebug.perfSummary();
-        const entry = snapshot.frontend.summaries.find(
-          (summary) => summary.name === "lexical.deriveSemanticState",
-        );
-        return entry?.count ?? 0;
-      };
-      const frontendSummary = async (name) => {
-        const snapshot = await window.__cfDebug.perfSummary();
-        return snapshot.frontend.summaries.find((summary) => summary.name === name) ?? null;
-      };
+      const findSummary = (summaries, name) =>
+        summaries.find((summary) => summary.name === name) ?? null;
 
       const editor = window.__editor;
       if (!editor) {
@@ -749,16 +752,27 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         typeof editor.peekDoc === "function" ? editor.peekDoc() : editor.getDoc();
 
       const beforeLength = readCanonicalDoc().length;
-      const semanticBefore = await frontendSummary("lexical.deriveSemanticState");
+      const beforePerfSnapshot = await window.__cfDebug.perfSummary();
+      const beforePerfSummaries = beforePerfSnapshot.frontend.summaries;
+      const semanticBefore = findSummary(beforePerfSummaries, "lexical.deriveSemanticState");
       const semanticCountBefore = semanticBefore?.count ?? 0;
-      const getMarkdownBefore = await frontendSummary("lexical.getLexicalMarkdown");
-      const publishSnapshotBefore = await frontendSummary("lexical.publishRichDocumentSnapshot");
-      const deferredSyncBefore = await frontendSummary("lexical.setLexicalMarkdown");
-      const incrementalSyncBefore = await frontendSummary("lexical.incrementalRichSync");
+      const getMarkdownBefore = findSummary(beforePerfSummaries, "lexical.getLexicalMarkdown");
+      const publishSnapshotBefore = findSummary(
+        beforePerfSummaries,
+        "lexical.publishRichDocumentSnapshot",
+      );
+      const deferredSyncBefore = findSummary(beforePerfSummaries, "lexical.setLexicalMarkdown");
+      const incrementalSyncBefore = findSummary(
+        beforePerfSummaries,
+        "lexical.incrementalRichSync",
+      );
       editor.setSelection(nextAnchor);
       editor.focus();
       await waitForAnimationFrames();
-      const sourceSpanIndexBefore = await frontendSummary("lexical.createSourceSpanIndex");
+      const sourceSpanIndexBefore = findSummary(
+        beforePerfSummaries,
+        "lexical.createSourceSpanIndex",
+      );
 
       const longTaskRecorder = createLongTaskRecorder();
       const timings = [];
@@ -776,52 +790,79 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       }
       const wallMs = performance.now() - wallStart;
 
-      const visualSyncStart = performance.now();
-      let deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
-      let incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
+      const syncObservationStart = performance.now();
+      const perfPollIntervalMs = 25;
+      const canonicalPollIntervalMs = 8;
+      let lastPerfSampleAt = Number.NEGATIVE_INFINITY;
+      let deferredSyncAfter = deferredSyncBefore;
+      let incrementalSyncAfter = incrementalSyncBefore;
+      let semanticAfter = semanticBefore;
       let finalLength = readCanonicalDoc().length;
-      let syncFreeVisualUpdate = false;
-      while (performance.now() - visualSyncStart < 3000) {
+      let canonicalMs = finalLength >= expectedLength ? 0 : null;
+      let visualSyncMs = null;
+      let semanticMs = null;
+      let visualSyncObserved = false;
+      let semanticObserved = false;
+      while (true) {
+        const now = performance.now();
+        if (canonicalMs == null) {
+          finalLength = readCanonicalDoc().length;
+          if (finalLength >= expectedLength) {
+            canonicalMs = now - syncObservationStart;
+          }
+        }
+        if (now - lastPerfSampleAt >= perfPollIntervalMs) {
+          const perfSnapshot = await window.__cfDebug.perfSummary();
+          const perfSampleAt = performance.now();
+          lastPerfSampleAt = perfSampleAt;
+          const perfSummaries = perfSnapshot.frontend.summaries;
+          deferredSyncAfter = findSummary(perfSummaries, "lexical.setLexicalMarkdown");
+          incrementalSyncAfter = findSummary(perfSummaries, "lexical.incrementalRichSync");
+          semanticAfter = findSummary(perfSummaries, "lexical.deriveSemanticState");
+          if (
+            !visualSyncObserved
+            && (
+              (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
+              || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
+            )
+          ) {
+            visualSyncObserved = true;
+            visualSyncMs = perfSampleAt - syncObservationStart;
+          }
+          if (
+            !semanticObserved
+            && (semanticAfter?.count ?? 0) > semanticCountBefore
+          ) {
+            semanticObserved = true;
+            semanticMs = perfSampleAt - syncObservationStart;
+          }
+        }
+        const elapsedMs = performance.now() - syncObservationStart;
+        const visualWaitExpired = elapsedMs >= 3000;
+        const semanticWaitExpired = elapsedMs >= 3000;
+        const canonicalWaitExpired = elapsedMs >= 5000;
         if (
-          (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
-          || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
+          (visualSyncObserved || visualWaitExpired)
+          && (semanticObserved || semanticWaitExpired)
+          && (canonicalMs != null || canonicalWaitExpired)
         ) {
           break;
         }
-        if (finalLength >= expectedLength) {
-          syncFreeVisualUpdate = true;
-          break;
-        }
-        await sleepInPage(25);
-        deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
-        incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
-        finalLength = readCanonicalDoc().length;
+        await sleepInPage(canonicalMs == null ? canonicalPollIntervalMs : perfPollIntervalMs);
       }
-      const visualSyncMs = syncFreeVisualUpdate ? 0 : performance.now() - visualSyncStart;
-
-      const canonicalStart = performance.now();
-      while (performance.now() - canonicalStart < 5000) {
-        if (finalLength >= expectedLength) {
-          break;
-        }
-        await sleepInPage(0);
-        finalLength = readCanonicalDoc().length;
+      const syncObservationEnd = performance.now();
+      if (canonicalMs == null) {
+        canonicalMs = syncObservationEnd - syncObservationStart;
       }
-      const canonicalMs = syncFreeVisualUpdate ? 0 : performance.now() - canonicalStart;
+      if (semanticMs == null) {
+        semanticMs = syncObservationEnd - syncObservationStart;
+      }
+      finalLength = readCanonicalDoc().length;
       if (finalLength < expectedLength) {
         throw new Error(
           `Lexical bridge insert did not update canonical markdown: expected length >= ${expectedLength}, got ${finalLength}.`,
         );
       }
-
-      const semanticStart = performance.now();
-      while (performance.now() - semanticStart < 3000) {
-        if (await semanticSpanCount() > semanticCountBefore) {
-          break;
-        }
-        await sleepInPage(25);
-      }
-      const semanticMs = performance.now() - semanticStart;
 
       const settleStart = performance.now();
       await waitForAnimationFrames();
@@ -835,34 +876,39 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
       longTaskRecorder.disconnect();
 
-      if (!syncFreeVisualUpdate) {
-        const deferredSyncStart = performance.now();
-        while (performance.now() - deferredSyncStart < 3000) {
-          if (
-            (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
-            || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
-          ) {
-            break;
-          }
-          await sleepInPage(25);
-          deferredSyncAfter = await frontendSummary("lexical.setLexicalMarkdown");
-          incrementalSyncAfter = await frontendSummary("lexical.incrementalRichSync");
-        }
-      }
-      const deferredSyncCount = Math.max(0, (deferredSyncAfter?.count ?? 0) - beforeDeferredCount);
+      const afterPerfSnapshot = await window.__cfDebug.perfSummary();
+      const afterPerfSummaries = afterPerfSnapshot.frontend.summaries;
+      const deferredSyncFinal = findSummary(afterPerfSummaries, "lexical.setLexicalMarkdown");
+      const incrementalSyncFinal = findSummary(afterPerfSummaries, "lexical.incrementalRichSync");
+      const sourceSpanIndexAfter = findSummary(
+        afterPerfSummaries,
+        "lexical.createSourceSpanIndex",
+      );
+      const getMarkdownAfter = findSummary(afterPerfSummaries, "lexical.getLexicalMarkdown");
+      const publishSnapshotAfter = findSummary(
+        afterPerfSummaries,
+        "lexical.publishRichDocumentSnapshot",
+      );
+      const semanticAfterFinal = findSummary(
+        afterPerfSummaries,
+        "lexical.deriveSemanticState",
+      );
+      const deferredSyncCount = Math.max(
+        0,
+        (deferredSyncFinal?.count ?? 0) - beforeDeferredCount,
+      );
       const deferredSyncWorkMs = Math.max(
         0,
-        (deferredSyncAfter?.totalMs ?? 0) - beforeDeferredTotalMs,
+        (deferredSyncFinal?.totalMs ?? 0) - beforeDeferredTotalMs,
       );
       const incrementalSyncCount = Math.max(
         0,
-        (incrementalSyncAfter?.count ?? 0) - beforeIncrementalCount,
+        (incrementalSyncFinal?.count ?? 0) - beforeIncrementalCount,
       );
       const incrementalSyncWorkMs = Math.max(
         0,
-        (incrementalSyncAfter?.totalMs ?? 0) - beforeIncrementalTotalMs,
+        (incrementalSyncFinal?.totalMs ?? 0) - beforeIncrementalTotalMs,
       );
-      const sourceSpanIndexAfter = await frontendSummary("lexical.createSourceSpanIndex");
       const sourceSpanIndexCount = Math.max(
         0,
         (sourceSpanIndexAfter?.count ?? 0) - (sourceSpanIndexBefore?.count ?? 0),
@@ -871,16 +917,13 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         0,
         (sourceSpanIndexAfter?.totalMs ?? 0) - (sourceSpanIndexBefore?.totalMs ?? 0),
       );
-      const semanticAfter = await frontendSummary("lexical.deriveSemanticState");
-      const getMarkdownAfter = await frontendSummary("lexical.getLexicalMarkdown");
-      const publishSnapshotAfter = await frontendSummary("lexical.publishRichDocumentSnapshot");
       const semanticWorkCount = Math.max(
         0,
-        (semanticAfter?.count ?? 0) - (semanticBefore?.count ?? 0),
+        (semanticAfterFinal?.count ?? 0) - (semanticBefore?.count ?? 0),
       );
       const semanticWorkMs = Math.max(
         0,
-        (semanticAfter?.totalMs ?? 0) - (semanticBefore?.totalMs ?? 0),
+        (semanticAfterFinal?.totalMs ?? 0) - (semanticBefore?.totalMs ?? 0),
       );
       const getMarkdownWorkCount = Math.max(
         0,
@@ -907,8 +950,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         p95InsertMs: percentile(timings, 95),
         maxInsertMs: Math.max(...timings, 0),
         canonicalMs,
-        visualSyncMs,
+        visualSyncMs: visualSyncMs ?? 0,
+        visualSyncObserved,
         semanticMs,
+        semanticObserved,
         semanticWorkCount,
         semanticWorkMs,
         getMarkdownWorkCount,
@@ -922,8 +967,6 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         incrementalSyncWorkMs,
         sourceSpanIndexCount,
         sourceSpanIndexWorkMs,
-        inputToSemanticMs: wallMs + canonicalMs + semanticMs + settleMs,
-        inputToSemanticPerCharMs: (wallMs + canonicalMs + semanticMs + settleMs) / count,
         longTaskSupported: longTaskRecorder.supported ? 1 : 0,
         longTaskCount: longTasks.count,
         longTaskTotalMs: longTasks.totalMs,
@@ -944,6 +987,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
     },
   );
+  return finalizeLexicalBridgeObservation(result);
 }
 
 export function typingBurstMetrics(caseKey, positionKey, result) {

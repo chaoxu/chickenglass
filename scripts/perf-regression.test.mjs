@@ -4,6 +4,7 @@ import {
   availableTypingBurstCases,
   buildHtmlExportPandocArgs,
   comparisonFailureRows,
+  finalizeLexicalBridgeObservation,
   findTypingBurstPositions,
   frontendSpanDeltaMetrics,
   HTML_EXPORT_PANDOC_CASES,
@@ -326,6 +327,36 @@ describe("perf regression scenarios", () => {
       { name: "lexical.typing.deferred_sync_count.index.near_end", unit: "count", value: 0 },
       { name: "lexical.typing.incremental_sync_count.index.near_end", unit: "count", value: 0 },
     ]));
+  });
+
+  it("computes input_to_semantic from the slower of canonical and semantic completion", () => {
+    expect(finalizeLexicalBridgeObservation({
+      insertCount: 100,
+      wallMs: 180,
+      canonicalMs: 40,
+      visualSyncMs: 18,
+      visualSyncObserved: true,
+      semanticMs: 320,
+      settleMs: 16,
+    })).toMatchObject({
+      visualSyncMs: 18,
+      inputToSemanticMs: 516,
+      inputToSemanticPerCharMs: 5.16,
+    });
+
+    expect(finalizeLexicalBridgeObservation({
+      insertCount: 100,
+      wallMs: 180,
+      canonicalMs: 280,
+      visualSyncMs: 14,
+      visualSyncObserved: false,
+      semanticMs: 120,
+      settleMs: 16,
+    })).toMatchObject({
+      visualSyncMs: 0,
+      inputToSemanticMs: 476,
+      inputToSemanticPerCharMs: 4.76,
+    });
   });
 
   it("emits position-scoped frontend span deltas for typing attribution", () => {
