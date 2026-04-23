@@ -10,6 +10,7 @@ import {
   findTrailingHeadingAttributes,
   hasUnnumberedHeadingAttributes,
 } from "./document";
+import type { DocumentAnalysis } from "./document";
 import { documentSemanticsField } from "../state/document-analysis";
 
 /** A single heading entry extracted from the document. */
@@ -31,6 +32,17 @@ export interface HeadingEntry {
  */
 export { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes };
 
+export function headingEntriesFromAnalysis(
+  analysis: Pick<DocumentAnalysis, "headings">,
+): HeadingEntry[] {
+  return analysis.headings.map((heading) => ({
+    level: heading.level,
+    text: heading.text,
+    number: heading.number,
+    pos: heading.from,
+  }));
+}
+
 /**
  * Extract all headings from the editor state.
  *
@@ -40,12 +52,7 @@ export { findTrailingHeadingAttributes, hasUnnumberedHeadingAttributes };
  * Returns entries sorted by document position.
  */
 export function extractHeadings(state: EditorState): HeadingEntry[] {
-  return state.field(documentSemanticsField).headings.map((heading) => ({
-    level: heading.level,
-    text: heading.text,
-    number: heading.number,
-    pos: heading.from,
-  }));
+  return headingEntriesFromAnalysis(state.field(documentSemanticsField));
 }
 
 /**

@@ -2,15 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { computeLiveStats } from "../writing-stats";
 import { Breadcrumbs } from "./breadcrumbs";
 import {
-  buildDocumentLabelGraph,
-  buildDocumentLabelParseSnapshot,
-  isLikelyLocalReferenceId,
-  type DocumentLabelGraph,
-} from "../markdown/labels";
+  extractDiagnosticsFromAnalysis,
+  type DiagnosticEntry,
+} from "../diagnostics";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import type { DiagnosticEntry } from "../diagnostics";
-import type { HeadingEntry } from "../heading-ancestry";
+import { headingEntriesFromAnalysis, type HeadingEntry } from "../heading-ancestry";
 import type { FileSystem } from "../file-manager";
 import type { ResolvedTheme } from "../theme-dom";
 import type { EditorMode } from "../../editor-display-mode";
@@ -20,6 +17,7 @@ import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexica
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import { registerCoflatDecoratorRenderers } from "../../lexical/renderers/block-renderers";
 import type { ProjectConfig } from "../../project-config";
+import { getDocumentAnalysisSnapshot } from "../../semantics/incremental/cached-document-analysis";
 
 registerCoflatDecoratorRenderers();
 
@@ -46,6 +44,7 @@ function toRevealMode(mode: EditorMode | undefined): RevealMode {
 }
 
 interface LexicalPaneDerivedState {
+  readonly cacheKey?: string;
   readonly chars: number;
   readonly diagnostics: DiagnosticEntry[];
   readonly diagnosticsEnabled: boolean;
@@ -65,6 +64,7 @@ interface LexicalPaneSemanticState {
 }
 
 interface LexicalSemanticDeriveOptions {
+  readonly cacheKey?: string;
   readonly includeDiagnostics: boolean;
 }
 
@@ -85,45 +85,6 @@ const LEXICAL_LIVE_STATS_DEBOUNCE_MS = 300;
 const LEXICAL_SEMANTIC_DERIVE_DEBOUNCE_MS = 300;
 const LEXICAL_SEMANTIC_IDLE_TIMEOUT_MS = 1_000;
 
-function extractDiagnosticsFromGraph(graph: DocumentLabelGraph): DiagnosticEntry[] {
-  const diagnostics: DiagnosticEntry[] = [];
-
-  for (const [id, definitions] of graph.duplicatesById) {
-    for (const definition of definitions) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate local target ID "${id}"`,
-        from: definition.from,
-        to: definition.to,
-      });
-    }
-  }
-
-  for (const reference of graph.references) {
-    if (!isLikelyLocalReferenceId(reference.id)) {
-      continue;
-    }
-    if (graph.definitionsById.has(reference.id)) {
-      continue;
-    }
-    diagnostics.push({
-      severity: "warning",
-      message: `Unresolved reference "@${reference.id}"`,
-      from: reference.from,
-      to: reference.to,
-    });
-  }
-
-  diagnostics.sort((left, right) => {
-    if (left.severity !== right.severity) {
-      return left.severity === "error" ? -1 : 1;
-    }
-    return left.from - right.from;
-  });
-
-  return diagnostics;
-}
-
 function deriveLexicalLiveCounts(doc: string): LexicalPaneLiveCounts {
   const counts = measureSync(
     "lexical.computeLiveStats",
@@ -141,29 +102,24 @@ function deriveLexicalSemanticState(
   options: LexicalSemanticDeriveOptions,
 ): LexicalPaneSemanticState {
   return measureSync("lexical.deriveSemanticState", () => {
-    const snapshot = buildDocumentLabelParseSnapshot(doc);
+    const analysis = measureSync(
+      "lexical.deriveDocumentAnalysis",
+      () => getDocumentAnalysisSnapshot(doc, options.cacheKey),
+      { category: "lexical", detail: options.cacheKey ?? `${doc.length} chars` },
+    );
     const headings = measureSync(
       "lexical.deriveHeadings",
-      () => snapshot.headings.map(({ level, text, number, pos, id }) => ({
-        level,
-        text,
-        number,
-        pos,
-        id,
-      })),
-      { category: "lexical", detail: `${snapshot.headings.length} headings` },
+      () => headingEntriesFromAnalysis(analysis),
+      { category: "lexical", detail: `${analysis.headings.length} headings` },
     );
     let diagnostics: DiagnosticEntry[] = [];
     if (options.includeDiagnostics) {
-      const graph = measureSync(
-        "lexical.deriveLabelGraph",
-        () => buildDocumentLabelGraph(doc, snapshot),
-        { category: "lexical", detail: `${snapshot.references.length} refs` },
-      );
       diagnostics = measureSync(
         "lexical.deriveDiagnostics",
-        () => extractDiagnosticsFromGraph(graph),
-        { category: "lexical", detail: `${graph.references.length} refs` },
+        () => extractDiagnosticsFromAnalysis(analysis, {
+          localOnlyWithoutBibliography: true,
+        }),
+        { category: "lexical", detail: `${analysis.references.length} refs` },
       );
     }
 
@@ -183,6 +139,7 @@ function deriveLexicalPaneState(
     const semanticState = deriveLexicalSemanticState(doc, options);
 
     return {
+      cacheKey: options.cacheKey,
       chars: counts.chars,
       diagnostics: semanticState.diagnostics,
       diagnosticsEnabled: options.includeDiagnostics,
@@ -221,6 +178,7 @@ export function LexicalEditorPane({
   ...editorOptions
 }: LexicalEditorPaneProps) {
   const [initialDerivedState] = useState(() => deriveLexicalPaneState(editorOptions.doc, {
+    cacheKey: editorOptions.docPath,
     includeDiagnostics: Boolean(onDiagnosticsChange),
   }));
   const derivedStateRef = useRef(initialDerivedState);
@@ -251,13 +209,20 @@ export function LexicalEditorPane({
 
   const getDerivedState = useCallback((doc: string, includeDiagnostics: boolean) => {
     const cached = derivedStateRef.current;
-    if (cached.doc === doc && cached.diagnosticsEnabled === includeDiagnostics) {
+    if (
+      cached.doc === doc
+      && cached.cacheKey === editorOptions.docPath
+      && cached.diagnosticsEnabled === includeDiagnostics
+    ) {
       return cached;
     }
-    const nextState = deriveLexicalPaneState(doc, { includeDiagnostics });
+    const nextState = deriveLexicalPaneState(doc, {
+      cacheKey: editorOptions.docPath,
+      includeDiagnostics,
+    });
     derivedStateRef.current = nextState;
     return nextState;
-  }, []);
+  }, [editorOptions.docPath]);
 
   const cancelScheduledDerivedState = useCallback(() => {
     if (liveCountsTimerRef.current !== null) {
@@ -334,6 +299,7 @@ export function LexicalEditorPane({
           return;
         }
         const semanticState = deriveLexicalSemanticState(doc, {
+          cacheKey: editorOptions.docPath,
           includeDiagnostics: shouldDeriveDiagnostics(),
         });
         if (docVersionRef.current !== version) {
@@ -344,7 +310,7 @@ export function LexicalEditorPane({
         callbacksRef.current.onDiagnosticsChange?.(semanticState.diagnostics);
       });
     }, LEXICAL_SEMANTIC_DERIVE_DEBOUNCE_MS);
-  }, [shouldDeriveDiagnostics]);
+  }, [editorOptions.docPath, shouldDeriveDiagnostics]);
 
   useEffect(() => {
     docVersionRef.current += 1;

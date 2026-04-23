@@ -7,6 +7,7 @@
 export {
   type HeadingEntry,
   extractHeadings,
+  headingEntriesFromAnalysis,
   headingAncestryAt,
   activeHeadingIndex,
   findTrailingHeadingAttributes,

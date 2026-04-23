@@ -1,8 +1,8 @@
 import type { EditorState } from "@codemirror/state";
 import { documentAnalysisField } from "../state/document-analysis";
 import { bibDataField } from "../state/bib-data";
-import { classifyReference } from "../index/crossref-resolver";
-import { blockCounterField } from "../state/block-counter";
+import type { DocumentAnalysis } from "../semantics/document";
+import { isLikelyLocalReferenceId } from "../lib/markdown/label-graph";
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -15,21 +15,26 @@ export interface DiagnosticEntry {
   readonly to: number;
 }
 
-function pushDuplicateIdDiagnostics(
+type ReferenceLookup = Pick<ReadonlyMap<string, unknown>, "has">;
+
+interface AnalysisDiagnosticOptions {
+  readonly bibliography?: ReferenceLookup;
+  readonly localOnlyWithoutBibliography?: boolean;
+}
+
+function pushDuplicateIdDiagnosticsFromAnalysis(
   diagnostics: DiagnosticEntry[],
-  state: EditorState,
+  analysis: DocumentAnalysis,
 ): void {
-  const analysis = state.field(documentAnalysisField);
-  const counters = state.field(blockCounterField, false);
   const blockIds = new Set<string>();
   const equationIds = new Set<string>();
   const seenBlockIds = new Set<string>();
   const seenEquationIds = new Set<string>();
   const seenHeadingIds = new Set<string>();
 
-  for (const block of counters?.blocks ?? []) {
-    if (block.id) {
-      blockIds.add(block.id);
+  for (const fencedDiv of analysis.fencedDivs) {
+    if (fencedDiv.id) {
+      blockIds.add(fencedDiv.id);
     }
   }
 
@@ -39,18 +44,18 @@ function pushDuplicateIdDiagnostics(
     }
   }
 
-  for (const block of counters?.blocks ?? []) {
-    if (!block.id) continue;
-    if (seenBlockIds.has(block.id)) {
+  for (const fencedDiv of analysis.fencedDivs) {
+    if (!fencedDiv.id) continue;
+    if (seenBlockIds.has(fencedDiv.id)) {
       diagnostics.push({
         severity: "error",
-        message: `Duplicate block ID "${block.id}"`,
-        from: block.from,
-        to: block.to,
+        message: `Duplicate local target ID "${fencedDiv.id}"`,
+        from: fencedDiv.attrFrom ?? fencedDiv.from,
+        to: fencedDiv.attrTo ?? fencedDiv.to,
       });
       continue;
     }
-    seenBlockIds.add(block.id);
+    seenBlockIds.add(fencedDiv.id);
   }
 
   for (const equation of analysis.equations) {
@@ -100,32 +105,32 @@ function pushDuplicateIdDiagnostics(
   }
 }
 
-export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
+export function extractDiagnosticsFromAnalysis(
+  analysis: DocumentAnalysis,
+  options: AnalysisDiagnosticOptions = {},
+): DiagnosticEntry[] {
+  const { bibliography, localOnlyWithoutBibliography = false } = options;
   const diagnostics: DiagnosticEntry[] = [];
-  const analysis = state.field(documentAnalysisField);
-  pushDuplicateIdDiagnostics(diagnostics, state);
-
-  // ── Warnings: unresolved references & citations ──────────────────────
-  // Uses the same per-id classification helper as the inline renderer.
-  const equationLabels = analysis.equationById;
-  const bibState = state.field(bibDataField, false);
-  const bibStore = bibState?.store;
+  pushDuplicateIdDiagnosticsFromAnalysis(diagnostics, analysis);
 
   for (const ref of analysis.references) {
     for (const id of ref.ids) {
-      const classification = classifyReference(state, id, {
-        bibliography: bibStore,
-        equationLabels,
-        preferCitation: ref.bracketed,
-      });
-      if (classification.kind === "unresolved") {
-        diagnostics.push({
-          severity: "warning",
-          message: `Unresolved reference "@${id}"`,
-          from: ref.from,
-          to: ref.to,
-        });
+      if (!bibliography && localOnlyWithoutBibliography && !isLikelyLocalReferenceId(id)) {
+        continue;
       }
+      const localTarget = analysis.referenceIndex.get(id);
+      if (localTarget?.type === "crossref" || localTarget?.type === "label") {
+        continue;
+      }
+      if (bibliography?.has(id)) {
+        continue;
+      }
+      diagnostics.push({
+        severity: "warning",
+        message: `Unresolved reference "@${id}"`,
+        from: ref.from,
+        to: ref.to,
+      });
     }
   }
 
@@ -136,4 +141,11 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   });
 
   return diagnostics;
+}
+
+export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
+  const analysis = state.field(documentAnalysisField);
+  return extractDiagnosticsFromAnalysis(analysis, {
+    bibliography: state.field(bibDataField, false)?.store,
+  });
 }

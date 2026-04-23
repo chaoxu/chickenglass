@@ -133,15 +133,12 @@ describe("LexicalEditorPane derived state scheduling", () => {
 
     render(
       <LexicalEditorPane
+        docPath="notes/no-diagnostics.md"
         doc="# Initial\n\none two"
         onHeadingsChange={onHeadingsChange}
       />,
     );
 
-    const initialLabelGraphCalls = countPerfCalls(
-      measureSyncSpy,
-      "lexical.deriveLabelGraph",
-    );
     const initialDiagnosticsCalls = countPerfCalls(
       measureSyncSpy,
       "lexical.deriveDiagnostics",
@@ -159,12 +156,12 @@ describe("LexicalEditorPane derived state scheduling", () => {
     ]);
     expect(countPerfCalls(
       measureSyncSpy,
-      "lexical.deriveLabelGraph",
-    )).toBe(initialLabelGraphCalls);
-    expect(countPerfCalls(
-      measureSyncSpy,
       "lexical.deriveDiagnostics",
     )).toBe(initialDiagnosticsCalls);
+    expect(countPerfCalls(
+      measureSyncSpy,
+      "lexical.deriveDocumentAnalysis",
+    )).toBeGreaterThan(0);
   });
 
   it("publishes current diagnostics from the current unsaved doc when the diagnostics callback appears", async () => {
@@ -195,6 +192,58 @@ describe("LexicalEditorPane derived state scheduling", () => {
         message: "Unresolved reference \"@sec:missing\"",
       }),
     ]);
+  });
+
+  it("keeps citation ids out of lexical diagnostics without bibliography data", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const diagnostics = vi.fn();
+
+    render(
+      <LexicalEditorPane
+        doc="# Intro\n\nSee [@sec:missing] and [@karger2000]."
+        onDiagnosticsChange={diagnostics}
+      />,
+    );
+
+    expect(diagnostics).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        message: "Unresolved reference \"@sec:missing\"",
+      }),
+    ]);
+  });
+
+  it("seeds the shared incremental analysis cache for a stable doc path", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const {
+      clearDocumentAnalysisCache,
+      getDocumentAnalysisSnapshot,
+    } = await import("../../semantics/incremental/cached-document-analysis");
+    const { getDocumentAnalysisRevision } = await import("../../semantics/incremental/engine");
+    const docPath = "notes/lexical-cache.md";
+    const nextDoc = "# Updated\n\nBody with [@sec:missing].\n";
+
+    clearDocumentAnalysisCache();
+
+    render(
+      <LexicalEditorPane
+        docPath={docPath}
+        doc="# Initial\n\nBody.\n"
+        onHeadingsChange={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      lexicalEditorPaneState.props?.onTextChange(nextDoc);
+      vi.advanceTimersByTime(LEXICAL_TEST_LIVE_DEBOUNCE_MS);
+      vi.advanceTimersByTime(16);
+    });
+
+    const cached = getDocumentAnalysisSnapshot(nextDoc, docPath);
+
+    expect(getDocumentAnalysisRevision(cached)).toBe(1);
+    expect(cached.references).toHaveLength(1);
   });
 });
 
