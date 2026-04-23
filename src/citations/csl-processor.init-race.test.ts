@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CitationJsModules, CitationJsLoader } from "./csl-processor";
 
 beforeEach(() => {
   vi.resetModules();
@@ -6,8 +7,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.resetModules();
-  vi.doUnmock("@citation-js/core");
-  vi.doUnmock("@citation-js/plugin-csl");
 });
 
 describe("CslProcessor init races", () => {
@@ -18,8 +17,7 @@ describe("CslProcessor init races", () => {
     });
     const templatesAdd = vi.fn();
     const engineFactory = vi.fn((_data, styleName: string) => ({ styleName }));
-
-    vi.doMock("@citation-js/core", async () => {
+    const loader: CitationJsLoader = async () => {
       await coreImportGate;
       return {
         plugins: {
@@ -30,11 +28,11 @@ describe("CslProcessor init races", () => {
             }),
           },
         },
-      };
-    });
-    vi.doMock("@citation-js/plugin-csl", async () => ({}));
+      } as unknown as CitationJsModules;
+    };
 
-    const { CslProcessor } = await import("./csl-processor");
+    const { CslProcessor, setCitationJsLoaderForTest } = await import("./csl-processor");
+    setCitationJsLoaderForTest(loader);
     const processor = new CslProcessor([
       { id: "alpha2020", type: "article-journal" },
     ]);
@@ -63,8 +61,7 @@ describe("CslProcessor init races", () => {
     });
     const templatesAdd = vi.fn();
     const engineFactory = vi.fn((_data, styleName: string) => ({ styleName }));
-
-    vi.doMock("@citation-js/core", async () => {
+    const loader: CitationJsLoader = async () => {
       await coreImportGate;
       return {
         plugins: {
@@ -75,11 +72,11 @@ describe("CslProcessor init races", () => {
             }),
           },
         },
-      };
-    });
-    vi.doMock("@citation-js/plugin-csl", async () => ({}));
+      } as unknown as CitationJsModules;
+    };
 
-    const { CslProcessor } = await import("./csl-processor");
+    const { CslProcessor, setCitationJsLoaderForTest } = await import("./csl-processor");
+    setCitationJsLoaderForTest(loader);
     const processor = new CslProcessor([
       { id: "alpha2020", type: "article-journal" },
     ]);

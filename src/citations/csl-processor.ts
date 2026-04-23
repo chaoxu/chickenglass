@@ -25,24 +25,32 @@ import defaultCslStyle from "./ieee.csl?raw";
  * dynamic-importing them here and caching the result we keep them out of
  * the main startup chunk entirely.  (#446)
  */
-interface CitationJsModules {
+export interface CitationJsModules {
   plugins: typeof import("@citation-js/core").plugins;
 }
 
+export type CitationJsLoader = () => Promise<CitationJsModules>;
+
 let citationJsPromise: Promise<CitationJsModules> | null = null;
+let citationJsLoaderOverride: CitationJsLoader | null = null;
 
 function loadCitationJs(): Promise<CitationJsModules> {
   if (!citationJsPromise) {
-    citationJsPromise = (async () => {
+    citationJsPromise = (citationJsLoaderOverride ?? (async () => {
       const [core] = await Promise.all([
         import("@citation-js/core"),
         // Side-effect import: registers the CSL plugin with citation-js
         import("@citation-js/plugin-csl"),
       ]);
       return { plugins: core.plugins };
-    })();
+    }))();
   }
   return citationJsPromise;
+}
+
+export function setCitationJsLoaderForTest(loader: CitationJsLoader | null): void {
+  citationJsPromise = null;
+  citationJsLoaderOverride = loader;
 }
 
 /** CiteprocEngine type from @citation-js/core (replicated to avoid static import). */
