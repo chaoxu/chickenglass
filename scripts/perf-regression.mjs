@@ -167,11 +167,16 @@ export const HTML_EXPORT_PANDOC_REQUIRED_METRICS = [
 ];
 
 export function finalizeLexicalBridgeObservation(result) {
-  const visualSyncMs = result.visualSyncObserved ? result.visualSyncMs : 0;
+  const visualSyncCounts = result.deferredSyncCount + result.incrementalSyncCount;
+  const visualSyncSeen = result.visualSyncObserved || visualSyncCounts > 0;
+  const visualSyncMs = visualSyncSeen
+    ? (result.visualSyncObserved ? result.visualSyncMs : result.visualSyncTimeoutMs)
+    : 0;
   const inputToSemanticMs =
     result.wallMs + Math.max(result.canonicalMs, result.semanticMs) + result.settleMs;
   return {
     ...result,
+    visualSyncObserved: visualSyncSeen,
     visualSyncMs,
     inputToSemanticMs,
     inputToSemanticPerCharMs: inputToSemanticMs / result.insertCount,
@@ -811,7 +816,10 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
             canonicalMs = now - syncObservationStart;
           }
         }
-        if (now - lastPerfSampleAt >= perfPollIntervalMs) {
+        if (
+          (!visualSyncObserved || !semanticObserved)
+          && now - lastPerfSampleAt >= perfPollIntervalMs
+        ) {
           const perfSnapshot = await window.__cfDebug.perfSummary();
           const perfSampleAt = performance.now();
           lastPerfSampleAt = perfSampleAt;
@@ -952,6 +960,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
         canonicalMs,
         visualSyncMs: visualSyncMs ?? 0,
         visualSyncObserved,
+        visualSyncTimeoutMs: syncObservationEnd - syncObservationStart,
         semanticMs,
         semanticObserved,
         semanticWorkCount,

@@ -336,10 +336,14 @@ describe("perf regression scenarios", () => {
       canonicalMs: 40,
       visualSyncMs: 18,
       visualSyncObserved: true,
+      visualSyncTimeoutMs: 3000,
+      deferredSyncCount: 1,
+      incrementalSyncCount: 0,
       semanticMs: 320,
       settleMs: 16,
     })).toMatchObject({
       visualSyncMs: 18,
+      visualSyncObserved: true,
       inputToSemanticMs: 516,
       inputToSemanticPerCharMs: 5.16,
     });
@@ -350,12 +354,34 @@ describe("perf regression scenarios", () => {
       canonicalMs: 280,
       visualSyncMs: 14,
       visualSyncObserved: false,
+      visualSyncTimeoutMs: 3000,
+      deferredSyncCount: 0,
+      incrementalSyncCount: 0,
       semanticMs: 120,
       settleMs: 16,
     })).toMatchObject({
       visualSyncMs: 0,
+      visualSyncObserved: false,
       inputToSemanticMs: 476,
       inputToSemanticPerCharMs: 4.76,
+    });
+  });
+
+  it("reconciles late sync counts against the final snapshot", () => {
+    expect(finalizeLexicalBridgeObservation({
+      insertCount: 100,
+      wallMs: 180,
+      canonicalMs: 0,
+      visualSyncMs: 0,
+      visualSyncObserved: false,
+      visualSyncTimeoutMs: 3000,
+      deferredSyncCount: 1,
+      incrementalSyncCount: 0,
+      semanticMs: 340,
+      settleMs: 16,
+    })).toMatchObject({
+      visualSyncMs: 3000,
+      visualSyncObserved: true,
     });
   });
 
