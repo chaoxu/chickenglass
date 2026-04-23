@@ -167,15 +167,21 @@ describe("LexicalEditorPane derived state scheduling", () => {
 
   it("publishes current diagnostics from the current unsaved doc when the diagnostics callback appears", async () => {
     vi.resetModules();
+    const perf = await import("../perf");
+    const measureSyncSpy = vi.spyOn(perf, "measureSync");
     const { LexicalEditorPane } = await import("./lexical-editor-pane");
     const diagnostics = vi.fn();
+    const headings = vi.fn();
     const view = render(
       <LexicalEditorPane
         doc="# Initial\n\none two"
+        onHeadingsChange={headings}
       />,
     );
 
     expect(diagnostics).not.toHaveBeenCalled();
+    const initialLiveCountDerives = countPerfCalls(measureSyncSpy, "lexical.computeLiveStats");
+    headings.mockClear();
 
     act(() => {
       lexicalEditorPaneState.props?.onTextChange("# Initial\n\nSee [@sec:missing].");
@@ -184,6 +190,7 @@ describe("LexicalEditorPane derived state scheduling", () => {
     view.rerender(
       <LexicalEditorPane
         doc="# Initial\n\none two"
+        onHeadingsChange={headings}
         onDiagnosticsChange={diagnostics}
       />,
     );
@@ -193,6 +200,8 @@ describe("LexicalEditorPane derived state scheduling", () => {
         message: "Unresolved reference \"@sec:missing\"",
       }),
     ]);
+    expect(headings).not.toHaveBeenCalled();
+    expect(countPerfCalls(measureSyncSpy, "lexical.computeLiveStats")).toBe(initialLiveCountDerives);
   });
 
   it("resets cached semantic publication when the doc path changes but the saved doc text does not", async () => {

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { computeLiveStats } from "../writing-stats";
 import { Breadcrumbs } from "./breadcrumbs";
-import {
-  extractDiagnosticsFromAnalysis,
-  type DiagnosticEntry,
-  sameDiagnosticEntries,
-} from "../diagnostics";
+import type { DiagnosticEntry } from "../diagnostics";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import { headingEntriesFromAnalysis, type HeadingEntry } from "../heading-ancestry";
+import type { HeadingEntry } from "../heading-ancestry";
+import {
+  deriveSidebarSemanticState,
+  type SidebarSemanticState,
+} from "./sidebar-semantic-state";
 import type { FileSystem } from "../file-manager";
 import type { ResolvedTheme } from "../theme-dom";
 import type { EditorMode } from "../../editor-display-mode";
@@ -18,7 +18,6 @@ import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexica
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import type { ProjectConfig } from "../../project-config";
 import { getDocumentAnalysisSnapshot } from "../../semantics/incremental/cached-document-analysis";
-import { getDocumentAnalysisSliceRevision } from "../../semantics/incremental/engine";
 
 interface LexicalEditorPaneProps {
   readonly doc: string;
@@ -47,21 +46,9 @@ interface LexicalPaneLiveCounts {
   readonly words: number;
 }
 
-interface LexicalDiagnosticsSliceRevisions {
-  readonly equations: number;
-  readonly fencedDivs: number;
-  readonly headings: number;
-  readonly references: number;
-}
-
-interface LexicalPaneSemanticState {
+interface LexicalPaneSemanticState extends SidebarSemanticState {
   readonly cacheKey?: string;
-  readonly diagnostics: DiagnosticEntry[];
-  readonly diagnosticsEnabled: boolean;
-  readonly diagnosticsRevisions?: LexicalDiagnosticsSliceRevisions;
   readonly doc: string;
-  readonly headings: HeadingEntry[];
-  readonly headingsRevision: number;
 }
 
 interface LexicalSemanticDeriveOptions {
@@ -98,40 +85,6 @@ function deriveLexicalLiveCounts(doc: string): LexicalPaneLiveCounts {
   };
 }
 
-function diagnosticSliceRevisions(
-  doc: ReturnType<typeof getDocumentAnalysisSnapshot>,
-): LexicalDiagnosticsSliceRevisions {
-  return {
-    equations: getDocumentAnalysisSliceRevision(doc, "equations"),
-    fencedDivs: getDocumentAnalysisSliceRevision(doc, "fencedDivs"),
-    headings: getDocumentAnalysisSliceRevision(doc, "headings"),
-    references: getDocumentAnalysisSliceRevision(doc, "references"),
-  };
-}
-
-function sameDiagnosticSliceRevisions(
-  before: LexicalDiagnosticsSliceRevisions | undefined,
-  after: LexicalDiagnosticsSliceRevisions | undefined,
-): boolean {
-  return before?.equations === after?.equations
-    && before?.fencedDivs === after?.fencedDivs
-    && before?.headings === after?.headings
-    && before?.references === after?.references;
-}
-
-function sameHeadingEntries(
-  before: readonly HeadingEntry[],
-  after: readonly HeadingEntry[],
-): boolean {
-  return before.length === after.length
-    && before.every((entry, index) => (
-      entry.level === after[index]?.level
-      && entry.number === after[index]?.number
-      && entry.pos === after[index]?.pos
-      && entry.text === after[index]?.text
-    ));
-}
-
 function deriveLexicalSemanticState(
   doc: string,
   options: LexicalSemanticDeriveOptions,
@@ -144,62 +97,17 @@ function deriveLexicalSemanticState(
       { category: "lexical", detail: options.cacheKey ?? `${doc.length} chars` },
     );
     const previousState = previous;
-    const hasStableCacheKey = Boolean(options.cacheKey);
-    const headingsRevision = getDocumentAnalysisSliceRevision(analysis, "headings");
-    const reusableHeadings = hasStableCacheKey
-      && previousState
-      && previousState.cacheKey === options.cacheKey
-      && previousState.headingsRevision === headingsRevision
-      ? previousState.headings
-      : null;
-    const headings = reusableHeadings
-      ? reusableHeadings
-      : measureSync(
-          "lexical.deriveHeadings",
-          () => headingEntriesFromAnalysis(analysis),
-          { category: "lexical", detail: `${analysis.headings.length} headings` },
-        );
-    const stableHeadings = previousState
-      && sameHeadingEntries(previousState.headings, headings)
-      ? previousState.headings
-      : headings;
-    let diagnostics: DiagnosticEntry[] = [];
-    const nextDiagnosticsRevisions = options.includeDiagnostics
-      ? diagnosticSliceRevisions(analysis)
-      : undefined;
-    if (options.includeDiagnostics) {
-      const reusableDiagnostics = hasStableCacheKey
-        && previousState
-        && previousState.cacheKey === options.cacheKey
-        && previousState.diagnosticsEnabled
-        && sameDiagnosticSliceRevisions(previousState.diagnosticsRevisions, nextDiagnosticsRevisions)
-        ? previousState.diagnostics
-        : null;
-      diagnostics = reusableDiagnostics
-        ? reusableDiagnostics
-        : measureSync(
-            "lexical.deriveDiagnostics",
-            () => extractDiagnosticsFromAnalysis(analysis, {
-              localOnlyWithoutBibliography: true,
-            }),
-            { category: "lexical", detail: `${analysis.references.length} refs` },
-          );
-      if (
-        previousState?.diagnosticsEnabled
-        && sameDiagnosticEntries(previousState.diagnostics, diagnostics)
-      ) {
-        diagnostics = previousState.diagnostics;
-      }
-    }
+    const nextState = deriveSidebarSemanticState(analysis, {
+      includeDiagnostics: options.includeDiagnostics,
+      localOnlyWithoutBibliography: true,
+      metricPrefix: "lexical",
+      reuseByRevision: Boolean(options.cacheKey),
+    }, previousState);
 
     return {
       cacheKey: options.cacheKey,
-      diagnostics,
-      diagnosticsEnabled: options.includeDiagnostics,
-      diagnosticsRevisions: nextDiagnosticsRevisions,
       doc,
-      headings: stableHeadings,
-      headingsRevision,
+      ...nextState,
     };
   }, { category: "lexical", detail: `${doc.length} chars` });
 }
@@ -293,13 +201,30 @@ export function LexicalEditorPane({
     cancelSemanticIdleTaskRef.current = null;
   }, []);
 
+  const syncLiveCounts = useCallback((doc: string) => {
+    const counts = deriveLexicalLiveCounts(doc);
+    useEditorTelemetryStore.getState().setLiveCounts(counts.words, counts.chars);
+  }, []);
+
   const publishSemanticState = useCallback((
     semanticState: LexicalPaneSemanticState,
-    options: { readonly force?: boolean } = {},
+    options: {
+      readonly force?: boolean;
+      readonly publishDiagnostics?: boolean;
+      readonly publishHeadings?: boolean;
+      readonly updateHeadingState?: boolean;
+    } = {},
   ) => {
-    const { force = false } = options;
-    setHeadings(semanticState.headings);
-    if (force || publishedHeadingsRef.current !== semanticState.headings) {
+    const {
+      force = false,
+      publishDiagnostics = true,
+      publishHeadings = true,
+      updateHeadingState = true,
+    } = options;
+    if (updateHeadingState) {
+      setHeadings(semanticState.headings);
+    }
+    if (publishHeadings && (force || publishedHeadingsRef.current !== semanticState.headings)) {
       measureSync("lexical.publishHeadings", () => {
         callbacksRef.current.onHeadingsChange?.(semanticState.headings);
       }, {
@@ -308,7 +233,7 @@ export function LexicalEditorPane({
       });
       publishedHeadingsRef.current = semanticState.headings;
     }
-    if (callbacksRef.current.onDiagnosticsChange) {
+    if (publishDiagnostics && callbacksRef.current.onDiagnosticsChange) {
       if (force || publishedDiagnosticsRef.current !== semanticState.diagnostics) {
         measureSync("lexical.publishDiagnostics", () => {
           callbacksRef.current.onDiagnosticsChange?.(semanticState.diagnostics);
@@ -320,7 +245,9 @@ export function LexicalEditorPane({
       publishedDiagnosticsRef.current = semanticState.diagnostics;
       return;
     }
-    publishedDiagnosticsRef.current = semanticState.diagnostics;
+    if (publishDiagnostics) {
+      publishedDiagnosticsRef.current = semanticState.diagnostics;
+    }
   }, []);
 
   const applyImmediateState = useCallback((
@@ -328,10 +255,9 @@ export function LexicalEditorPane({
     options: { readonly forcePublish?: boolean } = {},
   ) => {
     const semanticState = getSemanticState(doc, shouldDeriveDiagnostics());
-    const counts = deriveLexicalLiveCounts(doc);
-    useEditorTelemetryStore.getState().setLiveCounts(counts.words, counts.chars);
+    syncLiveCounts(doc);
     publishSemanticState(semanticState, { force: options.forcePublish });
-  }, [getSemanticState, publishSemanticState, shouldDeriveDiagnostics]);
+  }, [getSemanticState, publishSemanticState, shouldDeriveDiagnostics, syncLiveCounts]);
 
   useEffect(() => {
     const previousCallbacks = callbacksRef.current;
@@ -344,9 +270,24 @@ export function LexicalEditorPane({
     const headingsSubscriberChanged = onHeadingsChange !== undefined
       && onHeadingsChange !== previousCallbacks.onHeadingsChange;
     if (diagnosticsSubscriberChanged || headingsSubscriberChanged) {
-      applyImmediateState(currentDocRef.current, { forcePublish: true });
+      const semanticState = getSemanticState(
+        currentDocRef.current,
+        shouldDeriveDiagnostics(),
+      );
+      publishSemanticState(semanticState, {
+        force: true,
+        publishDiagnostics: diagnosticsSubscriberChanged,
+        publishHeadings: headingsSubscriberChanged,
+        updateHeadingState: false,
+      });
     }
-  }, [applyImmediateState, onDiagnosticsChange, onHeadingsChange]);
+  }, [
+    getSemanticState,
+    onDiagnosticsChange,
+    onHeadingsChange,
+    publishSemanticState,
+    shouldDeriveDiagnostics,
+  ]);
 
   const scheduleLiveCounts = useCallback((doc: string, version: number) => {
     if (liveCountsTimerRef.current !== null) {
