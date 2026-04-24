@@ -18,7 +18,7 @@ import {
   subscribeWindowState,
   type WindowState,
   type CurrentDocumentState,
-  type SidebarSectionState,
+  type WorkspaceLayoutState,
 } from "../window-state";
 
 export interface UseWindowStateReturn {
@@ -29,9 +29,8 @@ export interface UseWindowStateReturn {
    */
   saveState: (patch: Partial<{
     currentDocument: CurrentDocumentState | null;
+    layout: WorkspaceLayoutState;
     projectRoot: string | null;
-    sidebarWidth: number;
-    sidebarSections: SidebarSectionState[];
   }>) => void;
   /** Reload from localStorage (useful after external writes). */
   reloadState: () => void;
@@ -47,16 +46,14 @@ export function useWindowState(): UseWindowStateReturn {
   const saveState = useCallback(
     (patch: Partial<{
       currentDocument: CurrentDocumentState | null;
+      layout: WorkspaceLayoutState;
       projectRoot: string | null;
-      sidebarWidth: number;
-      sidebarSections: SidebarSectionState[];
     }>) => {
       const prev = getWindowStateSnapshot();
       const next = buildWindowState({
         currentDocument: patch.currentDocument !== undefined ? patch.currentDocument : prev.currentDocument,
+        layout: patch.layout ?? prev.layout,
         projectRoot: patch.projectRoot !== undefined ? patch.projectRoot : prev.projectRoot,
-        sidebarWidth: patch.sidebarWidth ?? prev.sidebarWidth,
-        sidebarSections: patch.sidebarSections ?? prev.sidebarSections,
       });
       saveWindowState(next);
     },

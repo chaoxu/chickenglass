@@ -70,9 +70,12 @@ describe("window-state launch params", () => {
       JSON.stringify(
         createTestWindowState({
           currentDocument: { path: "notes.md", name: "notes.md" },
+          layout: {
+            sidebarWidth: 312,
+            sidebarTab: "outline",
+            sidenotesCollapsed: false,
+          },
           projectRoot: "/tmp/original-project",
-          sidebarWidth: 312,
-          sidebarSections: [{ title: "Files", collapsed: true }],
         }),
       ),
     );
@@ -89,8 +92,9 @@ describe("window-state launch params", () => {
       path: "outside.md",
       name: "outside.md",
     });
-    expect(state.sidebarWidth).toBe(312);
-    expect(state.sidebarSections).toEqual([{ title: "Files", collapsed: true }]);
+    expect(state.layout.sidebarWidth).toBe(312);
+    expect(state.layout.sidebarTab).toBe("outline");
+    expect(state.layout.sidenotesCollapsed).toBe(false);
   });
 
   it("clears the persisted document when launch params switch to a different root without a file", () => {
@@ -100,8 +104,6 @@ describe("window-state launch params", () => {
         createTestWindowState({
           currentDocument: { path: "notes.md", name: "notes.md" },
           projectRoot: "/tmp/original-project",
-          sidebarWidth: 220,
-          sidebarSections: [],
         }),
       ),
     );
@@ -145,10 +147,36 @@ describe("window-state persisted schema", () => {
 
     expect(loadWindowState()).toEqual({
       currentDocument: { path: "b.md", name: "B" },
+      layout: {
+        sidebarCollapsed: false,
+        sidebarTab: "files",
+        sidebarWidth: 320,
+        sidenotesCollapsed: true,
+      },
       projectRoot: null,
+      version: 3,
+    });
+  });
+
+  it("migrates v2 sidebar width into the canonical layout model", () => {
+    persistRaw(WINDOW_STATE_KEY, {
+      currentDocument: null,
+      projectRoot: "/project",
       sidebarSections: [{ title: "Files", collapsed: true }],
-      sidebarWidth: 320,
+      sidebarWidth: 0,
       version: 2,
+    });
+
+    expect(loadWindowState()).toEqual({
+      currentDocument: null,
+      layout: {
+        sidebarCollapsed: true,
+        sidebarTab: "files",
+        sidebarWidth: 220,
+        sidenotesCollapsed: true,
+      },
+      projectRoot: "/project",
+      version: 3,
     });
   });
 
@@ -185,6 +213,8 @@ describe("window-state persisted schema", () => {
       { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: "220", sidebarSections: [] },
       { version: 2, projectRoot: null, currentDocument: { path: "a.md" }, sidebarWidth: 220, sidebarSections: [] },
       { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }] },
+      { version: 3, projectRoot: null, currentDocument: null, layout: { sidebarCollapsed: false, sidebarWidth: 220, sidebarTab: "nope", sidenotesCollapsed: true } },
+      { version: 3, projectRoot: null, currentDocument: null, layout: { sidebarCollapsed: false, sidebarWidth: "220", sidebarTab: "files", sidenotesCollapsed: true } },
       { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [], tabs: "nope" },
       { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [], tabs: [{ path: "a.md" }] },
       { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }], tabs: [] },
@@ -198,15 +228,14 @@ describe("window-state persisted schema", () => {
     setTauriWindowLabel("document-a");
     persistRaw(WINDOW_STATE_KEY, createTestWindowState({
       currentDocument: { path: "global.md", name: "global.md" },
+      layout: { sidebarWidth: 300 },
       projectRoot: "/project/global",
-      sidebarSections: [],
-      sidebarWidth: 300,
     }));
 
     expect(loadWindowState()).toMatchObject({
       currentDocument: { path: "global.md", name: "global.md" },
       projectRoot: "/project/global",
-      sidebarWidth: 300,
+      layout: expect.objectContaining({ sidebarWidth: 300 }),
     });
   });
 
@@ -214,38 +243,35 @@ describe("window-state persisted schema", () => {
     setTauriWindowLabel("document-a");
     persistRaw(WINDOW_STATE_KEY, createTestWindowState({
       currentDocument: { path: "global.md", name: "global.md" },
+      layout: { sidebarWidth: 300 },
       projectRoot: "/project/global",
-      sidebarSections: [],
-      sidebarWidth: 300,
     }));
     persistRaw(getWindowStateStorageKey("document-a"), createTestWindowState({
       currentDocument: { path: "scoped.md", name: "scoped.md" },
+      layout: { sidebarWidth: 420 },
       projectRoot: "/project/scoped",
-      sidebarSections: [],
-      sidebarWidth: 420,
     }));
 
     expect(loadWindowState()).toMatchObject({
       currentDocument: { path: "scoped.md", name: "scoped.md" },
+      layout: expect.objectContaining({ sidebarWidth: 420 }),
       projectRoot: "/project/scoped",
-      sidebarWidth: 420,
     });
 
     localStorage.setItem(getWindowStateStorageKey("document-a"), "{bad json");
 
     expect(loadWindowState()).toMatchObject({
       currentDocument: { path: "global.md", name: "global.md" },
+      layout: expect.objectContaining({ sidebarWidth: 300 }),
       projectRoot: "/project/global",
-      sidebarWidth: 300,
     });
   });
 
   it("derives storage keys and saves snapshots for explicit window labels", () => {
     const state = createTestWindowState({
       currentDocument: { path: "notes.md", name: "notes.md" },
+      layout: { sidebarWidth: 260 },
       projectRoot: "/project",
-      sidebarSections: [{ title: "Files", collapsed: false }],
-      sidebarWidth: 260,
     });
 
     expect(getWindowStateStorageKey(null)).toBe(WINDOW_STATE_KEY);

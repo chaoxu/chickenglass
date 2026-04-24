@@ -24,7 +24,14 @@ interface AppSessionPersistenceDeps {
   >;
   sidebarLayout: Pick<
     SidebarLayoutController,
-    "sidebarCollapsed" | "sidebarWidth" | "setSidebarCollapsed" | "setSidebarWidth"
+    | "sidebarCollapsed"
+    | "sidebarTab"
+    | "sidebarWidth"
+    | "sidenotesCollapsed"
+    | "setSidebarCollapsed"
+    | "setSidebarTab"
+    | "setSidebarWidth"
+    | "setSidenotesCollapsed"
   >;
   editor: Pick<
     AppEditorShellController,
@@ -39,7 +46,7 @@ type SessionRestoreState =
     status: "restore-ui";
     generation: number;
     savedDocumentPath: string | null;
-    savedSidebarWidth: number;
+    savedLayout: AppSessionPersistenceDeps["workspace"]["windowState"]["layout"];
   }
   | {
     status: "restore-document";
@@ -68,9 +75,13 @@ export function useAppSessionPersistence({
   } = workspace;
   const {
     sidebarCollapsed,
+    sidebarTab,
     sidebarWidth,
+    sidenotesCollapsed,
     setSidebarCollapsed,
+    setSidebarTab,
     setSidebarWidth,
+    setSidenotesCollapsed,
   } = sidebarLayout;
   const {
     currentDocument,
@@ -96,13 +107,25 @@ export function useAppSessionPersistence({
     if (restoreState.status !== "completed") return;
     const timeout = window.setTimeout(() => {
       saveWindowState({
-        sidebarWidth: sidebarCollapsed ? 0 : sidebarWidth,
+        layout: {
+          sidebarCollapsed,
+          sidebarTab,
+          sidebarWidth,
+          sidenotesCollapsed,
+        },
       });
     }, SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS);
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [restoreState.status, saveWindowState, sidebarCollapsed, sidebarWidth]);
+  }, [
+    restoreState.status,
+    saveWindowState,
+    sidebarCollapsed,
+    sidebarTab,
+    sidebarWidth,
+    sidenotesCollapsed,
+  ]);
 
   useEffect(() => {
     if (restoreState.status !== "waiting-startup" || !startupComplete) {
@@ -113,13 +136,13 @@ export function useAppSessionPersistence({
       status: "restore-ui",
       generation: workspaceRequestRef.current,
       savedDocumentPath: windowState.currentDocument?.path ?? null,
-      savedSidebarWidth: windowState.sidebarWidth,
+      savedLayout: windowState.layout,
     });
   }, [
     restoreState.status,
     startupComplete,
-    windowState.sidebarWidth,
     windowState.currentDocument,
+    windowState.layout,
     workspaceRequestRef,
   ]);
 
@@ -128,18 +151,23 @@ export function useAppSessionPersistence({
       return;
     }
 
-    if (restoreState.savedSidebarWidth === 0) {
-      setSidebarCollapsed(true);
-    } else if (restoreState.savedSidebarWidth > 0) {
-      setSidebarWidth(restoreState.savedSidebarWidth);
-    }
+    setSidebarCollapsed(restoreState.savedLayout.sidebarCollapsed);
+    setSidebarTab(restoreState.savedLayout.sidebarTab);
+    setSidenotesCollapsed(restoreState.savedLayout.sidenotesCollapsed);
+    setSidebarWidth(restoreState.savedLayout.sidebarWidth);
 
     setRestoreState({
       status: "restore-document",
       generation: restoreState.generation,
       savedDocumentPath: restoreState.savedDocumentPath,
     });
-  }, [restoreState, setSidebarCollapsed, setSidebarWidth]);
+  }, [
+    restoreState,
+    setSidebarCollapsed,
+    setSidebarTab,
+    setSidebarWidth,
+    setSidenotesCollapsed,
+  ]);
 
   useEffect(() => {
     if (restoreState.status !== "restore-document") {

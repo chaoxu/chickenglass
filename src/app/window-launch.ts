@@ -27,8 +27,6 @@ export async function openDocumentInNewWindow(
       name: basename(path),
     },
     projectRoot,
-    sidebarWidth: 220,
-    sidebarSections: [],
   }));
 
   const nextWindow = new WebviewWindow(label, {

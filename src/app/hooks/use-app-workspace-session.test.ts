@@ -7,12 +7,24 @@ import type { ProjectOpenResult } from "../project-open-result";
 interface MockWindowState {
   projectRoot: string | null;
   currentDocument: { path: string; name: string } | null;
-  sidebarWidth: number;
-  sidebarSections: unknown[];
+  layout: {
+    sidebarCollapsed: boolean;
+    sidebarTab: "files" | "outline" | "diagnostics" | "runtime";
+    sidebarWidth: number;
+    sidenotesCollapsed: boolean;
+  };
   version: number;
 }
 
-const workspaceMockState = vi.hoisted(() => ({
+const workspaceMockState = vi.hoisted(() => {
+  const defaultLayout = {
+    sidebarCollapsed: false,
+    sidebarTab: "files" as const,
+    sidebarWidth: 220,
+    sidenotesCollapsed: true,
+  };
+
+  return {
   openFolderAt: vi.fn(async (path: string, _generation: number) => ({
     applied: true,
     root: path,
@@ -26,9 +38,8 @@ const workspaceMockState = vi.hoisted(() => ({
   windowState: {
     projectRoot: "/tmp/restored-project",
     currentDocument: { path: "draft.md", name: "draft.md" },
-    sidebarWidth: 220,
-    sidebarSections: [],
-    version: 2,
+    layout: defaultLayout,
+    version: 3,
   } as MockWindowState,
   reset() {
     this.openFolderAt.mockReset();
@@ -53,12 +64,12 @@ const workspaceMockState = vi.hoisted(() => ({
     this.windowState = {
       projectRoot: "/tmp/restored-project",
       currentDocument: { path: "draft.md", name: "draft.md" },
-      sidebarWidth: 220,
-      sidebarSections: [],
-      version: 2,
+      layout: defaultLayout,
+      version: 3,
     } as MockWindowState;
   },
-}));
+  };
+});
 
 vi.mock("./use-settings", () => ({
   useSettings: () => ({

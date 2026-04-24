@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { SidebarTab } from "../../lib/debug-types";
 
 export type { SidebarTab } from "../../lib/debug-types";
@@ -23,10 +23,18 @@ function isNarrowViewport(): boolean {
 }
 
 export function useSidebarLayout(): SidebarLayoutController {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(isNarrowViewport);
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState(isNarrowViewport);
   const [sidebarWidth, setSidebarWidth] = useState(224);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidenotesCollapsed, setSidenotesCollapsed] = useState(true);
+  const setSidebarCollapsed: Dispatch<SetStateAction<boolean>> = useCallback((value) => {
+    setSidebarCollapsedState((previous) => {
+      if (isNarrowViewport()) {
+        return true;
+      }
+      return typeof value === "function" ? value(previous) : value;
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -35,7 +43,7 @@ export function useSidebarLayout(): SidebarLayoutController {
     const media = window.matchMedia(NARROW_VIEWPORT_QUERY);
     const collapseForNarrowViewport = () => {
       if (media.matches) {
-        setSidebarCollapsed(true);
+        setSidebarCollapsedState(true);
       }
     };
 

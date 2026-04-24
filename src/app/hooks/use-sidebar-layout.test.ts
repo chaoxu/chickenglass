@@ -95,4 +95,19 @@ describe("useSidebarLayout", () => {
       expect(result.current.sidebarCollapsed).toBe(true);
     });
   });
+
+  it("does not expand while the viewport is narrow", async () => {
+    installMatchMedia(true);
+    const { result } = renderHook(() => useSidebarLayout());
+
+    expect(result.current.sidebarCollapsed).toBe(true);
+
+    act(() => {
+      result.current.setSidebarCollapsed(false);
+    });
+
+    await waitFor(() => {
+      expect(result.current.sidebarCollapsed).toBe(true);
+    });
+  });
 });

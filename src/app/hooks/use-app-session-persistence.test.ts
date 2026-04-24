@@ -67,7 +67,9 @@ interface TestRef {
     path: string;
   }>;
   setSidebarCollapsedCalls: boolean[];
+  setSidebarTabCalls: string[];
   setSidebarWidthCalls: number[];
+  setSidenotesCollapsedCalls: boolean[];
 }
 
 function createHarness(deps: {
@@ -86,7 +88,9 @@ function createHarness(deps: {
     openFileCalls: [],
     restoreDocumentFromRecoveryCalls: [],
     setSidebarCollapsedCalls: [],
+    setSidebarTabCalls: [],
     setSidebarWidthCalls: [],
+    setSidenotesCollapsedCalls: [],
   };
 
   const setSidebarCollapsed: Dispatch<SetStateAction<boolean>> = (value) => {
@@ -97,6 +101,16 @@ function createHarness(deps: {
   const setSidebarWidth: Dispatch<SetStateAction<number>> = (value) => {
     const result = typeof value === 'function' ? value(224) : value;
     ref.setSidebarWidthCalls.push(result);
+  };
+
+  const setSidebarTab: Dispatch<SetStateAction<"files" | "outline" | "diagnostics" | "runtime">> = (value) => {
+    const result = typeof value === 'function' ? value("files") : value;
+    ref.setSidebarTabCalls.push(result);
+  };
+
+  const setSidenotesCollapsed: Dispatch<SetStateAction<boolean>> = (value) => {
+    const result = typeof value === 'function' ? value(true) : value;
+    ref.setSidenotesCollapsedCalls.push(result);
   };
 
   const Harness: FC = () => {
@@ -112,9 +126,13 @@ function createHarness(deps: {
       },
       sidebarLayout: {
         sidebarCollapsed: deps.sidebarCollapsed ?? false,
+        sidebarTab: deps.windowState.layout.sidebarTab,
         sidebarWidth: deps.sidebarWidth ?? 224,
+        sidenotesCollapsed: deps.windowState.layout.sidenotesCollapsed,
         setSidebarCollapsed,
+        setSidebarTab,
         setSidebarWidth,
+        setSidenotesCollapsed,
       },
       editor: {
         currentDocument: null,
@@ -229,7 +247,7 @@ describe("useAppSessionPersistence", () => {
       await Promise.resolve();
     });
 
-    expect(windowState.version).toBe(2);
+    expect(windowState.version).toBe(3);
     expect(ref.openFileCalls).toContain("legacy.md");
     expect(ref.setSidebarWidthCalls).toContain(333);
   });
@@ -251,6 +269,33 @@ describe("useAppSessionPersistence", () => {
     });
 
     expect(ref.setSidebarCollapsedCalls).toContain(true);
+  });
+
+  it("restores the canonical persisted layout state", async () => {
+    const windowState = createMockWindowState({
+      currentDocument: null,
+      layout: {
+        sidebarCollapsed: false,
+        sidebarTab: "diagnostics",
+        sidebarWidth: 360,
+        sidenotesCollapsed: false,
+      },
+    });
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("main.md"),
+      workspaceRequestRef: { current: 0 },
+      windowState,
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    expect(ref.setSidebarCollapsedCalls).toContain(false);
+    expect(ref.setSidebarTabCalls).toContain("diagnostics");
+    expect(ref.setSidebarWidthCalls).toContain(360);
+    expect(ref.setSidenotesCollapsedCalls).toContain(false);
   });
 
   it("debounces sidebar width persistence", async () => {
@@ -294,7 +339,14 @@ describe("useAppSessionPersistence", () => {
       vi.advanceTimersByTime(1);
     });
     expect(saveWindowState).toHaveBeenCalledTimes(1);
-    expect(saveWindowState).toHaveBeenCalledWith({ sidebarWidth: 280 });
+    expect(saveWindowState).toHaveBeenCalledWith({
+      layout: {
+        sidebarCollapsed: false,
+        sidebarTab: "files",
+        sidebarWidth: 280,
+        sidenotesCollapsed: true,
+      },
+    });
 
     vi.useRealTimers();
   });
