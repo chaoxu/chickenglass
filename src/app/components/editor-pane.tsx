@@ -1,5 +1,4 @@
-import { useRef, useMemo, useState, useEffect, useCallback } from "react";
-import type { EditorState } from "@codemirror/state";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { useEditor } from "../hooks/use-editor";
 import type { UseEditorOptions, UseEditorReturn } from "../hooks/use-editor";
@@ -10,18 +9,8 @@ import { useLatest } from "../hooks/use-latest";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidenoteMargin, type SidenoteInvalidation } from "./sidenote-margin";
 import { computeSidenoteInvalidation } from "./sidenote-invalidation";
-import {
-  createDiagnosticsSidebarChangeChecker,
-  createHeadingSidebarMetadata,
-  sameHeadingSidebarMetadata,
-  type HeadingSidebarMetadata,
-} from "./editor-pane-sidebar-tracking";
-import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
-import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
-import {
-  documentSemanticsField,
-  getDocumentAnalysisSliceRevision,
-} from "../../state/document-analysis";
+import { type HeadingEntry } from "../heading-ancestry";
+import { type DiagnosticEntry } from "../diagnostics";
 import {
   defaultEditorPlugins,
   EditorPluginManager,
@@ -33,6 +22,7 @@ import {
   wordWrapCompartment,
 } from "../../editor";
 import type { Settings } from "../lib/types";
+import { useCm6SemanticPublisher } from "./cm6-semantic-publisher";
 
 const EMPTY_SIDENOTE_INVALIDATION: SidenoteInvalidation = {
   revision: 0,
@@ -75,86 +65,11 @@ export function EditorPane({
   const [sidenoteInvalidation, setSidenoteInvalidation] = useState<SidenoteInvalidation>(
     EMPTY_SIDENOTE_INVALIDATION,
   );
-  const onHeadingsChangeRef = useLatest(onHeadingsChange);
-  const onDiagnosticsChangeRef = useLatest(onDiagnosticsChange);
   const sidenotesCollapsedRef = useLatest(sidenotesCollapsed);
-  const headingFlushHandleRef = useRef<number | null>(null);
-  const pendingHeadingStateRef = useRef<EditorState | null>(null);
-  const lastPublishedHeadingMetadataRef = useRef<readonly HeadingSidebarMetadata[]>([]);
-  const diagnosticsFlushHandleRef = useRef<number | null>(null);
-  const pendingDiagnosticsStateRef = useRef<EditorState | null>(null);
-  const diagnosticsChanged = useMemo(() => createDiagnosticsSidebarChangeChecker(), []);
-
-  const publishHeadings = useCallback((state: EditorState, force = false) => {
-    const callback = onHeadingsChangeRef.current;
-    if (!callback) return;
-    const headings = extractHeadings(state);
-    const nextMetadata = createHeadingSidebarMetadata(headings);
-    if (!force && sameHeadingSidebarMetadata(lastPublishedHeadingMetadataRef.current, nextMetadata)) {
-      return;
-    }
-    lastPublishedHeadingMetadataRef.current = nextMetadata;
-    callback(headings);
-  }, []);
-
-  const publishDiagnostics = useCallback((state: EditorState) => {
-    const callback = onDiagnosticsChangeRef.current;
-    if (!callback) return;
-    callback(extractDiagnostics(state));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (headingFlushHandleRef.current !== null) {
-        window.clearTimeout(headingFlushHandleRef.current);
-        headingFlushHandleRef.current = null;
-      }
-      if (diagnosticsFlushHandleRef.current !== null) {
-        window.clearTimeout(diagnosticsFlushHandleRef.current);
-        diagnosticsFlushHandleRef.current = null;
-      }
-    };
-  }, []);
-
-  // CM6 extension that detects heading-slice revision changes and
-  // pushes fresh headings into React.  Created once (stable reference)
-  // so it never triggers editor re-creation.
-  const headingTrackingExtension = useMemo(() => {
-    let lastRev: number | undefined;
-    return EditorView.updateListener.of((update) => {
-      if (!onHeadingsChangeRef.current) return;
-      const analysis = update.state.field(documentSemanticsField, false);
-      if (!analysis) return;
-      const rev = getDocumentAnalysisSliceRevision(analysis, "headings");
-      if (rev === lastRev) return;
-      lastRev = rev;
-      pendingHeadingStateRef.current = update.state;
-      if (headingFlushHandleRef.current !== null) return;
-      headingFlushHandleRef.current = window.setTimeout(() => {
-        headingFlushHandleRef.current = null;
-        const state = pendingHeadingStateRef.current;
-        if (!state) return;
-        publishHeadings(state);
-      }, 0);
-    });
-  }, [publishHeadings]);
-
-  // CM6 extension that detects semantic or bibliography changes and
-  // pushes fresh diagnostics into React.
-  const diagnosticTrackingExtension = useMemo(() => {
-    return EditorView.updateListener.of((update) => {
-      if (!onDiagnosticsChangeRef.current) return;
-      if (!diagnosticsChanged(update.startState, update.state)) return;
-      pendingDiagnosticsStateRef.current = update.state;
-      if (diagnosticsFlushHandleRef.current !== null) return;
-      diagnosticsFlushHandleRef.current = window.setTimeout(() => {
-        diagnosticsFlushHandleRef.current = null;
-        const state = pendingDiagnosticsStateRef.current;
-        if (!state) return;
-        publishDiagnostics(state);
-      }, 0);
-    });
-  }, [diagnosticsChanged, publishDiagnostics]);
+  const semanticPublisher = useCm6SemanticPublisher({
+    onDiagnosticsChange,
+    onHeadingsChange,
+  });
 
   const sidenoteTrackingExtension = useMemo(() => {
     return EditorView.updateListener.of((update) => {
@@ -172,11 +87,10 @@ export function EditorPane({
   const extensions = useMemo(
     () => [
       ...(editorOptions.extensions ?? []),
-      headingTrackingExtension,
-      diagnosticTrackingExtension,
+      ...semanticPublisher.extensions,
       sidenoteTrackingExtension,
     ],
-    [editorOptions.extensions, headingTrackingExtension, diagnosticTrackingExtension, sidenoteTrackingExtension],
+    [editorOptions.extensions, semanticPublisher.extensions, sidenoteTrackingExtension],
   );
 
   const editorState = useEditor(containerRef, {
@@ -225,28 +139,11 @@ export function EditorPane({
   // When a hidden sidebar panel is shown again, push one fresh snapshot
   // without waiting for the next semantic revision.
   useEffect(() => {
-    if (view && onHeadingsChange) {
-      if (headingFlushHandleRef.current !== null) {
-        window.clearTimeout(headingFlushHandleRef.current);
-        headingFlushHandleRef.current = null;
-      }
-      pendingHeadingStateRef.current = view.state;
-      publishHeadings(view.state, true);
-    }
-  }, [onHeadingsChange, publishHeadings, view]);
-  useEffect(() => {
-    if (view && onDiagnosticsChange) {
-      if (diagnosticsFlushHandleRef.current !== null) {
-        window.clearTimeout(diagnosticsFlushHandleRef.current);
-        diagnosticsFlushHandleRef.current = null;
-      }
-      pendingDiagnosticsStateRef.current = view.state;
-      publishDiagnostics(view.state);
-    }
-  }, [onDiagnosticsChange, publishDiagnostics, view]);
+    semanticPublisher.forcePublishCurrent(view ?? null);
+  }, [onDiagnosticsChange, onHeadingsChange, semanticPublisher, view]);
 
   // Extract headings for breadcrumbs and outline
-  const headings = view ? extractHeadings(view.state) : [];
+  const headings = semanticPublisher.readHeadings(view ?? null);
 
   return (
     <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
