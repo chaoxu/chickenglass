@@ -15,7 +15,7 @@ interface AppOverlayDeps {
   dialogs: UseDialogsReturn;
   workspace: Pick<
     AppWorkspaceSessionController,
-    "settings" | "theme" | "setTheme" | "resolvedTheme" | "recentFiles" | "fileTree" | "handleOpenFolder"
+    "settings" | "theme" | "setTheme" | "resolvedTheme" | "recentFiles" | "fileTree"
   >;
   sidebarLayout: Pick<
     SidebarLayoutController,
@@ -26,6 +26,7 @@ interface AppOverlayDeps {
     "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "handleInsertImage" | "editorMode"
   >;
   onOpenFile: () => void;
+  onOpenFolder: () => void;
   onQuit: () => void;
 }
 
@@ -45,6 +46,7 @@ export function useAppOverlays({
   sidebarLayout,
   editor,
   onOpenFile,
+  onOpenFolder,
   onQuit,
 }: AppOverlayDeps): AppOverlayController {
   const searchIndex = useSearchIndexSync({
@@ -61,6 +63,7 @@ export function useAppOverlays({
     sidebarLayout,
     editor,
     onOpenFile,
+    onOpenFolder,
     onQuit,
     onShowLabelBacklinks: documentLabelActions.showLabelBacklinks,
     onRenameDocumentLabel: documentLabelActions.renameDocumentLabel,

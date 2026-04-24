@@ -1,5 +1,7 @@
 import { TAURI_COMMAND_CONTRACT } from "./command-contract";
-import { tauriCommand, tauriArgs } from "./make-command";
+import { tauriArgs, tauriCommand } from "./make-command";
+
+export type { OpenFolderResult } from "./command-contract";
 
 const fsCommands = TAURI_COMMAND_CONTRACT.fs;
 

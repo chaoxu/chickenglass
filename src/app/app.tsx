@@ -78,13 +78,11 @@ function ConnectedAppOverlays({
   const overlays = useAppOverlays({
     fs,
     dialogs,
-    workspace: {
-      ...workspace,
-      handleOpenFolder: onOpenFolder,
-    },
+    workspace,
     sidebarLayout,
     editor,
     onOpenFile,
+    onOpenFolder,
     onQuit,
   });
   const shouldLoadOverlays =

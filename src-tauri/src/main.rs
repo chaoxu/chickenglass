@@ -58,6 +58,7 @@ fn main() {
             commands::fs::write_file_binary,
             commands::fs::read_file_binary,
             commands::path::to_project_relative_path,
+            commands::path::canonicalize_project_root,
             commands::perf::get_perf_snapshot,
             commands::perf::clear_perf_snapshot,
             commands::recovery::write_hot_exit_backup,

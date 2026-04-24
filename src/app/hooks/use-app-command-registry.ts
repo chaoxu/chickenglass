@@ -21,7 +21,7 @@ interface AppCommandRegistryDeps {
   readonly dialogs: UseDialogsReturn;
   readonly workspace: Pick<
     AppWorkspaceSessionController,
-    "fileTree" | "handleOpenFolder" | "recentFiles" | "resolvedTheme" | "setTheme"
+    "fileTree" | "recentFiles" | "resolvedTheme" | "setTheme"
   >;
   readonly sidebarLayout: Pick<
     SidebarLayoutController,
@@ -39,6 +39,7 @@ interface AppCommandRegistryDeps {
     | "saveFile"
   >;
   readonly onOpenFile: () => void;
+  readonly onOpenFolder: () => void;
   readonly onQuit: () => void;
   readonly onShowLabelBacklinks: () => void;
   readonly onRenameDocumentLabel: () => void;
@@ -113,6 +114,7 @@ export function useAppCommandRegistry({
   sidebarLayout,
   editor,
   onOpenFile,
+  onOpenFolder,
   onQuit,
   onShowLabelBacklinks,
   onRenameDocumentLabel,
@@ -212,7 +214,7 @@ export function useAppCommandRegistry({
     { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, menuId: "file_open_file", action: () => onOpenFile() },
     { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, hotkey: "mod+shift+s", menuId: "file_save_as", action: handleSaveAs },
     { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: "file_close_tab", action: () => { void editor.closeCurrentFile(); } },
-    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: "file_open_folder", action: () => workspace.handleOpenFolder() },
+    { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: "file_open_folder", action: onOpenFolder },
     { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: "file_quit", action: onQuit },
 
     // Format
@@ -280,6 +282,7 @@ export function useAppCommandRegistry({
     onShowLabelBacklinks,
     onRenameDocumentLabel,
     onOpenFile,
+    onOpenFolder,
     onQuit,
   ]);
 

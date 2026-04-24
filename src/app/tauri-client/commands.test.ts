@@ -10,6 +10,7 @@ vi.mock("./core", () => ({
 
 import { exportDocumentCommand, checkPandocCommand } from "./export";
 import {
+  openFolderCommand,
   readFileCommand,
   writeFileIfUnchangedCommand,
 } from "./fs";
@@ -59,6 +60,22 @@ describe("typed Tauri command clients", () => {
   });
 
   it("maps filesystem commands to typed backend payloads", async () => {
+    tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce({
+      applied: true,
+      root: "/canonical/project",
+    });
+    await expect(openFolderCommand("/project-alias", 5)).resolves.toEqual({
+      applied: true,
+      root: "/canonical/project",
+    });
+    expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
+      "open_folder",
+      {
+        generation: 5,
+        path: "/project-alias",
+      },
+    );
+
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce("body");
     await expect(readFileCommand("notes.md")).resolves.toBe("body");
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(

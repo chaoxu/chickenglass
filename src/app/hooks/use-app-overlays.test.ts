@@ -190,6 +190,7 @@ async function createHookProps(
   activeDocumentSignal: ReturnType<typeof createActiveDocumentSignal>;
   setCurrentDocText: (nextDoc: string) => void;
   onOpenFile: ReturnType<typeof vi.fn>;
+  onOpenFolder: ReturnType<typeof vi.fn>;
   onQuit: ReturnType<typeof vi.fn>;
 }> {
   const fs = new MemoryFileSystem(options.files ?? {});
@@ -202,6 +203,7 @@ async function createHookProps(
     view: options.view,
   });
   const onOpenFile = vi.fn();
+  const onOpenFolder = vi.fn();
   const onQuit = vi.fn();
 
   const workspace: UseAppOverlaysProps["workspace"] = {
@@ -211,7 +213,6 @@ async function createHookProps(
     resolvedTheme: "light",
     recentFiles: options.recentFiles ?? [],
     fileTree: await fs.listTree(),
-    handleOpenFolder: vi.fn(),
   };
 
   return {
@@ -222,6 +223,7 @@ async function createHookProps(
       sidebarLayout,
       editor,
       onOpenFile,
+      onOpenFolder,
       onQuit,
     },
     fs,
@@ -232,6 +234,7 @@ async function createHookProps(
     activeDocumentSignal,
     setCurrentDocText,
     onOpenFile,
+    onOpenFolder,
     onQuit,
   };
 }
@@ -576,6 +579,7 @@ describe("useAppOverlays", () => {
       props,
       dialogs,
       editor,
+      onOpenFolder,
     } = await createHookProps({
       recentFiles: ["notes/recent.md"],
     });
@@ -585,6 +589,7 @@ describe("useAppOverlays", () => {
     });
 
     const saveAsCommand = getCommand(result.current.commands, "file.save-as");
+    const openFolderCommand = getCommand(result.current.commands, "file.open-folder");
     const searchCommand = getCommand(result.current.commands, "nav.search");
     const recentCommand = getCommand(result.current.commands, "file.recent-0");
 
@@ -593,6 +598,10 @@ describe("useAppOverlays", () => {
     getHotkeyHandler("mod+shift+s")();
 
     expect(editor.saveAs).toHaveBeenCalledTimes(3);
+
+    openFolderCommand.action();
+    overlayHookState.menuHandlers.file_open_folder?.();
+    expect(onOpenFolder).toHaveBeenCalledTimes(2);
 
     searchCommand.action();
     overlayHookState.menuHandlers.edit_find?.();

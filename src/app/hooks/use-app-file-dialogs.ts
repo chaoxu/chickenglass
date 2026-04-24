@@ -61,6 +61,12 @@ export function useAppFileDialogs({
       cancelPendingOpenFile: editor.cancelPendingOpenFile,
       closeCurrentFile: editor.closeCurrentFile,
       openProjectRoot: workspace.openProjectRoot,
+      canonicalizeProjectRoot: isTauri()
+        ? async (path) => {
+          const { canonicalizeProjectRootCommand } = await import("../tauri-client/path");
+          return canonicalizeProjectRootCommand(path);
+        }
+        : undefined,
       openFile: editor.openFile,
       listChildren,
       signal: controller.signal,

@@ -2,6 +2,7 @@ import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileEntry, FileSystem } from "../file-manager";
+import type { ProjectOpenResult } from "../project-open-result";
 import { replaceChildrenInTree } from "./use-app-workspace-session";
 
 interface MockWindowState {
@@ -13,11 +14,15 @@ interface MockWindowState {
 }
 
 const workspaceMockState = vi.hoisted(() => ({
-  openFolderAt: vi.fn(async (_path: string, _generation: number) => true),
+  openFolderAt: vi.fn(async (path: string, _generation: number) => ({
+    applied: true,
+    root: path,
+  })),
   saveWindowState: vi.fn(),
   addRecentFolder: vi.fn(),
   addRecentFile: vi.fn(),
   removeRecentFile: vi.fn(),
+  pickFolder: vi.fn(async () => null as string | null),
   loadProjectConfig: vi.fn(async () => ({})),
   windowState: {
     projectRoot: "/tmp/restored-project",
@@ -28,11 +33,16 @@ const workspaceMockState = vi.hoisted(() => ({
   } as MockWindowState,
   reset() {
     this.openFolderAt.mockReset();
-    this.openFolderAt.mockImplementation(async (_path: string, _generation: number) => true);
+    this.openFolderAt.mockImplementation(async (path: string, _generation: number) => ({
+      applied: true,
+      root: path,
+    }));
     this.saveWindowState.mockReset();
     this.addRecentFolder.mockReset();
     this.addRecentFile.mockReset();
     this.removeRecentFile.mockReset();
+    this.pickFolder.mockReset();
+    this.pickFolder.mockImplementation(async () => null);
     this.loadProjectConfig.mockReset();
     this.loadProjectConfig.mockImplementation(async () => ({}));
     this.windowState = {
@@ -102,7 +112,7 @@ vi.mock("../../lib/tauri", () => ({
 
 vi.mock("../tauri-fs", () => ({
   isTauri: () => true,
-  pickFolder: vi.fn(async () => null),
+  pickFolder: workspaceMockState.pickFolder,
   openFolderAt: workspaceMockState.openFolderAt,
 }));
 
@@ -137,7 +147,8 @@ interface HarnessRef {
   fileTree: FileEntry | null;
   projectConfig: Record<string, unknown>;
   startupComplete: boolean;
-  openProjectRoot: (path: string) => Promise<FileEntry | null>;
+  openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
+  handleOpenFolder: () => void;
   refreshTree: (changedPath?: string) => Promise<void>;
 }
 
@@ -148,6 +159,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     projectConfig: {},
     startupComplete: false,
     openProjectRoot: async () => null,
+    handleOpenFolder: () => {},
     refreshTree: async () => {},
   };
 
@@ -158,6 +170,7 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     ref.projectConfig = result.projectConfig;
     ref.startupComplete = result.startupComplete;
     ref.openProjectRoot = result.openProjectRoot;
+    ref.handleOpenFolder = result.handleOpenFolder;
     ref.refreshTree = result.refreshTree;
     return null;
   };
@@ -313,6 +326,104 @@ describe("useAppWorkspaceSession", () => {
     });
   });
 
+  it("persists and exposes the backend canonical root after opening an alias", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    workspaceMockState.openFolderAt.mockResolvedValueOnce({
+      applied: true,
+      root: "/tmp/canonical-project",
+    });
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    let result: ProjectOpenResult | null | undefined;
+    await act(async () => {
+      result = await ref.openProjectRoot("/tmp/project-alias");
+    });
+
+    expect(result?.projectRoot).toBe("/tmp/canonical-project");
+    expect(ref.projectRoot).toBe("/tmp/canonical-project");
+    expect(workspaceMockState.saveWindowState).toHaveBeenCalledWith({
+      projectRoot: "/tmp/canonical-project",
+      currentDocument: null,
+    });
+  });
+
+  it("persists the backend canonical root after startup restores an alias", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: "/tmp/project-alias",
+      currentDocument: { path: "draft.md", name: "draft.md" },
+    };
+    workspaceMockState.openFolderAt.mockResolvedValueOnce({
+      applied: true,
+      root: "/tmp/canonical-project",
+    });
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.projectRoot).toBe("/tmp/canonical-project");
+    });
+    expect(workspaceMockState.saveWindowState).toHaveBeenCalledWith({
+      projectRoot: "/tmp/canonical-project",
+    });
+
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: "/tmp/canonical-project",
+    };
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(workspaceMockState.openFolderAt).toHaveBeenCalledTimes(1);
+    expect(ref.startupComplete).toBe(true);
+  });
+
+  it("records the backend canonical root in recent folders after picker open", async () => {
+    workspaceMockState.windowState = {
+      ...workspaceMockState.windowState,
+      projectRoot: null,
+    };
+    workspaceMockState.pickFolder.mockResolvedValueOnce("/tmp/project-alias");
+    workspaceMockState.openFolderAt.mockResolvedValueOnce({
+      applied: true,
+      root: "/tmp/canonical-project",
+    });
+    const { Harness, ref } = createHarness(fsStub);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      ref.handleOpenFolder();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(workspaceMockState.addRecentFolder).toHaveBeenCalledWith("/tmp/canonical-project");
+    });
+  });
+
   it("preserves filesystem method receivers when shallow-loading children", async () => {
     workspaceMockState.windowState = {
       ...workspaceMockState.windowState,
@@ -357,8 +468,8 @@ describe("useAppWorkspaceSession", () => {
 
     // Separate act() blocks: the dynamic import `await tauriFs()` in
     // production adds microtask ticks, so each load needs its own flush.
-    let openFirst!: Promise<FileEntry | null>;
-    let openSecond!: Promise<FileEntry | null>;
+    let openFirst!: Promise<ProjectOpenResult | null>;
+    let openSecond!: Promise<ProjectOpenResult | null>;
 
     await act(async () => {
       openFirst = ref.openProjectRoot("/tmp/project-a");
@@ -385,10 +496,13 @@ describe("useAppWorkspaceSession", () => {
   });
 
   it("does not let a stale startup restore overwrite a newer manual open", async () => {
-    const restoredOpen = createDeferred<boolean>();
+    const restoredOpen = createDeferred<{ applied: boolean; root: string }>();
     workspaceMockState.openFolderAt
       .mockImplementationOnce(async () => restoredOpen.promise)
-      .mockImplementationOnce(async (_path: string, _generation: number) => true);
+      .mockImplementationOnce(async (path: string, _generation: number) => ({
+        applied: true,
+        root: path,
+      }));
     const restoredTree = createDeferred<FileEntry>();
     const manualTree = createDeferred<FileEntry>();
     const restoredConfig = createDeferred<Record<string, unknown>>();
@@ -404,7 +518,7 @@ describe("useAppWorkspaceSession", () => {
       await Promise.resolve();
     });
 
-    let manualOpen!: Promise<FileEntry | null>;
+    let manualOpen!: Promise<ProjectOpenResult | null>;
     await act(async () => {
       manualOpen = ref.openProjectRoot("/tmp/manual-project");
       await Promise.resolve();
@@ -417,7 +531,7 @@ describe("useAppWorkspaceSession", () => {
     });
 
     await act(async () => {
-      restoredOpen.resolve(false);
+      restoredOpen.resolve({ applied: false, root: "/tmp/restored-project" });
       restoredTree.resolve({ name: "restored", path: "", isDirectory: true, children: [] });
       restoredConfig.resolve({ bibliography: "restored.bib" });
       await Promise.resolve();

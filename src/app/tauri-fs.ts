@@ -16,6 +16,7 @@ import {
   fileExistsCommand,
   listChildrenCommand,
   listTreeCommand,
+  type OpenFolderResult,
   openFolderCommand,
   readFileBinaryCommand,
   readFileCommand,
@@ -46,9 +47,10 @@ export async function pickFolder(): Promise<string | null> {
 
 /**
  * Set the current Tauri project root to an already-known absolute folder path.
- * Returns true when this request won the backend generation race.
+ * Returns the backend canonical project root and whether this request won the
+ * backend generation race.
  */
-export async function openFolderAt(path: string, generation: number): Promise<boolean> {
+export async function openFolderAt(path: string, generation: number): Promise<OpenFolderResult> {
   latestProjectRootGeneration = Math.max(latestProjectRootGeneration, generation);
   return openFolderCommand(path, generation);
 }
@@ -60,8 +62,8 @@ export async function openFolderAt(path: string, generation: number): Promise<bo
 export async function openFolder(): Promise<string | null> {
   const selected = await pickFolder();
   if (!selected) return null;
-  await openFolderAt(selected, latestProjectRootGeneration + 1);
-  return selected;
+  const result = await openFolderAt(selected, latestProjectRootGeneration + 1);
+  return result.applied ? result.root : null;
 }
 
 /**

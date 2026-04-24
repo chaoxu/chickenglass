@@ -4,6 +4,7 @@ import type { FileEntry, FileSystem } from "../file-manager";
 import { measureAsync, withPerfOperation } from "../perf";
 import type { ProjectConfig } from "../project-config";
 import { loadProjectConfig } from "../project-config";
+import type { ProjectOpenResult } from "../project-open-result";
 import { useRecentFiles } from "./use-recent-files";
 import { useSettings } from "./use-settings";
 import { useTheme } from "./use-theme";
@@ -113,7 +114,7 @@ export interface AppWorkspaceSessionController {
   loadChildren: (dirPath: string) => Promise<void>;
   projectConfig: ProjectConfig;
   startupComplete: boolean;
-  openProjectRoot: (path: string) => Promise<FileEntry | null>;
+  openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
   handleOpenFolder: () => void;
   /** Generation counter — incremented before each project-root change. */
   workspaceRequestRef: { readonly current: number };
@@ -144,6 +145,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const workspaceRequestRef = useRef(0);
   const fullTreeRefreshGenerationRef = useRef(0);
   const scopedRefreshGenerationRef = useRef(new Map<string, number>());
+  const startupRestoreRootRef = useRef(windowState.projectRoot);
+  const startupStartedRef = useRef(false);
 
   const clearRestoredProjectState = useCallback(() => {
     setProjectRoot(null);
@@ -288,38 +291,55 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
    *  swallowed; current errors re-throw. */
   const openTauriFolder = useCallback(async (
     path: string,
-    onRootSet?: () => void,
-  ): Promise<FileEntry | null> => {
+    onRootSet?: (projectRoot: string) => void,
+  ): Promise<ProjectOpenResult | null> => {
     const requestId = ++workspaceRequestRef.current;
     try {
       const { openFolderAt } = await tauriFs();
-      const opened = await openFolderAt(path, requestId);
-      if (!opened || requestId !== workspaceRequestRef.current) {
+      const result = await openFolderAt(path, requestId);
+      if (!result.applied || requestId !== workspaceRequestRef.current) {
         return null;
       }
-      setProjectRoot(path);
-      onRootSet?.();
-      return loadWorkspaceContents(requestId);
+      const canonicalRoot = result.root;
+      setProjectRoot(canonicalRoot);
+      onRootSet?.(canonicalRoot);
+      const tree = await loadWorkspaceContents(requestId);
+      return tree ? { projectRoot: canonicalRoot, tree } : null;
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) return null;
       throw e;
     }
   }, [loadWorkspaceContents]);
 
-  const openProjectRoot = useCallback(async (path: string): Promise<FileEntry | null> => {
+  const openProjectRoot = useCallback(async (path: string): Promise<ProjectOpenResult | null> => {
     if (!isTauri()) return null;
-    return openTauriFolder(path, () => {
-      saveWindowState({ projectRoot: path, currentDocument: null });
+    const result = await openTauriFolder(path, (projectRoot) => {
+      saveWindowState({ projectRoot, currentDocument: null });
     });
+    if (result) {
+      setStartupComplete(true);
+    }
+    return result;
   }, [openTauriFolder, saveWindowState]);
 
   useEffect(() => {
+    if (startupStartedRef.current) {
+      return;
+    }
+    startupStartedRef.current = true;
+    const restoredProjectRoot = startupRestoreRootRef.current;
+    let startupRequestId = workspaceRequestRef.current;
     void withPerfOperation("startup.initial_session", async () => {
       try {
         if (isTauri()) {
-          if (windowState.projectRoot) {
+          if (restoredProjectRoot) {
+            startupRequestId = workspaceRequestRef.current + 1;
             try {
-              await openTauriFolder(windowState.projectRoot);
+              await openTauriFolder(restoredProjectRoot, (projectRoot) => {
+                if (projectRoot !== restoredProjectRoot) {
+                  saveWindowState({ projectRoot });
+                }
+              });
             } catch (e: unknown) {
               console.error("[workspace] failed to restore saved project root", e);
               clearRestoredProjectState();
@@ -330,16 +350,26 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
           }
         } else {
           const requestId = ++workspaceRequestRef.current;
+          startupRequestId = requestId;
           await loadWorkspaceContents(requestId);
         }
       } finally {
-        setStartupComplete(true);
+        if (workspaceRequestRef.current === startupRequestId) {
+          setStartupComplete(true);
+        }
       }
     }).catch((e: unknown) => {
       console.error("[workspace] initial session startup failed", e);
-      setStartupComplete(true);
+      if (workspaceRequestRef.current === startupRequestId) {
+        setStartupComplete(true);
+      }
     });
-  }, [clearRestoredProjectState, openTauriFolder, loadWorkspaceContents, windowState.projectRoot]);
+  }, [
+    clearRestoredProjectState,
+    openTauriFolder,
+    loadWorkspaceContents,
+    saveWindowState,
+  ]);
 
   const handleOpenFolder = useCallback(() => {
     if (!isTauri()) return;
@@ -348,11 +378,11 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         const { pickFolder } = await tauriFs();
         const folderPath = await pickFolder();
         if (folderPath) {
-          const tree = await openProjectRoot(folderPath);
-          if (!tree) {
+          const result = await openProjectRoot(folderPath);
+          if (!result) {
             return;
           }
-          addRecentFolder(folderPath);
+          addRecentFolder(result.projectRoot);
         }
       } catch (e: unknown) {
         console.error("[workspace] handleOpenFolder failed", e);

@@ -1,14 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tauri::{State, WebviewWindow, command};
+use tauri::{command, State, WebviewWindow};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::context::{run_command, CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{
     filesystem::{self, ConditionalTextWriteResult},
-    path::ProjectPathResolver,
+    path::{path_to_frontend_string, ProjectPathResolver},
 };
 
 const OPEN_FOLDER: CommandSpec =
@@ -58,6 +58,13 @@ pub struct ConditionalWriteResult {
     pub current_content: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenFolderResult {
+    pub applied: bool,
+    pub root: String,
+}
+
 fn fnv1a_hash(content: &str) -> String {
     let mut hash: u32 = 0x811c9dc5;
     for unit in content.encode_utf16() {
@@ -74,20 +81,10 @@ pub fn open_folder(
     perf: State<'_, PerfState>,
     path: String,
     generation: u64,
-) -> Result<bool, String> {
+) -> Result<OpenFolderResult, String> {
     run_command(&perf, OPEN_FOLDER, Some(&path), || {
-        let path = PathBuf::from(&path);
-        if !path.is_dir() {
-            return Err(format!("Not a directory: {}", path.display()));
-        }
-        let canonical = map_err_str!(path.canonicalize(), "Cannot resolve path: {}")?;
         let mut lock = root.0.lock().map_err(|e| e.to_string())?;
-        Ok(filesystem::install_project_root(
-            &mut lock,
-            window.label(),
-            canonical,
-            generation,
-        ))
+        open_project_root(&mut lock, window.label(), &path, generation)
     })
 }
 
@@ -327,13 +324,31 @@ fn write_binary_file_at_project_root(
     filesystem::write_binary_file(&full, path, data_base64)
 }
 
+fn open_project_root(
+    roots: &mut std::collections::HashMap<String, super::state::ProjectRootEntry>,
+    window_label: &str,
+    path: &str,
+    generation: u64,
+) -> Result<OpenFolderResult, String> {
+    let path = PathBuf::from(path);
+    if !path.is_dir() {
+        return Err(format!("Not a directory: {}", path.display()));
+    }
+    let canonical = map_err_str!(path.canonicalize(), "Cannot resolve path: {}")?;
+    let root = path_to_frontend_string(&canonical, "Project root path")?;
+    let applied = filesystem::install_project_root(roots, window_label, canonical, generation);
+    Ok(OpenFolderResult { applied, root })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        create_directory_at_project_root, create_file_at_project_root,
-        fnv1a_hash, write_binary_file_at_project_root,
+        create_directory_at_project_root, create_file_at_project_root, fnv1a_hash,
+        open_project_root, write_binary_file_at_project_root,
     };
+    use crate::commands::state::ProjectRootEntry;
     use base64::Engine;
+    use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -436,5 +451,83 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_file(&escaped);
+    }
+
+    #[test]
+    fn open_project_root_returns_and_stores_canonical_root() {
+        let root = create_temp_dir("cmd-open-canonical");
+        let mut roots = HashMap::new();
+
+        #[cfg(unix)]
+        let alias = {
+            let alias = root
+                .parent()
+                .expect("temp root should have parent")
+                .join(format!(
+                    "{}-alias",
+                    root.file_name()
+                        .and_then(|value| value.to_str())
+                        .expect("temp root should be utf-8")
+                ));
+            let _ = fs::remove_file(&alias);
+            let _ = fs::remove_dir_all(&alias);
+            std::os::unix::fs::symlink(&root, &alias).expect("create symlink alias");
+            alias
+        };
+
+        #[cfg(not(unix))]
+        let alias = root.clone();
+
+        let result = open_project_root(
+            &mut roots,
+            "main",
+            alias.to_str().expect("alias should be utf-8"),
+            1,
+        )
+        .expect("open project root");
+
+        assert!(result.applied);
+        assert_eq!(result.root, root.to_str().expect("root should be utf-8"));
+        let entry = roots.get("main").expect("project root entry");
+        assert_eq!(entry.generation, 1);
+        assert_eq!(entry.path, root);
+
+        #[cfg(unix)]
+        {
+            let _ = fs::remove_file(&alias);
+            let _ = fs::remove_dir_all(&alias);
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn open_project_root_reports_canonical_root_for_stale_generation() {
+        let root = create_temp_dir("cmd-open-stale-root");
+        let current = create_temp_dir("cmd-open-current-root");
+        let mut roots = HashMap::from([(
+            "main".to_string(),
+            ProjectRootEntry {
+                generation: 4,
+                path: current.clone(),
+            },
+        )]);
+
+        let result = open_project_root(
+            &mut roots,
+            "main",
+            root.to_str().expect("root should be utf-8"),
+            3,
+        )
+        .expect("open stale project root");
+
+        assert!(!result.applied);
+        assert_eq!(result.root, root.to_str().expect("root should be utf-8"));
+        assert_eq!(
+            roots.get("main").map(|entry| entry.path.clone()),
+            Some(current.clone()),
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&current);
     }
 }

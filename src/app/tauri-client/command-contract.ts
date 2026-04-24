@@ -62,6 +62,10 @@ export const TAURI_COMMAND_CONTRACT = {
       name: "to_project_relative_path",
       args: ["path"],
     },
+    canonicalizeProjectRoot: {
+      name: "canonicalize_project_root",
+      args: ["path"],
+    },
   },
   shell: {
     openUrl: { name: "open_url", args: ["url"] },
@@ -100,6 +104,11 @@ export const TAURI_COMMAND_CONTRACT = {
 } as const satisfies Record<string, TauriCommandGroupContract>;
 
 export interface WatchDirectoryResult {
+  readonly applied: boolean;
+  readonly root: string;
+}
+
+export interface OpenFolderResult {
   readonly applied: boolean;
   readonly root: string;
 }
@@ -147,7 +156,7 @@ export interface HotExitBackupSummary {
 export interface TauriCommandTypes {
   readonly open_folder: {
     readonly args: { readonly path: string; readonly generation: number };
-    readonly result: boolean;
+    readonly result: OpenFolderResult;
   };
   readonly read_file: {
     readonly args: { readonly path: string };
@@ -229,6 +238,10 @@ export interface TauriCommandTypes {
     readonly result: string;
   };
   readonly to_project_relative_path: {
+    readonly args: { readonly path: string };
+    readonly result: string;
+  };
+  readonly canonicalize_project_root: {
     readonly args: { readonly path: string };
     readonly result: string;
   };
