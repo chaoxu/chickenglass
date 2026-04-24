@@ -1162,6 +1162,13 @@ export async function getRecorderStatus(page) {
 }
 
 /**
+ * Return the latest frontend native watcher status snapshot.
+ */
+export async function getWatcherStatus(page) {
+  return page.evaluate(() => window.__cfDebug.watcherStatus());
+}
+
+/**
  * Capture the current combined debug state and record it in the session log.
  */
 export async function captureDebugState(page, label = null) {

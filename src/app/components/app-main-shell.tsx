@@ -97,6 +97,7 @@ export function AppMainShell({
               doc={editor.editorDoc}
               docPath={currentPath}
               projectConfig={workspace.projectConfig}
+              projectConfigStatus={workspace.projectConfigStatus}
               theme={workspace.resolvedTheme}
               fs={fs}
               sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}

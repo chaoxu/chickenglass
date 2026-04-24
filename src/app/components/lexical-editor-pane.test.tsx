@@ -1,5 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FileSystem } from "../file-manager";
 
 interface CapturedLexicalEditorProps {
   readonly onTextChange: (text: string) => void;
@@ -253,6 +254,68 @@ describe("LexicalEditorPane derived state scheduling", () => {
     ]);
   });
 
+  it("publishes frontmatter and project-config status diagnostics in lexical mode", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const diagnostics = vi.fn();
+
+    render(
+      <LexicalEditorPane
+        doc={"---\nbibliography: [\n---\nBody"}
+        projectConfigStatus={{
+          state: "error",
+          path: "coflat.yaml",
+          kind: "parse",
+          message: "bad project yaml",
+        }}
+        onDiagnosticsChange={diagnostics}
+      />,
+    );
+
+    expect(diagnostics).toHaveBeenLastCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        source: "frontmatter",
+        code: "frontmatter.parse",
+      }),
+      expect.objectContaining({
+        source: "project-config",
+        code: "project-config.parse",
+        message: "Project config parse failed: bad project yaml",
+      }),
+    ]));
+  });
+
+  it("publishes bibliography load failures in lexical mode", async () => {
+    vi.resetModules();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const diagnostics = vi.fn();
+    const fs = {
+      readFile: vi.fn(async () => {
+        throw new Error("missing bibliography");
+      }),
+    } as Partial<FileSystem> as FileSystem;
+
+    render(
+      <LexicalEditorPane
+        doc={"---\nbibliography: refs/missing.bib\n---\nSee [@paper]."}
+        docPath="notes/paper.md"
+        fs={fs}
+        onDiagnosticsChange={diagnostics}
+      />,
+    );
+
+    await flushMicrotasks();
+
+    expect(diagnostics).toHaveBeenLastCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        source: "bibliography",
+        code: "bibliography.read",
+        message: "bibliography read failed: Unable to read notes/refs/missing.bib",
+      }),
+    ]));
+  });
+
   it("reuses heading and diagnostics projections when shared semantic slices stay unchanged", async () => {
     vi.resetModules();
     const perf = await import("../perf");
@@ -381,6 +444,14 @@ describe("LexicalEditorPane derived state scheduling", () => {
 });
 
 const LEXICAL_TEST_LIVE_DEBOUNCE_MS = 300;
+
+async function flushMicrotasks(times = 6): Promise<void> {
+  for (let index = 0; index < times; index += 1) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
 
 function countPerfCalls(
   spy: {

@@ -11,6 +11,7 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { LexicalEditor } from "lexical";
+import { Fragment } from "react";
 import type { MutableRefObject, ReactElement, ReactNode, UIEventHandler } from "react";
 
 import type { EditorDocumentChange } from "../lib/string-editor-document-change";
@@ -193,79 +194,69 @@ export interface CoflatRichPluginPlanOptions {
   readonly showViewportTracking: boolean;
 }
 
-export function getCoflatRichPluginPlan({
-  editable,
-  hasClipboardPlugin,
-  hasHistoryPlugin,
-  hasOnChange,
-  hasSelectionPlugin,
-  showBibliography,
-  showBlockKeyboardAccess,
-  showCodeBlockChrome,
-  showHeadingChrome,
-  showInteractionTrace,
-  showListMarkerStrip,
-  showMarkdownExpansion,
-  showReferenceTypeahead,
-  showSlashPicker,
-  showSourcePosition,
-  showTableChrome,
-  showTabKey,
-  showViewportTracking,
-}: CoflatRichPluginPlanOptions): readonly CoflatRichPluginId[] {
-  const plan: CoflatRichPluginId[] = [];
-  if (hasClipboardPlugin) plan.push("clipboard");
-  plan.push("rich-text", "code-highlight", "code-fence-exit");
-  if (showCodeBlockChrome) plan.push("code-block-chrome");
-  if (hasHistoryPlugin) plan.push("history");
-  plan.push("list", "check-list");
-  if (editable && showListMarkerStrip) plan.push("list-marker-strip");
-  plan.push("link");
-  if (showTableChrome) plan.push("table-scroll-shadow");
-  if (editable && showTableChrome) plan.push("table-action-menu");
-  if (editable) plan.push("format-event");
-  if (editable && showMarkdownExpansion) plan.push("markdown-expansion");
-  if (editable && showBlockKeyboardAccess) plan.push("block-keyboard-access");
-  if (editable && showTabKey) plan.push("tab-key");
-  if (editable && showReferenceTypeahead) plan.push("reference-typeahead");
-  if (editable && showSlashPicker) plan.push("slash-picker");
-  if (showHeadingChrome) plan.push("heading-chrome-index");
-  if (showSourcePosition) plan.push("source-position");
-  if (showViewportTracking) plan.push("viewport-tracking");
-  if (editable) plan.push("markdown-shortcuts");
-  if (editable && hasOnChange) plan.push("on-change");
-  if (hasSelectionPlugin) plan.push("selection");
-  if (showInteractionTrace) plan.push("interaction-trace");
-  if (showBibliography) plan.push("bibliography");
-  plan.push("active-editor", "tree-view");
-  return plan;
+interface CoflatRichPluginDefinition {
+  readonly id: CoflatRichPluginId;
+  readonly enabled: (options: CoflatRichPluginPlanOptions) => boolean;
 }
 
-export function CoflatRichComposerPlugins({
-  clipboardPlugin,
-  contentEditable,
-  doc,
-  editable,
-  enableSourceNavigation,
-  hasOnChange,
-  historyPlugin,
-  onChange,
-  onViewportFromChange,
-  selectionPlugin,
-  showBibliography,
-  showBlockKeyboardAccess,
-  showCodeBlockChrome,
-  showHeadingChrome,
-  showInteractionTrace,
-  showListMarkerStrip,
-  showMarkdownExpansion,
-  showReferenceTypeahead,
-  showSlashPicker,
-  showSourcePosition,
-  showTableChrome,
-  showTabKey,
-  showViewportTracking,
-}: {
+const coflatRichPluginDefinitions: readonly CoflatRichPluginDefinition[] = [
+  { id: "clipboard", enabled: ({ hasClipboardPlugin }) => hasClipboardPlugin },
+  { id: "rich-text", enabled: () => true },
+  { id: "code-highlight", enabled: () => true },
+  { id: "code-fence-exit", enabled: () => true },
+  { id: "code-block-chrome", enabled: ({ showCodeBlockChrome }) => showCodeBlockChrome },
+  { id: "history", enabled: ({ hasHistoryPlugin }) => hasHistoryPlugin },
+  { id: "list", enabled: () => true },
+  { id: "check-list", enabled: () => true },
+  {
+    id: "list-marker-strip",
+    enabled: ({ editable, showListMarkerStrip }) => editable && showListMarkerStrip,
+  },
+  { id: "link", enabled: () => true },
+  { id: "table-scroll-shadow", enabled: ({ showTableChrome }) => showTableChrome },
+  {
+    id: "table-action-menu",
+    enabled: ({ editable, showTableChrome }) => editable && showTableChrome,
+  },
+  { id: "format-event", enabled: ({ editable }) => editable },
+  {
+    id: "markdown-expansion",
+    enabled: ({ editable, showMarkdownExpansion }) => editable && showMarkdownExpansion,
+  },
+  {
+    id: "block-keyboard-access",
+    enabled: ({ editable, showBlockKeyboardAccess }) => editable && showBlockKeyboardAccess,
+  },
+  { id: "tab-key", enabled: ({ editable, showTabKey }) => editable && showTabKey },
+  {
+    id: "reference-typeahead",
+    enabled: ({ editable, showReferenceTypeahead }) => editable && showReferenceTypeahead,
+  },
+  {
+    id: "slash-picker",
+    enabled: ({ editable, showSlashPicker }) => editable && showSlashPicker,
+  },
+  { id: "heading-chrome-index", enabled: ({ showHeadingChrome }) => showHeadingChrome },
+  { id: "source-position", enabled: ({ showSourcePosition }) => showSourcePosition },
+  { id: "viewport-tracking", enabled: ({ showViewportTracking }) => showViewportTracking },
+  { id: "markdown-shortcuts", enabled: ({ editable }) => editable },
+  { id: "on-change", enabled: ({ editable, hasOnChange }) => editable && hasOnChange },
+  { id: "selection", enabled: ({ hasSelectionPlugin }) => hasSelectionPlugin },
+  { id: "interaction-trace", enabled: ({ showInteractionTrace }) => showInteractionTrace },
+  { id: "bibliography", enabled: ({ showBibliography }) => showBibliography },
+  { id: "active-editor", enabled: () => true },
+  { id: "tree-view", enabled: () => true },
+];
+
+export function getCoflatRichPluginPlan(
+  options: CoflatRichPluginPlanOptions,
+): readonly CoflatRichPluginId[] {
+  return coflatRichPluginDefinitions
+    .filter((definition) => definition.enabled(options))
+    .map((definition) => definition.id);
+}
+
+interface CoflatRichComposerPluginsProps {
   readonly clipboardPlugin?: ReactNode;
   readonly contentEditable: ReactElement;
   readonly doc: string;
@@ -293,46 +284,161 @@ export function CoflatRichComposerPlugins({
   readonly showTableChrome: boolean;
   readonly showTabKey: boolean;
   readonly showViewportTracking: boolean;
-}) {
+}
+
+export function CoflatRichComposerPlugins({
+  clipboardPlugin,
+  contentEditable,
+  doc,
+  editable,
+  enableSourceNavigation,
+  hasOnChange,
+  historyPlugin,
+  onChange,
+  onViewportFromChange,
+  selectionPlugin,
+  showBibliography,
+  showBlockKeyboardAccess,
+  showCodeBlockChrome,
+  showHeadingChrome,
+  showInteractionTrace,
+  showListMarkerStrip,
+  showMarkdownExpansion,
+  showReferenceTypeahead,
+  showSlashPicker,
+  showSourcePosition,
+  showTableChrome,
+  showTabKey,
+  showViewportTracking,
+}: CoflatRichComposerPluginsProps) {
+  const props: CoflatRichComposerPluginsProps = {
+    clipboardPlugin,
+    contentEditable,
+    doc,
+    editable,
+    enableSourceNavigation,
+    hasOnChange,
+    historyPlugin,
+    onChange,
+    onViewportFromChange,
+    selectionPlugin,
+    showBibliography,
+    showBlockKeyboardAccess,
+    showCodeBlockChrome,
+    showHeadingChrome,
+    showInteractionTrace,
+    showListMarkerStrip,
+    showMarkdownExpansion,
+    showReferenceTypeahead,
+    showSlashPicker,
+    showSourcePosition,
+    showTableChrome,
+    showTabKey,
+    showViewportTracking,
+  };
+  const plan = getCoflatRichPluginPlan({
+    editable,
+    hasClipboardPlugin: clipboardPlugin != null,
+    hasHistoryPlugin: historyPlugin != null,
+    hasOnChange,
+    hasSelectionPlugin: selectionPlugin != null,
+    showBibliography,
+    showBlockKeyboardAccess,
+    showCodeBlockChrome,
+    showHeadingChrome,
+    showInteractionTrace,
+    showListMarkerStrip,
+    showMarkdownExpansion,
+    showReferenceTypeahead,
+    showSlashPicker,
+    showSourcePosition,
+    showTableChrome,
+    showTabKey,
+    showViewportTracking,
+  });
+
   return (
     <>
-      {clipboardPlugin}
-      <RichTextPlugin
-        contentEditable={contentEditable}
-        ErrorBoundary={LexicalErrorBoundary}
-        placeholder={null}
-      />
-      <CodeHighlightPlugin />
-      <CodeFenceExitPlugin />
-      {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
-      {historyPlugin}
-      <ListPlugin />
-      <CheckListPlugin />
-      {editable && showListMarkerStrip ? <ListMarkerStripPlugin /> : null}
-      <LinkPlugin />
-      {showTableChrome ? <TableScrollShadowPlugin /> : null}
-      {editable && showTableChrome ? <TableActionMenuPlugin /> : null}
-      {editable ? <FormatEventPlugin /> : null}
-      {editable && showMarkdownExpansion ? <MarkdownExpansionPlugin /> : null}
-      {editable && showBlockKeyboardAccess ? <BlockKeyboardAccessPlugin /> : null}
-      {editable && showTabKey ? <TabKeyPlugin /> : null}
-      {editable && showReferenceTypeahead ? <ReferenceTypeaheadPlugin /> : null}
-      {editable && showSlashPicker ? <SlashPickerPlugin /> : null}
-      {showHeadingChrome ? <HeadingChromeAndIndexPlugin doc={doc} /> : null}
-      {showSourcePosition ? (
-        <SourcePositionPlugin
-          doc={doc}
-          enableNavigation={enableSourceNavigation}
-        />
-      ) : null}
-      {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
-      {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
-      {editable && hasOnChange ? <OnChangePlugin onChange={onChange} /> : null}
-      {selectionPlugin}
-      {showInteractionTrace ? <InteractionTracePlugin /> : null}
-      {showBibliography ? <BibliographySection /> : null}
-      <ActiveEditorPlugin />
-      <TreeViewPlugin />
+      {plan.map((pluginId) => (
+        <Fragment key={pluginId}>
+          {renderCoflatRichPlugin(pluginId, props)}
+        </Fragment>
+      ))}
     </>
   );
+}
+
+function renderCoflatRichPlugin(
+  pluginId: CoflatRichPluginId,
+  props: CoflatRichComposerPluginsProps,
+): ReactNode {
+  switch (pluginId) {
+    case "clipboard":
+      return props.clipboardPlugin;
+    case "rich-text":
+      return (
+        <RichTextPlugin
+          contentEditable={props.contentEditable}
+          ErrorBoundary={LexicalErrorBoundary}
+          placeholder={null}
+        />
+      );
+    case "code-highlight":
+      return <CodeHighlightPlugin />;
+    case "code-fence-exit":
+      return <CodeFenceExitPlugin />;
+    case "code-block-chrome":
+      return <CodeBlockChromePlugin />;
+    case "history":
+      return props.historyPlugin;
+    case "list":
+      return <ListPlugin />;
+    case "check-list":
+      return <CheckListPlugin />;
+    case "list-marker-strip":
+      return <ListMarkerStripPlugin />;
+    case "link":
+      return <LinkPlugin />;
+    case "table-scroll-shadow":
+      return <TableScrollShadowPlugin />;
+    case "table-action-menu":
+      return <TableActionMenuPlugin />;
+    case "format-event":
+      return <FormatEventPlugin />;
+    case "markdown-expansion":
+      return <MarkdownExpansionPlugin />;
+    case "block-keyboard-access":
+      return <BlockKeyboardAccessPlugin />;
+    case "tab-key":
+      return <TabKeyPlugin />;
+    case "reference-typeahead":
+      return <ReferenceTypeaheadPlugin />;
+    case "slash-picker":
+      return <SlashPickerPlugin />;
+    case "heading-chrome-index":
+      return <HeadingChromeAndIndexPlugin doc={props.doc} />;
+    case "source-position":
+      return (
+        <SourcePositionPlugin
+          doc={props.doc}
+          enableNavigation={props.enableSourceNavigation}
+        />
+      );
+    case "viewport-tracking":
+      return <ViewportTrackingPlugin onViewportFromChange={props.onViewportFromChange} />;
+    case "markdown-shortcuts":
+      return <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} />;
+    case "on-change":
+      return <OnChangePlugin onChange={props.onChange} />;
+    case "selection":
+      return props.selectionPlugin;
+    case "interaction-trace":
+      return <InteractionTracePlugin />;
+    case "bibliography":
+      return <BibliographySection />;
+    case "active-editor":
+      return <ActiveEditorPlugin />;
+    case "tree-view":
+      return <TreeViewPlugin />;
+  }
 }

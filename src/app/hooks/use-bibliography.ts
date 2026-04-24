@@ -35,6 +35,12 @@ interface BootstrapCacheEntry {
 
 let bootstrapCache: BootstrapCacheEntry | null = null;
 
+export interface BibliographyLoadData {
+  readonly store: BibStore;
+  readonly cslProcessor: CslProcessor;
+  readonly status: BibliographyStatus;
+}
+
 async function parseBibTeXLazy(content: string): Promise<CslJsonItem[]> {
   const { parseBibTeX } = await import("../../citations/bibtex-parser");
   return parseBibTeX(content);
@@ -98,19 +104,13 @@ export function clearBootstrapCache(): void {
   bootstrapCache = null;
 }
 
-/**
- * Load a bibliography file (and optional CSL style) relative to the document,
- * falling back to project-root resolution, then dispatch the parsed data
- * to the CM6 view.
- */
-export async function loadBibliography(
+export async function loadBibliographyData(
   docPath: string,
   bibPath: string,
   cslPath: string,
   fs: FileSystem,
-  view: EditorView,
   isCurrent?: () => boolean,
-): Promise<void> {
+): Promise<BibliographyLoadData | null> {
   const readWithFallback = async (p: string): Promise<string> => {
     const candidates = projectPathCandidatesFromDocument(docPath, p);
     let lastError: unknown;
@@ -125,7 +125,7 @@ export async function loadBibliography(
     throw lastError ?? new Error(`Unable to read ${p}`);
   };
 
-  await withPerfOperation("citations.load", async (operation) => {
+  return withPerfOperation("citations.load", async (operation) => {
     try {
       let bibText: string;
       try {
@@ -134,7 +134,7 @@ export async function loadBibliography(
           detail: bibPath,
         });
       } catch (error: unknown) {
-        if (isCurrent && !isCurrent()) return;
+        if (isCurrent && !isCurrent()) return null;
         const status = bibliographyFailureStatus(
           "error",
           "read-bib",
@@ -144,10 +144,9 @@ export async function loadBibliography(
           "Unable to read bibliography file",
         );
         console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
-        dispatchBibliographyData(view, new Map(), CslProcessor.empty(), status);
-        return;
+        return { store: new Map(), cslProcessor: CslProcessor.empty(), status };
       }
-      if (isCurrent && !isCurrent()) return;
+      if (isCurrent && !isCurrent()) return null;
 
       let cslXml: string | undefined;
       let styleWarning: BibliographyStatus | null = null;
@@ -157,7 +156,7 @@ export async function loadBibliography(
             category: "citations",
             detail: cslPath,
           });
-          if (isCurrent && !isCurrent()) return;
+          if (isCurrent && !isCurrent()) return null;
         } catch (error: unknown) {
           styleWarning = bibliographyFailureStatus(
             "warning",
@@ -172,13 +171,11 @@ export async function loadBibliography(
 
       // Reuse cached bootstrap artifacts when inputs are unchanged.
       if (bootstrapCache && bootstrapCache.bibText === bibText && bootstrapCache.cslXml === cslXml) {
-        dispatchBibliographyData(
-          view,
-          bootstrapCache.store,
-          bootstrapCache.cslProcessor,
-          bibliographyLoadedStatus(bibPath, cslPath, bootstrapCache.cslProcessor, styleWarning),
-        );
-        return;
+        return {
+          store: bootstrapCache.store,
+          cslProcessor: bootstrapCache.cslProcessor,
+          status: bibliographyLoadedStatus(bibPath, cslPath, bootstrapCache.cslProcessor, styleWarning),
+        };
       }
 
       let items: CslJsonItem[];
@@ -188,7 +185,7 @@ export async function loadBibliography(
           detail: bibPath,
         });
       } catch (error: unknown) {
-        if (isCurrent && !isCurrent()) return;
+        if (isCurrent && !isCurrent()) return null;
         const status = bibliographyFailureStatus(
           "error",
           "parse-bib",
@@ -198,8 +195,7 @@ export async function loadBibliography(
           "Unable to parse bibliography file",
         );
         console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
-        dispatchBibliographyData(view, new Map(), CslProcessor.empty(), status);
-        return;
+        return { store: new Map(), cslProcessor: CslProcessor.empty(), status };
       }
       const store: BibStore = new Map(items.map((item) => [item.id, item]));
 
@@ -208,17 +204,16 @@ export async function loadBibliography(
         () => CslProcessor.create(items, cslXml),
         { category: "citations", detail: cslPath || bibPath },
       );
-      if (isCurrent && !isCurrent()) return;
+      if (isCurrent && !isCurrent()) return null;
 
       bootstrapCache = { bibText, cslXml, store, cslProcessor };
-      dispatchBibliographyData(
-        view,
+      return {
         store,
         cslProcessor,
-        bibliographyLoadedStatus(bibPath, cslPath, cslProcessor, styleWarning),
-      );
+        status: bibliographyLoadedStatus(bibPath, cslPath, cslProcessor, styleWarning),
+      };
     } catch (error: unknown) {
-      if (isCurrent && !isCurrent()) return;
+      if (isCurrent && !isCurrent()) return null;
       const status = bibliographyFailureStatus(
         "error",
         "unexpected",
@@ -228,9 +223,27 @@ export async function loadBibliography(
         "Unexpected bibliography load failure",
       );
       console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
-      dispatchBibliographyData(view, new Map(), CslProcessor.empty(), status);
+      return { store: new Map(), cslProcessor: CslProcessor.empty(), status };
     }
   }, bibPath);
+}
+
+/**
+ * Load a bibliography file (and optional CSL style) relative to the document,
+ * falling back to project-root resolution, then dispatch the parsed data
+ * to the CM6 view.
+ */
+export async function loadBibliography(
+  docPath: string,
+  bibPath: string,
+  cslPath: string,
+  fs: FileSystem,
+  view: EditorView,
+  isCurrent?: () => boolean,
+): Promise<void> {
+  const data = await loadBibliographyData(docPath, bibPath, cslPath, fs, isCurrent);
+  if (!data) return;
+  dispatchBibliographyData(view, data.store, data.cslProcessor, data.status);
 }
 
 export interface UseBibliographyOptions {

@@ -2,11 +2,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { REVEAL_MODE, type RevealMode } from "../../lexical/reveal-mode";
-import type { ProjectConfig } from "../../project-config";
+import {
+  mergeConfigs,
+  type ProjectConfig,
+  type ProjectConfigStatus,
+} from "../../project-config";
+import { parseFrontmatter } from "../../parser/frontmatter";
+import type { BibliographyStatus } from "../../state/bib-data";
 import { getDocumentAnalysisSnapshot } from "../../semantics/incremental/cached-document-analysis";
-import type { DiagnosticEntry } from "../diagnostics";
+import {
+  compareDiagnostics,
+  sameDiagnosticEntries,
+  type DiagnosticEntry,
+} from "../diagnostics";
+import {
+  diagnosticFromBibliographyStatus,
+  diagnosticFromFrontmatterStatus,
+  diagnosticFromProjectConfigStatus,
+  diagnosticStatusKey,
+} from "../diagnostic-status";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { FileSystem } from "../file-manager";
+import { loadBibliographyData } from "../hooks/use-bibliography";
+import { logCatchError } from "../lib/log-catch-error";
 import type { HeadingEntry } from "../heading-ancestry";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
@@ -32,6 +50,7 @@ interface LexicalEditorPaneProps {
   readonly onSurfaceReady?: () => void;
   readonly onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   readonly projectConfig?: ProjectConfig;
+  readonly projectConfigStatus?: ProjectConfigStatus;
   readonly sidenotesCollapsed?: boolean;
   readonly theme?: ResolvedTheme;
 }
@@ -43,12 +62,21 @@ interface LexicalPaneLiveCounts {
 
 interface LexicalPaneSemanticState extends SidebarSemanticState {
   readonly cacheKey?: string;
+  readonly diagnosticStatusKey: string;
   readonly doc: string;
 }
 
 interface LexicalSemanticDeriveOptions {
   readonly cacheKey?: string;
   readonly includeDiagnostics: boolean;
+  readonly statusDiagnostics?: readonly DiagnosticEntry[];
+}
+
+interface LexicalDiagnosticInputs {
+  readonly bibliographyPath: string;
+  readonly cslPath: string;
+  readonly statusDiagnostics: readonly DiagnosticEntry[];
+  readonly statusKey: string;
 }
 
 type IdleTaskHandle = number;
@@ -98,13 +126,45 @@ function deriveLexicalSemanticState(
       metricPrefix: "lexical",
       reuseByRevision: Boolean(options.cacheKey),
     }, previousState);
+    const statusDiagnostics = [...(options.statusDiagnostics ?? [])].sort(compareDiagnostics);
+    const diagnostics = options.includeDiagnostics && statusDiagnostics.length > 0
+      ? [...nextState.diagnostics, ...statusDiagnostics].sort(compareDiagnostics)
+      : nextState.diagnostics;
+    const stableDiagnostics = previous?.diagnosticsEnabled
+      && sameDiagnosticEntries(previous.diagnostics, diagnostics)
+      ? previous.diagnostics
+      : diagnostics;
 
     return {
       cacheKey: options.cacheKey,
+      diagnosticStatusKey: diagnosticStatusKey(statusDiagnostics),
       doc,
       ...nextState,
+      diagnostics: stableDiagnostics,
     };
   }, { category: "lexical", detail: `${doc.length} chars` });
+}
+
+function lexicalDiagnosticInputs(
+  doc: string,
+  projectConfig: ProjectConfig | undefined,
+  projectConfigStatus: ProjectConfigStatus | undefined,
+  bibliographyStatus: BibliographyStatus | undefined,
+): LexicalDiagnosticInputs {
+  const frontmatter = parseFrontmatter(doc);
+  const mergedConfig = mergeConfigs(projectConfig ?? {}, frontmatter.config);
+  const diagnostics = [
+    diagnosticFromFrontmatterStatus(frontmatter.status),
+    projectConfigStatus ? diagnosticFromProjectConfigStatus(projectConfigStatus) : null,
+    diagnosticFromBibliographyStatus(bibliographyStatus),
+  ].filter((diagnostic): diagnostic is DiagnosticEntry => diagnostic !== null);
+  diagnostics.sort(compareDiagnostics);
+  return {
+    bibliographyPath: mergedConfig.bibliography ?? "",
+    cslPath: mergedConfig.csl ?? "",
+    statusDiagnostics: diagnostics,
+    statusKey: diagnosticStatusKey(diagnostics),
+  };
 }
 
 function scheduleIdleTask(task: () => void): () => void {
@@ -129,14 +189,26 @@ export function LexicalEditorPane({
   onProgrammaticDocChange: _onProgrammaticDocChange,
   onSurfaceReady,
   onSidenotesCollapsedChange: _onSidenotesCollapsedChange,
-  projectConfig: _projectConfig,
+  projectConfig,
+  projectConfigStatus,
   sidenotesCollapsed: _sidenotesCollapsed,
   theme: _theme,
   ...editorOptions
 }: LexicalEditorPaneProps) {
+  const bibliographyStatusRef = useRef<BibliographyStatus>({ state: "idle" });
+  const bibliographyLoadKeyRef = useRef("");
+  const bibliographyLoadGenerationRef = useRef(0);
+  const diagnosticInputsForDoc = useCallback((doc: string) =>
+    lexicalDiagnosticInputs(
+      doc,
+      projectConfig,
+      projectConfigStatus,
+      bibliographyStatusRef.current,
+    ), [projectConfig, projectConfigStatus]);
   const [initialSemanticState] = useState(() => deriveLexicalSemanticState(editorOptions.doc, {
     cacheKey: editorOptions.docPath,
     includeDiagnostics: Boolean(onDiagnosticsChange),
+    statusDiagnostics: diagnosticInputsForDoc(editorOptions.doc).statusDiagnostics,
   }));
   const semanticStateRef = useRef(initialSemanticState);
   const callbacksRef = useRef({
@@ -168,9 +240,11 @@ export function LexicalEditorPane({
 
   const getSemanticState = useCallback((doc: string, includeDiagnostics: boolean) => {
     const cached = semanticStateRef.current;
+    const diagnosticInputs = diagnosticInputsForDoc(doc);
     if (
       cached.doc === doc
       && cached.cacheKey === editorOptions.docPath
+      && cached.diagnosticStatusKey === diagnosticInputs.statusKey
       && cached.diagnosticsEnabled === includeDiagnostics
     ) {
       return cached;
@@ -178,10 +252,11 @@ export function LexicalEditorPane({
     const nextState = deriveLexicalSemanticState(doc, {
       cacheKey: editorOptions.docPath,
       includeDiagnostics,
+      statusDiagnostics: diagnosticInputs.statusDiagnostics,
     }, cached);
     semanticStateRef.current = nextState;
     return nextState;
-  }, [editorOptions.docPath]);
+  }, [diagnosticInputsForDoc, editorOptions.docPath]);
 
   const cancelScheduledDerivedState = useCallback(() => {
     if (liveCountsTimerRef.current !== null) {
@@ -245,14 +320,77 @@ export function LexicalEditorPane({
     }
   }, []);
 
+  const publishCurrentBibliographyStatus = useCallback(() => {
+    if (!callbacksRef.current.onDiagnosticsChange) {
+      return;
+    }
+    const semanticState = getSemanticState(currentDocRef.current, true);
+    publishSemanticState(semanticState, {
+      publishHeadings: false,
+      updateHeadingState: false,
+    });
+  }, [getSemanticState, publishSemanticState]);
+
+  const syncBibliographyStatus = useCallback((doc: string) => {
+    const { bibliographyPath, cslPath } = diagnosticInputsForDoc(doc);
+    const loadKey = `${editorOptions.docPath ?? ""}\u0000${bibliographyPath}\u0000${cslPath}`;
+    if (loadKey === bibliographyLoadKeyRef.current) {
+      return;
+    }
+    bibliographyLoadKeyRef.current = loadKey;
+    bibliographyLoadGenerationRef.current += 1;
+    const generation = bibliographyLoadGenerationRef.current;
+
+    if (!bibliographyPath) {
+      bibliographyStatusRef.current = { state: "idle" };
+      publishCurrentBibliographyStatus();
+      return;
+    }
+
+    if (!editorOptions.fs || !editorOptions.docPath) {
+      bibliographyStatusRef.current = { state: "idle" };
+      publishCurrentBibliographyStatus();
+      return;
+    }
+
+    bibliographyStatusRef.current = { state: "idle" };
+    publishCurrentBibliographyStatus();
+
+    void loadBibliographyData(
+      editorOptions.docPath,
+      bibliographyPath,
+      cslPath,
+      editorOptions.fs,
+      () => bibliographyLoadGenerationRef.current === generation,
+    ).then((data) => {
+      if (!data || bibliographyLoadGenerationRef.current !== generation) {
+        return;
+      }
+      bibliographyStatusRef.current = data.status;
+      publishCurrentBibliographyStatus();
+    }).catch(logCatchError("[lexical] loadBibliographyData failed"));
+  }, [
+    diagnosticInputsForDoc,
+    editorOptions.docPath,
+    editorOptions.fs,
+    publishCurrentBibliographyStatus,
+  ]);
+
   const applyImmediateState = useCallback((
     doc: string,
     options: { readonly forcePublish?: boolean } = {},
   ) => {
+    syncBibliographyStatus(doc);
     const semanticState = getSemanticState(doc, shouldDeriveDiagnostics());
     syncLiveCounts(doc);
     publishSemanticState(semanticState, { force: options.forcePublish });
-  }, [getSemanticState, publishSemanticState, shouldDeriveDiagnostics, syncLiveCounts]);
+  }, [
+    getSemanticState,
+    publishSemanticState,
+    shouldDeriveDiagnostics,
+    syncBibliographyStatus,
+    syncLiveCounts,
+  ]);
 
   useEffect(() => {
     const previousCallbacks = callbacksRef.current;
@@ -335,6 +473,7 @@ export function LexicalEditorPane({
     semanticStateRef.current = deriveLexicalSemanticState(editorOptions.doc, {
       cacheKey: editorOptions.docPath,
       includeDiagnostics: shouldDeriveDiagnostics(),
+      statusDiagnostics: diagnosticInputsForDoc(editorOptions.doc).statusDiagnostics,
     });
     publishedHeadingsRef.current = null;
     publishedDiagnosticsRef.current = null;
@@ -347,6 +486,7 @@ export function LexicalEditorPane({
     cancelScheduledDerivedState,
     editorOptions.doc,
     editorOptions.docPath,
+    diagnosticInputsForDoc,
     shouldDeriveDiagnostics,
   ]);
 
@@ -366,9 +506,10 @@ export function LexicalEditorPane({
     currentDocRef.current = text;
     docVersionRef.current += 1;
     const version = docVersionRef.current;
+    syncBibliographyStatus(text);
     scheduleLiveCounts(text, version);
     scheduleSemanticState(text, version);
-  }, [scheduleLiveCounts, scheduleSemanticState]);
+  }, [scheduleLiveCounts, scheduleSemanticState, syncBibliographyStatus]);
 
   const handleSelectionChange = useCallback((nextSelection: MarkdownEditorSelection) => {
     setSelection(nextSelection);
