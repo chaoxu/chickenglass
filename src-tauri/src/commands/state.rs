@@ -26,6 +26,19 @@ pub struct FileWatcherState(pub Mutex<HashMap<String, FileWatcherEntry>>);
 /// Shared state remembering the last webview window that held native focus.
 pub struct LastFocusedWindow(pub Mutex<Option<String>>);
 
+pub fn remove_window_native_state(
+    window_label: &str,
+    project_roots: &mut HashMap<String, ProjectRootEntry>,
+    watchers: &mut HashMap<String, FileWatcherEntry>,
+    last_focused_window: &mut Option<String>,
+) {
+    project_roots.remove(window_label);
+    watchers.remove(window_label);
+    if last_focused_window.as_deref() == Some(window_label) {
+        *last_focused_window = None;
+    }
+}
+
 #[derive(Serialize, Clone)]
 pub struct PerfRecord {
     pub id: String,
@@ -249,9 +262,11 @@ impl PerfState {
 
 #[cfg(test)]
 mod tests {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
 
-    use super::PerfState;
+    use super::{remove_window_native_state, FileWatcherEntry, PerfState, ProjectRootEntry};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     #[test]
     fn perf_state_recovers_after_mutex_poison() {
@@ -277,5 +292,52 @@ mod tests {
             perf.0.lock().is_ok(),
             "recovery should clear the poison flag"
         );
+    }
+
+    #[test]
+    fn remove_window_native_state_clears_window_scoped_entries() {
+        let mut project_roots = HashMap::from([
+            (
+                "main".to_string(),
+                ProjectRootEntry {
+                    generation: 1,
+                    path: PathBuf::from("/tmp/main"),
+                },
+            ),
+            (
+                "other".to_string(),
+                ProjectRootEntry {
+                    generation: 1,
+                    path: PathBuf::from("/tmp/other"),
+                },
+            ),
+        ]);
+        let mut watchers = HashMap::from([
+            (
+                "main".to_string(),
+                FileWatcherEntry {
+                    generation: 1,
+                    root: PathBuf::from("/tmp/main"),
+                    watcher: None,
+                },
+            ),
+            (
+                "other".to_string(),
+                FileWatcherEntry {
+                    generation: 1,
+                    root: PathBuf::from("/tmp/other"),
+                    watcher: None,
+                },
+            ),
+        ]);
+        let mut last_focused = Some("main".to_string());
+
+        remove_window_native_state("main", &mut project_roots, &mut watchers, &mut last_focused);
+
+        assert!(!project_roots.contains_key("main"));
+        assert!(project_roots.contains_key("other"));
+        assert!(!watchers.contains_key("main"));
+        assert!(watchers.contains_key("other"));
+        assert_eq!(last_focused, None);
     }
 }

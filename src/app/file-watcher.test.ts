@@ -18,7 +18,7 @@ const watcherBackendState = vi.hoisted(() => {
 
   const listenDeferred = createDeferred<() => void>();
   return {
-    watchDirectoryCommand: vi.fn(async (path: string) => ({ applied: true, root: path })),
+    watchDirectoryCommand: vi.fn(async () => ({ applied: true, root: "/tmp/project-a" })),
     unwatchDirectoryCommand: vi.fn(async () => true),
     listeners: [] as Listener[],
     listen: vi.fn(async (_eventName: string, listener: Listener) => {
@@ -33,9 +33,9 @@ const watcherBackendState = vi.hoisted(() => {
     },
     reset() {
       this.watchDirectoryCommand.mockClear();
-      this.watchDirectoryCommand.mockImplementation(async (path: string) => ({
+      this.watchDirectoryCommand.mockImplementation(async () => ({
         applied: true,
-        root: path,
+        root: "/tmp/project-a",
       }));
       this.unwatchDirectoryCommand.mockClear();
       this.unwatchDirectoryCommand.mockImplementation(async () => true);
@@ -127,7 +127,6 @@ describe("FileWatcher", () => {
     await watchPromise;
 
     expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledWith(
-      "/tmp/project-a",
       expect.any(Number),
       500,
     );
@@ -170,14 +169,13 @@ describe("FileWatcher", () => {
     expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledTimes(1);
     expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
       1,
-      "/tmp/project-a",
       expect.any(Number),
       500,
     );
     const [secondCall = [] as unknown[]] =
       watcherBackendState.watchDirectoryCommand.mock.calls;
     const unwatchCalls = watcherBackendState.unwatchDirectoryCommand.mock.calls as Array<unknown[]>;
-    const secondToken = secondCall[1];
+    const secondToken = secondCall[0];
     expect(
       unwatchCalls.some((call) => call[0] === secondToken),
     ).toBe(false);
@@ -192,7 +190,7 @@ describe("FileWatcher", () => {
 
     await watcher.watch("/tmp/project-a");
     const [watchCall = [] as unknown[]] = watcherBackendState.watchDirectoryCommand.mock.calls;
-    const watchToken = watchCall[1];
+    const watchToken = watchCall[0];
     await expect(watcher.unwatch()).resolves.toBeUndefined();
 
     expect(consoleWarn).toHaveBeenCalledWith(
@@ -209,7 +207,7 @@ describe("FileWatcher", () => {
       watcherBackendState.listeners.push(listener);
       return () => {};
     });
-    watcherBackendState.watchDirectoryCommand.mockImplementation(async (_path: string) => ({
+    watcherBackendState.watchDirectoryCommand.mockImplementation(async () => ({
       applied: true,
       root: "/tmp/project-a-canonical",
     }));
@@ -218,7 +216,7 @@ describe("FileWatcher", () => {
 
     await watcher.watch("/tmp/project-a");
     const [watchCall = [] as unknown[]] = watcherBackendState.watchDirectoryCommand.mock.calls;
-    const watchToken = watchCall[1] as number;
+    const watchToken = watchCall[0] as number;
 
     watcherBackendState.emit({
       path: "stale-generation.md",

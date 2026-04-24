@@ -10,3 +10,7 @@ export const toProjectRelativePathCommand = tauriArgs(
 export const canonicalizeProjectRootCommand = tauriArgs(
   pathCommands.canonicalizeProjectRoot,
 )((path: string) => ({ path }));
+
+export const resolveProjectFileTargetCommand = tauriArgs(
+  pathCommands.resolveProjectFileTarget,
+)((path: string) => ({ path }));

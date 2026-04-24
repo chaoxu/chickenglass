@@ -6,8 +6,7 @@ export type { WatchDirectoryResult } from "./command-contract";
 const watchCommands = TAURI_COMMAND_CONTRACT.watch;
 
 export const watchDirectoryCommand = tauriArgs(watchCommands.watchDirectory)(
-  (path: string, generation: number, debounceMs: number) => ({
-    path,
+  (generation: number, debounceMs: number) => ({
     generation,
     debounceMs,
   }),

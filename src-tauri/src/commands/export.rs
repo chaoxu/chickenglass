@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde::{Deserialize, Serialize};
-use tauri::{command, State, WebviewWindow};
+use tauri::{command, path::BaseDirectory, AppHandle, Manager, State, WebviewWindow};
 
 use super::context::{run_command, CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
@@ -19,6 +19,7 @@ const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
     "tauri",
 );
 const EXPORT_CONTRACT_JSON: &str = include_str!("../../../src/latex/export-contract.json");
+const LATEX_RESOURCE_ROOT: &str = "latex";
 
 #[derive(Clone, Deserialize)]
 struct ExportDependencyTool {
@@ -231,13 +232,32 @@ fn latex_dir() -> PathBuf {
         .join("latex")
 }
 
+fn latex_resource_path(relative_path: &str) -> String {
+    format!("{}/{}", LATEX_RESOURCE_ROOT, relative_path)
+}
+
+fn resolve_latex_asset(app: Option<&AppHandle>, relative_path: &str) -> Result<PathBuf, String> {
+    match app {
+        Some(app) => app
+            .path()
+            .resolve(latex_resource_path(relative_path), BaseDirectory::Resource)
+            .map_err(|error| {
+                format!(
+                    "Failed to resolve bundled LaTeX export asset '{}': {}",
+                    relative_path, error
+                )
+            }),
+        None => Ok(latex_dir().join(relative_path)),
+    }
+}
+
 fn resolve_latex_template(
     paths: &ProjectPathResolver,
     template: Option<&str>,
+    app: Option<&AppHandle>,
 ) -> Result<PathBuf, String> {
     let contract = export_contract()?;
     let name = template.unwrap_or(&contract.latex.templates.default);
-    let latex_dir = latex_dir();
     if name.is_empty() {
         let default_template = contract
             .latex
@@ -245,10 +265,10 @@ fn resolve_latex_template(
             .builtins
             .get(&contract.latex.templates.default)
             .ok_or_else(|| "Default LaTeX template is missing from export contract".to_string())?;
-        return Ok(latex_dir.join(default_template));
+        return resolve_latex_asset(app, default_template);
     }
     match contract.latex.templates.builtins.get(name) {
-        Some(relative_path) => Ok(latex_dir.join(relative_path)),
+        Some(relative_path) => resolve_latex_asset(app, relative_path),
         None => paths.resolve_project_path(name),
     }
 }
@@ -271,11 +291,12 @@ fn build_latex_pandoc_args(
     format: &str,
     template: Option<&str>,
     bibliography: Option<&str>,
+    app: Option<&AppHandle>,
 ) -> Result<Vec<String>, String> {
     let contract = export_contract()?;
     let resource_path = build_pandoc_resource_path(project_root, source_dir)?;
-    let filter_path = latex_dir().join("filter.lua");
-    let template_path = resolve_latex_template(paths, template)?;
+    let filter_path = resolve_latex_asset(app, "filter.lua")?;
+    let template_path = resolve_latex_template(paths, template, app)?;
     let filter_path = filter_path.to_string_lossy().to_string();
     let template_path = template_path.to_string_lossy().to_string();
     let resource_path = resource_path.to_string_lossy().to_string();
@@ -366,6 +387,7 @@ fn build_pandoc_args(
     format: &str,
     template: Option<&str>,
     bibliography: Option<&str>,
+    app: Option<&AppHandle>,
 ) -> Result<Vec<String>, String> {
     match format {
         "pdf" | "latex" => build_latex_pandoc_args(
@@ -376,6 +398,7 @@ fn build_pandoc_args(
             format,
             template,
             bibliography,
+            app,
         ),
         "html" => build_html_pandoc_args(project_root, source_dir, output_path),
         _ => Err(format!("Unsupported export format: {}", format)),
@@ -384,6 +407,7 @@ fn build_pandoc_args(
 
 #[command]
 pub fn export_document(
+    app: AppHandle,
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
@@ -424,6 +448,7 @@ pub fn export_document(
                 &format,
                 template.as_deref(),
                 bibliography.as_deref(),
+                Some(&app),
             )?;
 
             let mut child = map_err_str!(
@@ -461,8 +486,8 @@ mod tests {
     use super::{
         bibliography_metadata_value, build_export_dependency_check, build_html_pandoc_args,
         build_latex_pandoc_args, build_pandoc_args, build_pandoc_resource_path, export_contract,
-        render_pandoc_arg, resolve_export_output_path, resolve_export_source_dir,
-        resolve_latex_template, ExportToolStatus,
+        latex_resource_path, render_pandoc_arg, resolve_export_output_path,
+        resolve_export_source_dir, resolve_latex_template, ExportToolStatus,
     };
     use crate::services::path::ProjectPathResolver;
     use std::fs;
@@ -601,13 +626,23 @@ mod tests {
         let project_root = create_temp_dir("export-root");
         let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
-        let article = resolve_latex_template(&paths, Some("article")).expect("article template");
-        let lipics = resolve_latex_template(&paths, Some("lipics")).expect("lipics template");
+        let article =
+            resolve_latex_template(&paths, Some("article"), None).expect("article template");
+        let lipics = resolve_latex_template(&paths, Some("lipics"), None).expect("lipics template");
 
         assert!(article.ends_with("src/latex/template/article.tex"));
         assert!(lipics.ends_with("src/latex/template/lipics.tex"));
 
         fs::remove_dir_all(&project_root).expect("remove project root");
+    }
+
+    #[test]
+    fn builds_tauri_resource_paths_for_packaged_latex_assets() {
+        assert_eq!(latex_resource_path("filter.lua"), "latex/filter.lua");
+        assert_eq!(
+            latex_resource_path("template/article.tex"),
+            "latex/template/article.tex"
+        );
     }
 
     #[test]
@@ -617,8 +652,8 @@ mod tests {
         fs::create_dir_all(&template_dir).expect("create template dir");
         let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
-        let template =
-            resolve_latex_template(&paths, Some("templates/custom.tex")).expect("custom template");
+        let template = resolve_latex_template(&paths, Some("templates/custom.tex"), None)
+            .expect("custom template");
 
         assert_eq!(template, template_dir.join("custom.tex"));
 
@@ -630,7 +665,7 @@ mod tests {
         let project_root = create_temp_dir("export-root");
         let paths = ProjectPathResolver::new(&project_root).expect("build path resolver");
 
-        let error = resolve_latex_template(&paths, Some("../template.tex"))
+        let error = resolve_latex_template(&paths, Some("../template.tex"), None)
             .expect_err("path traversal should fail");
 
         assert_rejects_unsafe_project_path(&error);
@@ -666,6 +701,7 @@ mod tests {
             "latex",
             Some("lipics"),
             Some("refs/project.bib"),
+            None,
         )
         .expect("pandoc args");
 
@@ -697,6 +733,7 @@ mod tests {
             &project_root,
             &output_path,
             "pdf",
+            None,
             None,
             None,
         )
@@ -749,6 +786,7 @@ mod tests {
             "html",
             Some("lipics"),
             Some("refs/project.bib"),
+            None,
         )
         .expect("pandoc args");
 
@@ -774,6 +812,7 @@ mod tests {
             &project_root,
             &output_path,
             "docx",
+            None,
             None,
             None,
         )

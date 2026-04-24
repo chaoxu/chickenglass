@@ -39,7 +39,7 @@ export const TAURI_COMMAND_CONTRACT = {
   watch: {
     watchDirectory: {
       name: "watch_directory",
-      args: ["path", "generation", "debounceMs"],
+      args: ["generation", "debounceMs"],
     },
     unwatchDirectory: { name: "unwatch_directory", args: ["generation"] },
   },
@@ -66,6 +66,10 @@ export const TAURI_COMMAND_CONTRACT = {
       name: "canonicalize_project_root",
       args: ["path"],
     },
+    resolveProjectFileTarget: {
+      name: "resolve_project_file_target",
+      args: ["path"],
+    },
   },
   shell: {
     openUrl: { name: "open_url", args: ["url"] },
@@ -78,19 +82,19 @@ export const TAURI_COMMAND_CONTRACT = {
   recovery: {
     writeHotExitBackup: {
       name: "write_hot_exit_backup",
-      args: ["projectRoot", "path", "name", "content", "baselineHash"],
+      args: ["path", "name", "content", "baselineHash"],
     },
     listHotExitBackups: {
       name: "list_hot_exit_backups",
-      args: ["projectRoot"],
+      args: [],
     },
     readHotExitBackup: {
       name: "read_hot_exit_backup",
-      args: ["projectRoot", "path"],
+      args: ["path"],
     },
     deleteHotExitBackup: {
       name: "delete_hot_exit_backup",
-      args: ["projectRoot", "path"],
+      args: ["path"],
     },
   },
   debug: {
@@ -111,6 +115,11 @@ export interface WatchDirectoryResult {
 export interface OpenFolderResult {
   readonly applied: boolean;
   readonly root: string;
+}
+
+export interface ProjectFileTarget {
+  readonly projectRoot: string;
+  readonly relativePath: string;
 }
 
 export interface NativeWindowDebugInfo {
@@ -226,7 +235,6 @@ export interface TauriCommandTypes {
   };
   readonly watch_directory: {
     readonly args: {
-      readonly path: string;
       readonly generation: number;
       readonly debounceMs: number;
     };
@@ -259,6 +267,10 @@ export interface TauriCommandTypes {
     readonly args: { readonly path: string };
     readonly result: string;
   };
+  readonly resolve_project_file_target: {
+    readonly args: { readonly path: string };
+    readonly result: ProjectFileTarget;
+  };
   readonly open_url: {
     readonly args: { readonly url: string };
     readonly result: undefined;
@@ -277,7 +289,6 @@ export interface TauriCommandTypes {
   };
   readonly write_hot_exit_backup: {
     readonly args: {
-      readonly projectRoot: string;
       readonly path: string;
       readonly name: string;
       readonly content: string;
@@ -286,15 +297,15 @@ export interface TauriCommandTypes {
     readonly result: HotExitBackupSummary;
   };
   readonly list_hot_exit_backups: {
-    readonly args: { readonly projectRoot: string };
+    readonly args: undefined;
     readonly result: HotExitBackupSummary[];
   };
   readonly read_hot_exit_backup: {
-    readonly args: { readonly projectRoot: string; readonly path: string };
+    readonly args: { readonly path: string };
     readonly result: HotExitBackup | null;
   };
   readonly delete_hot_exit_backup: {
-    readonly args: { readonly projectRoot: string; readonly path: string };
+    readonly args: { readonly path: string };
     readonly result: undefined;
   };
   readonly debug_list_windows: {

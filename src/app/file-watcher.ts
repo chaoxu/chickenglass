@@ -122,7 +122,6 @@ export class FileWatcher {
     let watchResult: WatchDirectoryResult | boolean;
     try {
       watchResult = await watchDirectoryCommand(
-        directoryPath,
         watchToken,
         DEFAULT_WATCH_DEBOUNCE_MS,
       );

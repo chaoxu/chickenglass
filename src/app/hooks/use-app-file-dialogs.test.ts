@@ -8,7 +8,14 @@ import {
 
 const fileDialogMockState = vi.hoisted(() => ({
   canonicalizeProjectRootCommand: vi.fn(async (path: string): Promise<string> => path),
+  openDialog: vi.fn(async (): Promise<string | string[] | null> => null),
+  openDocumentInNewWindow: vi.fn(async (): Promise<void> => {}),
   pickFolder: vi.fn(async (): Promise<string | null> => null),
+  resolveProjectFileTargetCommand: vi.fn(async (path: string) => ({
+    projectRoot: path,
+    relativePath: path,
+  })),
+  toProjectRelativePathCommand: vi.fn(async (path: string): Promise<string> => path),
 }));
 
 vi.mock("../../lib/tauri", () => ({
@@ -21,6 +28,19 @@ vi.mock("../tauri-fs", () => ({
 
 vi.mock("../tauri-client/path", () => ({
   canonicalizeProjectRootCommand: fileDialogMockState.canonicalizeProjectRootCommand,
+  resolveProjectFileTargetCommand: fileDialogMockState.resolveProjectFileTargetCommand,
+}));
+
+vi.mock("../tauri-client/fs", () => ({
+  toProjectRelativePathCommand: fileDialogMockState.toProjectRelativePathCommand,
+}));
+
+vi.mock("../window-launch", () => ({
+  openDocumentInNewWindow: fileDialogMockState.openDocumentInNewWindow,
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: fileDialogMockState.openDialog,
 }));
 
 const openedProject: ProjectOpenResult = {
@@ -67,8 +87,20 @@ describe("useAppFileDialogs", () => {
     fileDialogMockState.canonicalizeProjectRootCommand.mockImplementation(
       async (path: string) => path,
     );
+    fileDialogMockState.openDialog.mockReset();
+    fileDialogMockState.openDialog.mockResolvedValue(null);
+    fileDialogMockState.openDocumentInNewWindow.mockReset();
     fileDialogMockState.pickFolder.mockReset();
     fileDialogMockState.pickFolder.mockResolvedValue(null);
+    fileDialogMockState.resolveProjectFileTargetCommand.mockReset();
+    fileDialogMockState.resolveProjectFileTargetCommand.mockImplementation(async (path: string) => ({
+      projectRoot: path,
+      relativePath: path,
+    }));
+    fileDialogMockState.toProjectRelativePathCommand.mockReset();
+    fileDialogMockState.toProjectRelativePathCommand.mockImplementation(
+      async (path: string) => path,
+    );
   });
 
   it("records a recent folder after the Open Folder request opens a project", async () => {
@@ -124,5 +156,54 @@ describe("useAppFileDialogs", () => {
       expect(deps.openProjectRoot).toHaveBeenCalledWith("/tmp/missing-project");
     });
     expect(deps.addRecentFolder).not.toHaveBeenCalled();
+  });
+
+  it("opens a nested external Markdown file from its project config root", async () => {
+    fileDialogMockState.openDialog.mockResolvedValue("/tmp/project/chapters/intro.md");
+    fileDialogMockState.resolveProjectFileTargetCommand.mockResolvedValue({
+      projectRoot: "/tmp/project",
+      relativePath: "chapters/intro.md",
+    });
+    const deps = createDeps({
+      openProjectRoot: vi.fn(async () => ({
+        projectRoot: "/tmp/project",
+        tree: openedProject.tree,
+      })),
+    });
+    const { result } = renderHook(() => useAppFileDialogs(deps));
+
+    act(() => {
+      result.current.handleOpenFileRequest();
+    });
+
+    await waitFor(() => {
+      expect(deps.openProjectRoot).toHaveBeenCalledWith("/tmp/project");
+    });
+    expect(deps.editor.openFile).toHaveBeenCalledWith("chapters/intro.md");
+  });
+
+  it("opens an external Markdown file in a new window from its project config root", async () => {
+    fileDialogMockState.openDialog.mockResolvedValue("/tmp/project/chapters/intro.md");
+    fileDialogMockState.resolveProjectFileTargetCommand.mockResolvedValue({
+      projectRoot: "/tmp/project",
+      relativePath: "chapters/intro.md",
+    });
+    fileDialogMockState.toProjectRelativePathCommand.mockRejectedValue(
+      new Error("Path escapes project root"),
+    );
+    const deps = createDeps({ projectRoot: "/tmp/current" });
+    const { result } = renderHook(() => useAppFileDialogs(deps));
+
+    act(() => {
+      result.current.handleOpenFileRequest();
+    });
+
+    await waitFor(() => {
+      expect(fileDialogMockState.openDocumentInNewWindow).toHaveBeenCalledWith(
+        "/tmp/project",
+        "chapters/intro.md",
+      );
+    });
+    expect(deps.editor.openFile).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,6 @@ import { useCallback, useRef } from "react";
 import { openProjectInCurrentWindow as openProjectInCurrentWindowFlow } from "../project-open";
 import { isProjectRootEscapeError } from "../project-root-errors";
 import { openDocumentInNewWindow } from "../window-launch";
-import { dirname, basename } from "../../lib/utils";
 import { isTauri } from "../../lib/tauri";
 import type { FileEntry } from "../file-manager";
 import type { AppEditorShellController } from "./use-app-editor-shell";
@@ -123,9 +122,13 @@ export function useAppFileDialogs({
         });
         if (!selected || Array.isArray(selected)) return;
 
-        const projectRelativeTarget = basename(selected);
+        const { resolveProjectFileTargetCommand } = await import("../tauri-client/path");
+        const projectFileTarget = await resolveProjectFileTargetCommand(selected);
         if (!workspace.projectRoot) {
-          await openProjectInCurrentWindow(dirname(selected), projectRelativeTarget);
+          await openProjectInCurrentWindow(
+            projectFileTarget.projectRoot,
+            projectFileTarget.relativePath,
+          );
           return;
         }
 
@@ -137,7 +140,10 @@ export function useAppFileDialogs({
           if (!isProjectRootEscapeError(error)) {
             throw error;
           }
-          await openDocumentInNewWindow(dirname(selected), projectRelativeTarget);
+          await openDocumentInNewWindow(
+            projectFileTarget.projectRoot,
+            projectFileTarget.relativePath,
+          );
           return;
         }
 

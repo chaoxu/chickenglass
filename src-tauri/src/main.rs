@@ -5,7 +5,9 @@ mod commands;
 mod menu;
 mod services;
 
-use commands::state::{FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot};
+use commands::state::{
+    remove_window_native_state, FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot,
+};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{Manager, WindowEvent};
@@ -28,6 +30,28 @@ fn main() {
                 let last_focused = window.state::<LastFocusedWindow>();
                 if let Ok(mut label) = last_focused.0.lock() {
                     *label = Some(window.label().to_string());
+                }
+            } else if let WindowEvent::Destroyed = event {
+                let project_roots = window.state::<ProjectRoot>();
+                let watchers = window.state::<FileWatcherState>();
+                let last_focused = window.state::<LastFocusedWindow>();
+                let label = window.label().to_string();
+                match (
+                    project_roots.0.lock(),
+                    watchers.0.lock(),
+                    last_focused.0.lock(),
+                ) {
+                    (Ok(mut project_roots), Ok(mut watchers), Ok(mut last_focused)) => {
+                        remove_window_native_state(
+                            &label,
+                            &mut project_roots,
+                            &mut watchers,
+                            &mut last_focused,
+                        );
+                    }
+                    _ => {
+                        eprintln!("[native-state] failed to clean up closed window '{label}'");
+                    }
                 }
             }
         })
@@ -59,6 +83,7 @@ fn main() {
             commands::fs::read_file_binary,
             commands::path::to_project_relative_path,
             commands::path::canonicalize_project_root,
+            commands::path::resolve_project_file_target,
             commands::perf::get_perf_snapshot,
             commands::perf::clear_perf_snapshot,
             commands::recovery::write_hot_exit_backup,
