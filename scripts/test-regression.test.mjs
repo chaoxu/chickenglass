@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
+import { MissingFixtureError } from "./fixture-test-helpers.mjs";
 import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
+import { shouldSkipMissingFixture } from "./test-regression.mjs";
 
 class FakePage extends EventEmitter {
   off(event, listener) {
@@ -49,5 +51,25 @@ describe("browser regression runner checks", () => {
       skipped: true,
       message: "not applicable",
     });
+  });
+});
+
+describe("browser regression missing fixture policy", () => {
+  it("fails missing fixtures by default", () => {
+    const error = new MissingFixtureError("Missing fixture for fixtures/private.md. Tried: /tmp/missing");
+
+    expect(shouldSkipMissingFixture(error, { name: "private-heavy" })).toBe(false);
+  });
+
+  it("allows explicit optional fixture skips", () => {
+    const error = new MissingFixtureError("Missing fixture for fixtures/private.md. Tried: /tmp/missing");
+
+    expect(shouldSkipMissingFixture(error, {
+      name: "private-heavy",
+      optionalFixtures: true,
+    })).toBe(true);
+    expect(shouldSkipMissingFixture(error, { name: "private-heavy" }, {
+      allowMissingFixtures: true,
+    })).toBe(true);
   });
 });

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Browser regression test runner.
  *
@@ -14,6 +13,7 @@
  *   node scripts/test-regression.mjs [--browser managed|cdp] [--headed] [--filter headings,math]
  *   node scripts/test-regression.mjs --scenario smoke
  *   node scripts/test-regression.mjs --scenario lexical
+ *   node scripts/test-regression.mjs --allow-missing-fixtures
  */
 
 import console from "node:console";
@@ -26,6 +26,7 @@ import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
 import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
 import { resetEditorState } from "./editor-test-helpers.mjs";
 import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
+import { isMissingFixtureError } from "./fixture-test-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
@@ -84,11 +85,19 @@ async function loadTests(filter) {
       name: mod.name,
       run: mod.run,
       editorHealth: mod.editorHealth,
+      optionalFixtures: mod.optionalFixtures,
       runtimeIssues: mod.runtimeIssues,
     });
   }
 
   return tests;
+}
+
+export function shouldSkipMissingFixture(error, test, { allowMissingFixtures = false } = {}) {
+  if (!isMissingFixtureError(error)) {
+    return false;
+  }
+  return allowMissingFixtures || test.optionalFixtures === true;
 }
 
 async function collectFailureArtifacts(session, label, error) {
@@ -108,10 +117,11 @@ async function collectFailureArtifacts(session, label, error) {
 
 async function main() {
   const args = normalizeCliArgs(process.argv.slice(2));
-  const { getFlag, getIntFlag } = createArgParser(args);
+  const { getFlag, getIntFlag, hasFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
   const scenarioArg = getFlag("--scenario", "");
   const timeout = getIntFlag("--timeout", DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS);
+  const allowMissingFixtures = hasFlag("--allow-missing-fixtures");
   const filter = resolveFilter({ filterArg, scenarioArg });
 
   console.log("Browser Regression Tests");
@@ -221,7 +231,7 @@ async function main() {
         });
       } catch (err) {
         const elapsed = Date.now() - startTime;
-        if (err.message?.includes("Missing fixture for")) {
+        if (shouldSkipMissingFixture(err, test, { allowMissingFixtures })) {
           console.log(`  SKIP  ${test.name} (${elapsed}ms) — ${err.message}`);
           results.push({ name: test.name, pass: true, skipped: true, message: err.message, elapsed });
           skipped++;
@@ -264,7 +274,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message ?? String(err));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file:").href) {
+  main().catch((err) => {
+    console.error(err.message ?? String(err));
+    process.exit(1);
+  });
+}

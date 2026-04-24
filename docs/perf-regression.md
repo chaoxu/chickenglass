@@ -60,6 +60,13 @@ pnpm perf:compare -- \
 
 If the current run exceeds the configured thresholds, the command exits non-zero.
 
+CI uses compare mode as the gate. When no persisted historical baseline is
+available to the local Gitea runner, the workflow first captures an
+`open-index` baseline artifact from the current production build, then runs a
+second `perf:compare` pass against that generated baseline. That policy keeps
+capture-only output diagnostic while still exercising the comparison path,
+threshold reporting, and required-metric validation in CI.
+
 ## Supported Heavy-Doc Mode
 
 `typing-rich-burst` and other fixture-heavy scenarios should use `--heavy-doc`

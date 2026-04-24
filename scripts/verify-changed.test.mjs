@@ -149,6 +149,7 @@ describe("verify-changed", () => {
   it("selects browser lanes from changed paths", () => {
     expect(browserLanesForChangedFiles(["src/lexical/renderers/inline-math-renderer.tsx"])).toEqual(["lexical"]);
     expect(browserLanesForChangedFiles(["src/render/image-render.ts"])).toEqual(["cm6-rich", "media"]);
+    expect(browserLanesForChangedFiles(["scripts/fixture-test-helpers.mjs"])).toEqual(["smoke"]);
     expect(browserLanesForChangedFiles(["scripts/regression-tests/rich-arrowdown-bounded-scroll.mjs"])).toEqual([
       "cm6-rich",
       "scroll",

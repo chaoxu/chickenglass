@@ -210,8 +210,16 @@ export function buildFixtureProjectPayload(virtualPath, resolvedPath) {
   return payload;
 }
 
-function isMissingFixtureError(error) {
-  return error instanceof Error && error.message.startsWith("Missing fixture for ");
+export class MissingFixtureError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "MissingFixtureError";
+  }
+}
+
+export function isMissingFixtureError(error) {
+  return error instanceof MissingFixtureError ||
+    (error instanceof Error && error.message.startsWith("Missing fixture for "));
 }
 
 /**
@@ -251,7 +259,7 @@ export function resolveFixtureDocument(fixture) {
   const candidates = normalized.candidates ?? defaultFixtureCandidates(normalized.virtualPath);
   const resolvedPath = candidates.find((candidate) => existsSync(candidate));
   if (!resolvedPath) {
-    throw new Error(
+    throw new MissingFixtureError(
       `Missing fixture for ${fallbackDisplayPath}. Tried: ${candidates.join(", ")}`,
     );
   }

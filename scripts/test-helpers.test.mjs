@@ -112,6 +112,25 @@ describe("test helpers browser harness", () => {
     expect(page.evaluate).toHaveBeenCalledTimes(2);
   });
 
+  it("requires all debug bridge readiness promises to be present", async () => {
+    window.__app = { ready: Promise.resolve() };
+    window.__editor = {};
+    window.__cfDebug = { ready: Promise.resolve() };
+    window.__cmView = {};
+    window.__cmDebug = {};
+    const page = {
+      waitForFunction: vi.fn(async () => {}),
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+      title: vi.fn(async () => "Coflat"),
+      url: vi.fn(() => "http://localhost:5173/"),
+      context: vi.fn(() => ({ browser: () => null })),
+    };
+
+    await expect(waitForDebugBridge(page, { timeout: 10 })).rejects.toThrow(
+      "ready promises missing: __editor.ready",
+    );
+  });
+
   it("browser doctor reports wrong page attachments clearly", async () => {
     const page = {
       url: vi.fn(() => "http://localhost:5174/"),

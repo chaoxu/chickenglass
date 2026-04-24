@@ -31,7 +31,7 @@
     "check:staged-lint": "biome lint",
     "check:types": "pnpm typecheck && pnpm typecheck:server",
     "check:static": "pnpm check:lint && pnpm check:types && pnpm check:unused",
-    "check:pre-push": "pnpm check:types && pnpm lint:errors && pnpm lint:boundaries",
+    "check:pre-push": "pnpm check:static",
     "check:merge": "pnpm check:static && pnpm check:unit",
     "check:unused": "pnpm knip",
     "check:unit": "vitest run",
