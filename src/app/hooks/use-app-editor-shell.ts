@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import {
-  defaultEditorMode,
-  isLexicalEditorMode,
-  normalizeEditorMode,
-  type EditorMode,
-} from "../../editor-display-mode";
+import { useCallback, useRef } from "react";
+import type { EditorMode } from "../../editor-display-mode";
 import type { EditorView } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
 import { useEditorSession, type UseEditorSessionReturn } from "./use-editor-session";
 import { useEditorNavigation } from "./use-editor-navigation";
 import { useEditorTransactions } from "./use-editor-transactions";
+import { useEditorModeOverrides } from "./use-editor-mode-overrides";
+import { useEditorSurfaceHandles } from "./use-editor-surface-handles";
+import { useEditorDropOpen } from "./use-editor-drop-open";
+import { useSaveActivity, saveErrorMessage } from "./use-save-activity";
+import type { SaveActivity } from "./use-save-activity";
 import type { FileSystem } from "../file-manager";
 import type { HeadingEntry } from "../heading-ancestry";
 import type { DiagnosticEntry } from "../diagnostics";
@@ -22,11 +22,7 @@ import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save"
 import type { EditorDocumentChange } from "../editor-doc-change";
 import { saveAsErrorMessage } from "../project-root-errors";
 
-interface PendingModeOverride {
-  path: string;
-  mode: EditorMode;
-  requestId: number;
-}
+export type { SaveActivity, SaveActivityStatus } from "./use-save-activity";
 
 /** Dependencies injected into the shell hook from the top-level app component. */
 export interface AppEditorShellDeps {
@@ -55,23 +51,6 @@ export interface AppEditorShellDeps {
   requestUnsavedChangesDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
-}
-
-export type SaveActivityStatus = "failed" | "idle" | "saving";
-
-export interface SaveActivity {
-  status: SaveActivityStatus;
-  message?: string;
-}
-
-function saveErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-  return "Save failed";
 }
 
 /**
@@ -226,36 +205,15 @@ export function useAppEditorShell({
     isPathDirty,
     openFileWithContent: sessionOpenFileWithContent,
     saveFile: sessionSaveFile,
+    saveAs: sessionSaveAs,
     handleDocumentSnapshot: sessionHandleDocumentSnapshot,
   } = session;
 
-  const [saveActivity, setSaveActivity] = useState<SaveActivity>({ status: "idle" });
-  const [editorState, setEditorState] = useState<UseEditorReturn | null>(null);
-  const [headings, setHeadings] = useState<HeadingEntry[]>([]);
-  const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
-  const editorViewRef = useRef<EditorView | null>(null);
   const lexicalEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
-  const saveActivityTokenRef = useRef(0);
-  const pendingLexicalNavigationRef = useRef<{
-    readonly onComplete?: () => void;
-    readonly path: string;
-    readonly pos: number;
-  } | null>(null);
-
-  const clearSaveFailure = useCallback(() => {
-    setSaveActivity((previous) =>
-      previous.status === "failed" ? { status: "idle" } : previous,
-    );
-  }, []);
-
-  useEffect(() => {
-    saveActivityTokenRef.current += 1;
-    setSaveActivity({ status: "idle" });
-  }, [currentPath]);
-
-  useEffect(() => {
-    return activeDocumentSignal.subscribe(clearSaveFailure);
-  }, [activeDocumentSignal, clearSaveFailure]);
+  const { clearSaveFailure, saveActivity, trackSaveActivity } = useSaveActivity({
+    activeDocumentSignal,
+    currentPath,
+  });
 
   const handleDocChange = useCallback((changes: readonly EditorDocumentChange[]) => {
     clearSaveFailure();
@@ -290,23 +248,11 @@ export function useAppEditorShell({
   }, [getSessionCurrentDocText, runEditorTransaction]);
 
   const saveFile = useCallback(async () => {
-    const saveToken = ++saveActivityTokenRef.current;
-    setSaveActivity({ status: "saving" });
-    runEditorTransaction("save", () => undefined);
-    try {
+    await trackSaveActivity(async () => {
+      runEditorTransaction("save", () => undefined);
       await sessionSaveFile();
-      setSaveActivity((previous) =>
-        saveActivityTokenRef.current === saveToken && previous.status === "saving"
-          ? { status: "idle" }
-          : previous,
-      );
-    } catch (error: unknown) {
-      if (saveActivityTokenRef.current === saveToken) {
-        setSaveActivity({ status: "failed", message: saveErrorMessage(error) });
-      }
-      throw error;
-    }
-  }, [runEditorTransaction, sessionSaveFile]);
+    }, saveErrorMessage);
+  }, [runEditorTransaction, sessionSaveFile, trackSaveActivity]);
 
   const flushDirtyCurrentDocument = useCallback(async (
     reason: AutoSaveFlushReason,
@@ -371,23 +317,11 @@ export function useAppEditorShell({
   }, [flushCurrentHotExitBackup, flushDirtyCurrentDocument, runEditorTransaction, session]);
 
   const saveAs = useCallback(async () => {
-    const saveToken = ++saveActivityTokenRef.current;
-    setSaveActivity({ status: "saving" });
-    runEditorTransaction("save", () => undefined);
-    try {
-      await session.saveAs();
-      setSaveActivity((previous) =>
-        saveActivityTokenRef.current === saveToken && previous.status === "saving"
-          ? { status: "idle" }
-          : previous,
-      );
-    } catch (error: unknown) {
-      if (saveActivityTokenRef.current === saveToken) {
-        setSaveActivity({ status: "failed", message: saveAsErrorMessage(error) });
-      }
-      throw error;
-    }
-  }, [runEditorTransaction, session]);
+    await trackSaveActivity(async () => {
+      runEditorTransaction("save", () => undefined);
+      await sessionSaveAs();
+    }, saveAsErrorMessage);
+  }, [runEditorTransaction, sessionSaveAs, trackSaveActivity]);
 
   const handleWindowCloseRequest = useCallback(async () => {
     runEditorTransaction("save", () => undefined);
@@ -405,223 +339,53 @@ export function useAppEditorShell({
     syncView,
   } = navigation;
 
-  const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
-    setEditorState(state);
-    editorViewRef.current = state.view;
-    syncView(state.view);
-  }, [syncView]);
-
-  const handleLexicalSurfaceReady = useCallback(() => {
-    setEditorState(null);
-    editorViewRef.current = null;
-    syncView(null);
-    setHeadings([]);
-    setDiagnostics([]);
-  }, [syncView]);
-
-  const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
-    lexicalEditorHandleRef.current = handle;
-    if (!handle) return;
-    const pending = pendingLexicalNavigationRef.current;
-    if (!pending || pending.path !== currentPath) return;
-    pendingLexicalNavigationRef.current = null;
-    handle.setSelection(pending.pos, pending.pos);
-    handle.focus();
-    pending.onComplete?.();
-  }, [currentPath]);
-  const getLexicalEditorHandle = useCallback(() => lexicalEditorHandleRef.current, []);
-
-  const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
-    setHeadings(h);
-  }, []);
-
-  const handleDiagnosticsChange = useCallback((d: DiagnosticEntry[]) => {
-    setDiagnostics(d);
-  }, []);
-
-  const handleWatchedPathChange = useCallback((path: string) => {
-    const view = editorViewRef.current;
-    if (!view) return;
-    void import("../../render/image-url-cache").then(({ invalidateImageDataUrl }) => {
-      if (editorViewRef.current !== view) return;
-      invalidateImageDataUrl(view, path);
-    });
-  }, []);
-
-  const handleInsertImage = useCallback(() => {
-    const view = editorState?.view;
-    if (view) {
-      void import("../../editor").then(({ insertImageFromPicker }) => {
-        if (editorViewRef.current !== view) return;
-        void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
-      });
-    }
-  }, [editorState?.view, editorState?.imageSaver]);
+  const {
+    diagnostics,
+    editorState,
+    getLexicalEditorHandle,
+    handleDiagnosticsChange,
+    handleEditorStateChange,
+    handleGotoLine,
+    handleHeadingsChange,
+    handleInsertImage,
+    handleLexicalEditorReady,
+    handleLexicalSurfaceReady,
+    handleOutlineSelect,
+    handleWatchedPathChange,
+    headings,
+    queueLexicalNavigation,
+    clearPendingLexicalNavigation,
+  } = useEditorSurfaceHandles({
+    currentPath,
+    editorDoc,
+    editorHandleRef: lexicalEditorHandleRef,
+    handleCmGotoLine,
+    handleCmOutlineSelect,
+    syncView,
+  });
 
   const isMarkdownFile = currentPath?.endsWith(".md") ?? false;
 
-  // Persist mode overrides per file so explicit mode choices survive tab/file
-  // switches, including cross-file search navigation that sets the target
-  // file's mode before it becomes current.
-  const [modeOverrides, setModeOverrides] = useState<Record<string, EditorMode>>({});
-  const [pendingModeOverride, setPendingModeOverride] = useState<PendingModeOverride | null>(null);
-  const pendingModeRequestIdRef = useRef(0);
-
-  const editorMode = useMemo((): EditorMode => {
-    const override = currentPath ? modeOverrides[currentPath] : undefined;
-    if (override !== undefined) {
-      return normalizeEditorMode(override, isMarkdownFile);
-    }
-    if (pendingModeOverride && pendingModeOverride.path === currentPath) {
-      return normalizeEditorMode(pendingModeOverride.mode, isMarkdownFile);
-    }
-    return normalizeEditorMode(defaultEditorMode, isMarkdownFile);
-  }, [modeOverrides, pendingModeOverride, currentPath, isMarkdownFile]);
-
-  const handleModeChange = useCallback((mode: EditorMode | string) => {
-    const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
-    const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
-    const applyModeOverride = () => {
-      const finishModeOverride = () => {
-        if (currentPath) {
-          setModeOverrides((previous) => ({
-            ...previous,
-            [currentPath]: normalizedMode,
-          }));
-        }
-        setPendingModeOverride((previous) =>
-          previous?.path === currentPath ? null : previous,
-        );
-      };
-      if (
-        isLexicalEditorMode(normalizedMode) &&
-        !isLexicalEditorMode(editorMode)
-      ) {
-        const liveDoc = getSessionCurrentDocText();
-        if (liveDoc !== editorDoc) {
-          sessionHandleDocumentSnapshot(liveDoc);
-          window.setTimeout(finishModeOverride, 0);
-          return;
-        }
-      }
-      finishModeOverride();
-    };
-    if (flushResult.shouldDeferModeSwitch) {
-      window.setTimeout(applyModeOverride, 0);
-    } else {
-      applyModeOverride();
-    }
-  }, [
+  const {
+    editorMode,
+    handleModeChange,
+    handleSearchResult,
+  } = useEditorModeOverrides({
+    clearPendingLexicalNavigation,
     currentPath,
     editorDoc,
-    editorMode,
     getSessionCurrentDocText,
+    handleSearchResultNavigation,
     isMarkdownFile,
+    openFile,
+    queueLexicalNavigation,
     runEditorTransaction,
     sessionHandleDocumentSnapshot,
-  ]);
-
-  const handleOutlineSelect = useCallback((from: number) => {
-    const lexicalHandle = lexicalEditorHandleRef.current;
-    if (lexicalHandle) {
-      lexicalHandle.setSelection(from, from);
-      lexicalHandle.focus();
-      return;
-    }
-    handleCmOutlineSelect(from);
-  }, [handleCmOutlineSelect]);
-
-  const handleGotoLine = useCallback((line: number, col?: number) => {
-    const lexicalHandle = lexicalEditorHandleRef.current;
-    if (lexicalHandle) {
-      const doc = lexicalHandle.peekDoc();
-      const lines = doc.split(/\r\n|\n|\r/);
-      const clampedLine = Math.max(1, Math.min(line, lines.length));
-      const lineStart = lines
-        .slice(0, clampedLine - 1)
-        .reduce((offset, currentLine) => offset + currentLine.length + 1, 0);
-      const lineText = lines[clampedLine - 1] ?? "";
-      const offset = lineStart + Math.max(0, Math.min((col ?? 1) - 1, lineText.length));
-      lexicalHandle.setSelection(offset, offset);
-      lexicalHandle.focus();
-      return;
-    }
-    handleCmGotoLine(line, col);
-  }, [handleCmGotoLine]);
-
-  useEffect(() => {
-    const pending = pendingLexicalNavigationRef.current;
-    const lexicalHandle = lexicalEditorHandleRef.current;
-    if (!pending || !lexicalHandle || pending.path !== currentPath) {
-      return;
-    }
-    pendingLexicalNavigationRef.current = null;
-    lexicalHandle.setSelection(pending.pos, pending.pos);
-    lexicalHandle.focus();
-    pending.onComplete?.();
-  }, [currentPath, editorDoc]);
-
-  const handleSearchResult = useCallback((
-    target: SearchNavigationTarget,
-    onComplete?: () => void,
-  ) => {
-    const targetIsMarkdown = target.file.endsWith(".md");
-    const normalizedMode = normalizeEditorMode(target.editorMode, targetIsMarkdown);
-    const requestId = ++pendingModeRequestIdRef.current;
-    setPendingModeOverride({
-      path: target.file,
-      mode: normalizedMode,
-      requestId,
-    });
-    if (isLexicalEditorMode(normalizedMode)) {
-      pendingLexicalNavigationRef.current = {
-        onComplete,
-        path: target.file,
-        pos: target.pos,
-      };
-      void openFile(target.file).catch((error: unknown) => {
-        pendingLexicalNavigationRef.current = null;
-        console.error("[editor] handleSearchResult: failed to open file", target.file, error);
-        onComplete?.();
-      });
-      return;
-    }
-
-    void handleSearchResultNavigation(target.file, target.pos, onComplete).then((opened) => {
-      setPendingModeOverride((previous) => {
-        if (!previous || previous.requestId !== requestId) {
-          return previous;
-        }
-        return null;
-      });
-      if (!opened) {
-        return;
-      }
-      setModeOverrides((previous) => ({
-        ...previous,
-        [target.file]: normalizedMode,
-      }));
-    });
-  }, [handleSearchResultNavigation, openFile]);
+  });
 
   const hasDirtyDocument = currentDocument?.dirty ?? false;
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer.files);
-    for (const file of files) {
-      if (file.name.endsWith(".md")) {
-        void file.text().then((text) => {
-          openFileWithContent(file.name, text);
-        });
-      }
-    }
-  }, [openFileWithContent]);
+  const { handleDragOver, handleDrop } = useEditorDropOpen({ openFileWithContent });
 
   return {
     ...session,
