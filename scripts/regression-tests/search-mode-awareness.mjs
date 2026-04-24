@@ -14,6 +14,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "search-mode-awareness";
+export const optionalFixtures = true;
 
 const RAW_TOKEN = "raw_token_785_only_in_source";
 const SEMANTIC_LABEL = "#thm-search-785";

@@ -19,6 +19,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "hover-preview-blocks";
+export const optionalFixtures = true;
 
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';

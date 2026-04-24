@@ -58,7 +58,7 @@ pnpm build           # production build (frontend + editor package)
 pnpm build:app       # production app bundle only; does not typecheck
 pnpm build:coflats   # alias for pnpm build
 pnpm check:static    # lint + root/server typecheck + unused-code/deps
-pnpm check:pre-push  # local static gate aligned with CI static checks
+pnpm check:pre-push  # fast local gate: root/server typecheck + architectural lints
 pnpm check:merge     # full merge gate: check:static + unit tests
 pnpm check:lint      # bare-catch + import-boundary + Biome lint
 pnpm check:types     # root TypeScript + server TypeScript
@@ -132,7 +132,7 @@ Configured in `lefthook.yml`, installed automatically on `pnpm install` via the 
 | Hook | Runs | Commands |
 |---|---|---|
 | `pre-commit` | on every commit | `pnpm check:staged-lint {staged_files}` for staged TS/JS/JSON files |
-| `pre-push` | on every push | `pnpm check:pre-push` (same static checks as CI) |
+| `pre-push` | on every push | `pnpm check:pre-push` (fast local type/boundary gate) |
 
 Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only do that intentionally.
 

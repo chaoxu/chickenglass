@@ -9,6 +9,7 @@
 import { openFixtureDocument, switchToMode, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "clustered-crossref-invalidation";
+export const optionalFixtures = true;
 
 export async function run(page) {
   await openFixtureDocument(page, "cogirth/clustered-crossref-invalidation.md", { project: "full-project" });

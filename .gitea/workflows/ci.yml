@@ -62,9 +62,11 @@ jobs:
   merged-app-browser:
     name: Production app browser subset
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.0
@@ -79,31 +81,77 @@ jobs:
       - run: pnpm check:app-build
         timeout-minutes: 10
       - name: Run merged-app browser subset
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           set -u
           artifacts_dir=/tmp/coflat-browser-artifacts
           preview_log="$artifacts_dir/preview.log"
+          baseline_log="$artifacts_dir/baseline-preview.log"
+          baseline_dir="$artifacts_dir/baseline-worktree"
+          baseline_file="$artifacts_dir/perf-open-index-baseline.json"
           mkdir -p "$artifacts_dir"
 
-          pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort > "$preview_log" 2>&1 &
-          server_pid=$!
+          start_preview() {
+            preview_dir="$1"
+            preview_port="$2"
+            preview_log_path="$3"
+            (cd "$preview_dir" && pnpm exec vite preview --host 127.0.0.1 --port "$preview_port" --strictPort > "$preview_log_path" 2>&1) &
+            echo $!
+          }
+
+          wait_for_preview() {
+            preview_port="$1"
+            preview_log_path="$2"
+            for _ in $(seq 1 60); do
+              if curl -fsS "http://127.0.0.1:$preview_port" >/dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            echo "Vite preview on port $preview_port did not become reachable. Preview log:"
+            tail -200 "$preview_log_path" || true
+            return 1
+          }
+
+          stop_preview() {
+            preview_pid="$1"
+            if [ -n "$preview_pid" ]; then
+              kill "$preview_pid" 2>/dev/null || true
+              wait "$preview_pid" 2>/dev/null || true
+            fi
+          }
+
+          current_server_pid=""
+          baseline_server_pid=""
           cleanup() {
-            kill "$server_pid" 2>/dev/null || true
+            stop_preview "$current_server_pid"
+            stop_preview "$baseline_server_pid"
           }
           trap cleanup EXIT
 
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:4173 >/dev/null; then
-              break
-            fi
-            sleep 1
-          done
-          if ! curl -fsS http://127.0.0.1:4173 >/dev/null; then
-            echo "Vite preview did not become reachable. Preview log:"
-            tail -200 "$preview_log" || true
-            exit 1
+          baseline_ref=""
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            git fetch origin "$GITHUB_BASE_REF" --depth=1
+            baseline_ref="origin/$GITHUB_BASE_REF"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            baseline_ref="HEAD^"
           fi
+
+          if [ -n "$baseline_ref" ] && [ "$(git rev-parse "$baseline_ref")" != "$(git rev-parse HEAD)" ]; then
+            git worktree add --detach "$baseline_dir" "$baseline_ref" || exit 1
+            (cd "$baseline_dir" && pnpm install --frozen-lockfile --ignore-scripts && pnpm check:app-build) || exit 1
+            baseline_server_pid=$(start_preview "$baseline_dir" 4174 "$baseline_log")
+            wait_for_preview 4174 "$baseline_log" || exit 1
+            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4174 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$baseline_file" || exit 1
+            stop_preview "$baseline_server_pid"
+            baseline_server_pid=""
+          else
+            echo "No distinct baseline ref available; CI will run perf capture only."
+            baseline_file=""
+          fi
+
+          current_server_pid=$(start_preview "$PWD" 4173 "$preview_log")
+          wait_for_preview 4173 "$preview_log" || exit 1
 
           browser_status=0
           failing_command=""
@@ -117,16 +165,15 @@ jobs:
               failing_command="test:browser:lexical"
             }
           fi
-          if [ "$browser_status" -eq 0 ]; then
-            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$artifacts_dir/perf-open-index-baseline.json" || {
+          if [ "$browser_status" -eq 0 ] && [ -n "$baseline_file" ]; then
+            pnpm perf:compare -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --baseline "$baseline_file" || {
               browser_status=$?
-              failing_command="perf:capture open-index baseline"
+              failing_command="perf:compare open-index against $baseline_ref"
             }
-          fi
-          if [ "$browser_status" -eq 0 ]; then
-            pnpm perf:compare -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --baseline "$artifacts_dir/perf-open-index-baseline.json" || {
+          elif [ "$browser_status" -eq 0 ]; then
+            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$artifacts_dir/perf-open-index-current.json" || {
               browser_status=$?
-              failing_command="perf:compare open-index"
+              failing_command="perf:capture open-index current"
             }
           fi
 
@@ -134,6 +181,10 @@ jobs:
             echo "Browser command failed: $failing_command"
             echo "Preview log tail:"
             tail -200 "$preview_log" || true
+            if [ -f "$baseline_log" ]; then
+              echo "Baseline preview log tail:"
+              tail -200 "$baseline_log" || true
+            fi
           fi
           exit "$browser_status"
       - name: Upload browser diagnostics

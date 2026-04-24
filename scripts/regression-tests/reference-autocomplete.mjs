@@ -13,6 +13,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "reference-autocomplete";
+export const optionalFixtures = true;
 
 async function focusEditorEnd(page) {
   await page.evaluate(() => {
