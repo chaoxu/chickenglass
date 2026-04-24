@@ -22,7 +22,7 @@ src/render/plugin-adapters/* -> src/plugins/plugin-render-adapter
 src/plugins/* must not import src/render/*
 ```
 
-`pnpm lint` runs `scripts/check-plugin-render-boundary.mjs`, the shared import
+`pnpm check:lint` runs `scripts/check-plugin-render-boundary.mjs`, the shared import
 architecture checker. It fails when any module under `src/plugins/` imports,
 exports from, or dynamically imports `src/render/`; the same checker also
 guards other neutral-layer import boundaries and reports untracked `src/`

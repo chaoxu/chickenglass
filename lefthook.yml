@@ -3,12 +3,12 @@ pre-commit:
   commands:
     lint:
       glob: "*.{ts,tsx,js,mjs,json}"
-      run: pnpm biome lint {staged_files}
+      run: pnpm check:staged-lint {staged_files}
 
 pre-push:
   parallel: true
   commands:
     typecheck:
-      run: pnpm typecheck
+      run: pnpm check:types
     test:
-      run: pnpm test
+      run: pnpm check:unit

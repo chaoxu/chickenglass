@@ -48,7 +48,9 @@ describe("package editor export", () => {
     expect(packageJson.packageManager).toBe("pnpm@10.33.0");
     expect(packageJson.scripts?.["dev:worktree"]).toBe("node scripts/dev-worktree.mjs");
     expect(packageJson.scripts?.typecheck).toBe("tsc --noEmit");
-    expect(packageJson.scripts?.test).toBe("vitest run");
+    expect(packageJson.scripts?.["check:types"]).toBe("pnpm typecheck && pnpm typecheck:server");
+    expect(packageJson.scripts?.["check:unit"]).toBe("vitest run");
+    expect(packageJson.scripts?.test).toBe("pnpm check:unit");
     expect(packageJson.scripts?.prepare).toBe("lefthook install");
   });
 });

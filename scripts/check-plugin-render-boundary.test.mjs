@@ -18,7 +18,8 @@ const packageJson = JSON.parse(
 
 describe("import boundary checker", () => {
   it("runs from the standard lint script used by CI", () => {
-    expect(packageJson.scripts.lint).toContain("pnpm lint:boundaries");
+    expect(packageJson.scripts["check:lint"]).toContain("pnpm lint:boundaries");
+    expect(packageJson.scripts.lint).toBe("pnpm check:lint");
   });
 
   it("collects import, export, and dynamic import specifiers", () => {

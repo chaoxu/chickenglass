@@ -71,8 +71,8 @@ If you need custom budgets, override the selected runtime budget profile with:
 
 ## Repo-Wide Typecheck
 
-Use the normal repo command now that the deprecated `baseUrl` blocker is gone:
+Use the explicit check command for root and server TypeScript coverage:
 
 ```bash
-pnpm typecheck
+pnpm check:types
 ```

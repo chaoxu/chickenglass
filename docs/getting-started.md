@@ -40,11 +40,12 @@ pnpm dev:show        # stable no-HMR dev server for shared review on localhost:5
 pnpm test:watch      # run tests in watch mode
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
-pnpm typecheck       # repo-wide baseline typecheck
+pnpm check:static    # lint + typecheck + unused-code/dependency check
+pnpm check:types     # root + server typecheck
 pnpm lint:fix        # auto-fix lint issues
 ```
 
-Pre-commit hooks run `biome lint` on staged files. Pre-push hooks run `typecheck` and `test`.
+Pre-commit hooks run `pnpm check:staged-lint` on staged files. Pre-push hooks run `pnpm check:types` and `pnpm check:unit`.
 
 ## Browser testing
 

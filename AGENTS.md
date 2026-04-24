@@ -55,13 +55,19 @@ pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
 pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
 pnpm build           # production build (frontend + editor package)
+pnpm build:app       # production app bundle only; does not typecheck
 pnpm build:coflats   # alias for pnpm build
-pnpm lint            # Biome lint
+pnpm check:static    # lint + root/server typecheck + unused-code/deps
+pnpm check:lint      # bare-catch + import-boundary + Biome lint
+pnpm check:types     # root TypeScript + server TypeScript
+pnpm check:unit      # Vitest unit tests
+pnpm check:package   # build editor package + publint + size + package smoke
+pnpm lint            # alias for check:lint
 pnpm lint:fix        # Biome lint autofix
-pnpm test            # run tests (Vitest)
+pnpm test            # alias for Vitest unit tests
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
-pnpm typecheck       # typecheck only
+pnpm typecheck       # root TypeScript only
 pnpm tauri:dev       # launch Coflats Tauri desktop app
 pnpm tauri:build     # build Coflats production desktop app bundle
 pnpm tauri:build:dmg # build Coflats macOS DMG installer
@@ -105,8 +111,8 @@ Configured in `lefthook.yml`, installed automatically on `pnpm install` via the 
 
 | Hook | Runs | Commands |
 |---|---|---|
-| `pre-commit` | on every commit | `pnpm biome lint {staged_files}` for staged TS/JS/JSON files |
-| `pre-push` | on every push (parallel) | `pnpm typecheck`, `pnpm test` |
+| `pre-commit` | on every commit | `pnpm check:staged-lint {staged_files}` for staged TS/JS/JSON files |
+| `pre-push` | on every push (parallel) | `pnpm check:types`, `pnpm check:unit` |
 
 Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only do that intentionally.
 
@@ -116,9 +122,10 @@ Workflow at `.gitea/workflows/ci.yml`. Runs on push/PR to `main`.
 
 | Job | What it checks |
 |---|---|
-| `lint` | Biome lint + typecheck + knip |
-| `test` | Vitest unit tests |
-| `package` | `build:editor` → publint → size-limit |
+| `static` | `check:static` |
+| `test` | `check:unit` with Pandoc required |
+| `merged-app-browser` | `check:app-build` + required browser/perf subset |
+| `package` | `check:package` |
 | `rust` | `cargo nextest run` on the Tauri backend |
 
 ## Debug helpers

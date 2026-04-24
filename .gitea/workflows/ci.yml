@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # ── Frontend: lint, typecheck, dead-code ──────────────────────────────────
-  lint:
-    name: Lint & typecheck
+  # ── Frontend: lint, typecheck, unused-code/deps ───────────────────────────
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +22,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm lint:boundaries
-      - run: pnpm typecheck
-      - run: pnpm typecheck:server
-      - run: pnpm knip
+      - run: pnpm check:static
 
   # ── Frontend: unit tests ──────────────────────────────────────────────────
   test:
@@ -56,7 +52,7 @@ jobs:
             exit 1
           fi
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm check:unit
         env:
           REQUIRE_PANDOC: "1"
 
@@ -76,7 +72,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm build:app
+      - run: pnpm check:app-build
       - name: Run merged-app browser subset
         run: |
           set -u
@@ -139,7 +135,7 @@ jobs:
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:
     name: Editor package
-    needs: [lint]
+    needs: [static]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -152,10 +148,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build:editor
-      - run: pnpm publint
-      - run: pnpm size
-      - run: pnpm smoke:editor-package
+      - run: pnpm check:package
 
   # ── Rust / Tauri backend ──────────────────────────────────────────────────
   rust:
