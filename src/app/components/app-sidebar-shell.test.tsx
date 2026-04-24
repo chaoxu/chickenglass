@@ -120,12 +120,28 @@ describe("AppSidebarShell", () => {
 
     expect(sidebarShellTestState.fileTreeRenderCount).toBe(1);
 
+    const editorDerivedOutline = {
+      headings: [{ level: 1, number: "1", pos: 0, text: "Updated" }],
+      onSelect: outline.onSelect,
+    };
+    const editorDerivedDiagnostics = {
+      diagnostics: [{
+        code: "reference.unresolved" as const,
+        from: 4,
+        message: 'Unresolved reference "@missing"',
+        severity: "warning" as const,
+        source: "reference" as const,
+        to: 12,
+      }],
+      onSelect: diagnostics.onSelect,
+    };
+
     act(() => {
       root.render(renderSidebar({
         children: createElement(AppSidebarShell, { sidebarLayout }),
-        diagnostics,
+        diagnostics: editorDerivedDiagnostics,
         fileTree,
-        outline,
+        outline: editorDerivedOutline,
       }));
     });
 

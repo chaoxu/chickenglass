@@ -618,6 +618,45 @@ describe("useAppOverlays", () => {
     expect(overlayHookState.hotkeys.map((binding) => binding.handler)).not.toContain(recentCommand.action);
   });
 
+  it("keeps command wiring stable across same-view editor text updates", async () => {
+    const view = createSearchIndexView("# Current\n");
+    const {
+      props,
+      activeDocumentSignal,
+      setCurrentDocText,
+    } = await createHookProps({
+      currentPath: "notes/current.md",
+      currentDocText: "# Current\n",
+      view,
+    });
+
+    const { result, rerender } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: props,
+    });
+
+    const initialCommands = result.current.commands;
+    const initialHotkeys = overlayHookState.hotkeys;
+    const initialMenuHandlers = overlayHookState.menuHandlers;
+
+    setCurrentDocText("# Current\n\nTyped text\n");
+    act(() => {
+      activeDocumentSignal.publish("notes/current.md");
+      rerender({
+        ...props,
+        editor: {
+          ...props.editor,
+          editorState: props.editor.editorState
+            ? { ...props.editor.editorState }
+            : null,
+        },
+      });
+    });
+
+    expect(result.current.commands).toBe(initialCommands);
+    expect(overlayHookState.hotkeys).toBe(initialHotkeys);
+    expect(overlayHookState.menuHandlers).toBe(initialMenuHandlers);
+  });
+
   it("alerts when Save As rejects a destination outside the project root", async () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { props, editor } = await createHookProps({
