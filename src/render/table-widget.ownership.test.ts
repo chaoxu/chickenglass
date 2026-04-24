@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import type { ParsedTable } from "./table-utils";
@@ -38,6 +40,10 @@ vi.mock("./table-discovery", () => ({
 }));
 
 const { TableWidget } = await import("./table-widget");
+
+function readRenderSource(relativePath: string): string {
+  return readFileSync(resolve(process.cwd(), relativePath), "utf8");
+}
 
 function makeTable(): ParsedTable {
   return {
@@ -184,5 +190,19 @@ describe("TableWidget cross-widget editor ownership", () => {
     expect(createInlineEditorControllerMock).toHaveBeenCalledTimes(1);
 
     newWidget.destroy(dom);
+  });
+});
+
+describe("TableWidget module ownership", () => {
+  it("keeps DOM construction and mutation flows out of the shell widget", () => {
+    const source = readRenderSource("src/render/table-widget.ts");
+
+    expect(source.split(/\r?\n/).length).toBeLessThan(600);
+    expect(source).toContain("buildTableWidgetDOM");
+    expect(source).not.toContain("createInlineEditorController");
+    expect(source).not.toContain("applyTableMutation");
+    expect(source).not.toContain("showWidgetContextMenu");
+    expect(source).not.toContain('document.createElement("table")');
+    expect(source).not.toContain('addEventListener("contextmenu"');
   });
 });
