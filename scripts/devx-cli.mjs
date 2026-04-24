@@ -7,6 +7,9 @@ const DEFAULT_VALUE_FLAGS = new Set([
   "--artifacts-dir",
   "--bottom-offset-px",
   "--browser",
+  "--base",
+  "--bibliography",
+  "--branch",
   "--col",
   "--context-radius",
   "--direction",
@@ -22,6 +25,8 @@ const DEFAULT_VALUE_FLAGS = new Set([
   "--min-reverse-scroll-px",
   "--mode",
   "--output",
+  "--pandoc",
+  "--path",
   "--port",
   "--profile",
   "--radius",
@@ -37,6 +42,7 @@ const DEFAULT_VALUE_FLAGS = new Set([
   "--steps",
   "--steps-file",
   "--steps-json",
+  "--template",
   "--timeout",
   "--url",
 ]);
@@ -49,7 +55,10 @@ const DEFAULT_BOOLEAN_FLAGS = new Set([
   "--headed",
   "--help",
   "--json",
+  "--dump-markdown",
+  "--fetch",
   "--no-activate",
+  "--no-link-node-modules",
   "--no-start-server",
   "--simulate-wheel",
   "-h",
@@ -89,6 +98,17 @@ export function parseCliArgs(argv = process.argv.slice(2), options = {}) {
       continue;
     }
 
+    const equalsIndex = token.indexOf("=");
+    if (token.startsWith("--") && equalsIndex > 2) {
+      const flagName = token.slice(0, equalsIndex);
+      if (valueFlags.has(flagName)) {
+        flags.set(flagName, token.slice(equalsIndex + 1));
+      } else {
+        flags.set(token, true);
+      }
+      continue;
+    }
+
     if (booleanFlags.has(token)) {
       flags.set(token, true);
       continue;
@@ -96,7 +116,7 @@ export function parseCliArgs(argv = process.argv.slice(2), options = {}) {
 
     const next = argv[index + 1];
     const hasValue = valueFlags.has(token)
-      ? next !== undefined
+      ? next !== undefined && !isFlagLike(next)
       : next !== undefined && !isFlagLike(next);
     if (hasValue) {
       flags.set(token, next);
@@ -166,11 +186,38 @@ export function createArgParser(argv = process.argv.slice(2), options = {}) {
   };
   const hasFlag = (flag) => parsed.flags.has(flag);
   const getPositionals = () => [...parsed.positionals];
+  const getFlagNames = () => [...parsed.flags.keys()];
+  const getRequiredFlag = (flag) => {
+    const value = parsed.flags.get(flag);
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+    throw new Error(`${flag} requires a value.`);
+  };
+  const assertKnownFlags = (knownFlags) => {
+    const known = new Set(knownFlags);
+    const unknown = getFlagNames().filter((flag) => !known.has(flag));
+    if (unknown.length > 0) {
+      throw new Error(`Unknown option: ${unknown[0]}`);
+    }
+  };
+  const getFlagRecord = ({ stripPrefix = false } = {}) => {
+    const result = {};
+    for (const [flag, value] of parsed.flags) {
+      const key = stripPrefix ? flag.replace(/^-+/, "") : flag;
+      result[key] = value;
+    }
+    return result;
+  };
 
   return {
+    assertKnownFlags,
     getFlag,
+    getFlagNames,
+    getFlagRecord,
     getIntFlag,
     getPositionals,
+    getRequiredFlag,
     hasFlag,
   };
 }

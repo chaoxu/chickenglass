@@ -25,28 +25,22 @@ import {
   resolveLatexTemplatePath,
 } from "../src/latex/export-options.mjs";
 import { preprocess } from "../src/latex/preprocess.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
 const LATEX_DIR = resolve(REPO_ROOT, "src/latex");
 const FILTER_PATH = resolve(LATEX_DIR, "filter.lua");
 
-function parseArgs(argv) {
-  const positional = [];
-  const flags = {};
-  for (const arg of argv) {
-    if (arg.startsWith("--")) {
-      const eq = arg.indexOf("=");
-      if (eq === -1) {
-        flags[arg.slice(2)] = true;
-      } else {
-        flags[arg.slice(2, eq)] = arg.slice(eq + 1);
-      }
-    } else {
-      positional.push(arg);
-    }
-  }
-  return { positional, flags };
+export function parseExportLatexArgs(argv) {
+  const parser = createArgParser(argv, {
+    booleanFlags: ["--dump-markdown"],
+    valueFlags: ["--bibliography", "--output", "--pandoc", "--template"],
+  });
+  return {
+    flags: parser.getFlagRecord({ stripPrefix: true }),
+    positional: parser.getPositionals(),
+  };
 }
 
 export function buildPandocResourcePath(sourceDir, projectRoot) {
@@ -88,7 +82,7 @@ async function runPandoc({
 }
 
 async function main() {
-  const { positional, flags } = parseArgs(process.argv.slice(2));
+  const { positional, flags } = parseExportLatexArgs(process.argv.slice(2));
   if (positional.length === 0) {
     console.error("usage: export-latex <input.md> [--output=] [--template=] [--bibliography=]");
     process.exit(2);

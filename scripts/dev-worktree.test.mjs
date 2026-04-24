@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createDevWorktree,
+  parseDevWorktreeArgs,
   resolveDefaultWorktreePath,
   sanitizeDevWorktreeName,
 } from "./dev-worktree.mjs";
@@ -64,6 +65,53 @@ afterEach(() => {
 });
 
 describe("dev-worktree", () => {
+  it("parses CLI options through the shared parser", () => {
+    expect(
+      parseDevWorktreeArgs([
+        "topic-bootstrap",
+        "--base=origin/topic",
+        "--fetch",
+        "--branch",
+        "codex/topic-bootstrap",
+        "--path",
+        "nested/topic-worktree",
+        "--no-link-node-modules",
+      ]),
+    ).toEqual({
+      baseRef: "origin/topic",
+      branch: "codex/topic-bootstrap",
+      fetch: true,
+      help: false,
+      linkNodeModules: false,
+      name: "topic-bootstrap",
+      path: "nested/topic-worktree",
+    });
+  });
+
+  it("keeps strict CLI validation errors", () => {
+    expect(() => parseDevWorktreeArgs(["one", "two"])).toThrow(
+      "Provide only one worktree name.",
+    );
+    expect(() => parseDevWorktreeArgs(["topic", "--bogus"])).toThrow(
+      "Unknown option: --bogus",
+    );
+    expect(() => parseDevWorktreeArgs(["topic", "--fetch=false"])).toThrow(
+      "Unknown option: --fetch=false",
+    );
+    expect(() => parseDevWorktreeArgs(["topic", "--help=false"])).toThrow(
+      "Unknown option: --help=false",
+    );
+    expect(() => parseDevWorktreeArgs(["topic", "--no-link-node-modules=false"])).toThrow(
+      "Unknown option: --no-link-node-modules=false",
+    );
+    expect(() => parseDevWorktreeArgs(["topic", "--base"])).toThrow(
+      "--base requires a value.",
+    );
+    expect(() => parseDevWorktreeArgs(["topic", "--base", "--fetch"])).toThrow(
+      "--base requires a value.",
+    );
+  });
+
   it("creates a worktree with a sanitized default branch and path", () => {
     const repoRoot = initRepo();
     cleanup.push(repoRoot);

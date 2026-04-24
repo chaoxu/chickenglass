@@ -3,6 +3,7 @@
 import console from "node:console";
 import process from "node:process";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createArgParser } from "./devx-cli.mjs";
 
 function printUsage() {
   console.log(`Usage:
@@ -13,7 +14,8 @@ bridge is ready, there is no Vite error overlay, and generic editor health is cl
 }
 
 async function main(argv = process.argv.slice(2)) {
-  if (argv.includes("--help") || argv.includes("-h")) {
+  const parser = createArgParser(argv);
+  if (parser.hasFlag("--help") || parser.hasFlag("-h")) {
     printUsage();
     return;
   }
@@ -42,4 +44,3 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.stack ?? error.message : String(error));
   process.exit(1);
 });
-

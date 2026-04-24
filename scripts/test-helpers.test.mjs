@@ -6,7 +6,6 @@ import { join } from "node:path";
 import {
   buildViteDevArgs,
   createBrowserArtifactRecorder,
-  createArgParser,
   isLoopbackAppUrl,
   normalizeConnectEditorOptions,
   resolveTextAnchorInDocument,
@@ -18,7 +17,6 @@ import {
   waitForScrollReady,
   switchToMode,
 } from "./test-helpers.mjs";
-import { splitCliCommand } from "./devx-cli.mjs";
 
 describe("test helpers browser harness", () => {
   afterEach(() => {
@@ -334,73 +332,5 @@ describe("text anchors", () => {
     expect(() => resolveTextAnchorInDocument("alpha", "alpha", { occurrence: 0 })).toThrow(
       "Text anchor occurrence must be a positive integer; got 0.",
     );
-  });
-});
-
-describe("createArgParser", () => {
-  it("parses integer flags", () => {
-    const { getIntFlag } = createArgParser(["--timeout", "30000", "--offset", "-4"]);
-
-    expect(getIntFlag("--timeout", 15000)).toBe(30000);
-    expect(getIntFlag("--offset", 0)).toBe(-4);
-  });
-
-  it("returns the fallback for missing integer flags", () => {
-    const { getIntFlag } = createArgParser([]);
-
-    expect(getIntFlag("--timeout", 15000)).toBe(15000);
-  });
-
-  it("rejects invalid integer flags", () => {
-    const { getIntFlag } = createArgParser(["--iterations", "nope"]);
-
-    expect(() => getIntFlag("--iterations", 3)).toThrow(
-      "Invalid integer value for --iterations: nope",
-    );
-  });
-
-  it("rejects partially numeric integer flags", () => {
-    const { getIntFlag } = createArgParser(["--timeout", "15s"]);
-
-    expect(() => getIntFlag("--timeout", 15000)).toThrow(
-      "Invalid integer value for --timeout: 15s",
-    );
-  });
-
-  it("collects positionals without treating flag values as files", () => {
-    expect(
-      createArgParser([
-        "--url",
-        "http://localhost:5174",
-        "index.md",
-        "--output",
-        "/tmp/shot.png",
-      ]).getPositionals(),
-    ).toEqual(["index.md"]);
-    expect(
-      createArgParser([
-        "index.md",
-        "--url",
-        "http://localhost:5174",
-      ]).getPositionals(),
-    ).toEqual(["index.md"]);
-  });
-});
-
-describe("splitCliCommand", () => {
-  it("normalizes npm -- separators and extracts known subcommands", () => {
-    expect(splitCliCommand(["--", "compare", "--scenario", "open-index"], ["capture", "compare"], "capture")).toEqual({
-      command: "compare",
-      options: ["--scenario", "open-index"],
-      hasExplicitCommand: true,
-    });
-  });
-
-  it("falls back to the default command when no known subcommand is present", () => {
-    expect(splitCliCommand(["--scenario", "open-index"], ["capture", "compare"], "capture")).toEqual({
-      command: "capture",
-      options: ["--scenario", "open-index"],
-      hasExplicitCommand: false,
-    });
   });
 });

@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import process from "node:process";
+import { normalizeCliArgs } from "./devx-cli.mjs";
 
 const DEFAULT_ARGS = [
   "exec",
@@ -42,10 +43,7 @@ export function partitionFocusedVitestArgs(argv = []) {
   const sharedArgs = [];
   const explicitPaths = [];
 
-  for (const arg of argv) {
-    if (arg === "--") {
-      continue;
-    }
+  for (const arg of normalizeCliArgs(argv)) {
     if (looksLikeExplicitTestPath(arg)) {
       explicitPaths.push(arg);
       continue;

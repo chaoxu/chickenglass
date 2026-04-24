@@ -25,6 +25,7 @@ describe("focused vitest wrapper", () => {
   it("separates explicit test files from shared vitest flags", () => {
     expect(
       partitionFocusedVitestArgs([
+        "--",
         "--reporter",
         "basic",
         "src/render/reference-render.test.ts",

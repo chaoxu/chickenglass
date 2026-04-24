@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
+import { createArgParser } from "./devx-cli.mjs";
 
 function withoutGitEnv(env = process.env) {
   return Object.fromEntries(
@@ -211,70 +212,49 @@ function printSummary(result) {
   console.log(`Next: cd ${result.worktreePath}`);
 }
 
-function parseArgs(argv) {
-  const options = {
-    baseRef: "HEAD",
-    fetch: false,
-    linkNodeModules: true,
-  };
+export function parseDevWorktreeArgs(argv) {
+  const parser = createArgParser(argv, {
+    booleanFlags: ["--fetch", "--help", "--no-link-node-modules", "-h"],
+    valueFlags: ["--base", "--branch", "--path"],
+  });
+  parser.assertKnownFlags([
+    "--base",
+    "--branch",
+    "--fetch",
+    "--help",
+    "--no-link-node-modules",
+    "--path",
+    "-h",
+  ]);
 
-  const requireValue = (flag, index) => {
-    const value = argv[index + 1];
-    if (!value || value.startsWith("--")) {
-      throw new Error(`${flag} requires a value.`);
-    }
-    return value;
-  };
-
-  const positionals = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-
-    if (arg === "--help" || arg === "-h") {
-      options.help = true;
-      continue;
-    }
-    if (arg === "--fetch") {
-      options.fetch = true;
-      continue;
-    }
-    if (arg === "--no-link-node-modules") {
-      options.linkNodeModules = false;
-      continue;
-    }
-    if (arg === "--base") {
-      options.baseRef = requireValue(arg, i);
-      i += 1;
-      continue;
-    }
-    if (arg === "--branch") {
-      options.branch = requireValue(arg, i);
-      i += 1;
-      continue;
-    }
-    if (arg === "--path") {
-      options.path = requireValue(arg, i);
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith("--")) {
-      throw new Error(`Unknown option: ${arg}`);
-    }
-
-    positionals.push(arg);
-  }
-
+  const positionals = parser.getPositionals();
   if (positionals.length > 1) {
     throw new Error("Provide only one worktree name.");
   }
 
-  options.name = positionals[0];
+  const options = {
+    baseRef: parser.hasFlag("--base") ? parser.getRequiredFlag("--base") : "HEAD",
+    branch: parser.getFlag("--branch"),
+    fetch: parser.hasFlag("--fetch"),
+    help: parser.hasFlag("--help") || parser.hasFlag("-h"),
+    linkNodeModules: !parser.hasFlag("--no-link-node-modules"),
+    name: positionals[0],
+    path: parser.getFlag("--path"),
+  };
+
+  if (parser.hasFlag("--branch")) {
+    options.branch = parser.getRequiredFlag("--branch");
+  }
+  if (parser.hasFlag("--path")) {
+    options.path = parser.getRequiredFlag("--path");
+  }
+
   return options;
 }
 
 function main() {
   try {
-    const options = parseArgs(process.argv.slice(2));
+    const options = parseDevWorktreeArgs(process.argv.slice(2));
     if (options.help) {
       console.log(usage());
       return;
