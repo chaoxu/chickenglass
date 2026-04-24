@@ -359,6 +359,7 @@ export function useAppEditorShell({
     currentPath,
     editorDoc,
     editorHandleRef: lexicalEditorHandleRef,
+    fs,
     handleCmGotoLine,
     handleCmOutlineSelect,
     syncView,

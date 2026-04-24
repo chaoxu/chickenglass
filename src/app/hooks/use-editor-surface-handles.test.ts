@@ -3,7 +3,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import { MemoryFileSystem } from "../file-manager";
 import { useEditorSurfaceHandles } from "./use-editor-surface-handles";
+
+vi.mock("../../lib/tauri", () => ({
+  isTauri: () => true,
+}));
 
 interface HarnessRef {
   result: ReturnType<typeof useEditorSurfaceHandles>;
@@ -49,6 +54,7 @@ function stubFilePicker(file: File): void {
 function createHarness(options: {
   readonly currentPath: string | null;
   readonly editorHandleRef: MutableRefObject<MarkdownEditorHandle | null>;
+  readonly fs?: MemoryFileSystem;
 }): { readonly Harness: FC; readonly ref: HarnessRef } {
   const ref: HarnessRef = {
     result: null as unknown as ReturnType<typeof useEditorSurfaceHandles>,
@@ -59,6 +65,7 @@ function createHarness(options: {
       currentPath: options.currentPath,
       editorDoc: "Alpha",
       editorHandleRef: options.editorHandleRef,
+      fs: options.fs,
       handleCmGotoLine: vi.fn(),
       handleCmOutlineSelect: vi.fn(),
       syncView: vi.fn(),
@@ -129,6 +136,35 @@ describe("useEditorSurfaceHandles", () => {
     });
     expect(handle.insertText).toHaveBeenCalledWith(expect.stringContaining("![photo]("));
     expect(handle.insertText).toHaveBeenCalledWith(expect.stringMatching(/^\n!\[photo\]\(data:image\/png;base64,/));
+    expect(handle.focus).toHaveBeenCalledOnce();
+  });
+
+  it("saves picked Lexical images through the document image saver when a project filesystem is available", async () => {
+    const doc = "---\nimage-folder: figures\n---\n\nAlpha";
+    const handle = createHandle(doc);
+    const fs = new MemoryFileSystem({
+      "chapters/a.md": doc,
+    });
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "photo.png", {
+      type: "image/png",
+    });
+    stubFilePicker(file);
+    const { Harness, ref } = createHarness({
+      currentPath: "chapters/a.md",
+      editorHandleRef: { current: handle },
+      fs,
+    });
+
+    act(() => root.render(createElement(Harness)));
+    act(() => {
+      ref.result.handleInsertImage();
+    });
+
+    await vi.waitFor(() => {
+      expect(handle.insertText).toHaveBeenCalledOnce();
+    });
+    expect(await fs.exists("chapters/figures/photo.png")).toBe(true);
+    expect(handle.insertText).toHaveBeenCalledWith("\n![photo](figures/photo.png)\n");
     expect(handle.focus).toHaveBeenCalledOnce();
   });
 
