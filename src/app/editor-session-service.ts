@@ -1,4 +1,4 @@
-import { basename } from "./lib/utils";
+import { basename, dirname } from "./lib/utils";
 import {
   clearExternalDocumentConflict,
   clearSessionDocument,
@@ -113,8 +113,8 @@ export function createEditorSessionService({
     runtime.pipeline.clear(path);
     runtime.buffers.delete(path);
     runtime.liveDocs.delete(path);
-    runtime.externalConflictBaselines.delete(path);
-    runtime.newDocumentPaths.delete(path);
+    runtime.clearExternalConflictBaseline(path);
+    runtime.clearNewDocumentPath(path);
     runtime.commit(clearExternalDocumentConflict(runtime.getState(), path));
   };
 
@@ -197,7 +197,8 @@ export function createEditorSessionService({
         const diskContent = editorDocumentToString(diskDoc);
         const liveDoc = runtime.liveDocs.get(path) ?? diskDoc;
         runtime.buffers.set(path, diskDoc);
-        runtime.externalConflictBaselines.delete(path);
+        runtime.clearExternalConflictBaseline(path);
+        runtime.clearNewDocumentPath(path);
         runtime.pipeline.initPath(path, diskContent);
         runtime.commit(
           clearExternalDocumentConflict(
@@ -221,7 +222,7 @@ export function createEditorSessionService({
     try {
       if (await fs.exists(path)) {
         const diskContent = await fs.readFile(path);
-        runtime.externalConflictBaselines.set(path, createEditorDocumentText(diskContent));
+        runtime.setExternalConflictBaseline(path, createEditorDocumentText(diskContent));
         runtime.commit(setExternalDocumentConflict(runtime.getState(), {
           kind: "modified",
           path,
@@ -235,7 +236,8 @@ export function createEditorSessionService({
       if (!revisionAdvanced) {
         runtime.liveDocs.set(path, savedDoc);
       }
-      runtime.externalConflictBaselines.delete(path);
+      runtime.clearExternalConflictBaseline(path);
+      runtime.clearNewDocumentPath(path);
       runtime.pipeline.initPath(path, content);
       if (revisionAdvanced) {
         runtime.pipeline.bumpRevision(path);
@@ -252,7 +254,7 @@ export function createEditorSessionService({
       try {
         if (await fs.exists(path)) {
           const diskContent = await fs.readFile(path);
-          runtime.externalConflictBaselines.set(path, createEditorDocumentText(diskContent));
+          runtime.setExternalConflictBaseline(path, createEditorDocumentText(diskContent));
           runtime.commit(setExternalDocumentConflict(runtime.getState(), {
             kind: "modified",
             path,
@@ -298,7 +300,8 @@ export function createEditorSessionService({
 
       runtime.buffers.set(path, diskDoc);
       runtime.liveDocs.set(path, mergedDoc);
-      runtime.externalConflictBaselines.delete(path);
+      runtime.clearExternalConflictBaseline(path);
+      runtime.clearNewDocumentPath(path);
       runtime.pipeline.initPath(path, diskContent);
       if (dirty) {
         runtime.pipeline.bumpRevision(path);
@@ -446,11 +449,26 @@ export function createEditorSessionService({
 
   const openFileWithContent = async (name: string, content: string) => {
     const requestId = runtime.nextOpenFileRequest();
+    const nextGeneratedPath = (basePath: string, suffix: number): string => {
+      const directory = dirname(basePath);
+      const fileName = basename(basePath);
+      const dotIndex = fileName.lastIndexOf(".");
+      const hasExtension = dotIndex > 0;
+      const nextName = hasExtension
+        ? `${fileName.slice(0, dotIndex)} (${suffix})${fileName.slice(dotIndex)}`
+        : `${fileName} (${suffix})`;
+      return directory ? `${directory}/${nextName}` : nextName;
+    };
+
+    const isPathAvailable = async (candidatePath: string): Promise<boolean> =>
+      !runtime.hasPath(candidatePath) && !(await fs.exists(candidatePath));
+
     let path = name;
     let suffix = 1;
-    while (runtime.hasPath(path)) {
-      path = `${name} (${suffix++})`;
+    while (!(await isPathAvailable(path))) {
+      path = nextGeneratedPath(name, suffix++);
     }
+    if (!runtime.isLatestOpenFileRequest(requestId)) return;
 
     const canLeave = await prepareCurrentDocumentForTransition("switch-file", {
       name: basename(path),
@@ -467,7 +485,7 @@ export function createEditorSessionService({
     runtime.liveDocs.set(path, createEditorDocumentText(content));
     runtime.pipeline.initPath(path, "");
     runtime.pipeline.bumpRevision(path);
-    runtime.newDocumentPaths.add(path);
+    runtime.markNewDocumentPath(path);
     runtime.commit(
       setCurrentSessionDocument(runtime.getState(), {
         path,
@@ -500,7 +518,7 @@ export function createEditorSessionService({
     if (!restoredConflict && options?.baselineHash) {
       const currentBaselineHash = runtime.getPathBaselineHash(path);
       if (currentBaselineHash && currentBaselineHash !== options.baselineHash) {
-        runtime.externalConflictBaselines.set(
+        runtime.setExternalConflictBaseline(
           path,
           runtime.buffers.get(path) ?? emptyEditorDocument,
         );
@@ -586,7 +604,7 @@ export function createEditorSessionService({
       return "ignore";
     }
     if (currentDocument.dirty) {
-      runtime.externalConflictBaselines.set(path, createEditorDocumentText(content));
+      runtime.setExternalConflictBaseline(path, createEditorDocumentText(content));
       runtime.commit(setExternalDocumentConflict(
         runtime.getState(),
         { kind: "modified", path },

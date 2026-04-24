@@ -14,6 +14,7 @@ import {
 import { getCurrentSessionDocument } from "./editor-session-model";
 import {
   type EditorSessionRuntime,
+  remapEditorSessionStatePaths,
 } from "./editor-session-runtime";
 import { applySaveAsResult } from "./editor-session-save";
 import type { FileSystem } from "./file-manager";
@@ -45,7 +46,11 @@ export interface EditorSessionPersistence {
   writeDocumentSnapshot: (
     targetPath: string,
     doc: string,
-    options?: { createTargetIfMissing?: boolean; expectedBaselineHash?: string },
+    options?: {
+      createTargetIfMissing?: boolean;
+      expectedBaselineHash?: string;
+      overwriteExistingTarget?: boolean;
+    },
   ) => Promise<string>;
   handleRename: (oldPath: string, newPath: string) => Promise<void>;
   handleDelete: (path: string) => Promise<void>;
@@ -62,14 +67,6 @@ function currentDocumentText(
     ?? runtime.buffers.get(path)
     ?? emptyEditorDocument,
   );
-}
-
-function remapPath(path: string, oldPath: string, newPath: string): string | null {
-  if (path === oldPath) return newPath;
-  if (oldPath !== "" && path.startsWith(`${oldPath}/`)) {
-    return `${newPath}/${path.slice(oldPath.length + 1)}`;
-  }
-  return null;
 }
 
 export function createEditorSessionPersistence({
@@ -102,12 +99,50 @@ export function createEditorSessionPersistence({
   const writeDocumentSnapshot = async (
     targetPath: string,
     doc: string,
-    options?: { createTargetIfMissing?: boolean; expectedBaselineHash?: string },
+    options?: {
+      createTargetIfMissing?: boolean;
+      expectedBaselineHash?: string;
+      overwriteExistingTarget?: boolean;
+    },
   ): Promise<string> => {
+    const throwExistingTargetConflict = async (): Promise<never> => {
+      try {
+        const currentContent = await measureAsync(
+          "save_file.create_conflict_read",
+          () => fs.readFile(targetPath),
+          {
+            category: "save_file",
+            detail: targetPath,
+          },
+        );
+        runtime.setExternalConflictBaseline(
+          targetPath,
+          createEditorDocumentText(currentContent),
+        );
+        runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+          kind: "modified",
+          path: targetPath,
+        }));
+      } catch (_error: unknown) {
+        runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+          kind: "deleted",
+          path: targetPath,
+        }));
+      }
+      throw new SaveWriteConflictError(targetPath);
+    };
+
     const targetExists =
       options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
     const shouldCreateTarget =
       options?.createTargetIfMissing === true && !targetExists;
+    if (
+      options?.createTargetIfMissing === true
+      && targetExists
+      && options.overwriteExistingTarget !== true
+    ) {
+      await throwExistingTargetConflict();
+    }
     const expectedBaselineHash = options?.expectedBaselineHash;
     const writeFileIfUnchanged = fs.writeFileIfUnchanged?.bind(fs);
     if (
@@ -131,7 +166,7 @@ export function createEditorSessionPersistence({
         return doc;
       }
       if (result?.currentContent !== undefined) {
-        runtime.externalConflictBaselines.set(
+        runtime.setExternalConflictBaseline(
           targetPath,
           createEditorDocumentText(result.currentContent),
         );
@@ -154,7 +189,7 @@ export function createEditorSessionPersistence({
           },
         );
         if (fnv1aHash(currentContent) !== expectedBaselineHash) {
-          runtime.externalConflictBaselines.set(
+          runtime.setExternalConflictBaseline(
             targetPath,
             createEditorDocumentText(currentContent),
           );
@@ -176,16 +211,27 @@ export function createEditorSessionPersistence({
       }
     }
 
-    await measureAsync(
-      "save_file.write",
-      () => (shouldCreateTarget
-        ? fs.createFile(targetPath, doc)
-        : fs.writeFile(targetPath, doc)),
-      {
-        category: "save_file",
-        detail: targetPath,
-      },
-    );
+    try {
+      await measureAsync(
+        "save_file.write",
+        () => (shouldCreateTarget
+          ? fs.createFile(targetPath, doc)
+          : fs.writeFile(targetPath, doc)),
+        {
+          category: "save_file",
+          detail: targetPath,
+        },
+      );
+    } catch (error: unknown) {
+      if (
+        shouldCreateTarget
+        && options?.overwriteExistingTarget !== true
+        && await fs.exists(targetPath)
+      ) {
+        await throwExistingTargetConflict();
+      }
+      throw error;
+    }
     return doc;
   };
 
@@ -225,8 +271,8 @@ export function createEditorSessionPersistence({
       if (savedRevisionIsCurrent) {
         runtime.liveDocs.set(currentPath, savedDoc);
       }
-      runtime.externalConflictBaselines.delete(currentPath);
-      runtime.newDocumentPaths.delete(currentPath);
+      runtime.clearExternalConflictBaseline(currentPath);
+      runtime.clearNewDocumentPath(currentPath);
 
       runtime.commit(
         clearExternalDocumentConflict(
@@ -246,70 +292,28 @@ export function createEditorSessionPersistence({
   };
 
   const renameBuffers = (oldPath: string, newPath: string): string | null => {
-    const pathsToRename = new Map<string, string>();
-    const addRemappedPath = (path: string) => {
-      const remapped = remapPath(path, oldPath, newPath);
-      if (remapped) {
-        pathsToRename.set(path, remapped);
-      }
-    };
-
-    for (const path of runtime.buffers.keys()) {
-      addRemappedPath(path);
-    }
-    for (const path of runtime.liveDocs.keys()) {
-      addRemappedPath(path);
-    }
+    const previousState = runtime.getState();
     const currentDocument = runtime.getCurrentDocument();
-    if (currentDocument) {
-      addRemappedPath(currentDocument.path);
-    }
-
-    for (const [oldDocumentPath, newDocumentPath] of pathsToRename) {
-      const buffered = runtime.buffers.get(oldDocumentPath);
-      const liveDoc = runtime.liveDocs.get(oldDocumentPath);
-
-      if (buffered !== undefined) {
-        runtime.buffers.delete(oldDocumentPath);
-        runtime.buffers.set(newDocumentPath, buffered);
-      }
-
-      if (liveDoc !== undefined) {
-        runtime.liveDocs.delete(oldDocumentPath);
-        runtime.liveDocs.set(newDocumentPath, liveDoc);
-      }
-
-      runtime.pipeline.clear(oldDocumentPath);
-      runtime.pipeline.initPath(
-        newDocumentPath,
-        editorDocumentToString(buffered ?? liveDoc ?? emptyEditorDocument),
-      );
-    }
+    const remappedState = remapEditorSessionStatePaths(previousState, oldPath, newPath);
+    runtime.remapPathMetadata(oldPath, newPath);
 
     if (!currentDocument) {
+      if (remappedState !== previousState) {
+        runtime.commit(remappedState);
+      }
       return null;
     }
 
-    const remappedCurrentPath = remapPath(currentDocument.path, oldPath, newPath);
-    if (!remappedCurrentPath) {
+    const remappedCurrentPath = remappedState.currentDocument?.path ?? null;
+    if (remappedState === runtime.getState() || remappedCurrentPath === currentDocument.path) {
+      if (remappedState !== previousState) {
+        runtime.commit(remappedState);
+      }
       return null;
     }
 
-    const state = runtime.getState();
-    const externalConflict = state.externalConflict;
     runtime.commit(
-      {
-        ...state,
-        externalConflict:
-          externalConflict && remapPath(externalConflict.path, oldPath, newPath)
-            ? null
-            : externalConflict,
-        currentDocument: {
-          ...currentDocument,
-          path: remappedCurrentPath,
-          name: basename(remappedCurrentPath),
-        },
-      },
+      remappedState,
       { editorDoc: currentDocumentText(remappedCurrentPath, runtime) },
     );
 
@@ -411,10 +415,15 @@ export function createEditorSessionPersistence({
         const relativePath = await toProjectRelativePathCommand(savePath);
         await writeDocumentSnapshot(relativePath, doc, {
           createTargetIfMissing: true,
+          overwriteExistingTarget: true,
         });
 
         runtime.pipeline.clear(currentPath);
         runtime.pipeline.initPath(relativePath, doc);
+        runtime.clearNewDocumentPath(currentPath);
+        runtime.clearNewDocumentPath(relativePath);
+        runtime.clearExternalConflictBaseline(currentPath);
+        runtime.clearExternalConflictBaseline(relativePath);
 
         runtime.commit(
           applySaveAsResult({

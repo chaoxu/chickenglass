@@ -96,6 +96,7 @@ function createSessionHarness(fs: FileSystem) {
   });
   runtime.setWriteDocumentSnapshot((path, snapshot) =>
     persistence.writeDocumentSnapshot(path, snapshot.content, {
+      createTargetIfMissing: snapshot.createTargetIfMissing,
       expectedBaselineHash: snapshot.expectedBaselineHash,
     }),
   );
@@ -213,5 +214,40 @@ describe("editor session lower-layer invariants", () => {
       dirty: false,
     });
     expect(runtime.getEditorDoc()).toBe("Nested text");
+  });
+
+  it("opens generated content at a filesystem-unique path", async () => {
+    const fs = new MemoryFileSystem({ "main.md": "# Existing" });
+    const { runtime, persistence, service } = createSessionHarness(fs);
+
+    await service.openFileWithContent("main.md", "# Generated");
+
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "main (1).md",
+      name: "main (1).md",
+      dirty: true,
+    });
+
+    await expect(persistence.saveCurrentDocument()).resolves.toBe(true);
+    await expect(fs.readFile("main.md")).resolves.toBe("# Existing");
+    await expect(fs.readFile("main (1).md")).resolves.toBe("# Generated");
+  });
+
+  it("surfaces a conflict instead of overwriting when a generated target appears before save", async () => {
+    const fs = new MemoryFileSystem();
+    const { runtime, persistence, service } = createSessionHarness(fs);
+
+    await service.openFileWithContent("scratch.md", "# Generated");
+    await fs.createFile("scratch.md", "# Existing");
+
+    await expect(persistence.saveCurrentDocument()).resolves.toBe(false);
+
+    await expect(fs.readFile("scratch.md")).resolves.toBe("# Existing");
+    expect(runtime.getState().externalConflict).toEqual({
+      kind: "modified",
+      path: "scratch.md",
+    });
+    expect(runtime.newDocumentPaths.has("scratch.md")).toBe(false);
+    expect(runtime.externalConflictBaselines.has("scratch.md")).toBe(true);
   });
 });
