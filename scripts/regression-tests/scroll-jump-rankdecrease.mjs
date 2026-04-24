@@ -13,6 +13,7 @@ import {
 import { RANKDECREASE_MAIN_FIXTURE } from "../fixture-test-helpers.mjs";
 
 export const name = "scroll-jump-rankdecrease";
+export const optionalFixtures = true;
 
 const STEP_PX = 90;
 const STEP_COUNT = 24;

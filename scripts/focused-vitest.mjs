@@ -18,6 +18,7 @@ const DEFAULT_ARGS = [
 const DEFAULT_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000;
 const DEFAULT_KILL_GRACE_MS = 5 * 1000;
+const ISOLATE_FILES_FLAG = "--isolate-files";
 
 export function terminateChild(child, signal = "SIGTERM", options = {}) {
   if (!child?.pid) {
@@ -77,8 +78,13 @@ function looksLikeExplicitTestPath(arg) {
 export function partitionFocusedVitestArgs(argv = []) {
   const sharedArgs = [];
   const explicitPaths = [];
+  let isolateFiles = false;
 
   for (const arg of normalizeCliArgs(argv)) {
+    if (arg === ISOLATE_FILES_FLAG) {
+      isolateFiles = true;
+      continue;
+    }
     if (looksLikeExplicitTestPath(arg)) {
       explicitPaths.push(arg);
       continue;
@@ -86,7 +92,7 @@ export function partitionFocusedVitestArgs(argv = []) {
     sharedArgs.push(arg);
   }
 
-  return { explicitPaths, sharedArgs };
+  return { explicitPaths, isolateFiles, sharedArgs };
 }
 
 export function findMissingExplicitPaths(argv = [], exists = existsSync) {
@@ -95,6 +101,16 @@ export function findMissingExplicitPaths(argv = [], exists = existsSync) {
 
 export function buildFocusedVitestArgs(extraArgs = []) {
   return [...DEFAULT_ARGS, ...extraArgs];
+}
+
+export function buildFocusedVitestRuns(argv = []) {
+  const { explicitPaths, isolateFiles, sharedArgs } = partitionFocusedVitestArgs(argv);
+  if (isolateFiles && explicitPaths.length > 0) {
+    return explicitPaths.map((path) => [...sharedArgs, path]);
+  }
+  return explicitPaths.length > 0
+    ? [[...sharedArgs, ...explicitPaths]]
+    : [sharedArgs];
 }
 
 export function resolvePnpmCommand(platform = process.platform) {
@@ -210,10 +226,7 @@ export async function main(argv = process.argv.slice(2)) {
     process.exit(1);
   }
 
-  const { explicitPaths, sharedArgs } = partitionFocusedVitestArgs(argv);
-  const runs = explicitPaths.length > 0
-    ? explicitPaths.map((path) => [...sharedArgs, path])
-    : [sharedArgs];
+  const runs = buildFocusedVitestRuns(argv);
 
   let activeChild = null;
 

@@ -6,6 +6,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "rankdecrease-proposition-proof-arrowdown";
+export const optionalFixtures = true;
 
 function selectionSignature(page) {
   return page.evaluate(() => {

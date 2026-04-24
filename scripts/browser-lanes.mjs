@@ -51,6 +51,28 @@ const SCROLL_FILTERS = [
 
 const SMOKE_FILTERS = ["mode-switch", "index-open-rich-render", "headings", "math-render"];
 
+export const BROWSER_HARNESS_SUPPORT_PATHS = [
+  "scripts/browser-doctor.mjs",
+  "scripts/browser-failure-artifacts.mjs",
+  "scripts/browser-health.mjs",
+  "scripts/browser-inspect.mjs",
+  "scripts/browser-lane.mjs",
+  "scripts/browser-lane.test.mjs",
+  "scripts/browser-lanes.mjs",
+  "scripts/browser-lifecycle.mjs",
+  "scripts/browser-repro.mjs",
+  "scripts/browser-screenshot.mjs",
+  "scripts/chrome-common.mjs",
+  "scripts/devx-browser-session.mjs",
+  "scripts/editor-test-helpers.mjs",
+  "scripts/fixture-test-helpers.mjs",
+  "scripts/launch-chrome.mjs",
+  "scripts/regression-runner-checks.mjs",
+  "scripts/runtime-budget-profiles.mjs",
+  "scripts/test-regression.mjs",
+  "scripts/test-helpers.mjs",
+];
+
 function filterArgs(filters) {
   return ["--filter", filters.join(",")];
 }
@@ -128,6 +150,11 @@ function regressionTestName(path) {
   return match?.[1] ?? "";
 }
 
+export function isBrowserHarnessSupportPath(path) {
+  const normalizedPath = path.replaceAll("\\", "/").replace(/^\.\//, "");
+  return BROWSER_HARNESS_SUPPORT_PATHS.includes(normalizedPath);
+}
+
 export function resolveBrowserLane(name) {
   const lane = BROWSER_LANES[name];
   if (!lane) {
@@ -144,19 +171,8 @@ export function browserAreaTouched(paths) {
     path.startsWith("src/render/") ||
     path.startsWith("src/lexical/") ||
     path.startsWith("src/app/components/") ||
-    path === "scripts/browser-doctor.mjs" ||
-    path === "scripts/browser-health.mjs" ||
-    path === "scripts/browser-inspect.mjs" ||
-    path === "scripts/browser-lifecycle.mjs" ||
-    path === "scripts/browser-repro.mjs" ||
-    path.startsWith("scripts/browser-lane") ||
-    path.startsWith("scripts/browser-lanes") ||
-    path === "scripts/devx-browser-session.mjs" ||
-    path === "scripts/launch-chrome.mjs" ||
-    path === "scripts/regression-runner-checks.mjs" ||
     path.startsWith("scripts/regression-tests/") ||
-    path === "scripts/test-regression.mjs" ||
-    path === "scripts/test-helpers.mjs"
+    isBrowserHarnessSupportPath(path)
   );
 }
 
@@ -164,22 +180,7 @@ export function selectBrowserLanesForChangedFiles(paths, { profile = "quick" } =
   const lanes = [];
   const normalizedPaths = paths.map((path) => path.replaceAll("\\", "/").replace(/^\.\//, ""));
 
-  const browserHarnessTouched = normalizedPaths.some((path) =>
-    hasPathPrefix(path, [
-      "scripts/browser-doctor.mjs",
-      "scripts/browser-health.mjs",
-      "scripts/browser-inspect.mjs",
-      "scripts/browser-lifecycle.mjs",
-      "scripts/browser-repro.mjs",
-      "scripts/browser-lane.mjs",
-      "scripts/browser-lanes.mjs",
-      "scripts/devx-browser-session.mjs",
-      "scripts/launch-chrome.mjs",
-      "scripts/regression-runner-checks.mjs",
-      "scripts/test-regression.mjs",
-      "scripts/test-helpers.mjs",
-    ])
-  );
+  const browserHarnessTouched = normalizedPaths.some(isBrowserHarnessSupportPath);
   if (browserHarnessTouched) {
     addLane(lanes, profile === "full" ? "all" : "smoke");
   }

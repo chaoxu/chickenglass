@@ -30,6 +30,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "author-journey";
+export const optionalFixtures = true;
 
 const RAW_TOKEN = "raw_token_785_only_in_source";
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';

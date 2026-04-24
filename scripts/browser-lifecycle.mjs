@@ -290,11 +290,15 @@ async function waitForDebugBridgeReady(page, timeout) {
         };
       })
       .filter((source) => source.promise && typeof source.promise.then === "function");
+    const missing = readyPromises
+      .map((entry) => `${entry.globalName}.${entry.propertyName}`)
+      .filter((name) => !sources.some((source) => source.name === name));
     const state = new Map(sources.map((source) => [source.name, "pending"]));
 
-    if (sources.length === 0) {
+    if (missing.length > 0) {
       return {
-        status: "ready",
+        status: "missing",
+        missing,
         pending: [],
         rejected: [],
       };
@@ -344,6 +348,11 @@ async function waitForDebugBridgeReady(page, timeout) {
   if (readiness.status === "timeout") {
     throw new Error(
       `debug bridge readiness timed out after ${timeout}ms; pending: ${readiness.pending.join(", ") || "none"}`,
+    );
+  }
+  if (readiness.status === "missing") {
+    throw new Error(
+      `debug bridge readiness missing promise(s): ${readiness.missing.join(", ")}`,
     );
   }
   if (readiness.status === "rejected") {
@@ -423,6 +432,9 @@ export async function waitForDebugBridge(
     const pendingReady = diagnostics.readiness
       ?.filter((entry) => entry.present)
       .map((entry) => entry.name) ?? [];
+    const missingReady = diagnostics.readiness
+      ?.filter((entry) => !entry.present)
+      .map((entry) => entry.name) ?? [];
     const reason = missingGlobals.length > 0
       ? `missing ${missingGlobals.join(", ")}`
       : diagnostics.evaluateError ?? (
@@ -431,8 +443,11 @@ export async function waitForDebugBridge(
     const readinessSuffix = pendingReady.length > 0
       ? `; ready promises present: ${pendingReady.join(", ")}`
       : "";
+    const missingReadinessSuffix = missingReady.length > 0
+      ? `; ready promises missing: ${missingReady.join(", ")}`
+      : "";
     throw new Error(
-      `Timed out waiting for debug bridge on ${page.url() || "<blank>"}${title ? ` (${title})` : ""}; readyState=${diagnostics.readyState}; ${reason}${readinessSuffix}. Open pages: ${formatInspectablePages(pages)}`,
+      `Timed out waiting for debug bridge on ${page.url() || "<blank>"}${title ? ` (${title})` : ""}; readyState=${diagnostics.readyState}; ${reason}${readinessSuffix}${missingReadinessSuffix}. Open pages: ${formatInspectablePages(pages)}`,
     );
   }
 }

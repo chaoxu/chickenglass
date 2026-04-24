@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildFocusedVitestArgs,
+  buildFocusedVitestRuns,
   findMissingExplicitPaths,
   getFocusedVitestTimeouts,
   partitionFocusedVitestArgs,
@@ -64,7 +65,42 @@ describe("focused vitest wrapper", () => {
         "src/render/reference-render.test.ts",
         "src/render/hover-preview.test.ts",
       ],
+      isolateFiles: false,
     });
+  });
+
+  it("runs explicit multi-file requests in one deterministic worker by default", () => {
+    expect(buildFocusedVitestRuns([
+      "--reporter",
+      "basic",
+      "src/render/reference-render.test.ts",
+      "src/render/hover-preview.test.ts",
+    ])).toEqual([[
+      "--reporter",
+      "basic",
+      "src/render/reference-render.test.ts",
+      "src/render/hover-preview.test.ts",
+    ]]);
+  });
+
+  it("keeps one-file-per-process isolation behind an explicit flag", () => {
+    expect(partitionFocusedVitestArgs([
+      "--isolate-files",
+      "src/render/reference-render.test.ts",
+    ])).toMatchObject({
+      isolateFiles: true,
+      sharedArgs: [],
+    });
+    expect(buildFocusedVitestRuns([
+      "--reporter",
+      "basic",
+      "--isolate-files",
+      "src/render/reference-render.test.ts",
+      "src/render/hover-preview.test.ts",
+    ])).toEqual([
+      ["--reporter", "basic", "src/render/reference-render.test.ts"],
+      ["--reporter", "basic", "src/render/hover-preview.test.ts"],
+    ]);
   });
 
   it("fails fast on missing explicit test files", () => {

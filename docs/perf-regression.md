@@ -60,6 +60,12 @@ pnpm perf:compare -- \
 
 If the current run exceeds the configured thresholds, the command exits non-zero.
 
+CI uses compare mode as the gate only when it can build a distinct baseline
+ref. Pull requests compare the candidate build against the target branch; push
+runs compare against the previous commit when available. If no distinct
+baseline ref exists, CI records a capture-only diagnostic artifact instead of
+presenting a same-build comparison as a regression check.
+
 ## Supported Heavy-Doc Mode
 
 `typing-rich-burst` and other fixture-heavy scenarios should use `--heavy-doc`

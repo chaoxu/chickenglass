@@ -8,6 +8,8 @@ import {
   COGIRTH_MAIN2_FIXTURE,
   DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
   DEFAULT_FIXTURE_SETTLE_MS,
+  isMissingFixtureError,
+  MissingFixtureError,
   PUBLIC_SHOWCASE_FIXTURE,
   RANKDECREASE_MAIN_FIXTURE,
   resolveFixtureDocument,
@@ -55,6 +57,24 @@ describe("fixture registry", () => {
     expect(resolved.displayPath).toBe("demo/index.md");
     expect(resolved.virtualPath).toBe("index.md");
     expect(resolved.content.length).toBeGreaterThan(0);
+  });
+
+  it("throws a typed error for missing required fixtures", () => {
+    expect(() => resolveFixtureDocument({
+      displayPath: "fixtures/missing/private.md",
+      virtualPath: "missing/private.md",
+      candidates: [resolve("/tmp/coflat-missing-private.md")],
+    })).toThrow(MissingFixtureError);
+
+    try {
+      resolveFixtureDocument({
+        displayPath: "fixtures/missing/private.md",
+        virtualPath: "missing/private.md",
+        candidates: [resolve("/tmp/coflat-missing-private.md")],
+      });
+    } catch (error) {
+      expect(isMissingFixtureError(error)).toBe(true);
+    }
   });
 
   it("builds full-project payloads relative to the owning fixture root", () => {

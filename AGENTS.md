@@ -58,7 +58,7 @@ pnpm build           # production build (frontend + editor package)
 pnpm build:app       # production app bundle only; does not typecheck
 pnpm build:coflats   # alias for pnpm build
 pnpm check:static    # lint + root/server typecheck + unused-code/deps
-pnpm check:pre-push  # fast local gate: root/server typecheck + custom lints
+pnpm check:pre-push  # fast local gate: root/server typecheck + architectural lints
 pnpm check:merge     # full merge gate: check:static + unit tests
 pnpm check:lint      # bare-catch + import-boundary + Biome lint
 pnpm check:types     # root TypeScript + server TypeScript
@@ -132,7 +132,7 @@ Configured in `lefthook.yml`, installed automatically on `pnpm install` via the 
 | Hook | Runs | Commands |
 |---|---|---|
 | `pre-commit` | on every commit | `pnpm check:staged-lint {staged_files}` for staged TS/JS/JSON files |
-| `pre-push` | on every push | `pnpm check:pre-push` |
+| `pre-push` | on every push | `pnpm check:pre-push` (fast local type/boundary gate) |
 
 Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only do that intentionally.
 
@@ -256,7 +256,7 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 ### Perf benchmarking
 
 - Use the shared perf harness in `scripts/perf-regression.mjs` and the guidance in `docs/perf-regression.md`.
-- For changed-area render/state verification, prefer `pnpm test:focused -- <tests...>` over ad hoc Vitest invocations. It pins Vitest to a single deterministic worker lane and cleans up the child worker process on exit.
+- For changed-area render/state verification, prefer `pnpm test:focused -- <tests...>` over ad hoc Vitest invocations. It pins Vitest to one deterministic worker process for all listed files and cleans up the child process on exit. Pass `--isolate-files` only when you intentionally need the older one-file-per-process behavior.
 - For fixture-heavy perf scenarios, prefer `pnpm perf:capture:heavy -- --scenario typing-rich-burst ...` or `pnpm perf:compare:heavy -- ...`.
 - Browser/perf automation budgets are named in `scripts/runtime-budget-profiles.mjs`; use `default` for normal lanes and `heavy-doc` for private heavy-fixture lanes.
 - When local private fixtures are available, `fixtures/cogirth/main2.md` is the preferred heavy fixture for open/edit/scroll performance work. Otherwise use `demo/index.md` and note the limitation.

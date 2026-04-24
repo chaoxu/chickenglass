@@ -1,6 +1,13 @@
 import { EventEmitter } from "node:events";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { MissingFixtureError } from "./fixture-test-helpers.mjs";
 import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
+import { shouldSkipMissingFixture } from "./test-regression.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 class FakePage extends EventEmitter {
   off(event, listener) {
@@ -49,5 +56,47 @@ describe("browser regression runner checks", () => {
       skipped: true,
       message: "not applicable",
     });
+  });
+});
+
+describe("browser regression missing fixture policy", () => {
+  it("fails missing fixtures by default", () => {
+    const error = new MissingFixtureError("Missing fixture for fixtures/private.md. Tried: /tmp/missing");
+
+    expect(shouldSkipMissingFixture(error, { name: "private-heavy" })).toBe(false);
+  });
+
+  it("allows explicit optional fixture skips", () => {
+    const error = new MissingFixtureError("Missing fixture for fixtures/private.md. Tried: /tmp/missing");
+
+    expect(shouldSkipMissingFixture(error, {
+      name: "private-heavy",
+      optionalFixtures: true,
+    })).toBe(true);
+    expect(shouldSkipMissingFixture(error, { name: "private-heavy" }, {
+      allowMissingFixtures: true,
+    })).toBe(true);
+  });
+
+  it("marks private-fixture browser regressions as optional", () => {
+    const regressionDir = join(__dirname, "regression-tests");
+    const privateMarkers = [
+      "cogirth/",
+      "rankdecrease/",
+      "RANKDECREASE_MAIN_FIXTURE",
+      "COGIRTH_MAIN2_FIXTURE",
+    ];
+    const privateFixtureFiles = readdirSync(regressionDir)
+      .filter((file) => file.endsWith(".mjs"))
+      .filter((file) => {
+        const content = readFileSync(join(regressionDir, file), "utf8");
+        return privateMarkers.some((marker) => content.includes(marker));
+      });
+
+    expect(privateFixtureFiles).not.toEqual([]);
+    for (const file of privateFixtureFiles) {
+      const content = readFileSync(join(regressionDir, file), "utf8");
+      expect(content, file).toContain("export const optionalFixtures = true");
+    }
   });
 });

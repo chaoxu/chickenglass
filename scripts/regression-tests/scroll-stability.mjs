@@ -15,6 +15,7 @@ import {
 import { RANKDECREASE_MAIN_FIXTURE } from "../fixture-test-helpers.mjs";
 
 export const name = "scroll-stability";
+export const optionalFixtures = true;
 
 const STEP_PX = 180;
 const STEP_COUNT = 8;

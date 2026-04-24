@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "rankdecrease-arrowdown-sweep";
+export const optionalFixtures = true;
 
 function selectionSignature(page) {
   return page.evaluate(() => {

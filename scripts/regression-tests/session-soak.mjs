@@ -30,6 +30,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "session-soak";
+export const optionalFixtures = true;
 
 const CYCLES = 2;
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';

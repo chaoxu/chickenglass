@@ -1295,31 +1295,12 @@ export async function scrollToText(page, needle) {
 export async function settleEditorLayout(page, options = {}) {
   const frameCount = Math.max(1, options.frameCount ?? 2);
   const delayMs = Math.max(0, options.delayMs ?? 32);
-  await page.evaluate(async ({ nextFrameCount, nextDelayMs }) => {
-    const waitForFrame = () =>
-      new Promise((resolve) => {
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          resolve();
-        };
-        const timeoutId = setTimeout(finish, 50);
-        requestAnimationFrame(() => {
-          clearTimeout(timeoutId);
-          finish();
-        });
-      });
-    for (let frame = 0; frame < nextFrameCount; frame += 1) {
-      await waitForFrame();
-    }
-    if (nextDelayMs > 0) {
+  await waitForAnimationFrames(page, frameCount);
+  if (delayMs > 0) {
+    await page.evaluate(async (nextDelayMs) => {
       await new Promise((resolve) => setTimeout(resolve, nextDelayMs));
-    }
-  }, {
-    nextFrameCount: frameCount,
-    nextDelayMs: delayMs,
-  });
+    }, delayMs);
+  }
 }
 
 /**
