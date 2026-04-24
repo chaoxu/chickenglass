@@ -1440,6 +1440,20 @@ describe("#1367 — canonical navigation stops", () => {
   });
 });
 
+describe("#1366 — vertical motion subsystem split", () => {
+  it("keeps planning, entry adapters, and scroll effects in separate owners", () => {
+    expect(fileExists("src/editor/vertical-motion-planner.ts")).toBe(true);
+    expect(fileExists("src/editor/vertical-motion-entry-adapters.ts")).toBe(true);
+    expect(fileExists("src/editor/vertical-motion-scroll-model.ts")).toBe(true);
+    expect(fileExists("src/editor/vertical-motion-scroll.ts")).toBe(true);
+    expect(importsModule("src/editor/vertical-motion.ts", "./vertical-motion-planner")).toBe(true);
+    expect(importsModule("src/editor/vertical-motion.ts", "./vertical-motion-entry-adapters")).toBe(true);
+    expect(importsModule("src/editor/vertical-motion.ts", "./vertical-motion-scroll")).toBe(true);
+    expect(fileText("src/editor/vertical-motion-planner.ts")).not.toContain("EditorView");
+    expect(fileText("src/editor/vertical-motion-planner.ts")).not.toContain("document.");
+  });
+});
+
 describe("#315 — editor session subsystem", () => {
   it("extracts the editor session model and pure session actions", () => {
     expect(fileExists("src/app/editor-session-model.ts")).toBe(true);
