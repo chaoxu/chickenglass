@@ -1,5 +1,4 @@
 import {
-  openFixtureDocument,
   screenshot,
   settleEditorLayout,
   switchToMode,
@@ -8,35 +7,66 @@ import {
 
 export const name = "visual-surface-parity";
 
-const FIXTURE = {
-  content: [
-    "# Visual Parity {#sec:visual}",
-    "",
-    "Paragraph text keeps the document rhythm stable across editor surfaces.",
-    "",
-    "- First item with **bold text**.",
-    "- Second item with $x+y$ inline math.",
-    "",
-    "1. Ordered first",
-    "2. Ordered second with `code`.",
-    "",
-    '::: {.theorem #thm:visual title="Visual Theorem"}',
-    "A theorem body has $a^2+b^2=c^2$ and a short sentence.",
-    ":::",
-    "",
-    "$$",
-    "\\int_0^1 x^2\\,dx = \\frac{1}{3}",
-    "$$ {#eq:visual}",
-    "",
-    "| Symbol | Meaning |",
-    "| --- | --- |",
-    "| $x$ | variable |",
-    "| $y$ | response |",
-    "",
-  ].join("\n"),
-  displayPath: "fixture:visual-surface-parity.md",
-  virtualPath: "visual-surface-parity.md",
-};
+const VISUAL_DOC_PATH = "surface-parity/visual-surface.md";
+const BIB_PATH = "surface-parity/references.bib";
+const BIB_CONTENT = [
+  "@book{knuth1984,",
+  "  author = {Knuth, Donald E.},",
+  "  title = {The TeXbook},",
+  "  year = {1984},",
+  "  publisher = {Addison-Wesley}",
+  "}",
+].join("\n");
+const VISUAL_DOC = [
+  "---",
+  "title: Visual Surface Parity",
+  "bibliography: references.bib",
+  "blocks:",
+  "  callout:",
+  "    title: Callout",
+  "    numbered: false",
+  "---",
+  "",
+  "# Visual Parity {#sec:visual}",
+  "",
+  "Paragraph text keeps the document rhythm stable across editor surfaces. A citation [@knuth1984] and a footnote[^note] stay inline.",
+  "",
+  "- First item with **bold text**.",
+  "- Second item with $x+y$ inline math.",
+  "",
+  "1. Ordered first",
+  "2. Ordered second with `code`.",
+  "",
+  '::: {.theorem #thm:visual title="Visual Theorem"}',
+  "A theorem body has $a^2+b^2=c^2$ and a short sentence.",
+  ":::",
+  "",
+  '::: {.definition #def:visual title="Visual Definition"}',
+  "A definition body keeps normal text style while using the shared block frame.",
+  ":::",
+  "",
+  "::: {.proof}",
+  "A proof body keeps normal text style and ends with the proof marker.",
+  "A second proof body line gives parity tests a clean non-header line.",
+  ":::",
+  "",
+  '::: {.callout title="Author Note"}',
+  "A custom callout is currently a generic fenced block, not a first-class admonition.",
+  ":::",
+  "",
+  "$$",
+  "\\int_0^1 x^2\\,dx = \\frac{1}{3}",
+  "$$ {#eq:visual}",
+  "",
+  "See [@thm:visual] and [@def:visual] for local references.",
+  "",
+  "| Symbol | Meaning |",
+  "| --- | --- |",
+  "| $x$ | variable |",
+  "| $y$ | response |",
+  "",
+  "[^note]: Footnote body with $z$ and short prose.",
+].join("\n");
 
 const SURFACES = [
   {
@@ -59,8 +89,59 @@ const SURFACES = [
   {
     key: "theorem-body",
     cm6Selector: ".cm-line.cf-block-theorem:not(.cf-block-header):not(.cf-block-closing-fence)",
-    lexicalSelector: ".cf-lexical-block--theorem .cf-lexical-block-body",
+    lexicalSelector: ".cf-lexical-block--theorem .cf-lexical-block-body .cf-doc-paragraph",
     style: ["color", "fontFamily", "fontSize", "lineHeight"],
+  },
+  {
+    key: "definition-header",
+    cm6Selector: ".cm-line.cf-block-definition.cf-block-header",
+    lexicalSelector: ".cf-lexical-block--definition .cf-lexical-block-header",
+    style: ["color", "fontFamily", "fontSize", "fontStyle", "fontWeight", "lineHeight"],
+  },
+  {
+    key: "definition-body",
+    cm6Selector: ".cm-line.cf-block-definition:not(.cf-block-header):not(.cf-block-closing-fence)",
+    lexicalSelector: ".cf-lexical-block--definition .cf-lexical-block-body .cf-doc-paragraph",
+    style: ["color", "fontFamily", "fontSize", "fontStyle", "lineHeight"],
+  },
+  {
+    key: "proof-header",
+    cm6Selector: ".cm-line.cf-block-proof.cf-block-header",
+    lexicalSelector: ".cf-lexical-block--proof .cf-lexical-block-header",
+    style: ["color", "fontFamily", "fontSize", "fontStyle", "fontWeight", "lineHeight"],
+  },
+  {
+    key: "proof-body",
+    cm6Selector: ".cm-line.cf-block-proof:not(.cf-block-header):not(.cf-block-closing-fence)",
+    lexicalSelector: ".cf-lexical-block--proof .cf-lexical-block-body .cf-doc-paragraph",
+    style: ["color", "fontFamily", "fontSize", "fontStyle", "lineHeight"],
+  },
+  {
+    key: "custom-callout-header",
+    cm6Selector: ".cm-line.cf-block-callout.cf-block-header",
+    lexicalSelector: ".cf-lexical-block--callout .cf-lexical-block-header",
+    style: ["color", "fontFamily", "fontSize", "fontStyle", "fontWeight", "lineHeight"],
+  },
+  {
+    key: "citation",
+    cm6Selector: ".cf-citation[data-reference-widget='true']",
+    lexicalSelector: ".cf-lexical-reference.cf-citation[data-coflat-citation='true']",
+    minScreenshotBytes: 120,
+    style: ["color", "fontFamily", "fontSize", "lineHeight"],
+  },
+  {
+    key: "cross-reference",
+    cm6Selector: ".cf-crossref[data-reference-widget='true']",
+    lexicalSelector: ".cf-lexical-reference.cf-crossref[data-coflat-reference='true']",
+    minScreenshotBytes: 120,
+    style: ["color", "fontFamily", "fontSize", "lineHeight", "textDecorationLine", "textDecorationStyle"],
+  },
+  {
+    key: "footnote-reference",
+    cm6Selector: ".cf-sidenote-ref[data-footnote-id]",
+    lexicalSelector: ".cf-lexical-footnote-ref[data-footnote-id]",
+    minScreenshotBytes: 80,
+    style: ["color", "fontSize", "fontWeight", "lineHeight", "verticalAlign"],
   },
   {
     key: "display-math",
@@ -101,6 +182,25 @@ function surfaceSelector(mode, surface) {
 
 async function captureSurface(page, mode, surface) {
   const selector = visualSelector(mode, surfaceSelector(mode, surface));
+  try {
+    await page.waitForFunction(
+      ({ selector }) => {
+        const element = [...document.querySelectorAll(selector)]
+          .find((candidate) => {
+            const box = candidate.getBoundingClientRect();
+            return candidate instanceof HTMLElement && box.width > 0 && box.height > 0;
+          });
+        return Boolean(element);
+      },
+      { selector },
+      { timeout: 10_000, polling: 100 },
+    );
+  } catch (error) {
+    throw new Error(
+      `Timed out waiting for ${mode} visual surface ${surface.key} (${selector}): ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   const rect = await page.evaluate(({ selector }) => {
     const element = [...document.querySelectorAll(selector)]
       .find((candidate) => {
@@ -188,6 +288,35 @@ async function collectVisuals(page, mode) {
   return result;
 }
 
+async function openVisualSurfaceProject(page) {
+  await page.evaluate(async ({ bibContent, bibPath, docContent, docPath }) => {
+    const app = window.__app;
+    if (!app?.loadFixtureProject) {
+      throw new Error("window.__app.loadFixtureProject is unavailable.");
+    }
+    await app.loadFixtureProject([
+      { path: docPath, kind: "text", content: docContent },
+      { path: bibPath, kind: "text", content: bibContent },
+    ], docPath);
+  }, {
+    bibContent: BIB_CONTENT,
+    bibPath: BIB_PATH,
+    docContent: VISUAL_DOC,
+    docPath: VISUAL_DOC_PATH,
+  });
+  await switchToMode(page, "cm6-rich");
+  await page.waitForFunction(
+    ({ docContent, docPath }) => {
+      const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
+      const doc = window.__editor?.getDoc?.() ?? "";
+      return currentPath === docPath && doc === docContent;
+    },
+    { docContent: VISUAL_DOC, docPath: VISUAL_DOC_PATH },
+    { timeout: 10_000, polling: 100 },
+  );
+  await waitForRenderReady(page, { frameCount: 3, delayMs: 64, timeoutMs: 10_000 });
+}
+
 function assertEqual(left, right, message) {
   if (left === right) return null;
   return `${message}: CM6=${JSON.stringify(left)}, Lexical=${JSON.stringify(right)}`;
@@ -205,7 +334,8 @@ function assertSurfaceParity(cm6, lexical) {
     if (!left || !right) {
       return `Missing surface ${surface.key}`;
     }
-    if (left.screenshotBytes < 500 || right.screenshotBytes < 500) {
+    const minScreenshotBytes = surface.minScreenshotBytes ?? 500;
+    if (left.screenshotBytes < minScreenshotBytes || right.screenshotBytes < minScreenshotBytes) {
       return `${surface.key} screenshot looks empty: CM6=${left.screenshotBytes}, Lexical=${right.screenshotBytes}`;
     }
 
@@ -239,10 +369,7 @@ function assertSurfaceParity(cm6, lexical) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, FIXTURE, {
-    mode: "cm6-rich",
-    project: "single-file",
-  });
+  await openVisualSurfaceProject(page);
 
   const cm6 = await collectVisuals(page, "cm6-rich");
   const lexical = await collectVisuals(page, "lexical");

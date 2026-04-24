@@ -12,6 +12,7 @@ const CM6_RICH_FILTERS = [
   "index-open-rich-render",
   "inline-reveal-geometry",
   "math-render",
+  "mode-switch-typing-parity",
   "rendered-hit-testing",
   "tables",
   "task-checkboxes",
@@ -23,6 +24,7 @@ const LEXICAL_FILTERS = [
   "lexical-bridge-insert-burst",
   "lexical-smoke",
   "mode-switch",
+  "mode-switch-typing-parity",
   "rendered-hit-testing",
   "visual-surface-parity",
 ];

@@ -488,6 +488,14 @@
   text-decoration: none;
 }
 
+.cf-lexical-reference.cf-crossref {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--cf-muted);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 .cf-lexical-reference:hover,
 .cf-lexical-reference:focus-visible {
   background: color-mix(in srgb, var(--cf-bg) 82%, var(--cf-hover));
@@ -496,6 +504,8 @@
 .cf-lexical-footnote-ref {
   color: var(--cf-fg);
   font-size: 0.75em;
+  font-weight: 600;
+  line-height: 0;
   vertical-align: super;
 }
 

@@ -32,6 +32,9 @@ const PARITY_FIXTURE = {
   virtualPath: "document-surface-parity.md",
 };
 
+const TYPING_ANCHOR = "A paragraph with";
+const TYPING_INSERT = "12345678901234567890";
+
 function assertCondition(condition, message, details = undefined) {
   if (condition) {
     return;
@@ -165,6 +168,107 @@ function assertParity(cm6, lexical) {
   assertNear("table", "left", cm6.table, lexical.table, 24);
 }
 
+async function measureTypingLatency(page, mode) {
+  const fixture = {
+    ...PARITY_FIXTURE,
+    displayPath: `fixture:document-surface-parity-${mode}.md`,
+    virtualPath: `document-surface-parity-${mode}.md`,
+  };
+  await openFixtureDocument(page, fixture, {
+    mode,
+    project: "single-file",
+    settleMs: 100,
+  });
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+
+  return page.evaluate(async ({ anchorNeedle, insertText }) => {
+    const mean = (values) =>
+      values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+    const percentile = (values, percentileValue) => {
+      if (values.length === 0) return 0;
+      const sorted = [...values].sort((left, right) => left - right);
+      const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
+      return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+    };
+    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitForFrames = () =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const waitForIdle = () =>
+      new Promise((resolve) => {
+        if (typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+          return;
+        }
+        setTimeout(resolve, 0);
+      });
+
+    const editor = window.__editor;
+    if (!editor?.getDoc || !editor?.setSelection || !editor?.insertText || !editor?.focus) {
+      throw new Error("window.__editor typing bridge is unavailable.");
+    }
+    await editor.ready;
+
+    const before = editor.getDoc();
+    const index = before.indexOf(anchorNeedle);
+    if (index < 0) {
+      throw new Error(`Typing anchor ${JSON.stringify(anchorNeedle)} is missing.`);
+    }
+    const anchor = index + anchorNeedle.length;
+    editor.setSelection(anchor, anchor);
+    editor.focus();
+    await waitForFrames();
+
+    const timings = [];
+    const wallStart = performance.now();
+    for (const char of insertText) {
+      const charStart = performance.now();
+      editor.insertText(char);
+      timings.push(performance.now() - charStart);
+    }
+    const wallMs = performance.now() - wallStart;
+
+    const expectedLength = before.length + insertText.length;
+    const expectedText = `${anchorNeedle}${insertText}`;
+    const canonicalStart = performance.now();
+    let after = editor.getDoc();
+    while (
+      performance.now() - canonicalStart < 5_000 &&
+      (after.length < expectedLength || !after.includes(expectedText))
+    ) {
+      await sleepInPage(8);
+      after = editor.getDoc();
+    }
+    const canonicalMs = performance.now() - canonicalStart;
+    if (after.length < expectedLength || !after.includes(expectedText)) {
+      throw new Error(
+        `Typing burst did not persist: expected length >= ${expectedLength}, ` +
+          `got ${after.length}, expectedText=${JSON.stringify(expectedText)}`,
+      );
+    }
+
+    const idleStart = performance.now();
+    await waitForFrames();
+    await waitForIdle();
+    const inputToIdleMs = performance.now() - wallStart;
+
+    return {
+      canonicalMs,
+      docLength: after.length,
+      inputToIdleMs,
+      insertCount: insertText.length,
+      insertMaxMs: Math.max(...timings, 0),
+      insertMeanMs: mean(timings),
+      insertP95Ms: percentile(timings, 95),
+      idleAfterInputMs: performance.now() - idleStart,
+      wallMs,
+      wallPerCharMs: wallMs / insertText.length,
+    };
+  }, {
+    anchorNeedle: TYPING_ANCHOR,
+    insertText: TYPING_INSERT,
+  });
+}
+
 async function main() {
   let session = null;
 
@@ -179,6 +283,10 @@ async function main() {
     const cm6 = await collectSurfaceMetrics(session.page, "cm6-rich");
     const lexical = await collectSurfaceMetrics(session.page, "lexical");
     assertParity(cm6, lexical);
+    const typing = {
+      cm6: await measureTypingLatency(session.page, "cm6-rich"),
+      lexical: await measureTypingLatency(session.page, "lexical"),
+    };
     console.log(JSON.stringify({
       status: "ok",
       cm6: {
@@ -193,6 +301,7 @@ async function main() {
         math: lexical.math.rect,
         table: lexical.table.rect,
       },
+      typing,
     }, null, 2));
   } catch (error) {
     if (session?.artifactRecorder) {
