@@ -1,10 +1,6 @@
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
-import { collectCitationMatches } from "../citations/citation-matching";
-import {
-  registerCitationsWithProcessor,
-  type CslProcessor,
-} from "../citations/csl-processor";
+import type { CslProcessor } from "../citations/csl-processor";
 import {
   BLOCK_MANIFEST_ENTRIES,
   EXCLUDED_FROM_FALLBACK,
@@ -12,7 +8,6 @@ import {
   type BlockManifestEntry,
 } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
-import type { ReferenceClassification, ResolvedCrossref } from "../index/crossref-resolver";
 import { isRelativeFilePath } from "../lib/pdf-target";
 import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import type { BlockCounterEntry } from "../lib/types";
@@ -27,11 +22,6 @@ import {
   stringTextSource,
   type DocumentSemantics,
 } from "../semantics/document";
-import {
-  formatBlockReferenceLabel,
-  formatEquationReferenceLabel,
-  formatHeadingReferenceLabel,
-} from "../semantics/reference-catalog";
 import type { BibStore } from "../state/bib-data";
 import {
   renderInlineMarkdown,
@@ -39,6 +29,9 @@ import {
   type InlineReferenceRenderContext,
 } from "./inline-render";
 import { renderKatex } from "./math-widget";
+import {
+  createPreviewReferencePresentationController,
+} from "../references/presentation";
 
 export interface PreviewBlockRenderOptions {
   readonly macros?: Record<string, string>;
@@ -76,11 +69,14 @@ export function renderPreviewBlockContentToDom(
   const tree = previewParser.parse(text);
   const semantics = analyzeDocumentSemantics(stringTextSource(text), tree);
   const referenceSemantics = options.referenceSemantics ?? semantics;
-
-  registerPreviewCitations(semantics, {
-    ...options,
+  const referenceController = createPreviewReferencePresentationController({
+    bibliography: options.bibliography,
+    blockCounters: options.blockCounters,
+    cslProcessor: options.cslProcessor,
     referenceSemantics,
   });
+
+  referenceController.registerCitations(semantics.references);
 
   const context: PreviewRenderContext = {
     doc: text,
@@ -92,108 +88,11 @@ export function renderPreviewBlockContentToDom(
     blockCounters: options.blockCounters,
     documentPath: options.documentPath,
     imageUrlOverrides: options.imageUrlOverrides,
-    referenceContext: buildReferenceContext({
-      ...options,
-      referenceSemantics,
-      semantics,
-    }),
+    referenceContext: referenceController,
   };
 
   renderNode(container, tree.topNode, context);
   applyImageOverrides(container, context);
-}
-
-function registerPreviewCitations(
-  semantics: DocumentSemantics,
-  options: PreviewBlockRenderOptions,
-): void {
-  if (!options.bibliography || !options.cslProcessor) return;
-
-  const matches = collectCitationMatches(semantics.references, options.bibliography, {
-    isLocalTarget: (id) => hasLocalCrossrefTarget(id, options),
-  });
-  registerCitationsWithProcessor(matches, options.cslProcessor);
-}
-
-function buildReferenceContext(
-  options: PreviewBlockRenderOptions & {
-    readonly semantics: DocumentSemantics;
-    readonly referenceSemantics: DocumentSemantics;
-  },
-): InlineReferenceRenderContext {
-  return {
-    classify(id: string): ReferenceClassification {
-      const resolved = resolvePreviewCrossref(id, options);
-      if (resolved) {
-        return { kind: "crossref", resolved };
-      }
-      if (options.bibliography?.has(id)) {
-        return { kind: "citation", id };
-      }
-      return { kind: "unresolved", id };
-    },
-    cite(ids, locators) {
-      if (options.cslProcessor) {
-        const rendered = options.cslProcessor.cite([...ids], [...locators]);
-        if (rendered) return rendered;
-      }
-      return `(${ids.map((id, index) => locators[index] ? `${id}, ${locators[index]}` : id).join("; ")})`;
-    },
-    citeNarrative(id) {
-      if (options.cslProcessor && options.bibliography?.has(id)) {
-        return options.cslProcessor.citeNarrative(id);
-      }
-      return id;
-    },
-  };
-}
-
-function resolvePreviewCrossref(
-  id: string,
-  options: Pick<PreviewBlockRenderOptions, "blockCounters"> & {
-    readonly referenceSemantics?: DocumentSemantics;
-  },
-): ResolvedCrossref | null {
-  const block = options.blockCounters?.get(id);
-  if (block) {
-    return {
-      kind: "block",
-      label: formatBlockReferenceLabel(block.title, block.number),
-      number: block.number,
-    };
-  }
-
-  const semantics = options.referenceSemantics;
-  const equation = semantics?.equationById.get(id);
-  if (equation) {
-    return {
-      kind: "equation",
-      label: formatEquationReferenceLabel(equation.number),
-      number: equation.number,
-    };
-  }
-
-  const heading = semantics?.headings.find((entry) => entry.id === id);
-  if (heading) {
-    return {
-      kind: "heading",
-      label: formatHeadingReferenceLabel(heading),
-      title: heading.text,
-    };
-  }
-
-  return null;
-}
-
-function hasLocalCrossrefTarget(
-  id: string,
-  options: Pick<PreviewBlockRenderOptions, "blockCounters" | "referenceSemantics">,
-): boolean {
-  if (options.blockCounters?.has(id)) return true;
-  const semantics = options.referenceSemantics;
-  if (!semantics) return false;
-  if (semantics.equationById.has(id)) return true;
-  return semantics.headings.some((heading) => heading.id === id);
 }
 
 function renderNode(

@@ -18,12 +18,8 @@ import {
 } from "@codemirror/view";
 import { type ChangeSet, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
-import {
-  classifyReference,
-  type ResolvedCrossref,
-} from "../index/crossref-resolver";
+import type { ResolvedCrossref } from "../references/presentation";
 import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
-import { ensureCitationsRegistered } from "../citations/citation-registration";
 import {
   type CslProcessor,
 } from "../citations/csl-processor";
@@ -34,8 +30,6 @@ import {
   ClusteredCrossrefWidget,
   MixedClusterWidget,
   UnresolvedRefWidget,
-  type ClusteredCrossrefPart,
-  type MixedClusterPart,
 } from "./crossref-render";
 import { buildDecorations, pushWidgetDecoration } from "./decoration-core";
 import {
@@ -53,6 +47,13 @@ import {
 } from "./inline-reveal-policy";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
 import { createSemanticSensitiveViewPlugin } from "./view-plugin-factories";
+import {
+  createEditorReferencePresentationController,
+  ensureEditorReferencePresentationCitationsRegistered,
+  type ReferencePresentationClusteredCrossrefPart,
+  type ReferencePresentationMixedPart,
+  type ReferencePresentationRoute,
+} from "../references/presentation";
 import {
   getReferenceRenderAnalysis,
   getReferenceRenderState,
@@ -77,28 +78,35 @@ function getRevealedReferenceTarget(
   );
 }
 
-// ── Helper functions ──────────────────────────────────────────────
-
-/**
- * Strip outer parentheses from a string if they exist.
- * Used to clean citation formatting for display (e.g., "(Karger, 2000)" → "Karger, 2000").
- */
-function stripOuterParens(text: string): string {
-  return text.startsWith("(") && text.endsWith(")")
-    ? text.slice(1, -1)
-    : text;
-}
-
 // ── Render-plan types ──────────────────────────────────────────────
 
 /** A planned reference rendering before widget emission. */
 export type ReferenceRenderItem =
   | { readonly kind: "source-mark"; readonly from: number; readonly to: number }
   | { readonly kind: "citation"; readonly from: number; readonly to: number; readonly rendered: string; readonly ids: readonly string[]; readonly narrative: boolean }
-  | { readonly kind: "mixed-cluster"; readonly from: number; readonly to: number; readonly parts: readonly MixedClusterPart[]; readonly raw: string }
+  | { readonly kind: "mixed-cluster"; readonly from: number; readonly to: number; readonly parts: readonly ReferencePresentationMixedPart[]; readonly raw: string }
   | { readonly kind: "crossref"; readonly from: number; readonly to: number; readonly resolved: ResolvedCrossref; readonly raw: string }
-  | { readonly kind: "clustered-crossref"; readonly from: number; readonly to: number; readonly parts: readonly ClusteredCrossrefPart[]; readonly raw: string }
+  | { readonly kind: "clustered-crossref"; readonly from: number; readonly to: number; readonly parts: readonly ReferencePresentationClusteredCrossrefPart[]; readonly raw: string }
   | { readonly kind: "unresolved"; readonly from: number; readonly to: number; readonly raw: string };
+
+function toRenderItem(
+  route: ReferencePresentationRoute,
+  from: number,
+  to: number,
+): ReferenceRenderItem {
+  switch (route.kind) {
+    case "citation":
+      return { ...route, from, to };
+    case "mixed-cluster":
+      return { ...route, from, to };
+    case "crossref":
+      return { ...route, from, to };
+    case "clustered-crossref":
+      return { ...route, from, to };
+    case "unresolved":
+      return { ...route, from, to };
+  }
+}
 
 // ── Plan: pure routing without widget creation ─────────────────────
 
@@ -117,7 +125,7 @@ export type ReferenceRenderItem =
  * - Narrative, bib id → citation (narrative)
  *
  * Citations must be registered with the processor before calling this
- * function (see {@link ensureCitationsRegistered}).
+ * function (see {@link ensureEditorReferencePresentationCitationsRegistered}).
  */
 export function planReferenceRendering(
   view: EditorView,
@@ -125,8 +133,10 @@ export function planReferenceRendering(
   processor: CslProcessor,
   references = getReferenceRenderAnalysis(view.state).references,
 ): ReferenceRenderItem[] {
-  const analysis = getReferenceRenderAnalysis(view.state);
-  const equationLabels = analysis.equationById;
+  const controller = createEditorReferencePresentationController(view.state, {
+    store,
+    cslProcessor: processor,
+  });
   const items: ReferenceRenderItem[] = [];
   const activeRef = getRevealedReferenceTarget(view.state, view.hasFocus);
 
@@ -136,74 +146,14 @@ export function planReferenceRendering(
       continue;
     }
 
-    const classifications = ref.ids.map((id) =>
-      classifyReference(view.state, id, {
-        bibliography: store,
-        equationLabels,
-        preferCitation: ref.bracketed,
-      }),
-    );
-
-    if (ref.bracketed) {
-      const hasCitation = classifications.some((classification) => classification.kind === "citation");
-      const allCitations = hasCitation && classifications.every((classification) => classification.kind === "citation");
-
-      if (allCitations) {
-        const rendered = processor.cite([...ref.ids], [...ref.locators]);
-        items.push({ kind: "citation", from: ref.from, to: ref.to, rendered, ids: ref.ids, narrative: false });
-      } else if (hasCitation) {
-        const raw = view.state.sliceDoc(ref.from, ref.to);
-        const parts: MixedClusterPart[] = ref.ids.map((id, index) => {
-          const classification = classifications[index];
-          if (classification.kind === "citation") {
-            const rendered = processor.cite([id], ref.locators ? [ref.locators[index]] : undefined);
-            const stripped = stripOuterParens(rendered);
-            return { kind: "citation" as const, id, text: stripped };
-          }
-          const label = classification.kind === "crossref"
-            ? classification.resolved.label
-            : id;
-          return { kind: "crossref" as const, id, text: label };
-        });
-        items.push({ kind: "mixed-cluster", from: ref.from, to: ref.to, parts, raw });
-      } else if (ref.ids.length === 1) {
-        const resolved = classifications[0];
-        const raw = view.state.sliceDoc(ref.from, ref.to);
-        if (resolved.kind === "crossref") {
-          items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved: resolved.resolved, raw });
-        } else {
-          items.push({ kind: "unresolved", from: ref.from, to: ref.to, raw });
-        }
-      } else {
-        const raw = view.state.sliceDoc(ref.from, ref.to);
-        const parts = classifications.map((resolved, index) => {
-          if (resolved.kind === "crossref") {
-            return {
-              id: ref.ids[index],
-              text: resolved.resolved.label,
-            };
-          }
-          return {
-            id: ref.ids[index],
-            text: ref.ids[index],
-            unresolved: true,
-          };
-        });
-        if (parts.some((part) => !part.unresolved)) {
-          items.push({ kind: "clustered-crossref", from: ref.from, to: ref.to, parts, raw });
-        } else {
-          items.push({ kind: "unresolved", from: ref.from, to: ref.to, raw });
-        }
-      }
-    } else {
-      const resolved = classifications[0];
-      if (resolved.kind === "crossref") {
-        const raw = view.state.sliceDoc(ref.from, ref.to);
-        items.push({ kind: "crossref", from: ref.from, to: ref.to, resolved: resolved.resolved, raw });
-      } else if (resolved.kind === "citation") {
-        const rendered = processor.citeNarrative(ref.ids[0]);
-        items.push({ kind: "citation", from: ref.from, to: ref.to, rendered, ids: ref.ids, narrative: true });
-      }
+    const route = controller.planReference({
+      bracketed: ref.bracketed,
+      ids: ref.ids,
+      locators: ref.locators,
+      raw: view.state.sliceDoc(ref.from, ref.to),
+    });
+    if (route) {
+      items.push(toRenderItem(route, ref.from, ref.to));
     }
   }
 
@@ -283,7 +233,7 @@ export function collectReferenceRanges(
   // Numeric CSL registration is global to document order. Cache it at the
   // (analysis, bibliography-store) boundary so ordinary navigation does not
   // reset and replay every citation cluster.
-  ensureCitationsRegistered(analysis, store, processor);
+  ensureEditorReferencePresentationCitationsRegistered(analysis, store, processor);
 
   return emitReferenceDecorations(
     planReferenceRendering(

@@ -56,10 +56,12 @@ import {
   type WidgetKeyboardEntryDetail,
 } from "../state/widget-keyboard-entry";
 import { bibDataField } from "../state/bib-data";
-import { ensureCitationsRegistered } from "../citations/citation-registration";
-import { classifyReference } from "../index/crossref-resolver";
 import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 import { getOptionalReferenceRenderState } from "../state/reference-render-state";
+import {
+  createEditorReferencePresentationController,
+  ensureEditorReferencePresentationCitationsRegistered,
+} from "../references/presentation";
 
 export { cellEditAnnotation, shouldCommitBlurredInlineEditor };
 
@@ -154,16 +156,11 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
       return undefined;
     }
     const { store, cslProcessor } = bibliography;
-    ensureCitationsRegistered(analysis, store, cslProcessor);
-    return {
-      classify: (id, preferCitation) =>
-        classifyReference(rootView.state, id, {
-          bibliography: store,
-          preferCitation,
-        }),
-      cite: (ids, locators) => cslProcessor.cite([...ids], [...locators]),
-      citeNarrative: (id) => cslProcessor.citeNarrative(id),
-    };
+    ensureEditorReferencePresentationCitationsRegistered(analysis, store, cslProcessor);
+    return createEditorReferencePresentationController(rootView.state, {
+      store,
+      cslProcessor,
+    });
   }
 
   private syncToRoot(

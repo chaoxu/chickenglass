@@ -5,7 +5,6 @@
  * This file is intentionally only the DOM render adapter.
  */
 
-import type { ReferenceClassification } from "../index/crossref-resolver";
 import type { SyntaxNode } from "@lezer/common";
 import type { InlineRenderSurface } from "../inline-surface";
 import { CSS } from "../constants/css-classes";
@@ -22,6 +21,11 @@ import {
   parseInlineFragments,
 } from "../inline-fragments";
 import { isSafeUrl } from "../lib/url-utils";
+import {
+  planReferencePresentation,
+  type ReferencePresentationContext,
+  type ReferencePresentationRoute,
+} from "../references/presentation";
 import { renderKatexToHtml } from "./inline-shared";
 
 interface InlineSegment {
@@ -31,17 +35,7 @@ interface InlineSegment {
 
 type DomInlineSurface = InlineRenderSurface | "document-body";
 
-export interface InlineReferenceRenderContext {
-  classify: (
-    id: string,
-    preferCitation: boolean,
-  ) => ReferenceClassification;
-  cite: (
-    ids: readonly string[],
-    locators: readonly (string | undefined)[],
-  ) => string;
-  citeNarrative: (id: string) => string;
-}
+export interface InlineReferenceRenderContext extends ReferencePresentationContext {}
 
 function renderFragments(
   container: HTMLElement | DocumentFragment,
@@ -107,103 +101,44 @@ function renderReference(
   const raw = fragment.parenthetical
     ? `[${fragment.rawText}]`
     : fragment.rawText;
-  const classifications = fragment.ids.map((id) =>
-    referenceContext.classify(id, fragment.parenthetical),
-  );
-
-  if (!fragment.parenthetical) {
-    const resolved = classifications[0];
-    if (resolved.kind === "crossref") {
-      container.appendChild(new CrossrefWidget(resolved.resolved, raw).createDOM());
-      return;
-    }
-    if (resolved.kind === "citation") {
-      container.appendChild(
-        new CitationWidget(referenceContext.citeNarrative(fragment.ids[0]), fragment.ids, true)
-          .createDOM(),
-      );
-      return;
-    }
-    container.appendChild(new UnresolvedRefWidget(raw).createDOM());
-    return;
-  }
-
-  const hasCitation = classifications.some((classification) => classification.kind === "citation");
-  const allCitations = hasCitation
-    && classifications.every((classification) => classification.kind === "citation");
-
-  if (allCitations) {
-    container.appendChild(
-      new CitationWidget(referenceContext.cite(fragment.ids, fragment.locators), fragment.ids)
-        .createDOM(),
-    );
-    return;
-  }
-
-  if (hasCitation) {
-    container.appendChild(
-      new MixedClusterWidget(
-        fragment.ids.map((id, index) => {
-          const classification = classifications[index];
-          if (classification.kind === "citation") {
-            return {
-              kind: "citation" as const,
-              id,
-              text: stripOuterParens(
-                referenceContext.cite(
-                  [id],
-                  fragment.locators[index] === undefined ? [] : [fragment.locators[index]],
-                ),
-              ),
-            };
-          }
-          return {
-            kind: "crossref" as const,
-            id,
-            text: classification.kind === "crossref" ? classification.resolved.label : id,
-          };
-        }),
-        raw,
-      ).createDOM(),
-    );
-    return;
-  }
-
-  if (fragment.ids.length === 1) {
-    const resolved = classifications[0];
-    container.appendChild(
-      resolved.kind === "crossref"
-        ? new CrossrefWidget(resolved.resolved, raw).createDOM()
-        : new UnresolvedRefWidget(raw).createDOM(),
-    );
-    return;
-  }
-
-  const parts = classifications.map((classification, index) => {
-    if (classification.kind === "crossref") {
-      return {
-        id: fragment.ids[index],
-        text: classification.resolved.label,
-      };
-    }
-    return {
-      id: fragment.ids[index],
-      text: fragment.ids[index],
-      unresolved: true,
-    };
+  const route = planReferencePresentation(referenceContext, {
+    bracketed: fragment.parenthetical,
+    ids: fragment.ids,
+    locators: fragment.locators,
+    raw,
   });
 
-  container.appendChild(
-    parts.some((part) => !part.unresolved)
-      ? new ClusteredCrossrefWidget(parts, raw).createDOM()
-      : new UnresolvedRefWidget(raw).createDOM(),
-  );
+  if (!route) {
+    container.appendChild(document.createTextNode(raw));
+    return;
+  }
+
+  renderPresentationRoute(container, route);
 }
 
-function stripOuterParens(text: string): string {
-  return text.startsWith("(") && text.endsWith(")")
-    ? text.slice(1, -1)
-    : text;
+function renderPresentationRoute(
+  container: HTMLElement | DocumentFragment,
+  route: ReferencePresentationRoute,
+): void {
+  switch (route.kind) {
+    case "citation":
+      container.appendChild(
+        new CitationWidget(route.rendered, route.ids, route.narrative).createDOM(),
+      );
+      return;
+    case "mixed-cluster":
+      container.appendChild(new MixedClusterWidget(route.parts, route.raw).createDOM());
+      return;
+    case "crossref":
+      container.appendChild(new CrossrefWidget(route.resolved, route.raw).createDOM());
+      return;
+    case "clustered-crossref":
+      container.appendChild(new ClusteredCrossrefWidget(route.parts, route.raw).createDOM());
+      return;
+    case "unresolved":
+      container.appendChild(new UnresolvedRefWidget(route.raw).createDOM());
+      return;
+  }
 }
 
 function renderFragment(

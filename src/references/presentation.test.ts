@@ -18,11 +18,15 @@ import {
   makeBibStore,
   makeBlockPlugin,
 } from "../test-utils";
+import type { DocumentReferenceCatalog } from "../semantics/reference-catalog";
 import {
+  createCatalogReferencePresentationController,
   getReferencePresentationComputationCountForTest,
   getReferencePresentationModel,
+  planReferencePresentation,
   referencePresentationField,
   resetReferencePresentationComputationCountForTest,
+  type ReferencePresentationInput,
 } from "./presentation";
 
 function createState(doc: string): EditorState {
@@ -125,5 +129,98 @@ describe("getReferencePresentationModel", () => {
     expect(getReferencePresentationModel(nextState).getPreviewText("karger2000"))
       .toContain("Updated title");
     expect(getReferencePresentationComputationCountForTest()).toBe(2);
+  });
+});
+
+const catalogTargets = [
+  {
+    id: "thm-main",
+    kind: "block" as const,
+    from: 0,
+    to: 10,
+    displayLabel: "Theorem 1",
+    ordinal: 1,
+    title: "Main",
+  },
+  {
+    id: "eq-main",
+    kind: "equation" as const,
+    from: 20,
+    to: 30,
+    displayLabel: "Eq. (1)",
+    ordinal: 1,
+  },
+] as const;
+
+const catalog: DocumentReferenceCatalog = {
+  targets: catalogTargets,
+  targetsById: new Map(catalogTargets.map((target) => [target.id, [target]])),
+  uniqueTargetById: new Map(catalogTargets.map((target) => [target.id, target])),
+  duplicatesById: new Map(),
+  references: [],
+};
+
+function makeInput(
+  ids: readonly string[],
+  raw: string,
+  bracketed = true,
+): ReferencePresentationInput {
+  return {
+    bracketed,
+    ids,
+    locators: ids.map(() => undefined),
+    raw,
+  };
+}
+
+describe("reference presentation controller", () => {
+  it("uses one classification policy for local targets and citations", () => {
+    const controller = createCatalogReferencePresentationController(catalog, {
+      bibliography: makeBibStore([CSL_FIXTURES.karger]),
+      cite: (ids) => `[${ids.join(", ")}]`,
+      citeNarrative: (id) => `${id} narrative`,
+    });
+
+    expect(controller.classify("thm-main", true)).toMatchObject({
+      kind: "crossref",
+      resolved: { kind: "block", label: "Theorem 1" },
+    });
+    expect(controller.classify("karger2000", true)).toEqual({
+      kind: "citation",
+      id: "karger2000",
+    });
+    expect(controller.classify("missing", true)).toEqual({
+      kind: "unresolved",
+      id: "missing",
+    });
+  });
+
+  it("routes mixed and clustered references from the shared presentation plan", () => {
+    const controller = createCatalogReferencePresentationController(catalog, {
+      bibliography: makeBibStore([CSL_FIXTURES.karger]),
+      cite: (ids) => `(${ids.join("; ")})`,
+      citeNarrative: (id) => `${id} narrative`,
+    });
+
+    expect(controller.planReference(
+      makeInput(["eq-main", "karger2000"], "[@eq-main; @karger2000]"),
+    )).toMatchObject({
+      kind: "mixed-cluster",
+      parts: [
+        { kind: "crossref", id: "eq-main", text: "Eq. (1)" },
+        { kind: "citation", id: "karger2000", text: "karger2000" },
+      ],
+    });
+
+    expect(planReferencePresentation(
+      controller,
+      makeInput(["thm-main", "missing"], "[@thm-main; @missing]"),
+    )).toMatchObject({
+      kind: "clustered-crossref",
+      parts: [
+        { id: "thm-main", text: "Theorem 1" },
+        { id: "missing", text: "missing", unresolved: true },
+      ],
+    });
   });
 });

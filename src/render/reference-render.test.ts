@@ -591,6 +591,40 @@ describe("collectReferenceRanges", () => {
     expect(el.textContent).toContain("Theorem 1");
   });
 
+  it("keeps CM6 widgets and block previews on the same presentation route", async () => {
+    const doc = [
+      "$$a^2$$ {#eq:alpha}",
+      "",
+      "See [@eq:alpha; @karger2000].",
+    ].join("\n");
+    const editorProcessor = await CslProcessor.create([karger, stein]);
+    const previewProcessor = await CslProcessor.create([karger, stein]);
+    view = createView(doc, doc.length);
+    view.dispatch({
+      effects: bibDataEffect.of({
+        store,
+        cslProcessor: editorProcessor,
+      }),
+    });
+
+    const ref = collectReferenceRanges(view, store, editorProcessor).find(
+      (range) => view.state.sliceDoc(range.from, range.to) === "[@eq:alpha; @karger2000]",
+    );
+    expectPresent(ref, "reference range");
+    const widget = ref.value.spec.widget;
+    expect(widget).toBeDefined();
+    if (!widget) return;
+    const widgetText = (widget.toDOM() as HTMLElement).textContent;
+
+    const preview = document.createElement("div");
+    renderPreviewBlockContentToDom(preview, doc, {
+      bibliography: store,
+      cslProcessor: previewProcessor,
+    });
+
+    expect(preview.querySelector(`.${CSS.citation}`)?.textContent).toBe(widgetText);
+  });
+
   it("pure citation cluster still routes to CitationWidget (not MixedClusterWidget)", () => {
     const doc = "See [@karger2000; @stein2001].";
     view = createView(doc, doc.length);

@@ -15,11 +15,10 @@ import { type Extension } from "@codemirror/state";
 import { type EditorView, ViewPlugin } from "@codemirror/view";
 import { CSS, HOVER_DELAY_MS } from "../constants";
 import {
-  classifyReference,
+  createEditorReferencePresentationController,
   type ReferenceClassification,
   type ResolvedCrossref,
-  resolveCrossref,
-} from "../index/crossref-resolver";
+} from "../references/presentation";
 import { blockCounterField, type NumberedBlock } from "../state/block-counter";
 import { imageUrlField } from "../state/image-url";
 import { mathMacrosField } from "../state/math-macros";
@@ -342,10 +341,16 @@ export function buildCrossrefPreviewContent(
   id: string,
 ): HTMLElement {
   const equationLabels = view.state.field(documentAnalysisField, false)?.equationById;
+  const presentation = createEditorReferencePresentationController(view.state, {
+    equationLabels,
+  });
+  const classification = presentation.classify(id, false);
   return buildCrossrefTooltipPlan(
     view,
     id,
-    resolveCrossref(view.state, id, equationLabels ?? new Map()),
+    classification.kind === "crossref"
+      ? classification.resolved
+      : { kind: "unresolved", label: id },
     "hover",
   ).buildContent();
 }
@@ -355,10 +360,16 @@ export function buildCrossrefCompletionPreviewContent(
   id: string,
 ): HTMLElement {
   const equationLabels = view.state.field(documentAnalysisField, false)?.equationById;
+  const presentation = createEditorReferencePresentationController(view.state, {
+    equationLabels,
+  });
+  const classification = presentation.classify(id, false);
   return buildCrossrefTooltipPlan(
     view,
     id,
-    resolveCrossref(view.state, id, equationLabels ?? new Map()),
+    classification.kind === "crossref"
+      ? classification.resolved
+      : { kind: "unresolved", label: id },
     "completion",
   ).buildContent();
 }
@@ -448,12 +459,13 @@ function buildTooltipPlanForElement(
   if (!ref) return null;
 
   const { store } = bibData;
+  const presentation = createEditorReferencePresentationController(view.state, {
+    store,
+    cslProcessor: bibData.cslProcessor,
+    equationLabels,
+  });
   const classifications = ref.ids.map((id) =>
-    classifyReference(view.state, id, {
-      bibliography: store,
-      equationLabels,
-      preferCitation: ref.bracketed,
-    }),
+    presentation.classify(id, ref.bracketed),
   );
   const hasCrossref = classifications.some((classification) => classification.kind === "crossref");
 

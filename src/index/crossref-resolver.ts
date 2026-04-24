@@ -5,51 +5,21 @@ import {
 } from "../semantics/editor-reference-catalog";
 import { documentAnalysisField } from "../state/document-analysis";
 import {
-  formatEquationReferenceLabel,
-  getPreferredDocumentReferenceTarget,
-} from "../semantics/reference-catalog";
+  classifyReferenceTarget,
+  type EquationEntry,
+  resolveCatalogCrossref,
+  type ReferenceClassification,
+  type ReferenceClassificationOptions,
+  type ResolvedCrossref,
+} from "../references/presentation";
 
-/** The kind of target a cross-reference resolves to. */
-export type CrossrefKind = "block" | "heading" | "equation" | "citation" | "unresolved";
-
-/** Result of resolving a cross-reference. */
-export interface ResolvedCrossref {
-  /** What kind of target this reference points to. */
-  readonly kind: CrossrefKind;
-  /** The rendered display text (e.g., "Theorem 1", "Eq. (3)"). */
-  readonly label: string;
-  /** The assigned number, if applicable. */
-  readonly number?: number;
-  /** The full heading title, for heading cross-references. */
-  readonly title?: string;
-}
-
-/** Equation label entry found in the syntax tree. */
-export interface EquationEntry {
-  /** The equation label id (e.g., "eq:foo"). */
-  readonly id: string;
-  /** The sequential equation number. */
-  readonly number: number;
-}
-
-type ReferenceLookup = Pick<ReadonlyMap<string, unknown>, "has">;
-
-export type ReferenceClassification =
-  | { readonly kind: "crossref"; readonly resolved: ResolvedCrossref }
-  | { readonly kind: "citation"; readonly id: string }
-  | { readonly kind: "unresolved"; readonly id: string };
-
-export interface ReferenceClassificationOptions {
-  /** Known bibliography ids for citation routing. */
-  readonly bibliography?: ReferenceLookup;
-  /** Precomputed equation labels to avoid redundant analysis work. */
-  readonly equationLabels?: ReadonlyMap<string, EquationEntry>;
-  /**
-   * Kept for callers that still distinguish bracketed refs. Local document
-   * targets always take precedence over bibliography ids.
-   */
-  readonly preferCitation?: boolean;
-}
+export type {
+  CrossrefKind,
+  EquationEntry,
+  ReferenceClassification,
+  ReferenceClassificationOptions,
+  ResolvedCrossref,
+} from "../references/presentation";
 
 export function collectEquationLabels(
   state: EditorState,
@@ -83,41 +53,8 @@ export function resolveCrossref(
   equationLabels?: ReadonlyMap<string, EquationEntry>,
 ): ResolvedCrossref {
   const catalog = getEditorDocumentReferenceCatalog(state);
-  const target = getPreferredDocumentReferenceTarget(catalog, id);
-
-  if (target?.kind === "block") {
-    return {
-      kind: "block",
-      label: target.displayLabel,
-      number: target.ordinal,
-    };
-  }
-
-  const eqEntry = equationLabels?.get(id)
-    ?? (target?.kind === "equation" && target.ordinal !== undefined
-      ? { id, number: target.ordinal }
-      : undefined);
-  if (eqEntry) {
-    return {
-      kind: "equation",
-      label: formatEquationReferenceLabel(eqEntry.number),
-      number: eqEntry.number,
-    };
-  }
-
-  if (target?.kind === "heading") {
-    return {
-      kind: "heading",
-      label: target.displayLabel,
-      title: target.title,
-    };
-  }
-
-  // Assume citation if not found as block, equation, or heading.
-  return {
-    kind: "citation",
-    label: id,
-  };
+  return resolveCatalogCrossref(catalog, id, equationLabels)
+    ?? { kind: "citation", label: id };
 }
 
 /** A cross-reference occurrence found in the document text. */
@@ -153,24 +90,10 @@ export function classifyReference(
   id: string,
   options: ReferenceClassificationOptions = {},
 ): ReferenceClassification {
-  const {
-    bibliography,
-    equationLabels,
-  } = options;
-  const hasCitation = bibliography?.has(id) ?? false;
-
-  const resolved = resolveCrossref(state, id, equationLabels);
-  if (
-    resolved.kind === "block" ||
-    resolved.kind === "heading" ||
-    resolved.kind === "equation"
-  ) {
-    return { kind: "crossref", resolved };
-  }
-
-  if (hasCitation) {
-    return { kind: "citation", id };
-  }
-
-  return { kind: "unresolved", id };
+  const catalog = getEditorDocumentReferenceCatalog(state);
+  return classifyReferenceTarget(
+    (targetId) => resolveCatalogCrossref(catalog, targetId, options.equationLabels),
+    id,
+    { bibliography: options.bibliography },
+  );
 }
