@@ -81,6 +81,8 @@
 - ALWAYS test before claiming fixed. Use the managed browser harness when possible. For product-neutral checks, use `__editor` and `__app`; for CM6-only investigations, use `pnpm dev` + `pnpm chrome` + `__cmDebug.dump()`. Never ask the user to test unless it's something you literally cannot test (e.g., native OS interactions).
 - Always open `index.md` in the browser to verify rendering. It opens by default on startup. If a feature you changed is not covered by `index.md`, add a test case to it.
 - **Visual changes require browser verification before closing an issue.** Any change that affects CSS, rendering, decorations, themes, or layout MUST be verified in the live browser (via CDP) before closing the issue or claiming it's fixed. If browser verification is not possible, explicitly alert the user that visual verification was not done. Never close a visual issue based only on "build passes" or "tests pass."
+- Unit tests must own their input as inline or helper-built fixtures. Do not import public `demo/` documents into unit tests; showcase edits should not break low-level editor/session assertions.
+- Browser and regression tests should use `fixtures/` or `__app.loadFixtureProject()` for purpose-built projects. Public `demo/` documents are for showcase smoke checks, and large private fixtures are for perf/heavy-document lanes.
 - Test StateFields without a browser: `EditorState.create({extensions}).update({changes}).state.field(myField)`.
 - For parser bugs, write a Vitest test with the exact document content first, then check browser for incremental parsing issues.
 

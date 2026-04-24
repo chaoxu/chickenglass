@@ -284,6 +284,7 @@ tea logins                                                  # show configured lo
 
 - Temporary files go in `/tmp/coflat-*` — never in the project directory.
 - `demo/` is public showcase content only. Unless a file is intentionally generated for the public showcase, do not put it under `demo/`; use `fixtures/` for regression, heavy, or private documents instead.
+- Unit tests must own inline/helper-built inputs; `demo/` is for showcase smoke checks, not low-level assertions.
 - For isolated local work, prefer `pnpm dev:worktree -- <name>`.
   - It creates a new branch + worktree under `.worktrees/<sanitized-name>`.
   - It links the repo's `node_modules` into the new worktree when available, so verification commands usually work immediately.

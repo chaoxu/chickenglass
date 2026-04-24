@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import type { LexicalEditor } from "lexical";
 import {
@@ -20,10 +19,19 @@ import { MemoryFileSystem } from "../app/file-manager";
 import { setActiveEditor } from "./active-editor-tracker";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";
+import { registerCoflatDecoratorRenderers } from "./renderers/block-renderers";
 import { HEADING_SOURCE_SELECTOR, RAW_BLOCK_SOURCE_SELECTOR } from "./source-position-contract";
 
 type MarkdownEditorProps = ComponentProps<typeof LexicalMarkdownEditor>;
-const DEMO_INDEX_MD = readFileSync("demo/index.md", "utf8");
+
+registerCoflatDecoratorRenderers();
+
+const MOUNT_ONLY_NESTED_FIELD_DOC = [
+  "::: {.theorem #thm:mount-echo title=\"Mount Echo\"}",
+  "A nested block body should mount without publishing a document edit.",
+  ":::",
+  "",
+].join("\n");
 
 async function mountEditor(overrides: Partial<MarkdownEditorProps> = {}) {
   let editor: LexicalEditor | null = null;
@@ -88,7 +96,7 @@ describe("LexicalMarkdownEditor history", () => {
     const onDocChange = vi.fn();
     const onTextChange = vi.fn();
     const editor = await mountEditor({
-      doc: DEMO_INDEX_MD,
+      doc: MOUNT_ONLY_NESTED_FIELD_DOC,
       editorMode: "lexical",
       onDirtyChange,
       onDocChange,
@@ -96,6 +104,11 @@ describe("LexicalMarkdownEditor history", () => {
     });
 
     try {
+      await waitFor(() => {
+        const root = editor.editor.getRootElement();
+        expect(root?.querySelector(".cf-lexical-nested-editor--title")).not.toBeNull();
+        expect(root?.querySelector(".cf-lexical-nested-editor--block-body")).not.toBeNull();
+      });
       await new Promise((resolve) => setTimeout(resolve, 250));
       expect(onDirtyChange).not.toHaveBeenCalled();
       expect(onDocChange).not.toHaveBeenCalled();
