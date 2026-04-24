@@ -5,6 +5,8 @@ const CM6_RICH_FILTERS = [
   "code-blocks",
   "cross-references",
   "fenced-divs",
+  "heading-number-stability",
+  "heading-outline-parity",
   "headings",
   "hover-preview-blocks",
   "index-open-rich-render",
@@ -16,6 +18,7 @@ const CM6_RICH_FILTERS = [
 ];
 
 const LEXICAL_FILTERS = [
+  "heading-outline-parity",
   "lexical-bridge-insert-burst",
   "lexical-smoke",
   "mode-switch",

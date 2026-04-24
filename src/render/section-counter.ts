@@ -79,8 +79,8 @@ function buildSectionDecorationsForHeadings(
 }
 
 function sameSectionHeadingTopology(
-  before: readonly { readonly level: number; readonly unnumbered: boolean }[],
-  after: readonly { readonly level: number; readonly unnumbered: boolean }[],
+  before: readonly { readonly from: number; readonly level: number; readonly unnumbered: boolean }[],
+  after: readonly { readonly from: number; readonly level: number; readonly unnumbered: boolean }[],
 ): boolean {
   if (before.length !== after.length) {
     return false;
@@ -88,6 +88,7 @@ function sameSectionHeadingTopology(
 
   for (let index = 0; index < before.length; index += 1) {
     if (
+      before[index].from !== after[index].from ||
       before[index].level !== after[index].level ||
       before[index].unnumbered !== after[index].unnumbered
     ) {

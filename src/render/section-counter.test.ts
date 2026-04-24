@@ -218,6 +218,29 @@ describe("sectionNumberPlugin", () => {
     expect(newIter.value).toBe(oldIter.value);
   });
 
+  it("rebuilds section numbers after whole-document replacement with shifted headings", () => {
+    const doc = [
+      "# Alpha",
+      "",
+      "## Beta",
+      "",
+      "### Gamma",
+      "",
+      "# Delta",
+    ].join("\n");
+    const state = EditorState.create({
+      doc,
+      extensions: [markdown(), sectionNumberPlugin],
+    });
+
+    const nextDoc = doc.replace("## Beta", "## Beta Revised");
+    const nextState = state.update({
+      changes: { from: 0, to: doc.length, insert: nextDoc },
+    }).state;
+
+    expect(extractFieldNumbers(nextState)).toEqual(["1", "1.1", "1.1.1", "2"]);
+  });
+
   it("briefly keeps prior section numbers while editing through a heading marker", () => {
     const doc = [
       "# Intro",

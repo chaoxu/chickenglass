@@ -227,6 +227,10 @@ export function LexicalEditorPane({
   });
   const lexicalMode = revealMode ?? REVEAL_MODE.LEXICAL;
 
+  useEffect(() => {
+    onSurfaceReady?.();
+  }, [onSurfaceReady]);
+
   const shouldDeriveDiagnostics = useCallback(
     () => semanticPublisher.hasDiagnosticsSubscriber(),
     [semanticPublisher],
@@ -515,10 +519,6 @@ export function LexicalEditorPane({
       onLexicalEditorReady?.(null);
     };
   }, [onLexicalEditorReady]);
-
-  useEffect(() => {
-    onSurfaceReady?.();
-  }, [onSurfaceReady]);
 
   return (
     <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>

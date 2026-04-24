@@ -45,6 +45,32 @@ describe("LexicalEditorPane renderer registration", () => {
 });
 
 describe("LexicalEditorPane derived state scheduling", () => {
+  it("publishes initial headings after the surface-ready stale-state clear", async () => {
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const events: string[] = [];
+    const onSurfaceReady = vi.fn(() => {
+      events.push("surface-ready");
+    });
+    const onHeadingsChange = vi.fn((headings) => {
+      events.push(`headings:${headings.map((heading: { text: string }) => heading.text).join(",")}`);
+    });
+
+    render(
+      <LexicalEditorPane
+        doc="# Initial\n\none two"
+        onHeadingsChange={onHeadingsChange}
+        onSurfaceReady={onSurfaceReady}
+      />,
+    );
+
+    expect(onSurfaceReady).toHaveBeenCalledTimes(1);
+    expect(onHeadingsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ text: expect.stringContaining("Initial") }),
+    ]);
+    expect(events[0]).toBe("surface-ready");
+    expect(events[1]).toEqual(expect.stringContaining("headings:Initial"));
+  });
+
   it("delays live counts and semantic derivation after rich text changes", async () => {
     const { LexicalEditorPane } = await import("./lexical-editor-pane");
     const { useEditorTelemetryStore } = await import("../stores/editor-telemetry-store");

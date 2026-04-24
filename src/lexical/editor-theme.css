@@ -317,6 +317,7 @@
   font-size: var(--cf-h3-size, 1.1em);
   font-style: var(--cf-h3-style, italic);
   font-weight: var(--cf-h3-weight, 600);
+  line-height: 1.4;
 }
 
 .cf-lexical-heading--h4 {
@@ -324,6 +325,7 @@
   font-size: var(--cf-h4-size, 1.05em);
   font-style: var(--cf-h4-style, normal);
   font-weight: var(--cf-h4-weight, 600);
+  line-height: 1.4;
 }
 
 .cf-lexical-heading--h5 {
@@ -331,6 +333,7 @@
   font-size: var(--cf-h5-size, 1em);
   font-style: var(--cf-h5-style, normal);
   font-weight: var(--cf-h5-weight, 600);
+  line-height: 1.5;
 }
 
 .cf-lexical-heading--h6 {
@@ -338,6 +341,7 @@
   font-size: var(--cf-h6-size, 0.95em);
   font-style: var(--cf-h6-style, normal);
   font-weight: var(--cf-h6-weight, 600);
+  line-height: 1.5;
 }
 
 .cf-lexical-inline-math-panel {
