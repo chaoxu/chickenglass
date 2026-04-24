@@ -15,9 +15,82 @@ pub struct ProjectRootEntry {
 pub struct ProjectRoot(pub Mutex<HashMap<String, ProjectRootEntry>>);
 
 /// Shared state holding the active file watcher (if any).
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WatcherHealth {
+    Starting,
+    Healthy,
+    Degraded,
+    Failed,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WatcherHealthEvent {
+    pub status: WatcherHealth,
+    pub generation: u64,
+    pub root: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl WatcherHealthEvent {
+    pub fn starting(generation: u64, root: String) -> Self {
+        Self {
+            status: WatcherHealth::Starting,
+            generation,
+            root,
+            message: "Native watcher is starting".to_string(),
+            error: None,
+        }
+    }
+
+    pub fn healthy(generation: u64, root: String) -> Self {
+        Self {
+            status: WatcherHealth::Healthy,
+            generation,
+            root,
+            message: "Native watcher is active".to_string(),
+            error: None,
+        }
+    }
+
+    pub fn degraded(
+        generation: u64,
+        root: String,
+        message: impl Into<String>,
+        error: String,
+    ) -> Self {
+        Self {
+            status: WatcherHealth::Degraded,
+            generation,
+            root,
+            message: message.into(),
+            error: Some(error),
+        }
+    }
+
+    pub fn failed(
+        generation: u64,
+        root: String,
+        message: impl Into<String>,
+        error: String,
+    ) -> Self {
+        Self {
+            status: WatcherHealth::Failed,
+            generation,
+            root,
+            message: message.into(),
+            error: Some(error),
+        }
+    }
+}
+
 pub struct FileWatcherEntry {
     pub generation: u64,
     pub root: PathBuf,
+    pub health: WatcherHealthEvent,
     pub watcher: Option<RecommendedWatcher>,
 }
 
@@ -264,7 +337,10 @@ impl PerfState {
 mod tests {
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
-    use super::{FileWatcherEntry, PerfState, ProjectRootEntry, remove_window_native_state};
+    use super::{
+        FileWatcherEntry, PerfState, ProjectRootEntry, WatcherHealthEvent,
+        remove_window_native_state,
+    };
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -318,6 +394,7 @@ mod tests {
                 FileWatcherEntry {
                     generation: 1,
                     root: PathBuf::from("/tmp/main"),
+                    health: WatcherHealthEvent::healthy(1, "/tmp/main".to_string()),
                     watcher: None,
                 },
             ),
@@ -326,6 +403,7 @@ mod tests {
                 FileWatcherEntry {
                     generation: 1,
                     root: PathBuf::from("/tmp/other"),
+                    health: WatcherHealthEvent::healthy(1, "/tmp/other".to_string()),
                     watcher: None,
                 },
             ),

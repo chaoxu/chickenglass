@@ -1,6 +1,9 @@
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
+pub const FRONTEND_PATH_TRANSPORT_POLICY: &str =
+    "Coflat native paths must be valid UTF-8 before they can cross the Tauri boundary";
+
 pub struct ProjectPathResolver {
     canonical_root: PathBuf,
 }
@@ -138,18 +141,22 @@ fn canonicalize_parent_maybe_missing(path: &Path) -> Result<PathBuf, String> {
 pub fn file_name_to_frontend_string(name: &OsStr, label: &str) -> Result<String, String> {
     name.to_str()
         .map(str::to_owned)
-        .ok_or_else(|| format!("{label} is not valid UTF-8"))
+        .ok_or_else(|| unsupported_frontend_path_error(label))
 }
 
 pub fn path_to_frontend_string(path: &Path, label: &str) -> Result<String, String> {
     let path = path
         .to_str()
-        .ok_or_else(|| format!("{label} is not valid UTF-8"))?;
+        .ok_or_else(|| unsupported_frontend_path_error(label))?;
     if std::path::MAIN_SEPARATOR == '\\' {
         Ok(path.replace('\\', "/"))
     } else {
         Ok(path.to_string())
     }
+}
+
+fn unsupported_frontend_path_error(label: &str) -> String {
+    format!("{label} is not valid UTF-8. {FRONTEND_PATH_TRANSPORT_POLICY}.")
 }
 
 fn canonicalize_maybe_missing(path: &Path) -> Result<PathBuf, String> {
@@ -350,6 +357,7 @@ mod tests {
         )
         .expect_err("non-utf8 file names should fail");
         assert!(err.contains("Directory entry name is not valid UTF-8"));
+        assert!(err.contains(FRONTEND_PATH_TRANSPORT_POLICY));
     }
 
     #[test]

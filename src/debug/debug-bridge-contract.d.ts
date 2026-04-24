@@ -3,10 +3,12 @@ import type { EditorMode } from "../editor-display-mode";
 import type {
   DebugDocumentState,
   DebugRenderState,
+  FileWatcherStatus,
   InteractionTraceEntry,
   MarkdownEditorSelection,
   ScrollGuardEvent,
   SidebarTab,
+  WatcherHealthEvent,
 } from "../lib/debug-types";
 export type { DebugDocumentState } from "../lib/debug-types";
 import type {
@@ -46,6 +48,8 @@ export interface TauriSmokeWindowState {
   watcherRoot: string | null;
   watcherGeneration: number | null;
   watcherActive: boolean;
+  watcherHealth: WatcherHealthEvent | null;
+  frontendWatcherStatus: FileWatcherStatus;
   lastFocusedWindow: string | null;
 }
 
@@ -95,6 +99,7 @@ export interface CfDebugBridge {
   toggleFps: () => boolean;
   scrollGuards: () => readonly ScrollGuardEvent[];
   clearScrollGuards: () => void;
+  watcherStatus: () => FileWatcherStatus;
   renderState: () => DebugRenderState | null;
   recorderStatus: () => DebugSessionRecorderStatus;
   captureState: (label?: string | null) => DebugSessionCapture;

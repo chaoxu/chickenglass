@@ -37,6 +37,31 @@ export interface InteractionTraceEntry {
   readonly data?: string | null;
 }
 
+export type NativeWatcherHealth =
+  | "starting"
+  | "healthy"
+  | "degraded"
+  | "failed";
+
+export interface WatcherHealthEvent {
+  readonly status: NativeWatcherHealth;
+  readonly generation: number;
+  readonly root: string;
+  readonly message: string;
+  readonly error?: string;
+}
+
+export type FileWatcherHealth = NativeWatcherHealth | "stopped";
+
+export interface FileWatcherStatus {
+  status: FileWatcherHealth;
+  generation: number | null;
+  root: string | null;
+  message: string;
+  error?: string;
+  updatedAt: number;
+}
+
 export interface VisibleRawFencedOpener {
   readonly line: number | null;
   readonly text: string;

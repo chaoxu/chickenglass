@@ -30,6 +30,7 @@ import {
   debugGetNativeStateCommand,
   debugListWindowsCommand,
 } from "../tauri-client/debug";
+import { getLatestFileWatcherStatus } from "../file-watcher";
 import {
   getDebugBridgeReadyPromise,
   markDebugBridgeReady,
@@ -401,6 +402,7 @@ export function useAppDebug({
       toggleFps: () => useDevSettings.getState().toggle("fpsCounter"),
       scrollGuards: () => getScrollGuardEvents(),
       clearScrollGuards: () => clearScrollGuardEvents(),
+      watcherStatus: () => getLatestFileWatcherStatus(),
       renderState: () => window.__cmDebug?.renderState?.() ?? null,
       recorderStatus: () => getDebugSessionRecorderStatus(),
       captureState: (label?: string | null) => captureDebugSessionState(label),
@@ -434,6 +436,8 @@ export function useAppDebug({
             watcherRoot: nativeState.watcher_root,
             watcherGeneration: nativeState.watcher_generation,
             watcherActive: nativeState.watcher_active,
+            watcherHealth: nativeState.watcher_health,
+            frontendWatcherStatus: getLatestFileWatcherStatus(),
             lastFocusedWindow: nativeState.last_focused_window,
           };
         },

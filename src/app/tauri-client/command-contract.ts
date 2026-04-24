@@ -1,4 +1,9 @@
 import type { PerfSnapshot } from "../../lib/perf";
+import type { WatcherHealthEvent } from "../../lib/debug-types";
+export type {
+  NativeWatcherHealth,
+  WatcherHealthEvent,
+} from "../../lib/debug-types";
 import type {
   ConditionalWriteResult,
   FileEntry,
@@ -133,6 +138,7 @@ export interface NativeDebugState {
   readonly watcher_root: string | null;
   readonly watcher_generation: number | null;
   readonly watcher_active: boolean;
+  readonly watcher_health: WatcherHealthEvent | null;
   readonly last_focused_window: string | null;
 }
 

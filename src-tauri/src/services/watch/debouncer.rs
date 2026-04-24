@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::commands::state::WatcherHealthEvent;
+
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct FileChangedEvent {
@@ -15,11 +17,14 @@ pub(super) struct FileChangedEvent {
     pub(super) root: String,
 }
 
+#[derive(Debug)]
 pub(crate) enum WatchEventMessage {
-    Attached,
+    Attached(WatcherHealthEvent),
     FileChanged(QueuedFileChangedEvent),
+    Health(WatcherHealthEvent),
 }
 
+#[derive(Debug)]
 pub(crate) struct QueuedFileChangedEvent {
     pub(super) absolute_path: PathBuf,
     pub(super) observed_at: Instant,
@@ -43,10 +48,14 @@ impl DebouncedEventDispatcher {
         }
     }
 
-    fn handle_message(&mut self, message: WatchEventMessage) {
+    fn handle_message<F>(&mut self, message: WatchEventMessage, emit_status: &mut F)
+    where
+        F: FnMut(&WatcherHealthEvent),
+    {
         match message {
-            WatchEventMessage::Attached => {
+            WatchEventMessage::Attached(status) => {
                 self.attached = true;
+                emit_status(&status);
                 while let Some(event) = self.buffered.pop_front() {
                     self.queue_pending(event);
                 }
@@ -58,12 +67,16 @@ impl DebouncedEventDispatcher {
                     self.buffered.push_back(event);
                 }
             }
+            WatchEventMessage::Health(status) => {
+                emit_status(&status);
+            }
         }
     }
 
-    fn flush_due<F>(&mut self, now: Instant, emit: &mut F)
+    fn flush_due<F, S>(&mut self, now: Instant, emit: &mut F, emit_status: &mut S)
     where
-        F: FnMut(&FileChangedEvent),
+        F: FnMut(&FileChangedEvent) -> Result<(), String>,
+        S: FnMut(&WatcherHealthEvent),
     {
         let mut due_paths: Vec<PathBuf> = self
             .pending
@@ -79,7 +92,14 @@ impl DebouncedEventDispatcher {
 
         for path in due_paths {
             if let Some(event) = self.pending.remove(&path) {
-                emit(&event.payload);
+                if let Err(error) = emit(&event.payload) {
+                    emit_status(&WatcherHealthEvent::degraded(
+                        event.payload.generation,
+                        event.payload.root.clone(),
+                        "Failed to emit file watcher change event",
+                        error,
+                    ));
+                }
             }
         }
     }
@@ -113,12 +133,18 @@ pub(crate) fn spawn_debounced_event_worker(
         .spawn(move || {
             let mut dispatcher = DebouncedEventDispatcher::new(debounce_window);
             let mut emit = |payload: &FileChangedEvent| {
-                let _ = app.emit_to(window_label.as_str(), "file-changed", payload);
+                app.emit_to(window_label.as_str(), "file-changed", payload)
+                    .map_err(|e| e.to_string())
+            };
+            let mut emit_status = |payload: &WatcherHealthEvent| {
+                if let Err(error) = app.emit_to(window_label.as_str(), "watch-status", payload) {
+                    eprintln!("[watch] failed to emit watcher health event: {}", error);
+                }
             };
 
             loop {
                 let now = Instant::now();
-                dispatcher.flush_due(now, &mut emit);
+                dispatcher.flush_due(now, &mut emit, &mut emit_status);
 
                 let message = match dispatcher.next_deadline() {
                     Some(deadline) => {
@@ -134,8 +160,8 @@ pub(crate) fn spawn_debounced_event_worker(
                     },
                 };
 
-                dispatcher.handle_message(message);
-                dispatcher.flush_due(Instant::now(), &mut emit);
+                dispatcher.handle_message(message, &mut emit_status);
+                dispatcher.flush_due(Instant::now(), &mut emit, &mut emit_status);
             }
         })
         .map_err(|e| format!("Failed to start file watcher debounce worker: {}", e))?;
@@ -153,6 +179,7 @@ mod tests {
     use super::{
         DebouncedEventDispatcher, FileChangedEvent, QueuedFileChangedEvent, WatchEventMessage,
     };
+    use crate::commands::state::{WatcherHealth, WatcherHealthEvent};
     use std::path::PathBuf;
     use std::time::{Duration, Instant};
 
@@ -180,28 +207,42 @@ mod tests {
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(WatchEventMessage::Attached);
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now,
-            false,
-            1,
-        )));
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now + Duration::from_millis(200),
-            false,
-            2,
-        )));
+        dispatcher.handle_message(
+            WatchEventMessage::Attached(WatcherHealthEvent::healthy(1, "/tmp/project".to_string())),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event("notes/index.md", now, false, 1)),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event(
+                "notes/index.md",
+                now + Duration::from_millis(200),
+                false,
+                2,
+            )),
+            &mut |_| {},
+        );
 
-        dispatcher.flush_due(now + Duration::from_millis(699), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.flush_due(
+            now + Duration::from_millis(699),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
         assert!(emitted.is_empty());
 
-        dispatcher.flush_due(now + Duration::from_millis(700), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.flush_due(
+            now + Duration::from_millis(700),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
         assert_eq!(
             emitted,
             vec![FileChangedEvent {
@@ -219,24 +260,35 @@ mod tests {
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now,
-            false,
-            1,
-        )));
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event("notes/index.md", now, false, 1)),
+            &mut |_| {},
+        );
 
         assert!(emitted.is_empty());
 
-        dispatcher.handle_message(WatchEventMessage::Attached);
-        dispatcher.flush_due(now + Duration::from_millis(499), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.handle_message(
+            WatchEventMessage::Attached(WatcherHealthEvent::healthy(1, "/tmp/project".to_string())),
+            &mut |_| {},
+        );
+        dispatcher.flush_due(
+            now + Duration::from_millis(499),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
         assert!(emitted.is_empty());
 
-        dispatcher.flush_due(now + Duration::from_millis(500), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.flush_due(
+            now + Duration::from_millis(500),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
 
         assert_eq!(
             emitted,
@@ -255,23 +307,32 @@ mod tests {
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now,
-            false,
-            1,
-        )));
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now + Duration::from_millis(200),
-            false,
-            2,
-        )));
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event("notes/index.md", now, false, 1)),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event(
+                "notes/index.md",
+                now + Duration::from_millis(200),
+                false,
+                2,
+            )),
+            &mut |_| {},
+        );
 
-        dispatcher.handle_message(WatchEventMessage::Attached);
-        dispatcher.flush_due(now + Duration::from_millis(700), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.handle_message(
+            WatchEventMessage::Attached(WatcherHealthEvent::healthy(1, "/tmp/project".to_string())),
+            &mut |_| {},
+        );
+        dispatcher.flush_due(
+            now + Duration::from_millis(700),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
 
         assert_eq!(
             emitted,
@@ -290,23 +351,32 @@ mod tests {
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(WatchEventMessage::Attached);
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now,
-            true,
-            1,
-        )));
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now + Duration::from_millis(100),
-            false,
-            2,
-        )));
+        dispatcher.handle_message(
+            WatchEventMessage::Attached(WatcherHealthEvent::healthy(1, "/tmp/project".to_string())),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event("notes/index.md", now, true, 1)),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event(
+                "notes/index.md",
+                now + Duration::from_millis(100),
+                false,
+                2,
+            )),
+            &mut |_| {},
+        );
 
-        dispatcher.flush_due(now + Duration::from_millis(600), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.flush_due(
+            now + Duration::from_millis(600),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
 
         assert_eq!(
             emitted,
@@ -325,26 +395,40 @@ mod tests {
         let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
         let mut emitted = Vec::new();
 
-        dispatcher.handle_message(WatchEventMessage::Attached);
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now,
-            false,
-            1,
-        )));
-        dispatcher.flush_due(now + Duration::from_millis(500), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.handle_message(
+            WatchEventMessage::Attached(WatcherHealthEvent::healthy(1, "/tmp/project".to_string())),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event("notes/index.md", now, false, 1)),
+            &mut |_| {},
+        );
+        dispatcher.flush_due(
+            now + Duration::from_millis(500),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
 
-        dispatcher.handle_message(WatchEventMessage::FileChanged(queued_event(
-            "notes/index.md",
-            now + Duration::from_millis(750),
-            false,
-            2,
-        )));
-        dispatcher.flush_due(now + Duration::from_millis(1250), &mut |payload| {
-            emitted.push(payload.clone())
-        });
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event(
+                "notes/index.md",
+                now + Duration::from_millis(750),
+                false,
+                2,
+            )),
+            &mut |_| {},
+        );
+        dispatcher.flush_due(
+            now + Duration::from_millis(1250),
+            &mut |payload| {
+                emitted.push(payload.clone());
+                Ok(())
+            },
+            &mut |_| {},
+        );
 
         assert_eq!(
             emitted,
@@ -362,6 +446,39 @@ mod tests {
                     root: "/tmp/project".to_string(),
                 },
             ],
+        );
+    }
+
+    #[test]
+    fn emits_degraded_health_when_file_change_emit_fails() {
+        let now = Instant::now();
+        let mut dispatcher = DebouncedEventDispatcher::new(Duration::from_millis(500));
+        let mut health_events = Vec::new();
+
+        dispatcher.handle_message(
+            WatchEventMessage::Attached(WatcherHealthEvent::healthy(1, "/tmp/project".to_string())),
+            &mut |_| {},
+        );
+        dispatcher.handle_message(
+            WatchEventMessage::FileChanged(queued_event("notes/index.md", now, false, 1)),
+            &mut |_| {},
+        );
+
+        dispatcher.flush_due(
+            now + Duration::from_millis(500),
+            &mut |_payload| Err("window closed".to_string()),
+            &mut |payload| health_events.push(payload.clone()),
+        );
+
+        assert_eq!(health_events.len(), 1);
+        assert_eq!(health_events[0].status, WatcherHealth::Degraded);
+        assert_eq!(health_events[0].generation, 1);
+        assert_eq!(health_events[0].root, "/tmp/project");
+        assert!(
+            health_events[0]
+                .error
+                .as_deref()
+                .is_some_and(|error| { error.contains("window closed") })
         );
     }
 }

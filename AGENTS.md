@@ -199,6 +199,7 @@ __cfDebug.toggleFps()                           — toggle the status-bar FPS me
 __cfDebug.togglePerfPanel()                     — toggle the floating perf debug panel
 __cfDebug.scrollGuards()                        — recent scroll guard events
 __cfDebug.clearScrollGuards()                   — clear recent scroll guard events
+__cfDebug.watcherStatus()                       — latest frontend native watcher health status
 __cfDebug.renderState()                         — proxy to the current visible rich-render snapshot
 __cfDebug.recorderStatus()                      — debug recorder queue/connectivity/capture-mode snapshot
 __cfDebug.captureState("label")                 — combined selection/render/raw-fence/structure snapshot + recorder event
@@ -210,7 +211,7 @@ __tauriSmoke.openProject("/abs/path")           — dev-only Tauri helper to swi
 __tauriSmoke.openFile("/abs/path")              — dev-only Tauri helper to open a file
 __tauriSmoke.requestNativeClose()               — dev-only Tauri helper to request native close handling
 __tauriSmoke.listWindows()                      — dev-only Tauri helper to list app windows
-__tauriSmoke.getWindowState()                   — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher root
+__tauriSmoke.getWindowState()                   — dev-only Tauri snapshot: project root, current doc, dirty, backend root, watcher health
 __tauriSmoke.simulateExternalChange("notes.md") — dev-only Tauri helper to emit a file-changed event
 __fencedDivDebug = true                         — toggle fenced div parser tracing
 ```
