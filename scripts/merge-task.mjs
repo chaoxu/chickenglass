@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
@@ -10,6 +11,7 @@ const VALUE_FLAGS = [
   "--base-ref",
   "--branch",
   "--check",
+  "--handoff",
   "--issue",
   "--old-base",
 ];
@@ -50,6 +52,46 @@ export function collectRepeatedValueFlag(argv, flag) {
   }
 
   return { rest, values };
+}
+
+function readHandoff(path) {
+  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("handoff JSON must be an object.");
+  }
+  return parsed;
+}
+
+function stringField(source, key) {
+  const value = source[key];
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function stringArrayField(source, key) {
+  if (source[key] === undefined) {
+    return [];
+  }
+  if (!Array.isArray(source[key]) || !source[key].every((value) => typeof value === "string")) {
+    throw new Error(`handoff field ${key} must be an array of strings.`);
+  }
+  return source[key];
+}
+
+export function normalizeMergeTaskHandoff(handoff = {}) {
+  return {
+    baseBranch: stringField(handoff, "baseBranch"),
+    baseRef: stringField(handoff, "baseRef") ?? stringField(handoff, "base"),
+    branch: stringField(handoff, "branch"),
+    checks: stringArrayField(handoff, "checks"),
+    issue: stringField(handoff, "issue"),
+    oldBase: stringField(handoff, "oldBase"),
+  };
 }
 
 export function buildMergeTaskSteps({
@@ -167,19 +209,23 @@ export function parseMergeTaskArgs(argv = process.argv.slice(2)) {
     valueFlags: VALUE_FLAGS,
   });
   parser.assertKnownFlags([...BOOLEAN_FLAGS, ...VALUE_FLAGS]);
+  const handoff = parser.hasFlag("--handoff")
+    ? normalizeMergeTaskHandoff(readHandoff(parser.getRequiredFlag("--handoff")))
+    : {};
 
-  const baseBranch = parser.getFlag(
-    "--base-branch",
-    parser.getFlag("--base", "main"),
-  );
+  const cliBaseBranch = parser.getFlag("--base-branch");
+  const cliBaseAlias = parser.getFlag("--base");
+  const baseBranch = cliBaseBranch ?? cliBaseAlias ?? handoff.baseBranch ?? "main";
+  const hasCliBaseBranch = cliBaseBranch !== undefined || cliBaseAlias !== undefined;
+  const cliBaseRef = parser.getFlag("--base-ref");
 
   return {
     baseBranch,
-    baseRef: parser.getFlag("--base-ref", `origin/${baseBranch}`),
-    branch: parser.getRequiredFlag("--branch"),
-    checks,
-    issue: parser.getFlag("--issue"),
-    oldBase: parser.getFlag("--old-base"),
+    baseRef: cliBaseRef ?? (hasCliBaseBranch ? undefined : handoff.baseRef) ?? `origin/${baseBranch}`,
+    branch: parser.getFlag("--branch", handoff.branch),
+    checks: checks.length > 0 ? checks : handoff.checks ?? [],
+    issue: parser.getFlag("--issue", handoff.issue),
+    oldBase: parser.getFlag("--old-base", handoff.oldBase),
     run: parser.hasFlag("--run"),
   };
 }
@@ -213,12 +259,14 @@ export function printMergeTaskHelp(stream = process.stdout) {
   stream.write(`Usage:
   pnpm merge-task -- --branch <worker-branch> [--base-branch main] [--base-ref origin/main] [--old-base <ref>]
   pnpm merge-task -- --branch <worker-branch> --issue 1234 --check "rtk pnpm test:focused -- file.test.ts"
+  pnpm merge-task -- --handoff /tmp/coflat-agent-handoff.json
   pnpm merge-task -- --branch <worker-branch> --run
 
 The helper prints rtk-prefixed fetch/duplicate-inspection/rebase/diff/check
 steps plus manual merge/push/close steps by default. Use --run only after
 reviewing the plan; --run executes only non-manual steps.
 --base remains as a shorthand alias for --base-branch.
+Handoff JSON accepts issue, branch, baseBranch, baseRef, oldBase, and checks.
 `);
 }
 

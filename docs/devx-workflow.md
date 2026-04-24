@@ -49,25 +49,40 @@ described in `AGENTS.md`.
 
 ## Agent Branch Integration
 
-Worker agents must report:
+Worker agents should report the human context first:
 
 ```text
 Issue: #1234
 Branch: worker/issue-1234
-Base: <commit or origin/main>
 Changed paths:
 - src/...
 
 Verification:
-- pnpm test:focused -- ...
+- rtk pnpm test:focused -- src/foo.test.ts
 
 Residual risk:
 - ...
 ```
 
+They should also include handoff JSON for tool ingestion:
+
+```json
+{
+  "issue": "1234",
+  "branch": "worker/issue-1234",
+  "baseBranch": "main",
+  "baseRef": "origin/main",
+  "oldBase": "optional-original-base",
+  "checks": ["rtk pnpm test:focused -- src/foo.test.ts"],
+  "changedPaths": ["src/foo.ts"],
+  "residualRisk": "..."
+}
+```
+
 Use the merge helper to turn that report into a repeatable integration plan:
 
 ```bash
+pnpm merge-task -- --handoff /tmp/coflat-agent-handoff.json
 pnpm merge-task -- --branch worker/issue-1234 --base-branch main --base-ref origin/main --issue 1234 \
   --check "rtk pnpm test:focused -- src/foo.test.ts"
 ```
@@ -85,8 +100,11 @@ for the remote or commit used by duplicate inspection, rebase, and diff.
 Fast local gates:
 
 ```bash
+pnpm verify:changed # plan the smallest useful checks from changed files
+pnpm verify:changed -- --run
 pnpm check:pre-push  # root/server typecheck + custom architectural lints
 pnpm test:focused -- <changed tests>
+pnpm test:repeat -- --count 5 <changed tests>
 ```
 
 Full merge gate:
@@ -98,6 +116,39 @@ pnpm check:merge     # check:static + check:unit
 `pre-push` intentionally runs the fast gate. Full unit, browser, packaging, and
 Rust checks stay in CI and should also be run locally when the changed area
 requires them.
+
+`verify:changed` inspects committed changes against `origin/main`, unstaged
+changes, staged changes, and untracked files. Pass explicit paths to plan a
+change before editing:
+
+```bash
+pnpm verify:changed -- src/render/reference-render.ts
+pnpm verify:changed -- --profile full
+```
+
+Use `test:repeat` before closing intermittent or order-sensitive test issues:
+
+```bash
+pnpm test:repeat -- --count 5 src/editor/list-outliner.test.ts
+pnpm test:repeat -- --shuffle --count 10 src/a.test.ts src/b.test.ts
+```
+
+Runtime quick lanes:
+
+```bash
+pnpm test:browser:quick                # merged-app smoke
+pnpm test:browser:quick -- render      # headings/math/index rich render
+pnpm test:browser:quick -- lexical     # Lexical smoke
+pnpm test:browser:quick -- scroll      # scroll-jump focused lane
+pnpm test:browser:quick -- one headings math-render
+```
+
+Perf quick lanes are for local regression sniffing, not PR-quality perf claims:
+
+```bash
+pnpm perf:quick --scenario local-edit-index
+pnpm perf:quick:heavy --scenario typing-rich-burst
+```
 
 ## Focused Test Watchdog
 

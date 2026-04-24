@@ -69,6 +69,9 @@ pnpm lint:fix        # Biome lint autofix
 pnpm test            # alias for Vitest unit tests
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
+pnpm test:repeat -- --count 5 src/render/reference-render.test.ts
+                     # repeat focused tests for flake/order investigations
+pnpm verify:changed  # plan the smallest useful checks from changed files
 pnpm issue -- list    # tea-safe wrapper for local Gitea issues
 pnpm merge-task -- --branch worker-branch
                      # print a repeatable rtk-prefixed worker-branch merge plan
@@ -77,7 +80,11 @@ pnpm tauri:dev       # launch Coflats Tauri desktop app
 pnpm tauri:build     # build Coflats production desktop app bundle
 pnpm tauri:build:dmg # build Coflats macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
+pnpm test:browser:quick
+                     # named quick browser lanes: smoke/render/lexical/scroll/one
 pnpm doctor:browser  # verify browser harness readiness and emit failure artifacts
+pnpm perf:quick --scenario local-edit-index
+                     # one-sample local perf sniff, not PR-quality evidence
 pnpm perf:capture:heavy -- --scenario typing-rich-burst
                      # heavy-doc perf lane with longer open/debug budgets
 pnpm chrome          # launch Playwright Chromium with CDP on port 9322 (manual debug lane)

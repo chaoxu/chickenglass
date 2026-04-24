@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   buildMergeTaskSteps,
   collectRepeatedValueFlag,
   formatMergeTaskSteps,
+  normalizeMergeTaskHandoff,
   parseMergeTaskArgs,
   runMergeTaskSteps,
 } from "./merge-task.mjs";
@@ -60,6 +64,121 @@ describe("merge-task helper", () => {
       oldBase: "abc123",
       run: true,
     });
+  });
+
+  it("normalizes worker handoff metadata", () => {
+    expect(
+      normalizeMergeTaskHandoff({
+        base: "origin/main",
+        branch: "worker/1402",
+        checks: ["rtk pnpm check:types"],
+        issue: 1402,
+      }),
+    ).toEqual({
+      baseBranch: undefined,
+      baseRef: "origin/main",
+      branch: "worker/1402",
+      checks: ["rtk pnpm check:types"],
+      issue: "1402",
+      oldBase: undefined,
+    });
+  });
+
+  it("rejects invalid handoff checks", () => {
+    expect(() =>
+      normalizeMergeTaskHandoff({
+        checks: ["rtk pnpm check:types", 1],
+      })
+    ).toThrow("handoff field checks must be an array of strings.");
+  });
+
+  it("parses merge metadata from a handoff file and lets CLI flags override it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coflat-merge-task-"));
+    const file = join(dir, "handoff.json");
+    try {
+      writeFileSync(file, JSON.stringify({
+        baseBranch: "main",
+        baseRef: "origin/main",
+        branch: "worker/from-handoff",
+        checks: ["rtk pnpm check:types"],
+        issue: "1402",
+      }));
+
+      expect(
+        parseMergeTaskArgs([
+          "--handoff",
+          file,
+          "--branch",
+          "worker/from-cli",
+        ]),
+      ).toEqual({
+        baseBranch: "main",
+        baseRef: "origin/main",
+        branch: "worker/from-cli",
+        checks: ["rtk pnpm check:types"],
+        issue: "1402",
+        oldBase: undefined,
+        run: false,
+      });
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("recomputes baseRef when CLI base branch overrides handoff metadata", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coflat-merge-task-"));
+    const file = join(dir, "handoff.json");
+    try {
+      writeFileSync(file, JSON.stringify({
+        baseBranch: "main",
+        baseRef: "origin/main",
+        branch: "worker/from-handoff",
+        checks: ["rtk pnpm check:types"],
+      }));
+
+      expect(
+        parseMergeTaskArgs([
+          "--handoff",
+          file,
+          "--base",
+          "release",
+        ]),
+      ).toMatchObject({
+        baseBranch: "release",
+        baseRef: "origin/release",
+      });
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("keeps explicit CLI baseRef when overriding handoff base branch", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coflat-merge-task-"));
+    const file = join(dir, "handoff.json");
+    try {
+      writeFileSync(file, JSON.stringify({
+        baseBranch: "main",
+        baseRef: "origin/main",
+        branch: "worker/from-handoff",
+        checks: ["rtk pnpm check:types"],
+      }));
+
+      expect(
+        parseMergeTaskArgs([
+          "--handoff",
+          file,
+          "--base-branch",
+          "release",
+          "--base-ref",
+          "upstream/release",
+        ]),
+      ).toMatchObject({
+        baseBranch: "release",
+        baseRef: "upstream/release",
+      });
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 
   it("builds an rtk-prefixed merge plan", () => {
