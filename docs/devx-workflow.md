@@ -101,6 +101,7 @@ Fast local gates:
 
 ```bash
 pnpm verify:changed # plan the smallest useful checks from changed files
+pnpm verify:changed -- --profile edit --run
 pnpm verify:changed -- --run
 pnpm check:pre-push  # root/server typecheck + custom architectural lints
 pnpm test:focused -- <changed tests>
@@ -123,8 +124,14 @@ change before editing:
 
 ```bash
 pnpm verify:changed -- src/render/reference-render.ts
+pnpm verify:changed -- --profile edit
 pnpm verify:changed -- --profile full
 ```
+
+Use `--profile edit` while actively changing code. It runs diff checks and
+focused tests only, then reminds you which broader gates were skipped. Use the
+default quick profile before push, and full before closing broad/high-risk
+issues.
 
 Use `test:repeat` before closing intermittent or order-sensitive test issues:
 

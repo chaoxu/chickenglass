@@ -302,6 +302,24 @@ export function buildChangedVerificationPlan(paths, options = {}) {
   }
   addAreaTests(normalizedPaths, commands);
 
+  if (profile === "edit") {
+    if (focusedTests.length === 0 && normalizedPaths.some(isCodeFile)) {
+      notes.push("No direct focused test was found for changed code; use quick or full profile before relying on this change.");
+    }
+    if (normalizedPaths.some(isCodeFile) || packageBoundaryTouched(normalizedPaths)) {
+      notes.push("Edit profile skipped typecheck and architectural lints; run quick profile before push.");
+    }
+    if (browserAreaTouched(normalizedPaths)) {
+      notes.push("Browser-facing files changed; run `pnpm test:browser:quick` or full profile before closing runtime issues.");
+    }
+    return {
+      commands: uniqueCommands(commands),
+      files: normalizedPaths,
+      notes: unique(notes),
+      profile,
+    };
+  }
+
   const codeTouched = normalizedPaths.some(isCodeFile);
   if (codeTouched || packageBoundaryTouched(normalizedPaths)) {
     commands.push(createPlanCommand(["rtk", "pnpm", "check:pre-push"]));
@@ -390,6 +408,7 @@ Options:
   --base <ref>      include committed changes against a base ref (default: origin/main)
   --no-base         only inspect working tree, staged changes, and untracked files
   --profile quick   fast local plan (default)
+  --profile edit    inner-loop plan: diff checks + focused tests only
   --profile full    adds full merge/browser checks when relevant
   --run             execute the generated commands
   --json            print the plan as JSON

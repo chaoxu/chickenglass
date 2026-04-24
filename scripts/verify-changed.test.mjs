@@ -74,6 +74,33 @@ describe("verify-changed", () => {
     );
   });
 
+  it("keeps edit profile to diff checks and focused tests", () => {
+    const plan = buildChangedVerificationPlan(["scripts/verify-changed.mjs"], {
+      exists: existsFrom(["scripts/verify-changed.test.mjs"]),
+      profile: "edit",
+    });
+
+    expect(plan.commands.map(commandDisplay)).toEqual([
+      "rtk git diff --check HEAD",
+      "rtk pnpm test:focused -- scripts/verify-changed.test.mjs",
+    ]);
+    expect(plan.notes).toContain(
+      "Edit profile skipped typecheck and architectural lints; run quick profile before push.",
+    );
+  });
+
+  it("warns when edit profile cannot find a focused test for code", () => {
+    const plan = buildChangedVerificationPlan(["src/no-test.ts"], {
+      exists: existsFrom([]),
+      profile: "edit",
+    });
+
+    expect(plan.commands.map(commandDisplay)).toEqual(["rtk git diff --check HEAD"]);
+    expect(plan.notes).toContain(
+      "No direct focused test was found for changed code; use quick or full profile before relying on this change.",
+    );
+  });
+
   it("keeps generic package metadata out of the expensive package gate", () => {
     const plan = buildChangedVerificationPlan(["package.json"]);
 
