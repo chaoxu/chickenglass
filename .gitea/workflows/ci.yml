@@ -65,6 +65,8 @@ jobs:
     name: Production app browser subset
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      BROWSER_ARTIFACTS_DIR: /tmp/coflat-browser-artifacts-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,27 +89,40 @@ jobs:
         timeout-minutes: 30
         run: |
           set -u
-          artifacts_dir=/tmp/coflat-browser-artifacts
+          artifacts_dir="${BROWSER_ARTIFACTS_DIR:-/tmp/coflat-browser-artifacts-${GITHUB_RUN_ID:-local-$$}}"
           preview_log="$artifacts_dir/preview.log"
           baseline_log="$artifacts_dir/baseline-preview.log"
           baseline_dir="$artifacts_dir/baseline-worktree"
           baseline_file="$artifacts_dir/perf-open-index-baseline.json"
+          run_number="${GITHUB_RUN_NUMBER:-0}"
+          port_offset=$(( (run_number % 100) * 2 ))
+          current_preview_port=$((4173 + port_offset))
+          baseline_preview_port=$((current_preview_port + 1))
+          rm -rf "$artifacts_dir"
           mkdir -p "$artifacts_dir"
+          echo "Browser artifacts dir: $artifacts_dir"
+          echo "Preview ports: current=$current_preview_port baseline=$baseline_preview_port"
 
           start_preview() {
             preview_dir="$1"
             preview_port="$2"
             preview_log_path="$3"
             (cd "$preview_dir" && pnpm exec vite preview --host 127.0.0.1 --port "$preview_port" --strictPort > "$preview_log_path" 2>&1) &
-            echo $!
+            started_preview_pid=$!
           }
 
           wait_for_preview() {
             preview_port="$1"
             preview_log_path="$2"
-            for _ in $(seq 1 60); do
-              if curl -fsS "http://127.0.0.1:$preview_port" >/dev/null; then
+            echo "Waiting for Vite preview on port $preview_port..."
+            for attempt in $(seq 1 60); do
+              if curl --connect-timeout 1 --max-time 3 -fsS "http://127.0.0.1:$preview_port" >/dev/null; then
+                echo "Vite preview on port $preview_port is reachable."
                 return 0
+              fi
+              if [ $((attempt % 10)) -eq 0 ]; then
+                echo "Still waiting for Vite preview on port $preview_port after ${attempt}s."
+                tail -40 "$preview_log_path" || true
               fi
               sleep 1
             done
@@ -116,12 +131,24 @@ jobs:
             return 1
           }
 
+          stop_process_tree() {
+            root_pid="$1"
+            if [ -z "$root_pid" ] || ! kill -0 "$root_pid" 2>/dev/null; then
+              return 0
+            fi
+            for child_pid in $(pgrep -P "$root_pid" 2>/dev/null || true); do
+              stop_process_tree "$child_pid"
+            done
+            kill "$root_pid" 2>/dev/null || true
+          }
+
           stop_preview() {
             preview_pid="$1"
-            if [ -n "$preview_pid" ]; then
-              kill "$preview_pid" 2>/dev/null || true
-              wait "$preview_pid" 2>/dev/null || true
+            if [ -z "$preview_pid" ]; then
+              return 0
             fi
+            stop_process_tree "$preview_pid"
+            wait "$preview_pid" 2>/dev/null || true
           }
 
           current_server_pid=""
@@ -139,13 +166,18 @@ jobs:
           elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             baseline_ref="HEAD^"
           fi
+          echo "Baseline ref: ${baseline_ref:-none}"
 
           if [ -n "$baseline_ref" ] && [ "$(git rev-parse "$baseline_ref")" != "$(git rev-parse HEAD)" ]; then
+            echo "Preparing baseline worktree at $baseline_ref."
             git worktree add --detach "$baseline_dir" "$baseline_ref" || exit 1
+            echo "Installing and building baseline app."
             (cd "$baseline_dir" && pnpm install --frozen-lockfile --ignore-scripts && pnpm check:app-build) || exit 1
-            baseline_server_pid=$(start_preview "$baseline_dir" 4174 "$baseline_log")
-            wait_for_preview 4174 "$baseline_log" || exit 1
-            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4174 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$baseline_file" || exit 1
+            start_preview "$baseline_dir" "$baseline_preview_port" "$baseline_log"
+            baseline_server_pid="$started_preview_pid"
+            wait_for_preview "$baseline_preview_port" "$baseline_log" || exit 1
+            echo "Capturing baseline open-index performance."
+            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url "http://127.0.0.1:$baseline_preview_port" --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$baseline_file" || exit 1
             stop_preview "$baseline_server_pid"
             baseline_server_pid=""
           else
@@ -153,28 +185,34 @@ jobs:
             baseline_file=""
           fi
 
-          current_server_pid=$(start_preview "$PWD" 4173 "$preview_log")
-          wait_for_preview 4173 "$preview_log" || exit 1
+          echo "Starting current app preview."
+          start_preview "$PWD" "$current_preview_port" "$preview_log"
+          current_server_pid="$started_preview_pid"
+          wait_for_preview "$current_preview_port" "$preview_log" || exit 1
 
           browser_status=0
           failing_command=""
-          pnpm test:browser:merged-app -- --url http://127.0.0.1:4173 --browser managed --timeout 30000 --artifacts-dir "$artifacts_dir" || {
+          echo "Running merged-app browser subset."
+          pnpm test:browser:merged-app -- --url "http://127.0.0.1:$current_preview_port" --browser managed --timeout 30000 --artifacts-dir "$artifacts_dir" || {
             browser_status=$?
             failing_command="test:browser:merged-app"
           }
           if [ "$browser_status" -eq 0 ]; then
-            pnpm test:browser:lexical -- --url http://127.0.0.1:4173 --browser managed --timeout 30000 --artifacts-dir "$artifacts_dir" || {
+            echo "Running Lexical browser subset."
+            pnpm test:browser:lexical -- --url "http://127.0.0.1:$current_preview_port" --browser managed --timeout 30000 --artifacts-dir "$artifacts_dir" || {
               browser_status=$?
               failing_command="test:browser:lexical"
             }
           fi
           if [ "$browser_status" -eq 0 ] && [ -n "$baseline_file" ]; then
-            pnpm perf:compare -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --baseline "$baseline_file" || {
+            echo "Comparing open-index performance against $baseline_ref."
+            pnpm perf:compare -- --scenario open-index --iterations 1 --warmup 0 --url "http://127.0.0.1:$current_preview_port" --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --baseline "$baseline_file" || {
               browser_status=$?
               failing_command="perf:compare open-index against $baseline_ref"
             }
           elif [ "$browser_status" -eq 0 ]; then
-            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url http://127.0.0.1:4173 --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$artifacts_dir/perf-open-index-current.json" || {
+            echo "Capturing current open-index performance."
+            pnpm perf:capture -- --scenario open-index --iterations 1 --warmup 0 --url "http://127.0.0.1:$current_preview_port" --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --output "$artifacts_dir/perf-open-index-current.json" || {
               browser_status=$?
               failing_command="perf:capture open-index current"
             }
@@ -193,7 +231,7 @@ jobs:
       - name: Print browser diagnostics
         if: failure()
         run: |
-          artifacts_dir=/tmp/coflat-browser-artifacts
+          artifacts_dir="${BROWSER_ARTIFACTS_DIR:-/tmp/coflat-browser-artifacts-${GITHUB_RUN_ID:-local}}"
           if [ ! -d "$artifacts_dir" ]; then
             echo "No browser diagnostics directory found."
             exit 0
