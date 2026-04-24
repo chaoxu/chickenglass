@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FileEntry } from "./file-manager";
+import type { HotExitBackupStore } from "./hot-exit-backups";
 import { openProjectInCurrentWindow } from "./project-open";
 
 interface Deferred<T> {
@@ -21,6 +22,27 @@ function createFileTree(path: string): FileEntry {
     path: "",
     isDirectory: true,
     children: [{ name: path, path, isDirectory: false }],
+  };
+}
+
+function createRecoveryStore(
+  overrides?: Partial<HotExitBackupStore>,
+): HotExitBackupStore {
+  return {
+    writeBackup: vi.fn(async () => ({
+      bytes: 100,
+      contentHash: "hash",
+      id: "backup-id",
+      name: "draft.md",
+      path: "draft.md",
+      projectKey: "project",
+      projectRoot: "/tmp/project",
+      updatedAt: 100,
+    })),
+    listBackups: vi.fn(async () => []),
+    readBackup: vi.fn(async () => null),
+    deleteBackup: vi.fn(async () => {}),
+    ...overrides,
   };
 }
 
@@ -260,6 +282,96 @@ describe("openProjectInCurrentWindow", () => {
       "open-project-root:/tmp/next-project",
       "open-file:main.md",
     ]);
+  });
+
+  it("falls back to the default document when the explicit target cannot open", async () => {
+    let latestProjectRequest = 0;
+    const openProjectRoot = vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("main.md"),
+    }));
+    const closeCurrentFile = vi.fn(async () => true);
+    const openFile = vi.fn(async (path: string) => {
+      if (path === "missing.md") {
+        throw new Error("missing target");
+      }
+    });
+
+    const result = await openProjectInCurrentWindow({
+      projectRoot: "/tmp/next-project",
+      initialPath: "missing.md",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile,
+      openProjectRoot,
+      openFile,
+    });
+
+    expect(result).toBe(true);
+    expect(openFile).toHaveBeenNthCalledWith(1, "missing.md");
+    expect(openFile).toHaveBeenNthCalledWith(2, "main.md");
+  });
+
+  it("restores a hot-exit backup before explicit project-switch document activation", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    let latestProjectRequest = 0;
+    const recoveryStore = createRecoveryStore({
+      listBackups: vi.fn(async () => [{
+        bytes: 100,
+        contentHash: "hash",
+        id: "backup-id",
+        name: "draft.md",
+        path: "draft.md",
+        projectKey: "project",
+        projectRoot: "/tmp/next-project",
+        updatedAt: 100,
+      }]),
+      readBackup: vi.fn(async () => ({
+        version: 1 as const,
+        id: "backup-id",
+        projectRoot: "/tmp/next-project",
+        projectKey: "project",
+        path: "draft.md",
+        name: "draft.md",
+        content: "unsaved draft",
+        contentHash: "hash",
+        baselineHash: "baseline",
+        createdAt: 50,
+        updatedAt: 100,
+      })),
+    });
+    const restoreDocumentFromRecovery = vi.fn(async () => {});
+    const openProjectRoot = vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("draft.md"),
+    }));
+    const openFile = vi.fn(async () => {});
+
+    const result = await openProjectInCurrentWindow({
+      projectRoot: "/tmp/next-project",
+      initialPath: "draft.md",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile: vi.fn(async () => true),
+      openProjectRoot,
+      openFile,
+      restoreDocumentFromRecovery,
+      hotExitBackupStore: recoveryStore,
+    });
+
+    expect(result).toBe(true);
+    expect(restoreDocumentFromRecovery).toHaveBeenCalledWith(
+      "draft.md",
+      "unsaved draft",
+      { baselineHash: "baseline" },
+    );
+    expect(openFile).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledWith('Recover unsaved changes for "draft.md"?');
+    confirm.mockRestore();
   });
 
   it("does not switch projects when close is rejected", async () => {

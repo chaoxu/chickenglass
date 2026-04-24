@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FileEntry } from "../file-manager";
-import { findDefaultDocumentPath } from "../default-document-path";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
@@ -8,6 +7,7 @@ import {
   createHotExitBackupStore,
   type HotExitBackupStore,
 } from "../hot-exit-backups";
+import { activateProjectDocument } from "../project-document-activation";
 
 const SIDEBAR_WIDTH_SAVE_DEBOUNCE_MS = 200;
 
@@ -177,83 +177,21 @@ export function useAppSessionPersistence({
     const { generation, savedDocumentPath } = restoreState;
     const controller = new AbortController();
     let cancelled = false;
-
-    const guardedListChildren = listChildren
-      ? async (path: string): Promise<FileEntry[]> => {
-          if (cancelled || workspaceRequestRef.current !== generation) {
-            controller.abort();
-            return [];
-          }
-          const result = await listChildren(path);
-          if (cancelled || workspaceRequestRef.current !== generation) {
-            controller.abort();
-            return [];
-          }
-          return result;
-        }
-      : undefined;
+    const isCurrent = () => !cancelled && workspaceRequestRef.current === generation;
 
     void (async () => {
       try {
-        if (!fileTree) {
-          return;
-        }
-
-        if (recoveryStore && projectRoot) {
-          try {
-            const summaries = await recoveryStore.listBackups(projectRoot);
-            if (cancelled || workspaceRequestRef.current !== generation) {
-              return;
-            }
-            const recoverySummary = (savedDocumentPath
-              ? summaries.find((summary) => summary.path === savedDocumentPath)
-              : undefined) ?? summaries[0];
-            if (recoverySummary) {
-              const shouldRestore = window.confirm(
-                `Recover unsaved changes for "${recoverySummary.name}"?`,
-              );
-              if (shouldRestore) {
-                const backup = await recoveryStore.readBackup(projectRoot, recoverySummary.path);
-                if (cancelled || workspaceRequestRef.current !== generation) {
-                return;
-              }
-              if (backup) {
-                await restoreDocumentFromRecovery(backup.path, backup.content, {
-                  baselineHash: backup.baselineHash,
-                });
-                return;
-              }
-            }
-            }
-          } catch (error: unknown) {
-            console.error("[session] failed to restore hot-exit backup:", error);
-          }
-        }
-
-        if (savedDocumentPath) {
-          try {
-            await openFile(savedDocumentPath);
-            return;
-          } catch (_error: unknown) {
-            // File may have been deleted or may not exist under the restored root.
-          }
-        }
-
-        const first = await findDefaultDocumentPath(
+        await activateProjectDocument({
           fileTree,
-          guardedListChildren,
-          controller.signal,
-        );
-        if (cancelled || workspaceRequestRef.current !== generation) {
-          return;
-        }
-        if (first) {
-          try {
-            await openFile(first);
-          } catch (_error: unknown) {
-            // Default file may have disappeared between tree load and open.
-          }
-        }
+          hotExitBackupStore: recoveryStore,
+          isCurrent,
+          listChildren,
+          openFile,
+          preferredDocumentPath: savedDocumentPath,
+          projectRoot,
+          restoreDocumentFromRecovery,
+          signal: controller.signal,
+        });
       } finally {
         if (!cancelled) {
           setRestoreState({ status: "completed" });

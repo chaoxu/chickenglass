@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, memo, Suspense, useCallback } from "react";
 import { Diagnostics } from "./diagnostics";
 import { FileTree } from "./file-tree";
 import { RuntimeLogs } from "./runtime-logs";
@@ -10,8 +10,11 @@ import {
   SidebarTrigger,
 } from "./sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { useAppEditorController } from "../contexts/app-editor-context";
-import { useAppWorkspaceController } from "../contexts/app-workspace-context";
+import {
+  useAppSidebarDiagnostics,
+  useAppSidebarFileTree,
+  useAppSidebarOutline,
+} from "../contexts/app-sidebar-context";
 import { usePersistentTreeState } from "../hooks/use-file-tree-controller";
 import type { SidebarLayoutController, SidebarTab } from "../hooks/use-sidebar-layout";
 import { isRuntimeLogPanelEnabled } from "../runtime-logger";
@@ -29,10 +32,58 @@ interface AppSidebarShellProps {
   >;
 }
 
-export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
-  const workspace = useAppWorkspaceController();
-  const editor = useAppEditorController();
+const FileTreeSidebarPane = memo(function FileTreeSidebarPane() {
+  const sidebar = useAppSidebarFileTree();
   const fileTreePersistRef = usePersistentTreeState();
+  const openFile = useCallback((path: string) => {
+    void sidebar.openFile(path);
+  }, [sidebar]);
+  const createFile = useCallback((path: string) => {
+    void sidebar.createFile(path);
+  }, [sidebar]);
+  const createDirectory = useCallback((path: string) => {
+    void sidebar.createDirectory(path);
+  }, [sidebar]);
+  const loadChildren = useCallback((dirPath: string) => {
+    void sidebar.loadChildren(dirPath);
+  }, [sidebar]);
+
+  return (
+    <FileTree
+      root={sidebar.fileTree}
+      activePath={sidebar.activePath}
+      onSelect={openFile}
+      onDoubleClick={openFile}
+      onRename={sidebar.handleRename}
+      onDelete={sidebar.handleDelete}
+      onCreateFile={createFile}
+      onCreateDir={createDirectory}
+      persistRef={fileTreePersistRef}
+      onLoadChildren={loadChildren}
+    />
+  );
+});
+
+const OutlineSidebarPane = memo(function OutlineSidebarPane() {
+  const outline = useAppSidebarOutline();
+
+  return <Outline headings={outline.headings} onSelect={outline.onSelect} />;
+});
+
+const DiagnosticsSidebarPane = memo(function DiagnosticsSidebarPane() {
+  const diagnostics = useAppSidebarDiagnostics();
+
+  return (
+    <Diagnostics
+      diagnostics={diagnostics.diagnostics}
+      onSelect={diagnostics.onSelect}
+    />
+  );
+});
+
+export const AppSidebarShell = memo(function AppSidebarShell({
+  sidebarLayout,
+}: AppSidebarShellProps) {
   const showRuntimeLogs = isRuntimeLogPanelEnabled();
 
   return (
@@ -75,18 +126,7 @@ export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
 
           <SidebarContent>
             <TabsContent value="files" className="min-h-full">
-              <FileTree
-                root={workspace.fileTree}
-                activePath={editor.currentPath}
-                onSelect={(path) => { void editor.openFile(path); }}
-                onDoubleClick={(path) => { void editor.openFile(path); }}
-                onRename={editor.handleRename}
-                onDelete={editor.handleDelete}
-                onCreateFile={(path) => { void editor.createFile(path); }}
-                onCreateDir={(path) => { void editor.createDirectory(path); }}
-                persistRef={fileTreePersistRef}
-                onLoadChildren={(dirPath) => { void workspace.loadChildren(dirPath); }}
-              />
+              <FileTreeSidebarPane />
             </TabsContent>
             <TabsContent value="outline" className="min-h-full">
               <Suspense
@@ -96,11 +136,11 @@ export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
                   </div>
                 }
               >
-                <Outline headings={editor.headings} onSelect={editor.handleOutlineSelect} />
+                <OutlineSidebarPane />
               </Suspense>
             </TabsContent>
             <TabsContent value="diagnostics" className="min-h-full">
-              <Diagnostics diagnostics={editor.diagnostics} onSelect={editor.handleOutlineSelect} />
+              <DiagnosticsSidebarPane />
             </TabsContent>
             {showRuntimeLogs ? (
               <TabsContent value="runtime" className="min-h-full">
@@ -113,4 +153,4 @@ export function AppSidebarShell({ sidebarLayout }: AppSidebarShellProps) {
       <SidebarRail />
     </div>
   );
-}
+});
