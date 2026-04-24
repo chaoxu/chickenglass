@@ -1,15 +1,53 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const browserReproMocks = vi.hoisted(() => {
+  let pageUrl = "http://localhost:5173/";
+  const doctorState = {
+    debugGlobals: {
+      __app: true,
+      __cfDebug: true,
+      __cmView: true,
+      __editor: true,
+      lexicalEditor: false,
+    },
+    readyState: "complete",
+    title: "Coflats",
+    get url() {
+      return pageUrl;
+    },
+    viteErrorOverlay: "",
+  };
+  const editorHealth = {
+    autocompleteCount: 0,
+    dialogCount: 0,
+    docLength: 0,
+    hoverPreviewCount: 0,
+    issues: [],
+    mode: "cm6-rich",
+    selection: { anchor: 0, head: 0 },
+    semantics: { revision: 1 },
+    treeErrorNodeCount: 0,
+  };
   const page = {
+    context: vi.fn(() => ({ browser: () => null })),
+    evaluate: vi.fn(async (_fn, args) =>
+      args && Object.hasOwn(args, "maxVisibleDialogs") ? editorHealth : doctorState),
+    off: vi.fn(),
+    on: vi.fn(),
     reload: vi.fn(async () => {}),
+    screenshot: vi.fn(async () => Buffer.from("")),
+    title: vi.fn(async () => "Coflats"),
+    url: vi.fn(() => pageUrl),
   };
   const stopAppServer = vi.fn(async () => {});
 
   return {
     page,
     stopAppServer,
-    connectEditor: vi.fn(async () => page),
+    connectEditor: vi.fn(async (options = {}) => {
+      pageUrl = options.url ?? "http://localhost:5173/";
+      return page;
+    }),
     disconnectBrowser: vi.fn(async () => {}),
     ensureAppServer: vi.fn(async () => stopAppServer),
     waitForDebugBridge: vi.fn(async () => {}),
@@ -240,6 +278,8 @@ describe("browser repro helpers", () => {
       { autoStart: true },
     );
     expect(session).toEqual({
+      artifactRecorder: expect.any(Object),
+      artifactsDir: undefined,
       page: browserReproMocks.page,
       stopAppServer: browserReproMocks.stopAppServer,
     });
