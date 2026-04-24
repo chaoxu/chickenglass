@@ -93,6 +93,7 @@ import { TableNode } from "./nodes/table-node";
 import { TableRowNode } from "./nodes/table-row-node";
 import { isRevealSourceStyle } from "./reveal-source-style";
 import { getInlineTextFormatSpecs } from "./runtime";
+import { publishLexicalSourceBlockIdentitiesForCurrentRoot } from "./source-block-identity";
 
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
@@ -659,6 +660,7 @@ export function setLexicalMarkdown(
     }
     editor.update(() => {
       $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
+      publishLexicalSourceBlockIdentitiesForCurrentRoot(editor, markdown);
     }, updateOptions);
   }, { category: "lexical", detail: `${markdown.length} chars` });
 }

@@ -9,7 +9,10 @@ import {
   type LexicalNode,
   type SerializedLexicalNode,
 } from "lexical";
-import { findSourceBoundaryRangeContainingChange } from "../lib/markdown/block-scanner";
+import {
+  findSourceBoundaryRangeContainingChange,
+  type SourceBoundaryRangeWithIndex,
+} from "../lib/markdown/block-scanner";
 import { measureSync } from "../lib/perf";
 import {
   createMinimalEditorDocumentChanges,
@@ -30,6 +33,10 @@ import {
   type SourceRevealSpan,
   type SourceTextSpan,
 } from "./source-spans";
+import {
+  findLexicalSourceBlockNodeByIdentity,
+  publishLexicalSourceBlockIdentitiesForCurrentRoot,
+} from "./source-block-identity";
 
 export type IncrementalRichDocumentSyncResult =
   | { readonly applied: false }
@@ -41,12 +48,6 @@ export type IncrementalRichDocumentSyncResult =
       readonly nextBlockTo: number;
       readonly nodeKey: string;
     };
-
-interface IncrementalSyncBlockRange {
-  readonly from: number;
-  readonly index: number;
-  readonly to: number;
-}
 
 const PLAIN_PARAGRAPH_MARKDOWN_MARKER_RE = /[*_`[\]\\$<>|#@:!]/;
 const PLAIN_PARAGRAPH_BLOCK_START_RE =
@@ -63,11 +64,10 @@ function measureIncrementalRichSync<T>(branch: string, task: () => T): T {
 function findIncrementalSyncBlockRange(
   previousDoc: string,
   change: EditorDocumentChange,
-): IncrementalSyncBlockRange | null {
-  const range = findSourceBoundaryRangeContainingChange(previousDoc, change, {
+): SourceBoundaryRangeWithIndex | null {
+  return findSourceBoundaryRangeContainingChange(previousDoc, change, {
     includeFootnoteTerminatingBlank: true,
   });
-  return range ? { from: range.from, index: range.index, to: range.to } : null;
 }
 
 interface RawBlockTarget {
@@ -466,7 +466,15 @@ export function applyIncrementalRichDocumentSync(
         return;
       }
       let previousBlockSource = previousDoc.slice(blockFrom, blockTo);
-      let topLevel: LexicalNode | null = rootChildren[blockRange.index] ?? null;
+      let topLevel: LexicalNode | null = measureIncrementalRichSync(
+        "findSourceBlockIdentity",
+        () => findLexicalSourceBlockNodeByIdentity(
+          editor,
+          rootChildren,
+          previousDoc,
+          blockRange,
+        ),
+      ) ?? rootChildren[blockRange.index] ?? null;
       let rawSourceMatch = $isRawBlockNode(topLevel) && topLevel.getRaw() === previousBlockSource
         ? topLevel
         : null;
@@ -574,6 +582,17 @@ export function applyIncrementalRichDocumentSync(
       }
 
       const nextBlockSource = nextDoc.slice(blockFrom, nextBlockTo);
+      const finishApplied = (nodeKey: string) => {
+        publishLexicalSourceBlockIdentitiesForCurrentRoot(editor, nextDoc);
+        result = {
+          applied: true,
+          blockFrom,
+          blockTo,
+          nextBlockSource,
+          nextBlockTo,
+          nodeKey,
+        };
+      };
       const textUpdateTarget = topLevel;
       if (
         measureIncrementalRichSync(
@@ -585,14 +604,7 @@ export function applyIncrementalRichDocumentSync(
           ),
         )
       ) {
-        result = {
-          applied: true,
-          blockFrom,
-          blockTo,
-          nextBlockSource,
-          nextBlockTo,
-          nodeKey: topLevel.getKey(),
-        };
+        finishApplied(topLevel.getKey());
         return;
       }
 
@@ -608,14 +620,7 @@ export function applyIncrementalRichDocumentSync(
           ),
         )
       ) {
-        result = {
-          applied: true,
-          blockFrom,
-          blockTo,
-          nextBlockSource,
-          nextBlockTo,
-          nodeKey: topLevel.getKey(),
-        };
+        finishApplied(topLevel.getKey());
         return;
       }
 
@@ -631,14 +636,7 @@ export function applyIncrementalRichDocumentSync(
           ),
         )
       ) {
-        result = {
-          applied: true,
-          blockFrom,
-          blockTo,
-          nextBlockSource,
-          nextBlockTo,
-          nodeKey: topLevel.getKey(),
-        };
+        finishApplied(topLevel.getKey());
         return;
       }
 
@@ -672,14 +670,7 @@ export function applyIncrementalRichDocumentSync(
         && isRawBlockBodyOnlyChange(previousBlockSource, change, blockFrom)
       ) {
         topLevel.setRaw(nextBlockSource);
-        result = {
-          applied: true,
-          blockFrom,
-          blockTo,
-          nextBlockSource,
-          nextBlockTo,
-          nodeKey: topLevel.getKey(),
-        };
+        finishApplied(topLevel.getKey());
         return;
       }
 
@@ -710,14 +701,7 @@ export function applyIncrementalRichDocumentSync(
 
       $setSelection(null);
       topLevel.replace(replacement);
-      result = {
-        applied: true,
-        blockFrom,
-        blockTo,
-        nextBlockSource,
-        nextBlockTo,
-        nodeKey: replacement.getKey(),
-      };
+      finishApplied(replacement.getKey());
     }, {
       discrete: true,
       skipTransforms: true,
