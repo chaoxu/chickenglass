@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::{command, State, WebviewWindow};
+use tauri::{State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
-use crate::services::path::{path_to_frontend_string, ProjectPathResolver};
+use crate::services::path::{ProjectPathResolver, path_to_frontend_string};
 
 const TO_PROJECT_RELATIVE_PATH: CommandSpec = CommandSpec::new(
     "tauri.to_project_relative_path",

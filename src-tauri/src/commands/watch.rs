@@ -2,14 +2,14 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{command, AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, State, WebviewWindow, command};
 
-use super::context::{run_command, CommandSpec, WindowCommandContext};
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{FileWatcherState, PerfState, ProjectRoot};
 use crate::services::path::path_to_frontend_string;
 use crate::services::watch::{
-    attach_watcher, create_directory_watcher, remove_watcher_generation, reserve_watcher_slot,
-    spawn_debounced_event_worker, WatchEventMessage,
+    WatchEventMessage, attach_watcher, create_directory_watcher, remove_watcher_generation,
+    reserve_watcher_slot, spawn_debounced_event_worker,
 };
 
 const WATCH_DIRECTORY: CommandSpec = CommandSpec::new(

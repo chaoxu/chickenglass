@@ -28,11 +28,11 @@ export function createHotExitBackupStore(): HotExitBackupStore | null {
     return null;
   }
   return {
-    writeBackup: ({ path, name, content, baselineHash }) =>
-      writeHotExitBackupCommand(path, name, content, baselineHash),
-    listBackups: (_projectRoot) => listHotExitBackupsCommand(),
-    readBackup: (_projectRoot, path) => readHotExitBackupCommand(path),
-    deleteBackup: (_projectRoot, path) =>
-      deleteHotExitBackupCommand(path),
+    writeBackup: ({ projectRoot, path, name, content, baselineHash }) =>
+      writeHotExitBackupCommand(projectRoot, path, name, content, baselineHash),
+    listBackups: (projectRoot) => listHotExitBackupsCommand(projectRoot),
+    readBackup: (projectRoot, path) => readHotExitBackupCommand(projectRoot, path),
+    deleteBackup: (projectRoot, path) =>
+      deleteHotExitBackupCommand(projectRoot, path),
   };
 }

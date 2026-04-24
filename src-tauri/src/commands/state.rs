@@ -262,9 +262,9 @@ impl PerfState {
 
 #[cfg(test)]
 mod tests {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
-    use super::{remove_window_native_state, FileWatcherEntry, PerfState, ProjectRootEntry};
+    use super::{FileWatcherEntry, PerfState, ProjectRootEntry, remove_window_native_state};
     use std::collections::HashMap;
     use std::path::PathBuf;
 

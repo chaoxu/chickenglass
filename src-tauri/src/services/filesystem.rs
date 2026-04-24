@@ -494,9 +494,9 @@ fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, 
 #[cfg(test)]
 mod tests {
     use super::{
-        ConditionalTextWriteResult, FileEntry, create_text_file, delete_path,
-        install_project_root, list_children, rename_path, write_binary_file,
-        write_existing_file, write_existing_file_with_handle, write_text_file_if_hash_with_hook,
+        ConditionalTextWriteResult, FileEntry, create_text_file, delete_path, install_project_root,
+        list_children, rename_path, write_binary_file, write_existing_file,
+        write_existing_file_with_handle, write_text_file_if_hash_with_hook,
     };
     use crate::commands::state::ProjectRootEntry;
     use base64::Engine;
@@ -693,7 +693,10 @@ mod tests {
         write_existing_file(&file, "new").unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), "new");
-        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);
@@ -713,7 +716,10 @@ mod tests {
 
         assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
         assert_eq!(fs::read_to_string(&file).unwrap(), "old");
-        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o400);
+        assert_eq!(
+            fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o400
+        );
         assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);

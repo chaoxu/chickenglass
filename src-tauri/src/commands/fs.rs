@@ -1,14 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tauri::{command, State, WebviewWindow};
+use tauri::{State, WebviewWindow, command};
 
-use super::context::{run_command, CommandSpec, WindowCommandContext};
+use super::context::{CommandSpec, WindowCommandContext, run_command};
 use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{
     filesystem::{self, ConditionalTextWriteResult},
-    path::{path_to_frontend_string, ProjectPathResolver},
+    path::{ProjectPathResolver, path_to_frontend_string},
 };
 
 const OPEN_FOLDER: CommandSpec =

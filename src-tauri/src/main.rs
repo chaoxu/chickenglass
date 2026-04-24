@@ -6,7 +6,7 @@ mod menu;
 mod services;
 
 use commands::state::{
-    remove_window_native_state, FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot,
+    FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot, remove_window_native_state,
 };
 use std::collections::HashMap;
 use std::sync::Mutex;

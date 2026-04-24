@@ -82,19 +82,19 @@ export const TAURI_COMMAND_CONTRACT = {
   recovery: {
     writeHotExitBackup: {
       name: "write_hot_exit_backup",
-      args: ["path", "name", "content", "baselineHash"],
+      args: ["projectRoot", "path", "name", "content", "baselineHash"],
     },
     listHotExitBackups: {
       name: "list_hot_exit_backups",
-      args: [],
+      args: ["projectRoot"],
     },
     readHotExitBackup: {
       name: "read_hot_exit_backup",
-      args: ["path"],
+      args: ["projectRoot", "path"],
     },
     deleteHotExitBackup: {
       name: "delete_hot_exit_backup",
-      args: ["path"],
+      args: ["projectRoot", "path"],
     },
   },
   debug: {
@@ -289,6 +289,7 @@ export interface TauriCommandTypes {
   };
   readonly write_hot_exit_backup: {
     readonly args: {
+      readonly projectRoot: string;
       readonly path: string;
       readonly name: string;
       readonly content: string;
@@ -297,15 +298,15 @@ export interface TauriCommandTypes {
     readonly result: HotExitBackupSummary;
   };
   readonly list_hot_exit_backups: {
-    readonly args: undefined;
+    readonly args: { readonly projectRoot: string };
     readonly result: HotExitBackupSummary[];
   };
   readonly read_hot_exit_backup: {
-    readonly args: { readonly path: string };
+    readonly args: { readonly projectRoot: string; readonly path: string };
     readonly result: HotExitBackup | null;
   };
   readonly delete_hot_exit_backup: {
-    readonly args: { readonly path: string };
+    readonly args: { readonly projectRoot: string; readonly path: string };
     readonly result: undefined;
   };
   readonly debug_list_windows: {

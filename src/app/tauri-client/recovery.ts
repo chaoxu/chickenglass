@@ -1,5 +1,5 @@
 import { TAURI_COMMAND_CONTRACT } from "./command-contract";
-import { tauriArgs, tauriCommand } from "./make-command";
+import { tauriArgs } from "./make-command";
 
 export type {
   HotExitBackup,
@@ -11,25 +11,27 @@ const recoveryCommands = TAURI_COMMAND_CONTRACT.recovery;
 export const writeHotExitBackupCommand = tauriArgs(
   recoveryCommands.writeHotExitBackup,
 )((
+  projectRoot: string,
   path: string,
   name: string,
   content: string,
   baselineHash?: string,
 ) => ({
+  projectRoot,
   path,
   name,
   content,
   baselineHash,
 }));
 
-export const listHotExitBackupsCommand = tauriCommand(
+export const listHotExitBackupsCommand = tauriArgs(
   recoveryCommands.listHotExitBackups,
-);
+)((projectRoot: string) => ({ projectRoot }));
 
 export const readHotExitBackupCommand = tauriArgs(
   recoveryCommands.readHotExitBackup,
-)((path: string) => ({ path }));
+)((projectRoot: string, path: string) => ({ projectRoot, path }));
 
 export const deleteHotExitBackupCommand = tauriArgs(
   recoveryCommands.deleteHotExitBackup,
-)((path: string) => ({ path }));
+)((projectRoot: string, path: string) => ({ projectRoot, path }));

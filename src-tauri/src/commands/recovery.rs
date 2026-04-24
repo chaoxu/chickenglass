@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use tauri::{command, AppHandle, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow, command};
 
 use super::context::{CommandSpec, WindowCommandContext};
 use super::state::{PerfState, ProjectRoot};
@@ -34,6 +34,7 @@ pub fn write_hot_exit_backup(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
+    project_root: String,
     path: String,
     name: String,
     content: String,
@@ -43,9 +44,9 @@ pub fn write_hot_exit_backup(
     WindowCommandContext::new(&window, &root, &perf).run(
         WRITE_HOT_EXIT_BACKUP,
         Some(&detail),
-        |project_root| {
+        |session_project_root| {
             let app_data_dir = app_data_dir(&app)?;
-            let project_root = project_root_key(project_root)?;
+            let project_root = validated_project_root_key(session_project_root, &project_root)?;
             recovery::write_hot_exit_backup(
                 &app_data_dir,
                 HotExitBackupInput {
@@ -66,13 +67,14 @@ pub fn list_hot_exit_backups(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
+    project_root: String,
 ) -> Result<Vec<HotExitBackupSummary>, String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         LIST_HOT_EXIT_BACKUPS,
-        None,
-        |project_root| {
+        Some(&project_root),
+        |session_project_root| {
             let app_data_dir = app_data_dir(&app)?;
-            let project_root = project_root_key(project_root)?;
+            let project_root = validated_project_root_key(session_project_root, &project_root)?;
             recovery::list_hot_exit_backups(&app_data_dir, &project_root)
         },
     )
@@ -84,14 +86,15 @@ pub fn read_hot_exit_backup(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
+    project_root: String,
     path: String,
 ) -> Result<Option<HotExitBackup>, String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         READ_HOT_EXIT_BACKUP,
         Some(&path),
-        |project_root| {
+        |session_project_root| {
             let app_data_dir = app_data_dir(&app)?;
-            let project_root = project_root_key(project_root)?;
+            let project_root = validated_project_root_key(session_project_root, &project_root)?;
             recovery::read_hot_exit_backup(&app_data_dir, &project_root, &path)
         },
     )
@@ -103,14 +106,15 @@ pub fn delete_hot_exit_backup(
     window: WebviewWindow,
     root: State<'_, ProjectRoot>,
     perf: State<'_, PerfState>,
+    project_root: String,
     path: String,
 ) -> Result<(), String> {
     WindowCommandContext::new(&window, &root, &perf).run(
         DELETE_HOT_EXIT_BACKUP,
         Some(&path),
-        |project_root| {
+        |session_project_root| {
             let app_data_dir = app_data_dir(&app)?;
-            let project_root = project_root_key(project_root)?;
+            let project_root = validated_project_root_key(session_project_root, &project_root)?;
             recovery::delete_hot_exit_backup(&app_data_dir, &project_root, &path)
         },
     )
@@ -122,6 +126,36 @@ fn app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .map_err(|error| format!("Failed to resolve app data directory: {error}"))
 }
 
-fn project_root_key(project_root: &Path) -> Result<String, String> {
-    path_to_frontend_string(project_root, "Project root path")
+fn validated_project_root_key(
+    session_project_root: &Path,
+    expected_project_root: &str,
+) -> Result<String, String> {
+    let session_project_root = path_to_frontend_string(session_project_root, "Project root path")?;
+    if session_project_root != expected_project_root {
+        return Err(format!(
+            "Hot-exit backup project root mismatch: active project is '{}', request expected '{}'",
+            session_project_root, expected_project_root,
+        ));
+    }
+    Ok(session_project_root)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validated_project_root_key;
+    use std::path::Path;
+
+    #[test]
+    fn validates_recovery_request_against_active_project_root() {
+        let project_root = Path::new("/project-a");
+
+        assert_eq!(
+            validated_project_root_key(project_root, "/project-a").expect("matching root"),
+            "/project-a",
+        );
+
+        let error = validated_project_root_key(project_root, "/project-b")
+            .expect_err("stale recovery command should be rejected");
+        assert!(error.contains("project root mismatch"), "got: {error}");
+    }
 }

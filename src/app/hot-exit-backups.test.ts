@@ -65,6 +65,7 @@ describe("createHotExitBackupStore", () => {
       projectRoot: "/project",
     })).resolves.toBe(summary);
     expect(recoveryCommands.writeHotExitBackupCommand).toHaveBeenCalledWith(
+      "/project",
       "notes/main.md",
       "main.md",
       "# Draft\n",
@@ -72,7 +73,7 @@ describe("createHotExitBackupStore", () => {
     );
 
     await expect(store.listBackups("/project")).resolves.toEqual([summary]);
-    expect(recoveryCommands.listHotExitBackupsCommand).toHaveBeenCalledWith();
+    expect(recoveryCommands.listHotExitBackupsCommand).toHaveBeenCalledWith("/project");
 
     await expect(store.readBackup("/project", "notes/main.md")).resolves.toMatchObject({
       content: "# Draft\n",
@@ -80,11 +81,13 @@ describe("createHotExitBackupStore", () => {
       version: 1,
     });
     expect(recoveryCommands.readHotExitBackupCommand).toHaveBeenCalledWith(
+      "/project",
       "notes/main.md",
     );
 
     await store.deleteBackup("/project", "notes/main.md");
     expect(recoveryCommands.deleteHotExitBackupCommand).toHaveBeenCalledWith(
+      "/project",
       "notes/main.md",
     );
   });
