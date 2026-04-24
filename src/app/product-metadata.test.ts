@@ -34,14 +34,14 @@ function readHtmlTitle(): string | null {
 }
 
 describe("product metadata", () => {
-  it("uses the Coflats desktop identity across package, Tauri, and HTML metadata", () => {
+  it("uses the Coflat desktop identity across package, Tauri, and HTML metadata", () => {
     const pkg = readJson<PackageJson>("package.json");
     const tauri = readJson<TauriConfig>("src-tauri/tauri.conf.json");
 
     expect(pkg.name).toBe("coflat");
-    expect(tauri.productName).toBe("Coflats");
+    expect(tauri.productName).toBe("Coflat");
     expect(tauri.identifier).toBe("com.coflats.desktop");
-    expect(readHtmlTitle()).toBe("Coflats");
+    expect(readHtmlTitle()).toBe("Coflat");
   });
 
   it("grants spawned document windows the required native capabilities", () => {

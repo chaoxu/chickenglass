@@ -1,7 +1,7 @@
 /**
  * About dialog React component.
  *
- * Simple modal: "Coflats v0.1.0", description, credits, GitHub link.
+ * Simple modal: app name, version, description, credits, GitHub link.
  * Uses the shared app dialog primitives for escape, focus trap, and overlay.
  */
 

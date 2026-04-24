@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { activeCoflatProduct } from "./product";
 
-describe("Coflats product config", () => {
+describe("Coflat product config", () => {
   it("exposes the unified app identity", () => {
     expect(activeCoflatProduct).toMatchObject({
       description: "Semantic document editor for mathematical writing.",
-      displayName: "Coflats",
+      displayName: "Coflat",
       id: "coflats",
     });
   });

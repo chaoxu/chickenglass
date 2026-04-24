@@ -26,7 +26,7 @@ describe("openDocumentInNewWindow", () => {
     await openDocumentInNewWindow("/tmp/coflat-native-project-b", "outside.md");
 
     expect(createdWindows).toHaveLength(1);
-    expect(createdWindows[0].options.title).toBe("Coflats — outside.md");
+    expect(createdWindows[0].options.title).toBe("Coflat — outside.md");
     expect(createdWindows[0].options.url).toBe(
       `${window.location.origin}/?keep=1&projectRoot=%2Ftmp%2Fcoflat-native-project-b&file=outside.md`,
     );

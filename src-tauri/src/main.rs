@@ -96,5 +96,5 @@ fn main() {
             commands::debug::debug_emit_file_changed,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Coflats app");
+        .expect("error while running Coflat app");
 }

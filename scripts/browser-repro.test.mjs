@@ -11,7 +11,7 @@ const browserReproMocks = vi.hoisted(() => {
       lexicalEditor: false,
     },
     readyState: "complete",
-    title: "Coflats",
+    title: "Coflat",
     get url() {
       return pageUrl;
     },
@@ -36,7 +36,7 @@ const browserReproMocks = vi.hoisted(() => {
     on: vi.fn(),
     reload: vi.fn(async () => {}),
     screenshot: vi.fn(async () => Buffer.from("")),
-    title: vi.fn(async () => "Coflats"),
+    title: vi.fn(async () => "Coflat"),
     url: vi.fn(() => pageUrl),
   };
   const stopAppServer = vi.fn(async () => {});
