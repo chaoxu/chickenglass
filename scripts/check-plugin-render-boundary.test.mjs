@@ -275,6 +275,31 @@ describe("import boundary checker", () => {
     ]);
   });
 
+  it("rejects production src/lexical imports from app modules", () => {
+    const repoRoot = "/repo";
+    const lexicalFile = path.join(repoRoot, "src", "lexical", "render-context.tsx");
+
+    expect(
+      findBoundaryViolations(
+        [
+          {
+            filePath: lexicalFile,
+            sourceText: 'import { useFileSystem } from "../app/contexts/file-system-context";',
+          },
+        ],
+        repoRoot,
+      ),
+    ).toEqual([
+      {
+        filePath: lexicalFile,
+        line: 1,
+        rule: "src/lexical production modules must not import app modules",
+        specifier: "../app/contexts/file-system-context",
+        targetPath: null,
+      },
+    ]);
+  });
+
   it("ignores test files when enforcing production boundary rules", () => {
     const repoRoot = "/repo";
 

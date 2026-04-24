@@ -4,8 +4,8 @@ import { $getRoot, $isElementNode, $isTextNode } from "lexical";
 import { createElement, type ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
-import { FileSystemProvider } from "../../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../../app/file-manager";
+import { FileSystemProvider } from "../../filesystem/file-system-context";
 import type { MarkdownEditorHandle } from "../markdown-editor-types";
 import { LexicalRichMarkdownEditor } from "../rich-markdown-editor";
 

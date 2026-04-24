@@ -1,18 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode, type RefCallback } from "react";
+import { useCallback, useEffect, useState, type ReactNode, type RefCallback } from "react";
 import { useDevSettings } from "../../state/dev-settings";
 import { PerfDebugPanelContent } from "./perf-debug-panel";
 import { getInteractionLog, type InteractionTraceEntry } from "../../lexical/interaction-trace";
-
-// ── Portal target context ─────────────────────────────────────────────────────
-// The TreeViewPlugin (inside Lexical) portals its content into the sidebar.
-// A React context avoids the render-order race that document.getElementById
-// would hit (EditorPane renders before DebugSidebar).
-
-const TreeViewPortalContext = createContext<HTMLElement | null>(null);
-
-export function useTreeViewPortalTarget(): HTMLElement | null {
-  return useContext(TreeViewPortalContext);
-}
+import { TreeViewPortalTargetProvider } from "../../debug/tree-view-portal-context";
 
 export function DebugSidebarProvider({ children }: { readonly children: ReactNode }) {
   const [target, setTarget] = useState<HTMLElement | null>(null);
@@ -22,12 +12,12 @@ export function DebugSidebarProvider({ children }: { readonly children: ReactNod
   }, []);
 
   return (
-    <TreeViewPortalContext.Provider value={target}>
+    <TreeViewPortalTargetProvider value={target}>
       <div className="flex min-h-0 flex-1">
         {children}
         <DebugSidebarPanel treeViewRef={treeViewRef} />
       </div>
-    </TreeViewPortalContext.Provider>
+    </TreeViewPortalTargetProvider>
   );
 }
 

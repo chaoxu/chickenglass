@@ -49,6 +49,12 @@ export const BOUNDARY_RULES = [
     allow: [],
   },
   {
+    name: "src/lexical production modules must not import app modules",
+    from: ["lexical"],
+    to: ["app"],
+    allow: [],
+  },
+  {
     name: "src/lexical/runtime must not import app/editor/render modules",
     from: ["lexical/runtime"],
     to: ["app", "editor", "render"],

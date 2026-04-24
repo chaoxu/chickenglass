@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 
-import type { ProjectConfig } from "../../project-config";
-import { loadProjectConfig } from "../project-config";
-import type { FileSystem } from "../../lib/types";
+import type { FileSystem } from "./lib/types";
+import { loadProjectConfig, type ProjectConfig } from "./project-config";
 
 export function useProjectConfigResource(fs: FileSystem): ProjectConfig {
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});

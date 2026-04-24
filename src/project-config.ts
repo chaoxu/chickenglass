@@ -6,6 +6,7 @@
  */
 
 import { Facet } from "@codemirror/state";
+import type { FileSystem } from "./lib/types";
 import type { FrontmatterConfig } from "./parser/frontmatter";
 import { parseFrontmatter } from "./parser/frontmatter";
 
@@ -42,6 +43,27 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
   // ProjectConfig excludes title (title is always per-file)
   const { title: _title, ...projectConfig } = config;
   return projectConfig;
+}
+
+/**
+ * Try to load a project config from the filesystem root.
+ *
+ * Returns an empty config if the file doesn't exist or can't be parsed.
+ */
+export async function loadProjectConfig(
+  fs: FileSystem,
+): Promise<ProjectConfig> {
+  try {
+    const exists = await fs.exists(PROJECT_CONFIG_FILE);
+    if (!exists) return {};
+
+    const content = await fs.readFile(PROJECT_CONFIG_FILE);
+    return parseProjectConfig(content);
+  } catch (e: unknown) {
+    // Config file missing, unreadable, or invalid YAML — use empty config.
+    console.warn("[project-config] failed to load config, using defaults", e);
+    return {};
+  }
 }
 
 /** Keys whose values are Record objects and merge additively (project base, file overrides). */

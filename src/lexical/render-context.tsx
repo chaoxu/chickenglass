@@ -6,10 +6,10 @@ import {
 } from "react";
 
 import { buildDocumentLabelParseSnapshot } from "../lib/markdown/label-parser";
-import { useFileSystem } from "../app/contexts/file-system-context";
-import { useProjectConfigResource } from "../app/hooks/use-project-config-resource";
+import { useFileSystem } from "../filesystem/file-system-context";
 import type { FileSystem } from "../lib/types";
 import { measureSync } from "../lib/perf";
+import { useProjectConfigResource } from "../project-config-resource";
 import { type CitationRenderData, useCitationRenderData } from "../citations/citation-render-data";
 import { buildDocumentRuntime, type LexicalDocumentRuntime } from "./runtime/controller/document-runtime";
 import {

@@ -14,8 +14,8 @@ import {
 import { type ComponentProps, createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
+import { FileSystemProvider } from "../filesystem/file-system-context";
 import { setActiveEditor } from "./active-editor-tracker";
 import { LexicalMarkdownEditor } from "./markdown-editor";
 import type { MarkdownEditorHandle } from "./markdown-editor-types";

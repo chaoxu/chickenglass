@@ -23,8 +23,8 @@ import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
-import { FileSystemProvider } from "../app/contexts/file-system-context";
 import { MemoryFileSystem } from "../app/file-manager";
+import { FileSystemProvider } from "../filesystem/file-system-context";
 import { LexicalRichMarkdownEditor } from "./rich-markdown-editor";
 import { buildRenderIndex } from "./markdown/reference-index";
 
