@@ -27,7 +27,7 @@ import {
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import { bibDataEffect, bibDataField } from "../../state/bib-data";
 import { CslProcessor } from "../../citations/csl-processor";
-import type { ProjectConfig } from "../project-config";
+import type { ProjectConfig, ProjectConfigStatus } from "../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeLiveStats, computeLiveStatsFromText } from "../writing-stats";
 import { useEditorScroll } from "./use-editor-scroll";
@@ -51,6 +51,8 @@ export interface UseEditorOptions {
   doc: string;
   /** Project-level config forwarded to createEditor. */
   projectConfig?: ProjectConfig;
+  /** Structured status for project-level config diagnostics. */
+  projectConfigStatus?: ProjectConfigStatus;
   /** Resolved theme ("light" | "dark") — triggers themeCompartment.reconfigure. */
   theme?: ResolvedTheme;
   /** Additional CM6 extensions to include (e.g., change listeners from the parent). */
@@ -128,6 +130,7 @@ export function useEditor(
   const {
     doc,
     projectConfig,
+    projectConfigStatus,
     theme,
     extensions,
     fs,
@@ -271,6 +274,7 @@ export function useEditor(
       parent: container,
       doc,
       projectConfig,
+      projectConfigStatus,
       pluginManager,
       extensions: extraExtensions,
     }), { category: "editor" });
@@ -291,7 +295,7 @@ export function useEditor(
       newView.destroy();
       setView(null);
     };
-  }, [containerRef, debugBridge, extensions, pluginManager, projectConfig, resetScroll]);
+  }, [containerRef, debugBridge, extensions, pluginManager, projectConfig, projectConfigStatus, resetScroll]);
 
   useEffect(() => {
     if (!view) return;

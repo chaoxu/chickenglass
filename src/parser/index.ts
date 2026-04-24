@@ -8,6 +8,7 @@ export {
   extractRawFrontmatter,
   type FrontmatterConfig,
   type FrontmatterResult,
+  type FrontmatterStatus,
   parseFrontmatter,
 } from "./frontmatter";
 export { highlightExtension } from "./highlight";

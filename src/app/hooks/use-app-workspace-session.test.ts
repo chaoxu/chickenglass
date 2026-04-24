@@ -134,7 +134,10 @@ vi.mock("../tauri-fs", () => ({
 
 vi.mock("../project-config", () => ({
   PROJECT_CONFIG_FILE: "coflat.yaml",
-  loadProjectConfig: workspaceMockState.loadProjectConfig,
+  loadProjectConfigWithStatus: async (_fs: FileSystem) => ({
+    config: await workspaceMockState.loadProjectConfig(),
+    status: { state: "ok", path: "coflat.yaml" },
+  }),
 }));
 
 vi.mock("../perf", () => ({

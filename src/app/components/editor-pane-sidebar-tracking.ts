@@ -4,6 +4,8 @@ import { createChangeChecker } from "../../state/change-detection";
 import { bibDataField } from "../../state/bib-data";
 import { blockCounterField } from "../../state/block-counter";
 import { documentSemanticsField } from "../../state/document-analysis";
+import { frontmatterField } from "../../state/frontmatter-state";
+import { projectConfigStatusFacet } from "../../project-config";
 import type { HeadingEntry } from "../heading-ancestry";
 
 export interface HeadingSidebarMetadata {
@@ -84,6 +86,20 @@ function selectBibliographyIdMetadata(state: EditorState): readonly string[] {
   return [...(state.field(bibDataField, false)?.store.keys() ?? [])].sort();
 }
 
+function selectFrontmatterStatusMetadata(state: EditorState): string {
+  const status = state.field(frontmatterField, false)?.status;
+  return status ? JSON.stringify(status) : "";
+}
+
+function selectProjectConfigStatusMetadata(state: EditorState): string {
+  return JSON.stringify(state.facet(projectConfigStatusFacet));
+}
+
+function selectBibliographyStatusMetadata(state: EditorState): string {
+  const status = state.field(bibDataField, false)?.status;
+  return status ? JSON.stringify(status) : "";
+}
+
 export function createDiagnosticsSidebarChangeChecker(): ChangeChecker {
   return createChangeChecker(
     {
@@ -105,6 +121,18 @@ export function createDiagnosticsSidebarChangeChecker(): ChangeChecker {
     {
       get: selectBibliographyIdMetadata,
       equals: sameStringArray,
+    },
+    {
+      get: selectFrontmatterStatusMetadata,
+      equals: (before, after) => before === after,
+    },
+    {
+      get: selectProjectConfigStatusMetadata,
+      equals: (before, after) => before === after,
+    },
+    {
+      get: selectBibliographyStatusMetadata,
+      equals: (before, after) => before === after,
     },
     (state) => state.field(bibDataField, false)?.processorRevision ?? 0,
   );

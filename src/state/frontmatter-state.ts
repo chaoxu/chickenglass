@@ -15,6 +15,7 @@ import {
   parseFrontmatter,
   type FrontmatterConfig,
   type FrontmatterResult,
+  type FrontmatterStatus,
 } from "../parser/frontmatter";
 import { mergeConfigs, projectConfigFacet } from "../project-config";
 
@@ -26,6 +27,8 @@ export interface FrontmatterState {
   config: FrontmatterConfig;
   /** Character offset where the frontmatter ends (-1 if none). */
   end: number;
+  /** Structured parse status for diagnostics. */
+  status: FrontmatterStatus;
   /** Increments only when the merged `blocks` config changes semantically. */
   blocksRevision: number;
 }
@@ -38,7 +41,7 @@ interface FrontmatterStateInternal extends FrontmatterState {
 function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
   const frontmatterPrefix = sliceFrontmatterPrefix(state.doc);
   return frontmatterPrefix === null
-    ? { config: {}, end: -1 }
+    ? { config: {}, end: -1, status: { state: "missing" } }
     : parseFrontmatter(frontmatterPrefix);
 }
 
@@ -92,7 +95,7 @@ function buildFrontmatterState(
   const blocksRevision = previous && previous.blocksKey !== blocksKey
     ? previous.blocksRevision + 1
     : previous?.blocksRevision ?? 0;
-  return { config, end: result.end, blocksRevision, blocksKey };
+  return { config, end: result.end, status: result.status, blocksRevision, blocksKey };
 }
 
 /**

@@ -44,10 +44,14 @@ export {
 export { FileWatcher, type FileWatcherConfig } from "./file-watcher";
 export {
   type ProjectConfig,
+  type ProjectConfigStatus,
   projectConfigFacet,
+  projectConfigStatusFacet,
   parseProjectConfig,
+  parseProjectConfigWithStatus,
   mergeConfigs,
   loadProjectConfig,
+  loadProjectConfigWithStatus,
   PROJECT_CONFIG_FILE,
 } from "./project-config";
 

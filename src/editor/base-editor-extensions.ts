@@ -5,7 +5,12 @@ import type { Extension } from "@codemirror/state";
 import type { MarkdownExtension } from "@lezer/markdown";
 import { classHighlighter } from "@lezer/highlight";
 
-import { projectConfigFacet, type ProjectConfig } from "../project-config";
+import {
+  projectConfigFacet,
+  projectConfigStatusFacet,
+  type ProjectConfig,
+  type ProjectConfigStatus,
+} from "../project-config";
 import { markdownExtensions } from "../parser";
 import { highlightExtension } from "../parser/highlight";
 import { mathExtension } from "../parser/math-backslash";
@@ -18,8 +23,14 @@ export const inlineMarkdownExtensions: MarkdownExtension[] = [
   strikethroughExtension,
 ];
 
-export function createProjectConfigExtensions(projectConfig?: ProjectConfig): Extension[] {
-  return projectConfig ? [projectConfigFacet.of(projectConfig)] : [];
+export function createProjectConfigExtensions(
+  projectConfig?: ProjectConfig,
+  projectConfigStatus?: ProjectConfigStatus,
+): Extension[] {
+  const extensions: Extension[] = [];
+  if (projectConfig) extensions.push(projectConfigFacet.of(projectConfig));
+  if (projectConfigStatus) extensions.push(projectConfigStatusFacet.of(projectConfigStatus));
+  return extensions;
 }
 
 interface MarkdownLanguageOptions {

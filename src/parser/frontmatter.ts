@@ -93,7 +93,20 @@ export interface FrontmatterResult {
   config: FrontmatterConfig;
   /** Character offset where the frontmatter ends (after closing ---\n). -1 if none. */
   end: number;
+  /** Structured parse status for diagnostics. */
+  status: FrontmatterStatus;
 }
+
+export type FrontmatterStatus =
+  | { readonly state: "missing" }
+  | { readonly state: "ok"; readonly end: number }
+  | {
+    readonly state: "error";
+    readonly kind: "parse";
+    readonly message: string;
+    readonly from: number;
+    readonly to: number;
+  };
 
 /**
  * Extract the raw YAML text between `---` delimiters at the start of a document.
@@ -160,6 +173,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : "Invalid YAML frontmatter";
+}
+
 /** Convert a raw record to a typed BlockConfig, picking only known fields. */
 function toBlockConfig(raw: Record<string, unknown>): BlockConfig {
   const config: BlockConfig = {};
@@ -222,20 +239,30 @@ function validateMath(raw: Record<string, unknown>): Record<string, string> {
 export function parseFrontmatter(doc: string): FrontmatterResult {
   const extracted = extractRawFrontmatter(doc);
   if (!extracted) {
-    return { config: {}, end: -1 };
+    return { config: {}, end: -1, status: { state: "missing" } };
   }
 
   let parsed: unknown;
   try {
     parsed = parseYaml(extracted.raw);
-  } catch (_error: unknown) {
+  } catch (error: unknown) {
     // Frontmatter is parsed on every keystroke, so malformed YAML is expected
-    // while editing. Degrade to empty config without noisy console warnings.
-    return { config: {}, end: extracted.end };
+    // while editing. Degrade to empty config and let diagnostics surface it.
+    return {
+      config: {},
+      end: extracted.end,
+      status: {
+        state: "error",
+        kind: "parse",
+        message: errorMessage(error),
+        from: 0,
+        to: extracted.end,
+      },
+    };
   }
 
   if (!isRecord(parsed)) {
-    return { config: {}, end: extracted.end };
+    return { config: {}, end: extracted.end, status: { state: "ok", end: extracted.end } };
   }
 
   const raw = parsed;
@@ -289,5 +316,5 @@ export function parseFrontmatter(doc: string): FrontmatterResult {
     }
   }
 
-  return { config, end: extracted.end };
+  return { config, end: extracted.end, status: { state: "ok", end: extracted.end } };
 }

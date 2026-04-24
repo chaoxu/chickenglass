@@ -7,8 +7,8 @@ import {
 import { isTauri } from "../../lib/tauri";
 import type { FileEntry, FileSystem } from "../file-manager";
 import { measureAsync, withPerfOperation } from "../perf";
-import type { ProjectConfig } from "../project-config";
-import { loadProjectConfig, PROJECT_CONFIG_FILE } from "../project-config";
+import type { ProjectConfig, ProjectConfigStatus } from "../project-config";
+import { loadProjectConfigWithStatus, PROJECT_CONFIG_FILE } from "../project-config";
 import type { ProjectOpenResult } from "../project-open-result";
 import { useRecentFiles } from "./use-recent-files";
 import { useSettings } from "./use-settings";
@@ -44,6 +44,7 @@ export interface AppWorkspaceSessionController {
   /** Load children for a single directory and merge into the tree. */
   loadChildren: (dirPath: string) => Promise<void>;
   projectConfig: ProjectConfig;
+  projectConfigStatus: ProjectConfigStatus;
   startupComplete: boolean;
   openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
   handleOpenFolder: () => void;
@@ -72,6 +73,10 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
 
   const [fileTree, setFileTree] = useState<FileEntry | null>(null);
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({});
+  const [projectConfigStatus, setProjectConfigStatus] = useState<ProjectConfigStatus>({
+    state: "missing",
+    path: PROJECT_CONFIG_FILE,
+  });
   const [startupComplete, setStartupComplete] = useState(false);
   const workspaceRequestRef = useRef(0);
   const fullTreeRefreshGenerationRef = useRef(0);
@@ -82,6 +87,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const clearRestoredProjectState = useCallback(() => {
     setFileTree(null);
     setProjectConfig({});
+    setProjectConfigStatus({ state: "missing", path: PROJECT_CONFIG_FILE });
     saveWindowState({
       projectRoot: null,
       currentDocument: null,
@@ -100,14 +106,15 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         }),
         measureAsync(
           "startup.project_config",
-          () => loadProjectConfig(fs),
+          () => loadProjectConfigWithStatus(fs),
           { category: "startup" },
         ),
       ]);
       if (requestId !== workspaceRequestRef.current) return null;
       const tree: FileEntry = { name: "project", path: "", isDirectory: true, children: shallowChildren };
       setFileTree(tree);
-      setProjectConfig(nextProjectConfig);
+      setProjectConfig(nextProjectConfig.config);
+      setProjectConfigStatus(nextProjectConfig.status);
       return tree;
     }
 
@@ -118,13 +125,14 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       }),
       measureAsync(
         "startup.project_config",
-        () => loadProjectConfig(fs),
+        () => loadProjectConfigWithStatus(fs),
         { category: "startup" },
       ),
     ]);
     if (requestId !== workspaceRequestRef.current) return null;
     setFileTree(tree);
-    setProjectConfig(nextProjectConfig);
+    setProjectConfig(nextProjectConfig.config);
+    setProjectConfigStatus(nextProjectConfig.status);
     return tree;
   }, [fs]);
 
@@ -156,15 +164,16 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
           shouldReloadProjectConfig
             ? measureAsync(
               "project_config.reload",
-              () => loadProjectConfig(fs),
+              () => loadProjectConfigWithStatus(fs),
               { category: "workspace", detail: PROJECT_CONFIG_FILE },
             )
-            : Promise.resolve<ProjectConfig | null>(null),
+            : Promise.resolve<Awaited<ReturnType<typeof loadProjectConfigWithStatus>> | null>(null),
         ]);
         if (!scopedRefreshIsCurrent()) return;
         setFileTree((prev) => prev ? replaceFileTreeChildren(prev, dir, children) : prev);
         if (nextProjectConfig !== null) {
-          setProjectConfig(nextProjectConfig);
+          setProjectConfig(nextProjectConfig.config);
+          setProjectConfigStatus(nextProjectConfig.status);
         }
         return;
       } catch (e: unknown) {
@@ -184,7 +193,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         }),
         measureAsync(
           "startup.project_config",
-          () => loadProjectConfig(fs),
+          () => loadProjectConfigWithStatus(fs),
           { category: "startup" },
         ),
       ]);
@@ -195,7 +204,8 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         return;
       }
       setFileTree(tree);
-      setProjectConfig(nextProjectConfig);
+      setProjectConfig(nextProjectConfig.config);
+      setProjectConfigStatus(nextProjectConfig.status);
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) {
         return;
@@ -289,6 +299,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
           } else {
             setFileTree(null);
             setProjectConfig({});
+            setProjectConfigStatus({ state: "missing", path: PROJECT_CONFIG_FILE });
           }
         } else {
           const requestId = ++workspaceRequestRef.current;
@@ -350,6 +361,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     refreshTree,
     loadChildren,
     projectConfig,
+    projectConfigStatus,
     startupComplete,
     openProjectRoot,
     handleOpenFolder,

@@ -1,13 +1,15 @@
 import { EditorState } from "@codemirror/state";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { frontmatterField } from "../editor/frontmatter-state";
 import type { FrontmatterConfig } from "../parser/frontmatter";
 import { MemoryFileSystem } from "./file-manager";
 import {
   loadProjectConfig,
+  loadProjectConfigWithStatus,
   mergeConfigs,
   parseProjectConfig,
+  parseProjectConfigWithStatus,
   projectConfigFacet,
   PROJECT_CONFIG_FILE,
   type ProjectConfig,
@@ -128,6 +130,16 @@ describe("parseProjectConfig", () => {
       "\\R": "\\mathbb{R}",
       "\\set": "\\left\\{#1\\right\\}",
     });
+  });
+
+  it("returns structured parse status for invalid YAML", () => {
+    const result = parseProjectConfigWithStatus("bibliography: [");
+    expect(result.config).toEqual({});
+    expect(result.status).toEqual(expect.objectContaining({
+      state: "error",
+      path: PROJECT_CONFIG_FILE,
+      kind: "parse",
+    }));
   });
 });
 
@@ -271,6 +283,36 @@ describe("loadProjectConfig", () => {
       "\\set": "\\left\\{#1\\right\\}",
       "\\e": "\\varepsilon",
     });
+  });
+
+  it("returns structured missing status when config file does not exist", async () => {
+    const fs = new MemoryFileSystem({});
+    const result = await loadProjectConfigWithStatus(fs);
+    expect(result).toEqual({
+      config: {},
+      status: { state: "missing", path: PROJECT_CONFIG_FILE },
+    });
+  });
+
+  it("returns structured read status when config file cannot be read", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = {
+      exists: async () => true,
+      readFile: async () => {
+        throw new Error("permission denied");
+      },
+    } as unknown as MemoryFileSystem;
+
+    const result = await loadProjectConfigWithStatus(fs);
+
+    expect(result.config).toEqual({});
+    expect(result.status).toEqual({
+      state: "error",
+      path: PROJECT_CONFIG_FILE,
+      kind: "read",
+      message: "permission denied",
+    });
+    consoleWarn.mockRestore();
   });
 });
 
