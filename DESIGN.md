@@ -41,7 +41,7 @@ Pandoc-flavored markdown with these modifications:
 ### Semantic blocks
 
 ```markdown
-::: {.theorem #label} Optional Title with $math$
+::: {.theorem #label title="Optional Title with $math$"}
 Content here, parsed as full markdown.
 :::
 

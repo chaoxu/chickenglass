@@ -28,7 +28,7 @@ const MODE_SWITCH_FIXTURE = {
     "x^2 + y^2 = z^2",
     "$$ {#eq:mode-switch}",
     "",
-    "::: {.theorem #thm:mode-switch} Stable renderer",
+    '::: {.theorem #thm:mode-switch title="Stable renderer"}',
     "The lexical renderer should show this block after a mode switch.",
     ":::",
     "",

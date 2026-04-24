@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { SourceBlockRange } from "./markdown/block-scanner";
 import {
   markTableSourceBlock,
   rawBlockSourceAttrs,
   SOURCE_POSITION_DATASET,
 } from "./source-position-contract";
-import { syncSourceBlockPositions } from "./source-position-plugin";
+import { syncSourceBlockPositions } from "./source-block-position-sync";
 
 function markRawBlock(element: HTMLElement): void {
   Object.entries(rawBlockSourceAttrs("display-math")).forEach(([name, value]) => {
@@ -103,5 +104,29 @@ describe("syncSourceBlockPositions", () => {
 
     expect(first.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe(String(doc.indexOf(firstRaw)));
     expect(second.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe(String(doc.indexOf(secondRaw)));
+  });
+
+  it("uses pre-collected source ranges for fallback assignment", () => {
+    const root = document.createElement("div");
+    root.className = "cf-lexical-root";
+    const displayMath = document.createElement("section");
+    markRawBlock(displayMath);
+    root.append(displayMath);
+
+    const range: SourceBlockRange = {
+      bodyFrom: 12,
+      bodyTo: 13,
+      endLineIndex: 2,
+      from: 10,
+      raw: "$$\nx\n$$",
+      startLineIndex: 0,
+      to: 17,
+      variant: "display-math",
+    };
+
+    syncSourceBlockPositions(root, "plain prose with no source blocks", new Map(), [range]);
+
+    expect(displayMath.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe("10");
+    expect(displayMath.dataset[SOURCE_POSITION_DATASET.sourceTo]).toBe("17");
   });
 });

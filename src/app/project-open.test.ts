@@ -205,7 +205,7 @@ describe("openProjectInCurrentWindow", () => {
     const openProjectRoot = vi.fn(async () => null);
     const openFile = vi.fn(async () => {});
 
-    const result = await openProjectInCurrentWindow({
+    await expect(openProjectInCurrentWindow({
       projectRoot: "/tmp/missing-project",
       currentProjectRoot: "/tmp/original",
       nextRequestId: () => ++latestProjectRequest,
@@ -213,16 +213,56 @@ describe("openProjectInCurrentWindow", () => {
       cancelPendingOpenFile: vi.fn(),
       closeCurrentFile,
       openProjectRoot,
+      canonicalizeProjectRoot: vi.fn(async () => {
+        throw new Error("Not a directory: /tmp/missing-project");
+      }),
       openFile,
-    });
+    })).rejects.toThrow("Not a directory: /tmp/missing-project");
 
-    expect(result).toBe(false);
-    expect(openProjectRoot).toHaveBeenCalledWith("/tmp/missing-project");
+    expect(openProjectRoot).not.toHaveBeenCalled();
     expect(closeCurrentFile).not.toHaveBeenCalled();
     expect(openFile).not.toHaveBeenCalled();
   });
 
-  it("restores the previous project when close is rejected after target open", async () => {
+  it("closes the current file before switching the backend project root", async () => {
+    let latestProjectRequest = 0;
+    const calls: string[] = [];
+    const closeCurrentFile = vi.fn(async () => {
+      calls.push("close-current-file");
+      return true;
+    });
+    const openProjectRoot = vi.fn(async (path: string) => {
+      calls.push(`open-project-root:${path}`);
+      return {
+        projectRoot: path,
+        tree: createFileTree("main.md"),
+      };
+    });
+    const openFile = vi.fn(async (path: string) => {
+      calls.push(`open-file:${path}`);
+    });
+
+    const result = await openProjectInCurrentWindow({
+      projectRoot: "/tmp/next-project",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile,
+      openProjectRoot,
+      canonicalizeProjectRoot: vi.fn(async () => "/tmp/next-project"),
+      openFile,
+    });
+
+    expect(result).toBe(true);
+    expect(calls).toEqual([
+      "close-current-file",
+      "open-project-root:/tmp/next-project",
+      "open-file:main.md",
+    ]);
+  });
+
+  it("does not switch projects when close is rejected", async () => {
     let latestProjectRequest = 0;
     const closeCurrentFile = vi.fn(async () => false);
     const openProjectRoot = vi.fn(async (path: string) => ({
@@ -243,8 +283,7 @@ describe("openProjectInCurrentWindow", () => {
     });
 
     expect(result).toBe(false);
-    expect(openProjectRoot).toHaveBeenNthCalledWith(1, "/tmp/next-project");
-    expect(openProjectRoot).toHaveBeenNthCalledWith(2, "/tmp/original");
+    expect(openProjectRoot).not.toHaveBeenCalled();
     expect(openFile).not.toHaveBeenCalled();
   });
 

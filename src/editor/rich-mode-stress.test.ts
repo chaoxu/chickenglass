@@ -30,7 +30,7 @@ title: Stress Test
 
 Some text with **bold** and *italic* and \`code\`.
 
-::: {.theorem #thm:main} Main Theorem
+::: {.theorem #thm:main title="Main Theorem"}
 Let $x \\in \\mathbb{R}$. Then $x^2 \\geq 0$.
 :::
 
@@ -86,7 +86,7 @@ A paragraph.
   // Nested fenced divs
   `# Nested
 
-::: {.theorem #thm:nested} Nested Theorem
+::: {.theorem #thm:nested title="Nested Theorem"}
 Statement here.
 
 ::: {.proof}

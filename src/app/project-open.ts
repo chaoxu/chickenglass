@@ -56,6 +56,14 @@ export async function openProjectInCurrentWindow({
     return isRequestCurrent(requestId);
   }
 
+  const closed = await closeCurrentFile();
+  if (!isRequestCurrent(requestId)) {
+    return false;
+  }
+  if (!closed) {
+    return false;
+  }
+
   const result = await openProjectRoot(projectRoot);
   if (!result || !isRequestCurrent(requestId)) {
     return false;
@@ -63,17 +71,6 @@ export async function openProjectInCurrentWindow({
 
   const targetPath = initialPath ?? await findDefaultDocumentPath(result.tree, listChildren, signal);
   if (!isRequestCurrent(requestId)) {
-    return false;
-  }
-
-  const closed = await closeCurrentFile();
-  if (!isRequestCurrent(requestId)) {
-    return false;
-  }
-  if (!closed) {
-    if (currentProjectRoot) {
-      await openProjectRoot(currentProjectRoot);
-    }
     return false;
   }
   if (!targetPath) {
