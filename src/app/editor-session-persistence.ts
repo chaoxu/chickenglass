@@ -105,15 +105,7 @@ export function createEditorSessionPersistence({
       overwriteExistingTarget?: boolean;
     },
   ): Promise<string> => {
-    const targetExists =
-      options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
-    const shouldCreateTarget =
-      options?.createTargetIfMissing === true && !targetExists;
-    if (
-      options?.createTargetIfMissing === true
-      && targetExists
-      && options.overwriteExistingTarget !== true
-    ) {
+    const throwExistingTargetConflict = async (): Promise<never> => {
       try {
         const currentContent = await measureAsync(
           "save_file.create_conflict_read",
@@ -138,6 +130,18 @@ export function createEditorSessionPersistence({
         }));
       }
       throw new SaveWriteConflictError(targetPath);
+    };
+
+    const targetExists =
+      options?.createTargetIfMissing === true ? await fs.exists(targetPath) : true;
+    const shouldCreateTarget =
+      options?.createTargetIfMissing === true && !targetExists;
+    if (
+      options?.createTargetIfMissing === true
+      && targetExists
+      && options.overwriteExistingTarget !== true
+    ) {
+      await throwExistingTargetConflict();
     }
     const expectedBaselineHash = options?.expectedBaselineHash;
     const writeFileIfUnchanged = fs.writeFileIfUnchanged?.bind(fs);
@@ -207,16 +211,27 @@ export function createEditorSessionPersistence({
       }
     }
 
-    await measureAsync(
-      "save_file.write",
-      () => (shouldCreateTarget
-        ? fs.createFile(targetPath, doc)
-        : fs.writeFile(targetPath, doc)),
-      {
-        category: "save_file",
-        detail: targetPath,
-      },
-    );
+    try {
+      await measureAsync(
+        "save_file.write",
+        () => (shouldCreateTarget
+          ? fs.createFile(targetPath, doc)
+          : fs.writeFile(targetPath, doc)),
+        {
+          category: "save_file",
+          detail: targetPath,
+        },
+      );
+    } catch (error: unknown) {
+      if (
+        shouldCreateTarget
+        && options?.overwriteExistingTarget !== true
+        && await fs.exists(targetPath)
+      ) {
+        await throwExistingTargetConflict();
+      }
+      throw error;
+    }
     return doc;
   };
 

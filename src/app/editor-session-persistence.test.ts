@@ -320,6 +320,44 @@ describe("createEditorSessionPersistence", () => {
     });
   });
 
+  it("reports a conflict when a generated document target appears during creation", async () => {
+    const fs = new MemoryFileSystem();
+    const createFile = fs.createFile.bind(fs);
+    vi.spyOn(fs, "createFile").mockImplementationOnce(async (path, content) => {
+      await createFile(path, "external draft");
+      await createFile(path, content);
+    });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "generated.md",
+        name: "generated.md",
+        dirty: true,
+      },
+      editorDoc: "local draft",
+      buffers: createDocumentMap({ "generated.md": "" }),
+      liveDocs: createDocumentMap({ "generated.md": "local draft" }),
+    });
+    ref.runtime.markNewDocumentPath("generated.md");
+    ref.runtime.pipeline.bumpRevision("generated.md");
+
+    await expect(ref.result.saveCurrentDocument()).resolves.toBe(false);
+
+    await expect(fs.readFile("generated.md")).resolves.toBe("external draft");
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "generated.md",
+      name: "generated.md",
+      dirty: true,
+    });
+    expect(ref.runtime.getState().externalConflict).toEqual({
+      kind: "modified",
+      path: "generated.md",
+    });
+    expect(editorDocumentToString(
+      ref.runtime.externalConflictBaselines.get("generated.md") ?? emptyEditorDocument,
+    )).toBe("external draft");
+  });
+
   it("keeps newer edits dirty when they happen during an in-flight save", async () => {
     const writeGate = createDeferred<void>();
     const writeStarted = createDeferred<void>();
