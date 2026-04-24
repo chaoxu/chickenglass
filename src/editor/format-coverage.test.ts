@@ -726,6 +726,15 @@ describe("FORMAT.md coverage: Removed Features", () => {
     const state = createTestState(doc);
     expect(getNodeNames(state)).not.toContain("Blockquote");
   });
+
+  it("Pandoc definition lists are not canonical", () => {
+    const doc = "Term\n: Definition body\n\nNext paragraph.";
+    const state = createTestState(doc);
+    const names = getNodeNames(state);
+    expect(names).not.toContain("DefinitionList");
+    expect(names).not.toContain("DefinitionTerm");
+    expect(names).not.toContain("DefinitionDescription");
+  });
 });
 
 describe("FORMAT.md coverage: Unknown Fenced Div Classes", () => {

@@ -500,6 +500,7 @@ These standard markdown features are **not canonical**, even if Pandoc's markdow
 |---------|--------|-------------|
 | Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks |
 | `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: {.blockquote}` fenced divs |
+| Pandoc definition lists (`Term` followed by `: Definition`) | Not part of the Coflat semantic model | Use `::: {.definition}` fenced divs for mathematical definitions, or ordinary lists/tables for glossaries |
 
 The read/export pipeline still parses standard `>` blockquotes for compatibility with imported markdown, but the editor authoring format does not use them.
 
