@@ -5,7 +5,10 @@ import {
   parseStructuredFencedDivRaw,
 } from "./block-syntax";
 import { extractHeadingDefinitions } from "./headings";
-import { maskMarkdownCodeSpansAndBlocks } from "./masking";
+import {
+  maskMarkdownCodeSpansAndBlocks,
+  maskMarkdownReferenceScanTargets,
+} from "./masking";
 import { measureSync } from "../perf";
 import { scanReferenceTokens } from "../reference-tokens";
 
@@ -119,7 +122,7 @@ export function extractMarkdownEquations(doc: string, scanDoc = doc): MarkdownEq
 }
 
 export function extractDocumentLabelReferences(_doc: string, scanDoc = _doc): DocumentLabelReference[] {
-  return scanReferenceTokens(scanDoc);
+  return scanReferenceTokens(maskMarkdownReferenceScanTargets(scanDoc));
 }
 
 // Single-entry cache keyed by `doc` identity — subsequent calls with the
