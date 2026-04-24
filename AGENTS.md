@@ -13,7 +13,7 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 
 - This repo is hosted on a local Gitea instance at `http://localhost:3001`; see the Gitea / issue tracking section below for `tea` usage.
 - For terminal agents that support it, prefix repo-local shell commands with `rtk`.
-- Prefer repo browser helpers before ad hoc CDP scripts.
+- For browser inspection, use the managed Playwright harness (`pnpm browser:inspect`, `pnpm test:browser`, `pnpm doctor:browser`). Do NOT drive CDP on port 9322 unless the user explicitly asks.
 
 ## Stack
 
@@ -234,15 +234,17 @@ When asked to start the preview server, prefer `pnpm build && pnpm preview`. The
 
 ## Browser testing
 
-Prefer the managed Playwright harness for automated verification. The manual CDP/app-mode lane is still useful for visual debugging, but it is not the default regression path anymore.
+**Rule**: Do NOT use the CDP lane (port 9322, `pnpm chrome`, `chromium.connectOverCDP`) unless the user explicitly asks for it or is already driving the shared app window visually. The CDP lane is for human-in-the-loop visual debugging, not for automated inspection by agents. It has known pitfalls (headed `page.screenshot` hangs, stuck WebSocket connections, state lost on fallback) that the managed harness avoids.
 
-Managed harness:
+For any automated Lexical/CM6 inspection — DOM audits, screenshots, mode switches, reference/render checks — use the managed Playwright harness.
+
+Managed harness (the default):
 1. Start `pnpm dev`.
 2. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:quick -- cm6-rich`, `pnpm test:browser:lexical`, `pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "..."`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
-3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
+3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when the user explicitly asks for the manual shared app window.
 4. Browser setup and regression failures write artifacts under `/tmp/coflat-browser-artifacts` by default. Use `--artifacts-dir /tmp/coflat-*` to force a specific output directory for a run.
 
-Manual CDP lane:
+Manual CDP lane (user-driven only):
 1. Start `pnpm dev`, then `pnpm chrome` (CDP on port 9322).
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
 3. Use `page.evaluate()` + `__editor`/`__app` for surface-neutral actions. Use `__cmView`/`__cmDebug` only when investigating the CM6 surface. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout()` from the `default` runtime budget profile unless a repro needs a custom timeout.
