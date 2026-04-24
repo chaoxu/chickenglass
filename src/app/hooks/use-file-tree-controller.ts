@@ -9,9 +9,14 @@ import {
 } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildFileTreeIndex,
+  FILE_TREE_ROOT_ITEM_ID,
+  type FileTreeIndex,
+} from "../../lib/file-tree-model";
 import type { FileEntry } from "../file-manager";
 
-const ROOT_ITEM_ID = "__cf-file-tree-root__";
+const ROOT_ITEM_ID = FILE_TREE_ROOT_ITEM_ID;
 
 export interface FileTreeKeyResult {
   readonly handled: boolean;
@@ -24,20 +29,7 @@ export interface FileTreeKeyResult {
   };
 }
 
-/** Legacy helper retained for compatibility with #284 tests and pure callers. */
-export function flattenVisibleEntries(
-  entries: readonly FileEntry[],
-  openPaths: ReadonlySet<string>,
-): FileEntry[] {
-  const result: FileEntry[] = [];
-  for (const entry of entries) {
-    result.push(entry);
-    if (entry.isDirectory && openPaths.has(entry.path) && entry.children) {
-      result.push(...flattenVisibleEntries(entry.children, openPaths));
-    }
-  }
-  return result;
-}
+export { flattenVisibleFileEntries as flattenVisibleEntries } from "../../lib/file-tree-model";
 
 /** Legacy helper retained for compatibility with #284 tests and pure callers. */
 export function resolveFileTreeKey(
@@ -107,42 +99,10 @@ export function resolveFileTreeKey(
   return { handled: false };
 }
 
-export function buildTreeIndex(root: FileEntry | null): {
-  readonly entriesById: Map<string, FileEntry>;
-  readonly childrenById: Map<string, string[]>;
-} {
-  const entriesById = new Map<string, FileEntry>();
-  const childrenById = new Map<string, string[]>();
-
-  const syntheticRoot: FileEntry = root ?? {
-    name: "root",
-    path: "",
-    isDirectory: true,
-    children: [],
-  };
-
-  entriesById.set(ROOT_ITEM_ID, syntheticRoot);
-  childrenById.set(
-    ROOT_ITEM_ID,
-    syntheticRoot.children?.map((entry) => entry.path) ?? [],
-  );
-
-  const visit = (entry: FileEntry) => {
-    entriesById.set(entry.path, entry);
-    childrenById.set(
-      entry.path,
-      entry.isDirectory ? entry.children?.map((child) => child.path) ?? [] : [],
-    );
-    entry.children?.forEach(visit);
-  };
-
-  syntheticRoot.children?.forEach(visit);
-
-  return { entriesById, childrenById };
-}
+export { buildFileTreeIndex as buildTreeIndex } from "../../lib/file-tree-model";
 
 function getIndexedEntry(
-  index: ReturnType<typeof buildTreeIndex>,
+  index: FileTreeIndex,
   itemId: string,
 ): FileEntry {
   return index.entriesById.get(itemId)
@@ -321,7 +281,7 @@ export function useFileTreeController({
   persistRef,
   onLoadChildren,
 }: UseFileTreeControllerProps): FileTreeController {
-  const index = useMemo(() => buildTreeIndex(root), [root]);
+  const index = useMemo(() => buildFileTreeIndex(root), [root]);
   const onSelectRef = useRef(onSelect);
   const [state, setState] = useState<Partial<TreeState<FileEntry>>>(
     () => persistRef?.current.treeState ?? { expandedItems: [], focusedItem: null },

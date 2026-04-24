@@ -5,6 +5,7 @@ import {
   uint8ArrayToBase64,
 } from "./lib/utils";
 import { getDemoFiles } from "./demo-files";
+import { sortFileEntries, sortFileTree } from "../lib/file-tree-model";
 import { normalizeProjectPath } from "../lib/project-paths";
 import { fnv1aHash } from "./save-pipeline";
 
@@ -129,7 +130,7 @@ export class MemoryFileSystem implements FileSystem {
 
     const cache = new Map<string, readonly FileEntry[]>();
     for (const [path, entries] of entriesByParent) {
-      cache.set(path, [...entries.values()].sort(compareFileEntries));
+      cache.set(path, sortFileEntries([...entries.values()]));
     }
 
     this.immediateChildrenCache = cache;
@@ -185,8 +186,7 @@ export class MemoryFileSystem implements FileSystem {
       }
     }
 
-    sortTree(root);
-    return root;
+    return sortFileTree(root);
   }
 
   async listChildren(path: string): Promise<FileEntry[]> {
@@ -351,22 +351,6 @@ export class MemoryFileSystem implements FileSystem {
       if (key.startsWith(prefix)) this.files.delete(key);
     }
     this.invalidateImmediateChildrenCache();
-  }
-}
-
-function compareFileEntries(a: FileEntry, b: FileEntry): number {
-  if (a.isDirectory !== b.isDirectory) {
-    return a.isDirectory ? -1 : 1;
-  }
-  return a.name.localeCompare(b.name);
-}
-
-/** Sort a file tree: directories first, then alphabetical. */
-function sortTree(entry: FileEntry): void {
-  if (!entry.children) return;
-  entry.children.sort(compareFileEntries);
-  for (const child of entry.children) {
-    sortTree(child);
   }
 }
 

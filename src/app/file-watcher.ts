@@ -7,6 +7,7 @@
  */
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { getFileParentPath } from "../lib/file-tree-model";
 import type { ExternalDocumentSyncResult } from "./editor-session-service";
 import { logCatchError } from "./lib/log-catch-error";
 import { measureAsync } from "./perf";
@@ -54,11 +55,6 @@ function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEven
     return { path: payload, treeChanged: false };
   }
   return payload;
-}
-
-function parentDir(path: string): string {
-  const i = path.lastIndexOf("/");
-  return i < 0 ? "" : path.substring(0, i);
 }
 
 /**
@@ -211,7 +207,7 @@ export class FileWatcher {
   }
 
   private enqueueTreeRefresh(relativePath: string): void {
-    const dir = parentDir(relativePath);
+    const dir = getFileParentPath(relativePath);
     if (!this.pendingTreeRefreshes.has(dir)) {
       this.pendingTreeRefreshes.set(dir, relativePath);
     }

@@ -3,7 +3,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileEntry, FileSystem } from "../file-manager";
 import type { ProjectOpenResult } from "../project-open-result";
-import { replaceChildrenInTree } from "./use-app-workspace-session";
 
 interface MockWindowState {
   projectRoot: string | null;
@@ -545,59 +544,6 @@ describe("useAppWorkspaceSession", () => {
       projectRoot: null,
       currentDocument: null,
     });
-  });
-});
-
-describe("replaceChildrenInTree", () => {
-  const root: FileEntry = {
-    name: "project", path: "", isDirectory: true,
-    children: [
-      {
-        name: "docs", path: "docs", isDirectory: true,
-        children: [
-          { name: "readme.md", path: "docs/readme.md", isDirectory: false },
-          {
-            name: "sub", path: "docs/sub", isDirectory: true,
-            children: [{ name: "deep.md", path: "docs/sub/deep.md", isDirectory: false }],
-          },
-        ],
-      },
-      { name: "main.md", path: "main.md", isDirectory: false },
-    ],
-  };
-
-  it("replaces children of the target directory", () => {
-    const newChildren: FileEntry[] = [
-      { name: "new.md", path: "docs/new.md", isDirectory: false },
-    ];
-    const result = replaceChildrenInTree(root, "docs", newChildren);
-    expect(result).not.toBe(root);
-    expect(result.children?.[0].children).toEqual(newChildren);
-  });
-
-  it("preserves already-loaded subtrees in replaced children", () => {
-    const newChildren: FileEntry[] = [
-      { name: "readme.md", path: "docs/readme.md", isDirectory: false },
-      { name: "sub", path: "docs/sub", isDirectory: true },
-    ];
-    const result = replaceChildrenInTree(root, "docs", newChildren);
-    const sub = result.children?.[0].children?.find((c) => c.name === "sub");
-    expect(sub?.children).toEqual([
-      { name: "deep.md", path: "docs/sub/deep.md", isDirectory: false },
-    ]);
-  });
-
-  it("returns same reference when target directory is not found", () => {
-    const result = replaceChildrenInTree(root, "nonexistent", []);
-    expect(result).toBe(root);
-  });
-
-  it("handles root directory replacement", () => {
-    const newChildren: FileEntry[] = [
-      { name: "only.md", path: "only.md", isDirectory: false },
-    ];
-    const result = replaceChildrenInTree(root, "", newChildren);
-    expect(result.children).toEqual(newChildren);
   });
 });
 
