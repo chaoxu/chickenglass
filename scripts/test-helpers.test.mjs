@@ -16,6 +16,7 @@ import {
   waitForDebugBridge,
   waitForDocumentStable,
   waitForScrollReady,
+  switchToMode,
 } from "./test-helpers.mjs";
 import { splitCliCommand } from "./devx-cli.mjs";
 
@@ -192,6 +193,30 @@ describe("test helpers browser harness", () => {
       stableFrames: 1,
       timeoutMs: 200,
     })).resolves.toBeUndefined();
+  });
+
+  it("switches editor modes through the app debug bridge", async () => {
+    let mode = "cm6-rich";
+    window.__app = {
+      getMode: () => mode,
+      setMode: (nextMode) => {
+        mode = nextMode;
+      },
+    };
+    window.__editor = {
+      getDoc: () => "# Ready\n",
+    };
+    window.__cmDebug = {
+      semantics: () => ({ revision: 1 }),
+    };
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+    };
+
+    await switchToMode(page, "Lexical");
+
+    expect(mode).toBe("lexical");
+    expect(page.evaluate).toHaveBeenCalledWith(expect.any(Function), "lexical");
   });
 });
 

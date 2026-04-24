@@ -47,4 +47,28 @@ describe("StatusBar", () => {
     expect(saveStatus?.textContent).toBe("Failed");
     expect(saveStatus?.getAttribute("title")).toBe("disk full");
   });
+
+  it("exposes a stable mode-switch button for browser harnesses", () => {
+    const onModeChange = vi.fn();
+
+    act(() => {
+      root.render(createElement(StatusBar, {
+        editorMode: "cm6-rich",
+        onModeChange,
+        saveStatus: "idle",
+      }));
+    });
+
+    const modeButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='mode-button']",
+    );
+
+    expect(modeButton).not.toBeNull();
+    expect(modeButton?.getAttribute("aria-label")).toContain("Editor mode: CM6 Rich");
+
+    act(() => {
+      modeButton?.click();
+    });
+    expect(onModeChange).toHaveBeenCalledWith("lexical");
+  });
 });
