@@ -309,16 +309,28 @@ describe("equation label edge cases", () => {
     const text = "$$x$$ {#eq:foo} extra";
     const labels = findNodes(text, "EquationLabel");
     expect(labels).toHaveLength(0);
+
+    const display = findNodes(text, "DisplayMath");
+    expect(display).toHaveLength(0);
   });
 
-  it("keeps trailing equation title text outside the display math node", () => {
+  it("rejects display math with trailing equation title text", () => {
     const text = "$$x$$ {#eq:foo} Energy identity";
     const labels = findNodes(text, "EquationLabel");
     expect(labels).toHaveLength(0);
 
     const display = findNodes(text, "DisplayMath");
-    expect(display).toHaveLength(1);
-    expect(nodeText(text, display[0])).toBe("$$x$$");
+    expect(display).toHaveLength(0);
+  });
+
+  it("rejects display math with unbraced trailing text", () => {
+    expect(findNodes("$$x$$ trailing", "DisplayMath")).toHaveLength(0);
+    expect(findNodes("\\[x\\] trailing", "DisplayMath")).toHaveLength(0);
+  });
+
+  it("rejects multi-line display math with trailing text on the closing line", () => {
+    expect(findNodes("$$\nx\n$$ trailing", "DisplayMath")).toHaveLength(0);
+    expect(findNodes("\\[\nx\n\\] trailing", "DisplayMath")).toHaveLength(0);
   });
 
   it("does not create label when the local id contains another colon", () => {
@@ -327,8 +339,7 @@ describe("equation label edge cases", () => {
     expect(labels).toHaveLength(0);
 
     const display = findNodes(text, "DisplayMath");
-    expect(display).toHaveLength(1);
-    expect(display[0].to).toBe("$$x$$".length);
+    expect(display).toHaveLength(0);
   });
 
   it("inline math is unaffected by equation label extension", () => {

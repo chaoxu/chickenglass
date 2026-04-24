@@ -391,7 +391,7 @@ describe("documentAnalysisField incremental contract", () => {
       expected: [],
     },
     {
-      title: "deleting a middle equation closer so it absorbs the later block",
+      title: "deleting a middle equation closer leaves later invalid closer text unpaired",
       doc: [
         "$$x$$ {#eq:first}",
         "",
@@ -411,6 +411,7 @@ describe("documentAnalysisField incremental contract", () => {
       },
       expected: [
         { id: "eq:first", number: 1 },
+        { id: "eq:third", number: 2 },
       ],
     },
   ];

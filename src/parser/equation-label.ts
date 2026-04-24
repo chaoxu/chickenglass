@@ -6,35 +6,96 @@ import type {
   Line,
   Element,
 } from "@lezer/markdown";
+import type { Input } from "@lezer/common";
 import { OPEN_BRACE, CLOSE_BRACE, skipSpaceTab } from "./char-utils";
 import { isClosingFenceLine } from "./fenced-div";
 import { parseBracedId } from "./label-utils";
 
+interface BlockContextWithInput extends BlockContext {
+  readonly input: Input;
+}
+
+type ClosingSuffix =
+  | { readonly kind: "valid"; readonly labelFrom?: number; readonly labelTo?: number }
+  | { readonly kind: "invalid" };
+
+function isAllowedTrailingPunctuation(text: string): boolean {
+  return /^[.,;]\s*$/.test(text);
+}
+
 /**
  * Try to extract an equation label from text following a closing math delimiter.
- * Returns brace positions (relative to the line) or undefined if no label is found.
+ * Returns label positions (relative to the line), an empty valid suffix, or invalid
+ * when non-whitespace text follows the closing delimiter.
  */
-function extractLabel(
+function parseClosingSuffix(
   text: string,
   startOffset: number,
-): { labelFrom: number; labelTo: number } | undefined {
+): ClosingSuffix {
   let i = skipSpaceTab(text, startOffset);
-  if (i >= text.length || text.charCodeAt(i) !== OPEN_BRACE) return undefined;
+  if (i >= text.length) return { kind: "valid" };
+  if (text.charCodeAt(i) !== OPEN_BRACE) {
+    return isAllowedTrailingPunctuation(text.slice(i))
+      ? { kind: "valid" }
+      : { kind: "invalid" };
+  }
 
   const braceStart = i;
   i++;
   while (i < text.length && text.charCodeAt(i) !== CLOSE_BRACE) {
     i++;
   }
-  if (i >= text.length) return undefined;
+  if (i >= text.length) return { kind: "invalid" };
 
   const braceEnd = i + 1;
-  if (!parseBracedId(text.slice(braceStart, braceEnd), "eq:")) return undefined;
+  if (!parseBracedId(text.slice(braceStart, braceEnd), "eq:")) {
+    return { kind: "invalid" };
+  }
 
   // Ensure nothing meaningful follows the label
-  if (text.slice(braceEnd).trim().length > 0) return undefined;
+  if (text.slice(braceEnd).trim().length > 0) return { kind: "invalid" };
 
-  return { labelFrom: braceStart, labelTo: braceEnd };
+  return { kind: "valid", labelFrom: braceStart, labelTo: braceEnd };
+}
+
+function validateClosingDelimiterLookahead(
+  cx: BlockContext,
+  line: Line,
+  openDelimiter: string,
+  closeDelimiter: string,
+): "valid" | "invalid" | "unclosed" {
+  const input = (cx as BlockContextWithInput).input;
+  const source = input.read(cx.lineStart, input.length);
+  let lineOffset = 0;
+  let firstLine = true;
+
+  while (lineOffset <= source.length) {
+    const nextBreak = source.indexOf("\n", lineOffset);
+    const lineEnd = nextBreak >= 0 ? nextBreak : source.length;
+    const lineText = source.slice(lineOffset, lineEnd);
+
+    if (!firstLine && isClosingFenceLine(lineText) >= 3) {
+      return "unclosed";
+    }
+
+    const searchFrom = firstLine ? line.pos + openDelimiter.length : 0;
+    const closeInLine = lineText.indexOf(closeDelimiter, searchFrom);
+    if (closeInLine >= 0) {
+      const suffix = parseClosingSuffix(
+        lineText,
+        closeInLine + closeDelimiter.length,
+      );
+      return suffix.kind;
+    }
+
+    if (nextBreak < 0) {
+      break;
+    }
+    lineOffset = lineEnd + 1;
+    firstLine = false;
+  }
+
+  return "unclosed";
 }
 
 /**
@@ -50,8 +111,14 @@ function appendLabelIfPresent(
   closeOffset: number,
   closeAbsEnd: number,
 ): number {
-  const label = extractLabel(lineText, closeOffset);
-  if (!label) return closeAbsEnd;
+  const label = parseClosingSuffix(lineText, closeOffset);
+  if (
+    label.kind !== "valid"
+    || label.labelFrom === undefined
+    || label.labelTo === undefined
+  ) {
+    return closeAbsEnd;
+  }
   const labelFrom = lineStart + label.labelFrom;
   const labelTo = lineStart + label.labelTo;
   children.push(cx.elt("EquationLabel", labelFrom, labelTo));
@@ -135,6 +202,13 @@ function makeDisplayMathParser(
     parse(cx: BlockContext, line: Line) {
       const textAfterIndent = line.text.slice(line.pos);
       if (!textAfterIndent.startsWith(openDelimiter)) return false;
+      const closeValidation = validateClosingDelimiterLookahead(
+        cx,
+        line,
+        openDelimiter,
+        closeDelimiter,
+      );
+      if (closeValidation === "invalid") return false;
 
       const start = cx.lineStart + line.pos;
 
@@ -153,6 +227,7 @@ function makeDisplayMathParser(
         cx.nextLine();
         return true;
       }
+      if (textAfterIndent.slice(openLen).trim().length > 0) return false;
 
       // Multi-line: scan subsequent lines for closing delimiter
       const scan = scanMultilineClose(cx, line, closeDelimiter);

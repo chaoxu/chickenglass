@@ -54,6 +54,20 @@ describe("tableExtension — basic structure", () => {
 
     expect(findNodes(doc, "Table")).toHaveLength(1);
   });
+
+  it("does not parse Pandoc grid tables into semantic Table nodes", () => {
+    const doc = [
+      "+-------+------------------+",
+      "| Input | Output           |",
+      "+=======+==================+",
+      "| graph | first paragraph  |",
+      "|       |                  |",
+      "|       | second paragraph |",
+      "+-------+------------------+",
+    ].join("\n");
+
+    expect(findNodes(doc, "Table")).toHaveLength(0);
+  });
 });
 
 describe("tableExtension — pipes inside $…$ math", () => {

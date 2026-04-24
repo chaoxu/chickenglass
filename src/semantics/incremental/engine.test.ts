@@ -797,13 +797,10 @@ describe("incremental document analysis engine", () => {
     expectAnalysisMatchesRebuild(after, rebuilt);
   });
 
-  it("re-extracts equations in the math overhang after inserting a closing $$ (#778)", () => {
-    // Reviewer repro: the multi-line $$ pairs with the $$ at line start of
-    // "$$a$$", so eq:first is hidden (the "a$$ {#eq:first}" is leftover text).
-    // Inserting "$$\n\n" before "$$a$$" makes the multi-line $$ close properly,
-    // revealing $$a$$ as a separate equation block.  The mapped math region
-    // extends past the dirty window (overhang), and the equation slice must
-    // re-extract the overhang to discover eq:first.
+  it("keeps equations visible when an earlier multiline $$ has no valid closer (#778)", () => {
+    // "$$a$$ {#eq:first}" is a valid standalone single-line equation, but its
+    // first "$$" is not a valid closer for the earlier multiline opener because
+    // non-label content follows it on the same line.
     const doc = [
       "Intro.",
       "",
@@ -817,9 +814,10 @@ describe("incremental document analysis engine", () => {
     const state = createState(doc);
     const before = analyze(state);
 
-    // Before: only eq:second is visible (eq:first is hidden by the $$-pairing).
-    expect(before.equations.length).toBe(1);
-    expect(before.equations[0].id).toBe("eq:second");
+    expect(before.equations.map((equation) => equation.id)).toEqual([
+      "eq:first",
+      "eq:second",
+    ]);
 
     // Insert "$$\n\n" right before "$$a$$" to close the multi-line block.
     const insertPos = doc.indexOf("$$a$$");
@@ -841,23 +839,16 @@ describe("incremental document analysis engine", () => {
       expect(after.mathRegions[i]).toEqual(rebuilt.mathRegions[i]);
     }
 
-    // Equations must also match — both eq:first and eq:second should be
-    // present with correct numbering.
     expect(after.equations.length).toBe(rebuilt.equations.length);
     for (let i = 0; i < rebuilt.equations.length; i++) {
       expect(after.equations[i]).toEqual(rebuilt.equations[i]);
     }
   });
 
-  it("does not duplicate mathRegions in a multi-range transaction closing $$ and appending text (#780)", () => {
-    // Regression: in a transaction with two changes — one that inserts a
-    // closing $$ (which collapses a BigUnclosed region and triggers overhang
-    // re-extraction) and one that appends new text — the overhang extraction
-    // window uses an inclusive boundary while replaceOverlappingRanges uses
-    // a strict-overlap boundary.  A math region whose `from` equals
-    // `overhangTo` (the right edge of the overhang window) survives the
-    // remove step but is also emitted by the extractor, producing a
-    // duplicate entry in mathRegions.
+  it("does not duplicate mathRegions in a multi-range transaction near invalid multiline $$ (#780)", () => {
+    // The edit inserts a valid closer before "$$a$$" while a second change
+    // appends text. The incremental math regions must still match rebuild
+    // exactly and must not duplicate the adjacent standalone equation region.
     const doc = [
       "Intro.",
       "",
@@ -871,8 +862,10 @@ describe("incremental document analysis engine", () => {
     const state = createState(doc);
     const before = analyze(state);
 
-    // Before: only eq:second is visible (eq:first is swallowed by the $$-pairing).
-    expect(before.equations.length).toBe(1);
+    expect(before.equations.map((equation) => equation.id)).toEqual([
+      "eq:first",
+      "eq:second",
+    ]);
 
     // Two changes in a single transaction:
     //   1. Insert "$$\n\n" to close the multi-line block (dirty window W1).
