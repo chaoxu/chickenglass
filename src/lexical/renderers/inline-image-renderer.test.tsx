@@ -8,10 +8,13 @@ import { MemoryFileSystem } from "../../app/file-manager";
 import { FileSystemProvider } from "../../filesystem/file-system-context";
 import type { MarkdownEditorHandle } from "../markdown-editor-types";
 import { LexicalRichMarkdownEditor } from "../rich-markdown-editor";
+import { registerCoflatDecoratorRenderers } from "./block-renderers";
 
 type RichMarkdownEditorProps = ComponentProps<typeof LexicalRichMarkdownEditor>;
 
 const INLINE_IMAGE_DOC = "Before ![Inline alt](image.png) after";
+
+registerCoflatDecoratorRenderers();
 
 async function mountEditor(overrides: Partial<RichMarkdownEditorProps> = {}) {
   let editor: LexicalEditor | null = null;
