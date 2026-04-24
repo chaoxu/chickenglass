@@ -1454,6 +1454,20 @@ describe("#1366 — vertical motion subsystem split", () => {
   });
 });
 
+describe("#1349 — ambiguous cross-file labels", () => {
+  it("exposes plural and tri-state label resolution APIs", () => {
+    const queryApi = fileText("src/index/query-api.ts");
+
+    expect(queryApi).toContain("export type LabelResolution");
+    expect(queryApi).toContain("resolveLabelTargets");
+    expect(queryApi).toContain("resolveLabelResolution");
+    expect(queryApi).toContain('readonly kind: "ambiguous"');
+    expect(queryApi).toContain("readonly targets: readonly [IndexEntry, IndexEntry, ...IndexEntry[]]");
+    expect(queryApi).toContain("readonly label: string");
+    expect(queryApi).toContain("return resolution.kind === \"unique\" ? resolution.target : undefined");
+  });
+});
+
 describe("#315 — editor session subsystem", () => {
   it("extracts the editor session model and pure session actions", () => {
     expect(fileExists("src/app/editor-session-model.ts")).toBe(true);

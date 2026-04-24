@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import type { DocumentIndex, FileIndex, IndexEntry, IndexReference } from "./query-api";
-import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
+import {
+  findReferences,
+  getAllLabels,
+  queryIndex,
+  querySourceText,
+  resolveLabel,
+  resolveLabelResolution,
+  resolveLabelTargets,
+} from "./query-api";
 
 function makeEntry(overrides: Partial<IndexEntry> & { type: string; file: string }): IndexEntry {
   return {
@@ -214,6 +222,78 @@ describe("resolveLabel", () => {
     const entry = resolveLabel(index, "nonexistent");
     expect(entry).toBeUndefined();
   });
+
+  it("returns undefined instead of choosing an arbitrary duplicate label", () => {
+    const duplicateIndex = makeIndex([
+      {
+        file: "z-late.md",
+        entries: [
+          makeEntry({ type: "theorem", label: "dup", file: "z-late.md", position: { from: 20, to: 30 } }),
+        ],
+        references: [],
+      },
+      {
+        file: "a-early.md",
+        entries: [
+          makeEntry({ type: "definition", label: "dup", file: "a-early.md", position: { from: 5, to: 10 } }),
+        ],
+        references: [],
+      },
+    ]);
+
+    expect(resolveLabel(duplicateIndex, "dup")).toBeUndefined();
+  });
+});
+
+describe("resolveLabelResolution", () => {
+  it("reports missing, unique, and ambiguous labels explicitly", () => {
+    const first = makeEntry({ type: "definition", label: "dup", file: "b.md", position: { from: 20, to: 30 } });
+    const second = makeEntry({ type: "theorem", label: "dup", file: "a.md", position: { from: 10, to: 15 } });
+    const unique = makeEntry({ type: "lemma", label: "only", file: "c.md" });
+    const index = makeIndex([
+      { file: "b.md", entries: [first], references: [] },
+      { file: "a.md", entries: [second], references: [] },
+      { file: "c.md", entries: [unique], references: [] },
+    ]);
+
+    expect(resolveLabelResolution(index, "missing")).toEqual({
+      kind: "missing",
+      targets: [],
+    });
+    expect(resolveLabelResolution(index, "only")).toEqual({
+      kind: "unique",
+      target: unique,
+      targets: [unique],
+    });
+    expect(resolveLabelResolution(index, "dup")).toEqual({
+      kind: "ambiguous",
+      targets: [second, first],
+    });
+  });
+
+  it("sorts duplicate targets stably independent of file insertion order", () => {
+    const late = makeEntry({ type: "theorem", label: "dup", file: "z.md", position: { from: 2, to: 3 } });
+    const early = makeEntry({ type: "theorem", label: "dup", file: "a.md", position: { from: 20, to: 30 } });
+    const earlierInSameFile = makeEntry({ type: "lemma", label: "dup", file: "a.md", position: { from: 1, to: 5 } });
+    const indexA = makeIndex([
+      { file: "z.md", entries: [late], references: [] },
+      { file: "a.md", entries: [early, earlierInSameFile], references: [] },
+    ]);
+    const indexB = makeIndex([
+      { file: "a.md", entries: [early, earlierInSameFile], references: [] },
+      { file: "z.md", entries: [late], references: [] },
+    ]);
+
+    const expected = [
+      earlierInSameFile,
+      early,
+      late,
+    ];
+
+    expect(resolveLabelTargets(indexA, "dup")).toEqual(expected);
+    expect(resolveLabelTargets(indexB, "dup")).toEqual(expected);
+    expect(resolveLabelResolution(indexA, "dup")).toEqual(resolveLabelResolution(indexB, "dup"));
+  });
 });
 
 describe("findReferences", () => {
@@ -239,6 +319,7 @@ describe("findReferences", () => {
   it("finds all references to a label", () => {
     const refs = findReferences(index, "thm-1");
     expect(refs).toHaveLength(2);
+    expect(refs[0].label).toBe("thm-1");
     expect(refs[0].reference.sourceFile).toBe("chapter1.md");
     expect(refs[1].reference.sourceFile).toBe("chapter2.md");
   });
@@ -247,6 +328,8 @@ describe("findReferences", () => {
     const refs = findReferences(index, "thm-1");
     expect(refs[0].target).toBeDefined();
     expect(refs[0].target?.label).toBe("thm-1");
+    expect(refs[0].resolution.kind).toBe("unique");
+    expect(refs[0].targets).toEqual([thmEntry]);
   });
 
   it("returns empty for unreferenced labels", () => {
@@ -258,6 +341,11 @@ describe("findReferences", () => {
     const refs = findReferences(index, "thm-2");
     expect(refs).toHaveLength(1);
     expect(refs[0].target).toBeUndefined();
+    expect(refs[0].label).toBe("thm-2");
+    expect(refs[0].resolution).toEqual({
+      kind: "missing",
+      targets: [],
+    });
   });
 
   it("finds references within multi-id clusters", () => {
@@ -273,5 +361,39 @@ describe("findReferences", () => {
     const refs = findReferences(multiRefIndex, "thm-1");
     expect(refs).toHaveLength(1);
     expect(refs[0].reference.ids).toEqual(["thm-1", "thm-2"]);
+  });
+
+  it("preserves ambiguous targets instead of selecting one for references", () => {
+    const late = makeEntry({ type: "theorem", label: "dup", file: "z.md", position: { from: 2, to: 3 } });
+    const early = makeEntry({ type: "definition", label: "dup", file: "a.md", position: { from: 1, to: 5 } });
+    const duplicateIndex = makeIndex([
+      {
+        file: "z.md",
+        entries: [late],
+        references: [],
+      },
+      {
+        file: "refs.md",
+        entries: [],
+        references: [
+          makeRef({ ids: ["dup"], sourceFile: "refs.md" }),
+        ],
+      },
+      {
+        file: "a.md",
+        entries: [early],
+        references: [],
+      },
+    ]);
+
+    const refs = findReferences(duplicateIndex, "dup");
+
+    expect(refs).toHaveLength(1);
+    expect(refs[0].target).toBeUndefined();
+    expect(refs[0].resolution).toEqual({
+      kind: "ambiguous",
+      targets: [early, late],
+    });
+    expect(refs[0].targets).toEqual([early, late]);
   });
 });

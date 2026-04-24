@@ -25,10 +25,19 @@ import type {
   FileIndex,
   IndexEntry,
   IndexQuery,
+  LabelResolution,
   ResolvedReference,
   SourceTextQuery,
 } from "./query-api";
-import { findReferences, getAllLabels, queryIndex, querySourceText, resolveLabel } from "./query-api";
+import {
+  findReferences,
+  getAllLabels,
+  queryIndex,
+  querySourceText,
+  resolveLabel,
+  resolveLabelResolution,
+  resolveLabelTargets,
+} from "./query-api";
 
 export interface IndexFileSnapshot {
   readonly file: string;
@@ -151,10 +160,22 @@ export class BackgroundIndexer {
     return querySourceText(this.getDocumentIndex(), query);
   }
 
-  /** Resolve a label to its index entry. */
+  /** Resolve a label to its unique index entry. */
   async resolveLabel(label: string): Promise<IndexEntry | undefined> {
     if (this.disposed) throw new Error(`Indexer.resolveLabel("${label}"): indexer is disposed`);
     return resolveLabel(this.getDocumentIndex(), label);
+  }
+
+  /** Resolve a label to all matching index entries. */
+  async resolveLabelTargets(label: string): Promise<readonly IndexEntry[]> {
+    if (this.disposed) throw new Error(`Indexer.resolveLabelTargets("${label}"): indexer is disposed`);
+    return resolveLabelTargets(this.getDocumentIndex(), label);
+  }
+
+  /** Resolve a label to a missing/unique/ambiguous result. */
+  async resolveLabelResolution(label: string): Promise<LabelResolution> {
+    if (this.disposed) throw new Error(`Indexer.resolveLabelResolution("${label}"): indexer is disposed`);
+    return resolveLabelResolution(this.getDocumentIndex(), label);
   }
 
   /** Find all references to a label across all files. */

@@ -78,11 +78,33 @@ export interface DocumentIndex {
   readonly files: ReadonlyMap<string, FileIndex>;
 }
 
+/** Result of resolving a label across indexed files. */
+export type LabelResolution =
+  | {
+      readonly kind: "missing";
+      readonly targets: readonly [];
+    }
+  | {
+      readonly kind: "unique";
+      readonly target: IndexEntry;
+      readonly targets: readonly [IndexEntry];
+    }
+  | {
+      readonly kind: "ambiguous";
+      readonly targets: readonly [IndexEntry, IndexEntry, ...IndexEntry[]];
+    };
+
 /** Result of resolving a cross-file reference. */
 export interface ResolvedReference {
   /** The reference itself. */
   readonly reference: IndexReference;
-  /** The target entry, if found. */
+  /** The specific label this result was queried for. */
+  readonly label: string;
+  /** Explicit zero/one/many target resolution for this reference label. */
+  readonly resolution: LabelResolution;
+  /** All target entries for this reference label, sorted stably. */
+  readonly targets: readonly IndexEntry[];
+  /** The target entry when resolution is unique; undefined when missing or ambiguous. */
   readonly target: IndexEntry | undefined;
 }
 
@@ -134,6 +156,24 @@ function getSourceLineIndex(fileIndex: FileIndex): readonly SourceLineIndex[] {
 
   sourceLineIndexCache.set(fileIndex, indexedLines);
   return indexedLines;
+}
+
+function compareIndexEntries(left: IndexEntry, right: IndexEntry): number {
+  const fileCompare = compareStrings(left.file, right.file);
+  if (fileCompare !== 0) return fileCompare;
+  if (left.position.from !== right.position.from) {
+    return left.position.from - right.position.from;
+  }
+  if (left.position.to !== right.position.to) {
+    return left.position.to - right.position.to;
+  }
+  const typeCompare = compareStrings(left.type, right.type);
+  if (typeCompare !== 0) return typeCompare;
+  return compareStrings(left.label ?? "", right.label ?? "");
+}
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /**
@@ -237,19 +277,50 @@ export function getAllLabels(index: DocumentIndex): readonly string[] {
 }
 
 /**
- * Resolve a label to its target entry across all files.
- * Returns the first matching entry, or undefined if not found.
+ * Resolve a label to all matching target entries across all files.
+ * Results are sorted by file path and source position so reporting is stable
+ * regardless of Map insertion order.
+ */
+export function resolveLabelTargets(
+  index: DocumentIndex,
+  label: string,
+): readonly IndexEntry[] {
+  const targets: IndexEntry[] = [];
+  for (const [, fileIndex] of index.files) {
+    for (const entry of fileIndex.entries) {
+      if (entry.label === label) targets.push(entry);
+    }
+  }
+  return targets.sort(compareIndexEntries);
+}
+
+/**
+ * Resolve a label to a missing/unique/ambiguous result across all files.
+ */
+export function resolveLabelResolution(
+  index: DocumentIndex,
+  label: string,
+): LabelResolution {
+  const targets = resolveLabelTargets(index, label);
+  if (targets.length === 0) {
+    return { kind: "missing", targets: [] };
+  }
+  if (targets.length === 1) {
+    return { kind: "unique", target: targets[0], targets: [targets[0]] };
+  }
+  return { kind: "ambiguous", targets: targets as [IndexEntry, IndexEntry, ...IndexEntry[]] };
+}
+
+/**
+ * Resolve a label to its unique target entry across all files.
+ * Returns undefined when the label is missing or ambiguous.
  */
 export function resolveLabel(
   index: DocumentIndex,
   label: string,
 ): IndexEntry | undefined {
-  for (const [, fileIndex] of index.files) {
-    for (const entry of fileIndex.entries) {
-      if (entry.label === label) return entry;
-    }
-  }
-  return undefined;
+  const resolution = resolveLabelResolution(index, label);
+  return resolution.kind === "unique" ? resolution.target : undefined;
 }
 
 /**
@@ -259,13 +330,20 @@ export function findReferences(
   index: DocumentIndex,
   label: string,
 ): readonly ResolvedReference[] {
-  const target = resolveLabel(index, label);
+  const resolution = resolveLabelResolution(index, label);
+  const target = resolution.kind === "unique" ? resolution.target : undefined;
   const results: ResolvedReference[] = [];
 
   for (const [, fileIndex] of index.files) {
     for (const ref of fileIndex.references) {
       if (ref.ids.includes(label)) {
-        results.push({ reference: ref, target });
+        results.push({
+          reference: ref,
+          label,
+          resolution,
+          targets: resolution.targets,
+          target,
+        });
       }
     }
   }
