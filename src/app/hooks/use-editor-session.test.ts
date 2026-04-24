@@ -605,6 +605,49 @@ describe("useEditorSession", () => {
     expect(ref.result.currentDocument?.dirty).toBe(false);
   });
 
+  it("merges dirty external conflicts into a user-resolvable document", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "base\n" });
+    const { Harness, ref } = createHarness(fs);
+
+    act(() => root.render(createElement(Harness)));
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+      await fs.writeFile("draft.md", "disk\n");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "local\n"));
+    });
+
+    await act(async () => {
+      await expect(ref.result.syncExternalChange("draft.md")).resolves.toBe("notify");
+      await ref.result.mergeExternalConflict("draft.md");
+    });
+
+    expect(ref.result.hasUnresolvedExternalConflict).toBe(false);
+    expect(ref.result.currentDocument?.dirty).toBe(true);
+    expect(ref.result.editorDoc).toBe([
+      "<<<<<<< Local edits\n",
+      "local\n",
+      "||||||| Last saved\n",
+      "base\n",
+      "=======\n",
+      "disk\n",
+      ">>>>>>> Disk version\n",
+    ].join(""));
+    await expect(fs.readFile("draft.md")).resolves.toBe("disk\n");
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "resolved\n"));
+    });
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    await expect(fs.readFile("draft.md")).resolves.toBe("resolved\n");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
   it("restores a deleted conflicted file when the user keeps local edits", async () => {
     const fs = new MemoryFileSystem({ "draft.md": "hello" });
     const { Harness, ref } = createHarness(fs);

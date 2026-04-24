@@ -23,6 +23,7 @@ import {
   emptyEditorDocument,
   type EditorDocumentChange,
 } from "./editor-doc-change";
+import { createExternalConflictMergeDocument } from "./external-conflict-merge";
 import {
   documentForPath,
   documentTextForPath,
@@ -50,6 +51,7 @@ export interface EditorSessionService {
   reloadFile: (path: string) => Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
   keepExternalConflict: (path: string) => Promise<void>;
+  mergeExternalConflict: (path: string) => Promise<void>;
   createFile: (path: string) => Promise<void>;
   createDirectory: (path: string) => Promise<void>;
   closeCurrentFile: (options?: { discard?: boolean }) => Promise<boolean>;
@@ -262,6 +264,54 @@ export function createEditorSessionService({
         // usable replacement baseline.
       }
       console.error("[session] failed to restore deleted conflicted file:", path, error);
+      runtime.commit(setExternalDocumentConflict(runtime.getState(), {
+        kind: "deleted",
+        path,
+      }));
+    }
+  };
+
+  const mergeExternalConflict = async (path: string): Promise<void> => {
+    const conflict = runtime.getState().externalConflict;
+    if (conflict?.path !== path) {
+      return;
+    }
+
+    if (conflict.kind === "deleted") {
+      await keepExternalConflict(path);
+      return;
+    }
+
+    try {
+      const diskDoc = runtime.externalConflictBaselines.get(path)
+        ?? createEditorDocumentText(await fs.readFile(path));
+      const baseDoc = runtime.buffers.get(path) ?? emptyEditorDocument;
+      const localDoc = runtime.liveDocs.get(path) ?? baseDoc;
+      const diskContent = editorDocumentToString(diskDoc);
+      const merged = createExternalConflictMergeDocument({
+        base: editorDocumentToString(baseDoc),
+        disk: diskContent,
+        local: editorDocumentToString(localDoc),
+      });
+      const mergedDoc = createEditorDocumentText(merged.content);
+      const dirty = !mergedDoc.eq(diskDoc);
+
+      runtime.buffers.set(path, diskDoc);
+      runtime.liveDocs.set(path, mergedDoc);
+      runtime.externalConflictBaselines.delete(path);
+      runtime.pipeline.initPath(path, diskContent);
+      if (dirty) {
+        runtime.pipeline.bumpRevision(path);
+      }
+      runtime.activeDocumentSignal.publish(path);
+      runtime.commit(
+        clearExternalDocumentConflict(
+          markSessionDocumentDirty(runtime.getState(), path, dirty),
+          path,
+        ),
+        runtime.getCurrentPath() === path ? { editorDoc: merged.content } : undefined,
+      );
+    } catch (_error: unknown) {
       runtime.commit(setExternalDocumentConflict(runtime.getState(), {
         kind: "deleted",
         path,
@@ -612,6 +662,7 @@ export function createEditorSessionService({
     reloadFile,
     syncExternalChange,
     keepExternalConflict,
+    mergeExternalConflict,
     createFile,
     createDirectory,
     closeCurrentFile,

@@ -57,6 +57,7 @@ export interface UseEditorSessionReturn {
   reloadFile: (path: string) => Promise<void>;
   syncExternalChange: (path: string) => Promise<ExternalDocumentSyncResult>;
   keepExternalConflict: (path: string) => Promise<void>;
+  mergeExternalConflict: (path: string) => Promise<void>;
   hasUnresolvedExternalConflict: boolean;
   saveFile: () => Promise<void>;
   createFile: (path: string) => Promise<void>;
@@ -147,6 +148,7 @@ export function useEditorSession({
     reloadFile: sessionService.reloadFile,
     syncExternalChange: sessionService.syncExternalChange,
     keepExternalConflict: sessionService.keepExternalConflict,
+    mergeExternalConflict: sessionService.mergeExternalConflict,
     hasUnresolvedExternalConflict:
       snapshot.externalConflict?.path === snapshot.currentPath,
     saveFile: sessionPersistence.saveFile,

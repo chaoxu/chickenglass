@@ -6,6 +6,7 @@ interface ExternalConflictBannerProps {
   conflict: ExternalDocumentConflict | null;
   currentPath: string | null;
   keepExternalConflict: (path: string) => void | Promise<void>;
+  mergeExternalConflict: (path: string) => void | Promise<void>;
   reloadFile: (path: string) => Promise<void>;
   closeCurrentFile: (options?: { discard?: boolean }) => Promise<boolean>;
 }
@@ -14,6 +15,7 @@ export function ExternalConflictBanner({
   conflict,
   currentPath,
   keepExternalConflict,
+  mergeExternalConflict,
   reloadFile,
   closeCurrentFile,
 }: ExternalConflictBannerProps) {
@@ -42,6 +44,12 @@ export function ExternalConflictBanner({
     );
   };
 
+  const mergeChanges = () => {
+    void Promise.resolve(mergeExternalConflict(conflict.path)).catch(
+      logCatchError("[external-conflict] merge failed", conflict.path),
+    );
+  };
+
   return (
     <div
       className="flex min-h-11 shrink-0 items-center gap-3 border-b border-[var(--cf-border)] bg-[var(--cf-panel)] px-4 py-2 text-sm text-[var(--cf-text)]"
@@ -56,6 +64,15 @@ export function ExternalConflictBanner({
       >
         Keep edits
       </button>
+      {!deleted ? (
+        <button
+          type="button"
+          className="shrink-0 rounded border border-[var(--cf-border)] px-2.5 py-1 text-xs font-medium text-[var(--cf-text)] hover:bg-[var(--cf-hover)]"
+          onClick={mergeChanges}
+        >
+          Merge
+        </button>
+      ) : null}
       <button
         type="button"
         className="shrink-0 rounded bg-[var(--cf-accent)] px-2.5 py-1 text-xs font-medium text-[var(--cf-accent-fg)] hover:opacity-90"

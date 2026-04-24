@@ -27,6 +27,7 @@ describe("ExternalConflictBanner", () => {
         conflict: { kind: "modified", path: "notes/draft.md" },
         currentPath: "notes/draft.md",
         keepExternalConflict,
+        mergeExternalConflict: vi.fn(),
         reloadFile,
         closeCurrentFile: vi.fn(async () => true),
       }));
@@ -57,6 +58,7 @@ describe("ExternalConflictBanner", () => {
         conflict: { kind: "modified", path: "notes/draft.md" },
         currentPath: "notes/draft.md",
         keepExternalConflict: vi.fn(),
+        mergeExternalConflict: vi.fn(),
         reloadFile,
         closeCurrentFile: vi.fn(async () => true),
       }));
@@ -74,6 +76,32 @@ describe("ExternalConflictBanner", () => {
     expect(reloadFile).toHaveBeenCalledWith("notes/draft.md");
   });
 
+  it("lets the user merge modified disk changes into the editor", async () => {
+    const mergeExternalConflict = vi.fn();
+
+    await act(async () => {
+      root.render(createElement(ExternalConflictBanner, {
+        conflict: { kind: "modified", path: "notes/draft.md" },
+        currentPath: "notes/draft.md",
+        keepExternalConflict: vi.fn(),
+        mergeExternalConflict,
+        reloadFile: vi.fn(async () => {}),
+        closeCurrentFile: vi.fn(async () => true),
+      }));
+    });
+
+    const mergeButton = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Merge");
+    expect(mergeButton).toBeDefined();
+
+    await act(async () => {
+      mergeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mergeExternalConflict).toHaveBeenCalledWith("notes/draft.md");
+  });
+
   it("closes a dirty file that was deleted on disk", async () => {
     const closeCurrentFile = vi.fn(async () => true);
 
@@ -82,6 +110,7 @@ describe("ExternalConflictBanner", () => {
         conflict: { kind: "deleted", path: "notes/draft.md" },
         currentPath: "notes/draft.md",
         keepExternalConflict: vi.fn(),
+        mergeExternalConflict: vi.fn(),
         reloadFile: vi.fn(async () => {}),
         closeCurrentFile,
       }));
@@ -109,6 +138,7 @@ describe("ExternalConflictBanner", () => {
         conflict: { kind: "modified", path: "notes/draft.md" },
         currentPath: "notes/other.md",
         keepExternalConflict: vi.fn(),
+        mergeExternalConflict: vi.fn(),
         reloadFile: vi.fn(async () => {}),
         closeCurrentFile: vi.fn(async () => true),
       }));

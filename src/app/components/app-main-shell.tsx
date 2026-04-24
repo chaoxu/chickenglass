@@ -80,6 +80,7 @@ export function AppMainShell({
         conflict={editor.externalConflict}
         currentPath={currentPath}
         keepExternalConflict={editor.keepExternalConflict}
+        mergeExternalConflict={editor.mergeExternalConflict}
         reloadFile={editor.reloadFile}
         closeCurrentFile={editor.closeCurrentFile}
       />

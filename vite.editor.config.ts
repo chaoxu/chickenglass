@@ -1,4 +1,4 @@
-import { copyFileSync } from "node:fs";
+import { copyFileSync, cpSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
@@ -15,7 +15,10 @@ function copyEditorCss(): Plugin {
   return {
     name: "copy-editor-css",
     closeBundle() {
-      copyFileSync("src/editor-theme.css", "dist/editor.css");
+      const katexCss = readFileSync("node_modules/katex/dist/katex.min.css", "utf8");
+      const editorCss = readFileSync("src/editor-theme.css", "utf8");
+      writeFileSync("dist/editor.css", `${katexCss}\n${editorCss}`);
+      cpSync("node_modules/katex/dist/fonts", "dist/fonts", { recursive: true });
     },
   };
 }

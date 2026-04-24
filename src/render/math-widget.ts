@@ -1,6 +1,5 @@
 import type { EditorState } from "@codemirror/state";
 import { type EditorView, WidgetType } from "@codemirror/view";
-import katexStyles from "katex/dist/katex.min.css?inline";
 import { CSS } from "../constants/css-classes";
 import { isPlainPrimaryMouseEvent } from "../state/mouse-selection";
 import { documentAnalysisField } from "../state/document-analysis";
@@ -26,22 +25,11 @@ import {
 } from "./block-widget-height";
 import { cloneRenderedHTMLElement } from "./widget-core";
 
-const KATEX_STYLE_ID = "cf-katex-styles";
 const displayMathHeightCache = new Map<string, number>();
 const displayMathDomCache = new Map<string, HTMLElement>();
 const DEFAULT_DISPLAY_MATH_HEIGHT_PX = 32;
 const DISPLAY_MATH_EXTRA_LINE_HEIGHT_PX = 14;
 const MAX_ESTIMATED_DISPLAY_MATH_HEIGHT_PX = 96;
-
-function ensureKatexStyles(): void {
-  if (typeof document === "undefined") return;
-  if (document.getElementById(KATEX_STYLE_ID)) return;
-
-  const styleEl = document.createElement("style");
-  styleEl.id = KATEX_STYLE_ID;
-  styleEl.textContent = katexStyles;
-  document.head.appendChild(styleEl);
-}
 
 function estimateDisplayMathHeight(latex: string): number {
   let lineCount = Math.max(1, latex.split("\n").length);
@@ -53,8 +41,6 @@ function estimateDisplayMathHeight(latex: string): number {
     DEFAULT_DISPLAY_MATH_HEIGHT_PX + (lineCount - 1) * DISPLAY_MATH_EXTRA_LINE_HEIGHT_PX,
   );
 }
-
-ensureKatexStyles();
 
 export function clearKatexCache(): void {
   clearKatexHtmlCache();

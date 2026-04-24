@@ -58,12 +58,15 @@ import { mountEditor } from "coflat/editor";
 
 The CSS import is required. It provides:
 
+- KaTeX font-face definitions and packaged fonts under `dist/fonts`
 - `--cf-*` design token defaults (light theme) and `[data-theme="dark"]` overrides
 - CodeMirror 6 base overrides
 - Shared component classes (math rendering, fenced div blocks, search panel, tooltips)
 - `prefers-reduced-motion` and `prefers-contrast` media queries
 
-It does **not** include Tailwind, app-shell layout, or print styles.
+It does **not** include Tailwind, app-shell layout, or print styles. Hosts should
+not load KaTeX CSS separately for the standalone editor; `coflat/editor/style.css`
+owns the math font contract.
 
 ### Dark mode
 

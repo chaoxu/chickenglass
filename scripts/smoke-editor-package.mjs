@@ -137,6 +137,15 @@ try {
       throw new Error(`Packed tarball is missing ${requiredFile}`);
     }
   }
+  for (const requiredFont of [
+    "dist/fonts/KaTeX_Main-Regular.woff2",
+    "dist/fonts/KaTeX_Math-Italic.woff2",
+    "dist/fonts/KaTeX_Size2-Regular.woff2",
+  ]) {
+    if (!packedFiles.has(requiredFont)) {
+      throw new Error(`Packed tarball is missing ${requiredFont}`);
+    }
+  }
 
   const builtCss = readFileSync(join(repoRoot, "dist", "editor.css"), "utf8");
   if (!builtCss.includes("--cf-bg")) {
@@ -148,11 +157,17 @@ try {
   if (builtCss.includes("@import")) {
     throw new Error("dist/editor.css still contains @import directives");
   }
+  if (!builtCss.includes("@font-face") || !builtCss.includes("fonts/KaTeX_Main-Regular.woff2")) {
+    throw new Error("dist/editor.css is missing bundled KaTeX font-face definitions");
+  }
 
   const builtModule = readFileSync(join(repoRoot, "dist", "editor.mjs"), "utf8");
   validateBuiltEditorImports(builtModule);
   if (builtModule.includes("@overleaf/codemirror-tree-view")) {
     throw new Error("dist/editor.mjs still externalizes @overleaf/codemirror-tree-view");
+  }
+  if (builtModule.includes("cf-katex-styles") || builtModule.includes("fonts/KaTeX_")) {
+    throw new Error("dist/editor.mjs still injects KaTeX CSS instead of relying on editor.css");
   }
 
   const builtTypes = readFileSync(join(repoRoot, "dist", "editor.d.ts"), "utf8");

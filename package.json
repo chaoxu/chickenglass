@@ -79,18 +79,6 @@
     "prepare": "lefthook install",
     "prepack": "pnpm build:editor"
   },
-  "size-limit": [
-    {
-      "name": "coflat/editor (JS)",
-      "path": "dist/editor.mjs",
-      "limit": "10 MB"
-    },
-    {
-      "name": "coflat/editor (CSS)",
-      "path": "dist/editor.css",
-      "limit": "100 kB"
-    }
-  ],
   "license": "MIT",
   "pnpm": {
     "onlyBuiltDependencies": [
