@@ -4,6 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
 import { CSS } from "../constants/css-classes";
+import chicagoAuthorDateStyle from "./chicago-author-date.csl?raw";
 import defaultCslStyle from "./ieee.csl?raw";
 import { equationLabelExtension } from "../parser/equation-label";
 import { fencedDiv } from "../parser/fenced-div";
@@ -62,6 +63,24 @@ const equationCollision: CslJsonItem = {
   id: "eq:stein2001",
   type: "book",
   title: "Equation collision",
+};
+
+const alphaSortedEntry: CslJsonItem = {
+  id: "alpha2021",
+  type: "article-journal",
+  author: [{ family: "Alpha", given: "Alice" }],
+  title: "Alpha sorted bibliography entry",
+  issued: { "date-parts": [[2021]] },
+  "container-title": "Journal of Sorted References",
+};
+
+const zetaSortedEntry: CslJsonItem = {
+  id: "zeta2020",
+  type: "article-journal",
+  author: [{ family: "Zeta", given: "Zoe" }],
+  title: "Zeta cited first entry",
+  issued: { "date-parts": [[2020]] },
+  "container-title": "Journal of Citation Order",
 };
 
 const store = makeBibStore([karger, stein, alpha, equationCollision]);
@@ -479,11 +498,11 @@ describe("bibliographyPlugin integration", () => {
     it("does not reuse cached CSL HTML across different processors", () => {
       const firstProcessor = new CslProcessor([karger, stein, alpha]);
       const secondProcessor = new CslProcessor([karger, stein, alpha]);
-      const firstSpy = vi.spyOn(firstProcessor, "bibliography").mockReturnValue([
-        '<span class="csl-entry">First processor</span>',
+      const firstSpy = vi.spyOn(firstProcessor, "bibliographyEntries").mockReturnValue([
+        { id: "karger2000", html: '<span class="csl-entry">First processor</span>' },
       ]);
-      const secondSpy = vi.spyOn(secondProcessor, "bibliography").mockReturnValue([
-        '<span class="csl-entry">Second processor</span>',
+      const secondSpy = vi.spyOn(secondProcessor, "bibliographyEntries").mockReturnValue([
+        { id: "karger2000", html: '<span class="csl-entry">Second processor</span>' },
       ]);
 
       view = createBibView("See [@karger2000].", false);
@@ -517,6 +536,40 @@ describe("bibliographyPlugin integration", () => {
 
       expect(view.state.field(bibDataField).processorRevision).toBe(processor.revision);
       expect(view.dom.querySelector(`.${CSS.bibliographyEntry} .csl-left-margin`)?.textContent).toBe("[1]");
+    });
+
+    it("keeps CSL-sorted bibliography DOM ids and backlinks aligned with entry content", async () => {
+      const sortedStore = makeBibStore([zetaSortedEntry, alphaSortedEntry]);
+      const processor = await CslProcessor.create(
+        [zetaSortedEntry, alphaSortedEntry],
+        chicagoAuthorDateStyle,
+      );
+
+      view = createTestView([
+        "See [@zeta2020].",
+        "",
+        "Then see [@alpha2021].",
+      ].join("\n"), {
+        extensions: [
+          markdown({
+            extensions: [fencedDiv, mathExtension, equationLabelExtension],
+          }),
+          documentSemanticsField,
+          bibDataField,
+          bibliographyPlugin,
+        ],
+      });
+
+      view.dispatch({
+        effects: bibDataEffect.of({ store: sortedStore, cslProcessor: processor }),
+      });
+
+      const entries = [...view.dom.querySelectorAll<HTMLElement>(`.${CSS.bibliographyEntry}`)];
+      expect(entries.map((entry) => entry.id)).toEqual(["bib-alpha2021", "bib-zeta2020"]);
+      expect(entries[0].textContent).toContain("Alpha sorted bibliography entry");
+      expect(entries[1].textContent).toContain("Zeta cited first entry");
+      expect(entries[0].querySelector(`.${CSS.bibliographyBacklink}`)?.getAttribute("href")).toBe("#cite-ref-2");
+      expect(entries[1].querySelector(`.${CSS.bibliographyBacklink}`)?.getAttribute("href")).toBe("#cite-ref-1");
     });
   });
 });

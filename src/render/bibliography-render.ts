@@ -27,6 +27,7 @@ import {
   getAnalysisCitationRegistrationKey,
 } from "../citations/citation-matching";
 import {
+  type CslBibliographyEntry,
   type CslProcessor,
 } from "../citations/csl-processor";
 import { type CslJsonItem } from "../citations/csl-json";
@@ -227,7 +228,7 @@ export function buildBibliographyDecorations(
 
 interface BibliographyCacheEntry {
   readonly citedKey: string;
-  readonly cslHtml: readonly string[];
+  readonly cslEntries: readonly CslBibliographyEntry[];
   readonly processorRevision: number;
   readonly store: BibStore;
 }
@@ -282,7 +283,7 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
   if (citedIds.length === 0) return Decoration.none;
   const backlinks = collectCitationBacklinksFromAnalysis(analysis, store);
 
-  let cslHtml: readonly string[] = [];
+  let cslEntries: readonly CslBibliographyEntry[] = [];
   if (cslProcessor) {
     const citedKey = getCitedIdsKey(citedIds);
     const cached = bibliographyCache.get(cslProcessor);
@@ -293,20 +294,24 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
       cached.store !== store
     ) {
       ensureCitationsRegistered(analysis, store, cslProcessor);
-      cslHtml = cslProcessor.bibliography(citedIds);
+      cslEntries = cslProcessor.bibliographyEntries(citedIds);
       bibliographyCache.set(cslProcessor, {
         citedKey,
-        cslHtml,
+        cslEntries,
         processorRevision,
         store,
       });
     } else {
-      cslHtml = cached.cslHtml;
+      cslEntries = cached.cslEntries;
     }
   }
 
-  const entries = cslHtml.length > 0
-    ? citedIds.map((id) => store.get(id)).filter((e): e is CslJsonItem => e !== undefined)
+  const cslRows = cslEntries
+    .map((entry) => ({ entry: store.get(entry.id), html: entry.html }))
+    .filter((row): row is { readonly entry: CslJsonItem; readonly html: string } => row.entry !== undefined);
+  const cslHtml = cslRows.map((row) => row.html);
+  const entries = cslRows.length > 0
+    ? cslRows.map((row) => row.entry)
     : sortBibEntries(
         citedIds.map((id) => store.get(id)).filter((e): e is CslJsonItem => e !== undefined),
       );

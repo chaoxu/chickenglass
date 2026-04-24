@@ -59,6 +59,11 @@ export function setCitationJsLoaderForTest(loader: CitationJsLoader | null): voi
 /** CiteprocEngine type from @citation-js/core (replicated to avoid static import). */
 type CiteprocEngine = import("@citation-js/core").CiteprocEngine;
 
+export interface CslBibliographyEntry {
+  readonly id: string;
+  readonly html: string;
+}
+
 /** Pandoc-style locator label terms mapped to CSL locator labels. */
 const LOCATOR_TERMS: ReadonlyMap<string, string> = new Map([
   ["book", "book"], ["bk.", "book"], ["bks.", "book"],
@@ -124,6 +129,17 @@ function buildCitationItems(
     }
     return { id };
   });
+}
+
+function findKnownEntryId(
+  rawIds: string | readonly string[] | undefined,
+  items: ReadonlyMap<string, CslJsonItem>,
+): string | undefined {
+  if (typeof rawIds === "string") {
+    return items.has(rawIds) ? rawIds : undefined;
+  }
+
+  return rawIds?.find((id) => items.has(id));
 }
 
 let nextProcessorId = 0;
@@ -338,12 +354,27 @@ export class CslProcessor {
    * Each entry is an HTML string (may contain <i>, <span>, etc.).
    */
   bibliography(citedIds: string[]): string[] {
+    return this.bibliographyEntries(citedIds).map((entry) => entry.html);
+  }
+
+  /**
+   * Generate the bibliography with the CSL-rendered entry identity preserved.
+   *
+   * citeproc applies bibliography style sorting internally, so the returned
+   * HTML order can differ from document citation order. The `entry_ids`
+   * metadata returned alongside `makeBibliography()` is the source of truth
+   * for which rendered entry each HTML fragment belongs to.
+   */
+  bibliographyEntries(citedIds: readonly string[]): CslBibliographyEntry[] {
     if (!this.engine || citedIds.length === 0) return [];
     try {
       const validIds = citedIds.filter((id) => this.items.has(id));
       if (validIds.length === 0) return [];
-      const [, entries] = this.engine.makeBibliography();
-      return entries.map((e: string) => e.trim());
+      const [params, entries] = this.engine.makeBibliography();
+      return entries.map((html: string, index): CslBibliographyEntry => ({
+        id: findKnownEntryId(params.entry_ids?.[index], this.items) ?? validIds[index] ?? "",
+        html: html.trim(),
+      })).filter((entry) => entry.id !== "");
     } catch (e: unknown) {
       // CSL engine may fail on malformed entries -- return empty bibliography
       console.warn("[csl] bibliography() engine error", e);

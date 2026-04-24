@@ -37,6 +37,10 @@ declare module "@citation-js/core" {
     citationID: string;
   }
 
+  interface CiteprocBibliographyParams extends Record<string, unknown> {
+    entry_ids?: Array<string | string[]>;
+  }
+
   /** The citeproc-js engine (exposed via citation-js plugin-csl). */
   interface CiteprocEngine {
     makeCitationCluster(items: CiteprocCitationItem[]): string;
@@ -45,7 +49,7 @@ declare module "@citation-js/core" {
       citationsPre: Array<[string, number]>,
       citationsPost: Array<[string, number]>,
     ): [Record<string, unknown>, Array<[number, string]>];
-    makeBibliography(): [Record<string, unknown>, string[]];
+    makeBibliography(): [CiteprocBibliographyParams, string[]];
     updateItems(ids: string[]): void;
   }
 
