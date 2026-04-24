@@ -65,6 +65,11 @@ export { cellEditAnnotation, shouldCommitBlurredInlineEditor };
 
 const tableKeyboardEntryHandlers = new WeakMap<HTMLElement, EventListener>();
 
+function consumeTableKeyboardEvent(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 export function serializeTableWidgetMacros(macros: Record<string, string>): string {
   return JSON.stringify(
     Object.entries(macros).sort(([left], [right]) => left.localeCompare(right)),
@@ -452,7 +457,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         },
         onKeydown: (event) => {
           if (event.key === "Escape") {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const destroyed = destroyActiveInlineEditor();
             if (!destroyed) return true;
             commitDestroyedInlineEditor(destroyed);
@@ -461,7 +466,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           }
 
           if (event.key === "Tab") {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const intent = moveTableCellByTab(navigationModel, address, event.shiftKey);
             if (intent.kind === "append-row") {
               const destroyed = destroyActiveInlineEditor();
@@ -477,7 +482,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           }
 
           if (event.key === "Enter") {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const intent = moveTableCellVertically(navigationModel, address, "down");
             if (intent.kind === "handoff") {
               const destroyed = destroyActiveInlineEditor();
@@ -496,7 +501,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           const len = active.view.state.doc.length;
 
           if (event.key === "ArrowLeft" && pos === 0) {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const intent = moveTableCellHorizontally(navigationModel, address, "left");
             if (intent.kind === "handoff") return handoffFromActiveEditor(intent.direction);
             applyCellIntent(intent);
@@ -504,7 +509,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           }
 
           if (event.key === "ArrowRight" && pos === len) {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const intent = moveTableCellHorizontally(navigationModel, address, "right");
             if (intent.kind === "handoff") return handoffFromActiveEditor(intent.direction);
             applyCellIntent(intent);
@@ -512,7 +517,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           }
 
           if (event.key === "ArrowUp") {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const intent = moveTableCellVertically(navigationModel, address, "up");
             if (intent.kind === "handoff") return handoffFromActiveEditor(intent.direction);
             applyCellIntent(intent);
@@ -520,15 +525,21 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           }
 
           if (event.key === "ArrowDown") {
-            event.preventDefault();
+            consumeTableKeyboardEvent(event);
             const intent = moveTableCellVertically(navigationModel, address, "down");
             if (intent.kind === "handoff") return handoffFromActiveEditor(intent.direction);
             applyCellIntent(intent);
             return true;
           }
 
-          if (event.key === "Backspace" && pos === 0) return true;
-          if (event.key === "Delete" && pos === len) return true;
+          if (event.key === "Backspace" && pos === 0) {
+            consumeTableKeyboardEvent(event);
+            return true;
+          }
+          if (event.key === "Delete" && pos === len) {
+            consumeTableKeyboardEvent(event);
+            return true;
+          }
 
           return false;
         },
@@ -610,7 +621,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
           !event.metaKey &&
           !event.altKey
         ) {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           openCellEditor(cell, address);
           requestAnimationFrame(() => {
             const active = getActiveInlineEditor();
@@ -626,20 +637,20 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         }
 
         if (event.key === "Enter" || event.key === "F2") {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           openCellEditor(cell, address);
           return;
         }
 
         if (event.key === "Escape") {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           clearActivePreviewCell();
           this.editorView?.focus();
           return;
         }
 
         if (event.key === "ArrowLeft") {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           const intent = moveTableCellHorizontally(navigationModel, address, "left");
           if (intent.kind === "handoff") {
             clearActivePreviewCell();
@@ -651,7 +662,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         }
 
         if (event.key === "ArrowRight") {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           const intent = moveTableCellHorizontally(navigationModel, address, "right");
           if (intent.kind === "handoff") {
             clearActivePreviewCell();
@@ -663,7 +674,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         }
 
         if (event.key === "ArrowUp") {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           const intent = moveTableCellVertically(navigationModel, address, "up");
           if (intent.kind === "handoff") {
             clearActivePreviewCell();
@@ -675,7 +686,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
         }
 
         if (event.key === "ArrowDown") {
-          event.preventDefault();
+          consumeTableKeyboardEvent(event);
           const intent = moveTableCellVertically(navigationModel, address, "down");
           if (intent.kind === "handoff") {
             clearActivePreviewCell();

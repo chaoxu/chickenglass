@@ -317,6 +317,14 @@ const richVerticalMotionDomHandlers: Extension = EditorView.domEventHandlers({
   keydown(event, view) {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return false;
     if (!isRichMode(view)) return false;
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest(".cf-table-widget")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
 
     const handled = moveWithReverseScrollGuard(
       view,

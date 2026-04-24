@@ -6,6 +6,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import { mathMacrosField } from "../state/math-macros";
 import { tableDiscoveryField } from "../state/table-discovery";
+import { WIDGET_KEYBOARD_ENTRY_EVENT } from "../state/widget-keyboard-entry";
 import {
   createEditorState,
   createMockEditorView,
@@ -271,6 +272,73 @@ describe("TableWidget source range attributes", () => {
       requestAnimationFrameSpy.mockRestore();
       cancelAnimationFrameSpy.mockRestore();
     }
+  });
+
+  it("stops handled preview-cell arrow keys from bubbling to the root editor", () => {
+    const widget = new TableWidget(makeTable(), "| A | B |\n|---|---|\n| 1 | 2 |", 0, {});
+    const dom = widget.toDOM(makeStubView());
+    const bubbled = vi.fn();
+    dom.addEventListener("keydown", bubbled);
+
+    dom.dispatchEvent(new CustomEvent(WIDGET_KEYBOARD_ENTRY_EVENT, {
+      bubbles: true,
+      cancelable: true,
+      detail: {
+        direction: "down",
+        sourceFrom: 0,
+        sourceTo: 25,
+      },
+    }));
+
+    const activeCell = dom.querySelector<HTMLElement>(".cf-table-cell-active");
+    expect(activeCell).not.toBeNull();
+    if (!activeCell) {
+      throw new Error("expected active table cell");
+    }
+
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+    });
+    activeCell.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(bubbled).not.toHaveBeenCalled();
+  });
+
+  it("stops handled inline-cell arrow keys from bubbling to the root editor", () => {
+    const widget = new TableWidget(makeTable(), "| A | B |\n|---|---|\n| 1 | 2 |", 0, {});
+    const dom = widget.toDOM(makeStubView());
+    const bubbled = vi.fn();
+    dom.addEventListener("keydown", bubbled);
+
+    const bodyCell = dom.querySelector<HTMLElement>("tbody td");
+    expect(bodyCell).not.toBeNull();
+    if (!bodyCell) {
+      throw new Error("expected body table cell");
+    }
+
+    bodyCell.dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    const inlineEditorContent = bodyCell.querySelector<HTMLElement>(".cm-content");
+    expect(inlineEditorContent).not.toBeNull();
+    if (!inlineEditorContent) {
+      throw new Error("expected inline table cell editor");
+    }
+
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+    inlineEditorContent.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(bubbled).not.toHaveBeenCalled();
   });
 });
 

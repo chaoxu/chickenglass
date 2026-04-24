@@ -201,6 +201,11 @@ async function main() {
           passed++;
         } else {
           console.log(`  FAIL  ${test.name} (${elapsed}ms)${suffix}`);
+          await collectFailureArtifacts(
+            session,
+            `test-${test.name}`,
+            new Error(result.message ?? `${test.name} returned pass=false`),
+          );
           failed++;
         }
 
