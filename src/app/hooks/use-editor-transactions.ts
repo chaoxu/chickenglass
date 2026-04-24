@@ -27,6 +27,10 @@ export interface UseEditorTransactionsOptions {
   readonly handleDocumentSnapshot: (doc: string) => void;
 }
 
+function isNonMutatingRead(intent: EditorTransactionIntent): boolean {
+  return intent === "debug-read";
+}
+
 export function useEditorTransactions({
   currentPath,
   editorDoc,
@@ -49,11 +53,12 @@ export function useEditorTransactions({
       || intent === "search-navigation"
       || intent === "source-selection";
 
-    const flushedDoc = handle.flushPendingEdits();
+    const shouldUseSnapshotRead = isNonMutatingRead(intent);
+    const flushedDoc = shouldUseSnapshotRead ? null : handle.flushPendingEdits();
     if (needsSelectionSnapshot) {
       handle.getSelection();
     }
-    const freshDoc = flushedDoc ?? handle.getDoc();
+    const freshDoc = flushedDoc ?? (shouldUseSnapshotRead ? handle.peekDoc() : handle.getDoc());
     const currentDoc = getSessionCurrentDocText();
     if (freshDoc !== currentDoc) {
       handleDocumentSnapshot(freshDoc);

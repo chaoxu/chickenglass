@@ -94,7 +94,7 @@ describe("useEditorTransactions", () => {
     container.remove();
   });
 
-  it("flushes pending editor edits before running a document transaction", () => {
+  it("uses the cheap Lexical snapshot for non-mutating document reads", () => {
     const handle = createHandle("# A edited\n");
     const {
       Harness,
@@ -118,10 +118,10 @@ describe("useEditorTransactions", () => {
       );
     });
 
-    const flushOrder = vi.mocked(handle.flushPendingEdits).mock.invocationCallOrder[0];
-    const getDocOrder = vi.mocked(handle.getDoc).mock.invocationCallOrder[0];
+    expect(handle.flushPendingEdits).not.toHaveBeenCalled();
     expect(handle.getSelection).not.toHaveBeenCalled();
-    expect(flushOrder).toBeLessThan(getDocOrder);
+    expect(handle.getDoc).not.toHaveBeenCalled();
+    expect(handle.peekDoc).toHaveBeenCalledOnce();
     expect(handleDocumentSnapshot).toHaveBeenCalledWith("# A edited\n");
     expect(result).toEqual({
       flush: {

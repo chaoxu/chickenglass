@@ -20,7 +20,7 @@ interface PendingModeOverride {
 }
 
 export interface EditorModeOverridesDeps {
-  clearPendingLexicalNavigation: () => void;
+  clearPendingLexicalNavigation: (requestId?: number) => void;
   currentPath: string | null;
   editorDoc: string;
   getSessionCurrentDocText: () => string;
@@ -30,6 +30,7 @@ export interface EditorModeOverridesDeps {
     onComplete?: () => void,
   ) => Promise<boolean>;
   isMarkdownFile: boolean;
+  isPathOpen: (path: string) => boolean;
   openFile: (path: string) => Promise<void>;
   queueLexicalNavigation: (navigation: PendingLexicalNavigation) => void;
   runEditorTransaction: <T>(
@@ -52,6 +53,7 @@ export function useEditorModeOverrides({
   getSessionCurrentDocText,
   handleSearchResultNavigation,
   isMarkdownFile,
+  isPathOpen,
   openFile,
   queueLexicalNavigation,
   runEditorTransaction,
@@ -128,13 +130,44 @@ export function useEditorModeOverrides({
       requestId,
     });
     if (isLexicalEditorMode(normalizedMode)) {
+      const completeLexicalNavigation = () => {
+        setPendingModeOverride((previous) => {
+          if (!previous || previous.requestId !== requestId) {
+            return previous;
+          }
+          return null;
+        });
+        setModeOverrides((previous) => ({
+          ...previous,
+          [target.file]: normalizedMode,
+        }));
+        onComplete?.();
+      };
       queueLexicalNavigation({
-        onComplete,
+        onComplete: completeLexicalNavigation,
         path: target.file,
         pos: target.pos,
+        requestId,
       });
-      void openFile(target.file).catch((error: unknown) => {
-        clearPendingLexicalNavigation();
+      void openFile(target.file).then(() => {
+        if (!isPathOpen(target.file)) {
+          clearPendingLexicalNavigation(requestId);
+          setPendingModeOverride((previous) => {
+            if (!previous || previous.requestId !== requestId) {
+              return previous;
+            }
+            return null;
+          });
+          onComplete?.();
+        }
+      }).catch((error: unknown) => {
+        clearPendingLexicalNavigation(requestId);
+        setPendingModeOverride((previous) => {
+          if (!previous || previous.requestId !== requestId) {
+            return previous;
+          }
+          return null;
+        });
         console.error("[editor] handleSearchResult: failed to open file", target.file, error);
         onComplete?.();
       });
@@ -159,6 +192,7 @@ export function useEditorModeOverrides({
   }, [
     clearPendingLexicalNavigation,
     handleSearchResultNavigation,
+    isPathOpen,
     openFile,
     queueLexicalNavigation,
   ]);

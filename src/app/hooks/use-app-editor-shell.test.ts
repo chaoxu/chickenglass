@@ -246,6 +246,47 @@ describe("useAppEditorShell", () => {
     });
   });
 
+  it("completes same-file Lexical search navigation without waiting for a remount", async () => {
+    const onComplete = vi.fn();
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleModeChange("lexical");
+    });
+
+    await vi.waitFor(() => {
+      expect(ref.result.editorMode).toBe("lexical");
+    });
+
+    const handle = createEditorHandle("# A\n");
+    act(() => {
+      ref.result.handleLexicalEditorReady(handle);
+    });
+
+    act(() => {
+      ref.result.handleSearchResult({
+        file: "a.md",
+        pos: 3,
+        editorMode: "lexical",
+      }, onComplete);
+    });
+
+    expect(handle.setSelection).toHaveBeenCalledWith(3, 3);
+    expect(handle.focus).toHaveBeenCalledOnce();
+    expect(onComplete).toHaveBeenCalledOnce();
+    expect(ref.result.editorMode).toBe("lexical");
+  });
+
   it("does not flush the Lexical markdown snapshot when reopening the current file", async () => {
     const { Harness, ref } = createHarness({
       files: {
@@ -657,6 +698,54 @@ describe("useAppEditorShell", () => {
       expect(ref.result.currentPath).toBe("a.md");
       expect(ref.result.editorMode).toBe("source");
     });
+
+    requestUnsavedChangesDecision.mockResolvedValueOnce("discard");
+
+    await act(async () => {
+      await ref.result.openFile("b.md");
+    });
+
+    expect(ref.result.currentPath).toBe("b.md");
+    expect(ref.result.editorMode).toBe("cm6-rich");
+  });
+
+  it("clears pending Lexical search navigation when the target open is canceled", async () => {
+    const onComplete = vi.fn();
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("discard");
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+        "b.md": "# B\n",
+      },
+      requestUnsavedChangesDecision,
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
+    });
+
+    requestUnsavedChangesDecision.mockResolvedValueOnce("cancel");
+
+    act(() => {
+      ref.result.handleSearchResult({
+        file: "b.md",
+        pos: 0,
+        editorMode: "lexical",
+      }, onComplete);
+    });
+
+    await vi.waitFor(() => {
+      expect(onComplete).toHaveBeenCalledOnce();
+    });
+    expect(ref.result.currentPath).toBe("a.md");
 
     requestUnsavedChangesDecision.mockResolvedValueOnce("discard");
 
