@@ -13,34 +13,60 @@ import {
 
 export const name = "local-pdf-preview";
 
+function readPdfPreviewStatus() {
+  const wrappers = Array.from(
+    window.__cmView.dom.querySelectorAll(".cf-image-wrapper, .cf-image-error"),
+  ).map((el) => ({
+    className: el.className,
+    text: el.textContent ?? "",
+    ariaLabel:
+      el.querySelector("canvas, img")?.getAttribute("aria-label")
+      ?? el.getAttribute("aria-label")
+      ?? "",
+    hasCanvas: Boolean(el.querySelector("canvas")),
+  }));
+
+  const target = wrappers.find((entry) =>
+    entry.text.includes("Generated showcase figure rendered from a local PDF asset")
+    || entry.ariaLabel.includes("Generated showcase figure rendered from a local PDF asset"),
+  );
+
+  return {
+    target,
+    wrappers,
+  };
+}
+
 export async function run(page) {
   await openRegressionDocument(page, "index.md");
   await scrollToText(page, "Local PDF figure");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const status = await page.evaluate(async () => {
-    const wrappers = Array.from(
-      window.__cmView.dom.querySelectorAll(".cf-image-wrapper, .cf-image-error"),
-    ).map((el) => ({
-      className: el.className,
-      text: el.textContent ?? "",
-      ariaLabel:
-        el.querySelector("canvas, img")?.getAttribute("aria-label")
-        ?? el.getAttribute("aria-label")
-        ?? "",
-      hasCanvas: Boolean(el.querySelector("canvas")),
-    }));
+  await page.waitForFunction(
+    () => {
+      const wrappers = Array.from(
+        window.__cmView.dom.querySelectorAll(".cf-image-wrapper, .cf-image-error"),
+      ).map((el) => ({
+        className: el.className,
+        text: el.textContent ?? "",
+        ariaLabel:
+          el.querySelector("canvas, img")?.getAttribute("aria-label")
+          ?? el.getAttribute("aria-label")
+          ?? "",
+      }));
 
-    const target = wrappers.find((entry) =>
-      entry.text.includes("Generated showcase figure rendered from a local PDF asset")
-      || entry.ariaLabel.includes("Generated showcase figure rendered from a local PDF asset"),
-    );
+      const target = wrappers.find((entry) =>
+        entry.text.includes("Generated showcase figure rendered from a local PDF asset")
+        || entry.ariaLabel.includes("Generated showcase figure rendered from a local PDF asset"),
+      );
 
-    return {
-      target,
-      wrappers,
-    };
-  });
+      return Boolean(target && !target.className.includes("cf-image-loading"));
+    },
+    undefined,
+    { polling: 100, timeout: 15_000 },
+  ).catch(() => null);
+
+  const status = await page.evaluate(readPdfPreviewStatus);
 
   if (!status.target) {
     return {

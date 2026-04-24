@@ -157,7 +157,7 @@ export function StructureSourceEditor({
       }}
       onEditorReady={(handle) => {
         handleRef.current = handle;
-        focusEditor();
+        queueMicrotask(focusEditor);
       }}
       onFocus={focusEditor}
       onKeyDown={handleKeyDown}

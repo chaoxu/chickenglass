@@ -53,6 +53,7 @@ export interface ParsedSourceRevealToken {
 export type ParsedSourceToken = ParsedSourceTextToken | ParsedSourceRevealToken;
 
 const MARKDOWN_ESCAPE_RE = /\\([\\`*{}[\]()#+\-.!_>"])/g;
+const FENCED_CODE_START_RE = /^(\s*)(`{3,}|~{3,}).*$/;
 
 interface LinkAtSource {
   readonly labelFrom: number;
@@ -573,6 +574,41 @@ function parseTableTokens(
   return tokens;
 }
 
+function matchFencedCodeEndLine(
+  lines: readonly string[],
+  startLineIndex: number,
+): number {
+  const startLine = lines[startLineIndex] ?? "";
+  const start = startLine.match(FENCED_CODE_START_RE);
+  const marker = start?.[2];
+  if (!marker) {
+    return -1;
+  }
+
+  const fenceChar = marker[0] ?? "";
+  const closingFence = new RegExp(`^\\s*\\${fenceChar}{${marker.length},}\\s*$`);
+  for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
+    if (closingFence.test(lines[lineIndex] ?? "")) {
+      return lineIndex;
+    }
+  }
+  return -1;
+}
+
+function parseFencedCodeTokens(
+  markdown: string,
+  lines: readonly string[],
+  offsets: readonly number[],
+  startLineIndex: number,
+  endLineIndex: number,
+): readonly ParsedSourceToken[] {
+  const bodyFrom = (offsets[startLineIndex] ?? 0) + (lines[startLineIndex]?.length ?? 0) + 1;
+  const closingLineFrom = offsets[endLineIndex] ?? bodyFrom;
+  const bodyTo = Math.max(bodyFrom, closingLineFrom - 1);
+  const token = textToken(markdown, bodyFrom, bodyTo, []);
+  return token ? [token] : [];
+}
+
 function sourceBlocksForImport(
   markdown: string,
 ): SourceBlockRange[] {
@@ -605,6 +641,19 @@ export function parseMarkdownSourceTokens(markdown: string): readonly ParsedSour
         });
       }
       lineIndex = block.endLineIndex;
+      continue;
+    }
+
+    const fencedCodeEndLine = matchFencedCodeEndLine(lines, lineIndex);
+    if (fencedCodeEndLine >= 0) {
+      tokens.push(...parseFencedCodeTokens(
+        markdown,
+        lines,
+        offsets,
+        lineIndex,
+        fencedCodeEndLine,
+      ));
+      lineIndex = fencedCodeEndLine;
       continue;
     }
 

@@ -1,14 +1,20 @@
 import { memo, useMemo, type ComponentType, type JSX } from "react";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { NodeKey } from "lexical";
 
 import { FigureMedia } from "../figure-media";
 import { parseMarkdownImage } from "../markdown/image-markdown";
 import type { RawBlockVariant } from "../nodes/raw-block-node";
+import { StructureSourceEditor } from "../structure-source-editor";
+import { useStructureEditToggle } from "../structure-edit-plugin";
+import { useStructureSourceSelectionBridge } from "../structure-source-selection";
+import { useLexicalSurfaceEditable } from "../editability-context";
 import { FencedDivBlockRenderer } from "./fenced-div-renderers";
 import { FootnoteDefinitionBlockRenderer } from "./footnote-renderers";
 import { FrontmatterRenderer } from "./frontmatter-renderer";
 import { DisplayMathBlockRenderer } from "./math-renderers";
 import { RawBlockSourceRangeShell } from "./raw-block-source-range";
+import { structureToggleProps, useRawBlockUpdater } from "./shared";
 
 interface RawBlockContentRendererProps {
   readonly nodeKey: NodeKey;
@@ -16,16 +22,46 @@ interface RawBlockContentRendererProps {
 }
 
 function ImageBlockRenderer({
+  nodeKey,
   raw,
 }: {
+  readonly nodeKey: NodeKey;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
+  const surfaceEditable = useLexicalSurfaceEditable();
+  const updateRaw = useRawBlockUpdater(nodeKey);
+  const sourceEdit = useStructureEditToggle(nodeKey, "image", "image-source");
+  const onSelectionChange = useStructureSourceSelectionBridge(editor, nodeKey, 0);
   const parsed = useMemo(() => parseMarkdownImage(raw), [raw]);
   if (!parsed) {
     return <div className="cf-lexical-raw-fallback">{raw}</div>;
   }
 
-  return <FigureMedia alt={parsed.alt} src={parsed.src} />;
+  if (sourceEdit.active) {
+    return (
+      <div className="cf-lexical-block-source-line">
+        <StructureSourceEditor
+          className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-structure-source-editor cf-lexical-structure-source-editor--image"
+          doc={raw}
+          namespace={`coflat-image-source-${nodeKey}`}
+          onChange={(nextRaw) => updateRaw(() => nextRaw)}
+          onClose={sourceEdit.deactivate}
+          onSelectionChange={onSelectionChange}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <FigureMedia
+      activationProps={structureToggleProps(surfaceEditable, sourceEdit.activate, {
+        keyboardActivation: true,
+      })}
+      alt={parsed.alt}
+      src={parsed.src}
+    />
+  );
 }
 
 function RawFallbackRenderer({ raw }: RawBlockContentRendererProps): JSX.Element {

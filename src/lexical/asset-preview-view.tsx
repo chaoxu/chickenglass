@@ -26,7 +26,7 @@ export function AssetPreviewView({
   if (layout === "block") {
     if (preview.kind === "loading") {
       return (
-        <div className="cf-lexical-media">
+        <div className="cf-lexical-media" {...activationProps}>
           <div
             className="cf-lexical-media-fallback cf-lexical-media-fallback--loading"
             data-preview-state="loading"
@@ -39,7 +39,7 @@ export function AssetPreviewView({
 
     if (preview.kind === "error" || !preview.previewUrl) {
       return (
-        <div className="cf-lexical-media">
+        <div className="cf-lexical-media" {...activationProps}>
           <div
             className="cf-lexical-media-fallback cf-lexical-media-fallback--error"
             data-preview-state="error"
@@ -51,7 +51,7 @@ export function AssetPreviewView({
     }
 
     return (
-      <div className="cf-lexical-media">
+      <div className="cf-lexical-media" {...activationProps}>
         <img alt={fallbackLabel(alt, src)} className={imageClassName} src={preview.previewUrl} />
       </div>
     );

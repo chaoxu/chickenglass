@@ -106,6 +106,8 @@ import {
   COFLAT_REVEAL_COMMIT_TAG,
   COFLAT_REVEAL_UI_TAG,
 } from "./update-tags";
+import { getLexicalMarkdown } from "./markdown";
+import { createSourceSpanIndex } from "./source-spans";
 
 // Re-exports kept so existing unit tests can continue importing the
 // pure markdown helpers from this module.
@@ -151,6 +153,34 @@ function finishRevealClose<Session>(
   );
 }
 
+function readRevealSourceRange(
+  editor: LexicalEditor,
+  request: CursorRevealOpenRequest,
+): { readonly from: number; readonly to: number } | null {
+  const markdown = getLexicalMarkdown(editor);
+  let range: { readonly from: number; readonly to: number } | null = null;
+  editor.getEditorState().read(() => {
+    const node = $getNodeByKey(request.nodeKey);
+    if (!node) {
+      return;
+    }
+    const index = createSourceSpanIndex(markdown);
+    const from = index.getNodeStart(node);
+    const to = index.getNodeEnd(node);
+    if (from === null || to === null) {
+      return;
+    }
+    range = { from, to };
+  });
+  if (range) {
+    return range;
+  }
+  const fallbackFrom = markdown.indexOf(request.source);
+  return fallbackFrom < 0
+    ? null
+    : { from: fallbackFrom, to: fallbackFrom + request.source.length };
+}
+
 // ─── Floating presentation ──────────────────────────────────────────────
 
 function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[] }) {
@@ -189,11 +219,15 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
     if (!dom) {
       return;
     }
+    const sourceRange = readRevealSourceRange(editor, request);
     const nextState = {
       adapter,
       anchor: dom,
       caretOffset: request.caretOffset,
       nodeKey: request.nodeKey,
+      source: request.source,
+      sourceFrom: sourceRange?.from ?? null,
+      sourceTo: sourceRange?.to ?? null,
     };
     lifecycleRef.current = openCursorReveal(nextState, "editing");
     setDraft(request.source);

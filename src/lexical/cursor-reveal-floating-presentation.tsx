@@ -4,12 +4,16 @@ import type { NodeKey } from "lexical";
 import { SurfaceFloatingPortal } from "./runtime";
 import type { RevealAdapter } from "./cursor-reveal-adapters";
 import { EditorChromeBody, EditorChromeInput, EditorChromePanel } from "./editor-chrome";
+import { SOURCE_POSITION_ATTR } from "./source-position-contract";
 
 export interface FloatingRevealPresentationState {
   readonly nodeKey: NodeKey;
   readonly anchor: HTMLElement;
   readonly adapter: RevealAdapter;
   readonly caretOffset: number;
+  readonly source: string;
+  readonly sourceFrom: number | null;
+  readonly sourceTo: number | null;
 }
 
 export function FloatingRevealPresentation({
@@ -36,6 +40,14 @@ export function FloatingRevealPresentation({
           <EditorChromeInput
             ref={inputRef}
             className="cf-lexical-inline-token-source cf-lexical-floating-source-editor cf-lexical-inline-token-panel-editor"
+            data-coflat-floating-source="true"
+            data-coflat-source-text={state.source}
+            {...(state.sourceFrom === null
+              ? {}
+              : { [SOURCE_POSITION_ATTR.sourceFrom]: String(state.sourceFrom) })}
+            {...(state.sourceTo === null
+              ? {}
+              : { [SOURCE_POSITION_ATTR.sourceTo]: String(state.sourceTo) })}
             onBlur={onCommit}
             onChange={(event) => onDraftChange(event.currentTarget.value)}
             onKeyDown={(event) => {

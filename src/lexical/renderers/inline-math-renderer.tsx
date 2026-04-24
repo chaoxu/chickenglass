@@ -1,12 +1,16 @@
-import { memo, useMemo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
+import type { MouseEvent } from "react";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import katex from "katex";
 import type { NodeKey } from "lexical";
 
 import { useLexicalRenderContext } from "../render-context";
 import { INLINE_TOKEN_KEY_ATTR } from "../inline-token-boundary";
 import { stripInlineMathDelimiters } from "../inline-math-source";
+import { inlineMathSourceOffsetFromTarget } from "../math-source-position";
+import { OPEN_CURSOR_REVEAL_COMMAND } from "../cursor-reveal-command";
 import { buildKatexOptions } from "../../lib/katex-options";
-import { preventKatexMouseDown, useLazyVisibility } from "./shared";
+import { useLazyVisibility } from "./shared";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 
 // `nodeKey` and `raw` are primitive props that Lexical recreates with stable
@@ -20,10 +24,27 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
   readonly nodeKey: NodeKey;
   readonly raw: string;
 }) {
+  const [editor] = useLexicalComposerContext();
   const { config } = useLexicalRenderContext();
   const ref = useRef<HTMLSpanElement | null>(null);
   const visible = useLazyVisibility(ref);
   const body = useMemo(() => stripInlineMathDelimiters(raw), [raw]);
+  const openSourceReveal = useCallback((event: MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const caretOffset = inlineMathSourceOffsetFromTarget(
+      event.target,
+      raw,
+      event.clientX,
+    ) ?? raw.length;
+    editor.dispatchCommand(OPEN_CURSOR_REVEAL_COMMAND, {
+      adapterId: "inline-math",
+      caretOffset,
+      entry: "pointer",
+      nodeKey,
+      source: raw,
+    });
+  }, [editor, nodeKey, raw]);
   const html = useMemo(
     () => visible
       ? katex.renderToString(body, buildKatexOptions(false, config.math))
@@ -41,6 +62,7 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
         {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
         data-coflat-inline-math-key={nodeKey}
         data-coflat-inline-math-pending=""
+        onMouseDown={openSourceReveal}
         ref={ref}
         style={{ display: "inline-block", minWidth: `${Math.min(body.length, 12)}ch` }}
       >
@@ -55,7 +77,7 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
       {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
       data-coflat-inline-math-key={nodeKey}
       dangerouslySetInnerHTML={{ __html: html }}
-      onMouseDown={preventKatexMouseDown}
+      onMouseDown={openSourceReveal}
       ref={ref}
     />
   );

@@ -7,6 +7,11 @@ import { mapVisibleTextSelectionToMarkdown } from "./source-selection";
 import { fencedDivTitleMarkdownOffset } from "./structure-source-offsets";
 
 export function readEmbeddedInlineDomSelection(doc: string): MarkdownEditorSelection | null {
+  const activeSelection = readActiveFloatingSourceSelection(doc);
+  if (activeSelection) {
+    return activeSelection;
+  }
+
   const selection = document.getSelection();
   const { anchorNode, focusNode } = selection ?? {};
   if (!selection || !anchorNode || !focusNode) {
@@ -45,4 +50,21 @@ export function readEmbeddedInlineDomSelection(doc: string): MarkdownEditorSelec
     sourceFrom + titleOffset + mapped.focus,
     doc.length,
   );
+}
+
+function readActiveFloatingSourceSelection(doc: string): MarkdownEditorSelection | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLInputElement) || active.dataset.coflatFloatingSource !== "true") {
+    return null;
+  }
+
+  const source = active.dataset.coflatSourceText ?? active.value;
+  const sourceFrom = readSourceFrom(active) ?? doc.indexOf(source);
+  if (sourceFrom < 0) {
+    return null;
+  }
+
+  const anchor = sourceFrom + (active.selectionStart ?? active.value.length);
+  const focus = sourceFrom + (active.selectionEnd ?? active.selectionStart ?? active.value.length);
+  return createMarkdownSelection(anchor, focus, doc.length);
 }

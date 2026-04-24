@@ -18,6 +18,7 @@ export type StructureEditSurface =
   | "display-math-source"
   | "footnote-source"
   | "frontmatter-source"
+  | "image-source"
   | "table-cell";
 
 /**

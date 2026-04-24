@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import {
+  $getNodeByKey,
   $getNearestNodeFromDOMNode,
   $getSelection,
   $isDecoratorNode,
@@ -24,6 +25,7 @@ import {
   OPEN_CURSOR_REVEAL_COMMAND,
   type CursorRevealOpenRequest,
 } from "./cursor-reveal-controller";
+import { INLINE_TOKEN_KEY_ATTR } from "./inline-token-boundary";
 import { REVEAL_SOURCE_STYLE_PROPERTY } from "./reveal-source-style";
 
 export function useUserDrivenSelectionReveal(
@@ -120,41 +122,62 @@ export function registerDecoratorClickRevealEntry(
   adapters: readonly RevealAdapter[],
   onOpen: (request: CursorRevealOpenRequest) => void,
 ): () => void {
+  const openFromEvent = (event: MouseEvent): boolean => {
+    if (!(event.target instanceof Node)) {
+      return false;
+    }
+    const node = findClickedDecoratorNode(event.target);
+    if (!node || !$isDecoratorNode(node)) {
+      return false;
+    }
+    const pick = pickRevealSubjectFromNode(
+      node,
+      {
+        clientX: event.clientX,
+        entry: "pointer",
+        target: event.target,
+      },
+      adapters,
+    );
+    if (!pick) {
+      return false;
+    }
+    const request = createRevealOpenRequest(
+      pick.subject,
+      pick.adapter,
+      pick.subject.caretOffset ?? pick.subject.source.length,
+      "pointer",
+    );
+    onOpen(request);
+    return true;
+  };
+
   return editor.registerCommand(
     CLICK_COMMAND,
     (event) => {
-      if (!(event.target instanceof Node)) {
+      if (!openFromEvent(event)) {
         return false;
       }
-      const node = $getNearestNodeFromDOMNode(event.target);
-      if (!node || !$isDecoratorNode(node)) {
-        return false;
-      }
-      const pick = pickRevealSubjectFromNode(
-        node,
-        {
-          clientX: event.clientX,
-          entry: "pointer",
-          target: event.target,
-        },
-        adapters,
-      );
-      if (!pick) {
-        return false;
-      }
-      const request = createRevealOpenRequest(
-        pick.subject,
-        pick.adapter,
-        pick.subject.caretOffset ?? pick.subject.source.length,
-        "pointer",
-      );
       event.preventDefault();
       event.stopPropagation();
-      onOpen(request);
       return true;
     },
     COMMAND_PRIORITY_HIGH,
   );
+}
+
+function findClickedDecoratorNode(target: Node) {
+  const nearest = $getNearestNodeFromDOMNode(target);
+  if ($isDecoratorNode(nearest)) {
+    return nearest;
+  }
+
+  const targetElement = target instanceof Element
+    ? target
+    : target.parentElement;
+  const keyedElement = targetElement?.closest(`[${INLINE_TOKEN_KEY_ATTR}]`);
+  const nodeKey = keyedElement?.getAttribute(INLINE_TOKEN_KEY_ATTR);
+  return nodeKey ? $getNodeByKey(nodeKey) : nearest;
 }
 
 export function registerDecoratorKeyboardBoundaryRevealEntry(
