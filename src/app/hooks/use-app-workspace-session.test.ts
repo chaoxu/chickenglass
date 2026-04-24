@@ -37,6 +37,12 @@ const workspaceMockState = vi.hoisted(() => ({
       root: path,
     }));
     this.saveWindowState.mockReset();
+    this.saveWindowState.mockImplementation((patch: Partial<MockWindowState>) => {
+      this.windowState = {
+        ...this.windowState,
+        ...patch,
+      } as MockWindowState;
+    });
     this.addRecentFolder.mockReset();
     this.addRecentFile.mockReset();
     this.removeRecentFile.mockReset();
@@ -116,6 +122,7 @@ vi.mock("../tauri-fs", () => ({
 }));
 
 vi.mock("../project-config", () => ({
+  PROJECT_CONFIG_FILE: "coflat.yaml",
   loadProjectConfig: workspaceMockState.loadProjectConfig,
 }));
 
@@ -768,6 +775,33 @@ describe("refreshTree scoped refresh", () => {
     });
 
     expect(fs.tracker.listChildrenCalls).toEqual([""]);
+  });
+
+  it("reloads project config when coflat.yaml changes during a scoped refresh", async () => {
+    workspaceMockState.loadProjectConfig
+      .mockResolvedValueOnce({ bibliography: "old.bib" })
+      .mockResolvedValueOnce({ bibliography: "new.bib" });
+    const fs = createScopedFs();
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.projectConfig).toEqual({ bibliography: "old.bib" });
+
+    await act(async () => {
+      await ref.refreshTree("coflat.yaml");
+    });
+
+    expect(fs.tracker.listChildrenCalls.at(-1)).toBe("");
+    expect(ref.projectConfig).toEqual({ bibliography: "new.bib" });
   });
 
   it("falls back to listTree when fs has no listChildren", async () => {

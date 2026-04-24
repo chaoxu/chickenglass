@@ -7,6 +7,10 @@
 
 import { readLocalStorage, writeLocalStorage } from "./lib/utils";
 import { RECENT_FILES_KEY, RECENT_FOLDERS_KEY } from "../constants";
+import {
+  emitLocalStorageKeyChange,
+  subscribeLocalStorageKey,
+} from "./stores/local-storage-subscription";
 
 const MAX_FILES = 10;
 const MAX_FOLDERS = 5;
@@ -14,6 +18,11 @@ const MAX_FOLDERS = 5;
 export interface RecentFileEntry {
   path: string;
   projectRoot: string | null;
+}
+
+export interface RecentState {
+  readonly fileEntries: readonly RecentFileEntry[];
+  readonly folders: readonly string[];
 }
 
 /** Read a string array from localStorage, filtering out non-strings. */
@@ -47,11 +56,62 @@ function readRecentFileEntries(): RecentFileEntry[] {
 
 function writeRecentFileEntries(entries: RecentFileEntry[]): void {
   writeLocalStorage(RECENT_FILES_KEY, entries);
+  recentSnapshot = { ...getRecentSnapshot(), fileEntries: entries };
+  recentStorageSignature = readRecentStorageSignature();
+  emitLocalStorageKeyChange(RECENT_FILES_KEY);
 }
 
 /** Persist a string array to localStorage. */
 function writeList(key: string, list: string[]): void {
   writeLocalStorage(key, list);
+  if (key === RECENT_FOLDERS_KEY) {
+    recentSnapshot = { ...getRecentSnapshot(), folders: list };
+    recentStorageSignature = readRecentStorageSignature();
+    emitLocalStorageKeyChange(RECENT_FOLDERS_KEY);
+  }
+}
+
+let recentSnapshot: RecentState | null = null;
+let recentStorageSignature: string | null = null;
+
+function readRecentStorageSignature(): string {
+  try {
+    return JSON.stringify({
+      files: localStorage.getItem(RECENT_FILES_KEY),
+      folders: localStorage.getItem(RECENT_FOLDERS_KEY),
+    });
+  } catch (_error) {
+    return "";
+  }
+}
+
+export function getRecentSnapshot(): RecentState {
+  const signature = readRecentStorageSignature();
+  if (!recentSnapshot || signature !== recentStorageSignature) {
+    recentSnapshot = {
+      fileEntries: readRecentFileEntries(),
+      folders: readList(RECENT_FOLDERS_KEY),
+    };
+    recentStorageSignature = signature;
+  }
+  return recentSnapshot;
+}
+
+export function subscribeRecentState(listener: () => void): () => void {
+  const handleChange = () => {
+    recentSnapshot = {
+      fileEntries: readRecentFileEntries(),
+      folders: readList(RECENT_FOLDERS_KEY),
+    };
+    recentStorageSignature = readRecentStorageSignature();
+    listener();
+  };
+  const unsubscribeFiles = subscribeLocalStorageKey(RECENT_FILES_KEY, handleChange);
+  const unsubscribeFolders = subscribeLocalStorageKey(RECENT_FOLDERS_KEY, handleChange);
+  return () => {
+    unsubscribeFiles();
+    unsubscribeFolders();
+  };
 }
 
 /**
@@ -91,7 +151,7 @@ export function recordRecentFolder(path: string): void {
 export function getRecentFileEntries(
   projectRoot?: string | null,
 ): readonly RecentFileEntry[] {
-  const entries = readRecentFileEntries();
+  const entries = getRecentSnapshot().fileEntries;
   if (projectRoot === undefined) return entries;
   return entries.filter((entry) => entry.projectRoot === projectRoot);
 }
@@ -105,7 +165,7 @@ export function getRecentFiles(
 
 /** Return the most-recently-opened folder paths (most recent first). */
 export function getRecentFolders(): readonly string[] {
-  return readList(RECENT_FOLDERS_KEY);
+  return getRecentSnapshot().folders;
 }
 
 export function removeRecentFile(

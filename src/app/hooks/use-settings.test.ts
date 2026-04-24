@@ -121,6 +121,31 @@ describe("useSettings", () => {
   // ── updateSetting ─────────────────────────────────────────────────
 
   describe("updateSetting", () => {
+    it("notifies every hook instance in the same tab", () => {
+      const first = renderHook(() => useSettings());
+      const second = renderHook(() => useSettings());
+
+      act(() => {
+        first.result.current.updateSetting("fontSize", 24);
+      });
+
+      expect(second.result.current.settings.fontSize).toBe(24);
+    });
+
+    it("updates after browser storage events from another window", () => {
+      const { result } = renderHook(() => useSettings());
+
+      act(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ fontSize: 22 }));
+        window.dispatchEvent(new StorageEvent("storage", {
+          key: STORAGE_KEY,
+          newValue: localStorage.getItem(STORAGE_KEY),
+        }));
+      });
+
+      expect(result.current.settings.fontSize).toBe(22);
+    });
+
     it("persists individual field changes to localStorage", () => {
       const { result } = renderHook(() => useSettings());
       act(() => {

@@ -1,8 +1,10 @@
 import type { EditorMode } from "../editor-display-mode";
 import type { IndexQuery } from "../index/query-api";
 import type { FileEntry } from "../lib/types";
+import { getEditorModeAdapter } from "./editor-mode-adapter";
+import type { AppSearchMode } from "./editor-mode-adapter";
 
-export type AppSearchMode = "semantic" | "source";
+export type { AppSearchMode };
 
 export interface SearchNavigationTarget {
   file: string;
@@ -11,7 +13,7 @@ export interface SearchNavigationTarget {
 }
 
 export function getAppSearchMode(editorMode: EditorMode): AppSearchMode {
-  return editorMode === "source" ? "source" : "semantic";
+  return getEditorModeAdapter(editorMode, true).searchMode;
 }
 
 /** Build a semantic index query from raw UI text and an optional type filter. */

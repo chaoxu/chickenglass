@@ -22,7 +22,7 @@ import {
 interface LexicalEditorPaneProps {
   readonly doc: string;
   readonly docPath?: string;
-  readonly editorMode?: EditorMode;
+  readonly revealMode?: RevealMode;
   readonly fs?: FileSystem;
   readonly onDirtyChange?: () => void;
   readonly onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
@@ -35,10 +35,6 @@ interface LexicalEditorPaneProps {
   readonly projectConfig?: ProjectConfig;
   readonly sidenotesCollapsed?: boolean;
   readonly theme?: ResolvedTheme;
-}
-
-function toRevealMode(mode: EditorMode | undefined): RevealMode {
-  return mode === "source" ? REVEAL_MODE.SOURCE : REVEAL_MODE.LEXICAL;
 }
 
 interface LexicalPaneLiveCounts {
@@ -126,7 +122,7 @@ function scheduleIdleTask(task: () => void): () => void {
 }
 
 export function LexicalEditorPane({
-  editorMode,
+  revealMode,
   onDiagnosticsChange,
   onDirtyChange,
   onHeadingsChange,
@@ -164,7 +160,7 @@ export function LexicalEditorPane({
     from: 0,
     to: 0,
   });
-  const lexicalMode = toRevealMode(editorMode);
+  const lexicalMode = revealMode ?? REVEAL_MODE.LEXICAL;
 
   const shouldDeriveDiagnostics = useCallback(
     () => Boolean(callbacksRef.current.onDiagnosticsChange),

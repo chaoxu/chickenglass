@@ -7,7 +7,7 @@ import { useAppEditorController } from "../contexts/app-editor-context";
 import { useFileSystem } from "../contexts/file-system-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
-import { isLexicalEditorMode } from "../../editor-display-mode";
+import { getEditorModeAdapter } from "../editor-mode-adapter";
 
 const LexicalEditorPane = lazy(async () => {
   const bootstrap = await import("./lexical-editor-pane-bootstrap");
@@ -61,8 +61,7 @@ export function AppMainShell({
   const currentPath = editor.currentPath;
   const trackOutline = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "outline";
   const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
-  const useLexicalEditor = isLexicalEditorMode(editor.editorMode);
-  const cm6EditorMode = editor.editorMode === "source" ? "source" : "rich";
+  const modeAdapter = getEditorModeAdapter(editor.editorMode, editor.isMarkdownFile);
   const saveStatus = !editor.currentDocument
     ? "idle"
     : editor.hasUnresolvedExternalConflict
@@ -85,7 +84,7 @@ export function AppMainShell({
         closeCurrentFile={editor.closeCurrentFile}
       />
       <DebugSidebarProvider>
-        {currentPath && useLexicalEditor ? (
+        {currentPath && modeAdapter.usesLexicalSurface ? (
           <Suspense
             fallback={
               <LexicalEditorPaneFallback
@@ -111,7 +110,7 @@ export function AppMainShell({
               onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
               onLexicalEditorReady={editor.handleLexicalEditorReady}
               onSurfaceReady={editor.handleLexicalSurfaceReady}
-              editorMode={editor.editorMode}
+              revealMode={modeAdapter.lexicalRevealMode}
             />
           </Suspense>
         ) : currentPath ? (
@@ -133,7 +132,7 @@ export function AppMainShell({
               onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
               onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
               onDocumentReady={editor.handleEditorDocumentReady}
-              editorMode={cm6EditorMode}
+              editorMode={modeAdapter.cm6Mode}
             />
           </Suspense>
         ) : (

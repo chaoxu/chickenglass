@@ -6,16 +6,16 @@
  * and the in-memory state together.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
-  getRecentFileEntries,
-  getRecentFolders,
+  getRecentSnapshot,
   recordRecentFile,
   recordRecentFolder,
   removeRecentFile,
   removeRecentEntry,
   clearRecentFiles,
   clearRecentFolders,
+  subscribeRecentState,
   type RecentFileEntry,
 } from "../recent-files";
 
@@ -43,14 +43,15 @@ export interface UseRecentFilesReturn {
 export function useRecentFiles(
   currentProjectRoot: string | null,
 ): UseRecentFilesReturn {
-  const [allRecentFileEntries, setAllRecentFileEntries] = useState<readonly RecentFileEntry[]>(
-    () => getRecentFileEntries(),
+  const recentState = useSyncExternalStore(
+    subscribeRecentState,
+    getRecentSnapshot,
+    getRecentSnapshot,
   );
-  const [recentFolders, setRecentFolders] = useState<readonly string[]>(getRecentFolders);
 
   const recentFileEntries = useMemo(
-    () => allRecentFileEntries.filter((entry) => entry.projectRoot === currentProjectRoot),
-    [allRecentFileEntries, currentProjectRoot],
+    () => recentState.fileEntries.filter((entry) => entry.projectRoot === currentProjectRoot),
+    [recentState.fileEntries, currentProjectRoot],
   );
 
   const recentFiles = useMemo(
@@ -60,39 +61,32 @@ export function useRecentFiles(
 
   const addRecentFile = useCallback((path: string) => {
     recordRecentFile(path, currentProjectRoot);
-    setAllRecentFileEntries(getRecentFileEntries());
   }, [currentProjectRoot]);
 
   const addRecentFolder = useCallback((path: string) => {
     recordRecentFolder(path);
-    setRecentFolders(getRecentFolders());
   }, []);
 
   const removeRecentFileForCurrentProject = useCallback((path: string) => {
     removeRecentFile(path, currentProjectRoot);
-    setAllRecentFileEntries(getRecentFileEntries());
   }, [currentProjectRoot]);
 
   const removeRecent = useCallback((path: string) => {
     removeRecentEntry(path);
-    setAllRecentFileEntries(getRecentFileEntries());
-    setRecentFolders(getRecentFolders());
   }, []);
 
   const clearFiles = useCallback(() => {
     clearRecentFiles();
-    setAllRecentFileEntries(getRecentFileEntries());
   }, []);
 
   const clearFolders = useCallback(() => {
     clearRecentFolders();
-    setRecentFolders(getRecentFolders());
   }, []);
 
   return {
     recentFiles,
     recentFileEntries,
-    recentFolders,
+    recentFolders: recentState.folders,
     addRecentFile,
     addRecentFolder,
     removeRecentFile: removeRecentFileForCurrentProject,

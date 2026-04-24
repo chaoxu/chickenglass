@@ -8,7 +8,7 @@ import { isTauri } from "../../lib/tauri";
 import type { FileEntry, FileSystem } from "../file-manager";
 import { measureAsync, withPerfOperation } from "../perf";
 import type { ProjectConfig } from "../project-config";
-import { loadProjectConfig } from "../project-config";
+import { loadProjectConfig, PROJECT_CONFIG_FILE } from "../project-config";
 import type { ProjectOpenResult } from "../project-open-result";
 import { useRecentFiles } from "./use-recent-files";
 import { useSettings } from "./use-settings";
@@ -61,7 +61,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     settings.writingTheme,
   );
   const { windowState, saveState: saveWindowState } = useWindowState();
-  const [projectRoot, setProjectRoot] = useState<string | null>(windowState.projectRoot);
+  const projectRoot = windowState.projectRoot;
   const {
     recentFiles,
     recentFolders,
@@ -80,7 +80,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
   const startupStartedRef = useRef(false);
 
   const clearRestoredProjectState = useCallback(() => {
-    setProjectRoot(null);
     setFileTree(null);
     setProjectConfig({});
     saveWindowState({
@@ -139,6 +138,7 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     // Scoped refresh: reload only the parent directory of the changed path.
     if (changedPath !== undefined && fs.listChildren) {
       const dir = getFileParentPath(changedPath);
+      const shouldReloadProjectConfig = changedPath === PROJECT_CONFIG_FILE;
       const fullTreeGenerationAtStart = fullTreeRefreshGenerationRef.current;
       const scopedGeneration = (scopedRefreshGenerationRef.current.get(dir) ?? 0) + 1;
       scopedRefreshGenerationRef.current.set(dir, scopedGeneration);
@@ -147,13 +147,25 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         && fullTreeGenerationAtStart === fullTreeRefreshGenerationRef.current
         && scopedRefreshGenerationRef.current.get(dir) === scopedGeneration;
       try {
-        const children = await measureAsync(
-          "sidebar.file_tree_dir",
-          () => fs.listChildren?.(dir) as Promise<FileEntry[]>,
-          { category: "sidebar", detail: dir },
-        );
+        const [children, nextProjectConfig] = await Promise.all([
+          measureAsync(
+            "sidebar.file_tree_dir",
+            () => fs.listChildren?.(dir) as Promise<FileEntry[]>,
+            { category: "sidebar", detail: dir },
+          ),
+          shouldReloadProjectConfig
+            ? measureAsync(
+              "project_config.reload",
+              () => loadProjectConfig(fs),
+              { category: "workspace", detail: PROJECT_CONFIG_FILE },
+            )
+            : Promise.resolve<ProjectConfig | null>(null),
+        ]);
         if (!scopedRefreshIsCurrent()) return;
         setFileTree((prev) => prev ? replaceFileTreeChildren(prev, dir, children) : prev);
+        if (nextProjectConfig !== null) {
+          setProjectConfig(nextProjectConfig);
+        }
         return;
       } catch (e: unknown) {
         if (!scopedRefreshIsCurrent()) return;
@@ -232,7 +244,6 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
         return null;
       }
       const canonicalRoot = result.root;
-      setProjectRoot(canonicalRoot);
       onRootSet?.(canonicalRoot);
       const tree = await loadWorkspaceContents(requestId);
       return tree ? { projectRoot: canonicalRoot, tree } : null;

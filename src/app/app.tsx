@@ -249,7 +249,7 @@ function AppInner() {
     currentDocument: editor.currentDocument,
     hasDirtyDocument: editor.hasDirtyDocument,
     startupComplete: workspace.startupComplete,
-    restoredProjectRoot: workspace.windowState.projectRoot,
+    restoredProjectRoot: workspace.projectRoot,
   });
 
   return (

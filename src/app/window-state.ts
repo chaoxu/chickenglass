@@ -14,6 +14,10 @@
 import { basename, readLocalStorage, writeLocalStorage } from "./lib/utils";
 import { WINDOW_STATE_KEY } from "../constants";
 import { isTauri } from "../lib/tauri";
+import {
+  emitLocalStorageKeyChange,
+  subscribeLocalStorageKey,
+} from "./stores/local-storage-subscription";
 
 /** Persisted state for a single editor tab in the legacy multi-tab model. */
 export interface TabState {
@@ -74,6 +78,23 @@ const DEFAULT_STATE: WindowState = {
   sidebarSections: [],
   version: STATE_VERSION,
 };
+
+let windowStateSnapshot: WindowState | null = null;
+let windowStateStorageSignature: string | null = null;
+
+function readWindowStateStorageSignature(): string {
+  const storageKey = getWindowStateStorageKey();
+  try {
+    return JSON.stringify({
+      storageKey,
+      scoped: localStorage.getItem(storageKey),
+      fallback: storageKey === WINDOW_STATE_KEY ? null : localStorage.getItem(WINDOW_STATE_KEY),
+      href: typeof window === "undefined" ? "" : window.location.href,
+    });
+  } catch (_error) {
+    return storageKey;
+  }
+}
 
 /**
  * Read the Tauri window label directly from TAURI_INTERNALS.
@@ -217,12 +238,31 @@ export function loadWindowState(): WindowState {
   });
 }
 
+export function getWindowStateSnapshot(): WindowState {
+  const signature = readWindowStateStorageSignature();
+  if (!windowStateSnapshot || signature !== windowStateStorageSignature) {
+    windowStateSnapshot = loadWindowState();
+    windowStateStorageSignature = readWindowStateStorageSignature();
+  }
+  return windowStateSnapshot;
+}
+
+export function reloadWindowStateSnapshot(): WindowState {
+  windowStateSnapshot = loadWindowState();
+  windowStateStorageSignature = readWindowStateStorageSignature();
+  emitLocalStorageKeyChange(getWindowStateStorageKey());
+  return windowStateSnapshot;
+}
+
 /**
  * Persist the given window state to localStorage.
  * Silently ignores storage errors (e.g. private-browsing quota limits).
  */
 export function saveWindowState(state: WindowState): void {
   writeLocalStorage(getWindowStateStorageKey(), state);
+  windowStateSnapshot = state;
+  windowStateStorageSignature = readWindowStateStorageSignature();
+  emitLocalStorageKeyChange(getWindowStateStorageKey());
 }
 
 export function saveWindowStateForLabel(
@@ -230,6 +270,28 @@ export function saveWindowStateForLabel(
   state: WindowState,
 ): void {
   writeLocalStorage(getWindowStateStorageKey(windowLabel), state);
+  if (getWindowStateStorageKey(windowLabel) === getWindowStateStorageKey()) {
+    windowStateSnapshot = state;
+    windowStateStorageSignature = readWindowStateStorageSignature();
+  }
+  emitLocalStorageKeyChange(getWindowStateStorageKey(windowLabel));
+}
+
+export function subscribeWindowState(listener: () => void): () => void {
+  const storageKey = getWindowStateStorageKey();
+  const handleChange = () => {
+    windowStateSnapshot = loadWindowState();
+    windowStateStorageSignature = readWindowStateStorageSignature();
+    listener();
+  };
+  const unsubscribeScoped = subscribeLocalStorageKey(storageKey, handleChange);
+  const unsubscribeFallback = storageKey === WINDOW_STATE_KEY
+    ? () => {}
+    : subscribeLocalStorageKey(WINDOW_STATE_KEY, handleChange);
+  return () => {
+    unsubscribeScoped();
+    unsubscribeFallback();
+  };
 }
 
 /**

@@ -56,22 +56,28 @@ export async function openProjectInCurrentWindow({
     return isRequestCurrent(requestId);
   }
 
-  const closed = await closeCurrentFile();
-  if (!closed || !isRequestCurrent(requestId)) {
-    return false;
-  }
-
   const result = await openProjectRoot(projectRoot);
   if (!result || !isRequestCurrent(requestId)) {
     return false;
   }
 
   const targetPath = initialPath ?? await findDefaultDocumentPath(result.tree, listChildren, signal);
-  if (!targetPath) {
-    return isRequestCurrent(requestId);
-  }
   if (!isRequestCurrent(requestId)) {
     return false;
+  }
+
+  const closed = await closeCurrentFile();
+  if (!isRequestCurrent(requestId)) {
+    return false;
+  }
+  if (!closed) {
+    if (currentProjectRoot) {
+      await openProjectRoot(currentProjectRoot);
+    }
+    return false;
+  }
+  if (!targetPath) {
+    return isRequestCurrent(requestId);
   }
 
   await openFile(targetPath);

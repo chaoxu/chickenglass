@@ -55,10 +55,6 @@ export interface EditorPaneProps extends UseEditorOptions {
   editorMode?: EditorMode;
 }
 
-function toCm6EditorMode(mode: EditorMode | undefined): EditorMode {
-  return mode === "source" ? "source" : "rich";
-}
-
 export function EditorPane({
   onStateChange,
   onDocumentReady,
@@ -223,7 +219,7 @@ export function EditorPane({
 
   useEffect(() => {
     if (!view) return;
-    setEditorMode(view, toCm6EditorMode(editorMode));
+    setEditorMode(view, editorMode ?? "rich");
   }, [view, editorMode]);
 
   // When a hidden sidebar panel is shown again, push one fresh snapshot

@@ -9,11 +9,13 @@
  * the initial state is loaded synchronously from localStorage on first render.
  */
 
-import { useState, useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import {
-  loadWindowState,
   saveWindowState,
   buildWindowState,
+  getWindowStateSnapshot,
+  reloadWindowStateSnapshot,
+  subscribeWindowState,
   type WindowState,
   type CurrentDocumentState,
   type SidebarSectionState,
@@ -36,7 +38,11 @@ export interface UseWindowStateReturn {
 }
 
 export function useWindowState(): UseWindowStateReturn {
-  const [windowState, setWindowState] = useState<WindowState>(loadWindowState);
+  const windowState = useSyncExternalStore(
+    subscribeWindowState,
+    getWindowStateSnapshot,
+    getWindowStateSnapshot,
+  );
 
   const saveState = useCallback(
     (patch: Partial<{
@@ -45,22 +51,20 @@ export function useWindowState(): UseWindowStateReturn {
       sidebarWidth: number;
       sidebarSections: SidebarSectionState[];
     }>) => {
-      setWindowState((prev) => {
-        const next = buildWindowState({
-          currentDocument: patch.currentDocument !== undefined ? patch.currentDocument : prev.currentDocument,
-          projectRoot: patch.projectRoot !== undefined ? patch.projectRoot : prev.projectRoot,
-          sidebarWidth: patch.sidebarWidth ?? prev.sidebarWidth,
-          sidebarSections: patch.sidebarSections ?? prev.sidebarSections,
-        });
-        saveWindowState(next);
-        return next;
+      const prev = getWindowStateSnapshot();
+      const next = buildWindowState({
+        currentDocument: patch.currentDocument !== undefined ? patch.currentDocument : prev.currentDocument,
+        projectRoot: patch.projectRoot !== undefined ? patch.projectRoot : prev.projectRoot,
+        sidebarWidth: patch.sidebarWidth ?? prev.sidebarWidth,
+        sidebarSections: patch.sidebarSections ?? prev.sidebarSections,
       });
+      saveWindowState(next);
     },
     [],
   );
 
   const reloadState = useCallback(() => {
-    setWindowState(loadWindowState());
+    reloadWindowStateSnapshot();
   }, []);
 
   return { windowState, saveState, reloadState };

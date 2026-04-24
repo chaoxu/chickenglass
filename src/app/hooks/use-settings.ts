@@ -1,17 +1,21 @@
 /**
  * useSettings — React hook for localStorage-backed application settings.
  *
- * - Loads from localStorage on first render, falling back to defaults.
+ * - Loads from a shared localStorage-backed store, falling back to defaults.
  * - `updateSetting(key, value)` updates one field and persists the full object.
  * - `resetSettings()` restores all defaults and persists them.
  * - All localStorage access is wrapped in try/catch for test environments.
  */
 
-import { useState, useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
 import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
 import { defaultEditorMode, normalizeEditorMode } from "../../editor-display-mode";
+import {
+  emitLocalStorageKeyChange,
+  subscribeLocalStorageKey,
+} from "../stores/local-storage-subscription";
 
 const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 30000,
@@ -71,6 +75,45 @@ function loadSettings(): Settings {
 
 function persistSettings(settings: Settings): void {
   writeLocalStorage(SETTINGS_KEY, settings);
+  settingsSnapshot = settings;
+  settingsStorageSignature = readSettingsStorageSignature();
+  emitLocalStorageKeyChange(SETTINGS_KEY);
+}
+
+let settingsSnapshot: Settings | null = null;
+let settingsStorageSignature: string | null = null;
+
+function readSettingsStorageSignature(): string {
+  try {
+    return JSON.stringify({
+      settings: localStorage.getItem(SETTINGS_KEY),
+      legacyTheme: localStorage.getItem(LEGACY_THEME_KEY),
+    });
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getSettingsSnapshot(): Settings {
+  const signature = readSettingsStorageSignature();
+  if (!settingsSnapshot || signature !== settingsStorageSignature) {
+    settingsSnapshot = loadSettings();
+    settingsStorageSignature = readSettingsStorageSignature();
+  }
+  return settingsSnapshot;
+}
+
+function subscribeSettings(listener: () => void): () => void {
+  const handleChange = () => {
+    getSettingsSnapshot();
+    listener();
+  };
+  const unsubscribeSettings = subscribeLocalStorageKey(SETTINGS_KEY, handleChange);
+  const unsubscribeLegacyTheme = subscribeLocalStorageKey(LEGACY_THEME_KEY, handleChange);
+  return () => {
+    unsubscribeSettings();
+    unsubscribeLegacyTheme();
+  };
 }
 
 export interface UseSettingsReturn {
@@ -80,20 +123,18 @@ export interface UseSettingsReturn {
 }
 
 export function useSettings(): UseSettingsReturn {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const settings = useSyncExternalStore(
+    subscribeSettings,
+    getSettingsSnapshot,
+    getSettingsSnapshot,
+  );
 
   const updateSetting = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => {
-    setSettings((prev) => {
-      const next = { ...prev, [key]: value };
-      persistSettings(next);
-      return next;
-    });
+    persistSettings({ ...getSettingsSnapshot(), [key]: value });
   }, []);
 
   const resetSettings = useCallback(() => {
-    const defaults = { ...DEFAULT_SETTINGS };
-    persistSettings(defaults);
-    setSettings(defaults);
+    persistSettings({ ...DEFAULT_SETTINGS });
   }, []);
 
   return { settings, updateSetting, resetSettings };

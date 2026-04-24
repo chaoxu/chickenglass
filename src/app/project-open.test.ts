@@ -199,6 +199,55 @@ describe("openProjectInCurrentWindow", () => {
     expect(openFile).toHaveBeenCalledWith("docs/note.md");
   });
 
+  it("does not close the current file when opening the target project fails", async () => {
+    let latestProjectRequest = 0;
+    const closeCurrentFile = vi.fn(async () => true);
+    const openProjectRoot = vi.fn(async () => null);
+    const openFile = vi.fn(async () => {});
+
+    const result = await openProjectInCurrentWindow({
+      projectRoot: "/tmp/missing-project",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile,
+      openProjectRoot,
+      openFile,
+    });
+
+    expect(result).toBe(false);
+    expect(openProjectRoot).toHaveBeenCalledWith("/tmp/missing-project");
+    expect(closeCurrentFile).not.toHaveBeenCalled();
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  it("restores the previous project when close is rejected after target open", async () => {
+    let latestProjectRequest = 0;
+    const closeCurrentFile = vi.fn(async () => false);
+    const openProjectRoot = vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("main.md"),
+    }));
+    const openFile = vi.fn(async () => {});
+
+    const result = await openProjectInCurrentWindow({
+      projectRoot: "/tmp/next-project",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile,
+      openProjectRoot,
+      openFile,
+    });
+
+    expect(result).toBe(false);
+    expect(openProjectRoot).toHaveBeenNthCalledWith(1, "/tmp/next-project");
+    expect(openProjectRoot).toHaveBeenNthCalledWith(2, "/tmp/original");
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
   it("cancels an older in-flight file open before awaiting same-project alias canonicalization", async () => {
     let latestProjectRequest = 0;
     let latestOpenFileToken = 0;
