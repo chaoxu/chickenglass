@@ -155,7 +155,7 @@ export class ImagePreviewWidget extends ShellWidget {
 
   override toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
-    this.syncWidgetAttrs(el);
+    this.syncWidgetAttrs(el, view);
     if (this.isBlock) {
       el.dataset.activeFenceGuides = "true";
       syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
@@ -180,7 +180,7 @@ export class ImagePreviewWidget extends ShellWidget {
     }
     dom.textContent = "";
     this.renderInto(dom);
-    this.syncWidgetAttrs(dom);
+    this.syncWidgetAttrs(dom, view);
     if (this.isBlock) {
       dom.dataset.activeFenceGuides = "true";
       syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);

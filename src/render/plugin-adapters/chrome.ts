@@ -166,7 +166,7 @@ export class BlockCaptionWidget extends MacroRenderingWidget {
 
   override toDOM(view?: import("@codemirror/view").EditorView): HTMLElement {
     const el = this.createDOM();
-    this.syncWidgetAttrs(el);
+    this.syncWidgetAttrs(el, view);
     el.dataset.activeFenceGuides = "true";
     syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
     if (this.sourceFrom >= 0 && view) {
@@ -193,6 +193,7 @@ export class BlockCaptionWidget extends MacroRenderingWidget {
       el.className = captionClassName(this.active);
       this.renderCaptionContent(el);
     });
+    this.syncWidgetAttrs(dom, view);
     dom.dataset.activeFenceGuides = "true";
     syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
     return true;

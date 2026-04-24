@@ -1,106 +1,29 @@
 /**
- * CM6 ViewPlugin that highlights search matches inside widget-backed content.
+ * CM6 ViewPlugin that feeds search state into widget-backed render surfaces.
  *
  * CM6's built-in search highlighter uses Decoration.mark, which is invisible
- * inside Decoration.replace widgets. This plugin monitors the search query
- * state and walks widget DOM elements to toggle a `cf-search-match` CSS class
- * when a search match overlaps the widget's source range.
- *
- * Works with all RenderWidget subclasses that set data-source-from and
- * data-source-to attributes (math, citations, crossrefs, block headers, etc.).
+ * inside Decoration.replace widgets. Render widgets register their DOM roots
+ * with the source-widget layer; this plugin supplies canonical visible search
+ * state so widgets can own their highlight classes without data-source DOM
+ * queries here.
  */
 
 import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
 import { type Extension } from "@codemirror/state";
 import { Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
-import { collectVisibleSearchState, type VisibleSearchState } from "../search/search-matches";
+import { collectVisibleSearchState } from "../search/search-matches";
 import { createSimpleViewPlugin } from "./view-plugin-factories";
-import { resolveLiveWidgetSourceRange } from "./source-widget";
+import { syncRegisteredWidgetSearchHighlights } from "./source-widget";
 
-const MATCH_CLASS = "cf-search-match";
-const SELECTED_MATCH_CLASS = "cf-search-match-selected";
-
-/**
- * Find the index of the first element in a sorted array whose `to` value
- * is greater than `target`, using binary search.
- */
-function lowerBound(
-  matches: readonly { from: number; to: number }[],
-  target: number,
-): number {
-  let lo = 0;
-  let hi = matches.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (matches[mid].to <= target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
-/**
- * Walk widget elements in contentDOM and toggle highlight classes
- * based on whether any search match overlaps their source range.
- *
- * Uses binary search on sorted matches to find overlapping ranges
- * in O(widgets * log(matches)) instead of O(widgets * matches).
- */
 function syncHighlights(
   view: EditorView,
-  searchState: VisibleSearchState,
   hadHighlights: boolean,
 ): boolean {
-  const { matches, activeMatch } = searchState;
-
-  // Fast path: no matches and nothing to clear — skip DOM query entirely (#6)
-  if (matches.length === 0 && !hadHighlights) return false;
-
-  // Short-circuit DOM query when no matches but we need to clear previous highlights
-  if (matches.length === 0) {
-    const widgets = view.contentDOM.querySelectorAll<HTMLElement>(
-      `.${MATCH_CLASS},.${SELECTED_MATCH_CLASS}`,
-    );
-    for (const el of widgets) {
-      el.classList.remove(MATCH_CLASS, SELECTED_MATCH_CLASS);
-    }
-    return false;
-  }
-
-  const widgets = view.contentDOM.querySelectorAll<HTMLElement>("[data-source-from]");
-  let anyHighlighted = false;
-
-  for (const el of widgets) {
-    const sourceRange = resolveLiveWidgetSourceRange(view, el);
-    if (!sourceRange) {
-      el.classList.remove(MATCH_CLASS, SELECTED_MATCH_CLASS);
-      continue;
-    }
-    const { from: sourceFrom, to: sourceTo } = sourceRange;
-
-    const hasSelectedMatch =
-      activeMatch !== null &&
-      activeMatch.from < sourceTo &&
-      activeMatch.to > sourceFrom;
-    let hasMatch = hasSelectedMatch;
-
-    if (!hasMatch) {
-      // Binary search: find first match whose `to` > sourceFrom,
-      // then scan forward while match.from < sourceTo.
-      const startIdx = lowerBound(matches, sourceFrom);
-      for (let i = startIdx; i < matches.length; i++) {
-        const match = matches[i];
-        if (match.from >= sourceTo) break; // no more overlaps possible
-        hasMatch = true;
-        break;
-      }
-    }
-
-    el.classList.toggle(MATCH_CLASS, hasMatch);
-    el.classList.toggle(SELECTED_MATCH_CLASS, hasSelectedMatch);
-    if (hasMatch) anyHighlighted = true;
-  }
-
-  return anyHighlighted;
+  return syncRegisteredWidgetSearchHighlights(
+    view,
+    collectVisibleSearchState(view),
+    hadHighlights,
+  );
 }
 
 /**
@@ -113,7 +36,7 @@ function createSearchHighlight(): Extension {
   let hadHighlights = false;
 
   function buildFn(view: EditorView): DecorationSet {
-    hadHighlights = syncHighlights(view, collectVisibleSearchState(view), hadHighlights);
+    hadHighlights = syncHighlights(view, hadHighlights);
     return Decoration.none;
   }
 
