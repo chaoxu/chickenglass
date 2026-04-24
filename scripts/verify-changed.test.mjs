@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildChangedVerificationPlan,
+  browserLanesForChangedFiles,
   candidateSiblingTests,
   collectChangedFiles,
   commandDisplay,
@@ -55,9 +56,10 @@ describe("verify-changed", () => {
       "rtk pnpm test:focused -- src/render/reference-render.test.ts",
       "rtk pnpm test:focused -- src/render/reference-render.test.ts src/render/hover-preview.test.ts src/render/hover-preview.render.test.ts",
       "rtk pnpm check:pre-push",
+      "rtk pnpm test:browser:quick -- cm6-rich",
     ]);
     expect(plan.notes).toContain(
-      "Browser-facing files changed; run `pnpm test:browser:merged-app` before closing visual/runtime issues.",
+      "Browser-facing files changed; selected browser lanes: cm6-rich.",
     );
   });
 
@@ -122,15 +124,13 @@ describe("verify-changed", () => {
     expect(plan.commands.map(commandDisplay)).toContain("rtk cargo nextest run");
   });
 
-  it("adds full merge and browser smoke commands in full profile", () => {
+  it("adds full merge and browser suite commands in full profile", () => {
     const plan = buildChangedVerificationPlan(["src/editor/keymap.ts"], {
       profile: "full",
     });
 
     expect(plan.commands.map(commandDisplay)).toContain("rtk pnpm check:merge");
-    expect(plan.commands.map(commandDisplay)).toContain(
-      "rtk pnpm test:browser:merged-app",
-    );
+    expect(plan.commands.map(commandDisplay)).toContain("rtk pnpm test:browser:quick -- all");
   });
 
   it("does not run heavy browser harness tests for the quick-lane wrapper itself", () => {
@@ -144,6 +144,16 @@ describe("verify-changed", () => {
     expect(plan.commands.map(commandDisplay)).not.toContain(
       "rtk pnpm test:focused -- scripts/test-regression.test.mjs scripts/browser-repro.test.mjs",
     );
+  });
+
+  it("selects browser lanes from changed paths", () => {
+    expect(browserLanesForChangedFiles(["src/lexical/renderers/inline-math-renderer.tsx"])).toEqual(["lexical"]);
+    expect(browserLanesForChangedFiles(["src/render/image-render.ts"])).toEqual(["cm6-rich", "media"]);
+    expect(browserLanesForChangedFiles(["scripts/regression-tests/rich-arrowdown-bounded-scroll.mjs"])).toEqual([
+      "cm6-rich",
+      "scroll",
+    ]);
+    expect(browserLanesForChangedFiles(["docs/devx.md"])).toEqual([]);
   });
 
   it("keeps changed file paths as argv, not shell text", () => {

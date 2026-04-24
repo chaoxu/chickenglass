@@ -3,6 +3,10 @@
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import {
+  browserAreaTouched,
+  selectBrowserLanesForChangedFiles,
+} from "./browser-lanes.mjs";
 import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
 
 const VALUE_FLAGS = ["--base", "--profile"];
@@ -238,15 +242,8 @@ function editorPackageTouched(paths) {
   );
 }
 
-function browserAreaTouched(paths) {
-  return paths.some((path) =>
-    path.startsWith("src/editor/") ||
-    path.startsWith("src/render/") ||
-    path.startsWith("src/lexical/") ||
-    path.startsWith("src/app/components/") ||
-    path.startsWith("scripts/regression-tests/") ||
-    path === "scripts/test-regression.mjs",
-  );
+export function browserLanesForChangedFiles(paths, options = {}) {
+  return selectBrowserLanesForChangedFiles(paths.map(normalizePath), options);
 }
 
 function rustTouched(paths) {
@@ -269,6 +266,12 @@ function addAreaTests(paths, commands) {
     if (paths.some((path) => touchesAny(path, area.paths))) {
       commands.push(createPlanCommand(area.command));
     }
+  }
+}
+
+function addBrowserLaneCommands(lanes, commands) {
+  for (const lane of lanes) {
+    commands.push(createPlanCommand(["rtk", "pnpm", "test:browser:quick", "--", lane]));
   }
 }
 
@@ -335,14 +338,17 @@ export function buildChangedVerificationPlan(paths, options = {}) {
     commands.push(createPlanCommand(["rtk", "cargo", "nextest", "run"]));
   }
 
+  const browserLanes = browserLanesForChangedFiles(normalizedPaths, { profile });
   if (profile === "full") {
     commands.push(createPlanCommand(["rtk", "pnpm", "check:merge"]));
-    if (browserAreaTouched(normalizedPaths)) {
-      commands.push(createPlanCommand(["rtk", "pnpm", "test:browser:merged-app"]));
+    if (browserLanes.length > 0) {
+      commands.push(createPlanCommand(["rtk", "pnpm", "test:browser:quick", "--", "all"]));
     }
   } else {
-    if (browserAreaTouched(normalizedPaths)) {
-      notes.push("Browser-facing files changed; run `pnpm test:browser:merged-app` before closing visual/runtime issues.");
+    if (browserLanes.length > 0) {
+      addBrowserLaneCommands(browserLanes, commands);
+      notes.push(`Browser-facing files changed; selected browser lanes: ${browserLanes.join(", ")}.`);
+      notes.push("Use full profile for the complete browser suite before closing broad runtime issues.");
     }
     if (docsOnly(normalizedPaths)) {
       notes.push("Docs-only change; quick plan stays at whitespace/diff verification.");

@@ -22,15 +22,31 @@ describe("browser lane helper", () => {
   });
 
   it("maps named quick lanes to regression filters", () => {
+    expect(buildBrowserLaneArgs(["cm6-rich"])).toEqual([
+      "scripts/test-regression.mjs",
+      "--filter",
+      expect.stringContaining("rendered-hit-testing"),
+    ]);
+    expect(buildBrowserLaneArgs(["media"])).toEqual([
+      "scripts/test-regression.mjs",
+      "--filter",
+      expect.stringContaining("local-pdf-preview"),
+    ]);
+    expect(buildBrowserLaneArgs(["scroll"])).toEqual([
+      "scripts/test-regression.mjs",
+      "--filter",
+      expect.stringContaining("scroll-jump-rankdecrease"),
+    ]);
+  });
+
+  it("keeps compatibility render lane and full-suite lane", () => {
     expect(buildBrowserLaneArgs(["render"])).toEqual([
       "scripts/test-regression.mjs",
       "--filter",
       "headings,math-render,index-open-rich-render",
     ]);
-    expect(buildBrowserLaneArgs(["scroll"])).toEqual([
+    expect(buildBrowserLaneArgs(["all"])).toEqual([
       "scripts/test-regression.mjs",
-      "--filter",
-      "scroll-jump-rankdecrease",
     ]);
   });
 
@@ -56,7 +72,8 @@ describe("browser lane helper", () => {
 
   it("prints lane help", () => {
     expect(formatBrowserLaneHelp()).toContain("render");
-    expect(formatBrowserLaneHelp()).toContain("Lexical WYSIWYG smoke lane");
+    expect(formatBrowserLaneHelp()).toContain("cm6-rich");
+    expect(formatBrowserLaneHelp()).toContain("Lexical WYSIWYG and mode-switch lane");
   });
 
   it("runs the browser regression script", () => {

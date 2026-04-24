@@ -2,27 +2,13 @@
 
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import {
+  BROWSER_LANE_ORDER,
+  BROWSER_LANES,
+  resolveBrowserLane,
+} from "./browser-lanes.mjs";
 
-export const BROWSER_LANES = {
-  lexical: {
-    args: ["--scenario", "lexical"],
-    description: "Lexical WYSIWYG smoke lane",
-  },
-  render: {
-    args: ["--filter", "headings,math-render,index-open-rich-render"],
-    description: "CM6 rich render smoke lane",
-  },
-  scroll: {
-    args: ["--filter", "scroll-jump-rankdecrease"],
-    description: "Scroll-jump regression lane",
-  },
-  smoke: {
-    args: ["--scenario", "smoke"],
-    description: "Merged-app smoke lane",
-  },
-};
-
-const COMMANDS = ["one", ...Object.keys(BROWSER_LANES)];
+const COMMANDS = ["one", ...BROWSER_LANE_ORDER];
 
 function normalizePackageArgs(argv) {
   return argv[0] === "--" ? argv.slice(1) : [...argv];
@@ -55,10 +41,7 @@ export function buildBrowserLaneArgs(argv = []) {
     return ["scripts/test-regression.mjs", "--filter", filter, ...runnerArgs];
   }
 
-  const lane = BROWSER_LANES[command];
-  if (!lane) {
-    throw new Error(`Unknown browser lane: ${command}`);
-  }
+  const { lane } = resolveBrowserLane(command);
 
   return [
     "scripts/test-regression.mjs",
@@ -72,12 +55,16 @@ export function formatBrowserLaneHelp() {
     "Usage:",
     "  pnpm test:browser:quick",
     "  pnpm test:browser:quick -- --headed",
+    "  pnpm test:browser:quick -- cm6-rich --headed",
+    "  pnpm test:browser:quick -- media",
+    "  pnpm test:browser:quick -- all",
     "  pnpm test:browser:quick -- render --headed",
     "  pnpm test:browser:quick -- one headings math-render -- --headed",
     "",
     "Lanes:",
   ];
-  for (const [name, lane] of Object.entries(BROWSER_LANES)) {
+  for (const name of BROWSER_LANE_ORDER) {
+    const lane = BROWSER_LANES[name];
     lines.push(`  ${name.padEnd(8)} ${lane.description}`);
   }
   return lines.join("\n");

@@ -81,7 +81,14 @@ pnpm tauri:build     # build Coflats production desktop app bundle
 pnpm tauri:build:dmg # build Coflats macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
 pnpm test:browser:quick
-                     # named quick browser lanes: smoke/render/lexical/scroll/one
+                     # named quick browser lanes: smoke/cm6-rich/lexical/media/navigation/scroll/render/all/one
+pnpm test:browser:cm6-rich
+pnpm test:browser:lexical
+pnpm test:browser:media
+pnpm test:browser:navigation
+pnpm test:browser:scroll
+pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "Local PDF figure"
+                     # JSON runtime inspection snapshot for browser failures
 pnpm doctor:browser  # verify browser harness readiness and emit failure artifacts
 pnpm perf:quick --scenario local-edit-index
                      # one-sample local perf sniff, not PR-quality evidence
@@ -231,7 +238,7 @@ Prefer the managed Playwright harness for automated verification. The manual CDP
 
 Managed harness:
 1. Start `pnpm dev`.
-2. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:lexical`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
+2. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:quick -- cm6-rich`, `pnpm test:browser:lexical`, `pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "..."`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when you intentionally want the manual shared app window.
 4. Browser setup and regression failures write artifacts under `/tmp/coflat-browser-artifacts` by default. Use `--artifacts-dir /tmp/coflat-*` to force a specific output directory for a run.
 
@@ -297,6 +304,7 @@ pnpm issue -- list --state closed --limit 30
 pnpm issue -- create --title "..." --description "..."
 pnpm issue -- comment <number> "Verification: ..."
 pnpm issue -- close <number>
+pnpm issue -- verify-close <number...> --commit <sha> --verify "rtk pnpm test"
 tea pulls --repo chaoxu/coflat                              # list pull requests
 tea pr --repo chaoxu/coflat create --title "..." --base main --head <branch>
 tea logins                                                  # show configured logins (default: coflat / chaoxu)
