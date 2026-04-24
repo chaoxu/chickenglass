@@ -265,6 +265,35 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
+  it("keeps boundary indexes aligned after footnotes that consume a terminating blank", () => {
+    const previousMarkdown = [
+      "[^1]: footnote",
+      "  continuation",
+      "",
+      "Repeated paragraph.",
+      "",
+      "Repeated paragraph.",
+    ].join("\n");
+    const insertAt = previousMarkdown.indexOf("paragraph") + "paragraph".length;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, insertAt),
+      " updated",
+      previousMarkdown.slice(insertAt),
+    ].join("");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    const nextKeys = readTopLevelKeys(editor);
+    expect(nextKeys[0]).toBe(previousKeys[0]);
+    expect(nextKeys[1]).toBe(previousKeys[1]);
+    expect(nextKeys.slice(2)).toEqual(previousKeys.slice(2));
+  });
+
   it("falls back when a raw-block body edit can change block boundaries", () => {
     const previousMarkdown = [
       "::: {.proof}",

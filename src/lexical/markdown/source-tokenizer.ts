@@ -575,32 +575,16 @@ function parseTableTokens(
 
 function sourceBlocksForImport(
   markdown: string,
-  lines: readonly string[],
-  offsets: readonly number[],
 ): SourceBlockRange[] {
-  return collectSourceBlockRanges(markdown).map((range) => {
-    if (range.variant !== "footnote-definition") {
-      return range;
-    }
-    const nextLineIndex = range.endLineIndex + 1;
-    const nextLine = lines[nextLineIndex];
-    if (nextLine === undefined || !/^\s*$/.test(nextLine)) {
-      return range;
-    }
-    const to = (offsets[nextLineIndex] ?? range.to) + nextLine.length;
-    return {
-      ...range,
-      endLineIndex: nextLineIndex,
-      raw: markdown.slice(range.from, to),
-      to,
-    };
+  return collectSourceBlockRanges(markdown, {
+    includeFootnoteTerminatingBlank: true,
   });
 }
 
 export function parseMarkdownSourceTokens(markdown: string): readonly ParsedSourceToken[] {
   const lines = markdown.split("\n");
   const offsets = lineOffsets(lines);
-  const sourceBlocks = sourceBlocksForImport(markdown, lines, offsets);
+  const sourceBlocks = sourceBlocksForImport(markdown);
   const sourceBlockByLine = new Map(
     sourceBlocks.map((range) => [range.startLineIndex, range]),
   );

@@ -11,24 +11,9 @@ import {
 } from "lexical";
 
 import { createMinimalEditorDocumentChanges, type EditorDocumentChange } from "../lib/editor-doc-change";
+import { findSourceBoundaryRangeContainingChange } from "../lib/markdown/block-scanner";
 import { measureSync } from "../lib/perf";
 import { parseMarkdownFragmentToJSON } from "./headless-markdown-parse";
-import {
-  DISPLAY_MATH_BRACKET_BLOCK_START_RE,
-  DISPLAY_MATH_DOLLAR_START_RE,
-  FOOTNOTE_DEFINITION_START_RE,
-  FRONTMATTER_DELIMITER_RE,
-  GRID_TABLE_SEPARATOR_RE,
-  IMAGE_BLOCK_START_RE,
-  matchDisplayMathEndLine,
-  matchFencedDivEndLine,
-  matchFencedDivStartLine,
-  matchFootnoteDefinitionEndLine,
-  matchGridTableEndLine,
-  matchRawEquationEndLine,
-  matchTableEndLine,
-  RAW_EQUATION_START_RE,
-} from "./markdown/block-scanner";
 import {
   parseMarkdownSourceTokens,
   type ParsedSourceToken,
@@ -55,13 +40,10 @@ export type IncrementalRichDocumentSyncResult =
       readonly nodeKey: string;
     };
 
-interface IncrementalSyncBlockRangeBase {
+interface IncrementalSyncBlockRange {
   readonly from: number;
-  readonly to: number;
-}
-
-interface IncrementalSyncBlockRange extends IncrementalSyncBlockRangeBase {
   readonly index: number;
+  readonly to: number;
 }
 
 const PLAIN_PARAGRAPH_MARKDOWN_MARKER_RE = /[*_`[\]\\$<>|#@:!]/;
@@ -76,97 +58,14 @@ function measureIncrementalRichSync<T>(branch: string, task: () => T): T {
   });
 }
 
-function computeLineOffsets(lines: readonly string[]): number[] {
-  const offsets: number[] = [];
-  let offset = 0;
-  for (const line of lines) {
-    offsets.push(offset);
-    offset += line.length + 1;
-  }
-  return offsets;
-}
-
-function rangeFromLineSpan(
-  lines: readonly string[],
-  lineOffsets: readonly number[],
-  startLineIndex: number,
-  endLineIndex: number,
-): IncrementalSyncBlockRangeBase {
-  const from = lineOffsets[startLineIndex] ?? 0;
-  const endLine = lines[endLineIndex] ?? "";
-  return {
-    from,
-    to: (lineOffsets[endLineIndex] ?? from) + endLine.length,
-  };
-}
-
-function matchSourceBlockEndLine(lines: readonly string[], lineIndex: number): number {
-  const line = lines[lineIndex] ?? "";
-
-  if (lineIndex === 0 && FRONTMATTER_DELIMITER_RE.test(line)) {
-    for (let endLineIndex = 1; endLineIndex < lines.length; endLineIndex += 1) {
-      if (FRONTMATTER_DELIMITER_RE.test(lines[endLineIndex] ?? "")) {
-        return endLineIndex;
-      }
-    }
-    return -1;
-  }
-
-  const fencedMatch = matchFencedDivStartLine(line);
-  if (fencedMatch) {
-    return matchFencedDivEndLine(lines, lineIndex, fencedMatch, {
-      allowLongerClosingFence: true,
-      nested: true,
-    });
-  }
-
-  if (DISPLAY_MATH_DOLLAR_START_RE.test(line) || DISPLAY_MATH_BRACKET_BLOCK_START_RE.test(line)) {
-    return matchDisplayMathEndLine(lines, lineIndex);
-  }
-
-  if (RAW_EQUATION_START_RE.test(line)) {
-    return matchRawEquationEndLine(lines, lineIndex);
-  }
-
-  if (IMAGE_BLOCK_START_RE.test(line)) {
-    return lineIndex;
-  }
-
-  if (GRID_TABLE_SEPARATOR_RE.test(line)) {
-    return matchGridTableEndLine(lines, lineIndex);
-  }
-
-  if (FOOTNOTE_DEFINITION_START_RE.test(line)) {
-    return matchFootnoteDefinitionEndLine(lines, lineIndex);
-  }
-
-  return matchTableEndLine(lines, lineIndex);
-}
-
 function findIncrementalSyncBlockRange(
   previousDoc: string,
   change: EditorDocumentChange,
 ): IncrementalSyncBlockRange | null {
-  const lines = previousDoc.split("\n");
-  const lineOffsets = computeLineOffsets(lines);
-  let index = 0;
-
-  for (let lineIndex = 0; lineIndex < lines.length;) {
-    const sourceBlockEndLine = matchSourceBlockEndLine(lines, lineIndex);
-    const range = sourceBlockEndLine >= 0
-      ? rangeFromLineSpan(lines, lineOffsets, lineIndex, sourceBlockEndLine)
-      : rangeFromLineSpan(lines, lineOffsets, lineIndex, lineIndex);
-    if (change.from >= range.from && change.to <= range.to) {
-      return { ...range, index };
-    }
-    if (change.to < range.from) {
-      return null;
-    }
-    lineIndex = sourceBlockEndLine >= 0 ? sourceBlockEndLine + 1 : lineIndex + 1;
-    index += 1;
-  }
-
-  return null;
+  const range = findSourceBoundaryRangeContainingChange(previousDoc, change, {
+    includeFootnoteTerminatingBlank: true,
+  });
+  return range ? { from: range.from, index: range.index, to: range.to } : null;
 }
 
 interface RawBlockTarget {

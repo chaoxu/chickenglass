@@ -87,11 +87,10 @@ import {
   GRID_TABLE_SEPARATOR_RE,
   IMAGE_BLOCK_START_RE,
   RAW_EQUATION_START_RE,
-  matchDisplayMathEndLine,
-  matchFencedDivEndLine,
-  matchFootnoteDefinitionEndLine,
-  matchGridTableEndLine,
-  matchRawEquationEndLine,
+  computeSourceLineOffsets,
+  matchSourceBlockRangeAtLine,
+  type CollectSourceBlockRangesOptions,
+  type SourceBlockVariant,
 } from "./markdown/block-scanner";
 import { isRevealSourceStyle } from "./reveal-source-style";
 
@@ -105,6 +104,47 @@ function joinRawLines(lines: readonly string[], startLineIndex: number, endLineI
 function appendRawBlock(rootNode: ElementNode, variant: RawBlockVariant, raw: string): boolean {
   rootNode.append($createRawBlockNode(variant, raw));
   return true;
+}
+
+interface SourceBlockTransformerScanContext {
+  readonly lineOffsets: readonly number[];
+  readonly markdown: string;
+}
+
+const sourceBlockTransformerScanContexts = new WeakMap<
+  readonly string[],
+  SourceBlockTransformerScanContext
+>();
+
+function getSourceBlockTransformerScanContext(
+  lines: readonly string[],
+): SourceBlockTransformerScanContext {
+  let context = sourceBlockTransformerScanContexts.get(lines);
+  if (!context) {
+    context = {
+      lineOffsets: computeSourceLineOffsets(lines),
+      markdown: lines.join("\n"),
+    };
+    sourceBlockTransformerScanContexts.set(lines, context);
+  }
+  return context;
+}
+
+function matchSourceBlockTransformerEndLine(
+  lines: readonly string[],
+  startLineIndex: number,
+  variant: SourceBlockVariant,
+  options: CollectSourceBlockRangesOptions = {},
+): number {
+  const { lineOffsets, markdown } = getSourceBlockTransformerScanContext(lines);
+  const range = matchSourceBlockRangeAtLine(
+    markdown,
+    lines,
+    startLineIndex,
+    options,
+    lineOffsets,
+  );
+  return range?.variant === variant ? range.endLineIndex : -1;
 }
 
 // Suppress live markdown-shortcut conversion for raw-block multiline
@@ -158,76 +198,59 @@ function createRawBlockTransformer(
 
 const frontmatterTransformer = createRawBlockTransformer(
   "frontmatter",
-  (lines, startLineIndex) => {
-    if (startLineIndex !== 0 || !FRONTMATTER_DELIMITER_RE.test(lines[startLineIndex])) {
-      return -1;
-    }
-    for (let lineIndex = startLineIndex + 1; lineIndex < lines.length; lineIndex += 1) {
-      if (FRONTMATTER_DELIMITER_RE.test(lines[lineIndex])) {
-        return lineIndex;
-      }
-    }
-    return -1;
-  },
+  (lines, startLineIndex) =>
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "frontmatter"),
 );
 frontmatterTransformer.regExpStart = FRONTMATTER_DELIMITER_RE;
 
 const fencedDivTransformer = createRawBlockTransformer(
   "fenced-div",
-  (lines, startLineIndex, startMatch) =>
-    matchFencedDivEndLine(lines, startLineIndex, startMatch),
+  (lines, startLineIndex) =>
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "fenced-div"),
 );
 fencedDivTransformer.regExpStart = FENCED_DIV_START_RE;
 
 const displayMathDollarTransformer = createRawBlockTransformer(
   "display-math",
-  (lines, startLineIndex) => {
-    if (!DISPLAY_MATH_DOLLAR_START_RE.test(lines[startLineIndex])) {
-      return -1;
-    }
-    return matchDisplayMathEndLine(lines, startLineIndex);
-  },
+  (lines, startLineIndex) =>
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "display-math"),
 );
 displayMathDollarTransformer.regExpStart = DISPLAY_MATH_DOLLAR_START_RE;
 
 const displayMathBracketTransformer = createRawBlockTransformer(
   "display-math",
-  (lines, startLineIndex) => {
-    if (!DISPLAY_MATH_BRACKET_BLOCK_START_RE.test(lines[startLineIndex])) {
-      return -1;
-    }
-    return matchDisplayMathEndLine(lines, startLineIndex);
-  },
+  (lines, startLineIndex) =>
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "display-math"),
 );
 displayMathBracketTransformer.regExpStart = DISPLAY_MATH_BRACKET_BLOCK_START_RE;
 
 const rawEquationTransformer = createRawBlockTransformer(
   "display-math",
-  (lines, startLineIndex) => matchRawEquationEndLine(lines, startLineIndex),
+  (lines, startLineIndex) =>
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "display-math"),
 );
 rawEquationTransformer.regExpStart = RAW_EQUATION_START_RE;
 
 const imageBlockTransformer = createRawBlockTransformer(
   "image",
   (lines, startLineIndex) =>
-    IMAGE_BLOCK_START_RE.test(lines[startLineIndex] ?? "")
-      ? startLineIndex
-      : -1,
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "image"),
 );
 imageBlockTransformer.regExpStart = IMAGE_BLOCK_START_RE;
 
 const footnoteDefinitionTransformer = createRawBlockTransformer(
   "footnote-definition",
   (lines, startLineIndex) =>
-    matchFootnoteDefinitionEndLine(lines, startLineIndex, {
-      includeTerminatingBlank: true,
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "footnote-definition", {
+      includeFootnoteTerminatingBlank: true,
     }),
 );
 footnoteDefinitionTransformer.regExpStart = FOOTNOTE_DEFINITION_START_RE;
 
 const gridTableTransformer = createRawBlockTransformer(
   "grid-table",
-  (lines, startLineIndex) => matchGridTableEndLine(lines, startLineIndex),
+  (lines, startLineIndex) =>
+    matchSourceBlockTransformerEndLine(lines, startLineIndex, "grid-table"),
 );
 gridTableTransformer.regExpStart = GRID_TABLE_SEPARATOR_RE;
 
