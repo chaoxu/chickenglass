@@ -11,6 +11,12 @@ const nativeDebugMockState = vi.hoisted(() => ({
     watcher_root: "/tmp/backend-project",
     watcher_generation: 7,
     watcher_active: true,
+    watcher_health: {
+      status: "healthy",
+      generation: 7,
+      root: "/tmp/backend-project",
+      message: "Native watcher is active",
+    },
     last_focused_window: "main",
   })),
   debugEmitFileChanged: vi.fn(async (_relativePath: string, _treeChanged?: boolean) => {}),
@@ -149,6 +155,17 @@ describe("useAppDebug", () => {
       watcherRoot: "/tmp/backend-project",
       watcherGeneration: 7,
       watcherActive: true,
+      watcherHealth: {
+        status: "healthy",
+        generation: 7,
+        root: "/tmp/backend-project",
+        message: "Native watcher is active",
+      },
+      frontendWatcherStatus: expect.objectContaining({
+        status: "stopped",
+        generation: null,
+        root: null,
+      }),
       lastFocusedWindow: "main",
     });
 

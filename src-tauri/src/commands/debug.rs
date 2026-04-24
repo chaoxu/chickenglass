@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, command};
 
-use super::state::{FileWatcherState, LastFocusedWindow, ProjectRoot};
+use super::state::{FileWatcherState, LastFocusedWindow, ProjectRoot, WatcherHealthEvent};
 
 fn ensure_debug_build() -> Result<(), String> {
     if cfg!(debug_assertions) {
@@ -25,6 +25,7 @@ pub struct NativeDebugState {
     pub watcher_root: Option<String>,
     pub watcher_generation: Option<u64>,
     pub watcher_active: bool,
+    pub watcher_health: Option<WatcherHealthEvent>,
     pub last_focused_window: Option<String>,
 }
 
@@ -62,13 +63,14 @@ pub fn debug_get_native_state(
             entry.map(|value| value.generation),
         )
     };
-    let (watcher_root, watcher_generation, watcher_active) = {
+    let (watcher_root, watcher_generation, watcher_active, watcher_health) = {
         let lock = watcher_state.0.lock().map_err(|e| e.to_string())?;
         let entry = lock.get(label);
         (
             entry.map(|value| value.root.display().to_string()),
             entry.map(|value| value.generation),
             entry.and_then(|value| value.watcher.as_ref()).is_some(),
+            entry.map(|value| value.health.clone()),
         )
     };
     let last_focused_window = last_focused_window
@@ -83,6 +85,7 @@ pub fn debug_get_native_state(
         watcher_root,
         watcher_generation,
         watcher_active,
+        watcher_health,
         last_focused_window,
     })
 }

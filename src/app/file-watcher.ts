@@ -7,18 +7,31 @@
  */
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import type { FileWatcherStatus } from "../lib/debug-types";
 import { getFileParentPath } from "../lib/file-tree-model";
 import type { ExternalDocumentSyncResult } from "./editor-session-service";
 import { logCatchError } from "./lib/log-catch-error";
 import { measureAsync } from "./perf";
 import {
+  WATCH_STATUS_EVENT,
   type WatchDirectoryResult,
+  type WatcherHealthEvent,
   watchDirectoryCommand,
   unwatchDirectoryCommand,
 } from "./tauri-client/watch";
 
+export type { FileWatcherStatus } from "../lib/debug-types";
+
 let latestFileWatcherToken = 0;
 const DEFAULT_WATCH_DEBOUNCE_MS = 500;
+const STOPPED_WATCHER_STATUS: FileWatcherStatus = {
+  status: "stopped",
+  generation: null,
+  root: null,
+  message: "Native watcher is stopped",
+  updatedAt: 0,
+};
+let latestFileWatcherStatus: FileWatcherStatus = STOPPED_WATCHER_STATUS;
 
 /** Callback to refresh the sidebar tree after structural filesystem changes. */
 export type RefreshTreeFn = (changedPath?: string) => Promise<void>;
@@ -31,6 +44,11 @@ export type SyncExternalChangeFn = (
   path: string,
 ) => Promise<ExternalDocumentSyncResult>;
 
+/** Callback fired when the native watcher reports health or failure status. */
+export type HandleWatcherStatusFn = (
+  status: FileWatcherStatus,
+) => void | Promise<void>;
+
 /** Configuration for the FileWatcher. */
 export interface FileWatcherConfig {
   /** Refresh the sidebar tree after structural changes. */
@@ -39,6 +57,8 @@ export interface FileWatcherConfig {
   handleWatchedPathChange?: HandleWatchedPathChangeFn;
   /** Ask the session layer how this watched change should be handled. */
   syncExternalChange: SyncExternalChangeFn;
+  /** React to native watcher health/failure status. */
+  handleWatcherStatus?: HandleWatcherStatusFn;
 }
 
 export interface FileChangedEvent {
@@ -49,12 +69,17 @@ export interface FileChangedEvent {
 }
 
 type FileChangedPayload = FileChangedEvent | string;
+type WatchStatusPayload = WatcherHealthEvent;
 
 function normalizeFileChangedEvent(payload: FileChangedPayload): FileChangedEvent {
   if (typeof payload === "string") {
     return { path: payload, treeChanged: false };
   }
   return payload;
+}
+
+export function getLatestFileWatcherStatus(): FileWatcherStatus {
+  return latestFileWatcherStatus;
 }
 
 /**
@@ -70,6 +95,7 @@ export class FileWatcher {
   private unlisten: UnlistenFn | null = null;
   private watchToken: number | null = null;
   private watchRoot: string | null = null;
+  private status: FileWatcherStatus = STOPPED_WATCHER_STATUS;
   private readonly pendingTreeRefreshes = new Map<string, string>();
   private treeRefreshTimer: number | null = null;
   private treeRefreshGeneration = 0;
@@ -87,16 +113,32 @@ export class FileWatcher {
     this.watchToken = watchToken;
     this.unlisten = null;
     this.watchRoot = null;
+    this.setStatus({
+      status: "starting",
+      generation: watchToken,
+      root: directoryPath,
+      message: "Native watcher is starting",
+      updatedAt: Date.now(),
+    });
     this.clearPendingTreeRefreshes();
 
     // Listen for file-changed events from the backend.
     // Lazy-import to keep @tauri-apps/api/event out of the browser bundle (#446).
     const { listen } = await import("@tauri-apps/api/event");
-    const unlisten = await listen<FileChangedPayload>("file-changed", (event) => {
-      void this.handleFileChanged(event.payload, watchToken).catch(
-        logCatchError("[file-watcher] handleFileChanged failed", event.payload),
-      );
-    });
+    const [unlistenFileChanged, unlistenWatchStatus] = await Promise.all([
+      listen<FileChangedPayload>("file-changed", (event) => {
+        void this.handleFileChanged(event.payload, watchToken).catch(
+          logCatchError("[file-watcher] handleFileChanged failed", event.payload),
+        );
+      }),
+      listen<WatchStatusPayload>(WATCH_STATUS_EVENT, (event) => {
+        this.handleWatchStatus(event.payload, watchToken);
+      }),
+    ]);
+    const unlisten = () => {
+      unlistenFileChanged();
+      unlistenWatchStatus();
+    };
 
     if (this.watchToken !== watchToken || latestFileWatcherToken !== watchToken) {
       unlisten();
@@ -133,6 +175,14 @@ export class FileWatcher {
       if (this.watchToken === watchToken) {
         this.watchToken = null;
         this.watchRoot = null;
+        this.setStatus({
+          status: "failed",
+          generation: watchToken,
+          root: directoryPath,
+          message: "Native watcher failed to start",
+          error: formatUnknownError(error),
+          updatedAt: Date.now(),
+        });
       }
       throw error;
     }
@@ -148,6 +198,7 @@ export class FileWatcher {
       if (this.watchToken === watchToken) {
         this.watchToken = null;
         this.watchRoot = null;
+        this.setStoppedStatus();
       }
       try {
         await unwatchDirectoryCommand(watchToken);
@@ -158,6 +209,13 @@ export class FileWatcher {
     }
 
     this.watchRoot = watchRoot;
+    this.setStatus({
+      status: "healthy",
+      generation: watchToken,
+      root: watchRoot,
+      message: "Native watcher is active",
+      updatedAt: Date.now(),
+    });
   }
 
   /** Stop watching and clean up. */
@@ -168,6 +226,7 @@ export class FileWatcher {
     this.watchToken = null;
     this.unlisten = null;
     this.watchRoot = null;
+    this.setStoppedStatus();
     this.clearPendingTreeRefreshes();
 
     unlisten?.();
@@ -178,6 +237,10 @@ export class FileWatcher {
         console.warn("[file-watcher] failed to stop backend watcher during teardown", watchToken, error);
       }
     }
+  }
+
+  getStatus(): FileWatcherStatus {
+    return this.status;
   }
 
   /** Handle a file-changed event from the backend. */
@@ -203,6 +266,23 @@ export class FileWatcher {
       this.enqueueTreeRefresh(relativePath);
     }
 
+  }
+
+  private handleWatchStatus(
+    payload: WatchStatusPayload,
+    subscriptionToken: number | null = this.watchToken,
+  ): void {
+    if (!this.isCurrentWatcherStatus(payload, subscriptionToken)) {
+      return;
+    }
+    this.setStatus({
+      status: payload.status,
+      generation: payload.generation,
+      root: payload.root,
+      message: payload.message,
+      error: payload.error,
+      updatedAt: Date.now(),
+    });
   }
 
   private enqueueTreeRefresh(relativePath: string): void {
@@ -258,6 +338,42 @@ export class FileWatcher {
     }
     return true;
   }
+
+  private isCurrentWatcherStatus(
+    event: WatcherHealthEvent,
+    subscriptionToken: number | null,
+  ): boolean {
+    if (subscriptionToken !== null && this.watchToken !== subscriptionToken) {
+      return false;
+    }
+    if (event.generation !== this.watchToken) {
+      return false;
+    }
+    if (this.watchRoot !== null && event.root !== this.watchRoot) {
+      return false;
+    }
+    return true;
+  }
+
+  private setStoppedStatus(): void {
+    this.setStatus({
+      status: "stopped",
+      generation: null,
+      root: null,
+      message: "Native watcher is stopped",
+      updatedAt: Date.now(),
+    });
+  }
+
+  private setStatus(status: FileWatcherStatus): void {
+    this.status = status;
+    latestFileWatcherStatus = status;
+    if (this.config.handleWatcherStatus) {
+      void Promise.resolve(this.config.handleWatcherStatus(status)).catch(
+        logCatchError("[file-watcher] watcher-status handler failed", status.status),
+      );
+    }
+  }
 }
 
 function normalizeWatchDirectoryResult(
@@ -268,4 +384,8 @@ function normalizeWatchDirectoryResult(
     return { applied: result, root: requestedRoot };
   }
   return result;
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

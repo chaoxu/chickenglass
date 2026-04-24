@@ -25,6 +25,11 @@ export function useProjectFileWatcher({
       refreshTree,
       handleWatchedPathChange,
       syncExternalChange,
+      handleWatcherStatus: (status) => {
+        if (status.status === "degraded" || status.status === "failed") {
+          console.warn("[file-watcher] native watcher reported unhealthy status", status);
+        }
+      },
     });
     let cancelled = false;
 

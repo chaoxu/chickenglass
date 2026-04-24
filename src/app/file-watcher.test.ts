@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ExternalDocumentSyncResult } from "./editor-session-service";
+import type { FileWatcherStatus } from "./file-watcher";
 
 const watcherBackendState = vi.hoisted(() => {
   interface Deferred<T> {
@@ -7,6 +8,7 @@ const watcherBackendState = vi.hoisted(() => {
     resolve: (value: T) => void;
   }
   type Listener = (event: { payload: unknown }) => void;
+  type ListenerEntry = { eventName: string; listener: Listener };
 
   const createDeferred = <T>(): Deferred<T> => {
     let resolve!: (value: T) => void;
@@ -20,15 +22,24 @@ const watcherBackendState = vi.hoisted(() => {
   return {
     watchDirectoryCommand: vi.fn(async () => ({ applied: true, root: "/tmp/project-a" })),
     unwatchDirectoryCommand: vi.fn(async () => true),
-    listeners: [] as Listener[],
-    listen: vi.fn(async (_eventName: string, listener: Listener) => {
-      watcherBackendState.listeners.push(listener);
+    listeners: [] as ListenerEntry[],
+    createDeferred,
+    listen: vi.fn(async (eventName: string, listener: Listener) => {
+      watcherBackendState.listeners.push({ eventName, listener });
       return watcherBackendState.listenDeferred.promise;
     }),
     listenDeferred,
-    emit(payload: unknown) {
-      for (const listener of this.listeners) {
-        listener({ payload });
+    emit(eventNameOrPayload: string | unknown, payload?: unknown) {
+      if (typeof eventNameOrPayload === "string" && payload !== undefined) {
+        for (const entry of this.listeners) {
+          if (entry.eventName === eventNameOrPayload) {
+            entry.listener({ payload });
+          }
+        }
+        return;
+      }
+      for (const entry of this.listeners) {
+        entry.listener({ payload: eventNameOrPayload });
       }
     },
     reset() {
@@ -42,9 +53,9 @@ const watcherBackendState = vi.hoisted(() => {
       this.listen.mockClear();
       this.listeners = [];
       this.listenDeferred = createDeferred<() => void>();
-      this.listen.mockImplementation(async (_eventName: string, listener: Listener) => {
-        this.listeners.push(listener);
-        return this.listenDeferred.promise;
+      this.listen.mockImplementation(async (eventName: string, listener: Listener) => {
+        watcherBackendState.listeners.push({ eventName, listener });
+        return watcherBackendState.listenDeferred.promise;
       });
     },
   };
@@ -55,6 +66,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("./tauri-client/watch", () => ({
+  WATCH_STATUS_EVENT: "watch-status",
   watchDirectoryCommand: watcherBackendState.watchDirectoryCommand,
   unwatchDirectoryCommand: watcherBackendState.unwatchDirectoryCommand,
 }));
@@ -66,6 +78,7 @@ function createWatcher(
     refreshTree?: (path?: string) => Promise<void>;
     handleWatchedPathChange?: (path: string) => void | Promise<void>;
     syncExternalChange?: (path: string) => Promise<ExternalDocumentSyncResult>;
+    handleWatcherStatus?: (status: FileWatcherStatus) => void | Promise<void>;
   } = {},
 ) {
   const refreshTree =
@@ -78,6 +91,7 @@ function createWatcher(
     refreshTree,
     handleWatchedPathChange,
     syncExternalChange,
+    handleWatcherStatus: options.handleWatcherStatus,
   });
 
   return {
@@ -97,6 +111,7 @@ describe("FileWatcher", () => {
     const watchPromise = watcher.watch("/tmp/project-a");
     await vi.waitFor(() => {
       expect(watcherBackendState.listen).toHaveBeenCalledWith("file-changed", expect.any(Function));
+      expect(watcherBackendState.listen).toHaveBeenCalledWith("watch-status", expect.any(Function));
     });
 
     await watcher.unwatch();
@@ -106,7 +121,7 @@ describe("FileWatcher", () => {
     watcherBackendState.listenDeferred.resolve(unlisten);
     await watchPromise;
 
-    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(unlisten).toHaveBeenCalledTimes(2);
     expect(watcherBackendState.watchDirectoryCommand).not.toHaveBeenCalled();
     expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenCalledTimes(2);
     expect(watcherBackendState.unwatchDirectoryCommand).toHaveBeenNthCalledWith(2, expect.any(Number));
@@ -119,7 +134,7 @@ describe("FileWatcher", () => {
 
     const watchPromise = watcher.watch("/tmp/project-a");
     await vi.waitFor(() => {
-      expect(watcherBackendState.listen).toHaveBeenCalledTimes(1);
+      expect(watcherBackendState.listen).toHaveBeenCalledTimes(2);
     });
     expect(watcherBackendState.watchDirectoryCommand).not.toHaveBeenCalled();
 
@@ -138,16 +153,19 @@ describe("FileWatcher", () => {
   it("drops a stale listener when a newer watcher instance takes over", async () => {
     watcherBackendState.reset();
     const firstUnlisten = vi.fn();
+    const firstStatusUnlisten = vi.fn();
     const secondUnlisten = vi.fn();
+    const secondStatusUnlisten = vi.fn();
     const firstListenDeferred = watcherBackendState.listenDeferred;
-    const secondListenDeferred = {
-      promise: Promise.resolve(secondUnlisten),
-      resolve: (_value: () => void) => {},
-    };
-
-    const listenQueue = [firstListenDeferred.promise, secondListenDeferred.promise];
+    const firstStatusListenDeferred = watcherBackendState.createDeferred<() => void>();
+    const listenQueue = [
+      firstListenDeferred.promise,
+      firstStatusListenDeferred.promise,
+      Promise.resolve(secondUnlisten),
+      Promise.resolve(secondStatusUnlisten),
+    ];
     watcherBackendState.listen.mockImplementation((_eventName: string, listener: (event: { payload: unknown }) => void) => {
-      watcherBackendState.listeners.push(listener);
+      watcherBackendState.listeners.push({ eventName: _eventName, listener });
       return listenQueue.shift() ?? Promise.resolve(vi.fn());
     });
 
@@ -156,16 +174,19 @@ describe("FileWatcher", () => {
 
     const firstWatch = first.watch("/tmp/project-a");
     await vi.waitFor(() => {
-      expect(watcherBackendState.listen).toHaveBeenCalledTimes(1);
+      expect(watcherBackendState.listen).toHaveBeenCalledTimes(2);
     });
     const secondWatch = second.watch("/tmp/project-a");
 
     firstListenDeferred.resolve(firstUnlisten);
+    firstStatusListenDeferred.resolve(firstStatusUnlisten);
     await firstWatch;
     await secondWatch;
 
     expect(firstUnlisten).toHaveBeenCalledTimes(1);
+    expect(firstStatusUnlisten).toHaveBeenCalledTimes(1);
     expect(secondUnlisten).not.toHaveBeenCalled();
+    expect(secondStatusUnlisten).not.toHaveBeenCalled();
     expect(watcherBackendState.watchDirectoryCommand).toHaveBeenCalledTimes(1);
     expect(watcherBackendState.watchDirectoryCommand).toHaveBeenNthCalledWith(
       1,
@@ -204,7 +225,7 @@ describe("FileWatcher", () => {
   it("ignores stale backend events with the wrong generation or root", async () => {
     watcherBackendState.reset();
     watcherBackendState.listen.mockImplementation(async (_eventName: string, listener: (event: { payload: unknown }) => void) => {
-      watcherBackendState.listeners.push(listener);
+      watcherBackendState.listeners.push({ eventName: _eventName, listener });
       return () => {};
     });
     watcherBackendState.watchDirectoryCommand.mockImplementation(async () => ({
@@ -218,29 +239,73 @@ describe("FileWatcher", () => {
     const [watchCall = [] as unknown[]] = watcherBackendState.watchDirectoryCommand.mock.calls;
     const watchToken = watchCall[0] as number;
 
-    watcherBackendState.emit({
+    const fileChangedListener = watcherBackendState.listeners.find(
+      (entry) => entry.eventName === "file-changed",
+    )?.listener;
+    expect(fileChangedListener).toBeDefined();
+
+    fileChangedListener?.({ payload: {
       path: "stale-generation.md",
       treeChanged: false,
       generation: watchToken - 1,
       root: "/tmp/project-a-canonical",
-    });
-    watcherBackendState.emit({
+    } });
+    fileChangedListener?.({ payload: {
       path: "stale-root.md",
       treeChanged: false,
       generation: watchToken,
       root: "/tmp/project-b",
-    });
-    watcherBackendState.emit({
+    } });
+    fileChangedListener?.({ payload: {
       path: "current.md",
       treeChanged: false,
       generation: watchToken,
       root: "/tmp/project-a-canonical",
-    });
+    } });
 
     await vi.waitFor(() => {
       expect(syncExternalChange).toHaveBeenCalledTimes(1);
     });
     expect(syncExternalChange).toHaveBeenCalledWith("current.md");
+  });
+
+  it("records and forwards native watcher health events", async () => {
+    watcherBackendState.reset();
+    watcherBackendState.listen.mockImplementation(async (eventName: string, listener: (event: { payload: unknown }) => void) => {
+      watcherBackendState.listeners.push({ eventName, listener });
+      return () => {};
+    });
+    watcherBackendState.watchDirectoryCommand.mockImplementation(async () => ({
+      applied: true,
+      root: "/tmp/project-a-canonical",
+    }));
+    const handleWatcherStatus = vi.fn();
+    const { watcher } = createWatcher({ handleWatcherStatus });
+
+    await watcher.watch("/tmp/project-a");
+    const [watchCall = [] as unknown[]] = watcherBackendState.watchDirectoryCommand.mock.calls;
+    const watchToken = watchCall[0] as number;
+
+    watcherBackendState.emit("watch-status", {
+      status: "degraded",
+      generation: watchToken,
+      root: "/tmp/project-a-canonical",
+      message: "Native watcher reported an error",
+      error: "backend unavailable",
+    });
+
+    expect(watcher.getStatus()).toMatchObject({
+      status: "degraded",
+      generation: watchToken,
+      root: "/tmp/project-a-canonical",
+      message: "Native watcher reported an error",
+      error: "backend unavailable",
+    });
+    expect(handleWatcherStatus).toHaveBeenCalledWith(expect.objectContaining({
+      status: "degraded",
+      generation: watchToken,
+      root: "/tmp/project-a-canonical",
+    }));
   });
 
   it("leaves dirty conflict presentation to the session state", async () => {
