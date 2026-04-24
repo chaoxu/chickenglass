@@ -369,13 +369,18 @@ export function updateDiscoveredTables(
   }
 
   if (treeAvailable === false) {
-    return finish(mapTableRanges(tables, tr));
+    const mapped = mapTableRanges(tables, tr);
+    if (tables.length > 0 && mapped === tables && !canSkipLocalTableRebuild(tables, tr)) {
+      return [...mapped];
+    }
+    return finish(mapped);
   }
 
   if (treeAvailable === undefined) {
     const pendingParse = computePendingTableParseTarget(tables, tr);
     if (pendingParse) {
-      return finish(mapTableRanges(tables, tr));
+      const mapped = mapTableRanges(tables, tr);
+      return tables.length > 0 && mapped === tables ? [...mapped] : finish(mapped);
     }
   }
 
