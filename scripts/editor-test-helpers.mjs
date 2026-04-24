@@ -1251,13 +1251,68 @@ export async function setCursor(page, line, col = 0) {
 export async function scrollTo(page, line) {
   await page.evaluate((ln) => {
     const view = window.__cmView;
-    view.focus();
-    const lines = view.state.doc.toString().split("\n");
+    const editor = window.__editor;
+    const doc = view?.state?.doc?.toString?.() ?? editor?.getDoc?.();
+    if (typeof doc !== "string") {
+      throw new Error("No active editor document is available for scrollTo().");
+    }
+    const lines = doc.split("\n");
     const clampedLine = Math.max(1, Math.min(ln, lines.length));
     let anchor = 0;
     for (let index = 0; index < clampedLine - 1; index += 1) {
       anchor += lines[index].length + 1;
     }
+
+    if (!view?.scrollDOM) {
+      if (!editor) {
+        throw new Error("No active editor bridge is available for scrollTo().");
+      }
+      editor.setSelection(anchor, anchor);
+      editor.focus?.();
+
+      const root = document.querySelector("[data-lexical-editor].cf-lexical-editor");
+      const surface = root?.closest(".cf-lexical-surface--scroll")
+        ?? root?.parentElement
+        ?? document.scrollingElement
+        ?? document.documentElement;
+      if (!(surface instanceof HTMLElement) && surface !== document.documentElement) {
+        return;
+      }
+
+      const candidates = root
+        ? [...root.querySelectorAll("[data-coflat-source-from], [data-coflat-heading-pos]")]
+        : [];
+      let target = root;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const candidate of candidates) {
+        if (!(candidate instanceof HTMLElement)) continue;
+        const from = Number(candidate.dataset.coflatSourceFrom ?? candidate.dataset.coflatHeadingPos);
+        const to = Number(candidate.dataset.coflatSourceTo ?? from);
+        if (!Number.isFinite(from) || !Number.isFinite(to)) continue;
+        const containsAnchor = from <= anchor && anchor <= to;
+        const distance = containsAnchor ? 0 : Math.min(Math.abs(anchor - from), Math.abs(anchor - to));
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          target = candidate;
+        }
+      }
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const scrollElement = surface instanceof HTMLElement ? surface : document.documentElement;
+      const coords = target.getBoundingClientRect();
+      const rect = scrollElement.getBoundingClientRect();
+      const viewportHeight = scrollElement.clientHeight || window.innerHeight || 800;
+      const targetTop = rect.top + Math.min(120, viewportHeight / 3);
+      scrollElement.scrollTop = Math.max(
+        0,
+        scrollElement.scrollTop + coords.top - targetTop,
+      );
+      return;
+    }
+
+    view.focus();
     view.dispatch({
       selection: { anchor },
       scrollIntoView: true,

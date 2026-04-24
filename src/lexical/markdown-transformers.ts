@@ -459,15 +459,25 @@ function nextSiblingRequiresListSeparator(node: LexicalNode): boolean {
   );
 }
 
+const LIST_RAW_BLOCK_SEPARATOR_RE =
+  /^((?: {4})*(?:\d+\.|[-*+](?: \[[ xX]\])?) [^\n]*\S[^\n]*)\n\n([ \t]{2,}(?:\$\$|\\\[|\\begin\{equation\}|\\begin\{align\}|:{3,}|!\[))/gm;
+
+export function normalizeListRawBlockSeparators(markdown: string): string {
+  return markdown.replace(LIST_RAW_BLOCK_SEPARATOR_RE, "$1\n$2");
+}
+
 function withListExportSeparator(transformer: ElementTransformer): ElementTransformer {
   return {
     ...transformer,
     export(node, exportChildren) {
       const markdown = transformer.export(node, exportChildren);
-      if (markdown === null || !$isListNode(node) || !nextSiblingRequiresListSeparator(node)) {
+      if (markdown === null || !$isListNode(node)) {
         return markdown;
       }
-      return `${markdown}\n`;
+      const normalizedMarkdown = normalizeListRawBlockSeparators(markdown);
+      return nextSiblingRequiresListSeparator(node)
+        ? `${normalizedMarkdown}\n`
+        : normalizedMarkdown;
     },
   };
 }

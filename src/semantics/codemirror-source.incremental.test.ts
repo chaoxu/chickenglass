@@ -10,6 +10,11 @@ import {
   getDocumentAnalysisRevision,
   getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
+import {
+  createDocumentAnalysisSnapshot,
+  updateDocumentAnalysisSnapshot,
+} from "./incremental/engine";
+import { buildSemanticDelta } from "./incremental/semantic-delta";
 
 function createSemanticsState(doc: string): EditorState {
   return EditorState.create({
@@ -131,6 +136,38 @@ describe("documentAnalysisField incremental contract", () => {
     ]);
     expect(after.headings[0]).toBe(stablePrefix);
     expect(after.headings[2]).not.toBe(renumberedTail);
+  });
+
+  it("keeps mapped heading numbers while a structural dirty window is not parsed yet", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Methods",
+      "",
+      "## Results",
+      "",
+    ].join("\n");
+    const beforeState = createSemanticsState(doc);
+    const before = createDocumentAnalysisSnapshot(
+      editorStateTextSource(beforeState),
+      fullTree(beforeState),
+    );
+    const from = doc.indexOf("Methods") + "Methods".length;
+    const transaction = beforeState.update({
+      changes: { from, insert: "\n" },
+    });
+    const afterState = transaction.state;
+
+    const after = updateDocumentAnalysisSnapshot(
+      before,
+      editorStateTextSource(afterState),
+      fullTree(afterState),
+      buildSemanticDelta(transaction),
+      { isSyntaxTreeAvailable: () => false },
+    );
+
+    expect(after.headings.map((heading) => heading.number)).toEqual(["1", "1.1", "1.2"]);
+    expect(after.headings.map((heading) => heading.from)).toEqual([0, 9, 22]);
   });
 
   it("reuses the prior analysis object on no-op transactions", () => {

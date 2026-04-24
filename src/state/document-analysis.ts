@@ -1,4 +1,4 @@
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import { type EditorState, StateField, type Transaction } from "@codemirror/state";
 
 import type { DocumentAnalysis, TextSource } from "../semantics/document";
@@ -91,7 +91,9 @@ function updateDocumentAnalysisForTransaction(
     const doc = editorStateTextSource(tr.state);
     const tree = syntaxTree(tr.state);
     return measureSync("cm6.documentAnalysis.update.sliceMerge", () =>
-      updateDocumentAnalysisSnapshot(value, doc, tree, delta)
+      updateDocumentAnalysisSnapshot(value, doc, tree, delta, {
+        isSyntaxTreeAvailable: (to) => syntaxTreeAvailable(tr.state, to),
+      })
     );
   });
 }

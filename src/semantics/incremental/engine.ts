@@ -70,6 +70,10 @@ export interface DocumentArtifacts {
   readonly ir: DocumentIR;
 }
 
+export interface DocumentAnalysisUpdateOptions {
+  readonly isSyntaxTreeAvailable?: (to: number) => boolean;
+}
+
 function reuseEquivalentArray<T>(
   previous: readonly T[],
   next: readonly T[],
@@ -130,6 +134,7 @@ export function updateDocumentAnalysisSnapshot(
   doc: TextSource,
   tree: Tree,
   delta: SemanticDelta,
+  options: DocumentAnalysisUpdateOptions = {},
 ): DocumentAnalysisSnapshot {
   const previousState = previous.incrementalState;
 
@@ -151,7 +156,7 @@ export function updateDocumentAnalysisSnapshot(
     useParagraphStructuralExtraction,
     extractedDirtyWindows,
     dirtyExtractions,
-  } = planDirtyWindows(previousState, doc, tree, delta);
+  } = planDirtyWindows(previousState, doc, tree, delta, options);
 
   const headingSlice = mergeHeadingSlice(
     previousState.headingSlice,
@@ -267,24 +272,27 @@ export function updateDocumentAnalysis(
   doc: TextSource,
   tree: Tree,
   delta: SemanticDelta,
+  options?: DocumentAnalysisUpdateOptions,
 ): DocumentAnalysisSnapshot;
 export function updateDocumentAnalysis(
   previous: DocumentAnalysis,
   doc: TextSource,
   tree: Tree,
   delta: SemanticDelta,
+  options?: DocumentAnalysisUpdateOptions,
 ): DocumentAnalysis;
 export function updateDocumentAnalysis(
   previous: DocumentAnalysis | DocumentAnalysisSnapshot,
   doc: TextSource,
   tree: Tree,
   delta: SemanticDelta,
+  options: DocumentAnalysisUpdateOptions = {},
 ): DocumentAnalysis | DocumentAnalysisSnapshot {
   const snapshot = snapshotFor(previous);
   if (!snapshot) {
     return createDocumentAnalysis(doc, tree);
   }
-  return updateDocumentAnalysisSnapshot(snapshot, doc, tree, delta);
+  return updateDocumentAnalysisSnapshot(snapshot, doc, tree, delta, options);
 }
 
 export function updateDocumentArtifacts(

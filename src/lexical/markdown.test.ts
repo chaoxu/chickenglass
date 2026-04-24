@@ -211,6 +211,23 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
+  it("does not inject blank lines before source-owned display math inside lists", () => {
+    const markdown = [
+      "1. First item with inline math $O(n \\log n)$",
+      "2. Display math in list:",
+      "   $$",
+      "   T(n) = 2T(n/2) + O(n)",
+      "   $$",
+      "3. Backslash display math in list:",
+      "   \\[",
+      "   f(x) = \\sum_{i=0}^n a_i x^i",
+      "   \\]",
+      "4. Simple text item",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe(markdown);
+  });
+
   it("does not inject list separators inside fenced code blocks", () => {
     const markdown = [
       "```",

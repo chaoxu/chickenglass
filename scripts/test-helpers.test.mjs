@@ -11,6 +11,7 @@ import {
   resolveTextAnchorInDocument,
   runBrowserDoctor,
   screenshot,
+  scrollTo,
   waitForAppUrl,
   waitForDebugBridge,
   waitForDocumentStable,
@@ -210,6 +211,63 @@ describe("test helpers browser harness", () => {
       stableFrames: 1,
       timeoutMs: 200,
     })).resolves.toBeUndefined();
+  });
+
+  it("scrolls Lexical through the product-neutral editor bridge", async () => {
+    const doc = "# One\n\nIntro\n\n## Target\n\nBody";
+    const targetOffset = doc.indexOf("## Target");
+    const surface = document.createElement("div");
+    surface.className = "cf-lexical-surface--scroll";
+    Object.defineProperty(surface, "clientHeight", { configurable: true, value: 300 });
+    surface.getBoundingClientRect = () => ({
+      bottom: 300,
+      height: 300,
+      left: 0,
+      right: 700,
+      top: 0,
+      width: 700,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    const root = document.createElement("div");
+    root.className = "cf-lexical-editor";
+    root.dataset.lexicalEditor = "true";
+    const target = document.createElement("h2");
+    target.dataset.coflatHeadingPos = String(targetOffset);
+    target.textContent = "Target";
+    target.getBoundingClientRect = () => ({
+      bottom: 420,
+      height: 40,
+      left: 0,
+      right: 700,
+      top: 380,
+      width: 700,
+      x: 0,
+      y: 380,
+      toJSON: () => ({}),
+    });
+    root.append(target);
+    surface.append(root);
+    document.body.append(surface);
+
+    const setSelection = vi.fn();
+    const focus = vi.fn();
+    window.__editor = {
+      focus,
+      getDoc: () => doc,
+      setSelection,
+    };
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+    };
+
+    await scrollTo(page, 5);
+
+    expect(setSelection).toHaveBeenCalledWith(targetOffset, targetOffset);
+    expect(focus).toHaveBeenCalled();
+    expect(surface.scrollTop).toBe(280);
   });
 
   it("switches editor modes through the app debug bridge", async () => {

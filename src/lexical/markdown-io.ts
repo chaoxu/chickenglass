@@ -10,7 +10,10 @@ import { findNextInlineMathSource } from "../lib/inline-math-source";
 import { measureSync } from "../lib/perf";
 import { createHeadlessMarkdownService } from "./headless-markdown-service";
 import { createHeadlessCoflatEditor } from "./markdown-schema";
-import { coflatMarkdownTransformers } from "./markdown-transformers";
+import {
+  coflatMarkdownTransformers,
+  normalizeListRawBlockSeparators,
+} from "./markdown-transformers";
 import { publishLexicalSourceBlockIdentitiesForCurrentRoot } from "./source-block-identity";
 
 export function createLexicalInitialEditorState(markdown: string): InitialEditorStateType {
@@ -168,12 +171,14 @@ export function exportMarkdownFromSerializedState(
   state: SerializedEditorState,
   sourceReplacements: readonly string[] = [],
 ): string {
-  const markdown = withPooledHeadlessMarkdownEditor((exportEditor) => {
-    exportEditor.setEditorState(exportEditor.parseEditorState(JSON.stringify(state)));
-    return exportEditor.getEditorState().read(() =>
-      $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
-    );
-  });
+  const markdown = normalizeListRawBlockSeparators(
+    withPooledHeadlessMarkdownEditor((exportEditor) => {
+      exportEditor.setEditorState(exportEditor.parseEditorState(JSON.stringify(state)));
+      return exportEditor.getEditorState().read(() =>
+        $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
+      );
+    }),
+  );
   return sourceReplacements.reduce(
     (current, source, index) =>
       current.replaceAll(sourceReplacementPlaceholder(index), source),
@@ -195,8 +200,10 @@ export function getLexicalMarkdown(editor: LexicalEditor): string {
         root: transformedRoot.node as SerializedEditorState["root"],
       }, sourceReplacements);
     }
-    return editorState.read(() =>
-      $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
+    return normalizeListRawBlockSeparators(
+      editorState.read(() =>
+        $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
+      ),
     );
   }, { category: "lexical" });
 }

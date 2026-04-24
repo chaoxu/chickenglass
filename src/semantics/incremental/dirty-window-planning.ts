@@ -41,6 +41,10 @@ export interface DirtyWindowPlan {
   readonly dirtyExtractions: readonly ExtractedDirtyStructuralWindow[];
 }
 
+export interface DirtyWindowPlanningOptions {
+  readonly isSyntaxTreeAvailable?: (to: number) => boolean;
+}
+
 export function createPositionMapper(
   delta: Pick<SemanticDelta, "mapOldToNew">,
 ): PositionMapper {
@@ -233,6 +237,7 @@ export function planDirtyWindows(
   doc: TextSource,
   tree: Tree,
   delta: SemanticDelta,
+  options: DirtyWindowPlanningOptions = {},
 ): DirtyWindowPlan {
   const changes = createPositionMapper(delta);
   const structuralExtractionMode = classifyStructuralExtraction(previousState, delta);
@@ -249,16 +254,19 @@ export function planDirtyWindows(
     delta.mapOldToNew,
     true,
   );
+  const availableDirtyWindows = options.isSyntaxTreeAvailable
+    ? expandedForExcluded.filter((window) => options.isSyntaxTreeAvailable?.(window.toNew) ?? true)
+    : expandedForExcluded;
   const extractedDirtyWindows = structuralExtractionMode === "skip"
     ? []
     : useParagraphStructuralExtraction
-      ? extractDirtyParagraphWindows(doc, tree, expandedForExcluded)
+      ? extractDirtyParagraphWindows(doc, tree, availableDirtyWindows)
       : extractDirtyFencedDivWindows(
           previousState.fencedDivSlice.fencedDivs,
           doc,
           tree,
           changes,
-          expandedForExcluded,
+          availableDirtyWindows,
         );
   const dirtyExtractions = extractedDirtyWindows.map(({ window, range, structural }) => ({
     window: {

@@ -353,13 +353,49 @@ async function runModeAndHeavyTypingScenario(page) {
   );
 }
 
+async function runCitationBibliographyScenario(page) {
+  await openFixtureDocument(page, "index.md", {
+    mode: "lexical",
+    timeoutMs: 30_000,
+    settleMs: 500,
+  });
+  await assertLexicalSurface(page);
+
+  const state = await page.waitForFunction(
+    () => {
+      const citation = document.querySelector(".cf-lexical-reference.cf-citation");
+      const bibliography = document.querySelector(".cf-bibliography.cf-lexical-bibliography");
+      const citationText = citation?.textContent?.trim() ?? "";
+      const bibliographyText = bibliography?.textContent ?? "";
+      if (
+        citationText &&
+        citationText !== "[cormen2009]" &&
+        bibliographyText.includes("Introduction to Algorithms")
+      ) {
+        return {
+          bibliographyText,
+          citationText,
+        };
+      }
+      return false;
+    },
+    null,
+    { timeout: 15_000, polling: 100 },
+  ).then((handle) => handle.jsonValue());
+
+  if (!state.citationText.startsWith("[") || state.citationText.includes("cormen2009")) {
+    throw new Error(`Lexical citation did not render as formatted CSL text: ${JSON.stringify(state)}`);
+  }
+}
+
 export async function run(page) {
   await runFormatScenario(page);
+  await runCitationBibliographyScenario(page);
   await runSourceToLexicalImmediateEditScenario(page);
   await runModeAndHeavyTypingScenario(page);
 
   return {
     pass: true,
-    message: "Lexical format, mode switch, heavy edit, and save/reopen smoke passed",
+    message: "Lexical format, citation, mode switch, heavy edit, and save/reopen smoke passed",
   };
 }
