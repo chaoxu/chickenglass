@@ -312,12 +312,16 @@ fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        delete_hot_exit_backup, list_hot_exit_backups, read_hot_exit_backup,
-        write_hot_exit_backup_at, HotExitBackupInput,
+        HotExitBackup, HotExitBackupInput, HotExitBackupSummary, delete_hot_exit_backup,
+        list_hot_exit_backups, read_hot_exit_backup, summary_for_backup, write_hot_exit_backup_at,
     };
+    use serde_json::Value;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    const HOT_EXIT_BACKUP_CONTRACT_JSON: &str =
+        include_str!("../../../tests/contracts/hot-exit-backups.contract.json");
 
     fn create_temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -337,6 +341,51 @@ mod tests {
             content: content.to_string(),
             baseline_hash: Some("baseline".to_string()),
         }
+    }
+
+    fn contract_record(name: &str) -> Value {
+        let contract: Value = serde_json::from_str(HOT_EXIT_BACKUP_CONTRACT_JSON)
+            .expect("parse hot-exit backup contract");
+        contract
+            .get(name)
+            .unwrap_or_else(|| panic!("missing contract record: {name}"))
+            .clone()
+    }
+
+    #[test]
+    fn hot_exit_backup_serde_contract_matches_typescript_contract() {
+        let expected = contract_record("backup");
+        let backup: HotExitBackup = serde_json::from_value(expected.clone()).unwrap();
+
+        assert_eq!(serde_json::to_value(&backup).unwrap(), expected);
+
+        let mut without_baseline = backup;
+        without_baseline.baseline_hash = None;
+        let expected_without_baseline = serde_json::to_value(&without_baseline).unwrap();
+        assert!(expected_without_baseline.get("baselineHash").is_none());
+        let decoded_without_baseline: HotExitBackup =
+            serde_json::from_value(expected_without_baseline).unwrap();
+        assert_eq!(decoded_without_baseline.baseline_hash, None);
+    }
+
+    #[test]
+    fn hot_exit_backup_summary_serde_contract_matches_typescript_contract() {
+        let backup: HotExitBackup = serde_json::from_value(contract_record("backup")).unwrap();
+        let expected = contract_record("summary");
+        let bytes = expected
+            .get("bytes")
+            .and_then(Value::as_u64)
+            .expect("summary contract bytes");
+        let summary = summary_for_backup(&backup, bytes);
+
+        assert_eq!(serde_json::to_value(&summary).unwrap(), expected);
+
+        let mut without_baseline = backup;
+        without_baseline.baseline_hash = None;
+        let summary_without_baseline: HotExitBackupSummary =
+            summary_for_backup(&without_baseline, bytes);
+        let expected_without_baseline = serde_json::to_value(&summary_without_baseline).unwrap();
+        assert!(expected_without_baseline.get("baselineHash").is_none());
     }
 
     #[test]
@@ -362,9 +411,11 @@ mod tests {
         assert_eq!(summaries, vec![summary]);
 
         delete_hot_exit_backup(&dir, "/project", "notes/main.md").unwrap();
-        assert!(read_hot_exit_backup(&dir, "/project", "notes/main.md")
-            .unwrap()
-            .is_none());
+        assert!(
+            read_hot_exit_backup(&dir, "/project", "notes/main.md")
+                .unwrap()
+                .is_none()
+        );
         assert!(list_hot_exit_backups(&dir, "/project").unwrap().is_empty());
 
         let _ = fs::remove_dir_all(&dir);

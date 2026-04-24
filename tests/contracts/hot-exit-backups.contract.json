@@ -1,0 +1,26 @@
+{
+  "backup": {
+    "version": 1,
+    "id": "backup-id",
+    "projectRoot": "/project",
+    "projectKey": "project-key",
+    "path": "notes/main.md",
+    "name": "main.md",
+    "content": "# Draft\n",
+    "contentHash": "content-hash",
+    "baselineHash": "baseline-hash",
+    "createdAt": 1700000000000,
+    "updatedAt": 1700000005000
+  },
+  "summary": {
+    "id": "backup-id",
+    "projectRoot": "/project",
+    "projectKey": "project-key",
+    "path": "notes/main.md",
+    "name": "main.md",
+    "contentHash": "content-hash",
+    "baselineHash": "baseline-hash",
+    "updatedAt": 1700000005000,
+    "bytes": 512
+  }
+}
