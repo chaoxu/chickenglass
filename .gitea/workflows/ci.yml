@@ -14,14 +14,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+      - name: Setup pnpm
+        run: |
+          pnpm_home="${RUNNER_TEMP:-$PWD/.tmp-ci}/pnpm"
+          npm install -g --prefix "$pnpm_home" pnpm@10.33.0
+          echo "$pnpm_home/bin" >> "$GITHUB_PATH"
+          "$pnpm_home/bin/pnpm" --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:static
 
@@ -32,14 +33,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+      - name: Setup pnpm
+        run: |
+          pnpm_home="${RUNNER_TEMP:-$PWD/.tmp-ci}/pnpm"
+          npm install -g --prefix "$pnpm_home" pnpm@10.33.0
+          echo "$pnpm_home/bin" >> "$GITHUB_PATH"
+          "$pnpm_home/bin/pnpm" --version
       - name: Install Pandoc
         run: |
           if command -v pandoc >/dev/null 2>&1; then
@@ -67,14 +69,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+      - name: Setup pnpm
+        run: |
+          pnpm_home="${RUNNER_TEMP:-$PWD/.tmp-ci}/pnpm"
+          npm install -g --prefix "$pnpm_home" pnpm@10.33.0
+          echo "$pnpm_home/bin" >> "$GITHUB_PATH"
+          "$pnpm_home/bin/pnpm" --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
         timeout-minutes: 10
@@ -187,13 +190,25 @@ jobs:
             fi
           fi
           exit "$browser_status"
-      - name: Upload browser diagnostics
+      - name: Print browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-diagnostics
-          path: /tmp/coflat-browser-artifacts
-          if-no-files-found: ignore
+        run: |
+          artifacts_dir=/tmp/coflat-browser-artifacts
+          if [ ! -d "$artifacts_dir" ]; then
+            echo "No browser diagnostics directory found."
+            exit 0
+          fi
+
+          echo "Browser diagnostics files:"
+          find "$artifacts_dir" -maxdepth 3 -type f -print | sort
+
+          for log_file in "$artifacts_dir"/*.log; do
+            if [ -f "$log_file" ]; then
+              echo ""
+              echo "===== ${log_file} ====="
+              tail -200 "$log_file" || true
+            fi
+          done
 
   # ── Standalone package: build + publint + size-limit ─────────────────────
   package:
@@ -203,14 +218,15 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+      - name: Setup pnpm
+        run: |
+          pnpm_home="${RUNNER_TEMP:-$PWD/.tmp-ci}/pnpm"
+          npm install -g --prefix "$pnpm_home" pnpm@10.33.0
+          echo "$pnpm_home/bin" >> "$GITHUB_PATH"
+          "$pnpm_home/bin/pnpm" --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:package
 
