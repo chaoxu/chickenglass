@@ -127,7 +127,23 @@ fn session_project_root_key(session_project_root: &std::path::Path) -> Result<St
 #[cfg(test)]
 mod tests {
     use super::session_project_root_key;
+    use super::{HotExitBackupInput, recovery};
+    use crate::commands::state::ProjectRootEntry;
+    use std::collections::HashMap;
+    use std::fs;
     use std::path::Path;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn create_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("coflat-{prefix}-{unique}"));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path.canonicalize().expect("canonicalize temp dir")
+    }
 
     #[test]
     fn derives_recovery_project_key_from_active_project_root() {
@@ -137,5 +153,68 @@ mod tests {
             session_project_root_key(project_root).expect("matching root"),
             "/project-a",
         );
+    }
+
+    #[test]
+    fn multi_window_recovery_uses_window_session_project_roots() {
+        let app_data_dir = create_temp_dir("recovery-window-isolation");
+        let project_roots = HashMap::from([
+            (
+                "main".to_string(),
+                ProjectRootEntry {
+                    generation: 1,
+                    path: PathBuf::from("/project-a"),
+                },
+            ),
+            (
+                "secondary".to_string(),
+                ProjectRootEntry {
+                    generation: 1,
+                    path: PathBuf::from("/project-b"),
+                },
+            ),
+        ]);
+
+        let main_project = session_project_root_key(&project_roots["main"].path)
+            .expect("main project key");
+        let secondary_project = session_project_root_key(&project_roots["secondary"].path)
+            .expect("secondary project key");
+
+        recovery::write_hot_exit_backup(
+            &app_data_dir,
+            HotExitBackupInput {
+                project_root: main_project.clone(),
+                path: "main.md".to_string(),
+                name: "main.md".to_string(),
+                content: "main draft".to_string(),
+                baseline_hash: None,
+            },
+        )
+        .expect("write main backup");
+        recovery::write_hot_exit_backup(
+            &app_data_dir,
+            HotExitBackupInput {
+                project_root: secondary_project.clone(),
+                path: "main.md".to_string(),
+                name: "main.md".to_string(),
+                content: "secondary draft".to_string(),
+                baseline_hash: None,
+            },
+        )
+        .expect("write secondary backup");
+
+        let main = recovery::read_hot_exit_backup(&app_data_dir, &main_project, "main.md")
+            .expect("read main backup")
+            .expect("main backup exists");
+        let secondary =
+            recovery::read_hot_exit_backup(&app_data_dir, &secondary_project, "main.md")
+                .expect("read secondary backup")
+                .expect("secondary backup exists");
+
+        assert_eq!(main.content, "main draft");
+        assert_eq!(secondary.content, "secondary draft");
+        assert_ne!(main.project_key, secondary.project_key);
+
+        let _ = fs::remove_dir_all(&app_data_dir);
     }
 }

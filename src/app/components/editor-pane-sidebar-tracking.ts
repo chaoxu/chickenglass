@@ -19,6 +19,18 @@ interface ReferenceSidebarMetadata {
   readonly ids: readonly string[];
 }
 
+interface DiagnosticsSidebarMetadata {
+  readonly bibliographyIds: readonly string[];
+  readonly bibliographyStatus: string;
+  readonly blockIds: readonly string[];
+  readonly equationIds: readonly string[];
+  readonly frontmatterStatus: string;
+  readonly headingIds: readonly string[];
+  readonly processorRevision: number;
+  readonly projectConfigStatus: string;
+  readonly references: readonly ReferenceSidebarMetadata[];
+}
+
 function sameStringArray(
   before: readonly string[],
   after: readonly string[],
@@ -98,6 +110,26 @@ function selectProjectConfigStatusMetadata(state: EditorState): string {
 function selectBibliographyStatusMetadata(state: EditorState): string {
   const status = state.field(bibDataField, false)?.status;
   return status ? JSON.stringify(status) : "";
+}
+
+export function createDiagnosticsSidebarMetadata(
+  state: EditorState,
+): DiagnosticsSidebarMetadata {
+  return {
+    bibliographyIds: selectBibliographyIdMetadata(state),
+    bibliographyStatus: selectBibliographyStatusMetadata(state),
+    blockIds: selectBlockIdMetadata(state),
+    equationIds: selectEquationIdMetadata(state),
+    frontmatterStatus: selectFrontmatterStatusMetadata(state),
+    headingIds: selectHeadingIdMetadata(state),
+    processorRevision: state.field(bibDataField, false)?.processorRevision ?? 0,
+    projectConfigStatus: selectProjectConfigStatusMetadata(state),
+    references: selectReferenceSidebarMetadata(state),
+  };
+}
+
+export function diagnosticsSidebarMetadataKey(state: EditorState): string {
+  return JSON.stringify(createDiagnosticsSidebarMetadata(state));
 }
 
 export function createDiagnosticsSidebarChangeChecker(): ChangeChecker {
