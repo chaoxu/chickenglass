@@ -1,16 +1,8 @@
+import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import type { FileSystem } from "../file-manager";
 import { createMockEditorView } from "../../test-utils";
-
-vi.mock("react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react")>();
-  return {
-    ...actual,
-    useRef: <T,>(value: T) => ({ current: value }),
-    useCallback: <T,>(fn: T) => fn,
-  };
-});
 
 import { useBibliography, clearBootstrapCache } from "./use-bibliography";
 
@@ -66,13 +58,15 @@ describe("useBibliography", () => {
       }),
     } as unknown as FileSystem;
     const { view, dispatch } = createView();
-    const { handleBibChange } = useBibliography({
+    const { result } = renderHook(() => useBibliography({
       fs,
       docPath: "notes/doc.md",
-    });
+    }));
 
-    handleBibChange("old.bib", "", view);
-    handleBibChange("new.bib", "", view);
+    act(() => {
+      result.current.handleBibChange("old.bib", "", view);
+      result.current.handleBibChange("new.bib", "", view);
+    });
 
     await vi.waitFor(() => {
       expect(dispatch).toHaveBeenCalledTimes(1);
@@ -97,13 +91,15 @@ describe("useBibliography", () => {
       }),
     } as unknown as FileSystem;
     const { view, dispatch } = createView();
-    const { loadInitial, handleBibChange } = useBibliography({
+    const { result } = renderHook(() => useBibliography({
       fs,
       docPath: "notes/doc.md",
-    });
+    }));
 
-    loadInitial("old.bib", "", view);
-    handleBibChange("new.bib", "", view);
+    act(() => {
+      result.current.loadInitial("old.bib", "", view);
+      result.current.handleBibChange("new.bib", "", view);
+    });
 
     await vi.waitFor(() => {
       expect(dispatch).toHaveBeenCalledTimes(1);
@@ -130,8 +126,10 @@ describe("useBibliography", () => {
 
     // First load — cold cache
     const { view: view1, dispatch: dispatch1 } = createView();
-    const hook1 = useBibliography({ fs, docPath: "notes/doc.md" });
-    hook1.loadInitial("refs.bib", "", view1);
+    const hook1 = renderHook(() => useBibliography({ fs, docPath: "notes/doc.md" }));
+    act(() => {
+      hook1.result.current.loadInitial("refs.bib", "", view1);
+    });
     await vi.waitFor(() => {
       expect(dispatch1).toHaveBeenCalledTimes(1);
     });
@@ -140,8 +138,10 @@ describe("useBibliography", () => {
 
     // Second load — same content, should hit bootstrap cache
     const { view: view2, dispatch: dispatch2 } = createView();
-    const hook2 = useBibliography({ fs, docPath: "notes/doc.md" });
-    hook2.loadInitial("refs.bib", "", view2);
+    const hook2 = renderHook(() => useBibliography({ fs, docPath: "notes/doc.md" }));
+    act(() => {
+      hook2.result.current.loadInitial("refs.bib", "", view2);
+    });
     await vi.waitFor(() => {
       expect(dispatch2).toHaveBeenCalledTimes(1);
     });
@@ -159,8 +159,10 @@ describe("useBibliography", () => {
     } as unknown as FileSystem;
 
     const { view: view1, dispatch: dispatch1 } = createView();
-    const hook1 = useBibliography({ fs, docPath: "notes/doc.md" });
-    hook1.loadInitial("refs.bib", "", view1);
+    const hook1 = renderHook(() => useBibliography({ fs, docPath: "notes/doc.md" }));
+    act(() => {
+      hook1.result.current.loadInitial("refs.bib", "", view1);
+    });
     await vi.waitFor(() => {
       expect(dispatch1).toHaveBeenCalledTimes(1);
     });
@@ -169,8 +171,10 @@ describe("useBibliography", () => {
     // Change bib content — cache should miss
     bibContent = NEW_BIB;
     const { view: view2, dispatch: dispatch2 } = createView();
-    const hook2 = useBibliography({ fs, docPath: "notes/doc.md" });
-    hook2.loadInitial("refs.bib", "", view2);
+    const hook2 = renderHook(() => useBibliography({ fs, docPath: "notes/doc.md" }));
+    act(() => {
+      hook2.result.current.loadInitial("refs.bib", "", view2);
+    });
     await vi.waitFor(() => {
       expect(dispatch2).toHaveBeenCalledTimes(1);
     });
@@ -183,12 +187,14 @@ describe("useBibliography", () => {
       readFile: vi.fn(() => Promise.reject(new Error("missing"))),
     } as unknown as FileSystem;
     const { view, dispatch } = createView();
-    const { loadInitial } = useBibliography({
+    const { result } = renderHook(() => useBibliography({
       fs,
       docPath: "notes/doc.md",
-    });
+    }));
 
-    loadInitial("refs.bib", "styles/custom.csl", view);
+    act(() => {
+      result.current.loadInitial("refs.bib", "styles/custom.csl", view);
+    });
 
     await vi.waitFor(() => {
       expect(dispatch).toHaveBeenCalledTimes(1);

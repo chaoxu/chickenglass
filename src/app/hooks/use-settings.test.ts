@@ -1,25 +1,5 @@
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// ── React mock ──────────────────────────────────────────────────────
-// Replace useState / useCallback with synchronous stubs so we can drive
-// the hook without a React renderer.
-let capturedState: unknown;
-
-vi.mock("react", () => ({
-  useState: (init: unknown) => {
-    const value = typeof init === "function" ? (init as () => unknown)() : init;
-    capturedState = value;
-    const setter = (updaterOrValue: unknown) => {
-      if (typeof updaterOrValue === "function") {
-        capturedState = (updaterOrValue as (prev: unknown) => unknown)(capturedState);
-      } else {
-        capturedState = updaterOrValue;
-      }
-    };
-    return [value, setter];
-  },
-  useCallback: <T>(fn: T) => fn,
-}));
 
 import type { Settings } from "../lib/types";
 import { useSettings } from "./use-settings";
@@ -34,15 +14,16 @@ function storedSettings(): Settings | null {
 
 describe("useSettings", () => {
   beforeEach(() => {
-    capturedState = undefined;
+    localStorage.clear();
+    vi.restoreAllMocks();
   });
 
   // ── loadSettings ──────────────────────────────────────────────────
 
   describe("loadSettings (via hook initialisation)", () => {
     it("returns full defaults when localStorage is empty", () => {
-      const { settings } = useSettings();
-      expect(settings).toEqual({
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings).toEqual({
         autoSaveInterval: 30000,
         fontSize: 16,
         lineHeight: 1.6,
@@ -66,11 +47,11 @@ describe("useSettings", () => {
         STORAGE_KEY,
         JSON.stringify({ fontSize: 20, tabSize: 4 }),
       );
-      const { settings } = useSettings();
-      expect(settings.fontSize).toBe(20);
-      expect(settings.tabSize).toBe(4);
-      expect(settings.lineHeight).toBe(1.6);
-      expect(settings.editorMode).toBe("cm6-rich");
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.fontSize).toBe(20);
+      expect(result.current.settings.tabSize).toBe(4);
+      expect(result.current.settings.lineHeight).toBe(1.6);
+      expect(result.current.settings.editorMode).toBe("cm6-rich");
     });
 
     it("migrates legacy spellCheck into enabledPlugins", () => {
@@ -78,8 +59,8 @@ describe("useSettings", () => {
         STORAGE_KEY,
         JSON.stringify({ spellCheck: true }),
       );
-      const { settings } = useSettings();
-      expect(settings.enabledPlugins.spellcheck).toBe(true);
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.enabledPlugins.spellcheck).toBe(true);
     });
 
     it("does not overwrite existing enabledPlugins.spellcheck", () => {
@@ -90,22 +71,22 @@ describe("useSettings", () => {
           enabledPlugins: { spellcheck: false },
         }),
       );
-      const { settings } = useSettings();
-      expect(settings.enabledPlugins.spellcheck).toBe(false);
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.enabledPlugins.spellcheck).toBe(false);
     });
 
     it("migrates legacy cf-theme key into settings.theme", () => {
       localStorage.setItem(LEGACY_THEME_KEY, "dark");
-      const { settings } = useSettings();
-      expect(settings.theme).toBe("dark");
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.theme).toBe("dark");
       // Legacy key should be cleaned up
       expect(localStorage.getItem(LEGACY_THEME_KEY)).toBeNull();
     });
 
     it("ignores invalid legacy cf-theme values", () => {
       localStorage.setItem(LEGACY_THEME_KEY, "neon");
-      const { settings } = useSettings();
-      expect(settings.theme).toBe("system");
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.theme).toBe("system");
       // Key still removed after migration attempt
       expect(localStorage.getItem(LEGACY_THEME_KEY)).toBeNull();
     });
@@ -116,8 +97,8 @@ describe("useSettings", () => {
         JSON.stringify({ theme: "light" }),
       );
       localStorage.setItem(LEGACY_THEME_KEY, "dark");
-      const { settings } = useSettings();
-      expect(settings.theme).toBe("light");
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.theme).toBe("light");
     });
 
     it("falls back to 'system' for corrupt theme value", () => {
@@ -125,15 +106,15 @@ describe("useSettings", () => {
         STORAGE_KEY,
         JSON.stringify({ theme: "banana" }),
       );
-      const { settings } = useSettings();
-      expect(settings.theme).toBe("system");
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.theme).toBe("system");
     });
 
     it("handles corrupt JSON in localStorage gracefully", () => {
       localStorage.setItem(STORAGE_KEY, "not-json{{{");
-      const { settings } = useSettings();
-      expect(settings.fontSize).toBe(16);
-      expect(settings.theme).toBe("system");
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.fontSize).toBe(16);
+      expect(result.current.settings.theme).toBe("system");
     });
   });
 
@@ -141,15 +122,19 @@ describe("useSettings", () => {
 
   describe("updateSetting", () => {
     it("persists individual field changes to localStorage", () => {
-      const { updateSetting } = useSettings();
-      updateSetting("fontSize", 24);
+      const { result } = renderHook(() => useSettings());
+      act(() => {
+        result.current.updateSetting("fontSize", 24);
+      });
       const stored = storedSettings();
       expect(stored?.fontSize).toBe(24);
     });
 
     it("preserves other fields when updating one", () => {
-      const { updateSetting } = useSettings();
-      updateSetting("tabSize", 8);
+      const { result } = renderHook(() => useSettings());
+      act(() => {
+        result.current.updateSetting("tabSize", 8);
+      });
       const stored = storedSettings();
       expect(stored?.tabSize).toBe(8);
       expect(stored?.lineHeight).toBe(1.6);
@@ -157,9 +142,11 @@ describe("useSettings", () => {
     });
 
     it("updates the in-memory state", () => {
-      const { updateSetting } = useSettings();
-      updateSetting("wordWrap", false);
-      expect((capturedState as Settings).wordWrap).toBe(false);
+      const { result } = renderHook(() => useSettings());
+      act(() => {
+        result.current.updateSetting("wordWrap", false);
+      });
+      expect(result.current.settings.wordWrap).toBe(false);
     });
   });
 
@@ -167,28 +154,34 @@ describe("useSettings", () => {
 
   describe("resetSettings", () => {
     it("restores all settings to defaults", () => {
-      const { updateSetting, resetSettings } = useSettings();
-      updateSetting("fontSize", 42);
-      updateSetting("theme", "dark");
-      resetSettings();
-      expect((capturedState as Settings).fontSize).toBe(16);
-      expect((capturedState as Settings).theme).toBe("system");
+      const { result } = renderHook(() => useSettings());
+      act(() => {
+        result.current.updateSetting("fontSize", 42);
+        result.current.updateSetting("theme", "dark");
+        result.current.resetSettings();
+      });
+      expect(result.current.settings.fontSize).toBe(16);
+      expect(result.current.settings.theme).toBe("system");
     });
 
     it("persists the default settings to localStorage", () => {
-      const { updateSetting, resetSettings } = useSettings();
-      updateSetting("fontSize", 42);
-      resetSettings();
+      const { result } = renderHook(() => useSettings());
+      act(() => {
+        result.current.updateSetting("fontSize", 42);
+        result.current.resetSettings();
+      });
       const stored = storedSettings();
       expect(stored?.fontSize).toBe(16);
       expect(stored?.theme).toBe("system");
     });
 
     it("clears customised enabledPlugins", () => {
-      const { updateSetting, resetSettings } = useSettings();
-      updateSetting("enabledPlugins", { spellcheck: true, foo: false });
-      resetSettings();
-      expect((capturedState as Settings).enabledPlugins).toEqual({});
+      const { result } = renderHook(() => useSettings());
+      act(() => {
+        result.current.updateSetting("enabledPlugins", { spellcheck: true, foo: false });
+        result.current.resetSettings();
+      });
+      expect(result.current.settings.enabledPlugins).toEqual({});
     });
   });
 });
