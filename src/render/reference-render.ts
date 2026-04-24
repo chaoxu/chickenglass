@@ -37,7 +37,6 @@ import {
 } from "../semantics/document";
 import {
   type DirtyRange,
-  dirtyRangesFromChanges,
   expandChangeRangeToLines,
   mergeDirtyRanges,
 } from "./incremental-dirty-ranges";
@@ -287,6 +286,52 @@ function mergeDirtyRangesWithActiveReference(
   return mergeDirtyRanges([...dirtyRanges, ...activeRanges]);
 }
 
+function mapReferenceDirtyRange(
+  range: Pick<ReferenceSemantics, "from" | "to">,
+  changes: ChangeSet,
+): DirtyRange {
+  const from = changes.mapPos(range.from, -1);
+  const to = changes.mapPos(range.to, 1);
+  return { from, to: Math.max(from, to) };
+}
+
+interface ReferenceDocDirtyRanges {
+  readonly ranges: readonly DirtyRange[];
+  readonly couldContainReferences: boolean;
+}
+
+function computeReferenceDocDirtyRanges(update: ViewUpdate): ReferenceDocDirtyRanges {
+  if (!update.docChanged) {
+    return { ranges: [], couldContainReferences: false };
+  }
+
+  const ranges: DirtyRange[] = [];
+  let couldContainReferences = false;
+
+  update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    const beforeRange = expandChangeRangeToLines(update.startState.doc, fromA, toA);
+    const afterRange = expandChangeRangeToLines(update.state.doc, fromB, toB);
+    const mappedBeforeRange = mapReferenceDirtyRange(beforeRange, update.changes);
+
+    ranges.push(afterRange, mappedBeforeRange);
+
+    if (
+      !couldContainReferences &&
+      (
+        update.startState.sliceDoc(beforeRange.from, beforeRange.to).includes("@") ||
+        update.state.sliceDoc(afterRange.from, afterRange.to).includes("@")
+      )
+    ) {
+      couldContainReferences = true;
+    }
+  });
+
+  return {
+    ranges: mergeDirtyRanges(ranges),
+    couldContainReferences,
+  };
+}
+
 interface ReferenceRevealChange {
   readonly beforeActive: Pick<ReferenceSemantics, "from" | "to"> | null;
   readonly afterActive: Pick<ReferenceSemantics, "from" | "to"> | null;
@@ -311,39 +356,22 @@ function referenceRenderDependenciesNeedRebuild(update: ViewUpdate): boolean {
 
 function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
   const { beforeActive, afterActive, activeChanged } = getReferenceRevealChange(update);
-  const docDirtyRanges = update.docChanged
-    ? dirtyRangesFromChanges(
-        update.changes,
-        (from, to) => expandChangeRangeToLines(update.state.doc, from, to),
-      )
-    : [];
+  const docDirty = computeReferenceDocDirtyRanges(update);
   if (
-    docDirtyRanges.length > 0 &&
+    docDirty.ranges.length > 0 &&
     !activeChanged &&
-    !dirtyRangesCouldContainReferences(update, docDirtyRanges)
+    !docDirty.couldContainReferences
   ) {
     return [];
   }
+  const mappedBeforeActive = activeChanged && beforeActive && update.docChanged
+    ? mapReferenceDirtyRange(beforeActive, update.changes)
+    : beforeActive;
   return mergeDirtyRangesWithActiveReference(
-    docDirtyRanges,
-    activeChanged ? beforeActive : null,
+    docDirty.ranges,
+    activeChanged ? mappedBeforeActive : null,
     activeChanged ? afterActive : null,
   );
-}
-
-function dirtyRangesCouldContainReferences(
-  update: ViewUpdate,
-  dirtyRanges: readonly DirtyRange[],
-): boolean {
-  for (const range of dirtyRanges) {
-    if (
-      update.startState.sliceDoc(range.from, range.to).includes("@") ||
-      update.state.sliceDoc(range.from, range.to).includes("@")
-    ) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function collectReferenceRangesForDirtySpans(
