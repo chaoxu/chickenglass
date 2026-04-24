@@ -1,11 +1,14 @@
 import { parse as parseYaml } from "yaml";
 
+import exportContract from "./export-contract.json" with { type: "json" };
 import { isFrontmatterDelimiterLine } from "../lib/frontmatter-delimiter.js";
 
-export const LATEX_PANDOC_FROM =
-  "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
+export const EXPORT_CONTRACT = exportContract;
+export const LATEX_PANDOC_FROM = exportContract.pandoc_from;
 
-export const LATEX_TEMPLATE_NAMES = new Set(["article", "lipics"]);
+export const LATEX_TEMPLATE_NAMES = new Set(
+  Object.keys(exportContract.latex.templates.builtins),
+);
 
 export function parseLatexFrontmatterConfig(markdown) {
   const lines = markdown.split("\n");
@@ -51,7 +54,10 @@ export function resolveLatexExportOptions({ config = {}, flags = {} } = {}) {
       stringOption(flags.bibliography) ??
       stringOption(latex.bibliography) ??
       stringOption(config.bibliography),
-    template: stringOption(flags.template) ?? stringOption(latex.template) ?? "article",
+    template:
+      stringOption(flags.template) ??
+      stringOption(latex.template) ??
+      exportContract.latex.templates.default,
   };
 }
 
@@ -71,9 +77,11 @@ function defaultResolvePath(base, path) {
 }
 
 export function resolveLatexTemplatePath(template, { cwd = "", latexDir, pathResolve = defaultResolvePath } = {}) {
-  const name = template || "article";
-  if (name === "article") return pathResolve(latexDir, "template/article.tex");
-  if (name === "lipics") return pathResolve(latexDir, "template/lipics.tex");
+  const name = template || exportContract.latex.templates.default;
+  const builtinTemplate = exportContract.latex.templates.builtins[name];
+  if (builtinTemplate) {
+    return pathResolve(latexDir, builtinTemplate);
+  }
   return pathResolve(cwd, name);
 }
 
@@ -93,24 +101,63 @@ export function buildLatexPandocArgs({
   resourcePath,
   template,
 }) {
-  const args = [
-    `--from=${LATEX_PANDOC_FROM}`,
-    "--to=latex",
-    "--wrap=preserve",
-    "--syntax-highlighting=none",
-    `--lua-filter=${filterPath}`,
-    `--template=${template}`,
-  ];
-  if (resourcePath) {
-    args.push(`--resource-path=${resourcePath}`);
-  }
-  args.push(`--output=${output}`);
+  const values = {
+    latex_filter_path: filterPath,
+    latex_template_path: template,
+    output_path: output,
+    pandoc_from: exportContract.pandoc_from,
+    resource_path: resourcePath,
+  };
+  const args = renderArgs(exportContract.latex.args, values).filter(
+    (arg) => resourcePath || !arg.startsWith("--resource-path="),
+  );
   const bibliographyMetadata = latexBibliographyMetadataValue(bibliography);
   if (bibliographyMetadata) {
-    args.push(`--metadata=bibliography=${bibliographyMetadata}`);
+    args.push(renderArg(exportContract.latex.bibliography_metadata_arg, {
+      bibliography_metadata: bibliographyMetadata,
+    }));
   }
   if (format === "pdf") {
-    args.push("--pdf-engine=xelatex");
+    args.push(...exportContract.latex.pdf_args);
   }
   return args;
+}
+
+export function buildPandocResourcePath(projectRoot, sourceDir, { delimiter = ":" } = {}) {
+  const pathByEntry = {
+    project_root: projectRoot,
+    source_dir: sourceDir,
+  };
+  const paths = [];
+  for (const entry of exportContract.resource_path.entries) {
+    const path = pathByEntry[entry];
+    if (!path) {
+      continue;
+    }
+    if (exportContract.resource_path.dedupe && paths.includes(path)) {
+      continue;
+    }
+    paths.push(path);
+  }
+  return paths.join(delimiter);
+}
+
+export function buildHtmlPandocArgs({ output, resourcePath }) {
+  return renderArgs(exportContract.html.args, {
+    output_path: output,
+    pandoc_from: exportContract.pandoc_from,
+    resource_path: resourcePath,
+  });
+}
+
+export function exportDependencyTools(format) {
+  return exportContract.dependencies[format] ?? [];
+}
+
+function renderArgs(args, values) {
+  return args.map((arg) => renderArg(arg, values));
+}
+
+function renderArg(arg, values) {
+  return arg.replaceAll(/\{([a-z_]+)\}/g, (_match, key) => values[key] ?? "");
 }

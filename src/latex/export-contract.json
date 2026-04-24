@@ -1,0 +1,76 @@
+{
+  "pandoc_from": "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark",
+  "resource_path": {
+    "entries": ["source_dir", "project_root"],
+    "dedupe": true
+  },
+  "latex": {
+    "templates": {
+      "default": "article",
+      "builtins": {
+        "article": "template/article.tex",
+        "lipics": "template/lipics.tex"
+      }
+    },
+    "args": [
+      "--from={pandoc_from}",
+      "--to=latex",
+      "--wrap=preserve",
+      "--syntax-highlighting=none",
+      "--lua-filter={latex_filter_path}",
+      "--template={latex_template_path}",
+      "--resource-path={resource_path}",
+      "--output={output_path}"
+    ],
+    "bibliography_metadata_arg": "--metadata=bibliography={bibliography_metadata}",
+    "pdf_args": ["--pdf-engine=xelatex"]
+  },
+  "html": {
+    "args": [
+      "--from={pandoc_from}",
+      "--to=html5",
+      "--standalone",
+      "--wrap=preserve",
+      "--katex",
+      "--section-divs",
+      "--filter=pandoc-crossref",
+      "--citeproc",
+      "--metadata=link-citations=true",
+      "--resource-path={resource_path}",
+      "--output={output_path}"
+    ]
+  },
+  "dependencies": {
+    "latex": [
+      {
+        "name": "pandoc",
+        "version_args": ["--version"],
+        "install_hint": "Install Pandoc from https://pandoc.org/installing.html or add it to PATH."
+      }
+    ],
+    "pdf": [
+      {
+        "name": "pandoc",
+        "version_args": ["--version"],
+        "install_hint": "Install Pandoc from https://pandoc.org/installing.html or add it to PATH."
+      },
+      {
+        "name": "xelatex",
+        "version_args": ["--version"],
+        "install_hint": "Install a TeX distribution that provides xelatex, such as TeX Live or MacTeX."
+      }
+    ],
+    "html": [
+      {
+        "name": "pandoc",
+        "version_args": ["--version"],
+        "install_hint": "Install Pandoc from https://pandoc.org/installing.html or add it to PATH."
+      },
+      {
+        "name": "pandoc-crossref",
+        "version_args": ["--version"],
+        "install_hint": "Install pandoc-crossref or add it to PATH. HTML export passes --filter=pandoc-crossref."
+      }
+    ]
+  }
+}

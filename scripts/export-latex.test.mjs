@@ -2,7 +2,8 @@ import { delimiter } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildPandocResourcePath, parseExportLatexArgs } from "./export-latex.mjs";
+import { buildPandocResourcePath } from "../src/latex/export-options.mjs";
+import { parseExportLatexArgs } from "./export-latex.mjs";
 
 describe("export-latex CLI profile", () => {
   it("parses documented equals and space flag forms through the shared parser", () => {
@@ -30,9 +31,9 @@ describe("export-latex CLI profile", () => {
   });
 
   it("matches desktop export resource-path semantics", () => {
-    expect(buildPandocResourcePath("/project/notes", "/project")).toBe(
+    expect(buildPandocResourcePath("/project", "/project/notes", { delimiter })).toBe(
       ["/project/notes", "/project"].join(delimiter),
     );
-    expect(buildPandocResourcePath("/project", "/project")).toBe("/project");
+    expect(buildPandocResourcePath("/project", "/project", { delimiter })).toBe("/project");
   });
 });

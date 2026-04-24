@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use serde::{Deserialize, Serialize};
 use tauri::{command, State, WebviewWindow};
 
 use super::context::{run_command, CommandSpec, WindowCommandContext};
@@ -16,28 +18,149 @@ const EXPORT_DOCUMENT: CommandSpec = CommandSpec::new(
     "tauri.export.export_document",
     "tauri",
 );
-const LATEX_PANDOC_FROM: &str = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
+const EXPORT_CONTRACT_JSON: &str = include_str!("../../../src/latex/export-contract.json");
 
-/// Check whether Pandoc is installed and return its version string.
+#[derive(Clone, Deserialize)]
+struct ExportDependencyTool {
+    name: String,
+    version_args: Vec<String>,
+    install_hint: String,
+}
+
+#[derive(Deserialize)]
+struct ExportResourcePathContract {
+    entries: Vec<String>,
+    dedupe: bool,
+}
+
+#[derive(Deserialize)]
+struct ExportTemplateContract {
+    default: String,
+    builtins: HashMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct LatexExportContract {
+    templates: ExportTemplateContract,
+    args: Vec<String>,
+    bibliography_metadata_arg: String,
+    pdf_args: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct HtmlExportContract {
+    args: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ExportContract {
+    pandoc_from: String,
+    resource_path: ExportResourcePathContract,
+    latex: LatexExportContract,
+    html: HtmlExportContract,
+    dependencies: HashMap<String, Vec<ExportDependencyTool>>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct ExportToolStatus {
+    name: String,
+    available: bool,
+    version: Option<String>,
+    install_hint: String,
+    message: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ExportDependencyCheck {
+    format: String,
+    ok: bool,
+    tools: Vec<ExportToolStatus>,
+}
+
+/// Check whether export dependencies for a target format are available.
 #[command]
-pub fn check_pandoc(perf: State<'_, PerfState>) -> Result<String, String> {
+pub fn check_pandoc(
+    perf: State<'_, PerfState>,
+    format: Option<String>,
+) -> Result<ExportDependencyCheck, String> {
     run_command(&perf, CHECK_PANDOC, None, || {
-        let output = map_err_str!(
-            Command::new("pandoc").arg("--version").output(),
-            "Failed to run pandoc: {}"
-        )?;
-
-        if !output.status.success() {
-            return Err("pandoc --version returned a non-zero exit code".to_string());
-        }
-
-        let version = String::from_utf8_lossy(&output.stdout);
-        Ok(version
-            .lines()
-            .next()
-            .unwrap_or("pandoc (unknown version)")
-            .to_string())
+        let format = format.unwrap_or_else(|| "html".to_string());
+        build_export_dependency_check(&format, check_export_tool)
     })
+}
+
+fn export_contract() -> Result<ExportContract, String> {
+    serde_json::from_str(EXPORT_CONTRACT_JSON)
+        .map_err(|e| format!("Failed to parse export contract: {}", e))
+}
+
+fn build_export_dependency_check<F>(
+    format: &str,
+    mut check_tool: F,
+) -> Result<ExportDependencyCheck, String>
+where
+    F: FnMut(&ExportDependencyTool) -> ExportToolStatus,
+{
+    let contract = export_contract()?;
+    let tools = contract
+        .dependencies
+        .get(format)
+        .ok_or_else(|| format!("Unsupported export format: {}", format))?;
+    let statuses: Vec<ExportToolStatus> = tools.iter().map(&mut check_tool).collect();
+    let ok = statuses.iter().all(|status| status.available);
+
+    Ok(ExportDependencyCheck {
+        format: format.to_string(),
+        ok,
+        tools: statuses,
+    })
+}
+
+fn check_export_tool(tool: &ExportDependencyTool) -> ExportToolStatus {
+    match Command::new(&tool.name).args(&tool.version_args).output() {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let version = stdout
+                .lines()
+                .chain(stderr.lines())
+                .find(|line| !line.trim().is_empty())
+                .map(|line| line.trim().to_string());
+
+            ExportToolStatus {
+                name: tool.name.clone(),
+                available: true,
+                version,
+                install_hint: tool.install_hint.clone(),
+                message: None,
+            }
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            ExportToolStatus {
+                name: tool.name.clone(),
+                available: false,
+                version: None,
+                install_hint: tool.install_hint.clone(),
+                message: Some(if stderr.is_empty() {
+                    format!(
+                        "{} {} returned a non-zero exit code",
+                        tool.name,
+                        tool.version_args.join(" ")
+                    )
+                } else {
+                    stderr
+                }),
+            }
+        }
+        Err(error) => ExportToolStatus {
+            name: tool.name.clone(),
+            available: false,
+            version: None,
+            install_hint: tool.install_hint.clone(),
+            message: Some(format!("Failed to run {}: {}", tool.name, error)),
+        },
+    }
 }
 
 fn resolve_export_output_path(
@@ -75,9 +198,25 @@ fn resolve_export_source_dir(
 }
 
 fn build_pandoc_resource_path(project_root: &Path, source_dir: &Path) -> Result<OsString, String> {
-    let mut resource_paths = vec![source_dir.to_path_buf()];
-    if source_dir != project_root {
-        resource_paths.push(project_root.to_path_buf());
+    let contract = export_contract()?;
+    let mut resource_paths = Vec::new();
+
+    for entry in contract.resource_path.entries {
+        let path = match entry.as_str() {
+            "source_dir" => source_dir,
+            "project_root" => project_root,
+            other => {
+                return Err(format!(
+                    "Unsupported export resource path entry in contract: {}",
+                    other
+                ));
+            }
+        };
+
+        if contract.resource_path.dedupe && resource_paths.iter().any(|existing| existing == path) {
+            continue;
+        }
+        resource_paths.push(path.to_path_buf());
     }
 
     std::env::join_paths(resource_paths)
@@ -96,12 +235,21 @@ fn resolve_latex_template(
     paths: &ProjectPathResolver,
     template: Option<&str>,
 ) -> Result<PathBuf, String> {
-    let name = template.unwrap_or("article");
+    let contract = export_contract()?;
+    let name = template.unwrap_or(&contract.latex.templates.default);
     let latex_dir = latex_dir();
-    match name {
-        "" | "article" => Ok(latex_dir.join("template").join("article.tex")),
-        "lipics" => Ok(latex_dir.join("template").join("lipics.tex")),
-        custom => paths.resolve_project_path(custom),
+    if name.is_empty() {
+        let default_template = contract
+            .latex
+            .templates
+            .builtins
+            .get(&contract.latex.templates.default)
+            .ok_or_else(|| "Default LaTeX template is missing from export contract".to_string())?;
+        return Ok(latex_dir.join(default_template));
+    }
+    match contract.latex.templates.builtins.get(name) {
+        Some(relative_path) => Ok(latex_dir.join(relative_path)),
+        None => paths.resolve_project_path(name),
     }
 }
 
@@ -124,26 +272,32 @@ fn build_latex_pandoc_args(
     template: Option<&str>,
     bibliography: Option<&str>,
 ) -> Result<Vec<String>, String> {
+    let contract = export_contract()?;
     let resource_path = build_pandoc_resource_path(project_root, source_dir)?;
     let filter_path = latex_dir().join("filter.lua");
     let template_path = resolve_latex_template(paths, template)?;
-    let mut args = vec![
-        format!("--from={}", LATEX_PANDOC_FROM),
-        "--to=latex".to_string(),
-        "--wrap=preserve".to_string(),
-        "--syntax-highlighting=none".to_string(),
-        format!("--lua-filter={}", filter_path.to_string_lossy()),
-        format!("--template={}", template_path.to_string_lossy()),
-        format!("--resource-path={}", resource_path.to_string_lossy()),
-        format!("--output={}", output_path.to_string_lossy()),
+    let filter_path = filter_path.to_string_lossy().to_string();
+    let template_path = template_path.to_string_lossy().to_string();
+    let resource_path = resource_path.to_string_lossy().to_string();
+    let output_path = output_path.to_string_lossy().to_string();
+    let values = [
+        ("latex_filter_path", filter_path.as_str()),
+        ("latex_template_path", template_path.as_str()),
+        ("output_path", output_path.as_str()),
+        ("pandoc_from", contract.pandoc_from.as_str()),
+        ("resource_path", resource_path.as_str()),
     ];
+    let mut args = render_pandoc_args(&contract.latex.args, &values);
 
     if let Some(metadata) = bibliography.and_then(bibliography_metadata_value) {
-        args.push(format!("--metadata=bibliography={}", metadata));
+        args.push(render_pandoc_arg(
+            &contract.latex.bibliography_metadata_arg,
+            &[("bibliography_metadata", metadata.as_str())],
+        ));
     }
 
     match format {
-        "pdf" => args.push("--pdf-engine=xelatex".to_string()),
+        "pdf" => args.extend(contract.latex.pdf_args),
         "latex" => {}
         _ => {
             return Err(format!("Unsupported export format: {}", format));
@@ -158,20 +312,50 @@ fn build_html_pandoc_args(
     source_dir: &Path,
     output_path: &Path,
 ) -> Result<Vec<String>, String> {
+    let contract = export_contract()?;
     let resource_path = build_pandoc_resource_path(project_root, source_dir)?;
-    Ok(vec![
-        format!("--from={}", LATEX_PANDOC_FROM),
-        "--to=html5".to_string(),
-        "--standalone".to_string(),
-        "--wrap=preserve".to_string(),
-        "--katex".to_string(),
-        "--section-divs".to_string(),
-        "--filter=pandoc-crossref".to_string(),
-        "--citeproc".to_string(),
-        "--metadata=link-citations=true".to_string(),
-        format!("--resource-path={}", resource_path.to_string_lossy()),
-        format!("--output={}", output_path.to_string_lossy()),
-    ])
+    let resource_path = resource_path.to_string_lossy().to_string();
+    let output_path = output_path.to_string_lossy().to_string();
+    Ok(render_pandoc_args(
+        &contract.html.args,
+        &[
+            ("output_path", output_path.as_str()),
+            ("pandoc_from", contract.pandoc_from.as_str()),
+            ("resource_path", resource_path.as_str()),
+        ],
+    ))
+}
+
+fn render_pandoc_args(templates: &[String], values: &[(&str, &str)]) -> Vec<String> {
+    templates
+        .iter()
+        .map(|template| render_pandoc_arg(template, values))
+        .collect()
+}
+
+fn render_pandoc_arg(template: &str, values: &[(&str, &str)]) -> String {
+    let value_by_key: HashMap<&str, &str> = values.iter().copied().collect();
+    let mut rendered = String::with_capacity(template.len());
+    let mut rest = template;
+
+    while let Some(open_index) = rest.find('{') {
+        rendered.push_str(&rest[..open_index]);
+        let after_open = &rest[open_index + 1..];
+        let Some(close_index) = after_open.find('}') else {
+            rendered.push_str(&rest[open_index..]);
+            return rendered;
+        };
+        let key = &after_open[..close_index];
+        if !key.is_empty() && key.chars().all(|c| c == '_' || c.is_ascii_lowercase()) {
+            rendered.push_str(value_by_key.get(key).copied().unwrap_or(""));
+            rest = &after_open[close_index + 1..];
+        } else {
+            rendered.push('{');
+            rest = after_open;
+        }
+    }
+    rendered.push_str(rest);
+    rendered
 }
 
 fn build_pandoc_args(
@@ -218,6 +402,20 @@ pub fn export_document(
             let project_root = paths.resolve_project_path("")?;
             let output_path = resolve_export_output_path(&paths, &output_path)?;
             let source_dir = resolve_export_source_dir(&paths, &project_root, &source_path)?;
+            let dependency_check = build_export_dependency_check(&format, check_export_tool)?;
+            if !dependency_check.ok {
+                let missing_tools = dependency_check
+                    .tools
+                    .iter()
+                    .filter(|tool| !tool.available)
+                    .map(|tool| tool.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(format!(
+                    "Missing export dependencies for {} export: {}",
+                    format, missing_tools
+                ));
+            }
             let args = build_pandoc_args(
                 &paths,
                 &project_root,
@@ -261,9 +459,10 @@ pub fn export_document(
 #[cfg(test)]
 mod tests {
     use super::{
-        bibliography_metadata_value, build_html_pandoc_args, build_latex_pandoc_args,
-        build_pandoc_args, build_pandoc_resource_path, resolve_export_output_path,
-        resolve_export_source_dir, resolve_latex_template, LATEX_PANDOC_FROM,
+        bibliography_metadata_value, build_export_dependency_check, build_html_pandoc_args,
+        build_latex_pandoc_args, build_pandoc_args, build_pandoc_resource_path, export_contract,
+        render_pandoc_arg, resolve_export_output_path, resolve_export_source_dir,
+        resolve_latex_template, ExportToolStatus,
     };
     use crate::services::path::ProjectPathResolver;
     use std::fs;
@@ -291,6 +490,10 @@ mod tests {
                 || error.contains("cannot contain . or .. components"),
             "got: {error}",
         );
+    }
+
+    fn pandoc_from() -> String {
+        export_contract().expect("export contract").pandoc_from
     }
 
     #[test]
@@ -466,7 +669,7 @@ mod tests {
         )
         .expect("pandoc args");
 
-        assert_eq!(args[0], format!("--from={}", LATEX_PANDOC_FROM));
+        assert_eq!(args[0], format!("--from={}", pandoc_from()));
         assert!(args.contains(&"--to=latex".to_string()));
         assert!(args.contains(&"--wrap=preserve".to_string()));
         assert!(args.contains(&"--syntax-highlighting=none".to_string()));
@@ -514,7 +717,7 @@ mod tests {
         let args =
             build_html_pandoc_args(&project_root, &source_dir, &output_path).expect("html args");
 
-        assert_eq!(args[0], format!("--from={}", LATEX_PANDOC_FROM));
+        assert_eq!(args[0], format!("--from={}", pandoc_from()));
         assert!(args.contains(&"--to=html5".to_string()));
         assert!(args.contains(&"--standalone".to_string()));
         assert!(args.contains(&"--wrap=preserve".to_string()));
@@ -579,5 +782,60 @@ mod tests {
         assert!(error.contains("Unsupported export format: docx"));
 
         fs::remove_dir_all(&project_root).expect("remove project root");
+    }
+
+    #[test]
+    fn renders_pandoc_arg_without_resubstituting_placeholder_like_values() {
+        let rendered = render_pandoc_arg(
+            "--resource-path={resource_path}",
+            &[
+                ("output_path", "/tmp/out.html"),
+                ("resource_path", "/tmp/{output_path}"),
+            ],
+        );
+
+        assert_eq!(rendered, "--resource-path=/tmp/{output_path}");
+    }
+
+    #[test]
+    fn preflights_html_export_dependencies_from_the_shared_contract() {
+        let check = build_export_dependency_check("html", |tool| ExportToolStatus {
+            name: tool.name.clone(),
+            available: tool.name == "pandoc",
+            version: None,
+            install_hint: tool.install_hint.clone(),
+            message: None,
+        })
+        .expect("dependency check");
+
+        assert!(!check.ok);
+        let missing_tools: Vec<&str> = check
+            .tools
+            .iter()
+            .filter(|tool| !tool.available)
+            .map(|tool| tool.name.as_str())
+            .collect();
+        assert_eq!(missing_tools, vec!["pandoc-crossref"]);
+    }
+
+    #[test]
+    fn preflights_pdf_export_dependencies_from_the_shared_contract() {
+        let check = build_export_dependency_check("pdf", |tool| ExportToolStatus {
+            name: tool.name.clone(),
+            available: tool.name == "pandoc",
+            version: None,
+            install_hint: tool.install_hint.clone(),
+            message: None,
+        })
+        .expect("dependency check");
+
+        assert!(!check.ok);
+        let missing_tools: Vec<&str> = check
+            .tools
+            .iter()
+            .filter(|tool| !tool.available)
+            .map(|tool| tool.name.as_str())
+            .collect();
+        assert_eq!(missing_tools, vec!["xelatex"]);
     }
 }

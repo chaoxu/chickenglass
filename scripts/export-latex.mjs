@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   buildLatexPandocArgs,
+  buildPandocResourcePath,
   parseLatexFrontmatterConfig,
   resolveLatexExportOptions,
   resolveLatexTemplatePath,
@@ -43,12 +44,6 @@ export function parseExportLatexArgs(argv) {
   };
 }
 
-export function buildPandocResourcePath(sourceDir, projectRoot) {
-  return sourceDir === projectRoot
-    ? sourceDir
-    : [sourceDir, projectRoot].join(delimiter);
-}
-
 async function runPandoc({
   bibliography,
   markdown,
@@ -62,7 +57,7 @@ async function runPandoc({
     bibliography,
     filterPath: FILTER_PATH,
     output,
-    resourcePath: buildPandocResourcePath(sourceDir, projectRoot),
+    resourcePath: buildPandocResourcePath(projectRoot, sourceDir, { delimiter }),
     template,
   });
 

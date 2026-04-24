@@ -23,7 +23,18 @@ beforeEach(() => {
   exportDocumentCommandMock.mockReset();
 
   isTauriMock.mockReturnValue(true);
-  checkPandocCommandMock.mockResolvedValue("pandoc 3.9.0.2");
+  checkPandocCommandMock.mockImplementation(async (format: string) => ({
+    format,
+    ok: true,
+    tools: [
+      {
+        available: true,
+        install_hint: "Install Pandoc.",
+        name: "pandoc",
+        version: "pandoc 3.9.0.2",
+      },
+    ],
+  }));
   exportDocumentCommandMock.mockImplementation(
     async (_content: string, _format: string, outputPath: string) => outputPath,
   );
@@ -36,7 +47,7 @@ describe("exportDocument", () => {
     const outputPath = await exportDocument(source, "html", "notes/main.md");
 
     expect(outputPath).toBe("notes/main.html");
-    expect(checkPandocCommandMock).toHaveBeenCalledOnce();
+    expect(checkPandocCommandMock).toHaveBeenCalledWith("html");
     expect(exportDocumentCommandMock).toHaveBeenCalledWith(
       source,
       "html",
@@ -56,11 +67,63 @@ describe("exportDocument", () => {
     expect(exportDocumentCommandMock).not.toHaveBeenCalled();
   });
 
-  it("wraps missing Pandoc errors before invoking export", async () => {
+  it("wraps dependency preflight command errors before invoking export", async () => {
     checkPandocCommandMock.mockRejectedValue(new Error("ENOENT"));
 
     await expect(exportDocument("# Intro", "html", "notes/main.md")).rejects.toThrow(
-      "Pandoc is not installed or not found in PATH",
+      "Could not check export dependencies before starting export",
+    );
+
+    expect(exportDocumentCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces missing pandoc-crossref before HTML export starts", async () => {
+    checkPandocCommandMock.mockResolvedValue({
+      format: "html",
+      ok: false,
+      tools: [
+        {
+          available: true,
+          install_hint: "Install Pandoc.",
+          name: "pandoc",
+          version: "pandoc 3",
+        },
+        {
+          available: false,
+          install_hint: "Install pandoc-crossref or add it to PATH.",
+          name: "pandoc-crossref",
+        },
+      ],
+    });
+
+    await expect(exportDocument("# Intro", "html", "notes/main.md")).rejects.toThrow(
+      "Missing export dependencies for html export: pandoc-crossref",
+    );
+
+    expect(exportDocumentCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces missing xelatex before PDF export starts", async () => {
+    checkPandocCommandMock.mockResolvedValue({
+      format: "pdf",
+      ok: false,
+      tools: [
+        {
+          available: true,
+          install_hint: "Install Pandoc.",
+          name: "pandoc",
+          version: "pandoc 3",
+        },
+        {
+          available: false,
+          install_hint: "Install a TeX distribution that provides xelatex.",
+          name: "xelatex",
+        },
+      ],
+    });
+
+    await expect(exportDocument("# Intro", "pdf", "notes/main.md")).rejects.toThrow(
+      "Missing export dependencies for pdf export: xelatex",
     );
 
     expect(exportDocumentCommandMock).not.toHaveBeenCalled();

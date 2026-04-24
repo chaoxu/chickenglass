@@ -12,14 +12,22 @@ import { parseFrontmatter } from "../parser/frontmatter";
 import type { FileEntry, FileSystem } from "./file-manager";
 import type { ExportFormat } from "./lib/types";
 import { measureAsync } from "./perf";
+import type { ExportDependencyCheck } from "./tauri-client/command-contract";
 import { checkPandocCommand, exportDocumentCommand } from "./tauri-client/export";
 
 export type { ExportFormat };
 
+async function checkExportDependencies(format: ExportFormat): Promise<ExportDependencyCheck> {
+  return checkPandocCommand(format);
+}
 
-/** Check whether Pandoc is installed. Returns the version string on success. */
-async function checkPandoc(): Promise<string> {
-  return checkPandocCommand();
+function formatMissingExportDependencies(check: ExportDependencyCheck): string {
+  const missing = check.tools.filter((tool) => !tool.available);
+  const summary = missing.map((tool) => tool.name).join(", ");
+  const hints = missing
+    .map((tool) => `${tool.name}: ${tool.install_hint}`)
+    .join(" ");
+  return `Missing export dependencies for ${check.format} export: ${summary}. ${hints}`;
 }
 
 /**
@@ -54,7 +62,7 @@ export const _preprocessLatexExportForTest = preprocessLatexExport;
  * @param sourcePath - Path of the source .md file (used to derive output path).
  * @param fs - Optional FileSystem used by LaTeX preprocessing helpers.
  * @returns The output file path on success.
- * @throws If not running in Tauri, if Pandoc is missing, or if export fails.
+ * @throws If not running in Tauri, if dependencies are missing, or if export fails.
  */
 export async function exportDocument(
   content: string,
@@ -69,14 +77,17 @@ export async function exportDocument(
     );
   }
 
+  let dependencyCheck: ExportDependencyCheck;
   try {
-    await checkPandoc();
+    dependencyCheck = await checkExportDependencies(format);
   } catch (e) {
     throw new Error(
-      "Pandoc is not installed or not found in PATH. " +
-        "Install Pandoc from https://pandoc.org/installing.html to enable export.",
+      "Could not check export dependencies before starting export.",
       { cause: e },
     );
+  }
+  if (!dependencyCheck.ok) {
+    throw new Error(formatMissingExportDependencies(dependencyCheck));
   }
 
   const outputPath = deriveOutputPath(sourcePath, format);

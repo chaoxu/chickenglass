@@ -24,14 +24,21 @@ describe("typed Tauri command clients", () => {
     tauriCore.invokeTauriCommandRaw.mockReset();
   });
 
-  it("routes no-arg commands through the shared typed command factory", async () => {
-    tauriCore.invokeTauriCommandRaw.mockResolvedValue("pandoc 3.1");
+  it("routes export dependency checks through the shared typed command factory", async () => {
+    tauriCore.invokeTauriCommandRaw.mockResolvedValue({
+      format: "html",
+      ok: true,
+      tools: [{ available: true, install_hint: "Install Pandoc.", name: "pandoc" }],
+    });
 
-    await expect(checkPandocCommand()).resolves.toBe("pandoc 3.1");
+    await expect(checkPandocCommand("html")).resolves.toMatchObject({
+      format: "html",
+      ok: true,
+    });
 
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenCalledWith(
       "check_pandoc",
-      undefined,
+      { format: "html" },
     );
   });
 

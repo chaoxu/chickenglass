@@ -44,7 +44,7 @@ export const TAURI_COMMAND_CONTRACT = {
     unwatchDirectory: { name: "unwatch_directory", args: ["generation"] },
   },
   export: {
-    checkPandoc: { name: "check_pandoc", args: [] },
+    checkPandoc: { name: "check_pandoc", args: ["format"] },
     exportDocument: {
       name: "export_document",
       args: [
@@ -153,6 +153,20 @@ export interface HotExitBackupSummary {
   readonly bytes: number;
 }
 
+export interface ExportToolStatus {
+  readonly name: string;
+  readonly available: boolean;
+  readonly version?: string;
+  readonly install_hint: string;
+  readonly message?: string;
+}
+
+export interface ExportDependencyCheck {
+  readonly format: ExportFormat;
+  readonly ok: boolean;
+  readonly tools: readonly ExportToolStatus[];
+}
+
 export interface TauriCommandTypes {
   readonly open_folder: {
     readonly args: { readonly path: string; readonly generation: number };
@@ -223,8 +237,8 @@ export interface TauriCommandTypes {
     readonly result: boolean;
   };
   readonly check_pandoc: {
-    readonly args: undefined;
-    readonly result: string;
+    readonly args: { readonly format: ExportFormat };
+    readonly result: ExportDependencyCheck;
   };
   readonly export_document: {
     readonly args: {

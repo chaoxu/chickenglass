@@ -244,7 +244,7 @@ pnpm perf:capture -- \
   --output output/perf/html-export-pandoc.json
 ```
 
-The scenario runs:
+The scenario renders its command from `src/latex/export-contract.json` and runs:
 
 - `pandoc --version`
 - `pandoc-crossref --version`

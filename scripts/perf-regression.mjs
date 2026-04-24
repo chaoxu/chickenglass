@@ -57,6 +57,11 @@ import {
   waitForRenderReady,
   waitForScrollReady,
 } from "./editor-test-helpers.mjs";
+import {
+  buildHtmlPandocArgs,
+  buildPandocResourcePath,
+  exportDependencyTools,
+} from "../src/latex/export-options.mjs";
 
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
@@ -112,7 +117,6 @@ async function discardDirtyPerfState(page) {
 }
 
 const SCROLL_STEP_SIZE = 30;
-const LATEX_PANDOC_FROM = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
 const PANDOC_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const HTML_EXPORT_SUPPORT_EXTENSIONS = new Set([
   ".bib",
@@ -1458,45 +1462,25 @@ function prepareHtmlExportPandocFixture(caseDef) {
   };
 }
 
-function buildPandocResourcePath(projectRoot, sourceDir) {
-  const paths = [sourceDir];
-  if (sourceDir !== projectRoot) {
-    paths.push(projectRoot);
-  }
-  return paths.join(delimiter);
-}
-
 export function buildHtmlExportPandocArgs(projectRoot, sourceDir, outputPath) {
-  const resourcePath = buildPandocResourcePath(projectRoot, sourceDir);
-  return [
-    `--from=${LATEX_PANDOC_FROM}`,
-    "--to=html5",
-    "--standalone",
-    "--wrap=preserve",
-    "--katex",
-    "--section-divs",
-    "--filter=pandoc-crossref",
-    "--citeproc",
-    "--metadata=link-citations=true",
-    `--resource-path=${resourcePath}`,
-    `--output=${outputPath}`,
-  ];
+  const resourcePath = buildPandocResourcePath(projectRoot, sourceDir, { delimiter });
+  return buildHtmlPandocArgs({ output: outputPath, resourcePath });
 }
 
-function assertCommandAvailable(command, args, installHint, commandRunner) {
-  const result = commandRunner(command, args, {
+function assertCommandAvailable(tool, commandRunner) {
+  const result = commandRunner(tool.name, tool.version_args, {
     encoding: "utf8",
     maxBuffer: PANDOC_MAX_BUFFER_BYTES,
   });
   if (result.error) {
     throw new Error(
-      `Missing required command "${command}" for html-export-pandoc. ${installHint}`,
+      `Missing required command "${tool.name}" for html-export-pandoc. ${tool.install_hint}`,
     );
   }
   if (result.status !== 0) {
     const stderr = String(result.stderr ?? "").trim();
     throw new Error(
-      `Preflight command "${command} ${args.join(" ")}" failed for html-export-pandoc.${
+      `Preflight command "${tool.name} ${tool.version_args.join(" ")}" failed for html-export-pandoc.${
         stderr ? ` ${stderr}` : ""
       }`,
     );
@@ -1506,18 +1490,9 @@ function assertCommandAvailable(command, args, installHint, commandRunner) {
 export function preflightHtmlExportPandoc({
   commandRunner = spawnSync,
 } = {}) {
-  assertCommandAvailable(
-    "pandoc",
-    ["--version"],
-    "Install Pandoc or add it to PATH.",
-    commandRunner,
-  );
-  assertCommandAvailable(
-    "pandoc-crossref",
-    ["--version"],
-    "Install pandoc-crossref or add it to PATH. The scenario passes --filter=pandoc-crossref to match Tauri HTML export.",
-    commandRunner,
-  );
+  for (const tool of exportDependencyTools("html")) {
+    assertCommandAvailable(tool, commandRunner);
+  }
 }
 
 function runPandocHtmlExport(caseDef) {

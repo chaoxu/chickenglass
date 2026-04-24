@@ -1,39 +1,17 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { describe, expect, it } from "vitest";
 
 import {
   buildLatexPandocArgs,
+  buildHtmlPandocArgs,
+  buildPandocResourcePath,
+  exportDependencyTools,
+  EXPORT_CONTRACT,
   LATEX_PANDOC_FROM,
   latexBibliographyMetadataValue,
   parseLatexFrontmatterConfig,
   resolveLatexExportOptions,
   resolveLatexTemplatePath,
 } from "./export-options.mjs";
-
-const rustExportSource = () =>
-  readFileSync(join(process.cwd(), "src-tauri/src/commands/export.rs"), "utf8");
-
-function extractRustLatexPandocFrom(source) {
-  const match = source.match(/const LATEX_PANDOC_FROM: &str =\s*"([^"]+)";/);
-  if (!match) {
-    throw new Error("Rust export command is missing LATEX_PANDOC_FROM");
-  }
-  return match[1];
-}
-
-function extractRustBuildLatexPandocArgsBody(source) {
-  const start = source.indexOf("fn build_latex_pandoc_args(");
-  if (start < 0) {
-    throw new Error("Rust export command is missing build_latex_pandoc_args");
-  }
-  const testsStart = source.indexOf("#[cfg(test)]", start);
-  if (testsStart < 0) {
-    throw new Error("Rust export command is missing test module boundary");
-  }
-  return source.slice(start, testsStart);
-}
 
 describe("parseLatexFrontmatterConfig", () => {
   it("parses LaTeX export options from frontmatter", () => {
@@ -202,55 +180,58 @@ describe("buildLatexPandocArgs", () => {
   });
 });
 
-describe("Rust/JS LaTeX export profile sync", () => {
-  it("keeps the duplicated native Pandoc profile aligned with the JS builder", () => {
-    const rust = rustExportSource();
-    const rustBuilder = extractRustBuildLatexPandocArgsBody(rust);
-    const expectedProfileOrder = [
-      "--from={}",
+describe("shared export contract", () => {
+  it("owns LaTeX, PDF, and HTML Pandoc profiles", () => {
+    expect(LATEX_PANDOC_FROM).toBe(EXPORT_CONTRACT.pandoc_from);
+    expect(EXPORT_CONTRACT.latex.args).toEqual([
+      "--from={pandoc_from}",
       "--to=latex",
       "--wrap=preserve",
       "--syntax-highlighting=none",
-      "--lua-filter={}",
-      "--template={}",
-      "--resource-path={}",
-      "--output={}",
-    ];
-    const jsProfileOrder = buildLatexPandocArgs({
-      filterPath: "FILTER",
-      output: "OUTPUT",
-      resourcePath: "RESOURCE",
-      template: "TEMPLATE",
-    })
-      .slice(0, expectedProfileOrder.length)
-      .map((arg) =>
-        arg
-          .replace(/^--from=.*/, "--from={}")
-          .replace(/^--lua-filter=.*/, "--lua-filter={}")
-          .replace(/^--template=.*/, "--template={}")
-          .replace(/^--resource-path=.*/, "--resource-path={}")
-          .replace(/^--output=.*/, "--output={}")
-      );
+      "--lua-filter={latex_filter_path}",
+      "--template={latex_template_path}",
+      "--resource-path={resource_path}",
+      "--output={output_path}",
+    ]);
+    expect(EXPORT_CONTRACT.latex.pdf_args).toEqual(["--pdf-engine=xelatex"]);
+    expect(EXPORT_CONTRACT.html.args).toContain("--filter=pandoc-crossref");
+    expect(EXPORT_CONTRACT.html.args).toContain("--citeproc");
+  });
 
-    expect(extractRustLatexPandocFrom(rust)).toBe(LATEX_PANDOC_FROM);
-    expect(jsProfileOrder).toEqual(expectedProfileOrder);
-    let previousRustIndex = -1;
-    for (const profileArg of expectedProfileOrder) {
-      const rustIndex = rustBuilder.indexOf(`"${profileArg}"`);
-      expect(rustIndex).toBeGreaterThan(previousRustIndex);
-      previousRustIndex = rustIndex;
-    }
-    for (const fixedArg of [
-      "--to=latex",
+  it("builds the canonical HTML Pandoc invocation", () => {
+    expect(
+      buildHtmlPandocArgs({
+        output: "/project/out.html",
+        resourcePath: "/project/notes:/project",
+      }),
+    ).toEqual([
+      `--from=${LATEX_PANDOC_FROM}`,
+      "--to=html5",
+      "--standalone",
       "--wrap=preserve",
-      "--syntax-highlighting=none",
-      "--pdf-engine=xelatex",
-    ]) {
-      expect(rustBuilder).toContain(`"${fixedArg}".to_string()`);
-    }
-    for (const dynamicFormat of [...expectedProfileOrder, "--metadata=bibliography={}"]) {
-      expect(rustBuilder).toContain(`"${dynamicFormat}"`);
-    }
+      "--katex",
+      "--section-divs",
+      "--filter=pandoc-crossref",
+      "--citeproc",
+      "--metadata=link-citations=true",
+      "--resource-path=/project/notes:/project",
+      "--output=/project/out.html",
+    ]);
+  });
+
+  it("centralizes resource-path order and dependency tools", () => {
+    expect(buildPandocResourcePath("/project", "/project/notes")).toBe(
+      "/project/notes:/project",
+    );
+    expect(buildPandocResourcePath("/project", "/project")).toBe("/project");
+    expect(exportDependencyTools("html").map((tool) => tool.name)).toEqual([
+      "pandoc",
+      "pandoc-crossref",
+    ]);
+    expect(exportDependencyTools("pdf").map((tool) => tool.name)).toEqual([
+      "pandoc",
+      "xelatex",
+    ]);
   });
 });
 
