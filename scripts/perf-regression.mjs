@@ -18,7 +18,6 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, dirname, extname, join, resolve } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { assertEditorHealth } from "./browser-health.mjs";
 import {
   sleep,
@@ -36,11 +35,14 @@ import {
   PERF_REPORT_VERSION,
 } from "./perf-regression-lib.mjs";
 import {
-  EXTERNAL_DEMO_ROOT,
-  EXTERNAL_FIXTURE_ROOT,
+  COGIRTH_MAIN2_FIXTURE,
+  PUBLIC_SHOWCASE_FIXTURE,
+  RANKDECREASE_MAIN_FIXTURE,
+  SCROLL_HEAVY_FIXTURE,
+} from "./fixture-test-helpers.mjs";
+import {
   hasFixtureDocument,
   openFixtureDocument,
-  PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
   showSidebarPanel,
@@ -103,8 +105,6 @@ async function discardDirtyPerfState(page) {
   }
 }
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 const SCROLL_STEP_SIZE = 30;
 const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS = 15000;
 const DEFAULT_FIXTURE_OPEN_TIMEOUT_MS = 10000;
@@ -129,14 +129,7 @@ const HTML_EXPORT_SUPPORT_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
 ]);
-const SCROLL_FIXTURE = {
-  displayPath: "fixtures/cogirth/main2.md",
-  virtualPath: "cogirth/main2.md",
-  candidates: [
-    resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-    resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
-  ],
-};
+const SCROLL_FIXTURE = SCROLL_HEAVY_FIXTURE;
 const PUBLIC_SCROLL_FALLBACK = PUBLIC_SHOWCASE_FIXTURE;
 
 export const TYPING_BURST_REQUIRED_METRICS = [
@@ -225,37 +218,19 @@ function steppedScrollMetrics(result) {
 
 export const TYPING_BURST_CASES = [
   {
-    key: "index",
-    displayPath: "demo/index.md",
-    virtualPath: "index.md",
+    ...PUBLIC_SHOWCASE_FIXTURE,
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
-    candidates: [
-      resolve(REPO_ROOT, "demo/index.md"),
-      resolve(EXTERNAL_DEMO_ROOT, "index.md"),
-    ],
   },
   {
-    key: "rankdecrease",
-    displayPath: "fixtures/rankdecrease/main.md",
-    virtualPath: "rankdecrease/main.md",
+    ...RANKDECREASE_MAIN_FIXTURE,
     positionKeys: DEFAULT_TYPING_BURST_POSITION_KEYS,
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
-    ],
   },
   {
-    key: "cogirth_main2",
-    displayPath: "fixtures/cogirth/main2.md",
-    virtualPath: "cogirth/main2.md",
+    ...COGIRTH_MAIN2_FIXTURE,
     positionKeys: [
       ...DEFAULT_TYPING_BURST_POSITION_KEYS,
       "inline_math",
       "citation_ref",
-    ],
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
     ],
   },
 ];
@@ -263,24 +238,8 @@ const TYPING_BURST_INSERT_COUNT = 100;
 const POST_TYPING_IDLE_OBSERVATION_MS = 500;
 
 export const HTML_EXPORT_PANDOC_CASES = [
-  {
-    key: "index",
-    displayPath: "demo/index.md",
-    virtualPath: "index.md",
-    candidates: [
-      resolve(REPO_ROOT, "demo/index.md"),
-      resolve(EXTERNAL_DEMO_ROOT, "index.md"),
-    ],
-  },
-  {
-    key: "cogirth_main2",
-    displayPath: "fixtures/cogirth/main2.md",
-    virtualPath: "cogirth/main2.md",
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
-    ],
-  },
+  PUBLIC_SHOWCASE_FIXTURE,
+  COGIRTH_MAIN2_FIXTURE,
 ];
 
 export function availableTypingBurstCases(caseDefinitions = TYPING_BURST_CASES) {

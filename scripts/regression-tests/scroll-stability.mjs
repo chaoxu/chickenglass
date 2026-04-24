@@ -8,7 +8,11 @@
  * or reverse motion.
  */
 
-import { openFixtureDocument, waitForScrollReady } from "../test-helpers.mjs";
+import {
+  openFixtureDocument,
+  waitForScrollReady,
+} from "../test-helpers.mjs";
+import { RANKDECREASE_MAIN_FIXTURE } from "../fixture-test-helpers.mjs";
 
 export const name = "scroll-stability";
 
@@ -18,11 +22,6 @@ const STEP_SETTLE_MS = 220;
 const DOWN_OVERSHOOT_TOLERANCE_PX = 120;
 const UP_OVERSHOOT_TOLERANCE_PX = 120;
 const REVERSE_TOLERANCE_PX = 40;
-
-const RANKDECREASE_FIXTURE = {
-  displayPath: "fixtures/rankdecrease/main.md",
-  virtualPath: "rankdecrease/main.md",
-};
 
 function describeSample(sample) {
   return `${sample.label}: scrollTop=${sample.scrollTop} topLine=${sample.topLine} viewport=L${sample.viewportFromLine}-L${sample.viewportToLine}`;
@@ -65,7 +64,7 @@ function findScrollAnomalies(samples) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, RANKDECREASE_FIXTURE, { mode: "rich" });
+  await openFixtureDocument(page, RANKDECREASE_MAIN_FIXTURE, { mode: "rich" });
   await waitForScrollReady(page, { stableFrames: 3, timeoutMs: 10_000 });
 
   const samples = await page.evaluate(

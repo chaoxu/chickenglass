@@ -1,32 +1,23 @@
 #!/usr/bin/env node
 
 import console from "node:console";
-import { dirname, resolve } from "node:path";
 import process from "node:process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { assertEditorHealth } from "./browser-health.mjs";
 import { sleep } from "./browser-lifecycle.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import { createArgParser } from "./devx-cli.mjs";
 import {
-  EXTERNAL_FIXTURE_ROOT,
-  openFixtureDocument,
   PUBLIC_SHOWCASE_FIXTURE,
+  RANKDECREASE_MAIN_FIXTURE,
+} from "./fixture-test-helpers.mjs";
+import {
+  openFixtureDocument,
   resolveFixtureDocumentWithFallback,
   traceVerticalCursorMotion,
 } from "./editor-test-helpers.mjs";
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-
-export const RANKDECREASE_CURSOR_FIXTURE = {
-  displayPath: "fixtures/rankdecrease/main.md",
-  virtualPath: "rankdecrease/main.md",
-  candidates: [
-    resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
-    resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
-  ],
-};
+export const RANKDECREASE_CURSOR_FIXTURE = RANKDECREASE_MAIN_FIXTURE;
 
 const PUBLIC_CURSOR_FALLBACK = {
   ...PUBLIC_SHOWCASE_FIXTURE,
@@ -168,7 +159,7 @@ Options:
   --port <n>                  CDP port for Chrome for Testing (default: 9322)
   --url <url>                 App URL Chrome is already running against
   --direction <up|down>       Cursor movement direction (default: up)
-  --start-line <n>            1-based starting line (default: 900)
+  --start-line <n>            1-based starting line (default: fixture-specific)
   --start-column <n>          0-based starting column (default: 0)
   --steps <n>                 Number of vertical moves to trace (default: 250)
   --settle-ms <n>             Extra settle time after each move (default: 150)
@@ -186,8 +177,21 @@ export function resolveCursorScrollTimeout(argv) {
   return getIntFlag("--timeout", 15000);
 }
 
+export function resolveCursorScrollTraceOptions(argv, direction) {
+  const { getIntFlag, hasFlag } = createArgParser(argv);
+  return {
+    direction,
+    startLine: hasFlag("--start-line") ? getIntFlag("--start-line") : undefined,
+    startColumn: getIntFlag("--start-column", 0),
+    steps: getIntFlag("--steps", 250),
+    settleMs: getIntFlag("--settle-ms", 150),
+    contextRadius: getIntFlag("--context-radius", 2),
+    minReverseScrollPx: getIntFlag("--min-reverse-scroll-px", 120),
+  };
+}
+
 export async function main(argv = process.argv.slice(2)) {
-  const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
+  const { getFlag, hasFlag } = createArgParser(argv);
   if (hasFlag("--help") || hasFlag("-h")) {
     printUsage();
     return;
@@ -202,6 +206,7 @@ export async function main(argv = process.argv.slice(2)) {
     throw new Error(`Unsupported direction "${direction}". Use up or down.`);
   }
   const timeout = resolveCursorScrollTimeout(argv);
+  const traceOptions = resolveCursorScrollTraceOptions(argv, direction);
 
   const session = await openBrowserSession(argv, { timeoutFallback: timeout });
   const { page } = session;
@@ -209,13 +214,7 @@ export async function main(argv = process.argv.slice(2)) {
     await sleep(500);
 
     const result = await runCursorScrollRegression(page, {
-      direction,
-      startLine: getIntFlag("--start-line", 900),
-      startColumn: getIntFlag("--start-column", 0),
-      steps: getIntFlag("--steps", 250),
-      settleMs: getIntFlag("--settle-ms", 150),
-      contextRadius: getIntFlag("--context-radius", 2),
-      minReverseScrollPx: getIntFlag("--min-reverse-scroll-px", 120),
+      ...traceOptions,
     });
 
     const report = {
@@ -240,7 +239,7 @@ export async function main(argv = process.argv.slice(2)) {
         fixture: result.fixture,
         traceResult: result.traceResult,
         anomaly: result.anomaly,
-        minReverseScrollPx: getIntFlag("--min-reverse-scroll-px", 120),
+        minReverseScrollPx: traceOptions.minReverseScrollPx,
       }));
     }
 

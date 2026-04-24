@@ -11,3 +11,6 @@ Rules:
 - Keep `demo/` limited to intentionally generated public showcase files.
 - When browser scripts need a fixture, use the shared fixture helpers in
   `scripts/test-helpers.mjs` instead of hardcoding `demo/` paths.
+- Scripted fixture roots are repo-relative by default. Set
+  `COFLAT_FIXTURE_ROOT=/path/to/fixtures` or `COFLAT_DEMO_ROOT=/path/to/demo`
+  when a private fixture tree lives outside the current checkout.

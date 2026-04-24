@@ -231,6 +231,7 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 - For changed-area render/state verification, prefer `pnpm test:focused -- <tests...>` over ad hoc Vitest invocations. It pins Vitest to a single deterministic worker lane and cleans up the child worker process on exit.
 - For fixture-heavy perf scenarios, prefer `pnpm perf:capture:heavy -- --scenario typing-rich-burst ...` or `pnpm perf:compare:heavy -- ...`.
 - When local private fixtures are available, `fixtures/cogirth/main2.md` is the preferred heavy fixture for open/edit/scroll performance work. Otherwise use `demo/index.md` and note the limitation.
+- Scripted browser/perf fixtures resolve from repo-local `demo/` and `fixtures/` by default. For private fixture trees outside the checkout, set `COFLAT_DEMO_ROOT` or `COFLAT_FIXTURE_ROOT`; do not hard-code user-home fixture roots in scripts.
 
 ### Runtime regression debugging
 

@@ -3,6 +3,7 @@ import {
   findReverseScrollJump,
   formatCursorScrollReport,
   resolveCursorScrollTimeout,
+  resolveCursorScrollTraceOptions,
 } from "./cursor-scroll-regression.mjs";
 
 const baseEntry = (overrides = {}) => ({
@@ -130,5 +131,15 @@ describe("cursor scroll regression", () => {
     expect(() => resolveCursorScrollTimeout(["--timeout", "15s"])).toThrow(
       "Invalid integer value for --timeout: 15s",
     );
+  });
+
+  it("leaves the start line unset unless the CLI explicitly overrides it", () => {
+    expect(resolveCursorScrollTraceOptions([], "up").startLine).toBeUndefined();
+    expect(resolveCursorScrollTraceOptions(["--start-line", "321"], "up")).toMatchObject({
+      direction: "up",
+      startLine: 321,
+      startColumn: 0,
+      steps: 250,
+    });
   });
 });

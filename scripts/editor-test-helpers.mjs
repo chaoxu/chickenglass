@@ -8,16 +8,12 @@ import {
   DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
   DEFAULT_FIXTURE_SETTLE_MS,
   hasFixtureDocument,
-  REPO_DEMO_ROOT,
   resolveFixtureDocument,
 } from "./fixture-test-helpers.mjs";
 export {
   DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
   DEFAULT_FIXTURE_SETTLE_MS,
-  EXTERNAL_DEMO_ROOT,
-  EXTERNAL_FIXTURE_ROOT,
   hasFixtureDocument,
-  PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
 } from "./fixture-test-helpers.mjs";
@@ -434,9 +430,7 @@ export async function openFixtureDocument(page, fixture, options = {}) {
     timeoutMs = DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
     settleMs = DEFAULT_FIXTURE_SETTLE_MS,
   } = options;
-  const preferOpenFile = Boolean(
-    resolved.resolvedPath?.startsWith(REPO_DEMO_ROOT),
-  );
+  const preferOpenFile = resolved.displayPath.startsWith("demo/");
   const projectPayload = project === "full-project" && resolved.resolvedPath
     ? buildFixtureProjectPayload(resolved.virtualPath, resolved.resolvedPath)
     : null;

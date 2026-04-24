@@ -2,47 +2,26 @@
 
 import console from "node:console";
 import process from "node:process";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { assertEditorHealth } from "./browser-health.mjs";
 import { sleep } from "./browser-lifecycle.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import { createArgParser } from "./devx-cli.mjs";
 import {
+  GEOMETRY_AUDIT_FIXTURES,
+  PUBLIC_SHOWCASE_FIXTURE,
+} from "./fixture-test-helpers.mjs";
+import {
   clearStructure,
-  EXTERNAL_FIXTURE_ROOT,
   getGeometrySnapshot,
   openFixtureDocument,
-  PUBLIC_SHOWCASE_FIXTURE,
   resolveFixtureDocumentWithFallback,
   scrollTo,
   setCursor,
   settleEditorLayout,
 } from "./editor-test-helpers.mjs";
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(SCRIPT_DIR, "..");
-
-const FIXTURES = {
-  rankdecrease: {
-    displayPath: "fixtures/rankdecrease/main.md",
-    virtualPath: "rankdecrease/main.md",
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/rankdecrease/main.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "rankdecrease/main.md"),
-    ],
-    defaultLine: 900,
-  },
-  cogirth: {
-    displayPath: "fixtures/cogirth/main2.md",
-    virtualPath: "cogirth/main2.md",
-    candidates: [
-      resolve(REPO_ROOT, "fixtures/cogirth/main2.md"),
-      resolve(EXTERNAL_FIXTURE_ROOT, "cogirth/main2.md"),
-    ],
-    defaultLine: 700,
-  },
-};
+const FIXTURES = GEOMETRY_AUDIT_FIXTURES;
 
 const PUBLIC_GEOMETRY_FALLBACK = {
   ...PUBLIC_SHOWCASE_FIXTURE,
