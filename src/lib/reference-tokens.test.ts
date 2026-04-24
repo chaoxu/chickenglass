@@ -74,4 +74,15 @@ describe("reference-tokens", () => {
       { bracketed: false, source: "@sec:intro" },
     ]);
   });
+
+  it("uses bare @id for narrative references, not bracket suppression syntax", () => {
+    expect(parseReferenceToken("@thm:foo")).toEqual({
+      bracketed: false,
+      ids: ["thm:foo"],
+      locators: [undefined],
+    });
+    expect(parseReferenceToken("[- @thm:foo]")).toBeNull();
+    expect(scanReferenceTokens("See [- @thm:foo] and @thm:bar.").map((token) => token.id))
+      .toEqual(["thm:bar"]);
+  });
 });

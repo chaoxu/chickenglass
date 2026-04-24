@@ -464,7 +464,7 @@ Inline `<br>` forces a visible line break inside a cell. The LaTeX exporter maps
 
 ### Grid tables
 
-Grid tables (pandoc `grid_tables`) are accepted for cells that need multiple paragraphs or block content. Coflat's live renderer may present these as a simpler table; the LaTeX exporter preserves the block structure:
+Grid tables (pandoc `grid_tables`) are accepted as Pandoc-compatible raw/source blocks for cells that need multiple paragraphs or block content. Coflat preserves the grid-table source range for import/export and source-boundary operations, but grid tables are not parsed into Coflat's semantic live table model. Use pipe tables for editable semantic tables.
 
 ```markdown
 +-------+------------------+
@@ -561,7 +561,7 @@ Each built-in block maps to a LaTeX environment. Unknown classes are passed thro
 | `==highlight==` | `\hl{highlight}` (requires `\usepackage{soul}`) |
 | `[@id]` where `id` begins with an xref prefix | `\cref{id}` |
 | `[@id]` otherwise | `\cite{id}` |
-| `[- @thm:foo]` (unbracketed) | `\cref{thm:foo}` (no surrounding brackets) |
+| `@id` where `id` begins with an xref prefix | `\cref{id}` (narrative form) |
 | `- [ ] task` / `- [x] done` | `\item[$\square$]` / `\item[$\boxtimes$]` inside `itemize` |
 | `<br>` inside a table cell | `\newline` |
 | `<br>` outside a table | `\\` |
