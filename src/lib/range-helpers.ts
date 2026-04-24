@@ -1,4 +1,5 @@
 import type { Text } from "@codemirror/state";
+import { mergeDocumentRanges } from "./document-ranges";
 
 export interface RangeLike {
   readonly from: number;
@@ -204,20 +205,5 @@ export function mergeRanges(
   ranges: readonly RangeLike[],
   adjacency = 0,
 ): RangeLike[] {
-  if (ranges.length <= 1) return [...ranges];
-  const sorted = [...ranges].sort((left, right) => left.from - right.from);
-  const merged: RangeLike[] = [sorted[0]];
-  for (let index = 1; index < sorted.length; index += 1) {
-    const last = merged[merged.length - 1];
-    const current = sorted[index];
-    if (current.from <= last.to + adjacency) {
-      merged[merged.length - 1] = {
-        from: last.from,
-        to: Math.max(last.to, current.to),
-      };
-      continue;
-    }
-    merged.push(current);
-  }
-  return merged;
+  return mergeDocumentRanges(ranges, adjacency);
 }

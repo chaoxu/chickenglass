@@ -1,15 +1,15 @@
-import type { ChangeDesc } from "@codemirror/state";
 import {
-  containsPosExclusiveEnd,
-  mergeRanges,
-  rangesIntersect,
-} from "../lib/range-helpers";
+  mapDocumentRanges,
+  mergeDocumentRanges,
+  normalizeDirtyDocumentRange,
+  positionInDocumentRanges,
+  rangeIntersectsDocumentRanges,
+  snapshotDocumentRanges,
+  type DocumentRange,
+} from "../lib/document-ranges";
 
 /** A snapshot of a visible document range (matches CM6 visibleRanges shape). */
-export interface VisibleRange {
-  readonly from: number;
-  readonly to: number;
-}
+export type VisibleRange = DocumentRange;
 
 /**
  * Compute the fragments of `newRanges` not covered by `oldRanges`.
@@ -56,11 +56,7 @@ export function isPositionInRanges(
   pos: number,
   ranges: readonly VisibleRange[],
 ): boolean {
-  for (const range of ranges) {
-    if (containsPosExclusiveEnd(range, pos)) return true;
-    if (range.from > pos) break;
-  }
-  return false;
+  return positionInDocumentRanges(pos, ranges);
 }
 
 /**
@@ -72,31 +68,11 @@ export function normalizeDirtyRange(
   to: number,
   docLength: number,
 ): VisibleRange {
-  const start = Math.max(0, Math.min(from, docLength));
-  const end = Math.max(0, Math.min(to, docLength));
-  if (start !== end) {
-    return start < end ? { from: start, to: end } : { from: end, to: start };
-  }
-  if (docLength === 0) {
-    return { from: 0, to: 0 };
-  }
-  const windowStart = Math.max(0, Math.min(start, docLength - 1));
-  return { from: windowStart, to: Math.min(docLength, windowStart + 1) };
+  return normalizeDirtyDocumentRange(from, to, docLength);
 }
 
 /** Map sorted ranges through document changes. */
-export function mapVisibleRanges(
-  ranges: readonly VisibleRange[],
-  changes: ChangeDesc,
-): VisibleRange[] {
-  return mergeRanges(
-    ranges.map((range) => {
-      const from = changes.mapPos(range.from, 1);
-      const to = changes.mapPos(range.to, -1);
-      return { from, to: Math.max(from, to) };
-    }),
-  );
-}
+export const mapVisibleRanges = mapDocumentRanges;
 
 /** Check whether a range overlaps any of the given sorted ranges. */
 export function rangeIntersectsRanges(
@@ -104,24 +80,14 @@ export function rangeIntersectsRanges(
   to: number,
   ranges: readonly VisibleRange[],
 ): boolean {
-  const target = { from, to };
-  for (const range of ranges) {
-    if (from === to) {
-      if (containsPosExclusiveEnd(range, from)) return true;
-      if (range.from > from) break;
-      continue;
-    }
-    if (rangesIntersect(target, range)) return true;
-    if (range.from >= to) break;
-  }
-  return false;
+  return rangeIntersectsDocumentRanges(from, to, ranges);
 }
 
 /** Snapshot CM6's live visibleRanges into a plain array of {from, to}. */
 export function snapshotRanges(
   ranges: readonly { from: number; to: number }[],
 ): VisibleRange[] {
-  return ranges.map((range) => ({ from: range.from, to: range.to }));
+  return snapshotDocumentRanges(ranges);
 }
 
-export { mergeRanges };
+export { mergeDocumentRanges as mergeRanges };

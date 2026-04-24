@@ -43,10 +43,7 @@ import {
 } from "./table-discovery";
 import { tableDiscoveryField } from "../state/table-discovery";
 import { createSimpleTextWidget } from "./render-core";
-import {
-  containsPosExclusiveEnd,
-  rangesIntersect,
-} from "../lib/range-helpers";
+import { rangesIntersect } from "../lib/range-helpers";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import {
   formatTable,
@@ -55,6 +52,7 @@ import {
 import {
   mergeRanges,
   normalizeDirtyRange,
+  rangeIntersectsRanges,
   type VisibleRange,
 } from "./viewport-diff";
 import { findCellAtPos, getCellBounds } from "./table-cell-geometry";
@@ -239,11 +237,7 @@ function tableIntersectsDirtyRanges(
   table: TableRange,
   dirtyRanges: readonly VisibleRange[],
 ): boolean {
-  for (const range of dirtyRanges) {
-    if (rangesIntersect(table, range)) return true;
-    if (range.from >= table.to) break;
-  }
-  return false;
+  return rangeIntersectsRanges(table.from, table.to, dirtyRanges);
 }
 
 function computeDirtyTableGridUpdate(
@@ -333,17 +327,7 @@ function rangeTouchesDirtyRanges(
   to: number,
   dirtyRanges: readonly VisibleRange[],
 ): boolean {
-  const target = { from, to };
-  for (const range of dirtyRanges) {
-    if (from === to) {
-      if (containsPosExclusiveEnd(range, from)) return true;
-    } else if (rangesIntersect(target, range)) {
-      return true;
-    }
-
-    if (range.from > to) break;
-  }
-  return false;
+  return rangeIntersectsRanges(from, to, dirtyRanges);
 }
 
 function updateTableGridArtifacts(
