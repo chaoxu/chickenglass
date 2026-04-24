@@ -134,10 +134,10 @@ describe("typed Tauri command clients", () => {
     );
   });
 
-  it("maps recovery commands with expected project-root validation", async () => {
+  it("maps recovery commands to session-scoped backend payloads", async () => {
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce({ id: "backup-id" });
 
-    await writeHotExitBackupCommand("/project", "notes/main.md", "main.md", "# Draft\n", "baseline");
+    await writeHotExitBackupCommand("notes/main.md", "main.md", "# Draft\n", "baseline");
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "write_hot_exit_backup",
       {
@@ -145,29 +145,28 @@ describe("typed Tauri command clients", () => {
         content: "# Draft\n",
         name: "main.md",
         path: "notes/main.md",
-        projectRoot: "/project",
       },
     );
 
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce([]);
-    await listHotExitBackupsCommand("/project");
+    await listHotExitBackupsCommand();
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "list_hot_exit_backups",
-      { projectRoot: "/project" },
+      undefined,
     );
 
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce(null);
-    await readHotExitBackupCommand("/project", "notes/main.md");
+    await readHotExitBackupCommand("notes/main.md");
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "read_hot_exit_backup",
-      { path: "notes/main.md", projectRoot: "/project" },
+      { path: "notes/main.md" },
     );
 
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce(undefined);
-    await deleteHotExitBackupCommand("/project", "notes/main.md");
+    await deleteHotExitBackupCommand("notes/main.md");
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "delete_hot_exit_backup",
-      { path: "notes/main.md", projectRoot: "/project" },
+      { path: "notes/main.md" },
     );
   });
 });

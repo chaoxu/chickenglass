@@ -8,8 +8,8 @@ import {
   type BlockManifestEntry,
 } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
+import { resolveMarkdownReferencePathFromDocument } from "../lib/markdown-reference-paths";
 import { isRelativeFilePath } from "../lib/pdf-target";
-import { resolveProjectPathFromDocument } from "../lib/project-paths";
 import type { BlockCounterEntry } from "../lib/types";
 import {
   extractRawFrontmatter,
@@ -659,7 +659,10 @@ function applyImageOverrides(
     const src = img.getAttribute("src");
     if (!src || !isRelativeFilePath(src)) continue;
 
-    const resolvedPath = resolveProjectPathFromDocument(context.documentPath ?? "", src);
+    const resolvedPath = resolveMarkdownReferencePathFromDocument(
+      context.documentPath ?? "",
+      src,
+    );
     const override = context.imageUrlOverrides.get(resolvedPath);
     if (override) {
       img.setAttribute("src", override);

@@ -118,7 +118,6 @@ describe("useHotExitBackups", () => {
       content: "draft",
       name: "main.md",
       path: "main.md",
-      projectRoot: "/project",
     });
   });
 
@@ -157,7 +156,6 @@ describe("useHotExitBackups", () => {
       content: "second",
       name: "main.md",
       path: "main.md",
-      projectRoot: "/project",
     });
   });
 
@@ -252,7 +250,7 @@ describe("useHotExitBackups", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(store.deleteBackup).toHaveBeenCalledWith("/project", "main.md");
+    expect(store.deleteBackup).toHaveBeenCalledWith("main.md");
 
     await act(async () => {
       activeDocumentSignal.publish("main.md");
@@ -344,7 +342,7 @@ describe("useHotExitBackups", () => {
     });
 
     expect(store.writeBackup).toHaveBeenCalledTimes(1);
-    expect(store.deleteBackup).toHaveBeenCalledWith("/project", "main.md");
+    expect(store.deleteBackup).toHaveBeenCalledWith("main.md");
     expect(store.deleteBackup).toHaveBeenCalledTimes(1);
   });
 });

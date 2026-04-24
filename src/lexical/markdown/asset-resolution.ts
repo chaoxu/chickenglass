@@ -1,9 +1,14 @@
 import { classifyAssetTarget } from "../../lib/markdown-image";
-import { normalizeProjectPath, resolveProjectPathFromDocument } from "../../lib/project-paths";
+import {
+  normalizeMarkdownReferencePath,
+  resolveMarkdownReferencePathFromDocument,
+} from "../../lib/markdown-reference-paths";
 
 export function buildStaticAssetUrl(docPath: string | undefined, targetPath: string): string | null {
   const target = classifyAssetTarget(targetPath);
-  const basePath = docPath ? resolveProjectPathFromDocument(docPath, targetPath) : normalizeProjectPath(targetPath);
+  const basePath = docPath
+    ? resolveMarkdownReferencePathFromDocument(docPath, targetPath)
+    : normalizeMarkdownReferencePath(targetPath);
   if (!basePath || !target.isLocal) {
     return targetPath || null;
   }

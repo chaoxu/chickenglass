@@ -35,6 +35,7 @@ import {
   deriveSidebarSemanticState,
   type SidebarSemanticState,
 } from "./sidebar-semantic-state";
+import { useSidebarSemanticPublisher } from "./sidebar-semantic-publisher";
 
 interface LexicalEditorPaneProps {
   readonly doc: string;
@@ -211,12 +212,14 @@ export function LexicalEditorPane({
     statusDiagnostics: diagnosticInputsForDoc(editorOptions.doc).statusDiagnostics,
   }));
   const semanticStateRef = useRef(initialSemanticState);
-  const callbacksRef = useRef({
+  const semanticPublisher = useSidebarSemanticPublisher({
     onDiagnosticsChange,
     onHeadingsChange,
   });
-  const publishedHeadingsRef = useRef<readonly HeadingEntry[] | null>(null);
-  const publishedDiagnosticsRef = useRef<readonly DiagnosticEntry[] | null>(null);
+  const previousCallbacksRef = useRef({
+    onDiagnosticsChange,
+    onHeadingsChange,
+  });
   const [handle, setHandle] = useState<MarkdownEditorHandle | null>(null);
   const handleRef = useRef<MarkdownEditorHandle | null>(null);
   const currentDocRef = useRef(editorOptions.doc);
@@ -234,8 +237,8 @@ export function LexicalEditorPane({
   const lexicalMode = revealMode ?? REVEAL_MODE.LEXICAL;
 
   const shouldDeriveDiagnostics = useCallback(
-    () => Boolean(callbacksRef.current.onDiagnosticsChange),
-    [],
+    () => semanticPublisher.hasDiagnosticsSubscriber(),
+    [semanticPublisher],
   );
 
   const getSemanticState = useCallback((doc: string, includeDiagnostics: boolean) => {
@@ -294,34 +297,15 @@ export function LexicalEditorPane({
     if (updateHeadingState) {
       setHeadings(semanticState.headings);
     }
-    if (publishHeadings && (force || publishedHeadingsRef.current !== semanticState.headings)) {
-      measureSync("lexical.publishHeadings", () => {
-        callbacksRef.current.onHeadingsChange?.(semanticState.headings);
-      }, {
-        category: "lexical",
-        detail: `${semanticState.headings.length} headings`,
-      });
-      publishedHeadingsRef.current = semanticState.headings;
-    }
-    if (publishDiagnostics && callbacksRef.current.onDiagnosticsChange) {
-      if (force || publishedDiagnosticsRef.current !== semanticState.diagnostics) {
-        measureSync("lexical.publishDiagnostics", () => {
-          callbacksRef.current.onDiagnosticsChange?.(semanticState.diagnostics);
-        }, {
-          category: "lexical",
-          detail: `${semanticState.diagnostics.length} diagnostics`,
-        });
-      }
-      publishedDiagnosticsRef.current = semanticState.diagnostics;
-      return;
-    }
-    if (publishDiagnostics) {
-      publishedDiagnosticsRef.current = semanticState.diagnostics;
-    }
-  }, []);
+    semanticPublisher.publish(semanticState, {
+      force,
+      publishDiagnostics,
+      publishHeadings,
+    });
+  }, [semanticPublisher]);
 
   const publishCurrentBibliographyStatus = useCallback(() => {
-    if (!callbacksRef.current.onDiagnosticsChange) {
+    if (!semanticPublisher.hasDiagnosticsSubscriber()) {
       return;
     }
     const semanticState = getSemanticState(currentDocRef.current, true);
@@ -329,9 +313,12 @@ export function LexicalEditorPane({
       publishHeadings: false,
       updateHeadingState: false,
     });
-  }, [getSemanticState, publishSemanticState]);
+  }, [getSemanticState, publishSemanticState, semanticPublisher]);
 
   const syncBibliographyStatus = useCallback((doc: string) => {
+    if (!semanticPublisher.hasDiagnosticsSubscriber()) {
+      return;
+    }
     const { bibliographyPath, cslPath } = diagnosticInputsForDoc(doc);
     const loadKey = `${editorOptions.docPath ?? ""}\u0000${bibliographyPath}\u0000${cslPath}`;
     if (loadKey === bibliographyLoadKeyRef.current) {
@@ -374,6 +361,7 @@ export function LexicalEditorPane({
     editorOptions.docPath,
     editorOptions.fs,
     publishCurrentBibliographyStatus,
+    semanticPublisher,
   ]);
 
   const applyImmediateState = useCallback((
@@ -393,8 +381,8 @@ export function LexicalEditorPane({
   ]);
 
   useEffect(() => {
-    const previousCallbacks = callbacksRef.current;
-    callbacksRef.current = {
+    const previousCallbacks = previousCallbacksRef.current;
+    previousCallbacksRef.current = {
       onDiagnosticsChange,
       onHeadingsChange,
     };
@@ -403,6 +391,9 @@ export function LexicalEditorPane({
     const headingsSubscriberChanged = onHeadingsChange !== undefined
       && onHeadingsChange !== previousCallbacks.onHeadingsChange;
     if (diagnosticsSubscriberChanged || headingsSubscriberChanged) {
+      if (diagnosticsSubscriberChanged) {
+        syncBibliographyStatus(currentDocRef.current);
+      }
       const semanticState = getSemanticState(
         currentDocRef.current,
         shouldDeriveDiagnostics(),
@@ -420,6 +411,7 @@ export function LexicalEditorPane({
     onHeadingsChange,
     publishSemanticState,
     shouldDeriveDiagnostics,
+    syncBibliographyStatus,
   ]);
 
   const scheduleLiveCounts = useCallback((doc: string, version: number) => {
@@ -475,8 +467,7 @@ export function LexicalEditorPane({
       includeDiagnostics: shouldDeriveDiagnostics(),
       statusDiagnostics: diagnosticInputsForDoc(editorOptions.doc).statusDiagnostics,
     });
-    publishedHeadingsRef.current = null;
-    publishedDiagnosticsRef.current = null;
+    semanticPublisher.resetPublished();
     applyImmediateState(editorOptions.doc, { forcePublish: true });
     useEditorTelemetryStore.getState().setTelemetry({
       doc: editorOptions.doc,
@@ -487,12 +478,14 @@ export function LexicalEditorPane({
     editorOptions.doc,
     editorOptions.docPath,
     diagnosticInputsForDoc,
+    semanticPublisher,
     shouldDeriveDiagnostics,
   ]);
 
   useEffect(() => {
     return () => {
       cancelScheduledDerivedState();
+      bibliographyLoadGenerationRef.current += 1;
     };
   }, [cancelScheduledDerivedState]);
 

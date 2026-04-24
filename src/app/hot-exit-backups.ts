@@ -9,7 +9,6 @@ import {
 } from "./tauri-client/recovery";
 
 export interface HotExitBackupWrite {
-  projectRoot: string;
   path: string;
   name: string;
   content: string;
@@ -18,9 +17,9 @@ export interface HotExitBackupWrite {
 
 export interface HotExitBackupStore {
   writeBackup: (backup: HotExitBackupWrite) => Promise<HotExitBackupSummary>;
-  listBackups: (projectRoot: string) => Promise<HotExitBackupSummary[]>;
-  readBackup: (projectRoot: string, path: string) => Promise<HotExitBackup | null>;
-  deleteBackup: (projectRoot: string, path: string) => Promise<void>;
+  listBackups: () => Promise<HotExitBackupSummary[]>;
+  readBackup: (path: string) => Promise<HotExitBackup | null>;
+  deleteBackup: (path: string) => Promise<void>;
 }
 
 export function createHotExitBackupStore(): HotExitBackupStore | null {
@@ -28,11 +27,10 @@ export function createHotExitBackupStore(): HotExitBackupStore | null {
     return null;
   }
   return {
-    writeBackup: ({ projectRoot, path, name, content, baselineHash }) =>
-      writeHotExitBackupCommand(projectRoot, path, name, content, baselineHash),
-    listBackups: (projectRoot) => listHotExitBackupsCommand(projectRoot),
-    readBackup: (projectRoot, path) => readHotExitBackupCommand(projectRoot, path),
-    deleteBackup: (projectRoot, path) =>
-      deleteHotExitBackupCommand(projectRoot, path),
+    writeBackup: ({ path, name, content, baselineHash }) =>
+      writeHotExitBackupCommand(path, name, content, baselineHash),
+    listBackups: () => listHotExitBackupsCommand(),
+    readBackup: (path) => readHotExitBackupCommand(path),
+    deleteBackup: (path) => deleteHotExitBackupCommand(path),
   };
 }

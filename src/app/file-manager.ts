@@ -6,7 +6,7 @@ import {
 } from "./lib/utils";
 import { getDemoFiles } from "./demo-files";
 import { sortFileEntries, sortFileTree } from "../lib/file-tree-model";
-import { normalizeProjectPath } from "../lib/project-paths";
+import { normalizeMarkdownReferencePath } from "../lib/markdown-reference-paths";
 import { fnv1aHash } from "./save-pipeline";
 
 // Re-export canonical types from src/lib/types.ts so that existing
@@ -21,7 +21,7 @@ export type MemoryFileSystemEntry =
   | { path: string; kind: "binary"; base64: string };
 
 function buildDemoAssetUrl(path: string): string | null {
-  const normalized = normalizeProjectPath(path);
+  const normalized = normalizeMarkdownReferencePath(path);
   if (
     !normalized ||
     path.startsWith("/") ||

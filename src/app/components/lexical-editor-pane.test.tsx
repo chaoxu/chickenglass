@@ -316,6 +316,56 @@ describe("LexicalEditorPane derived state scheduling", () => {
     ]));
   });
 
+  it("does not publish stale bibliography diagnostics after lexical pane unmount", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const diagnostics = vi.fn();
+    const readGate = createDeferred<string>();
+    const fs = {
+      readFile: vi.fn(() => readGate.promise),
+    } as Partial<FileSystem> as FileSystem;
+
+    const { unmount } = render(
+      <LexicalEditorPane
+        doc={"---\nbibliography: refs/library.bib\n---\nSee [@paper]."}
+        docPath="notes/paper.md"
+        fs={fs}
+        onDiagnosticsChange={diagnostics}
+      />,
+    );
+
+    expect(fs.readFile).toHaveBeenCalled();
+    diagnostics.mockClear();
+
+    unmount();
+    await act(async () => {
+      readGate.resolve("@article{paper, title={Paper}, author={A}, year={2024}}\n");
+      await readGate.promise;
+    });
+    await flushMicrotasks();
+
+    expect(diagnostics).not.toHaveBeenCalled();
+  });
+
+  it("does not load bibliography status when diagnostics are not subscribed", async () => {
+    vi.resetModules();
+    const { LexicalEditorPane } = await import("./lexical-editor-pane");
+    const fs = {
+      readFile: vi.fn(async () => "@article{paper, title={Paper}}\n"),
+    } as Partial<FileSystem> as FileSystem;
+
+    render(
+      <LexicalEditorPane
+        doc={"---\nbibliography: refs/library.bib\n---\nSee [@paper]."}
+        docPath="notes/paper.md"
+        fs={fs}
+      />,
+    );
+    await flushMicrotasks();
+
+    expect(fs.readFile).not.toHaveBeenCalled();
+  });
+
   it("reuses heading and diagnostics projections when shared semantic slices stay unchanged", async () => {
     vi.resetModules();
     const perf = await import("../perf");
@@ -451,6 +501,14 @@ async function flushMicrotasks(times = 6): Promise<void> {
       await Promise.resolve();
     });
   }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
 }
 
 function countPerfCalls(

@@ -62,32 +62,28 @@ describe("createHotExitBackupStore", () => {
       content: "# Draft\n",
       name: "main.md",
       path: "notes/main.md",
-      projectRoot: "/project",
     })).resolves.toBe(summary);
     expect(recoveryCommands.writeHotExitBackupCommand).toHaveBeenCalledWith(
-      "/project",
       "notes/main.md",
       "main.md",
       "# Draft\n",
       "baseline-hash",
     );
 
-    await expect(store.listBackups("/project")).resolves.toEqual([summary]);
-    expect(recoveryCommands.listHotExitBackupsCommand).toHaveBeenCalledWith("/project");
+    await expect(store.listBackups()).resolves.toEqual([summary]);
+    expect(recoveryCommands.listHotExitBackupsCommand).toHaveBeenCalledWith();
 
-    await expect(store.readBackup("/project", "notes/main.md")).resolves.toMatchObject({
+    await expect(store.readBackup("notes/main.md")).resolves.toMatchObject({
       content: "# Draft\n",
       path: "notes/main.md",
       version: 1,
     });
     expect(recoveryCommands.readHotExitBackupCommand).toHaveBeenCalledWith(
-      "/project",
       "notes/main.md",
     );
 
-    await store.deleteBackup("/project", "notes/main.md");
+    await store.deleteBackup("notes/main.md");
     expect(recoveryCommands.deleteHotExitBackupCommand).toHaveBeenCalledWith(
-      "/project",
       "notes/main.md",
     );
   });
@@ -99,6 +95,6 @@ describe("createHotExitBackupStore", () => {
       throw new Error("expected Tauri hot-exit backup store");
     }
 
-    await expect(store.readBackup("/project", "missing.md")).resolves.toBeNull();
+    await expect(store.readBackup("missing.md")).resolves.toBeNull();
   });
 });

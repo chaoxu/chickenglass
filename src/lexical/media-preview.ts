@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { readImageFileAsDataUrl } from "../lib/image-data-url";
 import { classifyAssetTarget } from "../lib/markdown-image";
-import { projectPathCandidatesFromDocument } from "../lib/project-paths";
+import { markdownReferencePathCandidatesFromDocument } from "../lib/markdown-reference-paths";
 import { useLexicalRenderResources } from "./render-context";
 import { rasterizePdfPage1 } from "./pdf-rasterizer";
 
@@ -17,7 +17,7 @@ async function readLocalImageDataUrl(
   target: string,
   fs: { readFileBinary(path: string): Promise<Uint8Array> },
 ): Promise<string | null> {
-  for (const candidate of projectPathCandidatesFromDocument(docPath, target)) {
+  for (const candidate of markdownReferencePathCandidatesFromDocument(docPath, target)) {
     try {
       const next = await readImageFileAsDataUrl(candidate, fs);
       if (next) {
@@ -90,7 +90,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
     setKind("loading");
 
     void (async () => {
-      for (const candidate of projectPathCandidatesFromDocument(docPath, target)) {
+      for (const candidate of markdownReferencePathCandidatesFromDocument(docPath, target)) {
         try {
           const bytes = await fs.readFileBinary(candidate);
           const canvas = await rasterizePdfPage1(bytes);

@@ -1,4 +1,5 @@
 import type { ExportFormat } from "../lib/types";
+import { projectFilePath } from "../../lib/project-file-paths";
 import { TAURI_COMMAND_CONTRACT } from "./command-contract";
 import { tauriArgs } from "./make-command";
 
@@ -21,8 +22,8 @@ export const exportDocumentCommand = tauriArgs(exportCommands.exportDocument)(
     bibliography: options.bibliography,
     content,
     format,
-    outputPath,
-    sourcePath,
+    outputPath: projectFilePath(outputPath),
+    sourcePath: projectFilePath(sourcePath),
     template: options.template,
   }),
 );

@@ -1,4 +1,7 @@
-import { normalizeProjectPath, projectPathCandidatesFromDocument } from "../../../lib/project-paths";
+import {
+  markdownReferencePathCandidatesFromDocument,
+  normalizeMarkdownReferencePath,
+} from "../../../lib/markdown-reference-paths";
 import { buildStaticAssetUrl } from "../../markdown/asset-resolution";
 
 export interface ProjectTextFileReader {
@@ -22,10 +25,10 @@ function getProjectPathCandidates(
   }
 
   if (docPath) {
-    return projectPathCandidatesFromDocument(docPath, normalizedTarget);
+    return markdownReferencePathCandidatesFromDocument(docPath, normalizedTarget);
   }
 
-  const normalized = normalizeProjectPath(normalizedTarget);
+  const normalized = normalizeMarkdownReferencePath(normalizedTarget);
   return normalized ? [normalized] : [];
 }
 

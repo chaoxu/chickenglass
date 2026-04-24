@@ -34,7 +34,6 @@ describe("hot-exit recovery Tauri commands", () => {
     tauriCore.invokeTauriCommandRaw.mockResolvedValue(summary);
 
     await expect(writeHotExitBackupCommand(
-      "/project",
       "notes/main.md",
       "main.md",
       "# Draft\n",
@@ -48,36 +47,33 @@ describe("hot-exit recovery Tauri commands", () => {
         content: "# Draft\n",
         name: "main.md",
         path: "notes/main.md",
-        projectRoot: "/project",
       },
     );
   });
 
   it("maps read, list, and delete arguments and preserves missing-backup null", async () => {
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce([]);
-    await expect(listHotExitBackupsCommand("/project")).resolves.toEqual([]);
+    await expect(listHotExitBackupsCommand()).resolves.toEqual([]);
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "list_hot_exit_backups",
-      { projectRoot: "/project" },
+      undefined,
     );
 
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce(null);
-    await expect(readHotExitBackupCommand("/project", "missing.md")).resolves.toBeNull();
+    await expect(readHotExitBackupCommand("missing.md")).resolves.toBeNull();
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "read_hot_exit_backup",
       {
         path: "missing.md",
-        projectRoot: "/project",
       },
     );
 
     tauriCore.invokeTauriCommandRaw.mockResolvedValueOnce(undefined);
-    await deleteHotExitBackupCommand("/project", "notes/main.md");
+    await deleteHotExitBackupCommand("notes/main.md");
     expect(tauriCore.invokeTauriCommandRaw).toHaveBeenLastCalledWith(
       "delete_hot_exit_backup",
       {
         path: "notes/main.md",
-        projectRoot: "/project",
       },
     );
   });

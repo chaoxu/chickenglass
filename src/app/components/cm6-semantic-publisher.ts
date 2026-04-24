@@ -3,7 +3,7 @@ import type { EditorState, Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import { documentSemanticsField, getDocumentAnalysisSliceRevision } from "../../state/document-analysis";
-import { extractDiagnostics, type DiagnosticEntry } from "../diagnostics";
+import { extractDiagnostics } from "../diagnostics";
 import { extractHeadings, type HeadingEntry } from "../heading-ancestry";
 import {
   createDiagnosticsSidebarChangeChecker,
@@ -11,11 +11,12 @@ import {
   sameHeadingSidebarMetadata,
   type HeadingSidebarMetadata,
 } from "./editor-pane-sidebar-tracking";
+import {
+  useSidebarSemanticPublisher,
+  type SidebarSemanticPublisherCallbacks,
+} from "./sidebar-semantic-publisher";
 
-interface Cm6SemanticPublisherOptions {
-  readonly onDiagnosticsChange?: (diagnostics: DiagnosticEntry[]) => void;
-  readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
-}
+type Cm6SemanticPublisherOptions = SidebarSemanticPublisherCallbacks;
 
 interface Cm6SemanticPublisher {
   readonly extensions: readonly Extension[];
@@ -27,8 +28,10 @@ export function useCm6SemanticPublisher({
   onDiagnosticsChange,
   onHeadingsChange,
 }: Cm6SemanticPublisherOptions): Cm6SemanticPublisher {
-  const onHeadingsChangeRef = useRef(onHeadingsChange);
-  const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
+  const semanticPublisher = useSidebarSemanticPublisher({
+    onDiagnosticsChange,
+    onHeadingsChange,
+  });
   const headingFlushHandleRef = useRef<number | null>(null);
   const pendingHeadingStateRef = useRef<EditorState | null>(null);
   const lastPublishedHeadingMetadataRef = useRef<readonly HeadingSidebarMetadata[]>([]);
@@ -36,31 +39,29 @@ export function useCm6SemanticPublisher({
   const pendingDiagnosticsStateRef = useRef<EditorState | null>(null);
   const diagnosticsChanged = useMemo(() => createDiagnosticsSidebarChangeChecker(), []);
 
-  useEffect(() => {
-    onHeadingsChangeRef.current = onHeadingsChange;
-  }, [onHeadingsChange]);
-
-  useEffect(() => {
-    onDiagnosticsChangeRef.current = onDiagnosticsChange;
-  }, [onDiagnosticsChange]);
-
   const publishHeadings = useCallback((state: EditorState, force = false) => {
-    const callback = onHeadingsChangeRef.current;
-    if (!callback) return;
+    if (!semanticPublisher.callbacksRef.current.onHeadingsChange) return;
     const headings = extractHeadings(state);
     const nextMetadata = createHeadingSidebarMetadata(headings);
     if (!force && sameHeadingSidebarMetadata(lastPublishedHeadingMetadataRef.current, nextMetadata)) {
       return;
     }
     lastPublishedHeadingMetadataRef.current = nextMetadata;
-    callback(headings);
-  }, []);
+    semanticPublisher.publish({ headings, diagnostics: [] }, {
+      force,
+      publishDiagnostics: false,
+    });
+  }, [semanticPublisher]);
 
   const publishDiagnostics = useCallback((state: EditorState) => {
-    const callback = onDiagnosticsChangeRef.current;
-    if (!callback) return;
-    callback(extractDiagnostics(state));
-  }, []);
+    if (!semanticPublisher.callbacksRef.current.onDiagnosticsChange) return;
+    semanticPublisher.publish({
+      diagnostics: extractDiagnostics(state),
+      headings: [],
+    }, {
+      publishHeadings: false,
+    });
+  }, [semanticPublisher]);
 
   useEffect(() => {
     return () => {
@@ -78,7 +79,7 @@ export function useCm6SemanticPublisher({
   const headingTrackingExtension = useMemo(() => {
     let lastRev: number | undefined;
     return EditorView.updateListener.of((update) => {
-      if (!onHeadingsChangeRef.current) return;
+      if (!semanticPublisher.callbacksRef.current.onHeadingsChange) return;
       const analysis = update.state.field(documentSemanticsField, false);
       if (!analysis) return;
       const rev = getDocumentAnalysisSliceRevision(analysis, "headings");
@@ -93,11 +94,11 @@ export function useCm6SemanticPublisher({
         publishHeadings(state);
       }, 0);
     });
-  }, [publishHeadings]);
+  }, [publishHeadings, semanticPublisher]);
 
   const diagnosticTrackingExtension = useMemo(() => {
     return EditorView.updateListener.of((update) => {
-      if (!onDiagnosticsChangeRef.current) return;
+      if (!semanticPublisher.callbacksRef.current.onDiagnosticsChange) return;
       if (!diagnosticsChanged(update.startState, update.state)) return;
       pendingDiagnosticsStateRef.current = update.state;
       if (diagnosticsFlushHandleRef.current !== null) return;
@@ -108,11 +109,11 @@ export function useCm6SemanticPublisher({
         publishDiagnostics(state);
       }, 0);
     });
-  }, [diagnosticsChanged, publishDiagnostics]);
+  }, [diagnosticsChanged, publishDiagnostics, semanticPublisher]);
 
   const forcePublishCurrent = useCallback((view: EditorView | null) => {
     if (!view) return;
-    if (onHeadingsChangeRef.current) {
+    if (semanticPublisher.callbacksRef.current.onHeadingsChange) {
       if (headingFlushHandleRef.current !== null) {
         window.clearTimeout(headingFlushHandleRef.current);
         headingFlushHandleRef.current = null;
@@ -120,7 +121,7 @@ export function useCm6SemanticPublisher({
       pendingHeadingStateRef.current = view.state;
       publishHeadings(view.state, true);
     }
-    if (onDiagnosticsChangeRef.current) {
+    if (semanticPublisher.callbacksRef.current.onDiagnosticsChange) {
       if (diagnosticsFlushHandleRef.current !== null) {
         window.clearTimeout(diagnosticsFlushHandleRef.current);
         diagnosticsFlushHandleRef.current = null;
@@ -128,7 +129,7 @@ export function useCm6SemanticPublisher({
       pendingDiagnosticsStateRef.current = view.state;
       publishDiagnostics(view.state);
     }
-  }, [publishDiagnostics, publishHeadings]);
+  }, [publishDiagnostics, publishHeadings, semanticPublisher]);
 
   const readHeadings = useCallback((view: EditorView | null): HeadingEntry[] => {
     return view ? extractHeadings(view.state) : [];

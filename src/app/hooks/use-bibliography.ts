@@ -17,7 +17,7 @@ import {
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { logCatchError } from "../lib/log-catch-error";
-import { projectPathCandidatesFromDocument } from "../lib/project-paths";
+import { markdownReferencePathCandidatesFromDocument } from "../../lib/markdown-reference-paths";
 import { dispatchIfConnected } from "../lib/view-dispatch";
 import { measureAsync, withPerfOperation } from "../perf";
 
@@ -112,7 +112,7 @@ export async function loadBibliographyData(
   isCurrent?: () => boolean,
 ): Promise<BibliographyLoadData | null> {
   const readWithFallback = async (p: string): Promise<string> => {
-    const candidates = projectPathCandidatesFromDocument(docPath, p);
+    const candidates = markdownReferencePathCandidatesFromDocument(docPath, p);
     let lastError: unknown;
     for (const candidate of candidates) {
       try {

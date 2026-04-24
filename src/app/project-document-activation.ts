@@ -46,7 +46,7 @@ export async function activateProjectDocument({
 
   if (hotExitBackupStore && projectRoot && restoreDocumentFromRecovery) {
     try {
-      const summaries = await hotExitBackupStore.listBackups(projectRoot);
+      const summaries = await hotExitBackupStore.listBackups();
       if (!isCurrent()) {
         return { status: "stale" };
       }
@@ -54,10 +54,7 @@ export async function activateProjectDocument({
         ? summaries.find((summary) => summary.path === preferredDocumentPath)
         : undefined) ?? summaries[0];
       if (recoverySummary && shouldRestoreBackup(recoverySummary.name)) {
-        const backup = await hotExitBackupStore.readBackup(
-          projectRoot,
-          recoverySummary.path,
-        );
+        const backup = await hotExitBackupStore.readBackup(recoverySummary.path);
         if (!isCurrent()) {
           return { status: "stale" };
         }

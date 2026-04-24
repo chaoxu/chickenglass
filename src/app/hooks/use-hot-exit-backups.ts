@@ -115,7 +115,6 @@ export function useHotExitBackups({
       }
 
       await latestState.activeStore.writeBackup({
-        projectRoot: latestState.projectRoot,
         path: latestDocument.path,
         name: latestDocument.name,
         content,
@@ -184,7 +183,10 @@ export function useHotExitBackups({
     const projectRootAtRequest = state.projectRoot;
     lastWrittenContentHashRef.current.delete(cacheKey);
     void enqueueBackupOperation(cacheKey, async () => {
-      await activeStoreAtRequest.deleteBackup(projectRootAtRequest, path);
+      if (stateRef.current.projectRoot !== projectRootAtRequest) {
+        return;
+      }
+      await activeStoreAtRequest.deleteBackup(path);
     })
       .catch(logCatchError("[hot-exit] backup delete failed"));
   }, [clearTimer, enqueueBackupOperation]);

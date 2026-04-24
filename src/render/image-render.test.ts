@@ -7,7 +7,7 @@ import {
   _imageDecorationFieldForTest,
   imageRenderPlugin,
 } from "./image-render";
-import { resolveProjectPathFromDocument } from "../lib/project-paths";
+import { resolveMarkdownReferencePathFromDocument } from "../lib/markdown-reference-paths";
 import { isPdfTarget, isRelativeFilePath } from "../lib/pdf-target";
 import { documentPathFacet } from "../lib/types";
 import { imageUrlEffect, imageUrlField } from "../state/image-url";
@@ -254,26 +254,26 @@ describe("isRelativeFilePath", () => {
 /**
  * Regression test for #471: non-PDF images must also use document-relative
  * path resolution, just like PDFs do. Before the fix, only PDF paths were
- * resolved via resolveProjectPathFromDocument; non-PDF images used the raw
+ * resolved via resolveMarkdownReferencePathFromDocument; non-PDF images used the raw
  * markdown target, causing them to resolve relative to the app URL instead
  * of the document's directory.
  */
 describe("Non-PDF image path resolution (#471)", () => {
   it("resolves a relative PNG path from a nested document", () => {
     // `![](diagram.png)` in `posts/math.md` should resolve to `posts/diagram.png`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "diagram.png");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "diagram.png");
     expect(resolved).toBe("posts/diagram.png");
   });
 
   it("resolves a subdirectory-relative image from a nested document", () => {
     // `![](images/cat.jpg)` in `posts/math.md` → `posts/images/cat.jpg`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "images/cat.jpg");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "images/cat.jpg");
     expect(resolved).toBe("posts/images/cat.jpg");
   });
 
   it("produces distinct paths for same filename in different directories", () => {
-    const fromPosts = resolveProjectPathFromDocument("posts/math.md", "diagram.png");
-    const fromNotes = resolveProjectPathFromDocument("notes/physics.md", "diagram.png");
+    const fromPosts = resolveMarkdownReferencePathFromDocument("posts/math.md", "diagram.png");
+    const fromNotes = resolveMarkdownReferencePathFromDocument("notes/physics.md", "diagram.png");
     expect(fromPosts).toBe("posts/diagram.png");
     expect(fromNotes).toBe("notes/diagram.png");
     expect(fromPosts).not.toBe(fromNotes);
@@ -290,7 +290,7 @@ describe("Non-PDF image path resolution (#471)", () => {
  * Tests for the document-relative PDF path resolution used in image-render.ts.
  *
  * The image render plugin resolves relative PDF targets against the current
- * document path (via documentPathFacet + resolveProjectPathFromDocument) before
+ * document path (via documentPathFacet + resolveMarkdownReferencePathFromDocument) before
  * using them as cache keys and passing them to requestPdfPreview. This prevents
  * cache collisions when the same filename appears in different directories
  * (e.g., `posts/diagram.pdf` vs `notes/diagram.pdf`).
@@ -301,25 +301,25 @@ describe("Non-PDF image path resolution (#471)", () => {
 describe("PDF path resolution for cache keys", () => {
   it("resolves a relative PDF path from a nested document", () => {
     // `![](diagram.pdf)` in `posts/math.md` should resolve to `posts/diagram.pdf`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "diagram.pdf");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "diagram.pdf");
     expect(resolved).toBe("posts/diagram.pdf");
   });
 
   it("resolves a subdirectory-relative PDF path from a nested document", () => {
     // `![](figures/plot.pdf)` in `posts/math.md` → `posts/figures/plot.pdf`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "figures/plot.pdf");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "figures/plot.pdf");
     expect(resolved).toBe("posts/figures/plot.pdf");
   });
 
   it("resolves ../ references correctly", () => {
     // `![](../shared/fig.pdf)` in `posts/math.md` → `shared/fig.pdf`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "../shared/fig.pdf");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "../shared/fig.pdf");
     expect(resolved).toBe("shared/fig.pdf");
   });
 
   it("treats leading-slash paths as project-root relative", () => {
     // `![](/assets/plot.pdf)` in any document → `assets/plot.pdf`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "/assets/plot.pdf");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "/assets/plot.pdf");
     expect(resolved).toBe("assets/plot.pdf");
   });
 
@@ -327,8 +327,8 @@ describe("PDF path resolution for cache keys", () => {
     // This is the core regression test for the cache collision bug.
     // Two documents referencing `diagram.pdf` from different directories
     // must produce different resolved paths.
-    const fromPosts = resolveProjectPathFromDocument("posts/math.md", "diagram.pdf");
-    const fromNotes = resolveProjectPathFromDocument("notes/physics.md", "diagram.pdf");
+    const fromPosts = resolveMarkdownReferencePathFromDocument("posts/math.md", "diagram.pdf");
+    const fromNotes = resolveMarkdownReferencePathFromDocument("notes/physics.md", "diagram.pdf");
     expect(fromPosts).toBe("posts/diagram.pdf");
     expect(fromNotes).toBe("notes/diagram.pdf");
     expect(fromPosts).not.toBe(fromNotes);
@@ -336,13 +336,13 @@ describe("PDF path resolution for cache keys", () => {
 
   it("resolves identically for root-level documents", () => {
     // `![](diagram.pdf)` in `index.md` (at root) → `diagram.pdf`
-    const resolved = resolveProjectPathFromDocument("index.md", "diagram.pdf");
+    const resolved = resolveMarkdownReferencePathFromDocument("index.md", "diagram.pdf");
     expect(resolved).toBe("diagram.pdf");
   });
 
   it("normalizes dot segments", () => {
     // `![](./figures/../figures/plot.pdf)` in `posts/math.md`
-    const resolved = resolveProjectPathFromDocument("posts/math.md", "./figures/../figures/plot.pdf");
+    const resolved = resolveMarkdownReferencePathFromDocument("posts/math.md", "./figures/../figures/plot.pdf");
     expect(resolved).toBe("posts/figures/plot.pdf");
   });
 });

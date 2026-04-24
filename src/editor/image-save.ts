@@ -12,9 +12,9 @@
 import { EditorView } from "@codemirror/view";
 import type { FileSystem } from "../lib/types";
 import {
-  relativeProjectPathFromDocument,
-  resolveProjectPathFromDocument,
-} from "../lib/project-paths";
+  relativeMarkdownReferencePathFromDocument,
+  resolveMarkdownReferencePathFromDocument,
+} from "../lib/markdown-reference-paths";
 import { isTauri } from "../lib/tauri";
 
 /** Supported image MIME types and their default file extensions. */
@@ -185,7 +185,7 @@ export async function planImageTarget(
   imageFolder: string,
   rawFilename: string,
 ): Promise<PlannedImageTarget> {
-  const targetDir = resolveProjectPathFromDocument(docPath, imageFolder);
+  const targetDir = resolveMarkdownReferencePathFromDocument(docPath, imageFolder);
 
   if (targetDir) {
     try {
@@ -205,7 +205,7 @@ export async function planImageTarget(
 
   return {
     targetPath,
-    markdownPath: relativeProjectPathFromDocument(docPath, targetPath),
+    markdownPath: relativeMarkdownReferencePathFromDocument(docPath, targetPath),
   };
 }
 
