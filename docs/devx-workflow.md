@@ -145,6 +145,7 @@ Runtime quick lanes:
 ```bash
 pnpm test:browser:quick                # merged-app smoke
 pnpm test:browser:quick -- render      # headings/math/index rich render
+pnpm test:browser:quick -- parity      # CM6/Lexical shared surface parity
 pnpm test:browser:quick -- lexical     # Lexical smoke
 pnpm test:browser:quick -- scroll      # scroll-jump focused lane
 pnpm test:browser:quick -- one headings math-render

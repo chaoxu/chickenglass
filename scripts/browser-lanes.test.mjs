@@ -20,6 +20,7 @@ describe("browser lanes manifest", () => {
       "navigation",
       "scroll",
       "render",
+      "parity",
       "all",
     ]);
   });
@@ -39,6 +40,8 @@ describe("browser lanes manifest", () => {
   it("keeps the older render lane available", () => {
     expect(resolveBrowserLane("render").name).toBe("render");
     expect(BROWSER_LANES.render.filters).toEqual(["headings", "math-render", "index-open-rich-render"]);
+    expect(resolveBrowserLane("parity").name).toBe("parity");
+    expect(BROWSER_LANES.parity.script).toBe("scripts/document-surface-parity.mjs");
   });
 
   it("selects all affected browser lanes from changed paths", () => {
@@ -47,6 +50,12 @@ describe("browser lanes manifest", () => {
       "src/render/pdf-preview-cache.ts",
       "src/editor/scroll-guard.ts",
     ])).toEqual(["cm6-rich", "lexical", "media", "scroll"]);
+  });
+
+  it("selects the parity lane for shared surface changes", () => {
+    expect(selectBrowserLanesForChangedFiles([
+      "src/lexical/editor-theme.css",
+    ])).toEqual(["cm6-rich", "lexical", "parity"]);
   });
 
   it("escalates browser harness changes to all only in full profile", () => {

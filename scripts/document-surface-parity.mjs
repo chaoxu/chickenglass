@@ -166,11 +166,12 @@ function assertParity(cm6, lexical) {
 }
 
 async function main() {
-  const session = await openBrowserSession(process.argv.slice(2), {
-    defaultBrowser: "managed",
-  });
+  let session = null;
 
   try {
+    session = await openBrowserSession(process.argv.slice(2), {
+      defaultBrowser: "managed",
+    });
     await openFixtureDocument(session.page, PARITY_FIXTURE, {
       mode: "cm6-rich",
       project: "single-file",
@@ -193,8 +194,25 @@ async function main() {
         table: lexical.table.rect,
       },
     }, null, 2));
+  } catch (error) {
+    if (session?.artifactRecorder) {
+      await session.artifactRecorder.collect({
+        error,
+        label: "document-surface-parity",
+        root: session.artifactsRoot,
+      }).then((artifacts) => {
+        console.error(`Artifacts: ${artifacts.outDir}`);
+      }).catch((artifactError) => {
+        console.error(
+          `Artifact collection failed: ${artifactError instanceof Error ? artifactError.message : String(artifactError)}`,
+        );
+      });
+    }
+    throw error;
   } finally {
-    await closeBrowserSession(session);
+    if (session) {
+      await closeBrowserSession(session);
+    }
   }
 }
 

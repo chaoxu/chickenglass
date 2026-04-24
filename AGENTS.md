@@ -81,7 +81,7 @@ pnpm tauri:build     # build Coflat production desktop app bundle
 pnpm tauri:build:dmg # build Coflat macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
 pnpm test:browser:quick
-                     # named quick browser lanes: smoke/cm6-rich/lexical/media/navigation/scroll/render/all/one
+                     # named quick browser lanes: smoke/cm6-rich/lexical/media/navigation/scroll/render/parity/all/one
 pnpm test:browser:cm6-rich
 pnpm test:browser:lexical
 pnpm test:browser:media
@@ -239,8 +239,8 @@ When asked to start the preview server, prefer `pnpm build && pnpm preview`. The
 For any automated Lexical/CM6 inspection — DOM audits, screenshots, mode switches, reference/render checks — use the managed Playwright harness.
 
 Managed harness (the default):
-1. Start `pnpm dev`.
-2. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:quick -- cm6-rich`, `pnpm test:browser:lexical`, `pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "..."`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
+1. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:quick -- cm6-rich`, `pnpm test:browser:quick -- parity`, `pnpm test:browser:lexical`, `pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "..."`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
+2. Managed localhost runs auto-start Vite when needed. Use `--no-start-server` only when you intentionally manage the app server yourself.
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when the user explicitly asks for the manual shared app window.
 4. Browser setup and regression failures write artifacts under `/tmp/coflat-browser-artifacts` by default. Use `--artifacts-dir /tmp/coflat-*` to force a specific output directory for a run.
 

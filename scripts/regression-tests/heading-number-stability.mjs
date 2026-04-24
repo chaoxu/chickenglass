@@ -5,6 +5,7 @@ import {
 } from "../test-helpers.mjs";
 
 export const name = "heading-number-stability";
+export const optionalFixtures = true;
 
 const FIXTURE = "rankdecrease/main.md";
 const NEEDLE = "# Introduction";

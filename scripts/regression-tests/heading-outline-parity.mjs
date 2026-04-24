@@ -31,9 +31,6 @@ const INITIAL_DOC = [
   "",
 ].join("\n");
 
-const AFTER_CM6_DOC = INITIAL_DOC.replace("## Beta", "## Beta Revised");
-const AFTER_LEXICAL_DOC = AFTER_CM6_DOC.replace("### Gamma", "### Gamma Revised");
-
 const FIXTURE = {
   content: INITIAL_DOC,
   displayPath: "fixture:heading-outline-parity.md",
@@ -83,42 +80,143 @@ function assertStyleParity(cm6, lexical, label) {
   );
 }
 
-async function waitForOutlineText(page, text) {
-  await page.waitForFunction(
-    (needle) => {
-      const panel = document.querySelector('[data-sidebar] [role="tabpanel"][data-state="active"]');
-      return panel?.innerText?.includes(needle) ?? false;
-    },
-    text,
-    { timeout: 5_000, polling: 100 },
-  );
+async function readOutlineSnapshot(page) {
+  return page.evaluate(() => {
+    const normalize = (text) => text.replace(/\s+/g, " ").trim();
+    const panel = document.querySelector('[data-sidebar] [role="tabpanel"][data-state="active"]');
+    const outline = panel
+      ? [...panel.querySelectorAll("button:not([aria-label])")]
+        .map((button) => {
+          const spans = [...button.querySelectorAll("span")];
+          return {
+            number: normalize(spans[0]?.textContent ?? ""),
+            text: normalize(spans.at(-1)?.textContent ?? button.textContent ?? ""),
+          };
+        })
+        .filter((entry) => entry.number || entry.text)
+      : [];
+    return {
+      hasNoHeadingsMessage: panel?.textContent?.includes("No headings") ?? false,
+      outline,
+    };
+  });
 }
 
-async function waitForOutlineCount(page, count) {
+async function waitForOutlineSnapshot(page, expected) {
   await page.waitForFunction(
-    (expectedCount) => {
+    (expectedOutline) => {
+      const normalize = (text) => text.replace(/\s+/g, " ").trim();
       const panel = document.querySelector('[data-sidebar] [role="tabpanel"][data-state="active"]');
       if (!panel) return false;
-      return panel.querySelectorAll("button:not([aria-label])").length >= expectedCount;
+      const outline = [...panel.querySelectorAll("button:not([aria-label])")]
+        .map((button) => {
+          const spans = [...button.querySelectorAll("span")];
+          return {
+            number: normalize(spans[0]?.textContent ?? ""),
+            text: normalize(spans.at(-1)?.textContent ?? button.textContent ?? ""),
+          };
+        })
+        .filter((entry) => entry.number || entry.text);
+      return JSON.stringify(outline) === JSON.stringify(expectedOutline);
     },
-    count,
+    expectedOutline(expected),
     { timeout: 5_000, polling: 100 },
   );
 }
 
-async function setDocument(page, doc, outlineNeedle) {
-  await page.evaluate((nextDoc) => {
+async function typeTextAtNeedle(page, needle, insert, expectedAfter) {
+  const position = await page.evaluate((targetNeedle) => {
     const editor = window.__editor;
-    if (!editor?.setDoc) {
-      throw new Error("window.__editor.setDoc is unavailable");
+    if (!editor?.getDoc || !editor?.setSelection || !editor?.focus) {
+      throw new Error("window.__editor selection bridge is unavailable");
     }
-    editor.setDoc(nextDoc);
-  }, doc);
+    const doc = editor.getDoc();
+    const index = doc.indexOf(targetNeedle);
+    if (index < 0) {
+      throw new Error(`Document is missing target ${JSON.stringify(targetNeedle)}`);
+    }
+    const nextPosition = index + targetNeedle.length;
+    editor.setSelection(nextPosition, nextPosition);
+    editor.focus();
+    return nextPosition;
+  }, needle);
+
+  for (const char of insert) {
+    await page.keyboard.type(char, { delay: 1 });
+    await settleEditorLayout(page, { frameCount: 1, delayMs: 16 });
+    const outlineStatus = await readOutlineSnapshot(page);
+    if (
+      outlineStatus.hasNoHeadingsMessage ||
+      outlineStatus.outline.length !== expectedAfter.length
+    ) {
+      throw new Error(
+        `Outline dropped during keyboard typing at ${position}: ${JSON.stringify(outlineStatus)}`,
+      );
+    }
+  }
+
   await waitForRenderReady(page, { frameCount: 3, delayMs: 64 });
-  await waitForOutlineText(page, outlineNeedle);
+  await waitForOutlineSnapshot(page, expectedAfter);
+  const expectedTypedNeedle = `${needle}${insert}`;
+  const updated = await page.evaluate((expectedText) => {
+    const doc = window.__editor?.getDoc?.() ?? "";
+    const selection = window.__editor?.getSelection?.() ?? null;
+    return {
+      hasExpectedText: doc.includes(expectedText),
+      selection,
+    };
+  }, expectedTypedNeedle);
+  if (!updated.hasExpectedText) {
+    throw new Error(
+      `Typing at ${position} did not update document text with ${JSON.stringify(expectedTypedNeedle)}; ` +
+        `selection=${JSON.stringify(updated.selection)}`,
+    );
+  }
 }
 
-async function collectSnapshot(page, mode) {
+async function assertOutlineNavigation(page, label) {
+  await showSidebarPanel(page, "outline");
+  const clicked = await page.evaluate((targetLabel) => {
+    const normalize = (text) => text.replace(/\s+/g, " ").trim();
+    const panel = document.querySelector('[data-sidebar] [role="tabpanel"][data-state="active"]');
+    const button = panel
+      ? [...panel.querySelectorAll("button:not([aria-label])")]
+        .find((candidate) => {
+          const spans = [...candidate.querySelectorAll("span")];
+          return normalize(spans.at(-1)?.textContent ?? candidate.textContent ?? "") === targetLabel;
+        })
+      : null;
+    if (!(button instanceof HTMLButtonElement)) return false;
+    button.click();
+    return true;
+  }, label);
+  if (!clicked) {
+    throw new Error(`Failed to click outline entry ${JSON.stringify(label)}`);
+  }
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+  const selection = await page.evaluate((targetLabel) => {
+    const doc = window.__editor?.getDoc?.() ?? "";
+    const labelIndex = doc.indexOf(targetLabel);
+    return {
+      labelIndex,
+      selection: window.__editor?.getSelection?.() ?? null,
+    };
+  }, label);
+  const from = selection.selection?.from;
+  if (
+    !Number.isFinite(from) ||
+    selection.labelIndex < 0 ||
+    from > selection.labelIndex ||
+    selection.labelIndex - from > 8
+  ) {
+    throw new Error(
+      `Outline navigation for ${JSON.stringify(label)} landed at ` +
+        `${JSON.stringify(selection.selection)}, labelIndex=${selection.labelIndex}`,
+    );
+  }
+}
+
+async function collectSnapshot(page, mode, expected) {
   await switchToMode(page, mode);
   await showSidebarPanel(page, "outline");
   await waitForRenderReady(page, {
@@ -126,7 +224,7 @@ async function collectSnapshot(page, mode) {
     frameCount: 3,
     delayMs: 64,
   });
-  await waitForOutlineCount(page, EXPECTED_INITIAL.length);
+  await waitForOutlineSnapshot(page, expected);
 
   return page.evaluate((expectedMode) => {
     const normalize = (text) => text.replace(/\s+/g, " ").trim();
@@ -227,8 +325,8 @@ export async function run(page) {
     project: "single-file",
   });
 
-  const cm6Initial = await collectSnapshot(page, "cm6-rich");
-  const lexicalInitial = await collectSnapshot(page, "lexical");
+  const cm6Initial = await collectSnapshot(page, "cm6-rich", EXPECTED_INITIAL);
+  const lexicalInitial = await collectSnapshot(page, "lexical", EXPECTED_INITIAL);
   let error =
     assertSnapshot(cm6Initial, EXPECTED_INITIAL, "initial CM6") ??
     assertSnapshot(lexicalInitial, EXPECTED_INITIAL, "initial Lexical") ??
@@ -239,11 +337,12 @@ export async function run(page) {
 
   await switchToMode(page, "cm6-rich");
   await showSidebarPanel(page, "outline");
-  await setDocument(page, AFTER_CM6_DOC, "Beta Revised");
+  await typeTextAtNeedle(page, "## Beta", " Revised", EXPECTED_AFTER_CM6);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+  await assertOutlineNavigation(page, "Beta Revised");
 
-  const cm6AfterUpdate = await collectSnapshot(page, "cm6-rich");
-  const lexicalAfterCm6Update = await collectSnapshot(page, "lexical");
+  const cm6AfterUpdate = await collectSnapshot(page, "cm6-rich", EXPECTED_AFTER_CM6);
+  const lexicalAfterCm6Update = await collectSnapshot(page, "lexical", EXPECTED_AFTER_CM6);
   error =
     assertSnapshot(cm6AfterUpdate, EXPECTED_AFTER_CM6, "after CM6 update") ??
     assertSnapshot(lexicalAfterCm6Update, EXPECTED_AFTER_CM6, "Lexical after CM6 update") ??
@@ -252,11 +351,12 @@ export async function run(page) {
     return { pass: false, message: error };
   }
 
-  await setDocument(page, AFTER_LEXICAL_DOC, "Gamma Revised");
+  await typeTextAtNeedle(page, "### Gamma", " Revised", EXPECTED_AFTER_LEXICAL);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+  await assertOutlineNavigation(page, "Gamma Revised");
 
-  const lexicalAfterUpdate = await collectSnapshot(page, "lexical");
-  const cm6AfterLexicalUpdate = await collectSnapshot(page, "cm6-rich");
+  const lexicalAfterUpdate = await collectSnapshot(page, "lexical", EXPECTED_AFTER_LEXICAL);
+  const cm6AfterLexicalUpdate = await collectSnapshot(page, "cm6-rich", EXPECTED_AFTER_LEXICAL);
   error =
     assertSnapshot(lexicalAfterUpdate, EXPECTED_AFTER_LEXICAL, "after Lexical update") ??
     assertSnapshot(cm6AfterLexicalUpdate, EXPECTED_AFTER_LEXICAL, "CM6 after Lexical update") ??

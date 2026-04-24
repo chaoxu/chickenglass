@@ -43,6 +43,13 @@ export function buildBrowserLaneArgs(argv = []) {
 
   const { lane } = resolveBrowserLane(command);
 
+  if (lane.script) {
+    return [
+      lane.script,
+      ...options,
+    ];
+  }
+
   return [
     "scripts/test-regression.mjs",
     ...lane.args,

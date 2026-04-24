@@ -61,14 +61,26 @@ function resolveFilter({ filterArg, scenarioArg }) {
 
 /** Dynamically import all test modules from the regression-tests directory. */
 async function loadTests(filter) {
-  const files = readdirSync(TESTS_DIR)
+  const allFiles = readdirSync(TESTS_DIR)
     .filter((f) => f.endsWith(".mjs"))
+    .sort();
+  if (filter.length > 0) {
+    const available = allFiles.map((file) => file.replace(/\.mjs$/, ""));
+    const unknown = filter.filter((name) => !available.includes(name));
+    if (unknown.length > 0) {
+      throw new Error(
+        `Unknown browser regression filter(s): ${unknown.join(", ")}. ` +
+          `Available tests: ${available.join(", ")}`,
+      );
+    }
+  }
+
+  const files = allFiles
     .filter((file) => {
       if (filter.length === 0) return true;
       const basename = file.replace(/\.mjs$/, "");
       return filter.includes(basename);
-    })
-    .sort();
+    });
 
   const tests = [];
   for (const file of files) {
@@ -101,17 +113,19 @@ export function shouldSkipMissingFixture(error, test, { allowMissingFixtures = f
 }
 
 async function collectFailureArtifacts(session, label, error) {
-  if (!session?.artifactRecorder) return;
-  await session.artifactRecorder.collect({
+  if (!session?.artifactRecorder) return null;
+  return session.artifactRecorder.collect({
     error,
     label,
     root: session.artifactsRoot,
   }).then((artifacts) => {
     console.error(`  Artifacts: ${artifacts.outDir}`);
+    return artifacts.outDir;
   }).catch((artifactError) => {
     console.error(
       `  Artifact collection failed: ${artifactError instanceof Error ? artifactError.message : String(artifactError)}`,
     );
+    return null;
   });
 }
 
@@ -126,6 +140,23 @@ async function main() {
 
   console.log("Browser Regression Tests");
   console.log("========================\n");
+
+  let tests;
+  try {
+    tests = await loadTests(filter);
+    if (tests.length === 0) {
+      console.error("No test modules found.");
+      if (filter.length > 0) {
+        console.error(`Filter: ${filter.join(", ")}`);
+      }
+      process.exitCode = 1;
+      return;
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
 
   // Connect to the browser harness
   let session = null;
@@ -169,17 +200,6 @@ async function main() {
   process.once("SIGTERM", onSigterm);
 
   try {
-    // Load test modules
-    const tests = await loadTests(filter);
-    if (tests.length === 0) {
-      console.error("No test modules found.");
-      if (filter.length > 0) {
-        console.error(`Filter: ${filter.join(", ")}`);
-      }
-      process.exitCode = 1;
-      return;
-    }
-
     console.log(`Running ${tests.length} test(s)...\n`);
 
     const results = [];
@@ -193,8 +213,8 @@ async function main() {
         await resetEditorState(page);
       } catch (err) {
         console.log(`  FAIL  ${test.name} (reset failed: ${err.message})`);
-        await collectFailureArtifacts(session, `reset-${test.name}`, err);
-        results.push({ name: test.name, pass: false, message: `Reset failed: ${err.message}` });
+        const artifacts = await collectFailureArtifacts(session, `reset-${test.name}`, err);
+        results.push({ name: test.name, pass: false, message: `Reset failed: ${err.message}`, artifacts });
         failed++;
         continue;
       }
@@ -214,11 +234,12 @@ async function main() {
           passed++;
         } else {
           console.log(`  FAIL  ${test.name} (${elapsed}ms)${suffix}`);
-          await collectFailureArtifacts(
+          const artifacts = await collectFailureArtifacts(
             session,
             `test-${test.name}`,
             new Error(result.message ?? `${test.name} returned pass=false`),
           );
+          result.artifacts = artifacts;
           failed++;
         }
 
@@ -227,6 +248,7 @@ async function main() {
           pass: result.pass,
           skipped: Boolean(result.skipped),
           message: result.message,
+          artifacts: result.artifacts ?? null,
           elapsed,
         });
       } catch (err) {
@@ -241,14 +263,14 @@ async function main() {
         if (err.message?.includes("Target closed") || err.message?.includes("Protocol error")) {
           console.log(`  FAIL  ${test.name} (${elapsed}ms) — Chrome disconnected`);
           console.error("\nChrome disconnected mid-test. Aborting remaining tests.");
-          await collectFailureArtifacts(session, `test-${test.name}`, err);
-          results.push({ name: test.name, pass: false, message: "Chrome disconnected", elapsed });
+          const artifacts = await collectFailureArtifacts(session, `test-${test.name}`, err);
+          results.push({ name: test.name, pass: false, message: "Chrome disconnected", artifacts, elapsed });
           failed++;
           break;
         }
         console.log(`  FAIL  ${test.name} (${elapsed}ms) — Error: ${err.message}`);
-        await collectFailureArtifacts(session, `test-${test.name}`, err);
-        results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, elapsed });
+        const artifacts = await collectFailureArtifacts(session, `test-${test.name}`, err);
+        results.push({ name: test.name, pass: false, message: `Error: ${err.message}`, artifacts, elapsed });
         failed++;
       }
     }
@@ -261,7 +283,8 @@ async function main() {
       console.log("\nFailed tests:");
       for (const r of results) {
         if (!r.pass) {
-          console.log(`  - ${r.name}: ${r.message ?? "no message"}`);
+          const artifactSuffix = r.artifacts ? ` (artifacts: ${r.artifacts})` : "";
+          console.log(`  - ${r.name}: ${r.message ?? "no message"}${artifactSuffix}`);
         }
       }
     }

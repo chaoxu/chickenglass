@@ -15,6 +15,7 @@ const CM6_RICH_FILTERS = [
   "rendered-hit-testing",
   "tables",
   "task-checkboxes",
+  "visual-surface-parity",
 ];
 
 const LEXICAL_FILTERS = [
@@ -23,6 +24,7 @@ const LEXICAL_FILTERS = [
   "lexical-smoke",
   "mode-switch",
   "rendered-hit-testing",
+  "visual-surface-parity",
 ];
 
 const MEDIA_FILTERS = [
@@ -67,6 +69,7 @@ export const BROWSER_HARNESS_SUPPORT_PATHS = [
   "scripts/browser-screenshot.mjs",
   "scripts/chrome-common.mjs",
   "scripts/devx-browser-session.mjs",
+  "scripts/document-surface-parity.mjs",
   "scripts/editor-test-helpers.mjs",
   "scripts/fixture-test-helpers.mjs",
   "scripts/launch-chrome.mjs",
@@ -111,6 +114,12 @@ export const BROWSER_LANES = {
     description: "Compatibility alias for the older CM6 render smoke lane",
     filters: ["headings", "math-render", "index-open-rich-render"],
   },
+  parity: {
+    args: [],
+    description: "CM6/Lexical shared document-surface parity audit",
+    filters: [],
+    script: "scripts/document-surface-parity.mjs",
+  },
   scroll: {
     args: filterArgs(SCROLL_FILTERS),
     description: "Long-document scroll and ArrowDown lane",
@@ -131,6 +140,7 @@ export const BROWSER_LANE_ORDER = [
   "navigation",
   "scroll",
   "render",
+  "parity",
   "all",
 ];
 
@@ -238,14 +248,33 @@ export function selectBrowserLanesForChangedFiles(paths, { profile = "quick" } =
 
     if (
       hasPathPrefix(path, [
+        "src/document-surface-classes.ts",
+        "src/document-surfaces",
         "src/editor/",
+        "src/editor-theme.css",
         "src/parser/",
         "src/plugins/",
         "src/render/",
+        "src/lexical/editor-theme.css",
+        "src/lexical/markdown-schema.ts",
         "scripts/regression-tests/",
       ])
     ) {
       addLane(lanes, "cm6-rich");
+    }
+
+    if (
+      hasPathPrefix(path, [
+        "src/document-surface-classes.ts",
+        "src/document-surfaces",
+        "src/editor-theme.css",
+        "src/lexical/editor-theme.css",
+        "src/lexical/markdown-schema.ts",
+        "scripts/document-surface-parity.mjs",
+      ]) ||
+      includesAny(testName, ["parity"])
+    ) {
+      addLane(lanes, "parity");
     }
   }
 
