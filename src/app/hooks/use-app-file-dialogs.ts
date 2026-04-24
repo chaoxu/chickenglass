@@ -23,7 +23,7 @@ export interface AppFileDialogsDeps {
   >;
   workspace: Pick<
     AppWorkspaceSessionController,
-    "projectRoot" | "openProjectRoot"
+    "projectRoot" | "openProjectRoot" | "addRecentFolder"
   >;
   /** Stable lazy-loader for subdirectories; passed through to default-doc search. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
@@ -44,15 +44,21 @@ export function useAppFileDialogs({
   const openProjectRequestRef = useRef(0);
   const searchAbortRef = useRef<AbortController | null>(null);
 
-  const openProjectInCurrentWindow = useCallback(async (
+  const canonicalizeProjectRoot = useCallback(async (path: string): Promise<string> => {
+    const { canonicalizeProjectRootCommand } = await import("../tauri-client/path");
+    return canonicalizeProjectRootCommand(path);
+  }, []);
+
+  const openProjectInCurrentWindowWithRoot = useCallback(async (
     projectRoot: string,
     initialPath?: string,
-  ): Promise<boolean> => {
+  ): Promise<{ readonly opened: boolean; readonly projectRoot: string | null }> => {
     searchAbortRef.current?.abort();
     const controller = new AbortController();
     searchAbortRef.current = controller;
+    let canonicalProjectRoot = projectRoot;
 
-    return openProjectInCurrentWindowFlow({
+    const opened = await openProjectInCurrentWindowFlow({
       projectRoot,
       initialPath,
       currentProjectRoot: workspace.projectRoot,
@@ -63,15 +69,28 @@ export function useAppFileDialogs({
       openProjectRoot: workspace.openProjectRoot,
       canonicalizeProjectRoot: isTauri()
         ? async (path) => {
-          const { canonicalizeProjectRootCommand } = await import("../tauri-client/path");
-          return canonicalizeProjectRootCommand(path);
+          canonicalProjectRoot = await canonicalizeProjectRoot(path);
+          return canonicalProjectRoot;
         }
         : undefined,
       openFile: editor.openFile,
       listChildren,
       signal: controller.signal,
     });
-  }, [editor, workspace, listChildren]);
+
+    return {
+      opened,
+      projectRoot: opened ? canonicalProjectRoot : null,
+    };
+  }, [canonicalizeProjectRoot, editor, workspace, listChildren]);
+
+  const openProjectInCurrentWindow = useCallback(async (
+    projectRoot: string,
+    initialPath?: string,
+  ): Promise<boolean> => {
+    const result = await openProjectInCurrentWindowWithRoot(projectRoot, initialPath);
+    return result.opened;
+  }, [openProjectInCurrentWindowWithRoot]);
 
   const handleOpenFolderRequest = useCallback(() => {
     if (!isTauri()) return;
@@ -82,12 +101,15 @@ export function useAppFileDialogs({
         if (!folderPath || folderPath === workspace.projectRoot) {
           return;
         }
-        await openProjectInCurrentWindow(folderPath);
+        const result = await openProjectInCurrentWindowWithRoot(folderPath);
+        if (result.projectRoot) {
+          workspace.addRecentFolder(result.projectRoot);
+        }
       } catch (e: unknown) {
         console.error("[app] open folder request failed", e);
       }
     })();
-  }, [openProjectInCurrentWindow, workspace.projectRoot]);
+  }, [openProjectInCurrentWindowWithRoot, workspace.addRecentFolder, workspace.projectRoot]);
 
   const handleOpenFileRequest = useCallback(() => {
     if (!isTauri()) return;
