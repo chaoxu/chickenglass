@@ -64,6 +64,10 @@ export interface CslBibliographyEntry {
   readonly html: string;
 }
 
+export type CslStyleStatus =
+  | { readonly state: "ok" }
+  | { readonly state: "error"; readonly message: string };
+
 /** Pandoc-style locator label terms mapped to CSL locator labels. */
 const LOCATOR_TERMS: ReadonlyMap<string, string> = new Map([
   ["book", "book"], ["bk.", "book"], ["bks.", "book"],
@@ -178,6 +182,7 @@ export class CslProcessor {
   // surfaces that reuse the same processor instance.
   private registeredCitationKey: string | null = null;
   private initPromise: Promise<void> | null = null;
+  private currentStyleStatus: CslStyleStatus = { state: "ok" };
   private readonly processorId = nextProcessorId++;
   private styleGeneration = 0;
 
@@ -390,6 +395,10 @@ export class CslProcessor {
     return this.registeredCitationKey;
   }
 
+  get styleStatus(): CslStyleStatus {
+    return this.currentStyleStatus;
+  }
+
   private async waitForLatestInit(initPromise: Promise<void> | null): Promise<void> {
     let pending = initPromise;
     while (pending) {
@@ -424,6 +433,7 @@ export class CslProcessor {
       if (styleGeneration === this.styleGeneration) {
         this.engine = engine;
         this.registeredCitationKey = null;
+        this.currentStyleStatus = { state: "ok" };
       }
     } catch (e: unknown) {
       // Invalid or unsupported CSL style XML -- disable engine, fall back to simple formatting
@@ -431,6 +441,10 @@ export class CslProcessor {
       if (styleGeneration === this.styleGeneration) {
         this.engine = null;
         this.registeredCitationKey = null;
+        this.currentStyleStatus = {
+          state: "error",
+          message: e instanceof Error && e.message ? e.message : "Invalid CSL style",
+        };
       }
     } finally {
       if (styleGeneration === this.styleGeneration) {

@@ -26,7 +26,7 @@ import { headingFold } from "./heading-fold";
 import { editorKeybindings } from "./keybindings";
 import { listOutlinerExtension } from "./list-outliner";
 import { editorModeField } from "./editor-mode-state";
-import { type ProjectConfig } from "./project-config";
+import { type ProjectConfig, type ProjectConfigStatus } from "./project-config";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
@@ -91,6 +91,8 @@ export interface EditorConfig {
   doc?: string;
   /** Project-level configuration to merge with per-file frontmatter. */
   projectConfig?: ProjectConfig;
+  /** Structured status for the project configuration source. */
+  projectConfigStatus?: ProjectConfigStatus;
   /** Plugin manager for toggleable editor features. */
   pluginManager?: EditorPluginManager;
   /** Additional CM6 extensions to include. */
@@ -142,7 +144,7 @@ export function createEditor(config: EditorConfig): EditorView {
     doc: config.doc ?? fallbackDocument,
     extensions: [
       // Project config (must come before frontmatterField so the facet is available)
-      ...createProjectConfigExtensions(config.projectConfig),
+      ...createProjectConfigExtensions(config.projectConfig, config.projectConfigStatus),
 
       // Parser: markdown with custom extensions + code block language support
       ...createMarkdownLanguageExtensions({

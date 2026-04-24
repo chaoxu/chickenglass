@@ -8,7 +8,12 @@
 import { useRef, useCallback } from "react";
 import type { EditorView } from "@codemirror/view";
 import type { CslJsonItem } from "../../citations/bibtex-parser";
-import { type BibStore, bibDataEffect } from "../../state/bib-data";
+import {
+  type BibStore,
+  bibDataEffect,
+  type BibliographyFailureKind,
+  type BibliographyStatus,
+} from "../../state/bib-data";
 import { CslProcessor } from "../../citations/csl-processor";
 import type { FileSystem } from "../file-manager";
 import { logCatchError } from "../lib/log-catch-error";
@@ -33,6 +38,59 @@ let bootstrapCache: BootstrapCacheEntry | null = null;
 async function parseBibTeXLazy(content: string): Promise<CslJsonItem[]> {
   const { parseBibTeX } = await import("../../citations/bibtex-parser");
   return parseBibTeX(content);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function bibliographyFailureStatus(
+  state: "error" | "warning",
+  kind: BibliographyFailureKind,
+  bibPath: string,
+  cslPath: string,
+  error: unknown,
+  fallback: string,
+): BibliographyStatus {
+  return {
+    state,
+    kind,
+    bibPath,
+    ...(cslPath ? { cslPath } : {}),
+    message: errorMessage(error, fallback),
+  };
+}
+
+function bibliographyLoadedStatus(
+  bibPath: string,
+  cslPath: string,
+  cslProcessor: CslProcessor,
+  styleWarning: BibliographyStatus | null,
+): BibliographyStatus {
+  if (styleWarning) return styleWarning;
+  if (cslPath && cslProcessor.styleStatus.state === "error") {
+    return {
+      state: "warning",
+      kind: "style-csl",
+      bibPath,
+      cslPath,
+      message: cslProcessor.styleStatus.message,
+    };
+  }
+  return { state: "ok", bibPath, ...(cslPath ? { cslPath } : {}) };
+}
+
+function dispatchBibliographyData(
+  view: EditorView,
+  store: BibStore,
+  cslProcessor: CslProcessor,
+  status: BibliographyStatus,
+): void {
+  dispatchIfConnected(
+    view,
+    { effects: bibDataEffect.of({ store, cslProcessor, status }) },
+    { context: "Bibliography dispatch error:" },
+  );
 }
 
 /** Clear the bootstrap cache (exposed for testing). */
@@ -69,13 +127,30 @@ export async function loadBibliography(
 
   await withPerfOperation("citations.load", async (operation) => {
     try {
-      const bibText = await operation.measureAsync("citations.read_bib", () => readWithFallback(bibPath), {
-        category: "citations",
-        detail: bibPath,
-      });
+      let bibText: string;
+      try {
+        bibText = await operation.measureAsync("citations.read_bib", () => readWithFallback(bibPath), {
+          category: "citations",
+          detail: bibPath,
+        });
+      } catch (error: unknown) {
+        if (isCurrent && !isCurrent()) return;
+        const status = bibliographyFailureStatus(
+          "error",
+          "read-bib",
+          bibPath,
+          cslPath,
+          error,
+          "Unable to read bibliography file",
+        );
+        console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
+        dispatchBibliographyData(view, new Map(), CslProcessor.empty(), status);
+        return;
+      }
       if (isCurrent && !isCurrent()) return;
 
       let cslXml: string | undefined;
+      let styleWarning: BibliographyStatus | null = null;
       if (cslPath) {
         try {
           cslXml = await measureAsync("citations.read_csl", () => readWithFallback(cslPath), {
@@ -83,25 +158,49 @@ export async function loadBibliography(
             detail: cslPath,
           });
           if (isCurrent && !isCurrent()) return;
-        } catch (_e) {
-          // best-effort: CSL file not found — use default style
+        } catch (error: unknown) {
+          styleWarning = bibliographyFailureStatus(
+            "warning",
+            "read-csl",
+            bibPath,
+            cslPath,
+            error,
+            "Unable to read CSL style; using default style",
+          );
         }
       }
 
       // Reuse cached bootstrap artifacts when inputs are unchanged.
       if (bootstrapCache && bootstrapCache.bibText === bibText && bootstrapCache.cslXml === cslXml) {
-        dispatchIfConnected(
+        dispatchBibliographyData(
           view,
-          { effects: bibDataEffect.of({ store: bootstrapCache.store, cslProcessor: bootstrapCache.cslProcessor }) },
-          { context: "Bibliography dispatch error:" },
+          bootstrapCache.store,
+          bootstrapCache.cslProcessor,
+          bibliographyLoadedStatus(bibPath, cslPath, bootstrapCache.cslProcessor, styleWarning),
         );
         return;
       }
 
-      const items = await operation.measureAsync("citations.parse_bib", () => parseBibTeXLazy(bibText), {
-        category: "citations",
-        detail: bibPath,
-      });
+      let items: CslJsonItem[];
+      try {
+        items = await operation.measureAsync("citations.parse_bib", () => parseBibTeXLazy(bibText), {
+          category: "citations",
+          detail: bibPath,
+        });
+      } catch (error: unknown) {
+        if (isCurrent && !isCurrent()) return;
+        const status = bibliographyFailureStatus(
+          "error",
+          "parse-bib",
+          bibPath,
+          cslPath,
+          error,
+          "Unable to parse bibliography file",
+        );
+        console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
+        dispatchBibliographyData(view, new Map(), CslProcessor.empty(), status);
+        return;
+      }
       const store: BibStore = new Map(items.map((item) => [item.id, item]));
 
       const cslProcessor = await operation.measureAsync(
@@ -112,19 +211,24 @@ export async function loadBibliography(
       if (isCurrent && !isCurrent()) return;
 
       bootstrapCache = { bibText, cslXml, store, cslProcessor };
-      dispatchIfConnected(
+      dispatchBibliographyData(
         view,
-        { effects: bibDataEffect.of({ store, cslProcessor }) },
-        { context: "Bibliography dispatch error:" },
+        store,
+        cslProcessor,
+        bibliographyLoadedStatus(bibPath, cslPath, cslProcessor, styleWarning),
       );
     } catch (error: unknown) {
       if (isCurrent && !isCurrent()) return;
-      console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
-      dispatchIfConnected(
-        view,
-        { effects: bibDataEffect.of({ store: new Map(), cslProcessor: CslProcessor.empty() }) },
-        { context: "Bibliography dispatch error:" },
+      const status = bibliographyFailureStatus(
+        "error",
+        "unexpected",
+        bibPath,
+        cslPath,
+        error,
+        "Unexpected bibliography load failure",
       );
+      console.warn("[bibliography] failed to load bibliography, using empty data", { bibPath, cslPath }, error);
+      dispatchBibliographyData(view, new Map(), CslProcessor.empty(), status);
     }
   }, bibPath);
 }
@@ -188,10 +292,11 @@ export function useBibliography(options: UseBibliographyOptions): UseBibliograph
       const generation = beginLoad();
 
       if (!bibPath) {
-        dispatchIfConnected(
+        dispatchBibliographyData(
           view,
-          { effects: bibDataEffect.of({ store: new Map(), cslProcessor: CslProcessor.empty() }) },
-          { context: "Bibliography dispatch error:" },
+          new Map(),
+          CslProcessor.empty(),
+          { state: "idle" },
         );
       } else {
         void loadBibliography(

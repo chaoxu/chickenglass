@@ -16,6 +16,28 @@ export type ProjectConfig = Omit<FrontmatterConfig, "title">;
 /** Well-known project config file name. */
 export const PROJECT_CONFIG_FILE = "coflat.yaml";
 
+export type ProjectConfigFailureKind = "read" | "parse";
+
+export type ProjectConfigStatus =
+  | { readonly state: "missing"; readonly path: string }
+  | { readonly state: "ok"; readonly path: string }
+  | {
+    readonly state: "error";
+    readonly path: string;
+    readonly kind: ProjectConfigFailureKind;
+    readonly message: string;
+  };
+
+export interface ProjectConfigLoadResult {
+  readonly config: ProjectConfig;
+  readonly status: ProjectConfigStatus;
+}
+
+const missingProjectConfigStatus: ProjectConfigStatus = {
+  state: "missing",
+  path: PROJECT_CONFIG_FILE,
+};
+
 /**
  * CM6 Facet that holds the project-level configuration.
  *
@@ -29,6 +51,16 @@ export const projectConfigFacet = Facet.define<ProjectConfig, ProjectConfig>({
   },
 });
 
+export const projectConfigStatusFacet = Facet.define<ProjectConfigStatus, ProjectConfigStatus>({
+  combine(values) {
+    return values.length > 0 ? values[values.length - 1] : missingProjectConfigStatus;
+  },
+});
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 /**
  * Parse a `coflat.yaml` file into a ProjectConfig.
  *
@@ -37,12 +69,30 @@ export const projectConfigFacet = Facet.define<ProjectConfig, ProjectConfig>({
  * the frontmatter parser.
  */
 export function parseProjectConfig(yaml: string): ProjectConfig {
+  return parseProjectConfigWithStatus(yaml).config;
+}
+
+export function parseProjectConfigWithStatus(yaml: string): ProjectConfigLoadResult {
   const wrapped = `---\n${yaml}\n---\n`;
-  const { config } = parseFrontmatter(wrapped);
+  const { config, status } = parseFrontmatter(wrapped);
 
   // ProjectConfig excludes title (title is always per-file)
   const { title: _title, ...projectConfig } = config;
-  return projectConfig;
+  if (status.state === "error") {
+    return {
+      config: {},
+      status: {
+        state: "error",
+        path: PROJECT_CONFIG_FILE,
+        kind: "parse",
+        message: status.message,
+      },
+    };
+  }
+  return {
+    config: projectConfig,
+    status: { state: "ok", path: PROJECT_CONFIG_FILE },
+  };
 }
 
 /**
@@ -53,16 +103,32 @@ export function parseProjectConfig(yaml: string): ProjectConfig {
 export async function loadProjectConfig(
   fs: FileSystem,
 ): Promise<ProjectConfig> {
+  return (await loadProjectConfigWithStatus(fs)).config;
+}
+
+export async function loadProjectConfigWithStatus(
+  fs: FileSystem,
+): Promise<ProjectConfigLoadResult> {
   try {
     const exists = await fs.exists(PROJECT_CONFIG_FILE);
-    if (!exists) return {};
+    if (!exists) {
+      return { config: {}, status: missingProjectConfigStatus };
+    }
 
     const content = await fs.readFile(PROJECT_CONFIG_FILE);
-    return parseProjectConfig(content);
+    return parseProjectConfigWithStatus(content);
   } catch (e: unknown) {
-    // Config file missing, unreadable, or invalid YAML — use empty config.
+    // Config file checks/read failures use empty config and surface status.
     console.warn("[project-config] failed to load config, using defaults", e);
-    return {};
+    return {
+      config: {},
+      status: {
+        state: "error",
+        path: PROJECT_CONFIG_FILE,
+        kind: "read",
+        message: errorMessage(e, "Unable to read project config"),
+      },
+    };
   }
 }
 

@@ -30,6 +30,13 @@ function getDispatchedStoreIds(dispatch: ReturnType<typeof vi.fn>): string[] {
   return [...lastSpec.effects.value.store.keys()];
 }
 
+function getDispatchedStatus(dispatch: ReturnType<typeof vi.fn>): unknown {
+  const lastSpec = dispatch.mock.calls.at(-1)?.[0] as {
+    effects: { value: { status: unknown } };
+  };
+  return lastSpec.effects.value.status;
+}
+
 const OLD_BIB = `@article{old2000,
   author = {Old, Author},
   title = {Old Paper},
@@ -200,11 +207,50 @@ describe("useBibliography", () => {
       expect(dispatch).toHaveBeenCalledTimes(1);
     });
     expect(getDispatchedStoreIds(dispatch)).toEqual([]);
+    expect(getDispatchedStatus(dispatch)).toEqual(expect.objectContaining({
+      state: "error",
+      kind: "read-bib",
+      bibPath: "refs.bib",
+      cslPath: "styles/custom.csl",
+      message: expect.stringContaining("Unable to read"),
+    }));
     expect(consoleWarn).toHaveBeenCalledWith(
       "[bibliography] failed to load bibliography, using empty data",
       { bibPath: "refs.bib", cslPath: "styles/custom.csl" },
       expect.any(Error),
     );
+    consoleWarn.mockRestore();
+  });
+
+  it("dispatches a CSL style warning while keeping parsed bibliography data", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = {
+      readFile: vi.fn((path: string) => {
+        if (path === "notes/refs.bib") return Promise.resolve(NEW_BIB);
+        if (path === "notes/bad.csl") return Promise.resolve("<style>");
+        throw new Error(`unexpected path: ${path}`);
+      }),
+    } as unknown as FileSystem;
+    const { view, dispatch } = createView();
+    const { result } = renderHook(() => useBibliography({
+      fs,
+      docPath: "notes/doc.md",
+    }));
+
+    act(() => {
+      result.current.loadInitial("refs.bib", "bad.csl", view);
+    });
+
+    await vi.waitFor(() => {
+      expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+    expect(getDispatchedStoreIds(dispatch)).toEqual(["new2001"]);
+    expect(getDispatchedStatus(dispatch)).toEqual(expect.objectContaining({
+      state: "warning",
+      kind: "style-csl",
+      bibPath: "refs.bib",
+      cslPath: "bad.csl",
+    }));
     consoleWarn.mockRestore();
   });
 });
