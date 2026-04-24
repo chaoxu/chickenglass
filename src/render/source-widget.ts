@@ -1,5 +1,6 @@
 import { type EditorView, WidgetType } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
+import type { VisibleSearchState } from "../search/search-matches";
 import { activeFencedDepthAtRange } from "../state/shell-ownership";
 import { activateStructureEditAt } from "../state/cm-structure-edit";
 import {
@@ -41,10 +42,25 @@ export function serializeMacros(macros: Record<string, string>): string {
  * without calling `toDOM()` again.
  */
 export const widgetSourceMap = new WeakMap<HTMLElement, RenderWidget>();
+const widgetSearchHighlightTargets = new WeakMap<EditorView, Set<HTMLElement>>();
 
 export interface WidgetSourceRange {
   readonly from: number;
   readonly to: number;
+}
+
+function lowerBound(
+  matches: readonly { from: number; to: number }[],
+  target: number,
+): number {
+  let lo = 0;
+  let hi = matches.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (matches[mid].to <= target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 function readAppliedFenceDepth(el: HTMLElement): number {
@@ -129,6 +145,77 @@ export function resolveLiveWidgetSourceRange(
   return { from: fallbackFrom, to: fallbackTo };
 }
 
+export function registerWidgetSearchHighlightTarget(
+  view: EditorView,
+  el: HTMLElement,
+): void {
+  const targets = widgetSearchHighlightTargets.get(view);
+  if (targets) {
+    targets.add(el);
+    return;
+  }
+  widgetSearchHighlightTargets.set(view, new Set([el]));
+}
+
+export function syncWidgetSearchHighlightClasses(
+  view: EditorView,
+  el: HTMLElement,
+  searchState: VisibleSearchState,
+): boolean {
+  const sourceRange = resolveLiveWidgetSourceRange(view, el);
+  if (!sourceRange) {
+    el.classList.remove(CSS.searchMatch, CSS.searchMatchSelected);
+    return false;
+  }
+
+  const { from: sourceFrom, to: sourceTo } = sourceRange;
+  const hasSelectedMatch =
+    searchState.activeMatch !== null &&
+    searchState.activeMatch.from < sourceTo &&
+    searchState.activeMatch.to > sourceFrom;
+  let hasMatch = hasSelectedMatch;
+
+  if (!hasMatch) {
+    const startIdx = lowerBound(searchState.matches, sourceFrom);
+    for (let i = startIdx; i < searchState.matches.length; i++) {
+      const match = searchState.matches[i];
+      if (match.from >= sourceTo) break;
+      hasMatch = true;
+      break;
+    }
+  }
+
+  el.classList.toggle(CSS.searchMatch, hasMatch);
+  el.classList.toggle(CSS.searchMatchSelected, hasSelectedMatch);
+  return hasMatch;
+}
+
+export function syncRegisteredWidgetSearchHighlights(
+  view: EditorView,
+  searchState: VisibleSearchState,
+  hadHighlights: boolean,
+): boolean {
+  const targets = widgetSearchHighlightTargets.get(view);
+  if (!targets || (targets.size === 0 && !hadHighlights)) return false;
+
+  let anyHighlighted = false;
+  for (const el of targets) {
+    if (!el.isConnected || !view.dom.contains(el)) {
+      targets.delete(el);
+      continue;
+    }
+    if (searchState.matches.length === 0) {
+      el.classList.remove(CSS.searchMatch, CSS.searchMatchSelected);
+      continue;
+    }
+    if (syncWidgetSearchHighlightClasses(view, el, searchState)) {
+      anyHighlighted = true;
+    }
+  }
+
+  return anyHighlighted;
+}
+
 /**
  * Base class for render widgets that replace document source.
  *
@@ -163,8 +250,12 @@ export abstract class RenderWidget extends BaseRenderWidget {
 
   protected syncWidgetAttrs(
     el: HTMLElement,
+    view?: EditorView,
   ): void {
     this.setSourceRangeAttrs(el);
+    if (view) {
+      registerWidgetSearchHighlightTarget(view, el);
+    }
   }
 
   protected syncFenceGuideOptIn(
@@ -219,7 +310,7 @@ export abstract class RenderWidget extends BaseRenderWidget {
 
   override toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
-    this.syncWidgetAttrs(el);
+    this.syncWidgetAttrs(el, view);
     if (this.sourceFrom >= 0 && view) {
       this.bindSourceReveal(el, view);
     }

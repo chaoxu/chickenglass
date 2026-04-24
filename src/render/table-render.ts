@@ -23,7 +23,7 @@ import {
   type Transaction,
 } from "@codemirror/state";
 import { buildDecorations } from "./decoration-core";
-import { createDecorationStateField } from "./decoration-field";
+import { createLifecycleDecorationStateField } from "./decoration-field";
 import { editorFocusField, focusTracker } from "./focus-state";
 import {
   getTableReferenceRenderDependencySignature,
@@ -168,38 +168,13 @@ function tableMayRenderReferences(
   return state.sliceDoc(table.from, table.to).includes("@");
 }
 
-function filterAffectedTableDecorations(
-  decorations: DecorationSet,
-  affectedTables: readonly Pick<TableRange, "from" | "to">[],
-): DecorationSet {
-  if (affectedTables.length === 0) {
-    return decorations;
-  }
-
-  const sortedTables = [...affectedTables].sort(
-    (left, right) => left.from - right.from,
-  );
-
-  return decorations.update({
-    filter(from, to) {
-      for (const table of sortedTables) {
-        if (table.from > to) break;
-        if (rangeTouchesTable(from, to, table)) return false;
-      }
-      return true;
-    },
-  });
-}
-
-function updateTableDecorationsForDiscoveryChange(
-  value: DecorationSet,
+function collectAffectedTableRenderRanges(
   tr: Transaction,
-): DecorationSet {
+): readonly Pick<TableRange, "from" | "to">[] {
   const { startState, state } = tr;
   const beforeTables = findTablesInState(startState);
   const afterTables = findTablesInState(state);
   const unchangedAfterTables = new Set<TableRange>();
-  const mappedValue = tr.docChanged ? value.map(tr.changes) : value;
   const availableBeforeTablesByKey = new Map<string, TableRange[]>();
 
   for (const beforeTable of beforeTables) {
@@ -230,43 +205,24 @@ function updateTableDecorationsForDiscoveryChange(
     .map((table) => mapTableRangeForDecorations(table, tr));
   const addedOrChangedTables = afterTables
     .filter((table) => !unchangedAfterTables.has(table));
-  const affectedTables = [...removedOrChangedTables, ...addedOrChangedTables];
-
-  if (affectedTables.length === 0) {
-    return mappedValue;
-  }
-
-  const macros = state.field(mathMacrosField);
-  const renderSignature = getTableReferenceRenderDependencySignature(state);
-
-  return filterAffectedTableDecorations(mappedValue, affectedTables).update({
-    add: addedOrChangedTables.map((table) =>
-      buildTableDecorationRange(state, table, macros, renderSignature)
-    ),
-    sort: true,
-  });
+  return [...removedOrChangedTables, ...addedOrChangedTables];
 }
 
-function updateTableDecorationsForReferenceChange(
-  value: DecorationSet,
+function collectTablesInDirtyRanges(
   state: EditorState,
-): DecorationSet {
+  dirtyRanges: readonly Pick<TableRange, "from" | "to">[],
+): Range<Decoration>[] {
+  if (dirtyRanges.length === 0) return [];
+
   const tables = findTablesInState(state).filter((table) =>
-    tableMayRenderReferences(state, table)
+    dirtyRanges.some((range) => rangeTouchesTable(range.from, range.to, table))
   );
-  if (tables.length === 0) {
-    return value;
-  }
 
   const macros = state.field(mathMacrosField);
   const renderSignature = getTableReferenceRenderDependencySignature(state);
-
-  return filterAffectedTableDecorations(value, tables).update({
-    add: tables.map((table) =>
-      buildTableDecorationRange(state, table, macros, renderSignature)
-    ),
-    sort: true,
-  });
+  return tables.map((table) =>
+    buildTableDecorationRange(state, table, macros, renderSignature)
+  );
 }
 
 /**
@@ -275,47 +231,58 @@ function updateTableDecorationsForReferenceChange(
  * Uses a StateField (not ViewPlugin) so that block-level replace decorations
  * (which cross line breaks) are permitted by CM6.
  */
-const tableDecorationField = createDecorationStateField({
+const tableDecorationField = createLifecycleDecorationStateField<Pick<TableRange, "from" | "to">>({
   spanName: "cm6.tableDecorations",
-  create(state) {
+  build(state) {
     return buildTableDecorationsFromState(state);
   },
 
-  update(value, tr) {
+  collectRanges(state, dirtyRanges) {
+    return collectTablesInDirtyRanges(state, dirtyRanges);
+  },
+
+  semanticChanged(beforeState, afterState) {
+    return (
+      tableReferenceRenderDependenciesChanged(beforeState, afterState) ||
+      afterState.field(tableDiscoveryField, false) !== beforeState.field(tableDiscoveryField, false)
+    );
+  },
+
+  shouldRebuild(tr) {
     const cellEdit = tr.annotation(cellEditAnnotation);
+    if (cellEdit === "commit") return true;
+    if (cellEdit === "edit") return false;
+
+    const tableDiscoveryChanged =
+      tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false);
     const referenceDepsChanged = tableReferenceRenderDependenciesChanged(
       tr.startState,
       tr.state,
     );
-    const tableDiscoveryChanged =
-      tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false);
-
-    // Live keystrokes inside the inline cell editor: map existing
-    // decorations through the change so the widget (and its nested
-    // editor) survives. Commits trigger a full rebuild below.
-    if (cellEdit === "edit") {
-      return value.map(tr.changes);
-    }
-
-    if (
-      cellEdit === "commit" ||
-      referenceDepsChanged ||
-      tableDiscoveryChanged
-    ) {
-      if (!referenceDepsChanged && tableDiscoveryChanged && cellEdit !== "commit") {
-        return updateTableDecorationsForDiscoveryChange(value, tr);
-      }
-      if (referenceDepsChanged && !tableDiscoveryChanged && cellEdit !== "commit") {
-        return updateTableDecorationsForReferenceChange(value, tr.state);
-      }
-      return buildTableDecorationsFromState(tr.state);
-    }
-    if (tr.docChanged) {
-      return value.map(tr.changes);
-    }
-    return value;
+    return tableDiscoveryChanged && referenceDepsChanged;
   },
 
+  dirtyRangeFn(tr) {
+    if (tr.annotation(cellEditAnnotation) === "edit") return [];
+
+    const tableDiscoveryChanged =
+      tr.state.field(tableDiscoveryField, false) !== tr.startState.field(tableDiscoveryField, false);
+    if (tableDiscoveryChanged) {
+      return collectAffectedTableRenderRanges(tr);
+    }
+
+    if (tableReferenceRenderDependenciesChanged(tr.startState, tr.state)) {
+      return findTablesInState(tr.state).filter((table) =>
+        tableMayRenderReferences(tr.state, table)
+      );
+    }
+
+    return [];
+  },
+
+  mapDecorations(value, tr) {
+    return tr.docChanged ? value.map(tr.changes) : value;
+  },
 });
 
 /** Standalone DOM event handler for table context menus. */

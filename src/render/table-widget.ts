@@ -19,6 +19,12 @@ import {
   cellEditAnnotation,
   TableWidgetController,
 } from "./table-widget-controller";
+import { focusRootOutsideTableWithRange } from "./table-widget-focus";
+import {
+  bindTableKeyboardEntry,
+  consumeTableKeyboardEvent,
+  type TableKeyboardEntryController,
+} from "./table-widget-keyboard-entry";
 import {
   clearActivePreviewCell,
   clearPreviewCellForOwner,
@@ -51,10 +57,6 @@ import {
   type TableCellNavigationIntent,
 } from "./table-widget-navigation";
 import { TableWidgetShellAdapter } from "./table-widget-shell-adapter";
-import {
-  WIDGET_KEYBOARD_ENTRY_EVENT,
-  type WidgetKeyboardEntryDetail,
-} from "../state/widget-keyboard-entry";
 import { bibDataField } from "../state/bib-data";
 import { getEditorDocumentReferenceCatalog } from "../semantics/editor-reference-catalog";
 import { getOptionalReferenceRenderState } from "../state/reference-render-state";
@@ -64,13 +66,6 @@ import {
 } from "../references/presentation";
 
 export { cellEditAnnotation, shouldCommitBlurredInlineEditor };
-
-const tableKeyboardEntryHandlers = new WeakMap<HTMLElement, EventListener>();
-
-function consumeTableKeyboardEvent(event: KeyboardEvent): void {
-  event.preventDefault();
-  event.stopPropagation();
-}
 
 export function serializeTableWidgetMacros(macros: Record<string, string>): string {
   return JSON.stringify(
@@ -88,7 +83,9 @@ export function serializeTableWidgetMacros(macros: Record<string, string>): stri
  * cursor is not adjacent, and the cell has its own undo/redo stack.
  * Only one cell editor is active at a time.
  */
-export class TableWidget extends ShellWidget implements TableWidgetSessionOwner {
+export class TableWidget extends ShellWidget implements
+  TableKeyboardEntryController,
+  TableWidgetSessionOwner {
   /** Reference to the EditorView, stored on first toDOM() call. */
   private editorView: EditorView | null = null;
   private readonly controller: TableWidgetController;
@@ -192,7 +189,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     container.className = "cf-table-widget";
     container.dataset.tableTextHash = this.tableText;
     container.dataset.tableFrom = String(this.tableFrom);
-    this.syncWidgetAttrs(container);
+    this.syncWidgetAttrs(container, this.editorView ?? undefined);
     container.dataset.activeFenceGuides = "true";
     syncActiveFenceGuideClasses(
       container,
@@ -216,7 +213,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     return true;
   }
 
-  private enterPreviewCellFromKeyboard(
+  enterPreviewCellFromKeyboard(
     container: HTMLElement,
     direction: "up" | "down",
   ): boolean {
@@ -232,23 +229,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
   }
 
   private bindKeyboardEntry(container: HTMLElement): void {
-    const previousHandler = tableKeyboardEntryHandlers.get(container);
-    if (previousHandler) {
-      container.removeEventListener(WIDGET_KEYBOARD_ENTRY_EVENT, previousHandler);
-    }
-
-    const handler = (event: Event): void => {
-      const customEvent = event as CustomEvent<WidgetKeyboardEntryDetail>;
-      const direction = customEvent.detail?.direction;
-      if (direction !== "up" && direction !== "down") return;
-      if (!this.enterPreviewCellFromKeyboard(container, direction)) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    container.addEventListener(WIDGET_KEYBOARD_ENTRY_EVENT, handler);
-    tableKeyboardEntryHandlers.set(container, handler);
+    bindTableKeyboardEntry(container, this);
   }
   private currentTableRange(): TableRange | null {
     return this.controller.currentTableRange();
@@ -267,45 +248,7 @@ export class TableWidget extends ShellWidget implements TableWidgetSessionOwner 
     tableRange: TableRange,
     direction: TableBoundaryHandoffDirection,
   ): boolean {
-    if (!rootView.dom.isConnected) return false;
-
-    const doc = rootView.state.doc;
-    const baselineScrollTop = rootView.scrollDOM.scrollTop;
-    const startLine = doc.lineAt(tableRange.from);
-    const endLine = doc.lineAt(Math.max(tableRange.from, tableRange.to - 1));
-    const targetPos = direction === "before"
-      ? Math.max(0, startLine.from - 1)
-      : Math.min(doc.length, endLine.to + 1);
-    const preserveDirectionalScroll = (): void => {
-      const currentScrollTop = rootView.scrollDOM.scrollTop;
-      const nextScrollTop = direction === "after"
-        ? Math.max(currentScrollTop, baselineScrollTop)
-        : Math.min(currentScrollTop, baselineScrollTop);
-      if (nextScrollTop !== currentScrollTop) {
-        rootView.scrollDOM.scrollTop = nextScrollTop;
-      }
-    };
-
-    clearActivePreviewCell();
-    rootView.dispatch({
-      selection: { anchor: targetPos },
-      scrollIntoView: false,
-      userEvent: "select",
-    });
-    preserveDirectionalScroll();
-    rootView.focus();
-    preserveDirectionalScroll();
-    requestAnimationFrame(() => {
-      if (!rootView.dom.isConnected) return;
-      rootView.focus();
-      rootView.dispatch({
-        selection: { anchor: targetPos },
-        scrollIntoView: false,
-        userEvent: "select",
-      });
-      preserveDirectionalScroll();
-    });
-    return true;
+    return focusRootOutsideTableWithRange(rootView, tableRange, direction);
   }
 
   private buildTableDOM(view: EditorView): HTMLTableElement {

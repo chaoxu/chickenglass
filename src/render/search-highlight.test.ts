@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import type { Extension } from "@codemirror/state";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { StateField, type Extension } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { search } from "@codemirror/search";
@@ -16,17 +16,20 @@ import {
   searchHighlightPlugin,
   shouldUpdateSearchHighlights,
 } from ".";
+import { RenderWidget } from "./source-widget";
 
 const views: EditorView[] = [];
 
-class FakeSearchWidget extends WidgetType {
-  toDOM(): HTMLElement {
+class FakeSearchWidget extends RenderWidget {
+  createDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cf-fake-search-widget";
-    el.dataset.sourceFrom = "0";
-    el.dataset.sourceTo = "5";
     el.textContent = "alpha";
     return el;
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof FakeSearchWidget;
   }
 }
 
@@ -41,6 +44,20 @@ function createSearchView(doc: string, extensions: readonly Extension[] = []): E
   });
   views.push(view);
   return view;
+}
+
+function createMappedFakeWidgetExtension(widget: WidgetType): Extension {
+  return StateField.define({
+    create() {
+      return Decoration.set([
+        Decoration.replace({ widget }).range(0, 5),
+      ]);
+    },
+    update(value, tr) {
+      return tr.docChanged ? value.map(tr.changes) : value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  });
 }
 
 afterEach(() => {
@@ -70,7 +87,12 @@ describe("searchHighlightPlugin", () => {
   it("highlights generic widget-backed matches via data-source metadata", () => {
     const widgetDeco = EditorView.decorations.of(
       Decoration.set([
-        Decoration.replace({ widget: new FakeSearchWidget() }).range(0, 5),
+        Decoration.replace({
+          widget: Object.assign(new FakeSearchWidget(), {
+            sourceFrom: 0,
+            sourceTo: 5,
+          }),
+        }).range(0, 5),
       ]),
     );
     const view = createSearchView("alpha beta", [widgetDeco]);
@@ -84,6 +106,35 @@ describe("searchHighlightPlugin", () => {
       wholeWord: false,
     });
 
+    const widget = view.contentDOM.querySelector(".cf-fake-search-widget");
+    expect(widget?.classList.contains(CSS.searchMatch)).toBe(true);
+  });
+
+  it("keeps registered widget highlights through document changes without data-source DOM queries", () => {
+    const fakeWidget = new FakeSearchWidget();
+    fakeWidget.sourceFrom = 0;
+    fakeWidget.sourceTo = 5;
+    const widgetDeco = createMappedFakeWidgetExtension(fakeWidget);
+    const view = createSearchView("alpha beta", [widgetDeco]);
+
+    openFindSearch(view);
+    const querySelectorAllSpy = vi.spyOn(view.contentDOM, "querySelectorAll")
+      .mockImplementation(() => {
+        throw new Error("search highlight should use registered widgets");
+      });
+
+    expect(() => {
+      setSearchControllerQuery(view, {
+        search: "alpha",
+        replace: "",
+        caseSensitive: false,
+        regexp: false,
+        wholeWord: false,
+      });
+      view.dispatch({ changes: { from: view.state.doc.length, insert: " suffix" } });
+    }).not.toThrow();
+
+    querySelectorAllSpy.mockRestore();
     const widget = view.contentDOM.querySelector(".cf-fake-search-widget");
     expect(widget?.classList.contains(CSS.searchMatch)).toBe(true);
   });

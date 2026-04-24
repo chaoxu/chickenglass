@@ -12,6 +12,7 @@ import {
 import {
   createDecorationStateField,
   createDecorationsField,
+  createLifecycleDecorationStateField,
   cursorSensitiveShouldRebuild,
   defaultShouldRebuild,
 } from "./decoration-field";
@@ -25,6 +26,7 @@ import {
   clearFrontendPerf,
   getFrontendPerfSnapshot,
 } from "../lib/perf";
+import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 
 describe("createDecorationsField", () => {
   let view: EditorView | undefined;
@@ -307,6 +309,58 @@ describe("createDecorationStateField", () => {
     expect(getFrontendPerfSnapshot().recent.map((record) => record.name)).toContain(
       "cm6.testDecorations.update",
     );
+  });
+});
+
+describe("createLifecycleDecorationStateField", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("maps stable document changes through the shared lifecycle contract", () => {
+    const lineDeco = Decoration.line({ class: "test-lifecycle" });
+    let buildCount = 0;
+    const field = createLifecycleDecorationStateField({
+      build(state) {
+        buildCount++;
+        return Decoration.set([lineDeco.range(state.doc.line(2).from)]);
+      },
+      collectRanges: () => [],
+      semanticChanged: () => false,
+    });
+    const state = createEditorState("first\nsecond", { extensions: [field] });
+    expect(buildCount).toBe(1);
+
+    const edited = state.update({ changes: { from: 0, insert: "XX" } }).state;
+
+    expect(buildCount).toBe(1);
+    const cursor = edited.field(field).iter();
+    expect(cursor.from).toBe(8);
+  });
+
+  it("rebuilds programmatic rewrites even when semantic checks report stable state", () => {
+    let buildCount = 0;
+    const field = createLifecycleDecorationStateField({
+      build() {
+        buildCount++;
+        return Decoration.none;
+      },
+      collectRanges: () => [],
+      semanticChanged: () => false,
+    });
+    const state = createEditorState("hello", { extensions: [field] });
+    expect(buildCount).toBe(1);
+
+    const edited = state.update({
+      changes: { from: 0, to: 5, insert: "world" },
+      annotations: programmaticDocumentChangeAnnotation.of(true),
+    }).state;
+    edited.field(field);
+
+    expect(buildCount).toBe(2);
   });
 });
 

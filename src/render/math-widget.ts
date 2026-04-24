@@ -302,7 +302,7 @@ export class MathWidget extends ShellMacroAwareWidget {
     if (!this.isDisplay) return super.toDOM(view);
 
     const el = this.createDOM();
-    this.syncWidgetAttrs(el);
+    this.syncWidgetAttrs(el, view);
     el.dataset.activeFenceGuides = "true";
     syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
 
@@ -357,7 +357,7 @@ export class MathWidget extends ShellMacroAwareWidget {
       renderKatex(dom, this.latex, false, this.macros);
     }
 
-    this.syncWidgetAttrs(dom);
+    this.syncWidgetAttrs(dom, view);
     if (this.isDisplay) {
       dom.dataset.activeFenceGuides = "true";
       syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
