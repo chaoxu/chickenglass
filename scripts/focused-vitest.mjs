@@ -15,22 +15,57 @@ const DEFAULT_ARGS = [
   "--maxWorkers",
   "1",
 ];
+const DEFAULT_RUN_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000;
+const DEFAULT_KILL_GRACE_MS = 5 * 1000;
 
-function terminateChild(child, signal = "SIGTERM") {
+export function terminateChild(child, signal = "SIGTERM", options = {}) {
   if (!child?.pid) {
     return;
   }
 
-  if (process.platform === "win32") {
+  const platform = options.platform ?? process.platform;
+  const processKill = options.processKill ?? process.kill;
+
+  if (platform === "win32") {
     child.kill(signal);
     return;
   }
 
   try {
-    process.kill(-child.pid, signal);
+    processKill(-child.pid, signal);
   } catch (_error) {
     child.kill(signal);
   }
+}
+
+function nonNegativeIntegerEnv(env, name, fallback) {
+  const raw = env[name];
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+export function getFocusedVitestTimeouts(env = process.env) {
+  return {
+    inactivityTimeoutMs: nonNegativeIntegerEnv(
+      env,
+      "FOCUSED_VITEST_INACTIVITY_TIMEOUT_MS",
+      DEFAULT_INACTIVITY_TIMEOUT_MS,
+    ),
+    killGraceMs: nonNegativeIntegerEnv(
+      env,
+      "FOCUSED_VITEST_KILL_GRACE_MS",
+      DEFAULT_KILL_GRACE_MS,
+    ),
+    runTimeoutMs: nonNegativeIntegerEnv(
+      env,
+      "FOCUSED_VITEST_TIMEOUT_MS",
+      DEFAULT_RUN_TIMEOUT_MS,
+    ),
+  };
 }
 
 function looksLikeExplicitTestPath(arg) {
@@ -66,6 +101,108 @@ export function resolvePnpmCommand(platform = process.platform) {
   return platform === "win32" ? "pnpm.cmd" : "pnpm";
 }
 
+function pipeChildOutput(child, streamName, output, onOutput) {
+  child[streamName]?.on("data", (chunk) => {
+    onOutput();
+    output.write(chunk);
+  });
+}
+
+export async function runFocusedVitestRun(runArgs, options = {}) {
+  const spawnFn = options.spawnFn ?? spawn;
+  const stdout = options.stdout ?? process.stdout;
+  const stderr = options.stderr ?? process.stderr;
+  const terminateFn = options.terminateFn ?? terminateChild;
+  const setTimeoutFn = options.setTimeoutFn ?? setTimeout;
+  const clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout;
+  const {
+    inactivityTimeoutMs,
+    killGraceMs,
+    runTimeoutMs,
+  } = {
+    ...getFocusedVitestTimeouts(options.env ?? process.env),
+    ...options.timeouts,
+  };
+
+  return new Promise((resolve, reject) => {
+    const child = spawnFn(resolvePnpmCommand(), buildFocusedVitestArgs(runArgs), {
+      stdio: ["inherit", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+      env: {
+        ...process.env,
+        ...(options.env ?? {}),
+        CI: (options.env ?? process.env).CI ?? "1",
+      },
+    });
+
+    let completed = false;
+    let timedOut = false;
+    let runTimer = null;
+    let inactivityTimer = null;
+    let killTimer = null;
+
+    const clearTimers = () => {
+      if (runTimer !== null) clearTimeoutFn(runTimer);
+      if (inactivityTimer !== null) clearTimeoutFn(inactivityTimer);
+      if (killTimer !== null) clearTimeoutFn(killTimer);
+      runTimer = null;
+      inactivityTimer = null;
+      killTimer = null;
+    };
+
+    const terminateForTimeout = (reason) => {
+      if (completed || timedOut) return;
+      timedOut = true;
+      stderr.write(`[focused-vitest] ${reason}; terminating child process.\n`);
+      terminateFn(child, "SIGTERM");
+      if (killGraceMs > 0) {
+        killTimer = setTimeoutFn(() => terminateFn(child, "SIGKILL"), killGraceMs);
+      }
+    };
+
+    const armInactivityTimer = () => {
+      if (inactivityTimer !== null) clearTimeoutFn(inactivityTimer);
+      if (inactivityTimeoutMs > 0) {
+        inactivityTimer = setTimeoutFn(
+          () => terminateForTimeout(`no output for ${inactivityTimeoutMs}ms`),
+          inactivityTimeoutMs,
+        );
+      }
+    };
+
+    pipeChildOutput(child, "stdout", stdout, armInactivityTimer);
+    pipeChildOutput(child, "stderr", stderr, armInactivityTimer);
+
+    if (runTimeoutMs > 0) {
+      runTimer = setTimeoutFn(
+        () => terminateForTimeout(`run exceeded ${runTimeoutMs}ms`),
+        runTimeoutMs,
+      );
+    }
+    armInactivityTimer();
+
+    child.on("close", (code, signal) => {
+      completed = true;
+      clearTimers();
+      if (timedOut) {
+        resolve(124);
+        return;
+      }
+      if (signal) {
+        resolve(1);
+        return;
+      }
+      resolve(code ?? 1);
+    });
+
+    child.on("error", (error) => {
+      completed = true;
+      clearTimers();
+      reject(error);
+    });
+  });
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const missingPaths = findMissingExplicitPaths(argv);
   if (missingPaths.length > 0) {
@@ -78,7 +215,7 @@ export async function main(argv = process.argv.slice(2)) {
     ? explicitPaths.map((path) => [...sharedArgs, path])
     : [sharedArgs];
 
-  let child = null;
+  let activeChild = null;
 
   let exiting = false;
   const cleanup = (signal = "SIGTERM") => {
@@ -86,7 +223,7 @@ export async function main(argv = process.argv.slice(2)) {
       return;
     }
     exiting = true;
-    terminateChild(child, signal);
+    terminateChild(activeChild, signal);
   };
 
   const handleSignal = (signal, exitCode) => {
@@ -102,26 +239,13 @@ export async function main(argv = process.argv.slice(2)) {
 
   try {
     for (const runArgs of runs) {
-      const exitCode = await new Promise((resolve, reject) => {
-        child = spawn(resolvePnpmCommand(), buildFocusedVitestArgs(runArgs), {
-          stdio: "inherit",
-          detached: process.platform !== "win32",
-          env: {
-            ...process.env,
-            CI: process.env.CI ?? "1",
-          },
-        });
-
-        child.on("exit", (code, signal) => {
-          if (signal) {
-            resolve(1);
-            return;
-          }
-          resolve(code ?? 1);
-        });
-
-        child.on("error", reject);
+      const exitCode = await runFocusedVitestRun(runArgs, {
+        spawnFn(command, args, spawnOptions) {
+          activeChild = spawn(command, args, spawnOptions);
+          return activeChild;
+        },
       });
+      activeChild = null;
 
       if (exitCode !== 0) {
         process.exit(exitCode);

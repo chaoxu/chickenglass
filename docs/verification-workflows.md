@@ -4,7 +4,7 @@ Use these commands when you need automation-safe evidence instead of the broad r
 
 ## Focused Render / State Verification
 
-Use the single-worker Vitest lane for changed-area editor/render/state work. It avoids worker-pool noise and cleans up its child process on exit.
+Use the single-worker Vitest lane for changed-area editor/render/state work. It avoids worker-pool noise, runs explicit test files one at a time, and cleans up its child process on exit.
 
 ```bash
 pnpm test:focused -- src/render/sidenote-render.test.ts
@@ -23,6 +23,15 @@ pnpm test:focused -- \
 ```
 
 If automation is handed an explicit test path that does not exist, `pnpm test:focused -- ...` now fails fast instead of silently falling back to a broader Vitest run.
+
+The wrapper has run and inactivity watchdogs so hung test workers do not trap
+automation. Override only while debugging a known slow case; a value of `0`
+disables that timer for the current command:
+
+```bash
+FOCUSED_VITEST_TIMEOUT_MS=600000 pnpm test:focused -- src/render/reference-render.test.ts
+FOCUSED_VITEST_INACTIVITY_TIMEOUT_MS=300000 pnpm test:focused -- src/render/reference-render.test.ts
+```
 
 ## Browser Regression Lane
 
@@ -75,4 +84,19 @@ Use the explicit check command for root and server TypeScript coverage:
 
 ```bash
 pnpm check:types
+```
+
+## Full Merge Gate
+
+Use the full local merge gate before closing broad implementation or cleanup
+issues:
+
+```bash
+pnpm check:merge
+```
+
+Use the fast pre-push lane for routine pushes:
+
+```bash
+pnpm check:pre-push
 ```

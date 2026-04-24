@@ -1,5 +1,7 @@
 import "@testing-library/jest-dom/vitest";
-import { beforeEach } from "vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach, beforeEach, vi } from "vitest";
+import { clearDocumentAnalysisCache } from "./semantics/incremental/cached-document-analysis";
 import { installLocalStorageMock } from "./test-utils";
 
 if (typeof globalThis.ResizeObserver === "undefined") {
@@ -49,4 +51,13 @@ if (
 
 beforeEach(() => {
   localStorageMock.clear();
+});
+
+afterEach(() => {
+  if (typeof document !== "undefined") {
+    cleanup();
+  }
+  clearDocumentAnalysisCache();
+  vi.clearAllMocks();
+  vi.useRealTimers();
 });

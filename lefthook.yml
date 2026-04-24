@@ -6,9 +6,6 @@ pre-commit:
       run: pnpm check:staged-lint {staged_files}
 
 pre-push:
-  parallel: true
   commands:
-    typecheck:
-      run: pnpm check:types
-    test:
-      run: pnpm check:unit
+    fast-check:
+      run: pnpm check:pre-push

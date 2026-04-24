@@ -58,6 +58,8 @@ pnpm build           # production build (frontend + editor package)
 pnpm build:app       # production app bundle only; does not typecheck
 pnpm build:coflats   # alias for pnpm build
 pnpm check:static    # lint + root/server typecheck + unused-code/deps
+pnpm check:pre-push  # fast local gate: root/server typecheck + custom lints
+pnpm check:merge     # full merge gate: check:static + unit tests
 pnpm check:lint      # bare-catch + import-boundary + Biome lint
 pnpm check:types     # root TypeScript + server TypeScript
 pnpm check:unit      # Vitest unit tests
@@ -67,6 +69,9 @@ pnpm lint:fix        # Biome lint autofix
 pnpm test            # alias for Vitest unit tests
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
+pnpm issue -- list    # tea-safe wrapper for local Gitea issues
+pnpm merge-task -- --branch worker-branch
+                     # print a repeatable rtk-prefixed worker-branch merge plan
 pnpm typecheck       # root TypeScript only
 pnpm tauri:dev       # launch Coflats Tauri desktop app
 pnpm tauri:build     # build Coflats production desktop app bundle
@@ -113,7 +118,7 @@ Configured in `lefthook.yml`, installed automatically on `pnpm install` via the 
 | Hook | Runs | Commands |
 |---|---|---|
 | `pre-commit` | on every commit | `pnpm check:staged-lint {staged_files}` for staged TS/JS/JSON files |
-| `pre-push` | on every push (parallel) | `pnpm check:types`, `pnpm check:unit` |
+| `pre-push` | on every push | `pnpm check:pre-push` |
 
 Skip hooks when needed: `git commit --no-verify` / `git push --no-verify`. Only do that intentionally.
 
@@ -276,19 +281,22 @@ Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` fo
 
 ## Gitea / issue tracking
 
-This repo is hosted on a local Gitea instance at `http://localhost:3001`. Use the **`tea`** CLI (not `gh`, not raw curl) for all issue/PR interactions:
+This repo is hosted on a local Gitea instance at `http://localhost:3001`. Use the repo issue wrapper for issues; it calls **`tea`** with the command order required by the local install. Use raw `tea` only for pulls, PRs, and login inspection. Do not use `gh` or raw curl for forge work.
 
 ```bash
-tea issues --repo chaoxu/coflat                             # list open issues (default verb is list)
-tea issues --repo chaoxu/coflat --state closed              # list closed issues
-tea issues --repo chaoxu/coflat --state closed --limit 30
-tea issues --repo chaoxu/coflat create --title "..." --description "..."
+pnpm issue -- list                                          # list open issues
+pnpm issue -- list --state closed --limit 30
+pnpm issue -- create --title "..." --description "..."
+pnpm issue -- comment <number> "Verification: ..."
+pnpm issue -- close <number>
 tea pulls --repo chaoxu/coflat                              # list pull requests
 tea pr --repo chaoxu/coflat create --title "..." --base main --head <branch>
 tea logins                                                  # show configured logins (default: coflat / chaoxu)
 ```
 
 `tea` is already logged in. The default login points to `http://localhost:3001` as user `chaoxu`.
+
+See `docs/devx-workflow.md` for verification records, worker-agent handoff metadata, and `pnpm merge-task` usage.
 
 ## Workspace hygiene
 
@@ -323,6 +331,7 @@ Every performance issue and PR must include a **before/after measurement** on a 
 Detailed rules and architecture decisions are in reference files -- loaded on demand, not always in context:
 
 - **[Development rules](docs/architecture/development-rules.md)** — rigor mode, dual-editor ownership, CM6 Typora-style rules, Lezer parser rules, testing policy, workflow gates, shell safety. Error handling policy: Never use bare `catch {}` without an explicit reason.
+- **[Devx workflow](docs/devx-workflow.md)** — issue wrapper, verification records, worker branch integration, and check lanes
 - **[Architecture decisions](docs/architecture/architecture-decisions.md)** — Pandoc-free editing, plugin system, FileSystem abstraction, Lezer-everywhere philosophy, library preferences
 - **[Subsystem pattern](docs/architecture/subsystem-pattern.md)** — model/controller/render-adapter seam pattern for non-trivial features. One concept should have one clear owner.
 - **[Inline rendering policy](docs/design/inline-rendering-policy.md)** — how inline math, bold, italic rendering works

@@ -102,12 +102,14 @@
 ## Workflow gates
 
 - **Reviewer/simplifier gate before every commit**: Before `git commit`, ALWAYS launch `pr-review-toolkit:code-reviewer` and `pr-review-toolkit:code-simplifier` in parallel on the diff. Apply findings. Then commit once, clean. Not optional. Subagents use `Skill tool` for the same gates and loop until both pass.
-- **Issue tracking uses Gitea** (`tea` CLI). Forge at `http://localhost:3001`, repo `chaoxu/coflat`. Use `tea issues --repo chaoxu/coflat`, `tea pulls --repo chaoxu/coflat`, `tea pr --repo chaoxu/coflat create`, `tea issues --repo chaoxu/coflat close N`, etc. GitHub mirror kept as `github` remote.
-- **Closure gate before every issue close** (`tea issues --repo chaoxu/coflat close`): Two PreToolUse hooks enforce this:
+- **Issue tracking uses Gitea** (`tea` CLI). Forge at `http://localhost:3001`, repo `chaoxu/coflat`. Use `pnpm issue -- list/create/close` for issues so the local `tea` subcommand order is correct. Use `tea pulls --repo chaoxu/coflat` and `tea pr --repo chaoxu/coflat create` for pulls and PRs. GitHub mirror kept as `github` remote.
+- **Closure gate before every issue close** (`pnpm issue -- close N`): Two PreToolUse hooks enforce this:
   1. `closure-gate.sh` -- blocks issue close unless `.claude/state/closure-verified-N` exists AND contains valid JSON with `{"verdict": "COMPLETE", "criteria": [...]}`. The marker is consumed on close.
   2. `closure-marker-guard.sh` -- blocks any Bash command that touches `closure-verified` files. Markers can only be created via the Write tool by a completeness review agent.
   - The completeness review agent must write the marker with structured JSON after verifying all acceptance criteria in the actual codebase.
   - **After every fix round, re-run the completeness review.** Never close based on fix worker self-reports alone. The review->fix->review loop continues until the review returns COMPLETE or retries are exhausted.
+- **Verification record before close**: Before closing any implementation issue, record the focused command(s), result, and residual risk in the issue/PR/commit. Use `docs/devx-workflow.md` as the canonical shape.
+- **Worker-agent handoff metadata**: Worker branch reports must include issue, branch, base commit/ref, changed paths, verification, and residual risk. Use `pnpm merge-task -- --branch <branch> --check "<command>"` to turn the handoff into a repeatable integration plan.
 
 ## Miscellaneous
 

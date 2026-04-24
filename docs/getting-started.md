@@ -14,6 +14,7 @@ pnpm tauri:dev        # Coflats desktop app (requires Rust toolchain)
 2. **[AGENTS.md](../AGENTS.md)** — commands, project structure, conventions, and tooling reference
 3. **[FORMAT.md](../FORMAT.md)** — the Pandoc-flavored markdown format the editors understand
 4. **[Feature inventory](feature-inventory.md)** — rebuild-oriented checklist of the full current product surface
+5. **[Devx workflow](devx-workflow.md)** — issue wrapper, merge-task helper, and verification record conventions
 
 ## Architecture docs
 
@@ -40,12 +41,17 @@ pnpm dev:show        # stable no-HMR dev server for shared review on localhost:5
 pnpm test:watch      # run tests in watch mode
 pnpm test:focused -- src/render/reference-render.test.ts
                      # automation-safe single-worker render/state verification
+pnpm check:pre-push  # fast local gate used by lefthook pre-push
+pnpm check:merge     # full local merge gate before closing broad issues
 pnpm check:static    # lint + typecheck + unused-code/dependency check
 pnpm check:types     # root + server typecheck
+pnpm issue -- list   # safe local Gitea issue wrapper
+pnpm merge-task -- --branch worker-branch
+                     # print worker-branch integration commands
 pnpm lint:fix        # auto-fix lint issues
 ```
 
-Pre-commit hooks run `pnpm check:staged-lint` on staged files. Pre-push hooks run `pnpm check:types` and `pnpm check:unit`.
+Pre-commit hooks run `pnpm check:staged-lint` on staged files. Pre-push hooks run `pnpm check:pre-push`; run `pnpm check:merge` before merging or closing broad implementation issues.
 
 ## Browser testing
 
