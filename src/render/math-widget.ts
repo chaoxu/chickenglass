@@ -27,6 +27,7 @@ import { cloneRenderedHTMLElement } from "./widget-core";
 
 const displayMathHeightCache = new Map<string, number>();
 const displayMathDomCache = new Map<string, HTMLElement>();
+const inlineMathDomCache = new Map<string, HTMLElement>();
 const DEFAULT_DISPLAY_MATH_HEIGHT_PX = 32;
 const DISPLAY_MATH_EXTRA_LINE_HEIGHT_PX = 14;
 const MAX_ESTIMATED_DISPLAY_MATH_HEIGHT_PX = 96;
@@ -45,6 +46,7 @@ function estimateDisplayMathHeight(latex: string): number {
 export function clearKatexCache(): void {
   clearKatexHtmlCache();
   displayMathDomCache.clear();
+  inlineMathDomCache.clear();
 }
 
 /**
@@ -126,6 +128,7 @@ export class MathWidget extends ShellMacroAwareWidget {
     resizeObserver: null,
     resizeMeasureFrame: null,
   };
+  private readonly inlineDomCacheKey: string;
   private readonly displayMeasurementKey: string;
   private readonly displayDomCacheKey: string;
 
@@ -138,6 +141,10 @@ export class MathWidget extends ShellMacroAwareWidget {
     private readonly equationNumber?: number,
   ) {
     super(macros);
+    this.inlineDomCacheKey = [
+      this.latex,
+      this.macrosKey,
+    ].join("\u0001");
     this.displayMeasurementKey = [
       this.raw,
       this.macrosKey,
@@ -252,17 +259,27 @@ export class MathWidget extends ShellMacroAwareWidget {
     return el;
   }
 
+  private createSharedInlineDOM(): HTMLElement {
+    const cached = inlineMathDomCache.get(this.inlineDomCacheKey);
+    if (cached) {
+      return cloneRenderedHTMLElement(cached);
+    }
+
+    const el = document.createElement("span");
+    el.className = CSS.mathInline;
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", this.latex);
+    renderKatex(el, this.latex, this.isDisplay, this.macros);
+    inlineMathDomCache.set(this.inlineDomCacheKey, cloneRenderedHTMLElement(el));
+    return el;
+  }
+
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
       if (this.isDisplay) {
         return this.createSharedDisplayDOM();
       }
-      const el = document.createElement("span");
-      el.className = CSS.mathInline;
-      el.setAttribute("role", "img");
-      el.setAttribute("aria-label", this.latex);
-      renderKatex(el, this.latex, this.isDisplay, this.macros);
-      return el;
+      return this.createSharedInlineDOM();
     });
   }
 
