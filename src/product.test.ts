@@ -7,7 +7,7 @@ describe("Coflat product config", () => {
     expect(activeCoflatProduct).toMatchObject({
       description: "Semantic document editor for mathematical writing.",
       displayName: "Coflat",
-      id: "coflats",
+      id: "coflat",
     });
   });
 });

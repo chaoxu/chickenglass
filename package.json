@@ -25,7 +25,7 @@
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json",
     "build": "pnpm build:app && pnpm build:editor",
     "build:app": "vite build",
-    "build:coflats": "pnpm build",
+    "build:coflat": "pnpm build",
     "build:editor": "tsc -p tsconfig.editor.json && vite build --config vite.editor.config.ts",
     "check:lint": "pnpm lint:errors && pnpm lint:boundaries && biome lint .",
     "check:staged-lint": "biome lint",

@@ -8,6 +8,7 @@ mod services;
 use commands::state::{
     FileWatcherState, LastFocusedWindow, PerfState, ProjectRoot, remove_window_native_state,
 };
+use services::app_data_migration::migrate_legacy_app_data_dir;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{Manager, WindowEvent};
@@ -56,6 +57,16 @@ fn main() {
             }
         })
         .setup(|app| {
+            match app.path().app_data_dir() {
+                Ok(app_data_dir) => {
+                    if let Err(error) = migrate_legacy_app_data_dir(&app_data_dir) {
+                        eprintln!("[app-data] failed to migrate legacy Coflat data: {error}");
+                    }
+                }
+                Err(error) => {
+                    eprintln!("[app-data] failed to resolve Coflat app data directory: {error}");
+                }
+            }
             let menu = menu::build_menu(app)?;
             app.set_menu(menu)?;
             menu::setup_menu_events(app);

@@ -1,10 +1,10 @@
-# Coflats Feature Inventory
+# Coflat Feature Inventory
 
-This document is the rebuild-oriented product spec for Coflats as it exists
+This document is the rebuild-oriented product spec for Coflat as it exists
 today. It answers a simple question:
 
 What does a replacement implementation need to do before it can honestly claim
-to be "Coflats-compatible"?
+to be "Coflat-compatible"?
 
 Use this alongside:
 
@@ -18,7 +18,7 @@ that a rebuild must preserve.
 
 ## 1. Product Shape
 
-Coflats is a semantic document editor for mathematical writing. The app
+Coflat is a semantic document editor for mathematical writing. The app
 switches between three editor surfaces from the same shell:
 
 - CM6 rich markdown-native editing.
@@ -42,12 +42,12 @@ The defining product qualities are:
 
 ## 2. Runtime Modes
 
-Coflats run in two main environments:
+Coflat runs in two main environments:
 
 - Browser dev mode via Vite, with the demo project loaded by default.
 - Desktop app mode via Tauri, with real filesystem/project access.
 
-Both app products currently expose these document modes:
+Both environments currently expose these document modes:
 
 - `rich`: the primary mode and the main focus of the product
 - `source`: raw markdown editing
@@ -152,7 +152,7 @@ Footnotes are supported as semantic markdown features, including:
 
 ## 4. Semantic Block System
 
-This is one of the Coflats product family's defining features.
+This is one of Coflat's defining features.
 
 The editor treats fenced divs as semantic blocks with plugin-defined behavior.
 
@@ -393,8 +393,8 @@ Important native-facing behavior includes:
 
 ## 11. Debug, Inspection, and Regression Surfaces
 
-These are rebuild requirements too, because they are how the Coflats products
-are debugged and kept stable.
+These are rebuild requirements too, because they are how Coflat is debugged
+and kept stable.
 
 ### 11.1 In-browser debug bridge
 
@@ -477,7 +477,7 @@ A serious rebuild should be able to answer "yes" to all of these:
 - Can it open and save plain markdown files as the shared boundary format?
 - Does CM6 keep markdown as the live source of truth?
 - Does Lexical keep WYSIWYG editing separate from markdown serialization?
-- Does it support the shared Coflats document format, not just generic markdown?
+- Does it support the shared Coflat document format, not just generic markdown?
 - Does CM6 rich mode preserve source-backed Typora-style editing?
 - Does Lexical mode preserve WYSIWYG editing with correct markdown round-trip behavior?
 - Are semantic blocks plugin-driven rather than hardcoded one-offs?
@@ -489,4 +489,4 @@ A serious rebuild should be able to answer "yes" to all of these:
 - Can the public showcase and browser regressions be used as acceptance tests?
 
 If the answer to any of those is "no", the rebuild is missing part of the
-current Coflats feature surface.
+current Coflat feature surface.

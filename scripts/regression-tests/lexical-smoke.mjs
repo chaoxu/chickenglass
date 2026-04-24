@@ -20,8 +20,8 @@ import {
 
 export const name = "lexical-smoke";
 
-const INSERT_MARKER = "COFLATSLEXICALSMOKEINSERT";
-const MODE_SWITCH_MARKER = "COFLATSLEXICALMODESWITCHINSERT";
+const INSERT_MARKER = "COFLATLEXICALSMOKEINSERT";
+const MODE_SWITCH_MARKER = "COFLATLEXICALMODESWITCHINSERT";
 
 const FORMAT_FIXTURE = {
   virtualPath: "format-command.md",
@@ -100,10 +100,10 @@ function createHeavySmokeDoc() {
 
   return [
     "---",
-    "title: Coflats Lexical Smoke",
+    "title: Coflat Lexical Smoke",
     "---",
     "",
-    "# Coflats Lexical Smoke {#sec:intro}",
+    "# Coflat Lexical Smoke {#sec:intro}",
     "",
     "::: {.blockquote}",
     "Canonical blockquote smoke content with $x + y$.",
@@ -123,8 +123,8 @@ function createHeavySmokeDoc() {
 
 function heavyFixture() {
   return {
-    virtualPath: "coflats-lexical-heavy-smoke.md",
-    displayPath: "generated:coflats-lexical-heavy-smoke.md",
+    virtualPath: "coflat-lexical-heavy-smoke.md",
+    displayPath: "generated:coflat-lexical-heavy-smoke.md",
     content: createHeavySmokeDoc(),
   };
 }

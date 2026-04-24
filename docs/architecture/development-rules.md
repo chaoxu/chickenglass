@@ -20,7 +20,7 @@
 
 ## Editor Surface Ownership
 
-- Coflats has one app shell with runtime editor modes: CM6 rich, Lexical WYSIWYG, and CM6 source.
+- Coflat has one app shell with runtime editor modes: CM6 rich, Lexical WYSIWYG, and CM6 source.
 - App-shell features should be shared unless they truly depend on one editor surface.
 - Prefer surface-neutral bridges and types (`__editor`, app hooks, shared semantic stores) when code or tests need to work in both editor surfaces.
 - Keep CM6-only rules in `src/editor`, `src/render`, CM6 state modules, and CM6 regression scripts. Keep Lexical-only rules in `src/lexical` and Lexical smoke/regression paths.

@@ -1,4 +1,4 @@
-# Coflats
+# Coflat
 
 Semantic document editor for mathematical writing. The app can switch at
 runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode. The
@@ -48,7 +48,7 @@ scripts/         # browser harness, CDP helpers, blog import tools
 
 ```bash
 pnpm install         # install dependencies
-pnpm dev             # start Coflats dev server (Vite)
+pnpm dev             # start Coflat dev server (Vite)
 pnpm dev:browser     # start/reuse Vite and launch Chrome for Testing
 pnpm dev:show        # start stable no-HMR dev server on localhost:5173 for demos / shared review
 pnpm preview         # serve the production build on 0.0.0.0 for IPv4 access
@@ -56,7 +56,7 @@ pnpm dev:worktree -- perf-444 --base origin/main --fetch
                      # create an isolated worktree under .worktrees/ from a committed base ref
 pnpm build           # production build (frontend + editor package)
 pnpm build:app       # production app bundle only; does not typecheck
-pnpm build:coflats   # alias for pnpm build
+pnpm build:coflat    # alias for pnpm build
 pnpm check:static    # lint + root/server typecheck + unused-code/deps
 pnpm check:pre-push  # fast local gate: root/server typecheck + architectural lints
 pnpm check:merge     # full merge gate: check:static + unit tests
@@ -76,9 +76,9 @@ pnpm issue -- list    # tea-safe wrapper for local Gitea issues
 pnpm merge-task -- --branch worker-branch
                      # print a repeatable rtk-prefixed worker-branch merge plan
 pnpm typecheck       # root TypeScript only
-pnpm tauri:dev       # launch Coflats Tauri desktop app
-pnpm tauri:build     # build Coflats production desktop app bundle
-pnpm tauri:build:dmg # build Coflats macOS DMG installer
+pnpm tauri:dev       # launch Coflat Tauri desktop app
+pnpm tauri:build     # build Coflat production desktop app bundle
+pnpm tauri:build:dmg # build Coflat macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
 pnpm test:browser:quick
                      # named quick browser lanes: smoke/cm6-rich/lexical/media/navigation/scroll/render/all/one

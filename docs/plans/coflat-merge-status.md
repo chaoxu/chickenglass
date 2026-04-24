@@ -1,7 +1,7 @@
-# Coflats Merge Status
+# Coflat Merge Status
 
 The separate Coflat 2 repository has been archived. This repository is now the
-source of truth for one Coflats app with runtime editor switching:
+source of truth for one Coflat app with runtime editor switching:
 
 - CM6 rich markdown-native editor.
 - Lexical WYSIWYG editor.
@@ -13,7 +13,7 @@ selection happens through the app mode (`cm6-rich`, `lexical`, or `source`).
 
 ## Completed
 
-- Replaced the product split with one Coflats app identity.
+- Replaced the product split with one Coflat app identity.
 - Removed separate build and Tauri commands for product variants.
 - Routed CM6 and Lexical through the shared app shell as runtime editor modes.
 - Ported the Lexical editor into `src/lexical`.
@@ -21,7 +21,7 @@ selection happens through the app mode (`cm6-rich`, `lexical`, or `source`).
 - Removed non-canonical include and provider-specific embed behavior from the
   canonical format path.
 - Verified `FORMAT.md` with Pandoc.
-- Verified `build:coflats`.
+- Verified `build:coflat`.
 - Verified Lexical heavy-document typing with real browser input, save/reopen,
   and source-mode serialization on `fixtures/cogirth/main2.md` and
   `fixtures/rankdecrease/main.md`.
@@ -41,7 +41,7 @@ selection happens through the app mode (`cm6-rich`, `lexical`, or `source`).
 - Audited docs and visible demo/about copy for single-editor assumptions:
   docs now describe runtime editor modes, browser-debug guidance prefers the
   surface-neutral `__editor` bridge, demo prose describes the shared format,
-  and the About dialog shows the unified Coflats app identity.
+  and the About dialog shows the unified Coflat app identity.
 
 ## Coflat 2 Parity Audit
 
@@ -65,7 +65,7 @@ which Coflat 2-only files still fit the merged architecture.
   - Shared browser-regression Lexical smoke in
     `scripts/regression-tests/lexical-smoke.mjs`.
 
-### Already Represented By Current Coflats Code
+### Already Represented By Current Coflat Code
 
 - Lexical editor core, source/rich mode switching, inline token boundary,
   source-position mapping, structure editing, table/math/reference renderers,

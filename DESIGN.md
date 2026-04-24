@@ -1,4 +1,4 @@
-# Coflats — Design Document
+# Coflat — Design Document
 
 ## What is it
 

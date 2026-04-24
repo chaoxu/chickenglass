@@ -40,7 +40,7 @@ describe("product metadata", () => {
 
     expect(pkg.name).toBe("coflat");
     expect(tauri.productName).toBe("Coflat");
-    expect(tauri.identifier).toBe("com.coflats.desktop");
+    expect(tauri.identifier).toBe("com.coflat.desktop");
     expect(readHtmlTitle()).toBe("Coflat");
   });
 

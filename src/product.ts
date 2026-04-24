@@ -1,11 +1,11 @@
 export interface CoflatProductConfig {
-  readonly id: "coflats";
+  readonly id: "coflat";
   readonly displayName: string;
   readonly description: string;
 }
 
 export const activeCoflatProduct: CoflatProductConfig = {
-  id: "coflats",
+  id: "coflat",
   displayName: "Coflat",
   description: "Semantic document editor for mathematical writing.",
 };

@@ -4,13 +4,13 @@
 
 ```bash
 pnpm install
-pnpm dev              # Coflats browser mode with demo content at localhost:5173
-pnpm tauri:dev        # Coflats desktop app (requires Rust toolchain)
+pnpm dev              # Coflat browser mode with demo content at localhost:5173
+pnpm tauri:dev        # Coflat desktop app (requires Rust toolchain)
 ```
 
 ## Reading order
 
-1. **[DESIGN.md](../DESIGN.md)** — what Coflats are, the editing models, and core concepts
+1. **[DESIGN.md](../DESIGN.md)** — what Coflat is, the editing models, and core concepts
 2. **[AGENTS.md](../AGENTS.md)** — commands, project structure, conventions, and tooling reference
 3. **[FORMAT.md](../FORMAT.md)** — the Pandoc-flavored markdown format the editors understand
 4. **[Feature inventory](feature-inventory.md)** — rebuild-oriented checklist of the full current product surface
@@ -28,7 +28,7 @@ Read these when you're working on a specific area:
 
 ## Key concepts
 
-- **One app switches editor surfaces.** Coflats can switch at runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode.
+- **One app switches editor surfaces.** Coflat can switch at runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode.
 - **Markdown is the boundary format for Lexical.** CM6 edits markdown directly. Lexical edits a rich document model and serializes to Pandoc-flavored markdown at load/save boundaries.
 - **Lezer** is the shared markdown structure parser for Coflat's editor surface and shared semantic paths. Pandoc owns document export. Custom markdown extensions live in `src/parser/`.
 - **Rich modes are explicit.** CM6 rich mode is Typora-style source-backed rendering. Lexical mode is WYSIWYG editing with markdown serialization.
@@ -56,10 +56,10 @@ Pre-commit hooks run `pnpm check:staged-lint` on staged files. Pre-push hooks ru
 ## Browser testing
 
 ```bash
-pnpm dev                  # terminal 1, Coflats
+pnpm dev                  # terminal 1, Coflat
 pnpm test:browser         # terminal 2, stable CM6 regression lane
 
-pnpm dev                  # terminal 1, Coflats
+pnpm dev                  # terminal 1, Coflat
 pnpm test:browser:lexical # terminal 2, Lexical smoke lane
 ```
 

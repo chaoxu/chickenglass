@@ -22,7 +22,7 @@ export const name = "lexical-bridge-insert-burst";
 const INSERT_COUNT = 100;
 const TARGET_FIXTURE_KEY = "index";
 const TARGET_POSITION_KEY = "after_frontmatter";
-const INSERT_TEXT = "COFLATSLEXICALBRIDGEINSERTBURST".repeat(4).slice(0, INSERT_COUNT);
+const INSERT_TEXT = "COFLATLEXICALBRIDGEINSERTBURST".repeat(4).slice(0, INSERT_COUNT);
 
 export async function run(page) {
   try {
