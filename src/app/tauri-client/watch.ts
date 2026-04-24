@@ -1,17 +1,17 @@
+import { TAURI_COMMAND_CONTRACT } from "./command-contract";
 import { tauriArgs } from "./make-command";
 
-export interface WatchDirectoryResult {
-  applied: boolean;
-  root: string;
-}
+export type { WatchDirectoryResult } from "./command-contract";
 
-export const watchDirectoryCommand = tauriArgs<WatchDirectoryResult>("watch_directory")(
+const watchCommands = TAURI_COMMAND_CONTRACT.watch;
+
+export const watchDirectoryCommand = tauriArgs(watchCommands.watchDirectory)(
   (path: string, generation: number, debounceMs: number) => ({
     path,
     generation,
     debounceMs,
   }),
 );
-export const unwatchDirectoryCommand = tauriArgs<boolean>("unwatch_directory")(
+export const unwatchDirectoryCommand = tauriArgs(watchCommands.unwatchDirectory)(
   (generation: number) => ({ generation }),
 );

@@ -28,8 +28,8 @@ async function bootstrap(): Promise<void> {
 
   if (isTauri()) {
     configureExternalUrlOpener(async (url) => {
-      const { invokeWithPerf } = await import("./perf");
-      await invokeWithPerf("open_url", { url });
+      const { openUrlCommand } = await import("./tauri-client/shell");
+      await openUrlCommand(url);
       return true;
     });
   }
