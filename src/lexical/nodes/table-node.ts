@@ -9,6 +9,10 @@ import {
 } from "lexical";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../../document-surface-classes";
+import {
   markTableSourceBlock,
   SOURCE_POSITION_DATASET,
 } from "../source-position-contract";
@@ -21,7 +25,10 @@ export type SerializedTableNode = Spread<{
 }, SerializedElementNode>;
 
 function syncTableDom(node: TableNode, dom: HTMLTableElement): void {
-  dom.className = LEXICAL_NODE_CLASS.TABLE_BLOCK;
+  dom.className = documentSurfaceClassNames(
+    DOCUMENT_SURFACE_CLASS.tableBlock,
+    LEXICAL_NODE_CLASS.TABLE_BLOCK,
+  );
   markTableSourceBlock(dom, node.getAlignments().length);
   dom.dataset[SOURCE_POSITION_DATASET.sourceBlockNodeKey] = node.getKey();
 }

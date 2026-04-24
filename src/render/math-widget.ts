@@ -1,6 +1,10 @@
 import type { EditorState } from "@codemirror/state";
 import { type EditorView, WidgetType } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../document-surface-classes";
 import { isPlainPrimaryMouseEvent } from "../state/mouse-selection";
 import { documentAnalysisField } from "../state/document-analysis";
 import type { MathSemantics } from "../semantics/document";
@@ -246,7 +250,10 @@ export class MathWidget extends ShellMacroAwareWidget {
     }
 
     const el = document.createElement("div");
-    el.className = CSS.mathDisplay;
+    el.className = documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.displayMath,
+      CSS.mathDisplay,
+    );
     el.setAttribute("role", "img");
     el.setAttribute("aria-label", this.latex);
     const content = document.createElement("div");
@@ -345,7 +352,9 @@ export class MathWidget extends ShellMacroAwareWidget {
       from.clearDisplayHeightMeasurement();
     }
 
-    dom.className = this.isDisplay ? CSS.mathDisplay : CSS.mathInline;
+    dom.className = this.isDisplay
+      ? documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.displayMath, CSS.mathDisplay)
+      : CSS.mathInline;
     dom.setAttribute("role", "img");
     dom.setAttribute("aria-label", this.latex);
 

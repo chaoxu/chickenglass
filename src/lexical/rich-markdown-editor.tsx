@@ -15,6 +15,10 @@ import {
   useState,
 } from "react";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../document-surface-classes";
 import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 import {
   type FocusOwner,
@@ -174,12 +178,27 @@ export function LexicalRichMarkdownEditor({
   const shellClassName = layoutMode === "inline"
     ? "cf-lexical-surface cf-lexical-surface--inline"
     : showBibliography
-      ? "cf-lexical-surface cf-lexical-surface--scroll"
-      : "cf-lexical-surface cf-lexical-surface--block";
+      ? documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.surface,
+        DOCUMENT_SURFACE_CLASS.surfaceLexical,
+        "cf-lexical-surface cf-lexical-surface--scroll",
+      )
+      : documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.surface,
+        DOCUMENT_SURFACE_CLASS.surfaceLexical,
+        "cf-lexical-surface cf-lexical-surface--block",
+      );
 
   const resolvedEditorClassName = [
+    "cf-lexical-editor",
     editorClassName,
-    layoutMode === "inline" ? "cf-lexical-editor--inline-surface" : "",
+    layoutMode === "inline"
+      ? "cf-lexical-editor--inline-surface"
+      : documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.flow,
+        DOCUMENT_SURFACE_CLASS.flowLexical,
+        "cf-lexical-editor--rich",
+      ),
   ].filter(Boolean).join(" ");
   const effectiveSurface = inheritedSurface ?? surfaceElement;
 

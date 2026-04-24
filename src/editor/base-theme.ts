@@ -17,7 +17,7 @@ export const baseThemeStyles = {
   },
   ".cm-content": {
     fontFamily: "var(--cf-content-font, KaTeX_Main, 'Times New Roman', serif)",
-    padding: `${CONTENT_PADDING_Y} ${CONTENT_PADDING_X} ${CONTENT_PADDING_Y} ${CONTENT_PADDING_X}`,
+    padding: `var(--cf-doc-content-padding-block-start, ${CONTENT_PADDING_Y}) var(--cf-doc-content-padding-inline, ${CONTENT_PADDING_X}) var(--cf-doc-content-padding-block-end, ${CONTENT_PADDING_Y}) var(--cf-doc-content-padding-inline, ${CONTENT_PADDING_X})`,
     maxWidth: `var(--cf-content-max-width, ${CONTENT_MAX_WIDTH})`,
     marginLeft: "auto",
     marginRight: `max(var(--cf-sidenote-width, ${MARGIN_RIGHT_CALC}), calc((100% - var(--cf-content-max-width, ${CONTENT_MAX_WIDTH})) / 2))`,

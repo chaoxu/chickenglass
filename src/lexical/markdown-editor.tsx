@@ -21,6 +21,10 @@ import {
   useState,
 } from "react";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../document-surface-classes";
 import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 import { useDevSettings } from "../state/dev-settings";
 import {
@@ -297,10 +301,21 @@ export function LexicalMarkdownEditor({
 
   const shellClassName = isSourceMode
     ? "cf-lexical-surface cf-lexical-surface--block"
-    : "cf-lexical-surface cf-lexical-surface--scroll";
+    : documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.surface,
+      DOCUMENT_SURFACE_CLASS.surfaceLexical,
+      "cf-lexical-surface cf-lexical-surface--scroll",
+    );
   const resolvedEditorClassName = [
+    "cf-lexical-editor",
     editorClassName,
-    isSourceMode ? "cf-lexical-editor--source" : "cf-lexical-editor--rich",
+    isSourceMode
+      ? "cf-lexical-editor--source"
+      : documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.flow,
+        DOCUMENT_SURFACE_CLASS.flowLexical,
+        "cf-lexical-editor--rich",
+      ),
   ].filter(Boolean).join(" ");
   const effectiveSurface = inheritedSurface ?? surfaceElement;
   const syncSelectionFromEventTarget = useCallback((target: EventTarget | null) => {

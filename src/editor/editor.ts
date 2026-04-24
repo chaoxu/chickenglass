@@ -2,6 +2,10 @@ import { indentUnit, LanguageDescription } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { treeView } from "@overleaf/codemirror-tree-view";
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../document-surface-classes";
 import { defaultPlugins } from "../plugins";
 import { cm6RichRenderExtensions } from "../render/cm6-rich-render-extensions";
 import { coreDocumentStateExtensions } from "../state/document-state-extensions";
@@ -43,6 +47,20 @@ export {
 const fallbackDocument = "# Untitled\n";
 const debugLaneCompartment = new Compartment();
 const defaultDebugLaneExtensions: Extension[] = [];
+const cm6DocumentSurfaceExtensions: Extension[] = [
+  EditorView.editorAttributes.of({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.surface,
+      DOCUMENT_SURFACE_CLASS.surfaceCm6,
+    ),
+  }),
+  EditorView.contentAttributes.of({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.flow,
+      DOCUMENT_SURFACE_CLASS.flowCm6,
+    ),
+  }),
+];
 
 export {
   lineNumbersCompartment,
@@ -155,6 +173,9 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Core document state (frontmatter, semantics, block plugins, caches)
       ...coreDocumentStateExtensions(defaultPlugins),
+
+      // Shared cross-editor document surface contract.
+      ...cm6DocumentSurfaceExtensions,
 
       // Reference/citation completion from semantic + bibliography state
       referenceAutocompleteExtension,

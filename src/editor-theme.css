@@ -157,6 +157,16 @@
   --cf-content-max-width: 800px;
   --cf-sidenote-width: 224px;
   --cf-fence-guide-width: 3px;
+  --cf-doc-content-padding-block-start: 24px;
+  --cf-doc-content-padding-block-end: 64px;
+  --cf-doc-content-padding-inline: 48px;
+  --cf-doc-paragraph-margin: 0.8em 0;
+  --cf-doc-heading-margin: 1.5em 0 0.5em;
+  --cf-doc-list-margin: 0.8em 0;
+  --cf-doc-list-item-margin: 0.2em 0;
+  --cf-doc-code-block-margin: 1em 0;
+  --cf-doc-display-math-margin: 0;
+  --cf-doc-blockquote-margin: 1em 0;
 }
 
 [data-theme="dark"] {
@@ -195,6 +205,21 @@
 .cf-code-font,
 .font-mono {
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
+}
+
+/* ── Shared document surface contract ─────────────────────────────────────── */
+
+.cf-doc-surface {
+  color: var(--cf-fg);
+  background: var(--cf-bg);
+}
+
+.cf-doc-flow {
+  color: var(--cf-fg);
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  font-size: var(--cf-base-font-size, 16px);
+  line-height: var(--cf-line-height, 1.5);
+  text-align: left;
 }
 
 /* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */

@@ -19,6 +19,8 @@ export interface HiddenWidgetStop {
   readonly kind: HiddenWidgetStopKind;
   readonly from: number;
   readonly to: number;
+  readonly contentFrom?: number;
+  readonly contentTo?: number;
   readonly startLine: number;
   readonly endLine: number;
 }
@@ -58,6 +60,7 @@ function hiddenStopFromRange(
   kind: HiddenWidgetStopKind,
   from: number,
   to: number,
+  content?: { readonly contentFrom: number; readonly contentTo: number },
 ): HiddenWidgetStop | null {
   const safeFrom = Math.max(0, Math.min(from, state.doc.length));
   const safeTo = Math.max(safeFrom, Math.min(to, state.doc.length));
@@ -67,6 +70,7 @@ function hiddenStopFromRange(
     kind,
     from: safeFrom,
     to: safeTo,
+    ...content,
     startLine: state.doc.lineAt(safeFrom).number,
     endLine: state.doc.lineAt(endPos).number,
   };
@@ -113,7 +117,10 @@ function collectDisplayMathStops(
   return analysis.analysis.mathRegions
     .filter((region) => region.isDisplay)
     .filter((region) => rangeOverlapsQueryRanges(region, queryRanges))
-    .map((region) => hiddenStopFromRange(state, "display-math", region.from, region.to))
+    .map((region) => hiddenStopFromRange(state, "display-math", region.from, region.to, {
+      contentFrom: region.contentFrom,
+      contentTo: region.contentTo,
+    }))
     .filter((stop): stop is HiddenWidgetStop => stop !== null);
 }
 
@@ -240,7 +247,7 @@ export function firstHiddenWidgetStopBetweenLines(
   forward: boolean,
 ): HiddenWidgetStop | null {
   const hiddenLineStart = Math.min(fromLine, targetLine) + 1;
-  const hiddenLineEnd = Math.max(fromLine, targetLine) - 1;
+  const hiddenLineEnd = Math.max(fromLine, targetLine);
   if (hiddenLineStart > hiddenLineEnd) return null;
 
   const candidates = forward
@@ -268,7 +275,7 @@ export function firstTableStopBetweenLines(
   forward: boolean,
 ): TableRange | null {
   const hiddenLineStart = Math.min(fromLine, targetLine) + 1;
-  const hiddenLineEnd = Math.max(fromLine, targetLine) - 1;
+  const hiddenLineEnd = Math.max(fromLine, targetLine);
   if (hiddenLineStart > hiddenLineEnd) return null;
 
   const candidates = forward

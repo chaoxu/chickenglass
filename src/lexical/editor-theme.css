@@ -44,7 +44,7 @@
   line-height: var(--cf-line-height, 1.5);
   caret-color: var(--cf-fg);
   text-align: left;
-  padding: 24px 48px 64px;
+  padding: var(--cf-doc-content-padding-block-start, 24px) var(--cf-doc-content-padding-inline, 48px) var(--cf-doc-content-padding-block-end, 64px);
 }
 
 .cf-lexical-editor--source {
@@ -54,8 +54,7 @@
 }
 
 .cf-lexical-editor.cf-lexical-editor--rich > * {
-  width: 100%;
-  max-width: var(--cf-content-max-width);
+  max-width: none;
   margin-left: 0;
   margin-right: 0;
 }
@@ -69,7 +68,18 @@
 }
 
 .cf-lexical-editor--rich {
+  width: 100%;
+  max-width: var(--cf-content-max-width);
+  margin-left: auto;
+  margin-right: auto;
   white-space: normal;
+}
+
+.cf-lexical-editor--rich.cf-lexical-editor--inline-surface {
+  width: auto;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .cf-lexical-editor--inline-surface {
@@ -95,7 +105,7 @@
 }
 
 .cf-lexical-paragraph {
-  margin: 0.8em 0;
+  margin: var(--cf-doc-paragraph-margin, 0.8em 0);
   min-height: 1.5em;
 }
 
@@ -128,7 +138,7 @@
 
 .cf-lexical-code-block {
   display: block;
-  margin: 1em 0;
+  margin: var(--cf-doc-code-block-margin, 1em 0);
   padding: 1.9rem 1rem 0.7rem;
   border: 1px solid var(--cf-border);
   border-radius: 0;
@@ -228,14 +238,14 @@
 }
 
 .cf-lexical-quote {
-  margin: 1em 0;
+  margin: var(--cf-doc-blockquote-margin, 1em 0);
   padding-left: 1em;
   border-left: 3px solid var(--cf-blockquote-border);
   color: var(--cf-blockquote-color);
 }
 
 .cf-lexical-list {
-  margin: 0.8em 0;
+  margin: var(--cf-doc-list-margin, 0.8em 0);
 }
 
 .cf-lexical-list--unordered,
@@ -255,7 +265,7 @@
 
 .cf-lexical-list-item {
   display: list-item;
-  margin: 0.2em 0;
+  margin: var(--cf-doc-list-item-margin, 0.2em 0);
 }
 
 .cf-lexical-list--unordered > .cf-lexical-list-item {
@@ -289,42 +299,42 @@
 }
 
 .cf-lexical-heading--h1 {
-  margin: 1.5em 0 0.5em;
+  margin: var(--cf-doc-heading-margin, 1.5em 0 0.5em);
   font-size: var(--cf-h1-size, 1.15em);
   font-style: var(--cf-h1-style, normal);
   font-weight: var(--cf-h1-weight, 700);
 }
 
 .cf-lexical-heading--h2 {
-  margin: 1.5em 0 0.5em;
+  margin: var(--cf-doc-heading-margin, 1.5em 0 0.5em);
   font-size: var(--cf-h2-size, 1.15em);
   font-style: var(--cf-h2-style, italic);
   font-weight: var(--cf-h2-weight, 400);
 }
 
 .cf-lexical-heading--h3 {
-  margin: 1.5em 0 0.5em;
+  margin: var(--cf-doc-heading-margin, 1.5em 0 0.5em);
   font-size: var(--cf-h3-size, 1.1em);
   font-style: var(--cf-h3-style, italic);
   font-weight: var(--cf-h3-weight, 600);
 }
 
 .cf-lexical-heading--h4 {
-  margin: 1.5em 0 0.5em;
+  margin: var(--cf-doc-heading-margin, 1.5em 0 0.5em);
   font-size: var(--cf-h4-size, 1.05em);
   font-style: var(--cf-h4-style, normal);
   font-weight: var(--cf-h4-weight, 600);
 }
 
 .cf-lexical-heading--h5 {
-  margin: 1.5em 0 0.5em;
+  margin: var(--cf-doc-heading-margin, 1.5em 0 0.5em);
   font-size: var(--cf-h5-size, 1em);
   font-style: var(--cf-h5-style, normal);
   font-weight: var(--cf-h5-weight, 600);
 }
 
 .cf-lexical-heading--h6 {
-  margin: 1.5em 0 0.5em;
+  margin: var(--cf-doc-heading-margin, 1.5em 0 0.5em);
   font-size: var(--cf-h6-size, 0.95em);
   font-style: var(--cf-h6-style, normal);
   font-weight: var(--cf-h6-weight, 600);
@@ -621,7 +631,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 1rem;
   align-items: center;
-  margin: 0.5em 0;
+  margin: var(--cf-doc-display-math-margin, 0.5em 0);
   text-align: initial;
 }
 
@@ -629,7 +639,7 @@
   grid-column: 2;
   overflow-x: auto;
   overflow-y: visible;
-  padding-block: 0.35em;
+  padding-block: 0;
   text-align: center;
 }
 

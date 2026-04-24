@@ -127,9 +127,12 @@ function createDisplayMathStructureEditTargetAt(
   const analysis = state.field(documentAnalysisField, false);
   if (!analysis) return null;
   const regions = analysis.mathRegions;
+  const posLine = state.doc.lineAt(pos).number;
   for (const region of regions) {
     if (!region.isDisplay) continue;
-    if (containsPos(region, pos)) {
+    const regionStartLine = state.doc.lineAt(region.from).number;
+    const regionEndLine = state.doc.lineAt(region.to).number;
+    if (containsPos(region, pos) || (posLine >= regionStartLine && posLine <= regionEndLine)) {
       return {
         kind: "display-math",
         from: region.from,
@@ -163,7 +166,18 @@ function mapStructureEditTarget(
 
   if (target.kind === "display-math") {
     const mappedFrom = mapPos(target.from, 1);
-    return createDisplayMathStructureEditTargetAt(state, mappedFrom);
+    const remapped = createDisplayMathStructureEditTargetAt(state, mappedFrom);
+    if (remapped) return remapped;
+    const mappedTo = Math.max(mappedFrom, mapPos(target.to, -1));
+    const mappedContentFrom = Math.max(mappedFrom, mapPos(target.contentFrom, 1));
+    const mappedContentTo = Math.max(mappedContentFrom, mapPos(target.contentTo, -1));
+    return {
+      kind: "display-math",
+      from: mappedFrom,
+      to: mappedTo,
+      contentFrom: mappedContentFrom,
+      contentTo: mappedContentTo,
+    };
   }
 
   const mappedOpenFenceFrom = mapPos(target.openFenceFrom, 1);

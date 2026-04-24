@@ -6,6 +6,10 @@ import markdownItTaskLists from "markdown-it-task-lists";
 import markdownItTexmath from "markdown-it-texmath";
 import katex from "katex";
 
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../../document-surface-classes";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { parseFrontmatter, type FrontmatterConfig } from "../../lib/frontmatter";
 import { scanReferenceRevealTokens } from "../../lib/reference-tokens";
@@ -214,7 +218,7 @@ export function renderDisplayMathHtml(raw: string, options: RichHtmlOptions): st
   const parsed = parseDisplayMathRaw(raw);
   const equation = katex.renderToString(parsed.body, buildKatexOptions(true, options.config?.math));
   const label = parsed.id ? options.renderIndex.references.get(parsed.id)?.shortLabel : undefined;
-  return `<div class="cf-lexical-display-math"><div class="cf-lexical-display-math-body">${equation}</div>${label ? `<div class="cf-lexical-display-math-label">${encodeHtml(label)}</div>` : ""}</div>`;
+  return `<div class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.displayMath, "cf-lexical-display-math")}"><div class="cf-lexical-display-math-body">${equation}</div>${label ? `<div class="cf-lexical-display-math-label">${encodeHtml(label)}</div>` : ""}</div>`;
 }
 
 export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): string {
@@ -228,14 +232,22 @@ export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): stri
   const bodyHtml = renderMarkdownRichHtml(parsed.body, options);
 
   if (viewModel.kind === "blockquote") {
-    return `<blockquote class="cf-lexical-blockquote-shell">${bodyHtml}</blockquote>`;
+    return `<blockquote class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.blockquote, "cf-lexical-blockquote-shell")}">${bodyHtml}</blockquote>`;
   }
 
-  const headerHtml = `<header class="cf-lexical-block-header"><span class="cf-lexical-block-label">${encodeHtml(viewModel.label)}</span>${titleHtml ? `<span class="cf-lexical-block-title">${titleHtml}</span>` : ""}</header>`;
+  const headerHtml = `<header class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.blockHeader, "cf-lexical-block-header")}"><span class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.blockLabel, "cf-lexical-block-label")}">${encodeHtml(viewModel.label)}</span>${titleHtml ? `<span class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.blockTitle, "cf-lexical-block-title")}">${titleHtml}</span>` : ""}</header>`;
+  const sectionClassName = documentSurfaceClassNames(
+    DOCUMENT_SURFACE_CLASS.block,
+    `cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}`,
+  );
+  const bodyClassName = documentSurfaceClassNames(
+    DOCUMENT_SURFACE_CLASS.blockBody,
+    "cf-lexical-block-body",
+  );
   if (viewModel.kind === "captioned") {
-    return `<section class="cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}"><div class="cf-lexical-block-body">${bodyHtml}</div>${headerHtml}</section>`;
+    return `<section class="${sectionClassName}"><div class="${bodyClassName}">${bodyHtml}</div>${headerHtml}</section>`;
   }
-  return `<section class="cf-lexical-block cf-lexical-block--${encodeAttr(parsed.blockType)}">${headerHtml}<div class="cf-lexical-block-body">${bodyHtml}</div></section>`;
+  return `<section class="${sectionClassName}">${headerHtml}<div class="${bodyClassName}">${bodyHtml}</div></section>`;
 }
 
 export function renderMarkdownRichHtml(markdown: string, options: RichHtmlOptions): string {

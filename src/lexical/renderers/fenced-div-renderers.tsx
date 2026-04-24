@@ -2,6 +2,10 @@ import { useCallback, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import type { NodeKey } from "lexical";
 
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../../document-surface-classes";
 import { readVisibleTextDomSelection } from "../dom-selection";
 import { EmbeddedFieldEditor } from "../embedded-field-editor";
 import { createFencedDivViewModel } from "../markdown/fenced-div-view-model";
@@ -93,7 +97,12 @@ function CaptionedBlockRenderer({
   }, [onTitleSelectionChange]);
 
   return (
-    <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`}>
+    <section
+      className={documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.block,
+        `cf-lexical-block cf-lexical-block--${parsed.blockType} cf-lexical-block--captioned`,
+      )}
+    >
       {openerEdit.active ? (
         <FencedDivStructureSourceEditor
           nodeKey={nodeKey}
@@ -101,7 +110,12 @@ function CaptionedBlockRenderer({
           raw={raw}
         />
       ) : null}
-      <div className="cf-lexical-block-body">
+      <div
+        className={documentSurfaceClassNames(
+          DOCUMENT_SURFACE_CLASS.blockBody,
+          "cf-lexical-block-body",
+        )}
+      >
         <EmbeddedFieldEditor
           className={`cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--${parsed.blockType}-body`}
           doc={parsed.bodyMarkdown}
@@ -115,14 +129,28 @@ function CaptionedBlockRenderer({
         />
       </div>
       {parsed.titleMarkdown ? (
-        <footer className="cf-lexical-block-caption">
+        <footer
+          className={documentSurfaceClassNames(
+            DOCUMENT_SURFACE_CLASS.blockCaption,
+            "cf-lexical-block-caption",
+          )}
+        >
           <span
-            className="cf-lexical-block-caption-label cf-lexical-structure-toggle"
+            className={documentSurfaceClassNames(
+              DOCUMENT_SURFACE_CLASS.blockLabel,
+              "cf-lexical-block-caption-label cf-lexical-structure-toggle",
+            )}
             {...structureToggleProps(surfaceEditable, openerEdit.activate)}
           >
             {label}
           </span>
-          <div className="cf-lexical-block-caption-text" ref={captionShellRef}>
+          <div
+            className={documentSurfaceClassNames(
+              DOCUMENT_SURFACE_CLASS.blockTitle,
+              "cf-lexical-block-caption-text",
+            )}
+            ref={captionShellRef}
+          >
             <EmbeddedFieldEditor
               activation="focus"
               className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--caption"
@@ -196,7 +224,12 @@ export function FencedDivBlockRenderer({
 
   if (viewModel.kind === "blockquote") {
     return (
-      <blockquote className="cf-lexical-blockquote-shell">
+      <blockquote
+        className={documentSurfaceClassNames(
+          DOCUMENT_SURFACE_CLASS.blockquote,
+          "cf-lexical-blockquote-shell",
+        )}
+      >
         <EmbeddedFieldEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--blockquote"
           doc={parsed.bodyMarkdown}
@@ -217,7 +250,12 @@ export function FencedDivBlockRenderer({
   }
 
   return (
-    <section className={`cf-lexical-block cf-lexical-block--${parsed.blockType}`}>
+    <section
+      className={documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.block,
+        `cf-lexical-block cf-lexical-block--${parsed.blockType}`,
+      )}
+    >
       {openerEdit.active ? (
         <FencedDivStructureSourceEditor
           nodeKey={nodeKey}
@@ -225,15 +263,29 @@ export function FencedDivBlockRenderer({
           raw={raw}
         />
       ) : null}
-      <header className="cf-lexical-block-header">
+      <header
+        className={documentSurfaceClassNames(
+          DOCUMENT_SURFACE_CLASS.blockHeader,
+          "cf-lexical-block-header",
+        )}
+      >
         <span
-          className="cf-lexical-block-label cf-lexical-structure-toggle"
+          className={documentSurfaceClassNames(
+            DOCUMENT_SURFACE_CLASS.blockLabel,
+            "cf-lexical-block-label cf-lexical-structure-toggle",
+          )}
           {...structureToggleProps(surfaceEditable, openerEdit.activate)}
         >
           {label}
         </span>
         {parsed.titleMarkdown ? (
-          <div className="cf-lexical-block-title" ref={titleShellRef}>
+          <div
+            className={documentSurfaceClassNames(
+              DOCUMENT_SURFACE_CLASS.blockTitle,
+              "cf-lexical-block-title",
+            )}
+            ref={titleShellRef}
+          >
             <EmbeddedFieldEditor
               activation="focus"
               className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--title"
@@ -256,7 +308,12 @@ export function FencedDivBlockRenderer({
           </div>
         ) : null}
       </header>
-      <div className="cf-lexical-block-body">
+      <div
+        className={documentSurfaceClassNames(
+          DOCUMENT_SURFACE_CLASS.blockBody,
+          "cf-lexical-block-body",
+        )}
+      >
         <EmbeddedFieldEditor
           className="cf-lexical-editor cf-lexical-nested-editor cf-lexical-nested-editor--block-body"
           doc={parsed.bodyMarkdown}

@@ -15,6 +15,7 @@ import { type ComponentProps, createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { MemoryFileSystem } from "../app/file-manager";
+import { DOCUMENT_SURFACE_CLASS } from "../document-surface-classes";
 import { FileSystemProvider } from "../filesystem/file-system-context";
 import { setActiveEditor } from "./active-editor-tracker";
 import { LexicalMarkdownEditor } from "./markdown-editor";
@@ -91,6 +92,23 @@ async function mountEditor(overrides: Partial<MarkdownEditorProps> = {}) {
 }
 
 describe("LexicalMarkdownEditor history", () => {
+  it("mounts rich mode on the shared document surface", async () => {
+    const editor = await mountEditor({
+      doc: "# Title",
+      editorMode: "lexical",
+    });
+
+    try {
+      const rootElement = editor.editor.getRootElement();
+      expect(rootElement?.classList.contains("cf-lexical-editor")).toBe(true);
+      expect(rootElement?.classList.contains(DOCUMENT_SURFACE_CLASS.flow)).toBe(true);
+      expect(rootElement?.classList.contains(DOCUMENT_SURFACE_CLASS.flowLexical)).toBe(true);
+      expect(rootElement?.closest(`.${DOCUMENT_SURFACE_CLASS.surfaceLexical}`)).not.toBeNull();
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("does not report mount-only nested field echoes as dirty", async () => {
     const onDirtyChange = vi.fn();
     const onDocChange = vi.fn();

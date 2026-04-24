@@ -3,6 +3,10 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import katex from "katex";
 import { $createParagraphNode, $getNodeByKey, type NodeKey } from "lexical";
 
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../../document-surface-classes";
 import { useLexicalSurfaceEditable } from "../editability-context";
 import { useLexicalRenderContext } from "../render-context";
 import { StructureSourceEditor } from "../structure-source-editor";
@@ -132,7 +136,10 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
 
   return (
     <div
-      className={`cf-lexical-display-math${sourceEdit.active ? " is-editing" : ""}`}
+      className={documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.displayMath,
+        `cf-lexical-display-math${sourceEdit.active ? " is-editing" : ""}`,
+      )}
     >
       {!sourceEdit.active ? (
         <>

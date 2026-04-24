@@ -163,26 +163,22 @@ async function resetFixture(page, mode) {
 async function targetCenter(page, selector) {
   const target = typeof selector === "string" ? { selector } : selector;
   return page.evaluate(({ selector: cssSelector, text }) => {
-    const visibleElements = [...document.querySelectorAll(cssSelector)]
+    const candidates = [...document.querySelectorAll(cssSelector)]
       .filter((element) => element instanceof HTMLElement)
-      .map((element) => {
-        element.scrollIntoView({ block: "center", inline: "nearest" });
-        const rect = element.getBoundingClientRect();
-        return { element, rect };
-      })
-      .filter(({ element, rect }) =>
-        rect.width > 1 &&
-        rect.height > 1 &&
-        (!text || (element.textContent ?? "").includes(text))
-      );
+      .filter((element) => !text || (element.textContent ?? "").includes(text));
 
-    const target = visibleElements[0];
-    if (!target) {
+    const element = candidates[0];
+    if (!(element instanceof HTMLElement)) {
+      return null;
+    }
+    element.scrollIntoView({ block: "center", inline: "nearest" });
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 1 || rect.height <= 1) {
       return null;
     }
 
     if (text) {
-      const walker = document.createTreeWalker(target.element, NodeFilter.SHOW_TEXT);
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         const node = walker.currentNode;
         const value = node.textContent ?? "";
@@ -207,10 +203,10 @@ async function targetCenter(page, selector) {
     }
 
     return {
-      height: target.rect.height,
-      width: target.rect.width,
-      x: target.rect.left + target.rect.width / 2,
-      y: target.rect.top + target.rect.height / 2,
+      height: rect.height,
+      width: rect.width,
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
     };
   }, target);
 }

@@ -1,3 +1,5 @@
+import { DOCUMENT_SURFACE_CLASS } from "../document-surface-classes";
+
 /**
  * Typed constants for all cf-* CSS class names used in decorations.
  *
@@ -9,7 +11,7 @@
 /** CSS class name builders and constants for block decorations. */
 export const CSS = {
   /** Block wrapper: "cf-block cf-block-{type}" */
-  block: (type: string) => `cf-block cf-block-${type}`,
+  block: (type: string) => `${DOCUMENT_SURFACE_CLASS.block} cf-block cf-block-${type}`,
 
   /** Always-on stable-shell debug outline for the active block/frontmatter. */
   activeShell: "cf-active-shell",

@@ -1,4 +1,4 @@
-import { EditorSelection, type SelectionRange } from "@codemirror/state";
+import { EditorSelection, type EditorState, type SelectionRange } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import { type TableRange } from "../state/table-discovery";
 import {
@@ -40,6 +40,33 @@ function findTableWidgetContainer(
     if (tableWidgetContainerMatchesRange(container, table)) return container;
   }
   return null;
+}
+
+function displayMathTargetFromStop(
+  state: EditorState,
+  stop: HiddenWidgetStop,
+): ReturnType<typeof createStructureEditTargetAt> {
+  if (stop.kind !== "display-math") {
+    return null;
+  }
+  const raw = state.doc.sliceString(stop.from, stop.to);
+  const openerLength = raw.startsWith("\\[") ? 2 : raw.startsWith("$$") ? 2 : 0;
+  const closer = raw.startsWith("\\[") ? "\\]" : "$$";
+  const closeIndex = raw.lastIndexOf(closer);
+  const contentFrom = stop.contentFrom ?? stop.from + openerLength;
+  const contentTo = stop.contentTo ??
+    (
+      closeIndex > openerLength
+        ? stop.from + closeIndex
+        : stop.to
+    );
+  return {
+    kind: "display-math",
+    from: stop.from,
+    to: stop.to,
+    contentFrom,
+    contentTo: Math.max(contentFrom, contentTo),
+  };
 }
 
 export function activateTableStop(
@@ -85,7 +112,23 @@ export function activateHiddenWidgetStop(
 ): number | null {
   const lineForStop = view.state.doc.lineAt(stop.from).number;
   const targetPos = forward ? stop.from : Math.max(stop.from, stop.to - 1);
-  const target = createStructureEditTargetAt(view.state, targetPos);
+  const target = createStructureEditTargetAt(view.state, targetPos) ??
+    (() => {
+      if (stop.kind !== "display-math") return null;
+      const contentLineNumber = Math.min(stop.endLine, stop.startLine + 1);
+      const contentLine = view.state.doc.line(contentLineNumber);
+      const candidates = [
+        stop.from,
+        Math.max(stop.from, stop.to - 1),
+        Math.floor((stop.from + stop.to) / 2),
+        contentLine.from,
+      ];
+      for (const candidate of candidates) {
+        const resolved = createStructureEditTargetAt(view.state, candidate);
+        if (resolved?.kind === "display-math") return resolved;
+      }
+      return displayMathTargetFromStop(view.state, stop);
+    })();
 
   if (target?.kind === "display-math") {
     const anchor = forward ? target.contentFrom : target.contentTo;

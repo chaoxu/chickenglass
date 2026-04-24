@@ -27,6 +27,10 @@ import {
 } from "./link-handler";
 import { addInlineRevealSourceMetricsInSubtree } from "./markdown-inline-source";
 import { CSS } from "../constants/css-classes";
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../document-surface-classes";
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
@@ -44,12 +48,48 @@ const headingMarkByLevel: Record<string, Decoration> = {
  * rather than only text spans wrapped by Decoration.mark.
  */
 const headingLineByLevel: Record<string, Decoration> = {
-  ATXHeading1: Decoration.line({ class: "cf-heading-line-1" }),
-  ATXHeading2: Decoration.line({ class: "cf-heading-line-2" }),
-  ATXHeading3: Decoration.line({ class: "cf-heading-line-3" }),
-  ATXHeading4: Decoration.line({ class: "cf-heading-line-4" }),
-  ATXHeading5: Decoration.line({ class: "cf-heading-line-5" }),
-  ATXHeading6: Decoration.line({ class: "cf-heading-line-6" }),
+  ATXHeading1: Decoration.line({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(1),
+      "cf-heading-line-1",
+    ),
+  }),
+  ATXHeading2: Decoration.line({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(2),
+      "cf-heading-line-2",
+    ),
+  }),
+  ATXHeading3: Decoration.line({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(3),
+      "cf-heading-line-3",
+    ),
+  }),
+  ATXHeading4: Decoration.line({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(4),
+      "cf-heading-line-4",
+    ),
+  }),
+  ATXHeading5: Decoration.line({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(5),
+      "cf-heading-line-5",
+    ),
+  }),
+  ATXHeading6: Decoration.line({
+    class: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(6),
+      "cf-heading-line-6",
+    ),
+  }),
 };
 
 /** Decoration to style horizontal rules. */

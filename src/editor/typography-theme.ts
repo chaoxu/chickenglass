@@ -71,12 +71,48 @@ export const typographyThemeStyles = {
   /* Heading line styles — font-size on .cm-line so all children (including
    * math widgets) inherit it. Uses CSS variables from theme-config.ts so
    * presets can override sizes. */
-  ".cf-heading-line-1": { fontSize: "var(--cf-h1-size, 1.15em)", lineHeight: "1.3", color: "var(--cf-fg)" },
-  ".cf-heading-line-2": { fontSize: "var(--cf-h2-size, 1.15em)", lineHeight: "1.3", color: "var(--cf-fg)" },
-  ".cf-heading-line-3": { fontSize: "var(--cf-h3-size, 1.1em)", lineHeight: "1.4", color: "var(--cf-fg)" },
-  ".cf-heading-line-4": { fontSize: "var(--cf-h4-size, 1.05em)", lineHeight: "1.4", color: "var(--cf-fg)" },
-  ".cf-heading-line-5": { fontSize: "var(--cf-h5-size, 1em)", lineHeight: "1.5", color: "var(--cf-fg)" },
-  ".cf-heading-line-6": { fontSize: "var(--cf-h6-size, 0.95em)", lineHeight: "1.5", color: "var(--cf-fg)" },
+  ".cf-heading-line-1": {
+    fontSize: "var(--cf-h1-size, 1.15em)",
+    fontStyle: "var(--cf-h1-style, normal)",
+    fontWeight: "var(--cf-h1-weight, 700)",
+    lineHeight: "1.3",
+    color: "var(--cf-fg)",
+  },
+  ".cf-heading-line-2": {
+    fontSize: "var(--cf-h2-size, 1.15em)",
+    fontStyle: "var(--cf-h2-style, italic)",
+    fontWeight: "var(--cf-h2-weight, 400)",
+    lineHeight: "1.3",
+    color: "var(--cf-fg)",
+  },
+  ".cf-heading-line-3": {
+    fontSize: "var(--cf-h3-size, 1.1em)",
+    fontStyle: "var(--cf-h3-style, italic)",
+    fontWeight: "var(--cf-h3-weight, 600)",
+    lineHeight: "1.4",
+    color: "var(--cf-fg)",
+  },
+  ".cf-heading-line-4": {
+    fontSize: "var(--cf-h4-size, 1.05em)",
+    fontStyle: "var(--cf-h4-style, normal)",
+    fontWeight: "var(--cf-h4-weight, 600)",
+    lineHeight: "1.4",
+    color: "var(--cf-fg)",
+  },
+  ".cf-heading-line-5": {
+    fontSize: "var(--cf-h5-size, 1em)",
+    fontStyle: "var(--cf-h5-style, normal)",
+    fontWeight: "var(--cf-h5-weight, 600)",
+    lineHeight: "1.5",
+    color: "var(--cf-fg)",
+  },
+  ".cf-heading-line-6": {
+    fontSize: "var(--cf-h6-size, 0.95em)",
+    fontStyle: "var(--cf-h6-style, normal)",
+    fontWeight: "var(--cf-h6-weight, 600)",
+    lineHeight: "1.5",
+    color: "var(--cf-fg)",
+  },
 
   /* Heading mark styles — font-weight/style on text spans.
    * Uses CSS variables from theme-config.ts so presets can override. */

@@ -50,13 +50,15 @@ export function planVerticalMotionStop(
   landedHead: number,
   forward: boolean,
 ): VerticalMotionStopPlan | null {
+  const landedWidgetStop = hiddenWidgetStopAtPos(index, landedHead);
+  const landedTableStop = tableStopAtPos(index, landedHead);
   const hiddenWidgetStop = firstHiddenWidgetStopBetweenLines(
     index,
     beforeLine,
     rawTargetLine,
     forward,
   );
-  if (hiddenWidgetStop) {
+  if (hiddenWidgetStop && hiddenWidgetStop !== landedWidgetStop) {
     return { kind: "hidden-crossed", stop: hiddenWidgetStop };
   }
 
@@ -66,16 +68,14 @@ export function planVerticalMotionStop(
     rawTargetLine,
     forward,
   );
-  if (crossedTableStop) {
+  if (crossedTableStop && crossedTableStop !== landedTableStop) {
     return { kind: "table-crossed", table: crossedTableStop };
   }
 
-  const landedWidgetStop = hiddenWidgetStopAtPos(index, landedHead);
   if (landedWidgetStop) {
     return { kind: "hidden-landed", stop: landedWidgetStop };
   }
 
-  const landedTableStop = tableStopAtPos(index, landedHead);
   if (landedTableStop) {
     return { kind: "table-landed", table: landedTableStop };
   }

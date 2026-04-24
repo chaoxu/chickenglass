@@ -5,6 +5,10 @@ import { ListItemNode, ListNode } from "@lexical/list";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import type { EditorThemeClasses, LexicalEditor } from "lexical";
 
+import {
+  DOCUMENT_SURFACE_CLASS,
+  documentSurfaceClassNames,
+} from "../document-surface-classes";
 import { FootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { HeadingAttributeNode } from "./nodes/heading-attribute-node";
 import { InlineImageNode } from "./nodes/inline-image-node";
@@ -69,33 +73,87 @@ const codeHighlightTokens = [
 
 export const lexicalMarkdownTheme: EditorThemeClasses = {
   root: "cf-lexical-root",
-  paragraph: "cf-lexical-paragraph",
-  quote: "cf-lexical-quote",
+  paragraph: documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.paragraph, "cf-lexical-paragraph"),
+  quote: documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.blockquote, "cf-lexical-quote"),
   heading: {
-    h1: "cf-lexical-heading cf-lexical-heading--h1",
-    h2: "cf-lexical-heading cf-lexical-heading--h2",
-    h3: "cf-lexical-heading cf-lexical-heading--h3",
-    h4: "cf-lexical-heading cf-lexical-heading--h4",
-    h5: "cf-lexical-heading cf-lexical-heading--h5",
-    h6: "cf-lexical-heading cf-lexical-heading--h6",
+    h1: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(1),
+      "cf-lexical-heading cf-lexical-heading--h1",
+    ),
+    h2: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(2),
+      "cf-lexical-heading cf-lexical-heading--h2",
+    ),
+    h3: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(3),
+      "cf-lexical-heading cf-lexical-heading--h3",
+    ),
+    h4: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(4),
+      "cf-lexical-heading cf-lexical-heading--h4",
+    ),
+    h5: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(5),
+      "cf-lexical-heading cf-lexical-heading--h5",
+    ),
+    h6: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.heading,
+      DOCUMENT_SURFACE_CLASS.headingLevel(6),
+      "cf-lexical-heading cf-lexical-heading--h6",
+    ),
   },
   list: {
-    checklist: "cf-lexical-list cf-lexical-list--check",
-    listitem: "cf-lexical-list-item",
-    listitemChecked: "cf-lexical-list-item cf-lexical-list-item--checked",
-    listitemUnchecked: "cf-lexical-list-item cf-lexical-list-item--unchecked",
+    checklist: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.list,
+      DOCUMENT_SURFACE_CLASS.listCheck,
+      "cf-lexical-list cf-lexical-list--check",
+    ),
+    listitem: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.listItem,
+      "cf-lexical-list-item",
+    ),
+    listitemChecked: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.listItem,
+      "cf-lexical-list-item cf-lexical-list-item--checked",
+    ),
+    listitemUnchecked: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.listItem,
+      "cf-lexical-list-item cf-lexical-list-item--unchecked",
+    ),
     nested: {
-      listitem: "cf-lexical-list-item--nested",
+      listitem: documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.listItem,
+        "cf-lexical-list-item--nested",
+      ),
     },
-    ol: "cf-lexical-list cf-lexical-list--ordered",
-    ul: "cf-lexical-list cf-lexical-list--unordered",
+    ol: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.list,
+      DOCUMENT_SURFACE_CLASS.listOrdered,
+      "cf-lexical-list cf-lexical-list--ordered",
+    ),
+    ul: documentSurfaceClassNames(
+      DOCUMENT_SURFACE_CLASS.list,
+      DOCUMENT_SURFACE_CLASS.listUnordered,
+      "cf-lexical-list cf-lexical-list--unordered",
+    ),
   },
-  link: "cf-lexical-link",
-  code: "cf-lexical-code-block block",
+  link: documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.link, "cf-lexical-link"),
+  code: documentSurfaceClassNames(
+    DOCUMENT_SURFACE_CLASS.codeBlock,
+    "cf-lexical-code-block block",
+  ),
   codeHighlight: Object.fromEntries(
     codeHighlightTokens.map((token) => [
       token,
-      `cf-lexical-code-token cf-lexical-code-token--${token}`,
+      documentSurfaceClassNames(
+        DOCUMENT_SURFACE_CLASS.codeToken,
+        `cf-lexical-code-token cf-lexical-code-token--${token}`,
+      ),
     ]),
   ) as NonNullable<EditorThemeClasses["codeHighlight"]>,
   text: Object.fromEntries(

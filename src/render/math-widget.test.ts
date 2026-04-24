@@ -57,7 +57,7 @@ describe("MathWidget (display)", () => {
     const widget = new MathWidget("x^2", "$$x^2$$", true);
     const el = widget.toDOM();
     expect(el.tagName).toBe("DIV");
-    expect(el.className).toBe(CSS.mathDisplay);
+    expect(el.classList.contains(CSS.mathDisplay)).toBe(true);
   });
 
   it("renders an equation number when provided", () => {
