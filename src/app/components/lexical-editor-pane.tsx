@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { EditorMode } from "../../editor-display-mode";
 import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
 import { REVEAL_MODE, type RevealMode } from "../../lexical/reveal-mode";
