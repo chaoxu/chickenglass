@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
@@ -186,18 +185,13 @@ export function candidateSiblingTests(path) {
     return [];
   }
   const base = withoutCodeExtension(normalized);
-  const directory = dirname(normalized);
-  const basename = base.split("/").pop();
-  return unique([
+  return [
     `${base}.test.ts`,
     `${base}.test.tsx`,
     `${base}.test.mjs`,
     `${base}.spec.ts`,
     `${base}.spec.tsx`,
-    `${directory}/${basename}.test.ts`,
-    `${directory}/${basename}.test.tsx`,
-    `${directory}/${basename}.test.mjs`,
-  ]);
+  ];
 }
 
 function findExistingTests(paths, exists = existsSync) {
