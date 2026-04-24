@@ -127,7 +127,6 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   /** Current best-effort save operation state for the active document. */
   saveActivity: SaveActivity;
-
   // --- Navigation ---
 
   /**

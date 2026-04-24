@@ -18,6 +18,8 @@ import {
   listTreeCommand,
   type OpenFolderResult,
   openFolderCommand,
+  probeFolderCommand,
+  type ProbeFolderResult,
   readFileBinaryCommand,
   readFileCommand,
   renameFileCommand,
@@ -53,6 +55,14 @@ export async function pickFolder(): Promise<string | null> {
 export async function openFolderAt(path: string, generation: number): Promise<OpenFolderResult> {
   latestProjectRootGeneration = Math.max(latestProjectRootGeneration, generation);
   return openFolderCommand(path, generation);
+}
+
+/**
+ * Validate and shallow-load a native folder without changing the active
+ * backend project root for this window.
+ */
+export async function probeFolderAt(path: string): Promise<ProbeFolderResult> {
+  return probeFolderCommand(path);
 }
 
 /**

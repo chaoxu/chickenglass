@@ -139,19 +139,29 @@ function AppInner() {
   const flushPendingHotExitBackup = useCallback(async () => {
     await flushHotExitBackupRef.current?.();
   }, []);
+  const handleAfterSave = useCallback(async (path: string) => {
+    deleteHotExitBackup(path);
+    await workspace.reloadProjectConfig(path);
+  }, [deleteHotExitBackup, workspace.reloadProjectConfig]);
 
   const editor = useAppEditorShell({
     fs,
     settings: workspace.settings,
     refreshTree: workspace.refreshTree,
     addRecentFile: workspace.addRecentFile,
-    onAfterSave: deleteHotExitBackup,
+    onAfterSave: handleAfterSave,
     onAfterPathRemoved: deleteHotExitBackup,
     onAfterDiscard: deleteHotExitBackup,
     flushPendingHotExitBackup,
     flushPendingAutoSave,
     requestUnsavedChangesDecision: unsavedChanges.requestDecision,
   });
+  const handleWatchedPathChange = useCallback((path: string) => {
+    editor.handleWatchedPathChange(path);
+    void workspace.reloadProjectConfig(path).catch((error: unknown) => {
+      console.error("[workspace] project config reload after watched change failed", error);
+    });
+  }, [editor.handleWatchedPathChange, workspace.reloadProjectConfig]);
 
   const autoSave = useAutoSave(
     editor.hasDirtyDocument,
@@ -260,7 +270,7 @@ function AppInner() {
   useProjectFileWatcher({
     projectRoot: workspace.projectRoot,
     refreshTree: workspace.refreshTree,
-    handleWatchedPathChange: editor.handleWatchedPathChange,
+    handleWatchedPathChange,
     syncExternalChange: editor.syncExternalChange,
   });
 

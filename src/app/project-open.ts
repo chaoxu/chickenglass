@@ -11,7 +11,11 @@ export interface OpenProjectInCurrentWindowOptions {
   isRequestCurrent: (requestId: number) => boolean;
   cancelPendingOpenFile: () => void;
   closeCurrentFile: () => Promise<boolean>;
-  openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
+  probeProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
+  openProjectRoot: (
+    path: string,
+    preloaded?: ProjectOpenResult | null,
+  ) => Promise<ProjectOpenResult | null>;
   canonicalizeProjectRoot?: (path: string) => Promise<string>;
   openFile: (path: string) => Promise<void>;
   restoreDocumentFromRecovery?: (
@@ -34,6 +38,7 @@ export async function openProjectInCurrentWindow({
   isRequestCurrent,
   cancelPendingOpenFile,
   closeCurrentFile,
+  probeProjectRoot,
   openProjectRoot,
   canonicalizeProjectRoot,
   openFile,
@@ -65,6 +70,11 @@ export async function openProjectInCurrentWindow({
     return isRequestCurrent(requestId);
   }
 
+  const targetProject = await probeProjectRoot(projectRoot);
+  if (!targetProject || !isRequestCurrent(requestId)) {
+    return false;
+  }
+
   const closed = await closeCurrentFile();
   if (!isRequestCurrent(requestId)) {
     return false;
@@ -73,7 +83,7 @@ export async function openProjectInCurrentWindow({
     return false;
   }
 
-  const result = await openProjectRoot(projectRoot);
+  const result = await openProjectRoot(projectRoot, targetProject);
   if (!result || !isRequestCurrent(requestId)) {
     return false;
   }

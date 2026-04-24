@@ -8,11 +8,13 @@ use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{
     filesystem::{self, ConditionalTextWriteResult},
-    path::{ProjectPathResolver, path_to_frontend_string},
+    path::{ProjectPathResolver, file_name_to_frontend_string, path_to_frontend_string},
 };
 
 const OPEN_FOLDER: CommandSpec =
     CommandSpec::new("tauri.open_folder", "tauri.fs.open_folder", "tauri");
+const PROBE_FOLDER: CommandSpec =
+    CommandSpec::new("tauri.probe_folder", "tauri.fs.probe_folder", "tauri");
 const READ_FILE: CommandSpec = CommandSpec::new("tauri.read_file", "tauri.fs.read_file", "tauri");
 const WRITE_FILE: CommandSpec =
     CommandSpec::new("tauri.write_file", "tauri.fs.write_file", "tauri");
@@ -65,6 +67,13 @@ pub struct OpenFolderResult {
     pub root: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeFolderResult {
+    pub root: String,
+    pub tree: FileEntry,
+}
+
 fn fnv1a_hash(content: &str) -> String {
     let mut hash: u32 = 0x811c9dc5;
     for unit in content.encode_utf16() {
@@ -85,6 +94,13 @@ pub fn open_folder(
     run_command(&perf, OPEN_FOLDER, Some(&path), || {
         let mut lock = root.0.lock().map_err(|e| e.to_string())?;
         open_project_root(&mut lock, window.label(), &path, generation)
+    })
+}
+
+#[command]
+pub fn probe_folder(perf: State<'_, PerfState>, path: String) -> Result<ProbeFolderResult, String> {
+    run_command(&perf, PROBE_FOLDER, Some(&path), || {
+        probe_project_root(&path)
     })
 }
 
@@ -340,11 +356,35 @@ fn open_project_root(
     Ok(OpenFolderResult { applied, root })
 }
 
+fn probe_project_root(path: &str) -> Result<ProbeFolderResult, String> {
+    let path = PathBuf::from(path);
+    if !path.is_dir() {
+        return Err(format!("Not a directory: {}", path.display()));
+    }
+    let canonical = map_err_str!(path.canonicalize(), "Cannot resolve path: {}")?;
+    let root = path_to_frontend_string(&canonical, "Project root path")?;
+    let name = canonical
+        .file_name()
+        .map(|name| file_name_to_frontend_string(name, "Project root name"))
+        .transpose()?
+        .unwrap_or_else(|| "project".to_string());
+    let children = filesystem::list_children(&canonical, "")?;
+    Ok(ProbeFolderResult {
+        root,
+        tree: FileEntry {
+            name,
+            path: "".to_string(),
+            is_directory: true,
+            children: Some(children),
+        },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         create_directory_at_project_root, create_file_at_project_root, fnv1a_hash,
-        open_project_root, write_binary_file_at_project_root,
+        open_project_root, probe_project_root, write_binary_file_at_project_root,
     };
     use crate::commands::state::ProjectRootEntry;
     use base64::Engine;
@@ -529,5 +569,22 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&current);
+    }
+
+    #[test]
+    fn probe_project_root_lists_without_installing_root() {
+        let root = create_temp_dir("probe-root");
+        fs::write(root.join("notes.md"), "# Notes").expect("write notes");
+        fs::create_dir(root.join("docs")).expect("create docs");
+
+        let result = probe_project_root(root.to_str().expect("root should be utf-8"))
+            .expect("probe project root");
+
+        assert_eq!(result.root, root.to_str().expect("root should be utf-8"));
+        let children = result.tree.children.expect("root children");
+        assert!(children.iter().any(|entry| entry.path == "notes.md"));
+        assert!(children.iter().any(|entry| entry.path == "docs"));
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

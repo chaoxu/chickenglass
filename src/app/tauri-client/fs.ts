@@ -2,12 +2,15 @@ import { TAURI_COMMAND_CONTRACT } from "./command-contract";
 import { tauriArgs, tauriCommand } from "./make-command";
 import { projectFilePath } from "../../lib/project-file-paths";
 
-export type { OpenFolderResult } from "./command-contract";
+export type { OpenFolderResult, ProbeFolderResult } from "./command-contract";
 
 const fsCommands = TAURI_COMMAND_CONTRACT.fs;
 
 export const openFolderCommand = tauriArgs(fsCommands.openFolder)(
   (path: string, generation: number) => ({ path, generation }),
+);
+export const probeFolderCommand = tauriArgs(fsCommands.probeFolder)(
+  (path: string) => ({ path }),
 );
 export const listTreeCommand = tauriCommand(fsCommands.listTree);
 export const listChildrenCommand = tauriArgs(fsCommands.listChildren)(

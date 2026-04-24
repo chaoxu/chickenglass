@@ -409,6 +409,28 @@ describe("FileWatcher", () => {
     expect(refreshTreeSpy).not.toHaveBeenCalled();
   });
 
+  it("routes modify-only coflat.yaml events through the watched-path handler without tree refresh", async () => {
+    const refreshTree = vi.fn(async (_path?: string) => {});
+    const handleWatchedPathChange = vi.fn();
+    const { watcher, refreshTree: refreshTreeSpy } = createWatcher({
+      refreshTree,
+      handleWatchedPathChange,
+      syncExternalChange: async () => "ignore",
+    });
+    const handleFileChanged = (
+      watcher as unknown as {
+        handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+      }
+    ).handleFileChanged.bind(watcher as unknown as {
+      handleFileChanged: (payload: { path: string; treeChanged: boolean }) => Promise<void>;
+    });
+
+    await handleFileChanged({ path: "coflat.yaml", treeChanged: false });
+
+    expect(handleWatchedPathChange).toHaveBeenCalledWith("coflat.yaml");
+    expect(refreshTreeSpy).not.toHaveBeenCalled();
+  });
+
   it("runs the watched-path handler even when the changed file is not open", async () => {
     const handleWatchedPathChange = vi.fn();
     const { watcher } = createWatcher({

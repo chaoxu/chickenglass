@@ -25,6 +25,7 @@ export type TauriCommandGroupContract = Readonly<
 export const TAURI_COMMAND_CONTRACT = {
   fs: {
     openFolder: { name: "open_folder", args: ["path", "generation"] },
+    probeFolder: { name: "probe_folder", args: ["path"] },
     readFile: { name: "read_file", args: ["path"] },
     writeFile: { name: "write_file", args: ["path", "content"] },
     writeFileIfHash: {
@@ -122,6 +123,11 @@ export interface OpenFolderResult {
   readonly root: string;
 }
 
+export interface ProbeFolderResult {
+  readonly root: string;
+  readonly tree: FileEntry;
+}
+
 export interface ProjectFileTarget {
   readonly projectRoot: string;
   readonly relativePath: string;
@@ -186,6 +192,10 @@ export interface TauriCommandTypes {
   readonly open_folder: {
     readonly args: { readonly path: string; readonly generation: number };
     readonly result: OpenFolderResult;
+  };
+  readonly probe_folder: {
+    readonly args: { readonly path: string };
+    readonly result: ProbeFolderResult;
   };
   readonly read_file: {
     readonly args: { readonly path: string };

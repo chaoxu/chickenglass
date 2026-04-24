@@ -63,6 +63,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::fs::open_folder,
+            commands::fs::probe_folder,
             commands::fs::read_file,
             commands::fs::write_file,
             commands::fs::write_file_if_hash,

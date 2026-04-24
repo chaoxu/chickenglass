@@ -29,6 +29,11 @@ const workspaceMockState = vi.hoisted(() => {
     applied: true,
     root: path,
   })),
+  probeFolderAt: vi.fn(async (path: string) => ({
+    projectRoot: path,
+    root: path,
+    tree: { name: "project", path: "", isDirectory: true, children: [] },
+  })),
   saveWindowState: vi.fn(),
   addRecentFolder: vi.fn(),
   addRecentFile: vi.fn(),
@@ -46,6 +51,12 @@ const workspaceMockState = vi.hoisted(() => {
     this.openFolderAt.mockImplementation(async (path: string, _generation: number) => ({
       applied: true,
       root: path,
+    }));
+    this.probeFolderAt.mockReset();
+    this.probeFolderAt.mockImplementation(async (path: string) => ({
+      projectRoot: path,
+      root: path,
+      tree: { name: "project", path: "", isDirectory: true, children: [] },
     }));
     this.saveWindowState.mockReset();
     this.saveWindowState.mockImplementation((patch: Partial<MockWindowState>) => {
@@ -130,6 +141,7 @@ vi.mock("../tauri-fs", () => ({
   isTauri: () => true,
   pickFolder: workspaceMockState.pickFolder,
   openFolderAt: workspaceMockState.openFolderAt,
+  probeFolderAt: workspaceMockState.probeFolderAt,
 }));
 
 vi.mock("../project-config", () => ({
@@ -167,9 +179,11 @@ interface HarnessRef {
   fileTree: FileEntry | null;
   projectConfig: Record<string, unknown>;
   startupComplete: boolean;
+  probeProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
   openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
   handleOpenFolder: () => void;
   refreshTree: (changedPath?: string) => Promise<void>;
+  reloadProjectConfig: (changedPath?: string) => Promise<void>;
 }
 
 function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
@@ -178,9 +192,11 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     fileTree: null,
     projectConfig: {},
     startupComplete: false,
+    probeProjectRoot: async () => null,
     openProjectRoot: async () => null,
     handleOpenFolder: () => {},
     refreshTree: async () => {},
+    reloadProjectConfig: async () => {},
   };
 
   const Harness: FC = () => {
@@ -189,9 +205,11 @@ function createHarness(fs: FileSystem): { Harness: FC; ref: HarnessRef } {
     ref.fileTree = result.fileTree;
     ref.projectConfig = result.projectConfig;
     ref.startupComplete = result.startupComplete;
+    ref.probeProjectRoot = result.probeProjectRoot;
     ref.openProjectRoot = result.openProjectRoot;
     ref.handleOpenFolder = result.handleOpenFolder;
     ref.refreshTree = result.refreshTree;
+    ref.reloadProjectConfig = result.reloadProjectConfig;
     return null;
   };
 
@@ -816,6 +834,36 @@ describe("refreshTree scoped refresh", () => {
 
     expect(fs.tracker.listChildrenCalls.at(-1)).toBe("");
     expect(ref.projectConfig).toEqual({ bibliography: "new.bib" });
+  });
+
+  it("reloads project config without refreshing the tree when coflat.yaml content changes", async () => {
+    workspaceMockState.loadProjectConfig
+      .mockResolvedValueOnce({ bibliography: "old.bib" })
+      .mockResolvedValueOnce({ bibliography: "new.bib" });
+    const fs = createScopedFs();
+    const { Harness, ref } = createHarness(fs);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(ref.projectConfig).toEqual({ bibliography: "old.bib" });
+    fs.tracker.listTreeCalls = 0;
+    fs.tracker.listChildrenCalls = [];
+
+    await act(async () => {
+      await ref.reloadProjectConfig("coflat.yaml");
+    });
+
+    expect(ref.projectConfig).toEqual({ bibliography: "new.bib" });
+    expect(fs.tracker.listChildrenCalls).toEqual([]);
+    expect(fs.tracker.listTreeCalls).toBe(0);
   });
 
   it("falls back to listTree when fs has no listChildren", async () => {

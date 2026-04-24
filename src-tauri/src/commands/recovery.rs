@@ -175,8 +175,8 @@ mod tests {
             ),
         ]);
 
-        let main_project = session_project_root_key(&project_roots["main"].path)
-            .expect("main project key");
+        let main_project =
+            session_project_root_key(&project_roots["main"].path).expect("main project key");
         let secondary_project = session_project_root_key(&project_roots["secondary"].path)
             .expect("secondary project key");
 

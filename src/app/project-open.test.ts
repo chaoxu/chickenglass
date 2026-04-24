@@ -1,7 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FileEntry } from "./file-manager";
 import type { HotExitBackupStore } from "./hot-exit-backups";
-import { openProjectInCurrentWindow } from "./project-open";
+import {
+  openProjectInCurrentWindow as openProjectInCurrentWindowFlow,
+  type OpenProjectInCurrentWindowOptions,
+} from "./project-open";
+
+function openProjectInCurrentWindow(
+  options: Omit<
+    OpenProjectInCurrentWindowOptions,
+    "probeProjectRoot"
+  > & Partial<Pick<OpenProjectInCurrentWindowOptions, "probeProjectRoot">>,
+): Promise<boolean> {
+  return openProjectInCurrentWindowFlow({
+    probeProjectRoot: vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("main.md"),
+    })),
+    ...options,
+  });
+}
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -221,7 +239,7 @@ describe("openProjectInCurrentWindow", () => {
     expect(openFile).toHaveBeenCalledWith("docs/note.md");
   });
 
-  it("does not close the current file when opening the target project fails", async () => {
+  it("does not close the current file when target project canonicalization fails", async () => {
     let latestProjectRequest = 0;
     const closeCurrentFile = vi.fn(async () => true);
     const openProjectRoot = vi.fn(async () => null);
@@ -246,18 +264,92 @@ describe("openProjectInCurrentWindow", () => {
     expect(openFile).not.toHaveBeenCalled();
   });
 
-  it("closes the current file before switching the backend project root", async () => {
+  it("does not close the current file when probing the target project returns null", async () => {
+    let latestProjectRequest = 0;
+    const closeCurrentFile = vi.fn(async () => true);
+    const probeProjectRoot = vi.fn(async () => null);
+    const openProjectRoot = vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("main.md"),
+    }));
+    const openFile = vi.fn(async () => {});
+
+    const result = await openProjectInCurrentWindow({
+      projectRoot: "/tmp/missing-project",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile,
+      probeProjectRoot,
+      openProjectRoot,
+      openFile,
+    });
+
+    expect(result).toBe(false);
+    expect(probeProjectRoot).toHaveBeenCalledWith("/tmp/missing-project");
+    expect(openProjectRoot).not.toHaveBeenCalled();
+    expect(closeCurrentFile).not.toHaveBeenCalled();
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  it("does not close the current file when probing the target project rejects", async () => {
+    let latestProjectRequest = 0;
+    const closeCurrentFile = vi.fn(async () => true);
+    const probeProjectRoot = vi.fn(async (path: string) => {
+      if (path === "/tmp/missing-project") {
+        throw new Error("Not a directory: /tmp/missing-project");
+      }
+      return {
+        projectRoot: path,
+        tree: createFileTree("main.md"),
+      };
+    });
+    const openProjectRoot = vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("main.md"),
+    }));
+    const openFile = vi.fn(async () => {});
+
+    await expect(openProjectInCurrentWindow({
+      projectRoot: "/tmp/missing-project",
+      currentProjectRoot: "/tmp/original",
+      nextRequestId: () => ++latestProjectRequest,
+      isRequestCurrent: (requestId) => requestId === latestProjectRequest,
+      cancelPendingOpenFile: vi.fn(),
+      closeCurrentFile,
+      probeProjectRoot,
+      openProjectRoot,
+      openFile,
+    })).rejects.toThrow("Not a directory: /tmp/missing-project");
+
+    expect(probeProjectRoot).toHaveBeenCalledWith("/tmp/missing-project");
+    expect(openProjectRoot).not.toHaveBeenCalled();
+    expect(closeCurrentFile).not.toHaveBeenCalled();
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  it("probes the target root before closing the current file, then commits the switch", async () => {
     let latestProjectRequest = 0;
     const calls: string[] = [];
+    const targetTree = createFileTree("main.md");
+    const probeProjectRoot = vi.fn(async (path: string) => {
+      calls.push(`probe-project-root:${path}`);
+      return {
+        projectRoot: path,
+        tree: targetTree,
+      };
+    });
     const closeCurrentFile = vi.fn(async () => {
       calls.push("close-current-file");
       return true;
     });
-    const openProjectRoot = vi.fn(async (path: string) => {
+    const openProjectRoot = vi.fn(async (path: string, preloaded?: unknown) => {
       calls.push(`open-project-root:${path}`);
+      expect(preloaded).toEqual({ projectRoot: "/tmp/next-project", tree: targetTree });
       return {
         projectRoot: path,
-        tree: createFileTree("main.md"),
+        tree: targetTree,
       };
     });
     const openFile = vi.fn(async (path: string) => {
@@ -271,6 +363,7 @@ describe("openProjectInCurrentWindow", () => {
       isRequestCurrent: (requestId) => requestId === latestProjectRequest,
       cancelPendingOpenFile: vi.fn(),
       closeCurrentFile,
+      probeProjectRoot,
       openProjectRoot,
       canonicalizeProjectRoot: vi.fn(async () => "/tmp/next-project"),
       openFile,
@@ -278,6 +371,7 @@ describe("openProjectInCurrentWindow", () => {
 
     expect(result).toBe(true);
     expect(calls).toEqual([
+      "probe-project-root:/tmp/next-project",
       "close-current-file",
       "open-project-root:/tmp/next-project",
       "open-file:main.md",
@@ -374,9 +468,13 @@ describe("openProjectInCurrentWindow", () => {
     confirm.mockRestore();
   });
 
-  it("does not switch projects when close is rejected", async () => {
+  it("does not commit the target project when closing the current file is rejected", async () => {
     let latestProjectRequest = 0;
     const closeCurrentFile = vi.fn(async () => false);
+    const probeProjectRoot = vi.fn(async (path: string) => ({
+      projectRoot: path,
+      tree: createFileTree("main.md"),
+    }));
     const openProjectRoot = vi.fn(async (path: string) => ({
       projectRoot: path,
       tree: createFileTree("main.md"),
@@ -390,12 +488,15 @@ describe("openProjectInCurrentWindow", () => {
       isRequestCurrent: (requestId) => requestId === latestProjectRequest,
       cancelPendingOpenFile: vi.fn(),
       closeCurrentFile,
+      probeProjectRoot,
       openProjectRoot,
       openFile,
     });
 
     expect(result).toBe(false);
+    expect(probeProjectRoot).toHaveBeenCalledWith("/tmp/next-project");
     expect(openProjectRoot).not.toHaveBeenCalled();
+    expect(closeCurrentFile).toHaveBeenCalledOnce();
     expect(openFile).not.toHaveBeenCalled();
   });
 
@@ -457,6 +558,6 @@ describe("openProjectInCurrentWindow", () => {
     await expect(firstRequest).resolves.toBe(false);
     await expect(secondRequest).resolves.toBe(true);
     expect(committedPaths).toEqual([]);
-    expect(openProjectRoot).toHaveBeenCalledTimes(1);
+    expect(openProjectRoot).not.toHaveBeenCalled();
   });
 });

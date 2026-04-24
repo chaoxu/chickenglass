@@ -56,18 +56,25 @@ const openedProject: ProjectOpenResult = {
 function createDeps(
   overrides: {
     openProjectRoot?: AppFileDialogsDeps["workspace"]["openProjectRoot"];
+    probeProjectRoot?: AppFileDialogsDeps["workspace"]["probeProjectRoot"];
     projectRoot?: string | null;
   } = {},
 ): AppFileDialogsDeps & {
   addRecentFolder: ReturnType<typeof vi.fn>;
   openProjectRoot: AppFileDialogsDeps["workspace"]["openProjectRoot"];
+  probeProjectRoot: AppFileDialogsDeps["workspace"]["probeProjectRoot"];
 } {
   const addRecentFolder = vi.fn();
   const openProjectRoot = overrides.openProjectRoot ?? vi.fn(async () => openedProject);
+  const probeProjectRoot = overrides.probeProjectRoot ?? vi.fn(async (path: string) => ({
+    projectRoot: path,
+    tree: openedProject.tree,
+  }));
 
   return {
     addRecentFolder,
     openProjectRoot,
+    probeProjectRoot,
     editor: {
       cancelPendingOpenFile: vi.fn(),
       closeCurrentFile: vi.fn(async () => true),
@@ -76,6 +83,7 @@ function createDeps(
     },
     workspace: {
       projectRoot: overrides.projectRoot ?? null,
+      probeProjectRoot,
       openProjectRoot,
       addRecentFolder,
     },
@@ -116,7 +124,10 @@ describe("useAppFileDialogs", () => {
     await waitFor(() => {
       expect(deps.addRecentFolder).toHaveBeenCalledWith("/tmp/selected-project");
     });
-    expect(deps.openProjectRoot).toHaveBeenCalledWith("/tmp/selected-project");
+    expect(deps.openProjectRoot).toHaveBeenCalledWith(
+      "/tmp/selected-project",
+      { projectRoot: "/tmp/selected-project", tree: openedProject.tree },
+    );
   });
 
   it("records the canonical root after opening a selected folder alias", async () => {
@@ -154,7 +165,10 @@ describe("useAppFileDialogs", () => {
     });
 
     await waitFor(() => {
-      expect(deps.openProjectRoot).toHaveBeenCalledWith("/tmp/missing-project");
+      expect(deps.openProjectRoot).toHaveBeenCalledWith(
+        "/tmp/missing-project",
+        { projectRoot: "/tmp/missing-project", tree: openedProject.tree },
+      );
     });
     expect(deps.addRecentFolder).not.toHaveBeenCalled();
   });
@@ -178,7 +192,10 @@ describe("useAppFileDialogs", () => {
     });
 
     await waitFor(() => {
-      expect(deps.openProjectRoot).toHaveBeenCalledWith("/tmp/project");
+      expect(deps.openProjectRoot).toHaveBeenCalledWith(
+        "/tmp/project",
+        { projectRoot: "/tmp/project", tree: openedProject.tree },
+      );
     });
     expect(deps.editor.openFile).toHaveBeenCalledWith("chapters/intro.md");
   });

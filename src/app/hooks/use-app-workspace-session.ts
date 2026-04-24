@@ -41,12 +41,17 @@ export interface AppWorkspaceSessionController {
   saveWindowState: ReturnType<typeof useWindowState>["saveState"];
   fileTree: FileEntry | null;
   refreshTree: (changedPath?: string) => Promise<void>;
+  reloadProjectConfig: (changedPath?: string) => Promise<void>;
   /** Load children for a single directory and merge into the tree. */
   loadChildren: (dirPath: string) => Promise<void>;
   projectConfig: ProjectConfig;
   projectConfigStatus: ProjectConfigStatus;
   startupComplete: boolean;
-  openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
+  probeProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
+  openProjectRoot: (
+    path: string,
+    preloaded?: ProjectOpenResult | null,
+  ) => Promise<ProjectOpenResult | null>;
   handleOpenFolder: () => void;
   /** Generation counter — incremented before each project-root change. */
   workspaceRequestRef: { readonly current: number };
@@ -135,6 +140,30 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     setProjectConfigStatus(nextProjectConfig.status);
     return tree;
   }, [fs]);
+
+  const reloadProjectConfig = useCallback(async (changedPath = PROJECT_CONFIG_FILE) => {
+    if (changedPath !== PROJECT_CONFIG_FILE) {
+      return;
+    }
+    const requestId = workspaceRequestRef.current;
+    if (isTauri() && !projectRoot) {
+      if (requestId !== workspaceRequestRef.current) return;
+      setProjectConfig({});
+      setProjectConfigStatus({ state: "missing", path: PROJECT_CONFIG_FILE });
+      return;
+    }
+
+    const nextProjectConfig = await measureAsync(
+      "project_config.reload",
+      () => loadProjectConfigWithStatus(fs),
+      { category: "workspace", detail: PROJECT_CONFIG_FILE },
+    );
+    if (requestId !== workspaceRequestRef.current) {
+      return;
+    }
+    setProjectConfig(nextProjectConfig.config);
+    setProjectConfigStatus(nextProjectConfig.status);
+  }, [fs, projectRoot]);
 
   const refreshTree = useCallback(async (changedPath?: string) => {
     const requestId = workspaceRequestRef.current;
@@ -242,9 +271,20 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
    *  Returns the file tree on success or null when the folder couldn't be opened
    *  or a newer request superseded this one.  Stale errors are silently
    *  swallowed; current errors re-throw. */
+  const probeProjectRoot = useCallback(async (path: string): Promise<ProjectOpenResult | null> => {
+    if (!isTauri()) return null;
+    const { probeFolderAt } = await tauriFs();
+    const result = await probeFolderAt(path);
+    return {
+      projectRoot: result.root,
+      tree: result.tree,
+    };
+  }, []);
+
   const openTauriFolder = useCallback(async (
     path: string,
     onRootSet?: (projectRoot: string) => void,
+    preloaded?: ProjectOpenResult | null,
   ): Promise<ProjectOpenResult | null> => {
     const requestId = ++workspaceRequestRef.current;
     try {
@@ -255,19 +295,36 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
       }
       const canonicalRoot = result.root;
       onRootSet?.(canonicalRoot);
-      const tree = await loadWorkspaceContents(requestId);
+      let tree: FileEntry | null;
+      if (preloaded && preloaded.projectRoot === canonicalRoot) {
+        tree = preloaded.tree;
+        const nextProjectConfig = await measureAsync(
+          "startup.project_config",
+          () => loadProjectConfigWithStatus(fs),
+          { category: "startup" },
+        );
+        if (requestId !== workspaceRequestRef.current) return null;
+        setFileTree(preloaded.tree);
+        setProjectConfig(nextProjectConfig.config);
+        setProjectConfigStatus(nextProjectConfig.status);
+      } else {
+        tree = await loadWorkspaceContents(requestId);
+      }
       return tree ? { projectRoot: canonicalRoot, tree } : null;
     } catch (e: unknown) {
       if (requestId !== workspaceRequestRef.current) return null;
       throw e;
     }
-  }, [loadWorkspaceContents]);
+  }, [fs, loadWorkspaceContents]);
 
-  const openProjectRoot = useCallback(async (path: string): Promise<ProjectOpenResult | null> => {
+  const openProjectRoot = useCallback(async (
+    path: string,
+    preloaded?: ProjectOpenResult | null,
+  ): Promise<ProjectOpenResult | null> => {
     if (!isTauri()) return null;
     const result = await openTauriFolder(path, (projectRoot) => {
       saveWindowState({ projectRoot, currentDocument: null });
-    });
+    }, preloaded);
     if (result) {
       setStartupComplete(true);
     }
@@ -359,10 +416,12 @@ export function useAppWorkspaceSession(fs: FileSystem): AppWorkspaceSessionContr
     saveWindowState,
     fileTree,
     refreshTree,
+    reloadProjectConfig,
     loadChildren,
     projectConfig,
     projectConfigStatus,
     startupComplete,
+    probeProjectRoot,
     openProjectRoot,
     handleOpenFolder,
     workspaceRequestRef,

@@ -67,6 +67,7 @@ interface HarnessOptions {
     options?: AutoSaveFlushOptions,
   ) => Promise<void>;
   flushPendingHotExitBackup?: () => Promise<void>;
+  onAfterSave?: (path: string) => void | Promise<void>;
   requestUnsavedChangesDecision?: () => Promise<"save" | "discard" | "cancel">;
   settings?: Partial<Settings>;
 }
@@ -105,6 +106,7 @@ function createHarness(
       settings,
       refreshTree: async () => {},
       addRecentFile: () => {},
+      onAfterSave: options.onAfterSave,
       flushPendingAutoSave: options.flushPendingAutoSave,
       flushPendingHotExitBackup: options.flushPendingHotExitBackup,
       requestUnsavedChangesDecision:
@@ -374,6 +376,32 @@ describe("useAppEditorShell", () => {
 
     expect(ref.result.saveActivity.status).toBe("idle");
     expect(ref.result.currentDocument?.dirty).toBe(false);
+  });
+
+  it("emits the internal save notification after saving coflat.yaml", async () => {
+    const onAfterSave = vi.fn();
+    const { Harness, ref } = createHarness({
+      files: {
+        "coflat.yaml": "bibliography: old.bib\n",
+      },
+      onAfterSave,
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("coflat.yaml");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "bibliography: new.bib\n"));
+    });
+
+    await act(async () => {
+      await ref.result.saveFile();
+    });
+
+    expect(onAfterSave).toHaveBeenCalledWith("coflat.yaml");
   });
 
   it("surfaces save failures until the next edit", async () => {

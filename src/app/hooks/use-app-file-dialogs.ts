@@ -19,11 +19,14 @@ import type { AppWorkspaceSessionController } from "./use-app-workspace-session"
 export interface AppFileDialogsDeps {
   editor: Pick<
     AppEditorShellController,
-    "cancelPendingOpenFile" | "closeCurrentFile" | "openFile" | "restoreDocumentFromRecovery"
+    | "cancelPendingOpenFile"
+    | "closeCurrentFile"
+    | "openFile"
+    | "restoreDocumentFromRecovery"
   >;
   workspace: Pick<
     AppWorkspaceSessionController,
-    "projectRoot" | "openProjectRoot" | "addRecentFolder"
+    "projectRoot" | "probeProjectRoot" | "openProjectRoot" | "addRecentFolder"
   >;
   /** Stable lazy-loader for subdirectories; passed through to default-doc search. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
@@ -52,6 +55,7 @@ export function useAppFileDialogs({
   const {
     addRecentFolder,
     openProjectRoot,
+    probeProjectRoot,
     projectRoot: currentProjectRoot,
   } = workspace;
   const openProjectRequestRef = useRef(0);
@@ -79,6 +83,7 @@ export function useAppFileDialogs({
       isRequestCurrent: (requestId) => requestId === openProjectRequestRef.current,
       cancelPendingOpenFile,
       closeCurrentFile,
+      probeProjectRoot,
       openProjectRoot,
       canonicalizeProjectRoot: isTauri()
         ? async (path) => {
@@ -106,6 +111,7 @@ export function useAppFileDialogs({
     listChildren,
     openFile,
     openProjectRoot,
+    probeProjectRoot,
     restoreDocumentFromRecovery,
   ]);
 
