@@ -1,5 +1,6 @@
-import { findDefaultDocumentPath } from "./default-document-path";
 import type { FileEntry } from "./file-manager";
+import type { HotExitBackupStore } from "./hot-exit-backups";
+import { activateProjectDocument } from "./project-document-activation";
 import type { ProjectOpenResult } from "./project-open-result";
 
 export interface OpenProjectInCurrentWindowOptions {
@@ -13,6 +14,12 @@ export interface OpenProjectInCurrentWindowOptions {
   openProjectRoot: (path: string) => Promise<ProjectOpenResult | null>;
   canonicalizeProjectRoot?: (path: string) => Promise<string>;
   openFile: (path: string) => Promise<void>;
+  restoreDocumentFromRecovery?: (
+    path: string,
+    content: string,
+    options?: { baselineHash?: string },
+  ) => Promise<void>;
+  hotExitBackupStore?: HotExitBackupStore | null;
   /** When provided, default-doc search loads subdirectories lazily. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
   /** When provided, cancels the in-flight default-doc search early. */
@@ -30,6 +37,8 @@ export async function openProjectInCurrentWindow({
   openProjectRoot,
   canonicalizeProjectRoot,
   openFile,
+  restoreDocumentFromRecovery,
+  hotExitBackupStore,
   listChildren,
   signal,
 }: OpenProjectInCurrentWindowOptions): Promise<boolean> {
@@ -69,14 +78,16 @@ export async function openProjectInCurrentWindow({
     return false;
   }
 
-  const targetPath = initialPath ?? await findDefaultDocumentPath(result.tree, listChildren, signal);
-  if (!isRequestCurrent(requestId)) {
-    return false;
-  }
-  if (!targetPath) {
-    return isRequestCurrent(requestId);
-  }
-
-  await openFile(targetPath);
+  await activateProjectDocument({
+    fileTree: result.tree,
+    hotExitBackupStore,
+    isCurrent: () => isRequestCurrent(requestId),
+    listChildren,
+    openFile,
+    preferredDocumentPath: initialPath ?? null,
+    projectRoot: result.projectRoot,
+    restoreDocumentFromRecovery,
+    signal,
+  });
   return isRequestCurrent(requestId);
 }

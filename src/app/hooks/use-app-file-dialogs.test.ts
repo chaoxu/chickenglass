@@ -72,6 +72,7 @@ function createDeps(
       cancelPendingOpenFile: vi.fn(),
       closeCurrentFile: vi.fn(async () => true),
       openFile: vi.fn(async () => {}),
+      restoreDocumentFromRecovery: vi.fn(async () => {}),
     },
     workspace: {
       projectRoot: overrides.projectRoot ?? null,

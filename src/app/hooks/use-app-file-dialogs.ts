@@ -12,13 +12,14 @@ import { isProjectRootEscapeError } from "../project-root-errors";
 import { openDocumentInNewWindow } from "../window-launch";
 import { isTauri } from "../../lib/tauri";
 import type { FileEntry } from "../file-manager";
+import type { HotExitBackupStore } from "../hot-exit-backups";
 import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 
 export interface AppFileDialogsDeps {
   editor: Pick<
     AppEditorShellController,
-    "cancelPendingOpenFile" | "closeCurrentFile" | "openFile"
+    "cancelPendingOpenFile" | "closeCurrentFile" | "openFile" | "restoreDocumentFromRecovery"
   >;
   workspace: Pick<
     AppWorkspaceSessionController,
@@ -26,6 +27,7 @@ export interface AppFileDialogsDeps {
   >;
   /** Stable lazy-loader for subdirectories; passed through to default-doc search. */
   listChildren?: (path: string) => Promise<FileEntry[]>;
+  hotExitBackupStore?: HotExitBackupStore | null;
 }
 
 export interface AppFileDialogsReturn {
@@ -39,7 +41,19 @@ export function useAppFileDialogs({
   editor,
   workspace,
   listChildren,
+  hotExitBackupStore,
 }: AppFileDialogsDeps): AppFileDialogsReturn {
+  const {
+    cancelPendingOpenFile,
+    closeCurrentFile,
+    openFile,
+    restoreDocumentFromRecovery,
+  } = editor;
+  const {
+    addRecentFolder,
+    openProjectRoot,
+    projectRoot: currentProjectRoot,
+  } = workspace;
   const openProjectRequestRef = useRef(0);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -60,19 +74,21 @@ export function useAppFileDialogs({
     const opened = await openProjectInCurrentWindowFlow({
       projectRoot,
       initialPath,
-      currentProjectRoot: workspace.projectRoot,
+      currentProjectRoot,
       nextRequestId: () => ++openProjectRequestRef.current,
       isRequestCurrent: (requestId) => requestId === openProjectRequestRef.current,
-      cancelPendingOpenFile: editor.cancelPendingOpenFile,
-      closeCurrentFile: editor.closeCurrentFile,
-      openProjectRoot: workspace.openProjectRoot,
+      cancelPendingOpenFile,
+      closeCurrentFile,
+      openProjectRoot,
       canonicalizeProjectRoot: isTauri()
         ? async (path) => {
           canonicalProjectRoot = await canonicalizeProjectRoot(path);
           return canonicalProjectRoot;
         }
         : undefined,
-      openFile: editor.openFile,
+      openFile,
+      restoreDocumentFromRecovery,
+      hotExitBackupStore,
       listChildren,
       signal: controller.signal,
     });
@@ -81,7 +97,17 @@ export function useAppFileDialogs({
       opened,
       projectRoot: opened ? canonicalProjectRoot : null,
     };
-  }, [canonicalizeProjectRoot, editor, workspace, listChildren]);
+  }, [
+    cancelPendingOpenFile,
+    canonicalizeProjectRoot,
+    closeCurrentFile,
+    currentProjectRoot,
+    hotExitBackupStore,
+    listChildren,
+    openFile,
+    openProjectRoot,
+    restoreDocumentFromRecovery,
+  ]);
 
   const openProjectInCurrentWindow = useCallback(async (
     projectRoot: string,
@@ -97,18 +123,18 @@ export function useAppFileDialogs({
       try {
         const { pickFolder } = await import("../tauri-fs");
         const folderPath = await pickFolder();
-        if (!folderPath || folderPath === workspace.projectRoot) {
+        if (!folderPath || folderPath === currentProjectRoot) {
           return;
         }
         const result = await openProjectInCurrentWindowWithRoot(folderPath);
         if (result.projectRoot) {
-          workspace.addRecentFolder(result.projectRoot);
+          addRecentFolder(result.projectRoot);
         }
       } catch (e: unknown) {
         console.error("[app] open folder request failed", e);
       }
     })();
-  }, [openProjectInCurrentWindowWithRoot, workspace.addRecentFolder, workspace.projectRoot]);
+  }, [addRecentFolder, currentProjectRoot, openProjectInCurrentWindowWithRoot]);
 
   const handleOpenFileRequest = useCallback(() => {
     if (!isTauri()) return;
@@ -124,7 +150,7 @@ export function useAppFileDialogs({
 
         const { resolveProjectFileTargetCommand } = await import("../tauri-client/path");
         const projectFileTarget = await resolveProjectFileTargetCommand(selected);
-        if (!workspace.projectRoot) {
+        if (!currentProjectRoot) {
           await openProjectInCurrentWindow(
             projectFileTarget.projectRoot,
             projectFileTarget.relativePath,
@@ -147,12 +173,12 @@ export function useAppFileDialogs({
           return;
         }
 
-        await editor.openFile(relativePath);
+        await openFile(relativePath);
       } catch (e: unknown) {
         console.error("[app] open file request failed", e);
       }
     })();
-  }, [editor, openProjectInCurrentWindow, workspace.projectRoot]);
+  }, [currentProjectRoot, openFile, openProjectInCurrentWindow]);
 
   const handleQuitRequest = useCallback(async (): Promise<void> => {
     if (!isTauri()) return;

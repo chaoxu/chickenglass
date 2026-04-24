@@ -11,6 +11,11 @@ import {
   AppWorkspaceControllerProvider,
   useAppWorkspaceController,
 } from "./contexts/app-workspace-context";
+import {
+  AppSidebarDiagnosticsProvider,
+  AppSidebarFileTreeProvider,
+  AppSidebarOutlineProvider,
+} from "./contexts/app-sidebar-context";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
 import type { FileEntry, FileSystem, MemoryFileSystemEntry } from "./file-manager";
 import { useAppDebug } from "./hooks/use-app-debug";
@@ -27,6 +32,7 @@ import type {
 import { useAutoSave } from "./hooks/use-auto-save";
 import { useDialogs } from "./hooks/use-dialogs";
 import { useHotExitBackups } from "./hooks/use-hot-exit-backups";
+import { createHotExitBackupStore } from "./hot-exit-backups";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import {
   type SidebarLayoutController,
@@ -117,6 +123,7 @@ function AppInner() {
   const unsavedChanges = useUnsavedChangesDialog();
   const workspace = useAppWorkspaceSession(fs);
   const sidebarLayout = useSidebarLayout();
+  const hotExitBackupStore = useMemo(() => createHotExitBackupStore(), []);
   const autoSaveFlushRef = useRef<UseAutoSaveReturn["flushPendingAutoSave"] | null>(null);
   const deleteHotExitBackupRef = useRef<((path: string) => void) | null>(null);
   const flushHotExitBackupRef = useRef<(() => Promise<void>) | null>(null);
@@ -165,6 +172,7 @@ function AppInner() {
     getCurrentBaselineHash: editor.getCurrentBaselineHash,
     getCurrentDocText: editor.getCurrentDocText,
     projectRoot: workspace.projectRoot,
+    store: hotExitBackupStore,
   });
   deleteHotExitBackupRef.current = hotExitBackups.deleteBackup;
   flushHotExitBackupRef.current = hotExitBackups.flushBackup;
@@ -200,7 +208,39 @@ function AppInner() {
     editor,
     workspace,
     listChildren: listChildrenStable,
+    hotExitBackupStore,
   });
+  const sidebarShellLayout = useMemo(() => ({
+    sidebarTab: sidebarLayout.sidebarTab,
+    setSidebarTab: sidebarLayout.setSidebarTab,
+  }), [sidebarLayout.sidebarTab, sidebarLayout.setSidebarTab]);
+  const sidebarFileTreeController = useMemo(() => ({
+    activePath: editor.currentPath,
+    createDirectory: editor.createDirectory,
+    createFile: editor.createFile,
+    fileTree: workspace.fileTree,
+    handleDelete: editor.handleDelete,
+    handleRename: editor.handleRename,
+    loadChildren: workspace.loadChildren,
+    openFile: editor.openFile,
+  }), [
+    editor.createDirectory,
+    editor.createFile,
+    editor.currentPath,
+    editor.handleDelete,
+    editor.handleRename,
+    editor.openFile,
+    workspace.fileTree,
+    workspace.loadChildren,
+  ]);
+  const sidebarOutlineController = useMemo(() => ({
+    headings: editor.headings,
+    onSelect: editor.handleOutlineSelect,
+  }), [editor.handleOutlineSelect, editor.headings]);
+  const sidebarDiagnosticsController = useMemo(() => ({
+    diagnostics: editor.diagnostics,
+    onSelect: editor.handleOutlineSelect,
+  }), [editor.diagnostics, editor.handleOutlineSelect]);
 
   useWindowCloseGuard({
     hasDirtyDocument: editor.hasDirtyDocument,
@@ -214,6 +254,7 @@ function AppInner() {
     workspace,
     sidebarLayout,
     editor,
+    hotExitBackupStore,
   });
 
   useProjectFileWatcher({
@@ -261,26 +302,32 @@ function AppInner() {
           width={sidebarLayout.sidebarWidth}
           onWidthChange={sidebarLayout.setSidebarWidth}
         >
-          <div
-            className="flex h-screen overflow-hidden overscroll-contain"
-            onDragOver={editor.handleDragOver}
-            onDrop={editor.handleDrop}
-          >
-            <AppSidebarShell sidebarLayout={sidebarLayout} />
-            <AppMainShell
-              sidebarLayout={sidebarLayout}
-              onOpenPalette={() => dialogs.setPaletteOpen(true)}
-              onOpenSettings={() => dialogs.setSettingsOpen(true)}
-            />
-            <ConnectedAppOverlays
-              dialogs={dialogs}
-              sidebarLayout={sidebarLayout}
-              unsavedChanges={unsavedChanges}
-              onOpenFile={fileDialogs.handleOpenFileRequest}
-              onOpenFolder={fileDialogs.handleOpenFolderRequest}
-              onQuit={fileDialogs.handleQuitRequest}
-            />
-          </div>
+          <AppSidebarFileTreeProvider value={sidebarFileTreeController}>
+            <AppSidebarOutlineProvider value={sidebarOutlineController}>
+              <AppSidebarDiagnosticsProvider value={sidebarDiagnosticsController}>
+                <div
+                  className="flex h-screen overflow-hidden overscroll-contain"
+                  onDragOver={editor.handleDragOver}
+                  onDrop={editor.handleDrop}
+                >
+                  <AppSidebarShell sidebarLayout={sidebarShellLayout} />
+                  <AppMainShell
+                    sidebarLayout={sidebarLayout}
+                    onOpenPalette={() => dialogs.setPaletteOpen(true)}
+                    onOpenSettings={() => dialogs.setSettingsOpen(true)}
+                  />
+                  <ConnectedAppOverlays
+                    dialogs={dialogs}
+                    sidebarLayout={sidebarLayout}
+                    unsavedChanges={unsavedChanges}
+                    onOpenFile={fileDialogs.handleOpenFileRequest}
+                    onOpenFolder={fileDialogs.handleOpenFolderRequest}
+                    onQuit={fileDialogs.handleQuitRequest}
+                  />
+                </div>
+              </AppSidebarDiagnosticsProvider>
+            </AppSidebarOutlineProvider>
+          </AppSidebarFileTreeProvider>
         </SidebarProvider>
       </AppEditorControllerProvider>
     </AppWorkspaceControllerProvider>

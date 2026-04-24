@@ -120,21 +120,41 @@ export function useAppCommandRegistry({
   onShowLabelBacklinks,
   onRenameDocumentLabel,
 }: AppCommandRegistryDeps): PaletteCommand[] {
+  const {
+    closeCurrentFile,
+    currentPath,
+    getCurrentDocText,
+    getLexicalEditorHandle,
+    handleInsertImage,
+    openFile,
+    saveAs,
+    saveFile,
+  } = editor;
+  const {
+    fileTree,
+    recentFiles,
+    resolvedTheme,
+    setTheme,
+  } = workspace;
+  const {
+    setSidebarCollapsed,
+    setSidebarTab,
+    setSidenotesCollapsed,
+  } = sidebarLayout;
   const latestEditorSnapshotRef = useRef({
-    currentPath: editor.currentPath,
-    getCurrentDocText: editor.getCurrentDocText,
-    getLexicalEditorHandle: editor.getLexicalEditorHandle,
+    currentPath,
+    getCurrentDocText,
+    getLexicalEditorHandle,
   });
   latestEditorSnapshotRef.current = {
-    currentPath: editor.currentPath,
-    getCurrentDocText: editor.getCurrentDocText,
-    getLexicalEditorHandle: editor.getLexicalEditorHandle,
+    currentPath,
+    getCurrentDocText,
+    getLexicalEditorHandle,
   };
 
   const handleExportHtml = useCallback(() => {
-    const currentPath = editor.currentPath;
     if (!currentPath) return;
-    const doc = editor.getCurrentDocText();
+    const doc = getCurrentDocText();
     void (async () => {
       try {
         const { exportDocument } = await import("../export");
@@ -144,10 +164,10 @@ export function useAppCommandRegistry({
         window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-  }, [editor.currentPath, editor.getCurrentDocText, fs]);
+  }, [currentPath, getCurrentDocText, fs]);
 
   const handleBatchExportHtml = useCallback(() => {
-    if (!workspace.fileTree) return;
+    if (!fileTree) return;
     void (async () => {
       const { batchExport } = await import("../export");
       // Fetch the full recursive tree at export time so that all nested
@@ -167,17 +187,17 @@ export function useAppCommandRegistry({
     })().catch((e: unknown) => {
       window.alert(`Batch export failed: ${e instanceof Error ? e.message : String(e)}`);
     });
-  }, [workspace.fileTree, fs]);
+  }, [fileTree, fs]);
 
   const handleSaveAs = useCallback(() => {
-    void editor.saveAs().catch((e: unknown) => {
+    void saveAs().catch((e: unknown) => {
       window.alert(saveAsErrorMessage(e));
     });
-  }, [editor]);
+  }, [saveAs]);
 
   const applyFormat = useCallback((detail: FormatEventDetail) => {
-    const requestPath = editor.currentPath;
-    const editorHandle = editor.getLexicalEditorHandle();
+    const requestPath = currentPath;
+    const editorHandle = getLexicalEditorHandle();
     if (!editorHandle) {
       dispatchFormatDetail(detail);
       return;
@@ -199,7 +219,7 @@ export function useAppCommandRegistry({
         dispatchFormatDetail(detail);
       }
     });
-  }, [editor]);
+  }, [currentPath, getLexicalEditorHandle]);
 
   const applySimpleFormat = useCallback((type: SimpleFormatEventType) => {
     applyFormat({ type });
@@ -211,10 +231,10 @@ export function useAppCommandRegistry({
 
   const commandDefs: CommandDef[] = useMemo(() => [
     // File
-    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: "file_save", action: () => { void editor.saveFile(); } },
+    { id: "file.save", label: "Save File", category: "File", shortcut: `${modKey}+S`, hotkey: "mod+s", menuId: "file_save", action: () => { void saveFile(); } },
     { id: "file.open-file", label: "Open File...", category: "File", shortcut: `${modKey}+O`, menuId: "file_open_file", action: () => onOpenFile() },
     { id: "file.save-as", label: "Save As...", category: "File", shortcut: `${modKey}+Shift+S`, hotkey: "mod+shift+s", menuId: "file_save_as", action: handleSaveAs },
-    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: "file_close_tab", action: () => { void editor.closeCurrentFile(); } },
+    { id: "file.close-file", label: "Close File", category: "File", shortcut: `${modKey}+W`, menuId: "file_close_tab", action: () => { void closeCurrentFile(); } },
     { id: "file.open-folder", label: "Open Folder...", category: "File", menuId: "file_open_folder", action: onOpenFolder },
     { id: "file.quit", label: "Quit App", category: "File", shortcut: `${modKey}+Q`, menuId: "file_quit", action: onQuit },
 
@@ -234,17 +254,17 @@ export function useAppCommandRegistry({
 
     // Navigation
     { id: "nav.go-to-line", label: "Go to Line", category: "Navigation", shortcut: `${modKey}+G`, hotkey: "mod+g", action: () => dialogs.setGotoLineOpen(true), hotkeyAction: () => dialogs.setGotoLineOpen((value) => !value) },
-    { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("files"); } },
-    { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("outline"); } },
-    { id: "nav.show-diagnostics", label: "Show Diagnostics Panel", category: "Navigation", action: () => { sidebarLayout.setSidebarCollapsed(false); sidebarLayout.setSidebarTab("diagnostics"); } },
+    { id: "nav.show-files", label: "Show Files Panel", category: "Navigation", action: () => { setSidebarCollapsed(false); setSidebarTab("files"); } },
+    { id: "nav.show-outline", label: "Show Outline Panel", category: "Navigation", action: () => { setSidebarCollapsed(false); setSidebarTab("outline"); } },
+    { id: "nav.show-diagnostics", label: "Show Diagnostics Panel", category: "Navigation", action: () => { setSidebarCollapsed(false); setSidebarTab("diagnostics"); } },
     { id: "nav.search", label: "Find in Files", category: "Navigation", shortcut: `${modKey}+Shift+F`, hotkey: "mod+shift+f", menuId: "edit_find", action: () => dialogs.setSearchOpen(true), hotkeyAction: () => dialogs.setSearchOpen((value) => !value) },
     { id: "nav.show-label-references", label: "Show References to Label", category: "Navigation", action: onShowLabelBacklinks },
     { id: "nav.settings", label: "Settings", category: "Navigation", shortcut: `${modKey}+,`, hotkey: "mod+,", action: () => dialogs.setSettingsOpen(true), hotkeyAction: () => dialogs.setSettingsOpen((value) => !value) },
 
     // View
-    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: "view_toggle_sidebar", action: () => sidebarLayout.setSidebarCollapsed((value) => !value) },
-    { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => sidebarLayout.setSidenotesCollapsed((value) => !value) },
-    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => workspace.setTheme(workspace.resolvedTheme === "dark" ? "light" : "dark") },
+    { id: "view.toggle-sidebar", label: "Toggle Sidebar", category: "View", shortcut: `${modKey}+\\`, hotkey: "mod+\\", menuId: "view_toggle_sidebar", action: () => setSidebarCollapsed((value) => !value) },
+    { id: "view.toggle-sidenotes", label: "Toggle Sidenote Margin", category: "View", action: () => setSidenotesCollapsed((value) => !value) },
+    { id: "view.toggle-theme", label: "Toggle Light/Dark Theme", category: "View", action: () => setTheme(resolvedTheme === "dark" ? "light" : "dark") },
     { id: "view.toggle-fps", label: "Toggle FPS Meter", category: "View", action: () => useDevSettings.getState().toggle("fpsCounter") },
     { id: "view.toggle-selection-always-on", label: "Toggle Selection Always On", category: "View", action: () => useDevSettings.getState().toggle("selectionAlwaysOn") },
     { id: "view.toggle-tree-view", label: "Toggle Tree View", category: "View", action: () => useDevSettings.getState().toggle("treeView") },
@@ -253,7 +273,7 @@ export function useAppCommandRegistry({
     { id: "view.toggle-focus-tracing", label: "Toggle Focus Tracing", category: "View", action: () => useDevSettings.getState().toggle("focusTracing") },
 
     // Insert
-    { id: "insert.image", label: "Insert Image", category: "Insert", action: () => editor.handleInsertImage() },
+    { id: "insert.image", label: "Insert Image", category: "Insert", action: () => handleInsertImage() },
 
     // Export
     { id: "export.html", label: "Export Current File to HTML", category: "Export", menuId: "file_export", action: handleExportHtml },
@@ -264,22 +284,29 @@ export function useAppCommandRegistry({
     { id: "help.about", label: "About Coflats", category: "Help", menuId: "help_about", action: () => dialogs.setAboutOpen(true) },
 
     // Recent files (palette only)
-    ...(workspace.recentFiles ?? []).map((path, i) => ({
+    ...(recentFiles ?? []).map((path, i) => ({
       id: `file.recent-${i}`,
       label: `Open Recent: ${basename(path)}`,
       category: "File",
-      action: () => { void editor.openFile(path); },
+      action: () => { void openFile(path); },
     })),
   ], [
     applyHeading,
     applySimpleFormat,
     dialogs,
-    editor,
-    workspace,
-    sidebarLayout,
+    closeCurrentFile,
     handleExportHtml,
     handleBatchExportHtml,
+    handleInsertImage,
     handleSaveAs,
+    openFile,
+    recentFiles,
+    resolvedTheme,
+    saveFile,
+    setSidebarCollapsed,
+    setSidebarTab,
+    setSidenotesCollapsed,
+    setTheme,
     onShowLabelBacklinks,
     onRenameDocumentLabel,
     onOpenFile,
