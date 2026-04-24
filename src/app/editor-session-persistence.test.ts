@@ -97,6 +97,7 @@ function createHarness({
   let result!: EditorSessionPersistence;
   runtime.setWriteDocumentSnapshot((path, snapshot) =>
     result.writeDocumentSnapshot(path, snapshot.content, {
+      createTargetIfMissing: snapshot.createTargetIfMissing,
       expectedBaselineHash: snapshot.expectedBaselineHash,
     }),
   );
@@ -494,6 +495,70 @@ describe("createEditorSessionPersistence", () => {
     });
   });
 
+  it("remaps conflict baselines and conflict state after a successful rename", async () => {
+    const fs = new MemoryFileSystem({ "draft.md": "disk" });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      editorDoc: "local",
+      buffers: createDocumentMap({ "draft.md": "base" }),
+      liveDocs: createDocumentMap({ "draft.md": "local" }),
+    });
+    ref.runtime.setExternalConflictBaseline(
+      "draft.md",
+      createEditorDocumentText("external"),
+    );
+    ref.runtime.commit(createEditorSessionState(
+      {
+        path: "draft.md",
+        name: "draft.md",
+        dirty: true,
+      },
+      { kind: "modified", path: "draft.md" },
+    ));
+
+    await ref.result.handleRename("draft.md", "final.md");
+
+    expect(ref.runtime.getState().externalConflict).toEqual({
+      kind: "modified",
+      path: "final.md",
+    });
+    expect(ref.runtime.externalConflictBaselines.has("draft.md")).toBe(false);
+    expect(editorDocumentToString(
+      ref.runtime.externalConflictBaselines.get("final.md") ?? emptyEditorDocument,
+    )).toBe("external");
+  });
+
+  it("remaps new-document markers after a successful rename", async () => {
+    const fs = new MemoryFileSystem({ "scratch.md": "generated" });
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "scratch.md",
+        name: "scratch.md",
+        dirty: true,
+      },
+      editorDoc: "generated",
+      buffers: createDocumentMap({ "scratch.md": "" }),
+      liveDocs: createDocumentMap({ "scratch.md": "generated" }),
+    });
+    ref.runtime.markNewDocumentPath("scratch.md");
+
+    await ref.result.handleRename("scratch.md", "renamed.md");
+
+    expect(ref.runtime.newDocumentPaths.has("scratch.md")).toBe(false);
+    expect(ref.runtime.newDocumentPaths.has("renamed.md")).toBe(true);
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "renamed.md",
+      name: "renamed.md",
+      dirty: true,
+    });
+  });
+
   it("clears the current session when deleting a parent directory", async () => {
     const fs = new MemoryFileSystem({ "notes/draft.md": "hello" });
     const refreshTree = vi.fn(async () => {});
@@ -683,6 +748,50 @@ describe("createEditorSessionPersistence", () => {
     expect(editorDocumentToString(ref.runtime.liveDocs.get("copy.md") ?? emptyEditorDocument)).toBe(edited);
     expect(onAfterSave).toHaveBeenCalledWith("copy.md");
     expect(onAfterPathRemoved).toHaveBeenCalledWith("main.md");
+  });
+
+  it("saveAs clears new-document markers and preserves later baseline conflict checks", async () => {
+    sessionMockState.isTauri = true;
+    sessionMockState.saveDialog.mockResolvedValue("/tmp/project/copy.md");
+    sessionMockState.toProjectRelativePath.mockResolvedValue("copy.md");
+
+    const fs = new MemoryFileSystem();
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "generated.md",
+        name: "generated.md",
+        dirty: true,
+      },
+      editorDoc: "# Generated\n",
+      buffers: createDocumentMap({ "generated.md": "" }),
+      liveDocs: createDocumentMap({ "generated.md": "# Generated\n" }),
+    });
+    ref.runtime.markNewDocumentPath("generated.md");
+    ref.runtime.pipeline.bumpRevision("generated.md");
+
+    await ref.result.saveAs();
+
+    expect(ref.runtime.newDocumentPaths.has("generated.md")).toBe(false);
+    expect(ref.runtime.newDocumentPaths.has("copy.md")).toBe(false);
+    await expect(fs.readFile("copy.md")).resolves.toBe("# Generated\n");
+
+    await fs.writeFile("copy.md", "# External\n");
+    const editedDoc = createEditorDocumentText("# Local\n");
+    ref.runtime.liveDocs.set("copy.md", editedDoc);
+    ref.runtime.pipeline.bumpRevision("copy.md");
+    ref.runtime.commit(
+      markSessionDocumentDirty(ref.runtime.getState(), "copy.md", true),
+      { editorDoc: "# Local\n" },
+    );
+
+    await expect(ref.result.saveCurrentDocument()).resolves.toBe(false);
+
+    await expect(fs.readFile("copy.md")).resolves.toBe("# External\n");
+    expect(ref.runtime.getState().externalConflict).toEqual({
+      kind: "modified",
+      path: "copy.md",
+    });
   });
 
   it("saveAs rejects outside-project destinations without changing dirty active edits", async () => {

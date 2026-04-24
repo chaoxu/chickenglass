@@ -3,6 +3,7 @@ import {
   emptyEditorDocument,
   type EditorDocumentText,
 } from "./editor-doc-change";
+import { basename } from "./lib/utils";
 import {
   createEditorSessionState,
   type EditorSessionState,
@@ -49,6 +50,11 @@ export interface EditorSessionRuntime {
   getPathBaselineHash: (path: string) => string | null;
   hasPath: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
+  setExternalConflictBaseline: (path: string, doc: EditorDocumentText) => void;
+  clearExternalConflictBaseline: (path: string) => void;
+  markNewDocumentPath: (path: string) => void;
+  clearNewDocumentPath: (path: string) => void;
+  remapPathMetadata: (oldPath: string, newPath: string) => Set<string>;
   commit: (nextState: EditorSessionState, options?: CommitSessionStateOptions) => void;
   cancelPendingOpenFile: () => void;
   nextOpenFileRequest: () => number;
@@ -76,6 +82,53 @@ export function documentTextForPath(
 ): EditorDocumentText {
   if (!path) return emptyEditorDocument;
   return liveDocs.get(path) ?? buffers.get(path) ?? emptyEditorDocument;
+}
+
+export function remapSessionPath(
+  path: string,
+  oldPath: string,
+  newPath: string,
+): string | null {
+  if (path === oldPath) return newPath;
+  if (oldPath !== "" && path.startsWith(`${oldPath}/`)) {
+    return `${newPath}/${path.slice(oldPath.length + 1)}`;
+  }
+  return null;
+}
+
+export function remapEditorSessionStatePaths(
+  state: EditorSessionState,
+  oldPath: string,
+  newPath: string,
+): EditorSessionState {
+  const currentDocument = state.currentDocument;
+  const remappedCurrentPath = currentDocument
+    ? remapSessionPath(currentDocument.path, oldPath, newPath)
+    : null;
+  const externalConflict = state.externalConflict;
+  const remappedConflictPath = externalConflict
+    ? remapSessionPath(externalConflict.path, oldPath, newPath)
+    : null;
+
+  if (!remappedCurrentPath && !remappedConflictPath) {
+    return state;
+  }
+
+  return {
+    currentDocument: currentDocument && remappedCurrentPath
+      ? {
+        ...currentDocument,
+        path: remappedCurrentPath,
+        name: basename(remappedCurrentPath),
+      }
+      : currentDocument,
+    externalConflict: externalConflict && remappedConflictPath
+      ? {
+        ...externalConflict,
+        path: remappedConflictPath,
+      }
+      : externalConflict,
+  };
 }
 
 export function createEditorSessionRuntime(): EditorSessionRuntime {
@@ -157,6 +210,80 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     hasPath: (path) => hasSessionPath(state, path),
     isPathDirty: (path) => getCurrentSessionDocument(state)?.path === path
       && getCurrentSessionDocument(state)?.dirty === true,
+    setExternalConflictBaseline: (path, doc) => {
+      externalConflictBaselines.set(path, doc);
+      newDocumentPaths.delete(path);
+    },
+    clearExternalConflictBaseline: (path) => {
+      externalConflictBaselines.delete(path);
+    },
+    markNewDocumentPath: (path) => {
+      newDocumentPaths.add(path);
+      externalConflictBaselines.delete(path);
+    },
+    clearNewDocumentPath: (path) => {
+      newDocumentPaths.delete(path);
+    },
+    remapPathMetadata: (oldPath, newPath) => {
+      const pathsToRename = new Map<string, string>();
+      const addRemappedPath = (path: string) => {
+        const remapped = remapSessionPath(path, oldPath, newPath);
+        if (remapped) {
+          pathsToRename.set(path, remapped);
+        }
+      };
+
+      for (const path of buffers.keys()) {
+        addRemappedPath(path);
+      }
+      for (const path of liveDocs.keys()) {
+        addRemappedPath(path);
+      }
+      for (const path of externalConflictBaselines.keys()) {
+        addRemappedPath(path);
+      }
+      for (const path of newDocumentPaths) {
+        addRemappedPath(path);
+      }
+      const currentDocument = getCurrentSessionDocument(state);
+      if (currentDocument) {
+        addRemappedPath(currentDocument.path);
+      }
+
+      const remappedPaths = new Set<string>();
+      for (const [oldDocumentPath, newDocumentPath] of pathsToRename) {
+        const buffered = buffers.get(oldDocumentPath);
+        const liveDoc = liveDocs.get(oldDocumentPath);
+        const conflictBaseline = externalConflictBaselines.get(oldDocumentPath);
+        const wasNewDocument = newDocumentPaths.has(oldDocumentPath);
+
+        buffers.delete(oldDocumentPath);
+        liveDocs.delete(oldDocumentPath);
+        externalConflictBaselines.delete(oldDocumentPath);
+        newDocumentPaths.delete(oldDocumentPath);
+
+        if (buffered !== undefined) {
+          buffers.set(newDocumentPath, buffered);
+        }
+        if (liveDoc !== undefined) {
+          liveDocs.set(newDocumentPath, liveDoc);
+        }
+        if (conflictBaseline !== undefined) {
+          externalConflictBaselines.set(newDocumentPath, conflictBaseline);
+        }
+        if (wasNewDocument) {
+          newDocumentPaths.add(newDocumentPath);
+        }
+
+        pipeline.clear(oldDocumentPath);
+        pipeline.initPath(
+          newDocumentPath,
+          editorDocumentToString(buffered ?? liveDoc ?? conflictBaseline ?? emptyEditorDocument),
+        );
+        remappedPaths.add(newDocumentPath);
+      }
+      return remappedPaths;
+    },
     commit: (nextState, options) => {
       const previousState = state;
       const previousEditorDoc = editorDoc;
