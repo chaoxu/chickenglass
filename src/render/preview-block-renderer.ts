@@ -176,7 +176,7 @@ function resolvePreviewCrossref(
   const heading = semantics?.headings.find((entry) => entry.id === id);
   if (heading) {
     return {
-      kind: "block",
+      kind: "heading",
       label: formatHeadingReferenceLabel(heading),
       title: heading.text,
     };

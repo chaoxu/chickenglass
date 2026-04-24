@@ -10,7 +10,7 @@ import {
 } from "../semantics/reference-catalog";
 
 /** The kind of target a cross-reference resolves to. */
-export type CrossrefKind = "block" | "equation" | "citation" | "unresolved";
+export type CrossrefKind = "block" | "heading" | "equation" | "citation" | "unresolved";
 
 /** Result of resolving a cross-reference. */
 export interface ResolvedCrossref {
@@ -107,7 +107,7 @@ export function resolveCrossref(
 
   if (target?.kind === "heading") {
     return {
-      kind: "block",
+      kind: "heading",
       label: target.displayLabel,
       title: target.title,
     };
@@ -160,7 +160,11 @@ export function classifyReference(
   const hasCitation = bibliography?.has(id) ?? false;
 
   const resolved = resolveCrossref(state, id, equationLabels);
-  if (resolved.kind === "block" || resolved.kind === "equation") {
+  if (
+    resolved.kind === "block" ||
+    resolved.kind === "heading" ||
+    resolved.kind === "equation"
+  ) {
     return { kind: "crossref", resolved };
   }
 

@@ -14,7 +14,7 @@ import {
   SimpleTextReferenceWidget,
 } from "./reference-widget";
 
-/** Widget for a resolved cross-reference (block or equation). */
+/** Widget for a resolved cross-reference (block, heading, or equation). */
 export class CrossrefWidget extends SimpleTextReferenceWidget {
   constructor(
     private readonly resolved: ResolvedCrossref,

@@ -12,9 +12,15 @@
  * browser testing since JSDOM does not implement hit-testing or layout.
  */
 import { EditorState } from "@codemirror/state";
+import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { equationLabelExtension } from "../parser/equation-label";
+import { fencedDiv } from "../parser/fenced-div";
+import { mathExtension } from "../parser/math-backslash";
+import { documentSemanticsField } from "../state/document-analysis";
 import {
+  buildCrossrefPreviewContent,
   destroyHoverPreviewTooltipForTest,
   ensureHoverPreviewTooltipForTest,
   getCachedTooltipContentForTest,
@@ -47,6 +53,23 @@ function createClusterDOM(
   }
 
   return { container, spans };
+}
+
+function createReferenceHoverPreviewView(doc: string): EditorView {
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  return new EditorView({
+    state: EditorState.create({
+      doc,
+      extensions: [
+        markdown({
+          extensions: [fencedDiv, mathExtension, equationLabelExtension],
+        }),
+        documentSemanticsField,
+      ],
+    }),
+    parent,
+  });
 }
 
 function createHoverPreviewView(): EditorView {
@@ -188,6 +211,27 @@ describe("per-item targeting invariants (#397 regression)", () => {
     expect(refIdFromElement(span1)).toBe("eq:a");
     expect(refIdFromElement(span2)).toBe("smith");
     expect(refIdFromElement(container)).toBeNull();
+  });
+});
+
+describe("heading crossref previews", () => {
+  it("builds heading previews without treating headings as block bodies", () => {
+    const view = createReferenceHoverPreviewView([
+      "# Intro",
+      "",
+      "## Result Section {#sec:result}",
+      "",
+      "::: {.theorem #thm-result}",
+      "Block body should not be reused.",
+      ":::",
+    ].join("\n"));
+
+    const content = buildCrossrefPreviewContent(view, "sec:result");
+
+    expect(content.textContent).toContain("Section 1.1 Result Section");
+    expect(content.textContent).not.toContain("Block body should not be reused.");
+
+    view.destroy();
   });
 });
 

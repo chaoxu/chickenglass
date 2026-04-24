@@ -3,7 +3,7 @@
  *
  * Replaces the separate crossref-render and citation-render ViewPlugins
  * with a single tree walk that routes each reference to the appropriate
- * widget based on whether the id resolves as a block/equation crossref
+ * widget based on whether the id resolves as a block/heading/equation crossref
  * or a bibliography citation.
  *
  * Widget classes remain render-owned; this plugin only handles discovery and
@@ -109,11 +109,11 @@ export type ReferenceRenderItem =
  * - Focused cursor/selection inside → source-mark
  * - Bracketed all-bib cluster → citation (parenthetical)
  * - Bracketed mixed cluster (some bib, some crossref) → mixed-cluster
- * - Bracketed single id, block/equation → crossref
- * - Bracketed multi id, at least one block/equation → clustered-crossref
+ * - Bracketed single id, block/heading/equation → crossref
+ * - Bracketed multi id, at least one block/heading/equation → clustered-crossref
  *   with unresolved items degraded in place
  * - Bracketed ids, none resolve to block/equation/citation → unresolved
- * - Narrative, block/equation → crossref
+ * - Narrative, block/heading/equation → crossref
  * - Narrative, bib id → citation (narrative)
  *
  * Citations must be registered with the processor before calling this

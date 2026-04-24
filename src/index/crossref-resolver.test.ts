@@ -206,7 +206,7 @@ describe("resolveCrossref", () => {
     const state = createState(doc);
     const result = resolveCrossref(state, "sec:mincostcirc");
 
-    expect(result.kind).toBe("block");
+    expect(result.kind).toBe("heading");
     expect(result.label).toBe("Section 1.1");
     expect(result.title).toBe("Min-Cost Circulation");
   });
@@ -222,9 +222,32 @@ describe("resolveCrossref", () => {
     const state = createState(doc);
     const result = resolveCrossref(state, "sec:appendix");
 
-    expect(result.kind).toBe("block");
+    expect(result.kind).toBe("heading");
     expect(result.label).toBe("Appendix");
     expect(result.title).toBe("Appendix");
+  });
+
+  it("keeps fenced block references distinct from heading references", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Result Section {#sec:result}",
+      "",
+      "::: {.theorem #thm-result}",
+      "A theorem.",
+      ":::",
+    ].join("\n");
+    const state = createState(doc);
+
+    expect(resolveCrossref(state, "sec:result")).toMatchObject({
+      kind: "heading",
+      label: "Section 1.1",
+      title: "Result Section",
+    });
+    expect(resolveCrossref(state, "thm-result")).toMatchObject({
+      kind: "block",
+      label: "Theorem 1",
+    });
   });
 
   it("returns citation for unknown id", () => {
@@ -316,6 +339,25 @@ describe("classifyReference", () => {
       kind: "unresolved",
       id: "thm:missing",
     });
+  });
+
+  it("classifies heading references as crossrefs with heading kind", () => {
+    const state = createState([
+      "# Intro",
+      "",
+      "## Methods {#sec:methods}",
+      "",
+      "See [@sec:methods].",
+    ].join("\n"));
+
+    const result = classifyReference(state, "sec:methods");
+
+    expect(result.kind).toBe("crossref");
+    if (result.kind !== "crossref") {
+      throw new Error("expected a crossref result");
+    }
+    expect(result.resolved.kind).toBe("heading");
+    expect(result.resolved.label).toBe("Section 1.1");
   });
 
   it("reuses the cached document reference catalog across repeated classifications", () => {

@@ -266,6 +266,26 @@ function buildCrossrefTooltipPlan(
     };
   }
 
+  if (resolved.kind === "heading") {
+    const headerText =
+      resolved.title && resolved.title !== resolved.label
+        ? `${resolved.label} ${resolved.title}`
+        : resolved.label;
+
+    return {
+      buildContent: () => {
+        const container = createCrossrefPreviewContainer(variant);
+        container.appendChild(createHoverPreviewHeader(headerText, macros));
+        return container;
+      },
+      cacheScope: view.state,
+      dependsOnBibliography: false,
+      dependsOnMacros: true,
+      key: `crossref:heading\0${variant}\0${id}\0${headerText}`,
+      mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
+    };
+  }
+
   if (resolved.kind === "equation") {
     const eqContent = findEquationSource(view, id);
     return {

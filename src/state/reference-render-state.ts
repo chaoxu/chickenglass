@@ -144,6 +144,30 @@ function getBlockNumberingKey(state: EditorState): string {
   return state.field(blockCounterField, false)?.numberingKey ?? "";
 }
 
+const headingReferenceTargetKeyCache = new WeakMap<
+  DocumentAnalysis["headings"],
+  string
+>();
+
+function getHeadingReferenceTargetKey(analysis: DocumentAnalysis | null): string {
+  if (!analysis) return "";
+  const cached = headingReferenceTargetKeyCache.get(analysis.headings);
+  if (cached !== undefined) return cached;
+
+  const key = analysis.headings
+    .filter((heading) => heading.id)
+    .map((heading) => [
+      heading.id,
+      heading.level,
+      heading.number,
+      heading.unnumbered ? "1" : "0",
+      heading.text,
+    ].join("\0"))
+    .join("\u0001");
+  headingReferenceTargetKeyCache.set(analysis.headings, key);
+  return key;
+}
+
 export const referenceRenderSliceChanged = createChangeChecker(
   (state) => getReferenceRenderAnalysis(state).references,
   (state) => getReferenceRenderAnalysis(state).referenceByFrom,
@@ -198,6 +222,11 @@ const crossrefNumberingChanged = createChangeChecker(
 
 const externalReferenceCatalogChanged = createChangeChecker(
   (state) => state.field(externalDocumentReferenceCatalogField, false),
+);
+
+const headingReferenceTargetsChanged = createChangeChecker(
+  (state) =>
+    getHeadingReferenceTargetKey(state.field(documentAnalysisField, false) ?? null),
 );
 
 const bibliographyInputsChanged = createChangeChecker(
@@ -324,6 +353,7 @@ export function referenceRenderRebuildDependenciesChanged(
 ): boolean {
   return (
     externalReferenceCatalogChanged(beforeState, afterState) ||
+    headingReferenceTargetsChanged(beforeState, afterState) ||
     bibliographyInputsChanged(beforeState, afterState) ||
     blockLabelConfigChanged(beforeState, afterState) ||
     crossrefNumberingChanged(beforeState, afterState)
@@ -349,6 +379,7 @@ export function tableReferenceRenderDependenciesChanged(
 
   const sharedOwnersChanged = (
     externalReferenceCatalogChanged(beforeState, afterState) ||
+    headingReferenceTargetsChanged(beforeState, afterState) ||
     bibliographyInputsChanged(beforeState, afterState) ||
     blockLabelConfigChanged(beforeState, afterState)
   );
@@ -377,6 +408,7 @@ export function getReferenceRenderDependencySignature(
       "",
       "",
       "",
+      "",
       0,
       0,
       0,
@@ -388,6 +420,7 @@ export function getReferenceRenderDependencySignature(
 
   return [
     getDocumentAnalysisSliceRevision(analysis, "references"),
+    getHeadingReferenceTargetKey(analysis),
     getEquationNumbersCacheKey(analysis),
     getBlockNumberingKey(state),
     getObjectIdentityId(state.field(externalDocumentReferenceCatalogField, false)),
@@ -412,6 +445,7 @@ export function getTableReferenceRenderDependencySignature(
       "",
       "",
       "",
+      "",
       0,
       0,
       0,
@@ -427,6 +461,7 @@ export function getTableReferenceRenderDependencySignature(
 
   return [
     citationRegistrationKey,
+    getHeadingReferenceTargetKey(analysis),
     getEquationNumbersCacheKey(analysis),
     getBlockNumberingKey(state),
     getObjectIdentityId(state.field(externalDocumentReferenceCatalogField, false)),

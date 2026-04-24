@@ -612,7 +612,7 @@ describe("FORMAT.md coverage: Cross-References", () => {
       "See [@sec:background].",
     ].join("\n"));
     const result = resolveCrossref(state, "sec:background");
-    expect(result.kind).toBe("block");
+    expect(result.kind).toBe("heading");
     expect(result.label).toBe("Section 1.1");
   });
 

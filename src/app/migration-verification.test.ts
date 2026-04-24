@@ -1468,6 +1468,20 @@ describe("#1349 — ambiguous cross-file labels", () => {
   });
 });
 
+describe("#1355 — heading crossref target kind", () => {
+  it("preserves heading as a first-class resolved crossref kind", () => {
+    const resolver = fileText("src/index/crossref-resolver.ts");
+    const hoverPreview = fileText("src/render/hover-preview.ts");
+    const previewRenderer = fileText("src/render/preview-block-renderer.ts");
+
+    expect(resolver).toContain('"block" | "heading" | "equation"');
+    expect(resolver).toContain('kind: "heading"');
+    expect(resolver).toContain('resolved.kind === "heading"');
+    expect(hoverPreview).toContain('resolved.kind === "heading"');
+    expect(previewRenderer).toContain('kind: "heading"');
+  });
+});
+
 describe("#315 — editor session subsystem", () => {
   it("extracts the editor session model and pure session actions", () => {
     expect(fileExists("src/app/editor-session-model.ts")).toBe(true);

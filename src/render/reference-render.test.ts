@@ -515,6 +515,23 @@ describe("collectReferenceRanges", () => {
     expect((widget.toDOM() as HTMLElement).textContent).toBe("[2]");
   });
 
+  it("renders preview heading crossrefs as first-class crossrefs", () => {
+    const preview = document.createElement("div");
+    renderPreviewBlockContentToDom(
+      preview,
+      [
+        "# Intro",
+        "",
+        "## Result Section {#sec:result}",
+        "",
+        "See [@sec:result].",
+      ].join("\n"),
+    );
+
+    const crossref = preview.querySelector(`.${CSS.crossref}`);
+    expect(crossref?.textContent).toBe("Section 1.1");
+  });
+
   // Regression (#397): mixed cluster must have per-item spans with data-ref-id
   it("renders mixed cluster with per-item spans and data-ref-id", async () => {
     const doc = [
@@ -724,6 +741,36 @@ describe("collectReferenceRanges", () => {
       });
 
       expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
+    it("rerenders heading refs when target numbering changes off the reference line", () => {
+      const doc = [
+        "# Intro",
+        "",
+        "## Result {#sec:result}",
+        "",
+        "See [@sec:result].",
+      ].join("\n");
+
+      view = createPluginView(doc, 0);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Section 1.1");
+
+      const beforeState = view.state;
+      const insert = [
+        "## Earlier {#sec:earlier}",
+        "",
+      ].join("\n");
+      const beforeTargetHeading = doc.indexOf("## Result");
+
+      view.dispatch({
+        changes: {
+          from: beforeTargetHeading,
+          insert,
+        },
+      });
+
+      expect(referenceRenderDependenciesChanged(beforeState, view.state)).toBe(true);
+      expect(view.dom.querySelector(`.${CSS.crossref}`)?.textContent).toBe("Section 1.2");
     });
 
     it("tracks block label changes from same-length frontmatter title edits", () => {
@@ -1113,6 +1160,32 @@ describe("planReferenceRendering", () => {
     const item = findPlan(items, "[@thm-main]");
     expect(item).toBeDefined();
     expect(item?.kind).toBe("crossref");
+  });
+
+  it("routes heading and fenced block references with distinct resolved kinds", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Result Section {#sec:result}",
+      "",
+      "::: {.theorem #thm-result}",
+      "Statement.",
+      ":::",
+      "",
+      "See [@sec:result] and [@thm-result].",
+    ].join("\n");
+    const items = plan(doc);
+    const heading = findPlan(items, "[@sec:result]");
+    const block = findPlan(items, "[@thm-result]");
+
+    expect(heading?.kind).toBe("crossref");
+    expect(block?.kind).toBe("crossref");
+    if (heading?.kind === "crossref") {
+      expect(heading.resolved.kind).toBe("heading");
+    }
+    if (block?.kind === "crossref") {
+      expect(block.resolved.kind).toBe("block");
+    }
   });
 
   it("routes bracketed local target before same-id citation", () => {
