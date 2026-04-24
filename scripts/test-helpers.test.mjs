@@ -182,6 +182,33 @@ describe("browser failure artifacts", () => {
       rmSync(outDir, { force: true, recursive: true });
     }
   });
+
+  it("treats an artifact root as a parent for timestamped captures", async () => {
+    const root = mkdtempSync(join(tmpdir(), "coflat-browser-artifacts-root-test-"));
+    const page = {
+      evaluate: vi.fn(async () => ({})),
+      off: vi.fn(),
+      on: vi.fn(),
+      screenshot: vi.fn(async () => Buffer.from("")),
+      url: vi.fn(() => "http://localhost:5173/"),
+    };
+    const recorder = createBrowserArtifactRecorder(page);
+
+    try {
+      const artifacts = await recorder.collect({
+        error: new Error("scenario failed"),
+        label: "unit-artifact",
+        root,
+      });
+
+      expect(artifacts.outDir.startsWith(`${root}/`)).toBe(true);
+      expect(artifacts.summaryPath).toBe(join(artifacts.outDir, "browser-artifacts.json"));
+      expect(artifacts.statePath).toBe(join(artifacts.outDir, "debug-state.json"));
+      expect(existsSync(artifacts.summaryPath)).toBe(true);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
 
 describe("screenshot", () => {

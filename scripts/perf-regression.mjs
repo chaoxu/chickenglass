@@ -2256,6 +2256,21 @@ export function printComparison(result) {
   }));
 }
 
+async function collectFailureArtifacts(session, label, error) {
+  if (!session?.artifactRecorder) return;
+  await session.artifactRecorder.collect({
+    error,
+    label,
+    root: session.artifactsRoot,
+  }).then((artifacts) => {
+    console.error(`Artifacts: ${artifacts.outDir}`);
+  }).catch((artifactError) => {
+    console.error(
+      `Artifact collection failed: ${artifactError instanceof Error ? artifactError.message : String(artifactError)}`,
+    );
+  });
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const { command, options, chromeArgs, getFlag, getIntFlag } = parseCliArgs(argv);
   if (options.includes("--help") || options.includes("-h")) {
@@ -2394,6 +2409,9 @@ export async function main(argv = process.argv.slice(2)) {
     }
 
     throw new Error(`Unknown command "${command}"`);
+  } catch (error) {
+    await collectFailureArtifacts(browserSession, `perf-${scenarioName}`, error);
+    throw error;
   } finally {
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);

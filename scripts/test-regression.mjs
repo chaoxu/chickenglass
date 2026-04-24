@@ -93,7 +93,7 @@ async function collectFailureArtifacts(session, label, error) {
   await session.artifactRecorder.collect({
     error,
     label,
-    outDir: session.artifactsDir,
+    root: session.artifactsRoot,
   }).then((artifacts) => {
     console.error(`  Artifacts: ${artifacts.outDir}`);
   }).catch((artifactError) => {

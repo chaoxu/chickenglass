@@ -64,6 +64,7 @@ export function normalizeConnectEditorOptions(portOrOptions = DEFAULT_PORT, opti
     timeout: rawOptions.timeout ?? 15000,
     url: rawOptions.url ?? DEFAULT_APP_URL,
     viewport: rawOptions.viewport ?? DEFAULT_MANAGED_VIEWPORT,
+    waitForBridge: rawOptions.waitForBridge ?? true,
   };
 }
 
@@ -222,10 +223,17 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
     const page = await context.newPage();
     page.setDefaultTimeout(resolved.timeout);
     await page.goto(resolved.url, { waitUntil: "domcontentloaded" });
-    await waitForDebugBridge(page, { timeout: resolved.timeout });
     browserCleanupByPage.set(page, async () => {
       await browser.close();
     });
+    if (resolved.waitForBridge) {
+      try {
+        await waitForDebugBridge(page, { timeout: resolved.timeout });
+      } catch (error) {
+        await disconnectBrowser(page);
+        throw error;
+      }
+    }
     return page;
   }
 
@@ -252,10 +260,17 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
   }
   await page.bringToFront().catch(() => {});
   page.setDefaultTimeout(Math.min(resolved.timeout, 10000));
-  await waitForDebugBridge(page, { timeout: resolved.timeout });
   browserCleanupByPage.set(page, async () => {
     await browser.close();
   });
+  if (resolved.waitForBridge) {
+    try {
+      await waitForDebugBridge(page, { timeout: resolved.timeout });
+    } catch (error) {
+      await disconnectBrowser(page);
+      throw error;
+    }
+  }
   return page;
 }
 

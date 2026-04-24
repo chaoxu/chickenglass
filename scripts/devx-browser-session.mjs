@@ -35,8 +35,10 @@ export async function openBrowserSession(argv = [], options = {}) {
       browser: chromeArgs.browser,
       headless: chromeArgs.headless,
       port: chromeArgs.port,
+      predicate: () => true,
       timeout,
       url: chromeArgs.url,
+      waitForBridge: false,
     });
     recorder = createBrowserArtifactRecorder(page);
 
@@ -51,6 +53,7 @@ export async function openBrowserSession(argv = [], options = {}) {
     });
     return {
       artifactRecorder: recorder,
+      artifactsRoot: artifactsDir,
       artifactsDir,
       page,
       stopAppServer,
@@ -61,7 +64,7 @@ export async function openBrowserSession(argv = [], options = {}) {
         dispose: true,
         error,
         label: "browser-session-setup",
-        outDir: artifactsDir,
+        root: artifactsDir,
       }).then((artifacts) => {
         console.error(`Browser setup artifacts: ${artifacts.outDir}`);
       }).catch((artifactError) => {

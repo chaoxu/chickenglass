@@ -260,8 +260,10 @@ describe("browser repro helpers", () => {
       browser: "cdp",
       headless: false,
       port: 9333,
+      predicate: expect.any(Function),
       timeout: 42000,
       url: "http://localhost:5174",
+      waitForBridge: false,
     });
     expect(browserReproMocks.page.reload).toHaveBeenCalledWith({ waitUntil: "load" });
     expect(browserReproMocks.waitForDebugBridge).toHaveBeenCalledWith(
@@ -279,6 +281,7 @@ describe("browser repro helpers", () => {
     );
     expect(session).toEqual({
       artifactRecorder: expect.any(Object),
+      artifactsRoot: undefined,
       artifactsDir: undefined,
       page: browserReproMocks.page,
       stopAppServer: browserReproMocks.stopAppServer,

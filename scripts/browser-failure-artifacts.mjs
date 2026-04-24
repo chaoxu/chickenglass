@@ -206,11 +206,14 @@ export function createBrowserArtifactRecorder(page, options = {}) {
     dispose: shouldDispose = false,
     error = null,
     label = "browser-failure",
-    outDir = resolveBrowserArtifactDir({ label }),
+    outDir = undefined,
+    root = DEFAULT_BROWSER_ARTIFACT_ROOT,
   } = {}) => {
     if (shouldDispose) {
       dispose();
     }
+    const resolvedOutDir = outDir ?? resolveBrowserArtifactDir({ label, root });
+    outDir = resolvedOutDir;
     mkdirSync(outDir, { recursive: true });
 
     const summary = {
