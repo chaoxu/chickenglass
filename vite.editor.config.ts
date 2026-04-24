@@ -1,18 +1,15 @@
-import { copyFileSync, readFileSync } from "node:fs";
+import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { visualizer } from "rollup-plugin-visualizer";
-
-interface PackageManifest {
-  readonly dependencies?: Record<string, string>;
-}
-
-const packageJson = JSON.parse(
-  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
-) as PackageManifest;
-
-const dependencyNames = Object.keys(packageJson.dependencies ?? {});
+import {
+  EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES,
+  isEditorBuildDependency,
+  isEditorBundledDependency,
+  isEditorExternalDependency,
+  packageNameFromSpecifier,
+} from "./scripts/editor-package-manifest.mjs";
 
 function copyEditorCss(): Plugin {
   return {
@@ -45,12 +42,30 @@ export default defineConfig(({ mode }) => ({
       fileName: () => "editor.mjs",
     },
     rolldownOptions: {
-      external: (id) =>
-        !id.includes("?inline") &&
-        !id.endsWith(".css") &&
-        dependencyNames.some((dependency) =>
-          id === dependency || id.startsWith(`${dependency}/`),
-        ),
+      external: (id) => {
+        if (id.includes("?inline") || id.endsWith(".css")) {
+          return false;
+        }
+
+        const packageName = packageNameFromSpecifier(id);
+        if (packageName && EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES.includes(packageName)) {
+          throw new Error(
+            `The standalone editor build imported app-only dependency ${packageName}.`,
+          );
+        }
+
+        if (packageName && !isEditorBuildDependency(id)) {
+          throw new Error(
+            `The standalone editor build imported ${packageName}, which is not listed in scripts/editor-package-manifest.mjs.`,
+          );
+        }
+
+        if (isEditorBundledDependency(id)) {
+          return false;
+        }
+
+        return isEditorExternalDependency(id);
+      },
       output: {
         codeSplitting: false,
       },

@@ -8,6 +8,22 @@
 npm install coflat
 ```
 
+## Dependency Boundary
+
+The standalone editor package intentionally exposes only the editor runtime.
+App-shell packages such as Tauri, Radix dialogs/selects, drag-and-drop tabs,
+file-tree widgets, websocket helpers, and Zustand stores are not part of the
+`coflat/editor` contract.
+
+Editor build dependencies are owned by `scripts/editor-package-manifest.mjs`.
+Change that manifest when a package becomes part of the public editor runtime or
+when a package is intentionally bundled into the editor artifact; do not rely on
+the root `dependencies` list as the editor contract. `pnpm check:package` builds
+the editor bundle and runs the package smoke test. The build fails on bare
+package imports outside the manifest, and the smoke test fails if generated
+`dist/editor.mjs` exposes an external dependency outside the public runtime list
+or imports an app-only dependency.
+
 ## Quick Start
 
 ```js

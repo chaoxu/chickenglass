@@ -3,6 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EDITOR_BUNDLED_DEPENDENCIES,
+  EDITOR_EXTERNAL_DEPENDENCIES,
+  EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES,
+  packageNameFromSpecifier,
+} from "./editor-package-manifest.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const tmpRoot = mkdtempSync(join(tmpdir(), "coflat-editor-package-"));
@@ -10,6 +16,9 @@ const consumerDir = join(tmpRoot, "consumer");
 const packageJson = JSON.parse(
   readFileSync(join(repoRoot, "package.json"), "utf8"),
 );
+const editorExternalDependencies = new Set(EDITOR_EXTERNAL_DEPENDENCIES);
+const editorBundledDependencies = new Set(EDITOR_BUNDLED_DEPENDENCIES);
+const editorForbiddenExternalDependencies = new Set(EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES);
 
 mkdirSync(consumerDir, { recursive: true });
 
@@ -29,7 +38,92 @@ function parsePackJson(output) {
   return JSON.parse(match[0]);
 }
 
+function extractImportedSpecifiers(moduleSource) {
+  const specifiers = new Set();
+  const patterns = [
+    /\bfrom\s*["']([^"']+)["']/g,
+    /\bimport\s*["']([^"']+)["']/g,
+    /\bimport\(\s*["']([^"']+)["']\s*\)/g,
+  ];
+
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(moduleSource)) !== null) {
+      specifiers.add(match[1]);
+    }
+  }
+
+  return [...specifiers].sort();
+}
+
+function validateEditorDependencyManifest() {
+  const rootDependencies = new Set(Object.keys(packageJson.dependencies ?? {}));
+  const rootInstallDependencies = new Set([
+    ...Object.keys(packageJson.dependencies ?? {}),
+    ...Object.keys(packageJson.devDependencies ?? {}),
+  ]);
+  const missing = EDITOR_EXTERNAL_DEPENDENCIES.filter(
+    (dependency) => !rootDependencies.has(dependency),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Editor dependency manifest references packages missing from dependencies: ${missing.join(", ")}`,
+    );
+  }
+
+  const forbiddenAllowed = EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES.filter((dependency) =>
+    editorExternalDependencies.has(dependency) || editorBundledDependencies.has(dependency),
+  );
+  if (forbiddenAllowed.length > 0) {
+    throw new Error(
+      `Editor dependency manifest allows app-only dependencies: ${forbiddenAllowed.join(", ")}`,
+    );
+  }
+
+  const missingBundled = EDITOR_BUNDLED_DEPENDENCIES.filter(
+    (dependency) => !rootInstallDependencies.has(dependency),
+  );
+  if (missingBundled.length > 0) {
+    throw new Error(
+      `Editor bundled dependency manifest references packages missing from dependencies/devDependencies: ${missingBundled.join(", ")}`,
+    );
+  }
+}
+
+function validateBuiltEditorImports(moduleSource) {
+  const violations = [];
+
+  for (const specifier of extractImportedSpecifiers(moduleSource)) {
+    if (specifier.startsWith(".") || specifier.startsWith("/")) {
+      violations.push(`relative import leaked into dist/editor.mjs: ${specifier}`);
+      continue;
+    }
+
+    const packageName = packageNameFromSpecifier(specifier);
+    if (!packageName) {
+      continue;
+    }
+
+    if (editorForbiddenExternalDependencies.has(packageName)) {
+      violations.push(`app-only dependency leaked into editor package: ${specifier}`);
+      continue;
+    }
+
+    if (!editorExternalDependencies.has(packageName)) {
+      violations.push(`external dependency is not in editor manifest: ${specifier}`);
+    }
+  }
+
+  if (violations.length > 0) {
+    throw new Error(
+      `Invalid standalone editor dependency contract:\n${violations.join("\n")}`,
+    );
+  }
+}
+
 try {
+  validateEditorDependencyManifest();
+
   const dryRunOutput = run("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], repoRoot);
   const [dryRunInfo] = parsePackJson(dryRunOutput);
 
@@ -56,9 +150,7 @@ try {
   }
 
   const builtModule = readFileSync(join(repoRoot, "dist", "editor.mjs"), "utf8");
-  if (/from ["']\.\.?\//.test(builtModule) || /import\(["']\.\.?\//.test(builtModule)) {
-    throw new Error("dist/editor.mjs still contains relative chunk imports");
-  }
+  validateBuiltEditorImports(builtModule);
   if (builtModule.includes("@overleaf/codemirror-tree-view")) {
     throw new Error("dist/editor.mjs still externalizes @overleaf/codemirror-tree-view");
   }
