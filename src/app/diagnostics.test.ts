@@ -78,4 +78,48 @@ describe("extractDiagnostics", () => {
       }),
     ]);
   });
+
+  it("reports duplicate heading IDs from the shared reference conflict model", () => {
+    const state = createState([
+      "# First {#dup}",
+      "",
+      "# Second {#dup}",
+    ].join("\n"));
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        message: "Duplicate heading ID \"dup\"",
+      }),
+    ]);
+  });
+
+  it("reports duplicate equation labels from the shared reference conflict model", () => {
+    const state = createState([
+      "$$ x $$ {#eq:dup}",
+      "",
+      "$$ y $$ {#eq:dup}",
+    ].join("\n"));
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        message: "Duplicate equation label \"eq:dup\"",
+      }),
+    ]);
+  });
+
+  it("does not also warn unresolved when a reference points at duplicate local targets", () => {
+    const state = createState([
+      "# First {#dup}",
+      "",
+      "# Second {#dup}",
+      "",
+      "See [@dup].",
+    ].join("\n"));
+
+    expect(extractDiagnostics(state).map((diagnostic) => diagnostic.message)).toEqual([
+      "Duplicate heading ID \"dup\"",
+    ]);
+  });
 });

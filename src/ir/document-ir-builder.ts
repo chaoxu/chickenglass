@@ -208,6 +208,7 @@ export function buildDocumentIR({
     ids: reference.ids,
     range: { from: reference.from, to: reference.to },
     bracketed: reference.bracketed,
+    locators: reference.locators,
   }));
 
   return {

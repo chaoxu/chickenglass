@@ -2,7 +2,12 @@ import type { EditorState } from "@codemirror/state";
 import { documentAnalysisField } from "../state/document-analysis";
 import { bibDataField } from "../state/bib-data";
 import type { DocumentAnalysis } from "../semantics/document";
-import { isLikelyLocalReferenceId } from "../lib/markdown/label-graph";
+import {
+  buildReferenceConflictModel,
+  type DuplicateReferenceTargetConflict,
+  type ReferenceLookup,
+} from "../semantics/reference-conflicts";
+import type { DocumentReferenceTarget } from "../semantics/reference-catalog";
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -28,94 +33,32 @@ export function sameDiagnosticEntries(
     ));
 }
 
-type ReferenceLookup = Pick<ReadonlyMap<string, unknown>, "has">;
-
 interface AnalysisDiagnosticOptions {
   readonly bibliography?: ReferenceLookup;
   readonly localOnlyWithoutBibliography?: boolean;
 }
 
-function pushDuplicateIdDiagnosticsFromAnalysis(
-  diagnostics: DiagnosticEntry[],
-  analysis: DocumentAnalysis,
-): void {
-  const blockIds = new Set<string>();
-  const equationIds = new Set<string>();
-  const seenBlockIds = new Set<string>();
-  const seenEquationIds = new Set<string>();
-  const seenHeadingIds = new Set<string>();
-
-  for (const fencedDiv of analysis.fencedDivs) {
-    if (fencedDiv.id) {
-      blockIds.add(fencedDiv.id);
-    }
+function duplicateTargetMessage(conflict: DuplicateReferenceTargetConflict): string {
+  const kinds = new Set(conflict.targets.map((target) => target.kind));
+  if (kinds.size !== 1) {
+    return `Duplicate local target ID "${conflict.id}"`;
   }
 
-  for (const equation of analysis.equations) {
-    if (equation.id) {
-      equationIds.add(equation.id);
-    }
+  const kind = conflict.targets[0]?.kind;
+  if (kind === "heading") {
+    return `Duplicate heading ID "${conflict.id}"`;
   }
+  if (kind === "equation") {
+    return `Duplicate equation label "${conflict.id}"`;
+  }
+  return `Duplicate local target ID "${conflict.id}"`;
+}
 
-  for (const fencedDiv of analysis.fencedDivs) {
-    if (!fencedDiv.id) continue;
-    if (seenBlockIds.has(fencedDiv.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate local target ID "${fencedDiv.id}"`,
-        from: fencedDiv.attrFrom ?? fencedDiv.from,
-        to: fencedDiv.attrTo ?? fencedDiv.to,
-      });
-      continue;
-    }
-    seenBlockIds.add(fencedDiv.id);
-  }
-
-  for (const equation of analysis.equations) {
-    if (!equation.id) continue;
-    if (blockIds.has(equation.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate local target ID "${equation.id}"`,
-        from: equation.labelFrom,
-        to: equation.labelTo,
-      });
-      continue;
-    }
-    if (seenEquationIds.has(equation.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate equation label "${equation.id}"`,
-        from: equation.labelFrom,
-        to: equation.labelTo,
-      });
-      continue;
-    }
-    seenEquationIds.add(equation.id);
-  }
-
-  for (const heading of analysis.headings) {
-    if (!heading.id) continue;
-    if (blockIds.has(heading.id) || equationIds.has(heading.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate local target ID "${heading.id}"`,
-        from: heading.from,
-        to: heading.to,
-      });
-      continue;
-    }
-    if (seenHeadingIds.has(heading.id)) {
-      diagnostics.push({
-        severity: "error",
-        message: `Duplicate heading ID "${heading.id}"`,
-        from: heading.from,
-        to: heading.to,
-      });
-      continue;
-    }
-    seenHeadingIds.add(heading.id);
-  }
+function duplicateDiagnosticRange(target: DocumentReferenceTarget): {
+  readonly from: number;
+  readonly to: number;
+} {
+  return { from: target.from, to: target.to };
 }
 
 export function extractDiagnosticsFromAnalysis(
@@ -124,25 +67,32 @@ export function extractDiagnosticsFromAnalysis(
 ): DiagnosticEntry[] {
   const { bibliography, localOnlyWithoutBibliography = false } = options;
   const diagnostics: DiagnosticEntry[] = [];
-  pushDuplicateIdDiagnosticsFromAnalysis(diagnostics, analysis);
+  const conflictModel = buildReferenceConflictModel(analysis, {
+    bibliography,
+    localOnlyWithoutBibliography,
+  });
 
-  for (const ref of analysis.references) {
-    for (const id of ref.ids) {
-      if (!bibliography && localOnlyWithoutBibliography && !isLikelyLocalReferenceId(id)) {
-        continue;
+  for (const conflict of conflictModel.conflicts) {
+    if (conflict.kind === "duplicate-target") {
+      const message = duplicateTargetMessage(conflict);
+      for (const target of conflict.targets.slice(1)) {
+        const { from, to } = duplicateDiagnosticRange(target);
+        diagnostics.push({
+          severity: "error",
+          message,
+          from,
+          to,
+        });
       }
-      const localTarget = analysis.referenceIndex.get(id);
-      if (localTarget?.type === "crossref" || localTarget?.type === "label") {
-        continue;
-      }
-      if (bibliography?.has(id)) {
-        continue;
-      }
+      continue;
+    }
+
+    if (conflict.kind === "unresolved-reference") {
       diagnostics.push({
         severity: "warning",
-        message: `Unresolved reference "@${id}"`,
-        from: ref.from,
-        to: ref.to,
+        message: `Unresolved reference "@${conflict.id}"`,
+        from: conflict.reference.from,
+        to: conflict.reference.to,
       });
     }
   }

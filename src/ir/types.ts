@@ -65,6 +65,8 @@ export interface ReferenceNode {
   readonly range: Range;
   /** Whether this is a bracketed reference ([@id]) vs narrative (@id). */
   readonly bracketed: boolean;
+  /** Locator strings parallel to ids (e.g. "p. 5"), undefined when absent. */
+  readonly locators: readonly (string | undefined)[];
 }
 
 /** A single table cell. */

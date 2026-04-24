@@ -5,17 +5,13 @@
 
 import {
   type DocumentSemantics,
-  type FencedDivSemantics,
 } from "../semantics/document";
 import type { DocumentArtifacts } from "../semantics/incremental/engine";
 import {
-  getDocumentAnalysisSnapshot,
+  getDocumentArtifacts,
   rememberDocumentAnalysisSnapshot,
 } from "../semantics/incremental/cached-document-analysis";
-import {
-  buildDocumentReferenceCatalog,
-  type DocumentReferenceCatalog,
-} from "../semantics/reference-catalog";
+import type { BlockNode, DocumentIR, MathNode, ReferenceNode, SectionNode } from "../ir/types";
 import type { FileIndex, IndexEntry, IndexReference } from "./query-api";
 
 const fileIndexAnalysisCache = new WeakMap<FileIndex, DocumentSemantics>();
@@ -27,29 +23,32 @@ export function extractFileIndex(
   file: string,
   analysis?: FileIndexAnalysisInput,
 ): FileIndex {
-  const resolvedAnalysis = resolveAnalysis(content, file, analysis);
+  const artifacts = resolveArtifacts(content, file, analysis);
   const entries: IndexEntry[] = [];
   const references: IndexReference[] = [];
 
-  extractFromAnalysis(content, file, resolvedAnalysis, entries, references);
+  extractFromIR(file, artifacts.ir, entries, references);
   const fileIndex = { file, sourceText: content, entries, references };
-  fileIndexAnalysisCache.set(fileIndex, resolvedAnalysis);
+  fileIndexAnalysisCache.set(fileIndex, artifacts.analysisSnapshot);
   return fileIndex;
 }
 
-function resolveAnalysis(
+function resolveArtifacts(
   content: string,
   file: string,
   analysis: FileIndexAnalysisInput | undefined,
-): DocumentSemantics {
+): DocumentArtifacts {
   if (!analysis) {
-    return getDocumentAnalysisSnapshot(content, file);
+    return getDocumentArtifacts(content, file);
   }
 
-  const documentAnalysis = isDocumentArtifacts(analysis)
-    ? analysis.analysisSnapshot
-    : analysis;
-  return rememberDocumentAnalysisSnapshot(content, documentAnalysis, file);
+  if (isDocumentArtifacts(analysis)) {
+    rememberDocumentAnalysisSnapshot(content, analysis.analysisSnapshot, file);
+    return analysis;
+  }
+
+  rememberDocumentAnalysisSnapshot(content, analysis, file);
+  return getDocumentArtifacts(content, file);
 }
 
 function isDocumentArtifacts(
@@ -64,114 +63,91 @@ export function getFileIndexAnalysis(
   return fileIndexAnalysisCache.get(fileIndex);
 }
 
-function extractFromAnalysis(
-  content: string,
+function extractFromIR(
   file: string,
-  analysis: DocumentSemantics,
+  ir: DocumentIR,
   entries: IndexEntry[],
   references: IndexReference[],
 ): void {
-  const catalog = buildDocumentReferenceCatalog(analysis);
-  appendBlockEntries(content, file, analysis, catalog, entries);
-  appendEquationEntries(file, catalog, entries);
-  appendHeadingEntries(file, catalog, entries);
-  appendReferences(file, catalog, references);
+  appendBlockEntries(file, ir.blocks, entries);
+  appendEquationEntries(file, ir.math, entries);
+  appendHeadingEntries(file, ir.sections, entries);
+  appendReferences(file, ir.references, references);
 }
 
 function appendBlockEntries(
-  content: string,
   file: string,
-  analysis: DocumentSemantics,
-  catalog: DocumentReferenceCatalog,
+  blocks: readonly BlockNode[],
   entries: IndexEntry[],
 ): void {
-  for (const target of catalog.targets) {
-    if (target.kind !== "block") continue;
-    const div = analysis.fencedDivByFrom.get(target.from);
-    if (!div) continue;
-
+  for (const block of blocks) {
     entries.push({
-      type: target.blockType ?? "div",
-      label: target.id,
-      title: target.title,
+      type: block.type,
+      label: block.label,
+      title: block.title,
       file,
-      position: { from: target.from, to: target.to },
-      content: extractFencedDivBody(div, content),
+      position: block.range,
+      content: block.content,
     });
   }
 }
 
 function appendEquationEntries(
   file: string,
-  catalog: DocumentReferenceCatalog,
+  math: readonly MathNode[],
   entries: IndexEntry[],
 ): void {
-  for (const target of catalog.targets) {
-    if (target.kind !== "equation") continue;
+  for (const equation of math) {
+    if (!equation.display || !equation.label) continue;
     entries.push({
       type: "equation",
-      label: target.id,
+      label: equation.label,
       file,
-      position: { from: target.from, to: target.to },
-      content: target.text ?? "",
+      position: equation.range,
+      content: equation.latex,
     });
   }
 }
 
 function appendHeadingEntries(
   file: string,
-  catalog: DocumentReferenceCatalog,
+  sections: readonly SectionNode[],
   entries: IndexEntry[],
 ): void {
-  for (const target of catalog.targets) {
-    if (target.kind !== "heading") continue;
+  for (const section of walkSections(sections)) {
     entries.push({
       type: "heading",
-      label: target.id,
-      number: target.number,
-      title: target.title,
+      label: section.id,
+      number: section.number || undefined,
+      title: section.heading,
       file,
-      position: { from: target.from, to: target.to },
-      content: target.title ?? "",
+      position: section.range,
+      content: section.heading,
     });
   }
 }
 
 function appendReferences(
   file: string,
-  catalog: DocumentReferenceCatalog,
+  irReferences: readonly ReferenceNode[],
   references: IndexReference[],
 ): void {
-  for (const ref of catalog.references) {
+  for (const ref of irReferences) {
     references.push({
       bracketed: ref.bracketed,
       ids: ref.ids,
       locators: ref.locators,
       sourceFile: file,
-      position: { from: ref.from, to: ref.to },
+      position: ref.range,
     });
   }
 }
 
-function extractFencedDivBody(div: FencedDivSemantics, content: string): string {
-  const bodyStart = skipFenceLine(content, div.openFenceTo);
-  const bodyEnd = trimClosingFence(content, div.closeFenceFrom, div.to);
-  if (bodyEnd <= bodyStart) return "";
-  return content.slice(bodyStart, bodyEnd);
-}
-
-function skipFenceLine(content: string, pos: number): number {
-  let next = pos;
-  while (next < content.length && content[next] !== "\n") next++;
-  if (next < content.length && content[next] === "\n") next++;
-  return next;
-}
-
-function trimClosingFence(content: string, closeFenceFrom: number, fallbackTo: number): number {
-  if (closeFenceFrom < 0) return fallbackTo;
-  let end = closeFenceFrom;
-  if (end > 0 && content[end - 1] === "\n") end--;
-  return end;
+function* walkSections(sections: readonly SectionNode[]): Generator<SectionNode> {
+  for (const section of sections) {
+    yield section;
+    yield* walkSections(section.children);
+  }
 }
 
 export function updateFileInIndex(

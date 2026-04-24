@@ -443,6 +443,58 @@ See [@eq:class] for the class equation.`;
       );
     });
 
+    it("derives headings, equations, blocks, and references from the IR projection", () => {
+      const content = [
+        "# Intro {#sec:intro}",
+        "",
+        "See [@thm:main, p. 12] and @eq:main.",
+        "",
+        '::: {.theorem #thm:main title="Main Result"}',
+        "Body text.",
+        ":::",
+        "",
+        "$$x^2$$ {#eq:main}",
+        "",
+      ].join("\n");
+      const artifacts = analyzeMarkdownDocument(content, "paper.md");
+      const result = extractFileIndex(content, "paper.md", artifacts);
+
+      expect(result.entries.map((entry) => ({
+        type: entry.type,
+        label: entry.label,
+        title: entry.title,
+        content: entry.content,
+      }))).toEqual([
+        {
+          type: artifacts.ir.blocks[0]?.type,
+          label: artifacts.ir.blocks[0]?.label,
+          title: artifacts.ir.blocks[0]?.title,
+          content: artifacts.ir.blocks[0]?.content,
+        },
+        {
+          type: "equation",
+          label: artifacts.ir.math[0]?.label,
+          title: undefined,
+          content: artifacts.ir.math[0]?.latex,
+        },
+        {
+          type: "heading",
+          label: artifacts.ir.sections[0]?.id,
+          title: artifacts.ir.sections[0]?.heading,
+          content: artifacts.ir.sections[0]?.heading,
+        },
+      ]);
+      expect(result.references).toEqual(
+        artifacts.ir.references.map((reference) => ({
+          bracketed: reference.bracketed,
+          ids: reference.ids,
+          locators: reference.locators,
+          sourceFile: "paper.md",
+          position: reference.range,
+        })),
+      );
+    });
+
     it("treats legacy include blocks as ordinary fenced-div semantics", () => {
       const content = [
         "::: {.include #inc:chapter}",

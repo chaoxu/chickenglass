@@ -1,8 +1,5 @@
 import type { ChangeDesc } from "@codemirror/state";
-import type {
-  CrossrefReferenceEntry,
-  LabelReferenceEntry,
-} from "../references/model";
+import type { CrossrefReferenceEntry } from "../references/model";
 import type {
   DocumentAnalysis,
   ReferenceSemantics,
@@ -83,23 +80,6 @@ function getHeadingReferenceEntry(
     : undefined;
 }
 
-function getEquationReferenceEntries(
-  analysis: DocumentAnalysis,
-): LabelReferenceEntry[] {
-  const entries: LabelReferenceEntry[] = [];
-  for (const entry of analysis.referenceIndex.values()) {
-    if (entry.type === "label" && entry.targetKind === "equation") {
-      entries.push(entry);
-    }
-  }
-  entries.sort((left, right) =>
-    (left.target.range?.from ?? left.sourceRange.from)
-      - (right.target.range?.from ?? right.sourceRange.from)
-    || (left.target.range?.to ?? left.sourceRange.to)
-      - (right.target.range?.to ?? right.sourceRange.to));
-  return entries;
-}
-
 function buildBlockTargets(
   blocks: readonly BlockReferenceTargetInput[],
 ): DocumentReferenceTarget[] {
@@ -122,21 +102,16 @@ function buildBlockTargets(
 function buildEquationTargets(
   analysis: DocumentAnalysis,
 ): DocumentReferenceTarget[] {
-  return getEquationReferenceEntries(analysis)
-    .flatMap((entry) => {
-      const range = entry.target.range;
-      if (!range) return [];
-      return [{
-        id: entry.id,
-        kind: "equation" as const,
-        from: range.from,
-        to: range.to,
-        displayLabel: entry.display,
-        number: entry.number,
-        ordinal: entry.ordinal,
-        text: entry.text,
-      }];
-    });
+  return analysis.equations.map((equation) => ({
+    id: equation.id,
+    kind: "equation" as const,
+    from: equation.from,
+    to: equation.to,
+    displayLabel: formatEquationReferenceLabel(equation.number),
+    number: String(equation.number),
+    ordinal: equation.number,
+    text: equation.latex,
+  }));
 }
 
 function buildHeadingTargets(
