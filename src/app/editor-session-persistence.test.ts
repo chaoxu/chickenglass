@@ -684,4 +684,51 @@ describe("createEditorSessionPersistence", () => {
     expect(onAfterSave).toHaveBeenCalledWith("copy.md");
     expect(onAfterPathRemoved).toHaveBeenCalledWith("main.md");
   });
+
+  it("saveAs rejects outside-project destinations without changing dirty active edits", async () => {
+    sessionMockState.isTauri = true;
+    sessionMockState.saveDialog.mockResolvedValue("/tmp/outside.md");
+    sessionMockState.toProjectRelativePath.mockRejectedValue(
+      new Error("Path '/tmp/outside.md' escapes project root"),
+    );
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fs = new MemoryFileSystem({ "main.md": "# Main\n" });
+    const refreshTree = vi.fn(async () => {});
+    const addRecentFile = vi.fn();
+    const onAfterPathRemoved = vi.fn();
+    const onAfterSave = vi.fn();
+    const ref = createHarness({
+      fs,
+      currentDocument: {
+        path: "main.md",
+        name: "main.md",
+        dirty: true,
+      },
+      editorDoc: "# Unsaved\n",
+      buffers: createDocumentMap({ "main.md": "# Main\n" }),
+      liveDocs: createDocumentMap({ "main.md": "# Unsaved\n" }),
+      refreshTree,
+      addRecentFile,
+      onAfterPathRemoved,
+      onAfterSave,
+    });
+    ref.runtime.pipeline.bumpRevision("main.md");
+
+    await expect(ref.result.saveAs()).rejects.toThrow("escapes project root");
+
+    expect(ref.runtime.getCurrentDocument()).toEqual({
+      path: "main.md",
+      name: "main.md",
+      dirty: true,
+    });
+    expect(editorDocumentToString(ref.runtime.buffers.get("main.md") ?? emptyEditorDocument)).toBe("# Main\n");
+    expect(editorDocumentToString(ref.runtime.liveDocs.get("main.md") ?? emptyEditorDocument)).toBe("# Unsaved\n");
+    expect(ref.runtime.getEditorDoc()).toBe("# Unsaved\n");
+    await expect(fs.readFile("main.md")).resolves.toBe("# Main\n");
+    expect(refreshTree).not.toHaveBeenCalled();
+    expect(addRecentFile).not.toHaveBeenCalled();
+    expect(onAfterSave).not.toHaveBeenCalled();
+    expect(onAfterPathRemoved).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
 });

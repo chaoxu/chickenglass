@@ -618,6 +618,31 @@ describe("useAppOverlays", () => {
     expect(overlayHookState.hotkeys.map((binding) => binding.handler)).not.toContain(recentCommand.action);
   });
 
+  it("alerts when Save As rejects a destination outside the project root", async () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { props, editor } = await createHookProps({
+      currentPath: "notes/current.md",
+      currentDocText: "# Current\n",
+    });
+    vi.mocked(editor.saveAs).mockRejectedValueOnce(
+      new Error("Path '/tmp/outside.md' escapes project root"),
+    );
+
+    const { result } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: props,
+    });
+
+    act(() => {
+      getCommand(result.current.commands, "file.save-as").action();
+    });
+
+    await vi.waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        "Save As can only save inside the current project folder. Choose a location inside the open project.",
+      );
+    });
+  });
+
   it("loads export implementation from export command actions", async () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { props, fs } = await createHookProps({

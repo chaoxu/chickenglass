@@ -19,3 +19,12 @@ export function isProjectRootEscapeError(error: unknown): boolean {
   const message = getErrorMessage(error);
   return message?.includes("escapes project root") ?? false;
 }
+
+export function saveAsErrorMessage(error: unknown): string {
+  if (isProjectRootEscapeError(error)) {
+    return "Save As can only save inside the current project folder. Choose a location inside the open project.";
+  }
+
+  const message = getErrorMessage(error);
+  return message ? `Save As failed: ${message}` : "Save As failed";
+}

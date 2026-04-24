@@ -15,6 +15,7 @@ import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { AppWorkspaceSessionController } from "./use-app-workspace-session";
 import type { UseDialogsReturn } from "./use-dialogs";
 import type { SidebarLayoutController } from "./use-sidebar-layout";
+import { saveAsErrorMessage } from "../project-root-errors";
 
 interface AppCommandRegistryDeps {
   readonly fs: FileSystem;
@@ -170,7 +171,7 @@ export function useAppCommandRegistry({
 
   const handleSaveAs = useCallback(() => {
     void editor.saveAs().catch((e: unknown) => {
-      console.error("[overlays] save-as failed", e);
+      window.alert(saveAsErrorMessage(e));
     });
   }, [editor]);
 

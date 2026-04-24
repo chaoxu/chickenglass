@@ -9,6 +9,19 @@ import type { AppEditorShellController } from "./use-app-editor-shell";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 
+const shellMockState = vi.hoisted(() => ({
+  isTauri: false,
+  saveDialog: vi.fn(async () => null as string | null),
+  toProjectRelativePath: vi.fn(async (path: string) => path),
+  reset() {
+    this.isTauri = false;
+    this.saveDialog.mockReset();
+    this.saveDialog.mockImplementation(async () => null);
+    this.toProjectRelativePath.mockReset();
+    this.toProjectRelativePath.mockImplementation(async (path: string) => path);
+  },
+}));
+
 vi.mock("../perf", () => ({
   measureAsync: (_name: string, task: () => Promise<unknown>) => task(),
   withPerfOperation: async (
@@ -27,6 +40,18 @@ vi.mock("../perf", () => ({
     measureSync: (_spanName, spanTask) => spanTask(),
     end: () => {},
   }),
+}));
+
+vi.mock("../../lib/tauri", () => ({
+  isTauri: () => shellMockState.isTauri,
+}));
+
+vi.mock("../tauri-client/fs", () => ({
+  toProjectRelativePathCommand: shellMockState.toProjectRelativePath,
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: shellMockState.saveDialog,
 }));
 
 const { useAppEditorShell } = await import("./use-app-editor-shell");
@@ -131,6 +156,7 @@ describe("useAppEditorShell", () => {
   let root: Root;
 
   beforeEach(() => {
+    shellMockState.reset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -381,6 +407,44 @@ describe("useAppEditorShell", () => {
 
     act(() => {
       ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed again\n"));
+    });
+
+    expect(ref.result.saveActivity.status).toBe("idle");
+    consoleError.mockRestore();
+  });
+
+  it("surfaces Save As project-root failures until the next edit", async () => {
+    shellMockState.isTauri = true;
+    shellMockState.saveDialog.mockResolvedValue("/tmp/outside.md");
+    shellMockState.toProjectRelativePath.mockRejectedValue(
+      new Error("Path '/tmp/outside.md' escapes project root"),
+    );
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    await act(async () => {
+      await expect(ref.result.saveAs()).rejects.toThrow("escapes project root");
+    });
+
+    expect(ref.result.saveActivity).toEqual({
+      status: "failed",
+      message: "Save As can only save inside the current project folder. Choose a location inside the open project.",
+    });
+    expect(ref.result.currentPath).toBe("a.md");
+    await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
     });
 
     expect(ref.result.saveActivity.status).toBe("idle");

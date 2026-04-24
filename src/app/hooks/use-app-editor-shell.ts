@@ -20,6 +20,7 @@ import type { ActiveDocumentSignal } from "../active-document-signal";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 import type { EditorDocumentChange } from "../editor-doc-change";
+import { saveAsErrorMessage } from "../project-root-errors";
 
 interface PendingModeOverride {
   path: string;
@@ -371,8 +372,22 @@ export function useAppEditorShell({
   }, [flushCurrentHotExitBackup, flushDirtyCurrentDocument, runEditorTransaction, session]);
 
   const saveAs = useCallback(async () => {
+    const saveToken = ++saveActivityTokenRef.current;
+    setSaveActivity({ status: "saving" });
     runEditorTransaction("save", () => undefined);
-    await session.saveAs();
+    try {
+      await session.saveAs();
+      setSaveActivity((previous) =>
+        saveActivityTokenRef.current === saveToken && previous.status === "saving"
+          ? { status: "idle" }
+          : previous,
+      );
+    } catch (error: unknown) {
+      if (saveActivityTokenRef.current === saveToken) {
+        setSaveActivity({ status: "failed", message: saveAsErrorMessage(error) });
+      }
+      throw error;
+    }
   }, [runEditorTransaction, session]);
 
   const handleWindowCloseRequest = useCallback(async () => {
