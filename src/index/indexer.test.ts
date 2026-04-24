@@ -124,6 +124,61 @@ The proof.
       expect(result.entries[2].type).toBe("proof");
     });
 
+    it("populates semantic numbers for numbered theorem-like blocks", () => {
+      const content = [
+        "::: {.theorem #thm-a}",
+        "First theorem.",
+        ":::",
+        "",
+        "::: {.lemma #lem-a}",
+        "A lemma.",
+        ":::",
+        "",
+        "::: {.definition #def-a}",
+        "A definition.",
+        ":::",
+        "",
+        "::: {.proof #proof-a}",
+        "Proof body.",
+        ":::",
+      ].join("\n");
+      const result = extractFileIndex(content, "test.md");
+
+      expect(queryIndex({ files: new Map([["test.md", result]]) }, { type: "theorem" })[0])
+        .toMatchObject({ label: "thm-a", number: "1" });
+      expect(queryIndex({ files: new Map([["test.md", result]]) }, { type: "lemma" })[0])
+        .toMatchObject({ label: "lem-a", number: "2" });
+      expect(queryIndex({ files: new Map([["test.md", result]]) }, { type: "definition" })[0])
+        .toMatchObject({ label: "def-a", number: "1" });
+      expect(queryIndex({ files: new Map([["test.md", result]]) }, { type: "proof" })[0]?.number)
+        .toBeUndefined();
+    });
+
+    it("populates semantic numbers for custom block counters", () => {
+      const content = [
+        "---",
+        "blocks:",
+        "  claim:",
+        "    counter: theorem",
+        "    numbered: true",
+        "    title: Claim",
+        "---",
+        "",
+        "::: {.theorem #thm-a}",
+        "First theorem.",
+        ":::",
+        "",
+        "::: {.claim #claim-a}",
+        "A claim.",
+        ":::",
+      ].join("\n");
+      const result = extractFileIndex(content, "custom.md");
+      const index = { files: new Map([["custom.md", result]]) };
+
+      expect(queryIndex(index, { label: "thm-a" })[0]?.number).toBe("1");
+      expect(queryIndex(index, { label: "claim-a" })[0]?.number).toBe("2");
+    });
+
     it("handles nested fenced divs", () => {
       const content = `:::: {.theorem #outer}
 Outer content.
