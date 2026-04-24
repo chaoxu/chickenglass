@@ -17,13 +17,12 @@ import { $convertFromMarkdownString, $convertToMarkdownString } from "@lexical/m
 import {
   $getRoot,
   $isElementNode,
-  type LexicalEditor,
   type LexicalNode,
   type SerializedElementNode,
   type SerializedLexicalNode,
 } from "lexical";
 
-import { coflatMarkdownTransformers, createHeadlessCoflatEditor } from "./markdown";
+import { coflatMarkdownTransformers, withPooledHeadlessMarkdownEditor } from "./markdown";
 
 /**
  * Faithful re-implementation of Lexical's internal `exportNodeToJSON`
@@ -43,13 +42,6 @@ export function $exportLexicalNodeToJSON(node: LexicalNode): SerializedLexicalNo
   return serialized;
 }
 
-let pooledEditor: LexicalEditor | null = null;
-
-function getPooledEditor(): LexicalEditor {
-  pooledEditor ??= createHeadlessCoflatEditor();
-  return pooledEditor;
-}
-
 /**
  * Parse a markdown fragment in the pooled side editor and return the
  * resulting top-level blocks as serialized JSON. Caller is responsible
@@ -60,20 +52,21 @@ function getPooledEditor(): LexicalEditor {
  * `coflatMarkdownTransformers` the live editor uses on full-doc import.
  */
 export function parseMarkdownFragmentToJSON(markdown: string): SerializedLexicalNode[] {
-  const editor = getPooledEditor();
-  let result: SerializedLexicalNode[] = [];
-  editor.update(() => {
-    // shouldPreserveNewLines=false: blank lines act as paragraph
-    // separators (Pandoc semantics) instead of becoming empty
-    // paragraphs of their own. The full-doc importer uses `true` so
-    // round-trip line counts match exactly; for a fragment the user
-    // typing `\n\n` means "split into two paragraphs", not "insert an
-    // empty paragraph between two".
-    $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, false);
-    const root = $getRoot();
-    result = root.getChildren().map($exportLexicalNodeToJSON);
-  }, { discrete: true });
-  return result;
+  return withPooledHeadlessMarkdownEditor((editor) => {
+    let result: SerializedLexicalNode[] = [];
+    editor.update(() => {
+      // shouldPreserveNewLines=false: blank lines act as paragraph
+      // separators (Pandoc semantics) instead of becoming empty
+      // paragraphs of their own. The full-doc importer uses `true` so
+      // round-trip line counts match exactly; for a fragment the user
+      // typing `\n\n` means "split into two paragraphs", not "insert an
+      // empty paragraph between two".
+      $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, false);
+      const root = $getRoot();
+      result = root.getChildren().map($exportLexicalNodeToJSON);
+    }, { discrete: true });
+    return result;
+  });
 }
 
 /**
@@ -89,19 +82,19 @@ export function parseMarkdownFragmentToJSON(markdown: string): SerializedLexical
  * exporter a real top-level child to render.
  */
 export function serializeBlockToMarkdown(blockJSON: SerializedLexicalNode): string {
-  const editor = getPooledEditor();
-  let result = "";
-  editor.update(() => {
-    const root = $getRoot();
-    root.clear();
-    const nodes = $generateNodesFromSerializedNodes([blockJSON]);
-    for (const node of nodes) {
-      root.append(node);
-    }
-    // shouldPreserveNewLines=false matches the parse side so the source
-    // we hand the user round-trips through `parseMarkdownFragmentToJSON`
-    // with no spurious blank-paragraph insertions.
-    result = $convertToMarkdownString(coflatMarkdownTransformers, undefined, false);
-  }, { discrete: true });
-  return result;
+  return withPooledHeadlessMarkdownEditor((editor) => {
+    let result = "";
+    editor.update(() => {
+      const root = $getRoot();
+      const nodes = $generateNodesFromSerializedNodes([blockJSON]);
+      for (const node of nodes) {
+        root.append(node);
+      }
+      // shouldPreserveNewLines=false matches the parse side so the source
+      // we hand the user round-trips through `parseMarkdownFragmentToJSON`
+      // with no spurious blank-paragraph insertions.
+      result = $convertToMarkdownString(coflatMarkdownTransformers, undefined, false);
+    }, { discrete: true });
+    return result;
+  });
 }

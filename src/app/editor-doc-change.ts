@@ -1,9 +1,10 @@
 import { Text } from "@codemirror/state";
-import type { EditorDocumentChange } from "../lib/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/editor-document-diff";
+
 export {
   createMinimalEditorDocumentChanges,
   type EditorDocumentChange,
-} from "../lib/editor-doc-change";
+} from "../lib/editor-document-diff";
 
 export type EditorDocumentText = Text;
 

@@ -1,4 +1,3 @@
-import { createElement, type JSX } from "react";
 import {
   DecoratorNode,
   type EditorConfig,
@@ -8,6 +7,7 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from "lexical";
+import { createElement, type JSX } from "react";
 
 export type InlineMathDelimiter = "dollar" | "paren";
 
@@ -17,7 +17,7 @@ export type SerializedInlineMathNode = Spread<{
   raw: string;
 }, SerializedLexicalNode>;
 
-import { InlineMathRenderer } from "../renderers/inline-math-renderer";
+import { getInlineMathRenderer } from "./renderer-registry";
 
 export class InlineMathNode extends DecoratorNode<JSX.Element> {
   __raw: string;
@@ -119,7 +119,8 @@ export class InlineMathNode extends DecoratorNode<JSX.Element> {
   }
 
   decorate(): JSX.Element {
-    return createElement(InlineMathRenderer, {
+    const Renderer = getInlineMathRenderer();
+    return createElement(Renderer, {
       nodeKey: this.getKey(),
       raw: this.getRaw(),
     });

@@ -1,6 +1,6 @@
 import {
-  ElementNode,
   type ElementDOMSlot,
+  ElementNode,
   type LexicalNode,
   type LexicalUpdateJSON,
   type NodeKey,
@@ -8,7 +8,10 @@ import {
   type Spread,
 } from "lexical";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
-import { markTableSourceBlock } from "../source-position-contract";
+import {
+  markTableSourceBlock,
+  SOURCE_POSITION_DATASET,
+} from "../source-position-contract";
 
 export type TableColumnAlignment = "center" | "left" | "right" | null;
 
@@ -20,6 +23,7 @@ export type SerializedTableNode = Spread<{
 function syncTableDom(node: TableNode, dom: HTMLTableElement): void {
   dom.className = LEXICAL_NODE_CLASS.TABLE_BLOCK;
   markTableSourceBlock(dom, node.getAlignments().length);
+  dom.dataset[SOURCE_POSITION_DATASET.sourceBlockNodeKey] = node.getKey();
 }
 
 export class TableNode extends ElementNode {

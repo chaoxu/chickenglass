@@ -1,4 +1,3 @@
-import { createElement, type JSX } from "react";
 import {
   DecoratorNode,
   type EditorConfig,
@@ -8,6 +7,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from "lexical";
+import { createElement, type JSX } from "react";
+
+import { getHeadingAttributeRenderer } from "./renderer-registry";
 
 export type SerializedHeadingAttributeNode = Spread<{
   raw: string;
@@ -83,9 +85,9 @@ export class HeadingAttributeNode extends DecoratorNode<JSX.Element> {
   }
 
   decorate(): JSX.Element {
-    return createElement("span", {
-      "aria-hidden": true,
-      className: "cf-heading-attribute-token__content",
+    const Renderer = getHeadingAttributeRenderer();
+    return createElement(Renderer, {
+      raw: this.getRaw(),
     });
   }
 }

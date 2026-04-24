@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { computeLiveStats } from "../writing-stats";
-import { Breadcrumbs } from "./breadcrumbs";
+import type { EditorMode } from "../../editor-display-mode";
+import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
+import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
+import { REVEAL_MODE, type RevealMode } from "../../lexical/reveal-mode";
+import type { ProjectConfig } from "../../project-config";
+import { getDocumentAnalysisSnapshot } from "../../semantics/incremental/cached-document-analysis";
 import type { DiagnosticEntry } from "../diagnostics";
+import type { EditorDocumentChange } from "../editor-doc-change";
+import type { FileSystem } from "../file-manager";
+import type { HeadingEntry } from "../heading-ancestry";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import type { HeadingEntry } from "../heading-ancestry";
+import type { ResolvedTheme } from "../theme-dom";
+import { computeLiveStats } from "../writing-stats";
+import { Breadcrumbs } from "./breadcrumbs";
 import {
   deriveSidebarSemanticState,
   type SidebarSemanticState,
 } from "./sidebar-semantic-state";
-import type { FileSystem } from "../file-manager";
-import type { ResolvedTheme } from "../theme-dom";
-import type { EditorMode } from "../../editor-display-mode";
-import type { EditorDocumentChange } from "../../lib/editor-doc-change";
-import { REVEAL_MODE, type RevealMode } from "../../lexical/reveal-mode";
-import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
-import { LexicalMarkdownEditor } from "../../lexical/markdown-editor";
-import type { ProjectConfig } from "../../project-config";
-import { getDocumentAnalysisSnapshot } from "../../semantics/incremental/cached-document-analysis";
 
 interface LexicalEditorPaneProps {
   readonly doc: string;

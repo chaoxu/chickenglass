@@ -1,5 +1,5 @@
-import type { EditorDocumentChange } from "../lib/editor-doc-change";
 import type { MarkdownEditorSelection } from "../lib/debug-types";
+import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 
 export type { MarkdownEditorSelection } from "../lib/debug-types";
 

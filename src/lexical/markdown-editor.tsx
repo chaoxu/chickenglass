@@ -27,10 +27,7 @@ import {
   useState,
 } from "react";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
-import {
-  createMinimalEditorDocumentChanges,
-  type EditorDocumentChange,
-} from "../lib/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 import { useDevSettings } from "../state/dev-settings";
 import {
   type FocusOwner,
@@ -43,6 +40,7 @@ import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
 import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { DocumentChangeBridgeProvider } from "./document-change-bridge";
+import { publishLexicalDocumentSnapshot } from "./document-publication";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { LexicalEditorHandlePlugin } from "./editor-handle-plugin";
@@ -59,6 +57,12 @@ import { EmbeddedFieldFlushProvider } from "./embedded-field-flush-registry";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
 import { InteractionTracePlugin } from "./interaction-trace-plugin";
+import {
+  LexicalSourceBridgePlugin,
+  sameSelection,
+  shouldIgnoreMarkdownEditorChange,
+  useLexicalDocumentSessionController,
+} from "./lexical-document-session";
 import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import {
   coflatMarkdownNodes,
@@ -66,12 +70,6 @@ import {
   createLexicalInitialEditorState,
   lexicalMarkdownTheme,
 } from "./markdown";
-import {
-  LexicalSourceBridgePlugin,
-  sameSelection,
-  shouldIgnoreMarkdownEditorChange,
-  useLexicalDocumentSessionController,
-} from "./lexical-document-session";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
 import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
@@ -317,18 +315,12 @@ export function LexicalMarkdownEditor({
 
     if (editorModeRef.current === "source") {
       const nextDoc = getSourceText(editor);
-      const changes = createMinimalEditorDocumentChanges(
-        lastCommittedDocRef.current,
-        nextDoc,
-      );
-      if (changes.length === 0) {
-        return;
-      }
-
-      pendingLocalEchoDocRef.current = nextDoc;
-      lastCommittedDocRef.current = nextDoc;
-      onTextChange?.(nextDoc);
-      onDocChange?.(changes);
+      publishLexicalDocumentSnapshot({
+        lastCommittedDocRef,
+        onDocChange,
+        onTextChange,
+        pendingLocalEchoDocRef,
+      }, nextDoc);
       return;
     }
 

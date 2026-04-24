@@ -265,6 +265,62 @@ describe("applyIncrementalRichDocumentSync", () => {
     expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
   });
 
+  it("updates the edited duplicate fenced div by source-range index", () => {
+    const repeatedRawBlock = [
+      "::: {.proof}",
+      "Repeated body.",
+      ":::",
+    ].join("\n");
+    const previousMarkdown = [
+      repeatedRawBlock,
+      "",
+      repeatedRawBlock,
+    ].join("\n");
+    const secondBodyOffset = previousMarkdown.lastIndexOf("Repeated body.")
+      + "Repeated".length;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, secondBodyOffset),
+      "2",
+      previousMarkdown.slice(secondBodyOffset),
+    ].join("");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    const nextKeys = readTopLevelKeys(editor);
+    expect(nextKeys[0]).toBe(previousKeys[0]);
+    expect(nextKeys[1]).toBe(previousKeys[1]);
+  });
+
+  it("updates the edited duplicate plain paragraph by source-range index", () => {
+    const previousMarkdown = [
+      "Repeated paragraph.",
+      "",
+      "Repeated paragraph.",
+    ].join("\n");
+    const secondOffset = previousMarkdown.lastIndexOf("paragraph") + "paragraph".length;
+    const nextMarkdown = [
+      previousMarkdown.slice(0, secondOffset),
+      " edited",
+      previousMarkdown.slice(secondOffset),
+    ].join("");
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, previousMarkdown);
+    const previousKeys = readTopLevelKeys(editor);
+
+    const result = applyIncrementalRichDocumentSync(editor, previousMarkdown, nextMarkdown);
+
+    expect(result.applied).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe(nextMarkdown);
+    const nextKeys = readTopLevelKeys(editor);
+    expect(nextKeys[0]).toBe(previousKeys[0]);
+    expect(nextKeys[1]).toBe(previousKeys[1]);
+  });
+
   it("keeps boundary indexes aligned after footnotes that consume a terminating blank", () => {
     const previousMarkdown = [
       "[^1]: footnote",

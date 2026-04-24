@@ -1,4 +1,3 @@
-import { createElement, type JSX } from "react";
 import {
   DecoratorNode,
   type EditorConfig,
@@ -8,8 +7,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from "lexical";
+import { createElement, type JSX } from "react";
 
-import { InlineImageRenderer } from "../renderers/inline-image-renderer";
+import { getInlineImageRenderer } from "./renderer-registry";
 
 export type SerializedInlineImageNode = Spread<{
   format: number;
@@ -98,7 +98,8 @@ export class InlineImageNode extends DecoratorNode<JSX.Element> {
   }
 
   decorate(): JSX.Element {
-    return createElement(InlineImageRenderer, {
+    const Renderer = getInlineImageRenderer();
+    return createElement(Renderer, {
       nodeKey: this.getKey(),
       raw: this.getRaw(),
     });

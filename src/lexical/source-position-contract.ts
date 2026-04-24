@@ -12,6 +12,7 @@ export const SOURCE_POSITION_DATASET = {
   sourceTo: "coflatSourceTo",
   tableBlock: "coflatTableBlock",
   tableColumns: "coflatTableColumns",
+  sourceBlockNodeKey: "coflatSourceBlockNodeKey",
 } as const;
 
 export const SOURCE_POSITION_ATTR = {
@@ -22,6 +23,7 @@ export const SOURCE_POSITION_ATTR = {
   sourceFrom: "data-coflat-source-from",
   sourceTo: "data-coflat-source-to",
   tableBlock: "data-coflat-table-block",
+  sourceBlockNodeKey: "data-coflat-source-block-node-key",
 } as const;
 
 export const RAW_BLOCK_SOURCE_SELECTOR = `[${SOURCE_POSITION_ATTR.rawBlock}='true']`;

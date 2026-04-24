@@ -6,11 +6,9 @@ import {
   PASTE_TAG,
 } from "lexical";
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef } from "react";
-import {
-  createMinimalEditorDocumentChanges,
-  type EditorDocumentChange,
-} from "../lib/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 import type { SurfaceFocusOwner } from "../state/editor-focus";
+import { publishLexicalDocumentSnapshot } from "./document-publication";
 import {
   replaceSourceText,
   shouldIgnoreMarkdownEditorChange,
@@ -41,13 +39,13 @@ import {
   useRichDocumentSnapshotPublisher,
 } from "./use-rich-document-snapshot-publisher";
 
-export { canReadLiveSelectionFromEditor, sameSelection } from "./selection-helpers";
 export {
   readEditorDocument,
   replaceSourceText,
   shouldIgnoreMarkdownEditorChange,
 } from "./document-session-helpers";
 export { readEmbeddedInlineDomSelection } from "./embedded-selection";
+export { canReadLiveSelectionFromEditor, sameSelection } from "./selection-helpers";
 
 export interface LexicalDocumentSessionController {
   readonly initialDocRef: MutableRefObject<string>;
@@ -137,16 +135,16 @@ export function useLexicalDocumentSessionController({
     }
 
     const nextDoc = getLexicalMarkdown(editor);
-    const changes = createMinimalEditorDocumentChanges(
-      lastCommittedDocRef.current,
-      nextDoc,
-    );
-    if (changes.length === 0) {
-      userEditPendingRef.current = false;
+    const published = publishLexicalDocumentSnapshot({
+      lastCommittedDocRef,
+      onDocChange,
+      onTextChange,
+      pendingLocalEchoDocRef,
+      userEditPendingRef,
+    }, nextDoc);
+    if (!published.changed) {
       return;
     }
-
-    userEditPendingRef.current = false;
     const nextSelection = readSourceSelectionFromLexicalSelection(editor, {
       fallback: sourceSelectionRef.current,
       markdown: nextDoc,
@@ -155,15 +153,13 @@ export function useLexicalDocumentSessionController({
       sourceSelectionRef.current = nextSelection;
       onSelectionChange?.(nextSelection);
     }
-    pendingLocalEchoDocRef.current = nextDoc;
-    lastCommittedDocRef.current = nextDoc;
-    onTextChange?.(nextDoc);
-    onDocChange?.(changes);
   }, [
+    lastCommittedDocRef,
     onDirtyChange,
     onDocChange,
     onSelectionChange,
     onTextChange,
+    pendingLocalEchoDocRef,
     requireUserEditFlag,
     richChangePolicy,
     scheduleRichDocumentSnapshot,

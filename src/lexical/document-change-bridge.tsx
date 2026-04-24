@@ -1,16 +1,14 @@
 import {
   createContext,
+  type MutableRefObject,
+  type ReactNode,
   useCallback,
   useContext,
   useMemo,
-  type MutableRefObject,
-  type ReactNode,
 } from "react";
 
-import {
-  applyEditorDocumentChanges,
-  type EditorDocumentChange,
-} from "../lib/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/string-editor-document-change";
+import { publishLexicalDocumentChanges } from "./document-publication";
 
 interface DocumentChangeBridge {
   readonly createSourceReplacement: (
@@ -67,16 +65,12 @@ export function DocumentChangeBridgeProvider({
       return;
     }
 
-    const currentDoc = lastCommittedDocRef.current;
-    const nextDoc = applyEditorDocumentChanges(currentDoc, changes);
-    if (nextDoc === currentDoc) {
-      return;
-    }
-
-    pendingLocalEchoDocRef.current = nextDoc;
-    lastCommittedDocRef.current = nextDoc;
-    onTextChange?.(nextDoc);
-    onDocChange?.(changes);
+    publishLexicalDocumentChanges({
+      lastCommittedDocRef,
+      onDocChange,
+      onTextChange,
+      pendingLocalEchoDocRef,
+    }, changes);
   }, [lastCommittedDocRef, onDocChange, onTextChange, pendingLocalEchoDocRef]);
 
   const value = useMemo((): DocumentChangeBridge => ({

@@ -9,14 +9,16 @@ import {
   type LexicalNode,
   type SerializedLexicalNode,
 } from "lexical";
-
-import { createMinimalEditorDocumentChanges, type EditorDocumentChange } from "../lib/editor-doc-change";
 import { findSourceBoundaryRangeContainingChange } from "../lib/markdown/block-scanner";
 import { measureSync } from "../lib/perf";
+import {
+  createMinimalEditorDocumentChanges,
+  type EditorDocumentChange,
+} from "../lib/string-editor-document-change";
 import { parseMarkdownFragmentToJSON } from "./headless-markdown-parse";
 import {
-  parseMarkdownSourceTokens,
   type ParsedSourceToken,
+  parseMarkdownSourceTokens,
 } from "./markdown/source-tokenizer";
 import { $isFootnoteReferenceNode } from "./nodes/footnote-reference-node";
 import { $isInlineImageNode } from "./nodes/inline-image-node";

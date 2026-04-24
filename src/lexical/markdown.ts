@@ -1,28 +1,28 @@
-import type { InitialEditorStateType } from "@lexical/react/LexicalComposer";
 import { CodeHighlightNode, CodeNode } from "@lexical/code";
 import { createHeadlessEditor } from "@lexical/headless";
 import { LinkNode } from "@lexical/link";
 import { $isListNode, ListItemNode, ListNode } from "@lexical/list";
 import {
-  CHECK_LIST,
-  CODE,
-  HEADING,
-  ORDERED_LIST,
-  QUOTE,
-  UNORDERED_LIST,
-  type ElementTransformer,
-  type MultilineElementTransformer,
-  type TextMatchTransformer,
-  type Transformer,
-  TEXT_FORMAT_TRANSFORMERS,
-  TEXT_MATCH_TRANSFORMERS,
   $convertFromMarkdownString,
   $convertToMarkdownString,
+  CHECK_LIST,
+  CODE,
+  type ElementTransformer,
+  HEADING,
+  type MultilineElementTransformer,
+  ORDERED_LIST,
+  QUOTE,
+  TEXT_FORMAT_TRANSFORMERS,
+  TEXT_MATCH_TRANSFORMERS,
+  type TextMatchTransformer,
+  type Transformer,
+  UNORDERED_LIST,
 } from "@lexical/markdown";
+import type { InitialEditorStateType } from "@lexical/react/LexicalComposer";
 import { $isHeadingNode, $isQuoteNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
-  type EditorUpdateOptions,
   type EditorThemeClasses,
+  type EditorUpdateOptions,
   type ElementNode,
   type Klass,
   type LexicalEditor,
@@ -30,9 +30,6 @@ import {
   type SerializedEditorState,
   type TextNode,
 } from "lexical";
-
-import { HEADING_TRAILING_ATTRIBUTES_RE } from "../lib/markdown/heading-syntax";
-import { measureSync } from "../lib/perf";
 import {
   findNextInlineMathSource,
   INLINE_MATH_DOLLAR_IMPORT_RE,
@@ -40,11 +37,13 @@ import {
   INLINE_MATH_PAREN_IMPORT_RE,
   INLINE_MATH_PAREN_SHORTCUT_RE,
 } from "../lib/inline-math-source";
+import { HEADING_TRAILING_ATTRIBUTES_RE } from "../lib/markdown/heading-syntax";
 import {
   MARKDOWN_IMAGE_IMPORT_RE,
   MARKDOWN_IMAGE_SHORTCUT_RE,
 } from "../lib/markdown-image";
 import { isBackslashEscaped } from "../lib/pandoc-dollar-math";
+import { measureSync } from "../lib/perf";
 import {
   BRACKETED_REFERENCE_IMPORT_RE,
   BRACKETED_REFERENCE_SHORTCUT_RE,
@@ -52,12 +51,25 @@ import {
   NARRATIVE_REFERENCE_SHORTCUT_RE,
   scanReferenceRevealTokens,
 } from "../lib/reference-tokens";
-import { getInlineTextFormatSpecs } from "./runtime";
+import { createHeadlessMarkdownService } from "./headless-markdown-service";
 import {
-  $createInlineImageNode,
-  $isInlineImageNode,
-  InlineImageNode,
-} from "./nodes/inline-image-node";
+  type CollectSourceBlockRangesOptions,
+  computeSourceLineOffsets,
+  DISPLAY_MATH_BRACKET_BLOCK_START_RE,
+  DISPLAY_MATH_DOLLAR_START_RE,
+  FENCED_DIV_START_RE,
+  FOOTNOTE_DEFINITION_START_RE,
+  FRONTMATTER_DELIMITER_RE,
+  GRID_TABLE_SEPARATOR_RE,
+  IMAGE_BLOCK_START_RE,
+  matchSourceBlockRangeAtLine,
+  RAW_EQUATION_START_RE,
+  type SourceBlockVariant,
+} from "./markdown/block-scanner";
+import {
+  createTableBlockTransformer,
+  createTableNodeFromMarkdown as createTableNodeFromMarkdownInner,
+} from "./markdown/table-lexical";
 import {
   $createFootnoteReferenceNode,
   $isFootnoteReferenceNode,
@@ -68,31 +80,19 @@ import {
   $isHeadingAttributeNode,
   HeadingAttributeNode,
 } from "./nodes/heading-attribute-node";
+import {
+  $createInlineImageNode,
+  $isInlineImageNode,
+  InlineImageNode,
+} from "./nodes/inline-image-node";
 import { $createInlineMathNode, $isInlineMathNode, InlineMathNode } from "./nodes/inline-math-node";
+import { $createRawBlockNode, $isRawBlockNode, RawBlockNode, type RawBlockVariant } from "./nodes/raw-block-node";
 import { $createReferenceNode, $isReferenceNode, ReferenceNode } from "./nodes/reference-node";
-import { $createRawBlockNode, $isRawBlockNode, type RawBlockVariant, RawBlockNode } from "./nodes/raw-block-node";
 import { TableCellNode } from "./nodes/table-cell-node";
 import { TableNode } from "./nodes/table-node";
 import { TableRowNode } from "./nodes/table-row-node";
-import {
-  createTableBlockTransformer,
-  createTableNodeFromMarkdown as createTableNodeFromMarkdownInner,
-} from "./markdown/table-lexical";
-import {
-  DISPLAY_MATH_BRACKET_BLOCK_START_RE,
-  DISPLAY_MATH_DOLLAR_START_RE,
-  FENCED_DIV_START_RE,
-  FOOTNOTE_DEFINITION_START_RE,
-  FRONTMATTER_DELIMITER_RE,
-  GRID_TABLE_SEPARATOR_RE,
-  IMAGE_BLOCK_START_RE,
-  RAW_EQUATION_START_RE,
-  computeSourceLineOffsets,
-  matchSourceBlockRangeAtLine,
-  type CollectSourceBlockRangesOptions,
-  type SourceBlockVariant,
-} from "./markdown/block-scanner";
 import { isRevealSourceStyle } from "./reveal-source-style";
+import { getInlineTextFormatSpecs } from "./runtime";
 
 const FOOTNOTE_REFERENCE_IMPORT = /\[\^[^\]\n]+\]/;
 const FOOTNOTE_REFERENCE_SHORTCUT = /\[\^[^\]\n]+\]$/;
@@ -790,11 +790,12 @@ export function exportMarkdownFromSerializedState(
   state: SerializedEditorState,
   sourceReplacements: readonly string[] = [],
 ): string {
-  const exportEditor = createHeadlessCoflatEditor();
-  exportEditor.setEditorState(exportEditor.parseEditorState(JSON.stringify(state)));
-  const markdown = exportEditor.getEditorState().read(() =>
-    $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
-  );
+  const markdown = withPooledHeadlessMarkdownEditor((exportEditor) => {
+    exportEditor.setEditorState(exportEditor.parseEditorState(JSON.stringify(state)));
+    return exportEditor.getEditorState().read(() =>
+      $convertToMarkdownString(coflatMarkdownTransformers, undefined, true)
+    );
+  });
   return sourceReplacements.reduce(
     (current, source, index) =>
       current.replaceAll(sourceReplacementPlaceholder(index), source),
@@ -832,8 +833,17 @@ export function createHeadlessCoflatEditor(): LexicalEditor {
   });
 }
 
+const headlessMarkdownService = createHeadlessMarkdownService(createHeadlessCoflatEditor);
+
+export function withPooledHeadlessMarkdownEditor<T>(
+  task: (editor: LexicalEditor) => T,
+): T {
+  return headlessMarkdownService.withPooledEditor(task);
+}
+
 export function roundTripMarkdown(markdown: string): string {
-  const editor = createHeadlessCoflatEditor();
-  setLexicalMarkdown(editor, markdown);
-  return getLexicalMarkdown(editor);
+  return withPooledHeadlessMarkdownEditor((editor) => {
+    setLexicalMarkdown(editor, markdown);
+    return getLexicalMarkdown(editor);
+  });
 }

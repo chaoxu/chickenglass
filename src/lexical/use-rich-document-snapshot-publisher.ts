@@ -1,8 +1,8 @@
-import type { EditorState } from "lexical";
-import type { LexicalEditor } from "lexical";
+import type { EditorState, LexicalEditor } from "lexical";
 import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
-import { createMinimalEditorDocumentChanges, type EditorDocumentChange } from "../lib/editor-doc-change";
 import { measureSync } from "../lib/perf";
+import type { EditorDocumentChange } from "../lib/string-editor-document-change";
+import { publishLexicalDocumentSnapshot } from "./document-publication";
 import { getLexicalMarkdown } from "./markdown";
 
 const DEFAULT_RICH_DOCUMENT_SNAPSHOT_DEBOUNCE_MS = 200;
@@ -67,18 +67,12 @@ export function useRichDocumentSnapshotPublisher({
       () => readRichDocumentSnapshot(editor),
       { category: "lexical" },
     );
-    const changes = createMinimalEditorDocumentChanges(
-      lastCommittedDocRef.current,
-      nextDoc,
-    );
-    if (changes.length === 0) {
-      return nextDoc;
-    }
-
-    pendingLocalEchoDocRef.current = nextDoc;
-    lastCommittedDocRef.current = nextDoc;
-    onTextChange?.(nextDoc);
-    onDocChange?.(changes);
+    publishLexicalDocumentSnapshot({
+      lastCommittedDocRef,
+      onDocChange,
+      onTextChange,
+      pendingLocalEchoDocRef,
+    }, nextDoc);
     return nextDoc;
   }, [
     lastCommittedDocRef,

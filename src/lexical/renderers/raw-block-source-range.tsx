@@ -1,26 +1,24 @@
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useMemo,
   useRef,
-  type ReactNode,
 } from "react";
-
+import type { RawBlockVariant } from "../nodes/raw-block-node";
 import {
   HEADING_SOURCE_SELECTOR,
   rawBlockSourceAttrs,
   readHeadingSourcePos,
   readSourceFrom,
   readSourceTo,
-  setSourceRange,
   SOURCE_BLOCK_SELECTOR,
+  SOURCE_POSITION_ATTR,
   SOURCE_POSITION_DATASET,
+  setSourceRange,
 } from "../source-position-contract";
-import type { RawBlockVariant } from "../nodes/raw-block-node";
 import { markIncrementalSourcePositionSync } from "../source-position-incremental-sync";
-
-const RAW_BLOCK_NODE_KEY_ATTR = "data-coflat-raw-block-node-key";
 
 export interface RawBlockSourceRange {
   readonly from: number;
@@ -109,8 +107,9 @@ export function findRawBlockSourceRangeElement(
   if (!root) {
     return null;
   }
-  return [...root.querySelectorAll<HTMLElement>(`[${RAW_BLOCK_NODE_KEY_ATTR}]`)]
-    .find((element) => element.getAttribute(RAW_BLOCK_NODE_KEY_ATTR) === nodeKey) ?? null;
+  return [...root.querySelectorAll<HTMLElement>(`[${SOURCE_POSITION_ATTR.sourceBlockNodeKey}]`)]
+    .find((element) => element.getAttribute(SOURCE_POSITION_ATTR.sourceBlockNodeKey) === nodeKey)
+    ?? null;
 }
 
 export function applyRawBlockSourceRangeChange(
@@ -169,7 +168,7 @@ export function RawBlockSourceRangeShell({
     <RawBlockSourceRangeContext.Provider value={value}>
       <section
         className={className}
-        data-coflat-raw-block-node-key={nodeKey}
+        data-coflat-source-block-node-key={nodeKey}
         ref={shellRef}
         {...rawBlockSourceAttrs(variant)}
       >

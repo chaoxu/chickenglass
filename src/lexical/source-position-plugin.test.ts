@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-
-import { syncSourceBlockPositions } from "./source-position-plugin";
 import {
   markTableSourceBlock,
   rawBlockSourceAttrs,
   SOURCE_POSITION_DATASET,
 } from "./source-position-contract";
+import { syncSourceBlockPositions } from "./source-position-plugin";
 
 function markRawBlock(element: HTMLElement): void {
   Object.entries(rawBlockSourceAttrs("display-math")).forEach(([name, value]) => {
@@ -80,5 +79,29 @@ describe("syncSourceBlockPositions", () => {
     expect(theorem.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe(String(doc.indexOf("::: {.theorem}")));
     expect(nestedDisplayMath.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBeUndefined();
     expect(topLevelDisplayMath.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe(String(doc.lastIndexOf("$$\ntop\n$$")));
+  });
+
+  it("uses explicit source-block node keys when rendered source blocks are reordered", () => {
+    const root = document.createElement("div");
+    root.className = "cf-lexical-root";
+    const first = document.createElement("section");
+    markRawBlock(first);
+    first.dataset[SOURCE_POSITION_DATASET.sourceBlockNodeKey] = "first";
+    const second = document.createElement("section");
+    markRawBlock(second);
+    second.dataset[SOURCE_POSITION_DATASET.sourceBlockNodeKey] = "second";
+    root.append(second, first);
+
+    const firstRaw = "$$\nfirst\n$$";
+    const secondRaw = "$$\nsecond\n$$";
+    const doc = [firstRaw, "", secondRaw].join("\n");
+
+    syncSourceBlockPositions(root, doc, new Map([
+      ["first", { from: doc.indexOf(firstRaw), nodeKey: "first", to: doc.indexOf(firstRaw) + firstRaw.length }],
+      ["second", { from: doc.indexOf(secondRaw), nodeKey: "second", to: doc.indexOf(secondRaw) + secondRaw.length }],
+    ]));
+
+    expect(first.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe(String(doc.indexOf(firstRaw)));
+    expect(second.dataset[SOURCE_POSITION_DATASET.sourceFrom]).toBe(String(doc.indexOf(secondRaw)));
   });
 });

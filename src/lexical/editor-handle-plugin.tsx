@@ -8,13 +8,12 @@ import {
 } from "lexical";
 import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
 import {
-  applyEditorDocumentChanges,
-  createMinimalEditorDocumentChanges,
+  applyStringEditorDocumentChanges,
   type EditorDocumentChange,
-} from "../lib/editor-doc-change";
+} from "../lib/string-editor-document-change";
 import type { SurfaceFocusOwner } from "../state/editor-focus";
 import { hasCursorRevealActive } from "./cursor-reveal-state";
-import { readEmbeddedInlineDomSelection } from "./embedded-selection";
+import { publishLexicalDocumentSnapshot } from "./document-publication";
 import {
   replaceSourceText,
 } from "./document-session-helpers";
@@ -25,12 +24,18 @@ import {
   storeSelection,
 } from "./editor-surface-shared";
 import { useEmbeddedFieldFlushRegistry } from "./embedded-field-flush-registry";
+import { readEmbeddedInlineDomSelection } from "./embedded-selection";
 import {
   getLexicalMarkdown,
   setLexicalMarkdown,
 } from "./markdown";
 import type { MarkdownEditorHandle, MarkdownEditorSelection } from "./markdown-editor-types";
 import { REVEAL_MODE, type RevealMode } from "./reveal-mode";
+import {
+  canReadLiveSelectionFromEditor,
+  sameSelection,
+  selectionTouchesFencedDiv,
+} from "./selection-helpers";
 import {
   mapVisibleTextOffsetToMarkdown,
   readSourceSelectionFromLexicalSelection,
@@ -41,11 +46,6 @@ import {
   getSourceText,
   selectSourceOffsetsInLexicalRoot,
 } from "./source-text";
-import {
-  canReadLiveSelectionFromEditor,
-  sameSelection,
-  selectionTouchesFencedDiv,
-} from "./selection-helpers";
 import { useDeferredRichDocumentSync } from "./use-deferred-rich-document-sync";
 
 interface RichMarkdownSnapshot {
@@ -220,17 +220,13 @@ export function LexicalEditorHandlePlugin({
 
     const publishDocumentSnapshot = (nextDoc: string) => {
       cancelRichDocumentSnapshot?.();
-      const changes = createMinimalEditorDocumentChanges(
-        lastCommittedDocRef.current,
-        nextDoc,
-      );
-      pendingLocalEchoDocRef.current = nextDoc;
-      lastCommittedDocRef.current = nextDoc;
-      userEditPendingRef.current = false;
-      onTextChange?.(nextDoc);
-      if (changes.length > 0) {
-        onDocChange?.(changes);
-      }
+      publishLexicalDocumentSnapshot({
+        lastCommittedDocRef,
+        onDocChange,
+        onTextChange,
+        pendingLocalEchoDocRef,
+        userEditPendingRef,
+      }, nextDoc);
     };
 
     const readSelectionSnapshot = () => {
@@ -365,7 +361,7 @@ export function LexicalEditorHandlePlugin({
         }
 
         const currentDoc = readFreshDocument();
-        const nextDoc = applyEditorDocumentChanges(currentDoc, changes);
+        const nextDoc = applyStringEditorDocumentChanges(currentDoc, changes);
         if (nextDoc === currentDoc) {
           if (storeSelectionOnNoopChange) {
             storeSelection(

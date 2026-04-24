@@ -1,11 +1,3 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type MouseEvent,
-  type RefObject,
-} from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $addUpdateTag,
@@ -14,21 +6,28 @@ import {
   type LexicalNode,
   type NodeKey,
 } from "lexical";
-
+import {
+  type MouseEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { EditorDocumentChange } from "../../lib/string-editor-document-change";
 import { useDocumentChangeBridge } from "../document-change-bridge";
-import {
-  COFLAT_INCREMENTAL_DOC_CHANGE_TAG,
-  COFLAT_NESTED_EDIT_TAG,
-} from "../update-tags";
-import type { EditorDocumentChange } from "../../lib/editor-doc-change";
-import {
-  surfaceActivationProps,
-  type SurfaceActivationPropsOptions,
-} from "../surface-activation";
 import {
   getPendingEmbeddedSurfaceFocusId,
   type PendingEmbeddedSurfaceFocusTarget,
 } from "../pending-surface-focus";
+import {
+  type SurfaceActivationPropsOptions,
+  surfaceActivationProps,
+} from "../surface-activation";
+import {
+  COFLAT_INCREMENTAL_DOC_CHANGE_TAG,
+  COFLAT_NESTED_EDIT_TAG,
+} from "../update-tags";
 import {
   applyRawBlockSourceRangeChange,
   findRawBlockSourceRangeElement,

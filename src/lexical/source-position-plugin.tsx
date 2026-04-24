@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $createNodeSelection,
   $getNearestNodeFromDOMNode,
+  $getRoot,
   $getSelection,
   $isNodeSelection,
   $isRangeSelection,
   $setSelection,
   type LexicalEditor,
 } from "lexical";
+import { useEffect, useMemo, useRef } from "react";
 
 import {
   NAVIGATE_SOURCE_POSITION_EVENT,
@@ -17,15 +18,22 @@ import {
 import { measureSync } from "../lib/perf";
 import { collectSourceBlockRanges } from "./markdown/block-scanner";
 import { $isRawBlockNode } from "./nodes/raw-block-node";
-import { sourcePositionFromElement } from "./source-position-dom";
+import { $isTableNode } from "./nodes/table-node";
+import {
+  assignSourceBlockRangesToModelBlocks,
+  type SourceBlockModelIdentity,
+  type SourceBlockPositionAssignment,
+} from "./source-block-position-assignment";
 import {
   clearSourceRange,
   HEADING_SOURCE_SELECTOR,
   readSourceFrom,
   readSourceTo,
-  setSourceRange,
   SOURCE_BLOCK_SELECTOR,
+  SOURCE_POSITION_ATTR,
+  setSourceRange,
 } from "./source-position-contract";
+import { sourcePositionFromElement } from "./source-position-dom";
 import { consumeIncrementalSourcePositionSync } from "./source-position-incremental-sync";
 
 export { readSourcePositionFromElement } from "./source-position-dom";
@@ -36,7 +44,15 @@ export {
   selectSourceOffsetsInRichLexicalRoot,
 } from "./source-selection";
 
-export function syncSourceBlockPositions(root: HTMLElement | null, doc: string): void {
+function readSourceBlockNodeKey(element: HTMLElement): string | null {
+  return element.getAttribute(SOURCE_POSITION_ATTR.sourceBlockNodeKey);
+}
+
+export function syncSourceBlockPositions(
+  root: HTMLElement | null,
+  doc: string,
+  assignments: ReadonlyMap<string, SourceBlockPositionAssignment> = new Map(),
+): void {
   if (!root) {
     return;
   }
@@ -49,16 +65,65 @@ export function syncSourceBlockPositions(root: HTMLElement | null, doc: string):
 
   measureSync("source.syncSourceBlockPositions", () => {
     const ranges = collectSourceBlockRanges(doc);
-    elements.forEach((element, index) => {
-      const range = ranges[index];
+    const assignedRanges = new Set<string>();
+    const fallbackElements: HTMLElement[] = [];
+    for (const element of elements) {
+      const nodeKey = readSourceBlockNodeKey(element);
+      const assignment = nodeKey ? assignments.get(nodeKey) : undefined;
+      if (!assignment) {
+        fallbackElements.push(element);
+        continue;
+      }
+
+      setSourceRange(element, assignment.from, assignment.to);
+      assignedRanges.add(`${assignment.from}:${assignment.to}`);
+    }
+
+    let rangeCursor = 0;
+    fallbackElements.forEach((element) => {
+      while (
+        rangeCursor < ranges.length
+        && assignedRanges.has(`${ranges[rangeCursor]?.from}:${ranges[rangeCursor]?.to}`)
+      ) {
+        rangeCursor += 1;
+      }
+      const range = ranges[rangeCursor];
       if (!range) {
         clearSourceRange(element);
         return;
       }
       setSourceRange(element, range.from, range.to);
+      rangeCursor += 1;
     });
   }, {
     detail: root.className,
+  });
+}
+
+function collectSourceBlockAssignments(
+  editor: LexicalEditor,
+  doc: string,
+): Map<string, SourceBlockPositionAssignment> {
+  const ranges = collectSourceBlockRanges(doc);
+  return editor.getEditorState().read(() => {
+    const blocks: SourceBlockModelIdentity[] = [];
+    for (const node of $getRoot().getChildren()) {
+      if ($isRawBlockNode(node)) {
+        blocks.push({
+          nodeKey: node.getKey(),
+          raw: node.getRaw(),
+          variant: node.getVariant(),
+        });
+        continue;
+      }
+      if ($isTableNode(node)) {
+        blocks.push({
+          nodeKey: node.getKey(),
+          variant: "table" as const,
+        });
+      }
+    }
+    return assignSourceBlockRangesToModelBlocks(blocks, ranges);
   });
 }
 
@@ -202,7 +267,11 @@ export function SourcePositionPlugin({
       ) {
         return;
       }
-      syncSourceBlockPositions(root, syncToken.doc);
+      syncSourceBlockPositions(
+        root,
+        syncToken.doc,
+        collectSourceBlockAssignments(editor, syncToken.doc),
+      );
     };
 
     sync();

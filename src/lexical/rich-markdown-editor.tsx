@@ -16,7 +16,7 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { LexicalEditor } from "lexical";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
-import type { EditorDocumentChange } from "../lib/editor-doc-change";
+import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 import {
   type FocusOwner,
   type FocusOwnerRole,
@@ -30,6 +30,7 @@ import { CursorRevealPlugin } from "./cursor-reveal-plugin";
 import { DocumentChangeBridgeProvider } from "./document-change-bridge";
 import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
+import { RichLexicalEditorHandlePlugin } from "./editor-handle-plugin";
 import {
   DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
@@ -38,13 +39,16 @@ import {
   repairBlankClickSelection,
   ViewportTrackingPlugin,
 } from "./editor-surface-shared";
-import { RichLexicalEditorHandlePlugin } from "./editor-handle-plugin";
 import {
   EmbeddedFieldFlushProvider,
 } from "./embedded-field-flush-registry";
 import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
 import { InteractionTracePlugin } from "./interaction-trace-plugin";
+import {
+  LexicalDocumentSyncPlugin,
+  useLexicalDocumentSessionController,
+} from "./lexical-document-session";
 import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import {
   coflatMarkdownNodes,
@@ -52,10 +56,6 @@ import {
   createLexicalInitialEditorState,
   lexicalMarkdownTheme,
 } from "./markdown";
-import {
-  LexicalDocumentSyncPlugin,
-  useLexicalDocumentSessionController,
-} from "./lexical-document-session";
 import type {
   MarkdownEditorHandle,
   MarkdownEditorSelection,

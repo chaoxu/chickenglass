@@ -1,4 +1,3 @@
-import { createElement, type JSX } from "react";
 import {
   DecoratorNode,
   type EditorConfig,
@@ -8,8 +7,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from "lexical";
+import { createElement, type JSX } from "react";
 
-import { ReferenceRenderer } from "../renderers/reference-renderer";
+import { getReferenceRenderer } from "./renderer-registry";
 
 export type SerializedReferenceNode = Spread<{
   format: number;
@@ -98,7 +98,8 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
   }
 
   decorate(): JSX.Element {
-    return createElement(ReferenceRenderer, {
+    const Renderer = getReferenceRenderer();
+    return createElement(Renderer, {
       nodeKey: this.getKey(),
       raw: this.getRaw(),
     });

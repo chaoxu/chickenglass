@@ -40,6 +40,14 @@ describe("parseMarkdownFragmentToJSON", () => {
     expect(blocks).toHaveLength(1);
     expect((blocks[0] as { type: string }).type).toBe("paragraph");
   });
+
+  it("resets pooled state between parse and serialize calls", () => {
+    parseMarkdownFragmentToJSON("# stale heading");
+    const [block] = parseMarkdownFragmentToJSON("fresh paragraph");
+    expect(block).toBeDefined();
+
+    expect(serializeBlockToMarkdown(block).trim()).toBe("fresh paragraph");
+  });
 });
 
 describe("serializeBlockToMarkdown", () => {
