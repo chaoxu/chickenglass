@@ -1,7 +1,14 @@
-import { EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
+import {
+  buildDocumentLabelGraph as buildPlainDocumentLabelGraph,
+} from "../lib/markdown/label-graph";
+import {
+  prepareDocumentLabelRename as preparePlainDocumentLabelRename,
+  resolveDocumentLabelBacklinks as resolvePlainDocumentLabelBacklinks,
+} from "../lib/markdown/label-actions";
 import { markdownExtensions } from "../parser";
 import {
   defaultPlugins,
@@ -19,24 +26,111 @@ import {
   getDocumentLabelDefinition,
   getDocumentLabelDefinitions,
   isValidDocumentLabelId,
+  type DocumentLabelGraph,
   validateDocumentLabelRename,
 } from "./document-label-graph";
 import { documentAnalysisField } from "../state/document-analysis";
+import { resolveDocumentLabelBacklinks as resolveCmDocumentLabelBacklinks } from "./document-label-backlinks";
+import { prepareDocumentLabelRename as prepareCmDocumentLabelRename } from "./document-label-rename";
+
+function graphExtensions() {
+  return [
+    frontmatterField,
+    markdown({ extensions: markdownExtensions }),
+    documentAnalysisField,
+    createPluginRegistryField(defaultPlugins),
+    blockCounterField,
+    editorBlockReferenceTargetInputsField,
+    documentReferenceCatalogField,
+    documentLabelGraphField,
+  ];
+}
 
 function createGraphState(doc: string): EditorState {
   return EditorState.create({
     doc,
-    extensions: [
-      frontmatterField,
-      markdown({ extensions: markdownExtensions }),
-      documentAnalysisField,
-      createPluginRegistryField(defaultPlugins),
-      blockCounterField,
-      editorBlockReferenceTargetInputsField,
-      documentReferenceCatalogField,
-      documentLabelGraphField,
-    ],
+    extensions: graphExtensions(),
   });
+}
+
+function createGraphSelectionState(doc: string, anchor: number, head = anchor): EditorState {
+  return EditorState.create({
+    doc,
+    selection: EditorSelection.single(anchor, head),
+    extensions: graphExtensions(),
+  });
+}
+
+function summarizeGraph(graph: DocumentLabelGraph) {
+  return {
+    definitions: graph.definitions.map((definition) => ({
+      id: definition.id,
+      kind: definition.kind,
+      from: definition.from,
+      to: definition.to,
+      labelFrom: definition.labelFrom,
+      labelTo: definition.labelTo,
+    })),
+    duplicateIds: [...graph.duplicatesById.keys()],
+    references: graph.references.map((reference) => ({
+      id: reference.id,
+      from: reference.from,
+      to: reference.to,
+      labelFrom: reference.labelFrom,
+      labelTo: reference.labelTo,
+      locator: reference.locator,
+    })),
+  };
+}
+
+function summarizeBacklinks(lookup: ReturnType<typeof resolveCmDocumentLabelBacklinks>) {
+  if (lookup.kind !== "ready") {
+    return lookup;
+  }
+  return {
+    kind: "ready",
+    source: lookup.result.source,
+    definition: {
+      id: lookup.result.definition.id,
+      kind: lookup.result.definition.kind,
+      from: lookup.result.definition.from,
+      to: lookup.result.definition.to,
+    },
+    backlinks: lookup.result.backlinks.map((backlink) => ({
+      from: backlink.from,
+      to: backlink.to,
+      lineNumber: backlink.lineNumber,
+      referenceText: backlink.referenceText,
+      locator: backlink.locator,
+    })),
+  };
+}
+
+function normalizeChanges(changes: readonly unknown[]) {
+  return changes.map((change) => {
+    if (typeof change !== "object" || change === null) {
+      throw new Error(`Expected object change, got ${String(change)}`);
+    }
+    const spec = change as { from?: unknown; to?: unknown; insert?: unknown };
+    if (typeof spec.from !== "number" || spec.to !== undefined && typeof spec.to !== "number") {
+      throw new Error(`Expected positional change, got ${JSON.stringify(change)}`);
+    }
+    return {
+      from: spec.from,
+      to: spec.to ?? spec.from,
+      insert: String(spec.insert ?? ""),
+    };
+  });
+}
+
+function applyTextChanges(doc: string, changes: readonly unknown[]): string {
+  return [...normalizeChanges(changes)]
+    .sort((left, right) => right.from - left.from || right.to - left.to)
+    .reduce(
+      (current, change) =>
+        `${current.slice(0, change.from)}${change.insert}${current.slice(change.to)}`,
+      doc,
+    );
 }
 
 describe("buildDocumentLabelGraph", () => {
@@ -144,7 +238,10 @@ describe("buildDocumentLabelGraph", () => {
     expect(graph.references.map((reference) => reference.id)).toEqual(["dup"]);
 
     expect(isValidDocumentLabelId("sec:intro")).toBe(true);
+    expect(isValidDocumentLabelId("single-letter-cite-style/x")).toBe(true);
     expect(isValidDocumentLabelId("bad label")).toBe(false);
+    expect(isValidDocumentLabelId("sec:trailing-")).toBe(false);
+    expect(isValidDocumentLabelId("sec:trailing:")).toBe(false);
 
     expect(validateDocumentLabelRename(graph, "fresh-id")).toEqual({
       ok: true,
@@ -155,6 +252,11 @@ describe("buildDocumentLabelGraph", () => {
       id: "bad label",
       reason: "invalid-format",
     });
+    expect(validateDocumentLabelRename(graph, "sec:trailing-")).toEqual({
+      ok: false,
+      id: "sec:trailing-",
+      reason: "invalid-format",
+    });
     expect(validateDocumentLabelRename(graph, "dup", { currentId: "dup" })).toEqual({
       ok: true,
       id: "dup",
@@ -163,6 +265,91 @@ describe("buildDocumentLabelGraph", () => {
       ok: false,
       id: "dup",
       reason: "collision",
+    });
+  });
+});
+
+describe("document label adapter parity", () => {
+  it("keeps duplicate and backlink graph behavior identical across CM6 and plain text", () => {
+    const doc = [
+      "# Intro {#sec:intro}",
+      "",
+      '::: {.theorem #dup title="First"}',
+      "Body.",
+      ":::",
+      "",
+      '::: {.lemma #dup title="Second"}',
+      "Body.",
+      ":::",
+      "",
+      "$$",
+      "x + y",
+      "$$ {#eq:main}",
+      "",
+      "See [@dup] and @sec:intro and [@eq:main, p. 2] and [@missing] and [@karger2000].",
+    ].join("\n");
+
+    const cmGraph = buildDocumentLabelGraph(createGraphState(doc));
+    const plainGraph = buildPlainDocumentLabelGraph(doc);
+
+    expect(summarizeGraph(cmGraph)).toEqual(summarizeGraph(plainGraph));
+    expect(summarizeGraph(cmGraph).references.map((reference) => reference.id)).toEqual([
+      "dup",
+      "sec:intro",
+      "eq:main",
+    ]);
+
+    const referencePosition = doc.indexOf("@sec:intro") + 2;
+    expect(summarizeBacklinks(
+      resolveCmDocumentLabelBacklinks(createGraphSelectionState(doc, referencePosition)),
+    )).toEqual(summarizeBacklinks(
+      resolvePlainDocumentLabelBacklinks(doc, referencePosition),
+    ));
+  });
+
+  it("keeps rename planning and validation identical across CM6 and plain text", () => {
+    const doc = [
+      "# Intro {#sec:intro}",
+      "",
+      "See @sec:intro and [@sec:intro, p. 2] and [@karger2000].",
+    ].join("\n");
+    const selection = doc.indexOf("@sec:intro") + 2;
+    const cmState = createGraphSelectionState(doc, selection);
+    const cmRename = prepareCmDocumentLabelRename(cmState, "sec:overview");
+    const plainRename = preparePlainDocumentLabelRename(doc, selection, "sec:overview");
+
+    expect(cmRename.kind).toBe("ready");
+    expect(plainRename.kind).toBe("ready");
+    if (cmRename.kind !== "ready" || plainRename.kind !== "ready") return;
+
+    expect({
+      currentId: cmRename.currentId,
+      nextId: cmRename.nextId,
+      referenceCount: cmRename.referenceCount,
+      changes: normalizeChanges(cmRename.changes),
+    }).toEqual({
+      currentId: plainRename.currentId,
+      nextId: plainRename.nextId,
+      referenceCount: plainRename.referenceCount,
+      changes: normalizeChanges(plainRename.changes),
+    });
+    expect(applyTextChanges(doc, cmRename.changes)).toBe(applyTextChanges(
+      doc,
+      plainRename.changes,
+    ));
+
+    const cmInvalid = prepareCmDocumentLabelRename(cmState, " sec:invalid");
+    const plainInvalid = preparePlainDocumentLabelRename(doc, selection, " sec:invalid");
+    expect(cmInvalid.kind).toBe("invalid");
+    expect(plainInvalid.kind).toBe("invalid");
+    if (cmInvalid.kind !== "invalid" || plainInvalid.kind !== "invalid") return;
+
+    expect({
+      id: cmInvalid.validation.id,
+      reason: cmInvalid.validation.reason,
+    }).toEqual({
+      id: plainInvalid.validation.id,
+      reason: plainInvalid.validation.reason,
     });
   });
 });

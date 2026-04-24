@@ -6,6 +6,12 @@ import {
   type DocumentLabelGraph,
   type DocumentLabelReference,
 } from "./document-label-graph";
+import { documentLabelGraphField } from "../state/document-label-graph";
+import {
+  resolveDocumentLabelBacklinkTargetInGraph,
+  resolveDocumentLabelSelectionTargetInGraph,
+  type DocumentLabelBacklinkTargetLookup,
+} from "../lib/markdown/label-model";
 
 export interface DocumentLabelBacklinkItem {
   readonly from: number;
@@ -36,44 +42,8 @@ export type DocumentLabelBacklinksLookup =
     readonly kind: "none";
   };
 
-function selectionTouchesRange(
-  selectionFrom: number,
-  selectionTo: number,
-  rangeFrom: number,
-  rangeTo: number,
-): boolean {
-  if (selectionFrom === selectionTo) {
-    return selectionFrom >= rangeFrom && selectionFrom <= rangeTo;
-  }
-  return selectionFrom < rangeTo && selectionTo > rangeFrom;
-}
-
-function findMatchingReference(
-  graph: DocumentLabelGraph,
-  selectionFrom: number,
-  selectionTo: number,
-): DocumentLabelReference | undefined {
-  return graph.references
-    .filter((reference) =>
-      selectionTouchesRange(selectionFrom, selectionTo, reference.from, reference.to))
-    .sort((left, right) =>
-      ((left.to - left.from) - (right.to - right.from))
-      || (left.from - right.from))
-    [0];
-}
-
-function findMatchingDefinition(
-  graph: DocumentLabelGraph,
-  selectionFrom: number,
-  selectionTo: number,
-): DocumentLabelDefinition | undefined {
-  return graph.definitions
-    .filter((definition) =>
-      selectionTouchesRange(selectionFrom, selectionTo, definition.from, definition.to))
-    .sort((left, right) =>
-      ((left.to - left.from) - (right.to - right.from))
-      || (left.from - right.from))
-    [0];
+function getDocumentLabelGraph(state: EditorState): DocumentLabelGraph {
+  return state.field(documentLabelGraphField, false) ?? buildDocumentLabelGraph(state);
 }
 
 function truncateMiddle(text: string, maxLength: number): string {
@@ -119,51 +89,39 @@ function readyResult(
   };
 }
 
-function duplicateResult(
+function toBacklinksLookup(
   graph: DocumentLabelGraph,
-  id: string,
+  state: EditorState,
+  lookup: DocumentLabelBacklinkTargetLookup,
 ): DocumentLabelBacklinksLookup {
-  return {
-    kind: "duplicate",
-    id,
-    definitions: graph.definitionsById.get(id) ?? [],
-  };
+  if (lookup.kind !== "target") {
+    return lookup;
+  }
+  return readyResult(graph, state, lookup.target.definition, lookup.source);
 }
 
 export function resolveDocumentLabelBacklinks(
   state: EditorState,
 ): DocumentLabelBacklinksLookup {
-  const graph = buildDocumentLabelGraph(state);
+  const graph = getDocumentLabelGraph(state);
   const selection = state.selection.main;
 
-  const reference = findMatchingReference(graph, selection.from, selection.to);
-  if (reference) {
-    const definition = graph.uniqueDefinitionById.get(reference.id);
-    if (definition) {
-      return readyResult(graph, state, definition, "reference");
-    }
-    if (graph.definitionsById.has(reference.id)) {
-      return duplicateResult(graph, reference.id);
-    }
-  }
-
-  const definition = findMatchingDefinition(graph, selection.from, selection.to);
-  if (definition) {
-    if (graph.duplicatesById.has(definition.id)) {
-      return duplicateResult(graph, definition.id);
-    }
-    return readyResult(graph, state, definition, "definition");
+  const lookup = resolveDocumentLabelBacklinkTargetInGraph(
+    graph,
+    selection.from,
+    selection.to,
+  );
+  if (lookup.kind !== "none") {
+    return toBacklinksLookup(graph, state, lookup);
   }
 
   if (!selection.empty) {
     const id = state.sliceDoc(selection.from, selection.to).trim();
-    const selectedDefinition = graph.uniqueDefinitionById.get(id);
-    if (selectedDefinition) {
-      return readyResult(graph, state, selectedDefinition, "selection");
-    }
-    if (graph.duplicatesById.has(id)) {
-      return duplicateResult(graph, id);
-    }
+    return toBacklinksLookup(
+      graph,
+      state,
+      resolveDocumentLabelSelectionTargetInGraph(graph, id),
+    );
   }
 
   return { kind: "none" };

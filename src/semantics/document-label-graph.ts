@@ -15,57 +15,27 @@ import {
   getDocumentAnalysisOrRecompute,
 } from "./editor-reference-catalog";
 import type { DocumentReferenceCatalog } from "./reference-catalog";
+import {
+  createDocumentLabelGraph,
+  findDocumentLabelBacklinks,
+  getDocumentLabelDefinition,
+  getDocumentLabelDefinitions,
+  isValidDocumentLabelId,
+  validateDocumentLabelRename,
+  type DocumentLabelDefinition,
+  type DocumentLabelGraph,
+  type DocumentLabelKind,
+  type DocumentLabelReference,
+  type DocumentLabelRenameValidation,
+} from "../lib/markdown/label-model";
 
-const EMPTY_DEFINITIONS: readonly DocumentLabelDefinition[] = [];
-const EMPTY_REFERENCES: readonly DocumentLabelReference[] = [];
-const LOCAL_LABEL_RE = /^[A-Za-z0-9_][\w.:-]*$/;
-
-export type DocumentLabelKind = "block" | "equation" | "heading";
-
-export interface DocumentLabelDefinition {
-  readonly id: string;
-  readonly kind: DocumentLabelKind;
-  readonly from: number;
-  readonly to: number;
-  readonly tokenFrom: number;
-  readonly tokenTo: number;
-  readonly labelFrom: number;
-  readonly labelTo: number;
-  readonly displayLabel: string;
-  readonly number?: string;
-  readonly title?: string;
-  readonly text?: string;
-  readonly blockType?: string;
-}
-
-export interface DocumentLabelReference {
-  readonly id: string;
-  readonly from: number;
-  readonly to: number;
-  readonly labelFrom: number;
-  readonly labelTo: number;
-  readonly clusterFrom: number;
-  readonly clusterTo: number;
-  readonly clusterIndex: number;
-  readonly bracketed: boolean;
-  readonly locator?: string;
-}
-
-export interface DocumentLabelRenameValidation {
-  readonly ok: boolean;
-  readonly id: string;
-  readonly reason?: "empty" | "invalid-format" | "collision";
-  readonly conflictingDefinitions?: readonly DocumentLabelDefinition[];
-}
-
-export interface DocumentLabelGraph {
-  readonly definitions: readonly DocumentLabelDefinition[];
-  readonly definitionsById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>;
-  readonly uniqueDefinitionById: ReadonlyMap<string, DocumentLabelDefinition>;
-  readonly duplicatesById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>;
-  readonly references: readonly DocumentLabelReference[];
-  readonly referencesByTarget: ReadonlyMap<string, readonly DocumentLabelReference[]>;
-}
+export type {
+  DocumentLabelDefinition,
+  DocumentLabelGraph,
+  DocumentLabelKind,
+  DocumentLabelReference,
+  DocumentLabelRenameValidation,
+};
 
 function mapDocumentLabelDefinition(
   definition: DocumentLabelDefinition,
@@ -127,60 +97,6 @@ function mapDocumentLabelReference(
     clusterFrom,
     clusterTo,
   };
-}
-
-function buildDefinitionsById(
-  definitions: readonly DocumentLabelDefinition[],
-): ReadonlyMap<string, readonly DocumentLabelDefinition[]> {
-  const byId = new Map<string, DocumentLabelDefinition[]>();
-  for (const definition of definitions) {
-    const bucket = byId.get(definition.id);
-    if (bucket) {
-      bucket.push(definition);
-    } else {
-      byId.set(definition.id, [definition]);
-    }
-  }
-  return byId;
-}
-
-function buildUniqueDefinitionById(
-  definitionsById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>,
-): ReadonlyMap<string, DocumentLabelDefinition> {
-  const unique = new Map<string, DocumentLabelDefinition>();
-  for (const [id, definitions] of definitionsById) {
-    if (definitions.length === 1) {
-      unique.set(id, definitions[0]);
-    }
-  }
-  return unique;
-}
-
-function buildDuplicatesById(
-  definitionsById: ReadonlyMap<string, readonly DocumentLabelDefinition[]>,
-): ReadonlyMap<string, readonly DocumentLabelDefinition[]> {
-  const duplicates = new Map<string, readonly DocumentLabelDefinition[]>();
-  for (const [id, definitions] of definitionsById) {
-    if (definitions.length > 1) {
-      duplicates.set(id, definitions);
-    }
-  }
-  return duplicates;
-}
-
-function buildReferencesByTarget(
-  references: readonly DocumentLabelReference[],
-): ReadonlyMap<string, readonly DocumentLabelReference[]> {
-  const byTarget = new Map<string, DocumentLabelReference[]>();
-  for (const reference of references) {
-    const bucket = byTarget.get(reference.id);
-    if (bucket) {
-      bucket.push(reference);
-    } else {
-      byTarget.set(reference.id, [reference]);
-    }
-  }
-  return byTarget;
 }
 
 function buildHeadingDefinitions(
@@ -357,26 +273,14 @@ function buildReferences(
   return references;
 }
 
-export function isValidDocumentLabelId(id: string): boolean {
-  return LOCAL_LABEL_RE.test(id);
-}
-
 export function buildDocumentLabelGraph(state: EditorState): DocumentLabelGraph {
   const analysis = getDocumentAnalysisOrRecompute(state);
   const catalog = getEditorDocumentReferenceCatalog(state, analysis);
   const doc = state.doc;
   const definitions = buildDefinitions(catalog, analysis, doc);
-  const definitionsById = buildDefinitionsById(definitions);
   const references = buildReferences(catalog, doc);
 
-  return {
-    definitions,
-    definitionsById,
-    uniqueDefinitionById: buildUniqueDefinitionById(definitionsById),
-    duplicatesById: buildDuplicatesById(definitionsById),
-    references,
-    referencesByTarget: buildReferencesByTarget(references),
-  };
+  return createDocumentLabelGraph(definitions, references);
 }
 
 export function mapDocumentLabelGraph(
@@ -401,65 +305,13 @@ export function mapDocumentLabelGraph(
     return graph;
   }
 
-  const definitionsById = buildDefinitionsById(definitions);
-  return {
-    definitions,
-    definitionsById,
-    uniqueDefinitionById: buildUniqueDefinitionById(definitionsById),
-    duplicatesById: buildDuplicatesById(definitionsById),
-    references,
-    referencesByTarget: buildReferencesByTarget(references),
-  };
+  return createDocumentLabelGraph(definitions, references);
 }
 
-export function getDocumentLabelDefinitions(
-  graph: DocumentLabelGraph,
-  id: string,
-): readonly DocumentLabelDefinition[] {
-  return graph.definitionsById.get(id) ?? EMPTY_DEFINITIONS;
-}
-
-export function getDocumentLabelDefinition(
-  graph: DocumentLabelGraph,
-  id: string,
-): DocumentLabelDefinition | undefined {
-  return graph.uniqueDefinitionById.get(id);
-}
-
-export function findDocumentLabelBacklinks(
-  graph: DocumentLabelGraph,
-  id: string,
-): readonly DocumentLabelReference[] {
-  return graph.referencesByTarget.get(id) ?? EMPTY_REFERENCES;
-}
-
-export function validateDocumentLabelRename(
-  graph: DocumentLabelGraph,
-  nextId: string,
-  options: { currentId?: string } = {},
-): DocumentLabelRenameValidation {
-  const candidate = nextId.trim();
-  if (candidate.length === 0) {
-    return { ok: false, id: candidate, reason: "empty" };
-  }
-
-  if (candidate !== nextId || !isValidDocumentLabelId(candidate)) {
-    return { ok: false, id: candidate, reason: "invalid-format" };
-  }
-
-  if (candidate === options.currentId) {
-    return { ok: true, id: candidate };
-  }
-
-  const conflictingDefinitions = graph.definitionsById.get(candidate);
-  if (conflictingDefinitions) {
-    return {
-      ok: false,
-      id: candidate,
-      reason: "collision",
-      conflictingDefinitions,
-    };
-  }
-
-  return { ok: true, id: candidate };
-}
+export {
+  findDocumentLabelBacklinks,
+  getDocumentLabelDefinition,
+  getDocumentLabelDefinitions,
+  isValidDocumentLabelId,
+  validateDocumentLabelRename,
+};
