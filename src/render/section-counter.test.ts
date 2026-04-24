@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { EditorState, type StateField } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import type { Decoration, DecorationSet } from "@codemirror/view";
-import { buildSectionDecorations, sectionNumberPlugin } from "./section-counter";
+import {
+  buildSectionDecorations,
+  clearStickySectionNumbersEffect,
+  sectionNumberField,
+  sectionNumberPlugin,
+} from "./section-counter";
 import { documentSemanticsField } from "../state/document-analysis";
+import { semanticGlobalInvalidationAnnotation } from "../semantics/incremental/semantic-delta";
+import { ensureFullSyntaxTree } from "../test-utils";
 
 /** Create an EditorState with the markdown parser and a given document. */
 function createState(doc: string): EditorState {
@@ -28,8 +35,22 @@ function extractNumbers(state: EditorState): string[] {
   return numbers;
 }
 
-const sectionNumberField =
-  (sectionNumberPlugin as unknown as readonly [unknown, StateField<DecorationSet>])[1];
+function extractFieldNumbers(state: EditorState): string[] {
+  return extractDecorationNumbers(state.field(sectionNumberField).decorations);
+}
+
+function extractDecorationNumbers(decos: DecorationSet): string[] {
+  const numbers: string[] = [];
+  const iter = decos.iter();
+  while (iter.value) {
+    const attrs = (iter.value as Decoration & { attrs?: Record<string, string> }).spec?.attributes;
+    if (attrs?.["data-section-number"]) {
+      numbers.push(attrs["data-section-number"]);
+    }
+    iter.next();
+  }
+  return numbers;
+}
 
 describe("buildSectionDecorations", () => {
   it("numbers sequential top-level headings", () => {
@@ -185,15 +206,50 @@ describe("sectionNumberPlugin", () => {
       doc,
       extensions: [markdown(), sectionNumberPlugin],
     });
-    const oldIter = state.field(sectionNumberField).iter();
+    const oldIter = state.field(sectionNumberField).decorations.iter();
     expect(oldIter.value).not.toBeNull();
 
     const tr = state.update({
       changes: { from: doc.length, insert: " extended" },
     });
-    const newIter = tr.state.field(sectionNumberField).iter();
+    const newIter = tr.state.field(sectionNumberField).decorations.iter();
     expect(newIter.value).not.toBeNull();
 
     expect(newIter.value).toBe(oldIter.value);
+  });
+
+  it("briefly keeps prior section numbers while editing through a heading marker", () => {
+    const doc = [
+      "# Intro",
+      "",
+      "## Methods",
+      "",
+      "## Results",
+    ].join("\n");
+    const state = EditorState.create({
+      doc,
+      extensions: [markdown(), sectionNumberPlugin],
+    });
+    const from = doc.indexOf("## Methods");
+    const editState = state.update({
+      changes: { from, to: from + "## ".length, insert: "" },
+      selection: { anchor: from },
+    }).state;
+    ensureFullSyntaxTree(editState);
+    const parsedState = editState.update({
+      annotations: semanticGlobalInvalidationAnnotation.of(true),
+    }).state;
+
+    expect(parsedState.field(documentSemanticsField).headings.map((heading) => heading.number)).toEqual([
+      "1",
+      "1.1",
+    ]);
+    expect(extractFieldNumbers(parsedState)).toEqual(["1", "1.1", "1.2"]);
+
+    const expired = parsedState.update({
+      effects: clearStickySectionNumbersEffect.of(undefined),
+    }).state;
+
+    expect(extractFieldNumbers(expired)).toEqual(["1", "1.1"]);
   });
 });
