@@ -14,8 +14,8 @@ import {
   openFixtureDocument,
   readEditorText,
   saveCurrentFile,
-  sleep,
   switchToMode,
+  waitForDocumentStable,
 } from "../test-helpers.mjs";
 
 export const name = "lexical-smoke";
@@ -170,7 +170,7 @@ async function switchToModeAfterLexicalMutation(page, mode) {
     await switchToMode(page, mode);
   } catch (error) {
     const firstError = error instanceof Error ? error.message : String(error);
-    await sleep(500);
+    await waitForDocumentStable(page, { quietMs: 500, timeoutMs: 2_000 });
     try {
       await switchToMode(page, mode);
     } catch (retryError) {
@@ -253,7 +253,7 @@ async function runSourceToLexicalImmediateEditScenario(page) {
     MODE_SWITCH_MARKER,
     { timeout: 10_000, polling: 100 },
   );
-  await sleep(750);
+  await waitForDocumentStable(page, { quietMs: 750, timeoutMs: 5_000 });
 
   const afterDeferredSync = await readEditorText(page);
   if (!afterDeferredSync.includes(MODE_SWITCH_MARKER)) {

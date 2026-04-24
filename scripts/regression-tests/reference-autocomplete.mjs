@@ -7,6 +7,7 @@ import {
   openFixtureDocument,
   pickAutocompleteOption,
   readAutocompleteOptions,
+  settleEditorLayout,
   switchToMode,
   waitForAutocomplete,
 } from "../test-helpers.mjs";
@@ -20,7 +21,7 @@ async function focusEditorEnd(page) {
     const anchor = view.state.doc.length;
     view.dispatch({ selection: { anchor } });
   });
-  await page.waitForTimeout(100);
+  await settleEditorLayout(page);
 }
 
 async function readDoc(page) {

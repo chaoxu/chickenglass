@@ -6,14 +6,14 @@
  * resolved clusters degrade one item at a time.
  */
 
-import { openFixtureDocument } from "../test-helpers.mjs";
+import { openFixtureDocument, switchToMode, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "clustered-crossref-invalidation";
 
 export async function run(page) {
   await openFixtureDocument(page, "cogirth/clustered-crossref-invalidation.md", { project: "full-project" });
-  await page.evaluate(() => window.__app.setMode("rich"));
-  await page.waitForTimeout(300);
+  await switchToMode(page, "cm6-rich");
+  await waitForRenderReady(page, { selector: ".cf-crossref" });
 
   const result = await page.evaluate(() => {
     const readClusterSnapshot = (raw) => {

@@ -45,6 +45,9 @@ import {
   resolveFixtureDocumentWithFallback,
   showSidebarPanel,
   switchToMode,
+  waitForDocumentStable,
+  waitForRenderReady,
+  waitForScrollReady,
 } from "./editor-test-helpers.mjs";
 
 function ensureDir(path) {
@@ -694,6 +697,7 @@ async function measureTypingBurst(page, anchor, insertCount) {
     const postIdleStart = performance.now();
     const postIdleLag = await measureEventLoopLag(postIdleObservationMs);
     const postIdleEnd = performance.now();
+    // Let buffered PerformanceObserver long-task entries flush before summarizing.
     await new Promise((resolve) => setTimeout(resolve, 0));
     const longTasks = longTaskRecorder.summarize(observationStart, postIdleStart);
     const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
@@ -964,6 +968,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const postIdleStart = performance.now();
       const postIdleLag = await measureEventLoopLag(postIdleObservationMs);
       const postIdleEnd = performance.now();
+      // Let buffered PerformanceObserver long-task entries flush before summarizing.
       await sleepInPage(0);
       const longTasks = longTaskRecorder.summarize(observationStart, postIdleStart);
       const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
@@ -1694,7 +1699,9 @@ export const scenarios = {
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
-      await page.waitForTimeout(800);
+      await waitForRenderReady(page, {
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+      });
       const before = await getSemanticRevisionInfo(page);
       const after = await page.evaluate((previous) => {
         const view = window.__cmView;
@@ -1882,7 +1889,9 @@ export const scenarios = {
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
-      await sleep(800);
+      await waitForScrollReady(page, {
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+      });
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
     },
@@ -1896,7 +1905,9 @@ export const scenarios = {
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
-      await sleep(800);
+      await waitForScrollReady(page, {
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+      });
 
       const jumpResult = await page.evaluate(async () => {
         const view = window.__cmView;
@@ -1909,6 +1920,7 @@ export const scenarios = {
         view.dispatch({ selection: { anchor: lb.from }, scrollIntoView: true });
         const coldMs = performance.now() - t0;
 
+        // Separate cold/warm jump measurements with a fixed observation window.
         await new Promise((r) => setTimeout(r, 200));
 
         // Warm jump: back to top
@@ -1917,6 +1929,7 @@ export const scenarios = {
         view.dispatch({ selection: { anchor: lt.from }, scrollIntoView: true });
         const warmBackMs = performance.now() - t1;
 
+        // Separate warm jump measurements with the same cadence as the cold run.
         await new Promise((r) => setTimeout(r, 200));
 
         // Warm jump: forward again
@@ -1946,7 +1959,9 @@ export const scenarios = {
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
         settleMs: runtimeOptions.postOpenSettleMs,
       });
-      await sleep(800);
+      await waitForScrollReady(page, {
+        timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
+      });
       const result = await runSteppedScroll(page);
       return { metrics: steppedScrollMetrics(result) };
     },
@@ -2015,7 +2030,10 @@ async function runScenarioSamples(
     await waitForDebugBridge(page, { timeout: runtimeOptions.debugBridgeTimeoutMs });
     await clearPerf(page);
     const scenarioResult = await scenario.run(page, runtimeOptions);
-    await sleep(settleMs);
+    await waitForDocumentStable(page, {
+      quietMs: settleMs,
+      timeoutMs: Math.max(5_000, settleMs + 1_000),
+    });
     await assertEditorHealth(page, `${scenarioName} run ${runIndex + 1}`);
     const snapshot = await getPerfSnapshot(page);
     if (runIndex >= warmup) {
@@ -2048,6 +2066,7 @@ async function runNativeScenarioSamples(
   const totalRuns = warmup + iterations;
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
     const scenarioResult = await scenario.run(null, runtimeOptions);
+    // Native scenarios do not have browser/editor readiness primitives.
     await sleep(settleMs);
     if (runIndex >= warmup) {
       snapshots.push({

@@ -23,6 +23,7 @@ import {
   switchToMode,
   waitForHoverPreviewState,
   waitForAutocomplete,
+  waitForRenderReady,
   resolveFixtureDocument,
   withRestoredFixture,
   withRuntimeIssueCapture,
@@ -91,7 +92,7 @@ export async function run(page) {
             () => !document.querySelector('[role="dialog"] input'),
             { timeout: 5000 },
           );
-          await page.waitForTimeout(250);
+          await waitForRenderReady(page);
           await assertEditorHealth(page, `cycle ${cycle}: after source search navigation`);
           operations += 2;
         },

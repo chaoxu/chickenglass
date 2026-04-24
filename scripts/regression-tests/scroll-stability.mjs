@@ -8,7 +8,7 @@
  * or reverse motion.
  */
 
-import { openFixtureDocument, sleep } from "../test-helpers.mjs";
+import { openFixtureDocument, waitForScrollReady } from "../test-helpers.mjs";
 
 export const name = "scroll-stability";
 
@@ -66,7 +66,7 @@ function findScrollAnomalies(samples) {
 
 export async function run(page) {
   await openFixtureDocument(page, RANKDECREASE_FIXTURE, { mode: "rich" });
-  await sleep(900);
+  await waitForScrollReady(page, { stableFrames: 3, timeoutMs: 10_000 });
 
   const samples = await page.evaluate(
     async ({ stepPx, stepCount, settleMs }) => {
@@ -74,6 +74,7 @@ export async function run(page) {
       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const settle = async () => {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // This fixed window is the measured scroll-probe cadence.
         await wait(settleMs);
       };
       const readScrollMetrics = () => ({

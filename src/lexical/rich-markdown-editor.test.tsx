@@ -661,6 +661,33 @@ describe("__editor selection bridge (rich mode)", () => {
     }
   });
 
+  it("keeps bridge setSelection when focus is requested before insertion", async () => {
+    const doc = [
+      "---",
+      "title: Bridge Focus",
+      "---",
+      "",
+      "Alpha Beta.",
+    ].join("\n");
+    const insertAt = doc.indexOf("Beta");
+    const onTextChange = vi.fn();
+    const editor = await mountEditor({ doc, onTextChange });
+
+    try {
+      act(() => {
+        editor.handle.setSelection(insertAt);
+        editor.handle.focus();
+        editor.handle.insertText("Z");
+      });
+
+      const expectedDoc = doc.replace("Beta", "ZBeta");
+      expect(editor.handle.getDoc()).toBe(expectedDoc);
+      expect(onTextChange).toHaveBeenLastCalledWith(expectedDoc);
+    } finally {
+      editor.unmount();
+    }
+  });
+
   it("getSelection reports the live source position when the caret is inside a heading", async () => {
     const editor = await mountEditor({ doc: "# Title\n\nbody" });
 

@@ -7,13 +7,13 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument, scrollToText, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "tables";
 
 export async function run(page) {
   await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await waitForRenderReady(page);
 
   // Check for Table node in syntax tree
   const tree = await page.evaluate(() => window.__cmDebug.treeString());

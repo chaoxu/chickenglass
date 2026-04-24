@@ -9,17 +9,16 @@
 
 /* global window */
 
-import { openRegressionDocument } from "../test-helpers.mjs";
+import { openRegressionDocument, switchToMode, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "block-picker";
 
 export async function run(page) {
   await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await waitForRenderReady(page);
 
   // Ensure rich mode
-  await page.evaluate(() => window.__app.setMode("rich"));
-  await new Promise((r) => setTimeout(r, 300));
+  await switchToMode(page, "cm6-rich");
 
   const result = await page.evaluate(() => {
     const view = window.__cmView;

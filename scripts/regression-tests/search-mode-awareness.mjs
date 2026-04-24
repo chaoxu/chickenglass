@@ -6,7 +6,12 @@
  * source mode after a cross-file result is opened.
  */
 
-import { closeAppSearch, openAppSearch, openFixtureDocument } from "../test-helpers.mjs";
+import {
+  closeAppSearch,
+  openAppSearch,
+  openFixtureDocument,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "search-mode-awareness";
 
@@ -40,7 +45,7 @@ async function setMode(page, mode) {
     mode,
     { timeout: 5000 },
   );
-  await page.waitForTimeout(200);
+  await waitForRenderReady(page);
 }
 
 export async function run(page) {
@@ -126,7 +131,7 @@ export async function run(page) {
     () => !document.querySelector('[role="dialog"] input'),
     { timeout: 5000 },
   );
-  await page.waitForTimeout(400);
+  await waitForRenderReady(page);
 
   const navigationState = await page.evaluate((needle) => ({
     mode: window.__app.getMode(),

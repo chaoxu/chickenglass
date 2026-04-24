@@ -5,7 +5,7 @@
  * so the shell-surface overlay has to measure the rendered widgets directly.
  */
 
-import { openFixtureDocument, sleep } from "../test-helpers.mjs";
+import { openFixtureDocument, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "block-widget-shell-surface-geometry";
 
@@ -36,7 +36,7 @@ export async function run(page) {
     },
     { mode: "rich" },
   );
-  await sleep(500);
+  await waitForRenderReady(page, { selector: ".cf-math-display" });
 
   const status = await page.evaluate(async () => {
     const view = window.__cmView;

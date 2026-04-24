@@ -7,7 +7,7 @@
  * inside the block.
  */
 
-import { openFixtureDocument, sleep } from "../test-helpers.mjs";
+import { openFixtureDocument, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "block-widget-fence-guides";
 
@@ -38,7 +38,7 @@ export async function run(page) {
     },
     { mode: "rich" },
   );
-  await sleep(500);
+  await waitForRenderReady(page, { selector: ".cf-math-display" });
 
   const status = await page.evaluate(async () => {
     const view = window.__cmView;

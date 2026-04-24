@@ -77,7 +77,7 @@ export async function run(page) {
     }
 
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(30);
+    await settleEditorLayout(page, { frameCount: 1, delayMs: 30 });
   }
 
   return {

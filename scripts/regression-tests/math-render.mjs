@@ -7,13 +7,13 @@
 
 /* global window */
 
-import { openRegressionDocument } from "../test-helpers.mjs";
+import { openRegressionDocument, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "math-render";
 
 export async function run(page) {
   await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await waitForRenderReady(page, { selector: ".katex" });
 
   // Check for rendered KaTeX elements
   const katexCount = await page.evaluate(() => {

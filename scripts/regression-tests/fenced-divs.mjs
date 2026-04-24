@@ -7,13 +7,13 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
+import { openRegressionDocument, scrollToText, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "fenced-divs";
 
 export async function run(page) {
   await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await waitForRenderReady(page);
 
   // Check Lezer tree for FencedDiv nodes
   const treeDivs = await page.evaluate(() => window.__cmDebug.tree());

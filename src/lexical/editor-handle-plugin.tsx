@@ -407,6 +407,13 @@ export function LexicalEditorHandlePlugin({
         applyDeferredRichDocumentSync();
         if (editorModeRef.current !== "source") {
           scrollSourcePositionIntoView(editor, editor.getRootElement(), selectionRef.current.from);
+          canonicalFallbackSelectionRef.current = selectionRef.current;
+          richSelectionDomInsertFailedRef.current = true;
+          selectionSnapshotFreshRef.current = false;
+          suppressRichSelectionPublishRef.current = true;
+          queueMicrotask(() => {
+            suppressRichSelectionPublishRef.current = false;
+          });
         }
         dispatchSurfaceFocusRequest(editor, { owner: focusOwnerRef.current });
       },

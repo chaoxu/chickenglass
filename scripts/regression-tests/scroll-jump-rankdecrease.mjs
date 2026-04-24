@@ -6,7 +6,7 @@
  * the exact wheel-like path that previously reproduced the large backward jump.
  */
 
-import { openFixtureDocument, sleep } from "../test-helpers.mjs";
+import { openFixtureDocument, waitForScrollReady } from "../test-helpers.mjs";
 
 export const name = "scroll-jump-rankdecrease";
 
@@ -69,7 +69,7 @@ function findWorstDrift(samples) {
 
 export async function run(page) {
   await openFixtureDocument(page, RANKDECREASE_FIXTURE, { mode: "rich" });
-  await sleep(700);
+  await waitForScrollReady(page, { stableFrames: 3, timeoutMs: 10_000 });
 
   const result = await page.evaluate(
     async ({ stepPx, stepCount, settleMs, bottomOffsetPx }) => {
@@ -79,6 +79,7 @@ export async function run(page) {
       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const settle = async () => {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // This fixed window is the measured scroll-probe cadence.
         await wait(settleMs);
       };
       const sample = (label) => {

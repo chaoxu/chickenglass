@@ -22,6 +22,7 @@ import {
   showHoverPreview,
   switchToMode,
   waitForHoverPreviewState,
+  waitForRenderReady,
   withRestoredFixture,
   withRuntimeIssueCapture,
   waitForAutocomplete,
@@ -61,7 +62,7 @@ export async function run(page) {
       () => !document.querySelector('[role="dialog"] input'),
       { timeout: 5000 },
     );
-    await page.waitForTimeout(300);
+    await waitForRenderReady(page);
 
     const sourceNavigation = await page.evaluate((needle) => ({
       mode: window.__app.getMode(),

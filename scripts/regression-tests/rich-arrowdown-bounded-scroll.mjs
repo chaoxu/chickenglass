@@ -59,7 +59,7 @@ export async function run(page) {
 
   for (let step = 1; step <= STEP_COUNT; step += 1) {
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(45);
+    await settleEditorLayout(page, { frameCount: 1, delayMs: 45 });
     const current = await sample(page);
     const scrollDelta = current.scrollTop - previous.scrollTop;
 
@@ -99,4 +99,3 @@ export async function run(page) {
     message: `bounded ${STEP_COUNT} ArrowDown steps from line ${START_LINE}; worst down=${worstDownDelta}px, worst reverse=${worstReverseDelta}px`,
   };
 }
-

@@ -7,17 +7,21 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText } from "../test-helpers.mjs";
+import {
+  openRegressionDocument,
+  scrollToText,
+  switchToMode,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "footnotes";
 
 export async function run(page) {
   const openedPath = await openRegressionDocument(page);
-  await new Promise((r) => setTimeout(r, 800));
+  await waitForRenderReady(page);
 
   // Ensure rich mode
-  await page.evaluate(() => window.__app.setMode("rich"));
-  await new Promise((r) => setTimeout(r, 300));
+  await switchToMode(page, "cm6-rich");
 
   await scrollToText(page, "# Footnotes");
 

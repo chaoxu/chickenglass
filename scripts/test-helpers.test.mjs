@@ -12,8 +12,10 @@ import {
   resolveTextAnchorInDocument,
   runBrowserDoctor,
   screenshot,
-  waitForDebugBridge,
   waitForAppUrl,
+  waitForDebugBridge,
+  waitForDocumentStable,
+  waitForScrollReady,
 } from "./test-helpers.mjs";
 import { splitCliCommand } from "./devx-cli.mjs";
 
@@ -150,6 +152,46 @@ describe("test helpers browser harness", () => {
       targetUrl: "http://localhost:5173/",
       timeout: 10,
     })).rejects.toThrow("Vite error overlay visible");
+  });
+
+  it("waits for canonical document stability through the editor bridge", async () => {
+    window.__app = { getMode: () => "cm6-rich" };
+    window.__editor = { getDoc: () => "# Ready\n" };
+    window.__cmDebug = { semantics: () => ({ revision: 3 }) };
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+    };
+
+    await expect(waitForDocumentStable(page, {
+      quietMs: 0,
+      timeoutMs: 100,
+    })).resolves.toBe(true);
+  });
+
+  it("waits for stable CM6 scroll geometry before scroll probes", async () => {
+    window.__app = { getMode: () => "cm6-rich" };
+    window.__editor = { getDoc: () => "# Ready\n" };
+    window.__cmDebug = { semantics: () => ({ revision: 3 }) };
+    window.__cmView = {
+      scrollDOM: {
+        scrollHeight: 2000,
+        clientHeight: 700,
+        scrollTop: 120,
+      },
+      viewport: {
+        from: 0,
+        to: 8,
+      },
+    };
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+      waitForFunction: vi.fn(async () => {}),
+    };
+
+    await expect(waitForScrollReady(page, {
+      stableFrames: 1,
+      timeoutMs: 200,
+    })).resolves.toBeUndefined();
   });
 });
 

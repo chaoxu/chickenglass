@@ -7,7 +7,12 @@
 
 /* global window */
 
-import { openFile, waitForDebugBridge } from "../test-helpers.mjs";
+import {
+  openFile,
+  switchToMode,
+  waitForDebugBridge,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "table-inline-spans";
 
@@ -41,8 +46,8 @@ async function inspectCase(page, insertText) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForDebugBridge(page);
   await openFile(page, "FORMAT.md");
-  await page.evaluate(() => window.__app.setMode("rich"));
-  await page.waitForTimeout(300);
+  await switchToMode(page, "cm6-rich");
+  await waitForRenderReady(page, { selector: ".cf-table-widget" });
 
   return page.evaluate(({ insertText }) => {
     const view = window.__cmView;

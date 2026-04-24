@@ -36,7 +36,7 @@ export async function run(page) {
   let previousState = await selectionSignature(page);
   for (let step = 0; step < 24; step += 1) {
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(30);
+    await settleEditorLayout(page, { frameCount: 1, delayMs: 30 });
     const state = await selectionSignature(page);
 
     if (state.rootLine < previousState.rootLine) {

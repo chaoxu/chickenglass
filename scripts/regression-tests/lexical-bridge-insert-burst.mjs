@@ -7,9 +7,10 @@
 
 import {
   openFixtureDocument,
+  readEditorText,
   resolveFixtureDocument,
-  sleep,
   switchToMode,
+  waitForDocumentStable,
 } from "../test-helpers.mjs";
 import {
   availableTypingBurstCases,
@@ -21,6 +22,7 @@ export const name = "lexical-bridge-insert-burst";
 const INSERT_COUNT = 100;
 const TARGET_FIXTURE_KEY = "index";
 const TARGET_POSITION_KEY = "after_frontmatter";
+const INSERT_TEXT = "COFLATSLEXICALBRIDGEINSERTBURST".repeat(4).slice(0, INSERT_COUNT);
 
 export async function run(page) {
   try {
@@ -31,22 +33,22 @@ export async function run(page) {
       throw new Error(`missing ${TARGET_FIXTURE_KEY} typing burst fixture`);
     }
     const fixture = resolveFixtureDocument(fixtureCase);
-    const positions = findTypingBurstPositions(fixture.content, fixtureCase.positionKeys);
-    const position = positions[TARGET_POSITION_KEY];
-    if (!position) {
-      throw new Error(
-        `missing ${TARGET_POSITION_KEY} typing burst position in ${fixture.displayPath}`,
-      );
-    }
-
     await switchToMode(page, "source");
     await openFixtureDocument(page, fixture, {
       mode: "lexical",
       settleMs: 1_000,
       timeoutMs: 45_000,
     });
+    const loadedMarkdown = await readEditorText(page);
+    const positions = findTypingBurstPositions(loadedMarkdown, fixtureCase.positionKeys);
+    const position = positions[TARGET_POSITION_KEY];
+    if (!position) {
+      throw new Error(
+        `missing ${TARGET_POSITION_KEY} typing burst position in loaded ${fixture.displayPath}`,
+      );
+    }
 
-    const result = await page.evaluate(async ({ anchor, count }) => {
+    const result = await page.evaluate(async ({ anchor, count, expectedText }) => {
       const editor = window.__editor;
       await editor.ready;
       const before = editor.getDoc();
@@ -57,10 +59,12 @@ export async function run(page) {
         );
 
       editor.setSelection(anchor, anchor);
+      const selectionAfterSet = editor.getSelection();
       editor.focus();
       await waitForAnimationFrames();
+      const selectionBeforeInsert = editor.getSelection();
 
-      const insertText = "1".repeat(count);
+      const insertText = expectedText.slice(0, count);
       for (const char of insertText) {
         editor.insertText(char);
       }
@@ -73,17 +77,24 @@ export async function run(page) {
         }
         await sleepInPage(0);
       }
+      // The Lexical bridge has a delayed rich-sync pass; this fixed observation
+      // window is the regression condition, not a generic harness settle.
       await sleepInPage(1_050);
       const after = editor.getDoc();
       return {
         afterLength: after.length,
         beforeLength: before.length,
         expectedLength,
+        insertIndex: after.indexOf(insertText),
+        insertedText: insertText,
         insertedAtAnchor: after.slice(anchor, anchor + insertText.length),
+        selectionAfterSet,
+        selectionBeforeInsert,
       };
     }, {
       anchor: position.anchor,
       count: INSERT_COUNT,
+      expectedText: INSERT_TEXT,
     });
 
     if (result.afterLength !== result.expectedLength) {
@@ -93,14 +104,14 @@ export async function run(page) {
       };
     }
 
-    if (result.insertedAtAnchor !== "1".repeat(INSERT_COUNT)) {
+    if (result.insertedAtAnchor !== result.insertedText) {
       return {
         pass: false,
-        message: `bridge insert did not persist at requested source anchor: ${JSON.stringify(result)}`,
+        message: `bridge insert did not persist at resolved canonical anchor: ${JSON.stringify(result)}`,
       };
     }
 
-    await sleep(100);
+    await waitForDocumentStable(page, { quietMs: 100, timeoutMs: 2_000 });
     return {
       pass: true,
       message: `Lexical bridge burst persisted ${result.afterLength - result.beforeLength} inserted chars`,

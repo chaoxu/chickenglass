@@ -7,7 +7,7 @@
 import {
   openFixtureDocument,
   readEditorText,
-  sleep,
+  waitForRenderReady,
 } from "../test-helpers.mjs";
 
 export const name = "task-checkboxes";
@@ -39,7 +39,7 @@ async function readCheckboxState(page) {
 
 export async function run(page) {
   await openFixtureDocument(page, TASK_CHECKBOX_FIXTURE, { mode: "cm6-rich" });
-  await sleep(500);
+  await waitForRenderReady(page, { selector: 'input[type="checkbox"]', minCount: 2 });
 
   const before = await readCheckboxState(page);
   if (
@@ -64,7 +64,7 @@ export async function run(page) {
     null,
     { timeout: 5_000, polling: 100 },
   );
-  await sleep(250);
+  await waitForRenderReady(page, { selector: 'input[type="checkbox"]', minCount: 2 });
 
   const afterProseEdit = await readCheckboxState(page);
   if (
