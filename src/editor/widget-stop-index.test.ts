@@ -218,6 +218,43 @@ describe("widget stop index queries", () => {
     }
   });
 
+  it("honors local query ranges for vertical motion stop collection", () => {
+    const doc = [
+      "![Far](far.png)",
+      "",
+      "plain text",
+      "",
+      "| Near | Value |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+      "$$",
+      "far = math",
+      "$$",
+    ].join("\n");
+    const view = createTestView(doc, {
+      extensions: [
+        ...createMarkdownLanguageExtensions(),
+        documentAnalysisField,
+        tableDiscoveryField,
+      ],
+      focus: false,
+    });
+
+    try {
+      const tableLine = view.state.doc.line(5);
+      const localIndex = getWidgetStopIndex(view, [
+        { from: tableLine.from, to: view.state.doc.line(7).to },
+      ]);
+
+      expect(localIndex.hiddenStopsForward).toHaveLength(0);
+      expect(localIndex.tableStopsForward).toHaveLength(1);
+      expect(localIndex.tableStopsForward[0].table.startLineNumber).toBe(5);
+    } finally {
+      view.destroy();
+    }
+  });
+
   it("does not create a MutationObserver or scan data-source DOM as the primary index", () => {
     const view = createTestView("![Alt](image.png)", {
       extensions: [...createMarkdownLanguageExtensions()],

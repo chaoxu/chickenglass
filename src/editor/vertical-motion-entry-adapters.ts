@@ -12,23 +12,34 @@ import { dispatchWidgetKeyboardEntry } from "../state/widget-keyboard-entry";
 import { type HiddenWidgetStop } from "./widget-stop-index";
 import { requestSelectionVisibility } from "./vertical-motion-scroll";
 
-function findClosestTableWidgetContainer(
+function readDatasetNumber(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function tableWidgetContainerMatchesRange(
+  container: HTMLElement,
+  table: TableRange,
+): boolean {
+  const sourceFrom = readDatasetNumber(container.dataset.sourceFrom);
+  const sourceTo = readDatasetNumber(container.dataset.sourceTo);
+  if (sourceFrom !== null || sourceTo !== null) {
+    return sourceFrom === table.from && sourceTo === table.to;
+  }
+
+  return readDatasetNumber(container.dataset.tableFrom) === table.from;
+}
+
+function findTableWidgetContainer(
   view: EditorView,
-  trackedFrom: number,
+  table: TableRange,
 ): HTMLElement | null {
   const containers = view.dom.querySelectorAll<HTMLElement>(".cf-table-widget");
-  let closest: HTMLElement | null = null;
-  let closestDist = Infinity;
   for (const container of containers) {
-    const parsed = Number.parseInt(container.dataset.tableFrom ?? "0", 10);
-    const tableFrom = Number.isFinite(parsed) ? parsed : 0;
-    const dist = Math.abs(tableFrom - trackedFrom);
-    if (dist < closestDist) {
-      closestDist = dist;
-      closest = container;
-    }
+    if (tableWidgetContainerMatchesRange(container, table)) return container;
   }
-  return closest;
+  return null;
 }
 
 export function activateTableStop(
@@ -37,7 +48,7 @@ export function activateTableStop(
   forward: boolean,
 ): number {
   const enterTable = (): boolean => {
-    const container = findClosestTableWidgetContainer(view, table.from);
+    const container = findTableWidgetContainer(view, table);
     if (!container) return false;
     return dispatchWidgetKeyboardEntry(container, {
       direction: forward ? "down" : "up",

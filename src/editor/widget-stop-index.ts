@@ -11,6 +11,7 @@ import {
   isStandaloneImageLine,
   readMarkdownImageContent,
 } from "../state/markdown-image";
+import { mergeRanges, rangesOverlap } from "../lib/range-helpers";
 
 export type HiddenWidgetStopKind = "frontmatter" | "display-math" | "block-image";
 
@@ -71,45 +72,95 @@ function hiddenStopFromRange(
   };
 }
 
-function collectFrontmatterStop(state: EditorState): HiddenWidgetStop | null {
+function normalizeQueryRanges(
+  state: EditorState,
+  ranges: readonly NavigationStopQueryRange[],
+): readonly NavigationStopQueryRange[] {
+  if (ranges.length === 0) return [];
+  return mergeRanges(
+    ranges.map((range) => {
+      const from = Math.max(0, Math.min(range.from, state.doc.length));
+      const to = Math.max(from, Math.min(range.to, state.doc.length));
+      return { from, to };
+    }),
+  );
+}
+
+function rangeOverlapsQueryRanges(
+  range: { readonly from: number; readonly to: number },
+  queryRanges: readonly NavigationStopQueryRange[],
+): boolean {
+  if (queryRanges.length === 0) return true;
+  return queryRanges.some((queryRange) => rangesOverlap(range, queryRange));
+}
+
+function collectFrontmatterStop(
+  state: EditorState,
+  queryRanges: readonly NavigationStopQueryRange[],
+): HiddenWidgetStop | null {
   const frontmatter = state.field(frontmatterField, false);
   if (!frontmatter || frontmatter.end <= 0) return null;
+  if (!rangeOverlapsQueryRanges({ from: 0, to: frontmatter.end }, queryRanges)) return null;
   return hiddenStopFromRange(state, "frontmatter", 0, frontmatter.end);
 }
 
-function collectDisplayMathStops(state: EditorState): readonly HiddenWidgetStop[] {
+function collectDisplayMathStops(
+  state: EditorState,
+  queryRanges: readonly NavigationStopQueryRange[],
+): readonly HiddenWidgetStop[] {
   const analysis = state.field(documentAnalysisField, false);
   if (!analysis) return [];
   return analysis.analysis.mathRegions
     .filter((region) => region.isDisplay)
+    .filter((region) => rangeOverlapsQueryRanges(region, queryRanges))
     .map((region) => hiddenStopFromRange(state, "display-math", region.from, region.to))
     .filter((stop): stop is HiddenWidgetStop => stop !== null);
 }
 
-function collectBlockImageStops(state: EditorState): readonly HiddenWidgetStop[] {
+function collectBlockImageStops(
+  state: EditorState,
+  queryRanges: readonly NavigationStopQueryRange[],
+): readonly HiddenWidgetStop[] {
   const seen = new Set<string>();
   const stops: HiddenWidgetStop[] = [];
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (node.name !== "Image") return;
-      if (!readMarkdownImageContent(state, node.node)) return;
-      if (!isStandaloneImageLine(state, node.from, node.to)) return;
-      const key = `${node.from}:${node.to}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      const stop = hiddenStopFromRange(state, "block-image", node.from, node.to);
-      if (stop) stops.push(stop);
-      return false;
-    },
-  });
+  const collectInRange = (from?: number, to?: number): void => {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.name !== "Image") return;
+        if (!rangeOverlapsQueryRanges({ from: node.from, to: node.to }, queryRanges)) {
+          return false;
+        }
+        if (!readMarkdownImageContent(state, node.node)) return;
+        if (!isStandaloneImageLine(state, node.from, node.to)) return;
+        const key = `${node.from}:${node.to}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        const stop = hiddenStopFromRange(state, "block-image", node.from, node.to);
+        if (stop) stops.push(stop);
+        return false;
+      },
+    });
+  };
+
+  if (queryRanges.length === 0) {
+    collectInRange();
+  } else {
+    for (const range of queryRanges) {
+      collectInRange(range.from, range.to);
+    }
+  }
 
   return stops;
 }
 
 function collectTableStops(
   state: EditorState,
+  queryRanges: readonly NavigationStopQueryRange[],
 ): readonly TableStopCandidate[] {
   return findTablesInState(state)
+    .filter((table) => rangeOverlapsQueryRanges(table, queryRanges))
     .map((table) => ({
       table,
       startLine: table.startLineNumber,
@@ -119,14 +170,15 @@ function collectTableStops(
 
 function buildWidgetStopIndex(
   state: EditorState,
+  queryRanges: readonly NavigationStopQueryRange[] = [],
 ): WidgetStopIndex {
-  const frontmatterStop = collectFrontmatterStop(state);
+  const frontmatterStop = collectFrontmatterStop(state, queryRanges);
   const hiddenStops = [
     ...(frontmatterStop ? [frontmatterStop] : []),
-    ...collectDisplayMathStops(state),
-    ...collectBlockImageStops(state),
+    ...collectDisplayMathStops(state, queryRanges),
+    ...collectBlockImageStops(state, queryRanges),
   ];
-  const tableStops = collectTableStops(state);
+  const tableStops = collectTableStops(state, queryRanges);
 
   return {
     hiddenStopsForward: [...hiddenStops].sort((left, right) => {
@@ -168,8 +220,12 @@ export function disposeWidgetStopIndex(view: EditorView): void {
 
 export function getWidgetStopIndex(
   view: EditorView,
-  _extraRanges: readonly NavigationStopQueryRange[] = [],
+  extraRanges: readonly NavigationStopQueryRange[] = [],
 ): WidgetStopIndex {
+  const queryRanges = normalizeQueryRanges(view.state, extraRanges);
+  if (queryRanges.length > 0) {
+    return buildWidgetStopIndex(view.state, queryRanges);
+  }
   const cached = widgetStopIndexCache.get(view.state);
   if (cached) return cached;
   const index = buildWidgetStopIndex(view.state);
