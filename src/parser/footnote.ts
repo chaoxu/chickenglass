@@ -8,6 +8,7 @@ import type {
   InlineContext,
 } from "@lezer/markdown";
 import { OPEN_BRACKET, CARET, CLOSE_BRACKET, COLON, SPACE, NEWLINE, CR, TAB } from "./char-utils";
+import { isClosingFenceLine } from "./fenced-div";
 
 /**
  * Inline parser for [^id] footnote references.
@@ -64,9 +65,29 @@ function scanFootnoteDefPrefix(text: string, start: number): number {
   return -1;
 }
 
+function isFootnoteContinuationLine(text: string): boolean {
+  if (isClosingFenceLine(text) >= 3) return false;
+
+  let indent = 0;
+  let pos = 0;
+  while (pos < text.length) {
+    const ch = text.charCodeAt(pos);
+    if (ch === SPACE) {
+      indent++;
+    } else if (ch === TAB) {
+      indent += 4 - (indent % 4);
+    } else {
+      break;
+    }
+    pos++;
+  }
+
+  return indent >= 2 && indent <= 4 && pos < text.length;
+}
+
 /**
  * Block parser for [^id]: content footnote definitions.
- * Produces FootnoteDef nodes spanning the definition line.
+ * Produces FootnoteDef nodes spanning the definition and continuation lines.
  */
 const footnoteDefParser: BlockParser = {
   name: "FootnoteDef",
@@ -83,7 +104,6 @@ const footnoteDefParser: BlockParser = {
 
     // Found [^id]:
     const absFrom = cx.lineStart + start;
-    const absTo = cx.lineStart + text.length;
     const labelFrom = cx.lineStart + start;
     const labelTo = cx.lineStart + bracketPos + 2; // includes ]:
 
@@ -93,8 +113,17 @@ const footnoteDefParser: BlockParser = {
     // after the label, so CM6 inline render plugins handle footnote
     // content naturally without a separate re-rendering widget (#430).
     const bodyStart = bracketPos + 2; // position after ]:
-    const bodyText = text.slice(bodyStart);
     const bodyAbsFrom = cx.lineStart + bodyStart;
+    const bodyParts = [text.slice(bodyStart)];
+    let absTo = cx.lineStart + text.length;
+
+    while (isFootnoteContinuationLine(cx.peekLine())) {
+      if (!cx.nextLine()) break;
+      bodyParts.push(`\n${line.text}`);
+      absTo = cx.lineStart + line.text.length;
+    }
+
+    const bodyText = bodyParts.join("");
     const inlineChildren = bodyText.length > 0
       ? cx.parser.parseInline(bodyText, bodyAbsFrom)
       : [];

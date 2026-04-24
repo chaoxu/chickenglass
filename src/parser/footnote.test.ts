@@ -104,6 +104,23 @@ describe("footnote definition [^id]: content", () => {
     const nodes = findNodes(text, "FootnoteDef");
     expect(nodes).toHaveLength(2);
   });
+
+  it("spans Pandoc multiline continuation lines", () => {
+    const text = "Text[^1]\n\n[^1]: first line\n  second line";
+    const defs = findNodes(text, "FootnoteDef");
+    expect(defs).toHaveLength(1);
+    expect(defs[0]).toMatchObject({
+      from: text.indexOf("[^1]:"),
+      to: text.length,
+    });
+  });
+
+  it("stops before an unindented line after multiline content", () => {
+    const text = "[^1]: first line\n  second line\nNext paragraph";
+    const defs = findNodes(text, "FootnoteDef");
+    expect(defs).toHaveLength(1);
+    expect(text.slice(defs[0].from, defs[0].to)).toBe("[^1]: first line\n  second line");
+  });
 });
 
 /**
