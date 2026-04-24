@@ -46,6 +46,15 @@ describe("reference-display", () => {
     expect(renderReferenceDisplay("[@fig:plot]", renderIndex)).toBe("Figure 2");
   });
 
+  it("uses the filtered citation store so local-bib collisions render as local references", () => {
+    const citations = {
+      store: new Map(),
+    };
+
+    expect(renderReferenceDisplay("[@fig:plot]", renderIndex, citations)).toBe("Figure 2");
+    expect(formatCitationPreview("fig:plot", citations)).toBeNull();
+  });
+
   it("formats citation previews from bibliography entries", () => {
     expect(formatCitationPreview("knuth1984", {
       store: new Map([["knuth1984", citeItem]]),

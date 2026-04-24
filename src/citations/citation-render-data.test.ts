@@ -98,4 +98,52 @@ describe("buildCitationRenderData", () => {
     expect(citations.backlinks.get("cite:lamport")).toBeUndefined();
     expect(citations.backlinks.get("cite:tufte")).toHaveLength(1);
   });
+
+  it("excludes local markdown targets that collide with bibliography keys", () => {
+    const citations = buildCitationRenderData(
+      [
+        "# Intro",
+        "",
+        "## Background {#cite:heading}",
+        "",
+        "::: {.theorem #cite:block}",
+        "Statement.",
+        ":::",
+        "",
+        "$$x^2$$ {#eq:cite}",
+        "",
+        "See [@cite:heading], [@cite:block], [@eq:cite], and [@cite:real].",
+      ].join("\n"),
+      {
+        store: new Map([
+          ["cite:heading", {
+            id: "cite:heading",
+            title: "Heading collision",
+            type: "book",
+          }],
+          ["cite:block", {
+            id: "cite:block",
+            title: "Block collision",
+            type: "book",
+          }],
+          ["eq:cite", {
+            id: "eq:cite",
+            title: "Equation collision",
+            type: "book",
+          }],
+          ["cite:real", {
+            id: "cite:real",
+            title: "Actual citation",
+            type: "book",
+          }],
+        ]),
+      },
+    );
+
+    expect(citations.citedIds).toEqual(["cite:real"]);
+    expect(citations.backlinks.get("cite:heading")).toBeUndefined();
+    expect(citations.backlinks.get("cite:block")).toBeUndefined();
+    expect(citations.backlinks.get("eq:cite")).toBeUndefined();
+    expect(citations.backlinks.get("cite:real")).toHaveLength(1);
+  });
 });

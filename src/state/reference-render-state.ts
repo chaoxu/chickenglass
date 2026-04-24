@@ -1,10 +1,7 @@
 import type { EditorState } from "@codemirror/state";
 
-import {
-  collectCitationMatches,
-  getCitationRegistrationKey,
-  type CslProcessor,
-} from "../citations/csl-processor";
+import { type CslProcessor } from "../citations/csl-processor";
+import { getAnalysisCitationRegistrationKey } from "../citations/citation-matching";
 import type { CitationRenderData } from "../citations/citation-render-data";
 import type { BibStore } from "./bib-data";
 import { bibDataField } from "./bib-data";
@@ -20,7 +17,6 @@ import { externalDocumentReferenceCatalogField } from "../semantics/editor-refer
 import {
   getEquationNumbersCacheKey,
   type DocumentAnalysis,
-  type ReferenceSemantics,
 } from "../semantics/document";
 import type { PluginRegistryState } from "./plugin-registry-core";
 
@@ -236,79 +232,8 @@ const bibliographyInputsChanged = createChangeChecker(
 );
 
 interface CitationRegistrationSnapshot {
-  readonly references: readonly ReferenceSemantics[] | null;
+  readonly key: string | null;
   readonly store: BibStore | null;
-}
-
-interface CitationClusterScan {
-  readonly nextIndex: number;
-  readonly ids: readonly string[];
-  readonly locators: readonly (string | undefined)[];
-}
-
-function nextCitationClusterScan(
-  references: readonly ReferenceSemantics[],
-  store: BibStore,
-  startIndex: number,
-): CitationClusterScan | null {
-  for (let index = startIndex; index < references.length; index += 1) {
-    const reference = references[index];
-    let ids: string[] | null = null;
-    let locators: (string | undefined)[] | null = null;
-
-    for (let idIndex = 0; idIndex < reference.ids.length; idIndex += 1) {
-      const id = reference.ids[idIndex];
-      if (!store.has(id)) continue;
-      ids ??= [];
-      locators ??= [];
-      ids.push(id);
-      locators.push(reference.locators[idIndex]);
-    }
-
-    if (ids) {
-      return {
-        nextIndex: index + 1,
-        ids,
-        locators: locators ?? [],
-      };
-    }
-  }
-
-  return null;
-}
-
-function sameCitationRegistrationInputs(
-  left: readonly ReferenceSemantics[],
-  right: readonly ReferenceSemantics[],
-  store: BibStore,
-): boolean {
-  let leftIndex = 0;
-  let rightIndex = 0;
-
-  for (;;) {
-    const leftCluster = nextCitationClusterScan(left, store, leftIndex);
-    const rightCluster = nextCitationClusterScan(right, store, rightIndex);
-
-    if (!leftCluster || !rightCluster) {
-      return leftCluster === rightCluster;
-    }
-
-    if (leftCluster.ids.length !== rightCluster.ids.length) {
-      return false;
-    }
-
-    for (let index = 0; index < leftCluster.ids.length; index += 1) {
-      if (leftCluster.ids[index] !== rightCluster.ids[index]) {
-        return false;
-      }
-      if (leftCluster.locators[index] !== rightCluster.locators[index]) {
-        return false;
-      }
-    }
-
-    leftIndex = leftCluster.nextIndex;
-    rightIndex = rightCluster.nextIndex;
-  }
 }
 
 function getCitationRegistrationSnapshot(
@@ -316,9 +241,12 @@ function getCitationRegistrationSnapshot(
 ): CitationRegistrationSnapshot {
   const analysis = state.field(documentAnalysisField, false) ?? null;
   const bibliography = state.field(bibDataField, false) ?? null;
+  const store = bibliography?.store ?? null;
   return {
-    references: analysis?.references ?? null,
-    store: bibliography?.store ?? null,
+    key: analysis && store
+      ? getAnalysisCitationRegistrationKey(analysis, store)
+      : null,
+    store,
   };
 }
 
@@ -329,13 +257,7 @@ function sameCitationRegistrationSnapshot(
   if (before.store !== after.store) {
     return false;
   }
-  if (!before.store) {
-    return before.references === after.references;
-  }
-  if (!before.references || !after.references) {
-    return before.references === after.references;
-  }
-  return sameCitationRegistrationInputs(before.references, after.references, before.store);
+  return before.key === after.key;
 }
 
 const citationRegistrationInputsChanged = createChangeChecker({
@@ -455,9 +377,7 @@ export function getTableReferenceRenderDependencySignature(
   }
 
   const { store, cslProcessor, processorRevision } = bibliography;
-  const citationRegistrationKey = getCitationRegistrationKey(
-    collectCitationMatches(analysis.references, store),
-  );
+  const citationRegistrationKey = getAnalysisCitationRegistrationKey(analysis, store);
 
   return [
     citationRegistrationKey,

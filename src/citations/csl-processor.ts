@@ -13,8 +13,11 @@
  *   const bib = processor.bibliography(["karger2000"]);
  */
 
-import type { ReferenceIndexModel } from "../references/model";
 import { type CslJsonItem } from "./bibtex-parser";
+import {
+  getCitationRegistrationKey,
+  type CitationCluster,
+} from "./citation-matching";
 import defaultCslStyle from "./ieee.csl?raw";
 
 /**
@@ -121,24 +124,6 @@ function buildCitationItems(
     }
     return { id };
   });
-}
-
-function serializeKeyPart(value: string | undefined): string {
-  return value ?? "";
-}
-
-export interface CitationCluster {
-  readonly ids: readonly string[];
-  readonly locators?: readonly (string | undefined)[];
-}
-
-export function getCitationRegistrationKey(
-  clusters: readonly CitationCluster[],
-): string {
-  return clusters
-    .map((cluster) => cluster.ids.map((id, index) =>
-      `${id}\0${serializeKeyPart(cluster.locators?.[index])}`).join("\u0001"))
-    .join("\u0002");
 }
 
 let nextProcessorId = 0;
@@ -424,154 +409,6 @@ export class CslProcessor {
   }
 }
 
-/** Shape of a reference with parallel id/locator arrays (matches ReferenceSemantics). */
-interface RefWithIds {
-  readonly from: number;
-  readonly to: number;
-  readonly ids: readonly string[];
-  readonly locators: readonly (string | undefined)[];
-}
-
-/** Minimal interface for a store that can check whether a citation id exists. */
-interface IdLookup {
-  has(id: string): boolean;
-}
-
-interface CitationCollectionOptions {
-  readonly isLocalTarget?: (id: string) => boolean;
-}
-
-function isCitationId(
-  id: string,
-  store: IdLookup,
-  options?: CitationCollectionOptions,
-): boolean {
-  return store.has(id) && !options?.isLocalTarget?.(id);
-}
-
-/**
- * Filter references against a bibliography store, returning only the
- * citation-relevant ids and locators from each reference that has at least
- * one known bib entry.
- *
- * Used by both the CM6 editor (reference-render.ts) and preview renderer
- * preview renderers before CSL registration, and by the bibliography
- * plugin to collect cited ids.
- */
-export function collectCitationMatches(
-  references: readonly RefWithIds[],
-  store: IdLookup,
-  options?: CitationCollectionOptions,
-): Array<{ ids: string[]; locators: (string | undefined)[] }> {
-  return references
-    .filter((ref) => ref.ids.some((id) => isCitationId(id, store, options)))
-    .map((ref) => {
-      const ids: string[] = [];
-      const locators: Array<string | undefined> = [];
-      ref.ids.forEach((id, index) => {
-        if (!isCitationId(id, store, options)) return;
-        ids.push(id);
-        locators.push(ref.locators[index]);
-      });
-      return { ids, locators };
-    });
-}
-
-/**
- * Collect all unique cited ids from references in document order.
- *
- * Convenience wrapper over `collectCitationMatches` for callers that
- * only need a flat deduplicated id list (e.g. the bibliography plugin).
- *
- * @deprecated Prefer `collectCitedIdsFromReferenceIndex()` when document
- * analysis is already available.
- */
-export function collectCitedIdsFromReferences(
-  references: readonly RefWithIds[],
-  store: IdLookup,
-): string[] {
-  const seen = new Set<string>();
-  const citedIds: string[] = [];
-  for (const match of collectCitationMatches(references, store)) {
-    for (const id of match.ids) {
-      if (!seen.has(id)) {
-        seen.add(id);
-        citedIds.push(id);
-      }
-    }
-  }
-  return citedIds;
-}
-
-export function collectCitedIdsFromReferenceIndex(
-  referenceIndex: ReferenceIndexModel,
-  store: IdLookup,
-): string[] {
-  const citedIds: string[] = [];
-  for (const entry of referenceIndex.values()) {
-    if (entry.type !== "citation" || !store.has(entry.id)) continue;
-    citedIds.push(entry.id);
-  }
-  return citedIds;
-}
-
-export interface CitationBacklink {
-  readonly occurrence: number;
-  readonly from: number;
-  readonly to: number;
-}
-
-export interface CitationBacklinkIndex {
-  readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>;
-}
-
-/**
- * Collect bibliography backlink targets in citation order.
- *
- * Each citation cluster that contains at least one known bibliography id gets a
- * sequential occurrence number. Every cited id in that cluster receives a
- * backlink to the same source range.
- */
-export function collectCitationBacklinksFromReferences(
-  references: readonly RefWithIds[],
-  store: IdLookup,
-): ReadonlyMap<string, readonly CitationBacklink[]> {
-  return collectCitationBacklinkIndexFromReferences(references, store).backlinks;
-}
-
-export function collectCitationBacklinkIndexFromReferences(
-  references: readonly RefWithIds[],
-  store: IdLookup,
-  options?: CitationCollectionOptions,
-): CitationBacklinkIndex {
-  const backlinks = new Map<string, CitationBacklink[]>();
-  let occurrence = 0;
-
-  for (const ref of references) {
-    const ids = ref.ids.filter((id, index, arr) =>
-      isCitationId(id, store, options) && arr.indexOf(id) === index);
-    if (ids.length === 0) continue;
-
-    occurrence += 1;
-    const backlink: CitationBacklink = {
-      occurrence,
-      from: ref.from,
-      to: ref.to,
-    };
-
-    for (const id of ids) {
-      const entries = backlinks.get(id);
-      if (entries) {
-        entries.push(backlink);
-      } else {
-        backlinks.set(id, [backlink]);
-      }
-    }
-  }
-
-  return { backlinks };
-}
-
 /**
  * Register citation matches with a CSL processor in document order.
  *
@@ -593,3 +430,22 @@ export function registerCitationsWithProcessor(
     }));
   processor.registerCitations(clusters);
 }
+
+export {
+  collectCitationBacklinkIndexFromReferences,
+  collectCitationBacklinksFromAnalysis,
+  collectCitationBacklinksFromReferences,
+  collectCitationMatches,
+  collectCitationMatchesFromAnalysis,
+  collectCitedIdsFromReferenceIndex,
+  collectCitedIdsFromReferences,
+  createReferenceIndexLocalTargetLookup,
+  getAnalysisCitationRegistrationKey,
+  getCitationRegistrationKey,
+  isLocalReferenceIndexTarget,
+  type CitationBacklink,
+  type CitationBacklinkIndex,
+  type CitationCollectionOptions,
+  type CitationCluster,
+  type CitationIdLookup,
+} from "./citation-matching";

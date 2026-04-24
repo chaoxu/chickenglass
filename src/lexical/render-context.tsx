@@ -99,7 +99,7 @@ function LexicalRenderContextRuntimeProvider({
     ),
     [doc, documentSnapshot, projectConfig, resolver],
   );
-  const citations = useCitationRenderData(documentSnapshot.references, documentRuntime.config, resolver);
+  const citations = useCitationRenderData(documentSnapshot, documentRuntime.config, resolver);
 
   const resources = useMemo<LexicalRenderResources>(() => ({
     docPath,

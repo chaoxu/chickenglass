@@ -21,9 +21,13 @@ import { formatBibEntry, sortBibEntries } from "../citations/bibliography";
 import { ensureCitationsRegistered } from "../citations/citation-registration";
 import {
   type CitationBacklink,
-  type CslProcessor,
-  collectCitationBacklinksFromReferences,
+  collectCitationBacklinksFromAnalysis,
   collectCitedIdsFromReferenceIndex,
+  getAnalysisCitationBacklinkKey,
+  getAnalysisCitationRegistrationKey,
+} from "../citations/citation-matching";
+import {
+  type CslProcessor,
 } from "../citations/csl-processor";
 import { type CslJsonItem } from "../citations/csl-json";
 import { CSS } from "../constants/css-classes";
@@ -31,7 +35,6 @@ import { sanitizeCslHtml } from "../lib/sanitize-csl-html";
 import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 import {
   documentAnalysisField,
-  getDocumentAnalysisSliceRevision,
 } from "../state/document-analysis";
 import { buildDecorations, createDecorationsField, RenderWidget } from "./render-core";
 
@@ -235,6 +238,15 @@ function getCitedIdsKey(citedIds: readonly string[]): string {
   return citedIds.join("\0");
 }
 
+function getBibliographyDependencyKey(state: EditorState): string {
+  const { store } = state.field(bibDataField);
+  const analysis = state.field(documentAnalysisField);
+  return [
+    getAnalysisCitationRegistrationKey(analysis, store),
+    getAnalysisCitationBacklinkKey(analysis, store),
+  ].join("\u0003");
+}
+
 export function bibliographyDependenciesChanged(
   beforeState: EditorState,
   afterState: EditorState,
@@ -249,12 +261,7 @@ export function bibliographyDependenciesChanged(
     return true;
   }
 
-  const beforeAnalysis = beforeState.field(documentAnalysisField);
-  const afterAnalysis = afterState.field(documentAnalysisField);
-  // Bibliography content/backlinks derive entirely from the references slice,
-  // so the slice revision is the canonical invalidation signal.
-  return getDocumentAnalysisSliceRevision(beforeAnalysis, "references")
-    !== getDocumentAnalysisSliceRevision(afterAnalysis, "references");
+  return getBibliographyDependencyKey(beforeState) !== getBibliographyDependencyKey(afterState);
 }
 
 function bibliographyShouldRebuild(tr: Transaction): boolean {
@@ -273,7 +280,7 @@ function buildBibliographyDecorationsFromState(state: EditorState): DecorationSe
   const analysis = state.field(documentAnalysisField);
   const citedIds = collectCitedIdsFromReferenceIndex(analysis.referenceIndex, store);
   if (citedIds.length === 0) return Decoration.none;
-  const backlinks = collectCitationBacklinksFromReferences(analysis.references, store);
+  const backlinks = collectCitationBacklinksFromAnalysis(analysis, store);
 
   let cslHtml: readonly string[] = [];
   if (cslProcessor) {

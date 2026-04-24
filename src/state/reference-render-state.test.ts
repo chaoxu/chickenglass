@@ -133,4 +133,32 @@ describe("table reference render dependencies", () => {
     expect(tableReferenceRenderDependenciesChanged(beforeState, afterState)).toBe(true);
     expect(getTableReferenceRenderDependencySignature(afterState)).not.toBe(beforeSignature);
   });
+
+  it("tracks when a bibliography id becomes a local target collision", () => {
+    const doc = [
+      "See [@karger2000].",
+      "",
+      "Tail paragraph.",
+    ].join("\n");
+
+    view = createReferenceStateView(doc);
+    const beforeState = view.state;
+    const beforeSignature = getTableReferenceRenderDependencySignature(beforeState);
+
+    view.dispatch({
+      changes: {
+        from: 0,
+        insert: [
+          "::: {.theorem #karger2000}",
+          "Statement.",
+          ":::",
+          "",
+        ].join("\n"),
+      },
+    });
+
+    const afterState = view.state;
+    expect(tableReferenceRenderDependenciesChanged(beforeState, afterState)).toBe(true);
+    expect(getTableReferenceRenderDependencySignature(afterState)).not.toBe(beforeSignature);
+  });
 });

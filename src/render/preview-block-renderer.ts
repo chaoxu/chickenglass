@@ -1,7 +1,7 @@
 import { parser as baseParser } from "@lezer/markdown";
 import type { SyntaxNode } from "@lezer/common";
+import { collectCitationMatches } from "../citations/citation-matching";
 import {
-  collectCitationMatches,
   registerCitationsWithProcessor,
   type CslProcessor,
 } from "../citations/csl-processor";

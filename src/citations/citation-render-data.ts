@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { DocumentLabelReference } from "../lib/markdown/label-parser";
+import type {
+  DocumentLabelParseSnapshot,
+  DocumentLabelReference,
+} from "../lib/markdown/label-parser";
 import { buildDocumentLabelParseSnapshot } from "../lib/markdown/label-parser";
 import { buildCitationBacklinkMap } from "./bibliography";
 import type { BibStore, CslJsonItem } from "./csl-json";
@@ -9,7 +12,13 @@ import {
   collectCitationClusters,
   collectCitedIdsFromClusters,
 } from "./markdown-citations";
-import { CslProcessor, getCitationRegistrationKey, type CitationBacklink } from "./csl-processor";
+import {
+  createSnapshotLocalTargetLookup,
+  getCitationRegistrationKey,
+  type CitationBacklink,
+  type CitationCollectionOptions,
+} from "./citation-matching";
+import { CslProcessor } from "./csl-processor";
 import type { FrontmatterConfig } from "../lib/frontmatter";
 
 export interface CitationTextResourceResolver {
@@ -20,6 +29,7 @@ export interface CitationRenderData {
   readonly backlinks: ReadonlyMap<string, readonly CitationBacklink[]>;
   readonly citedIds: readonly string[];
   readonly cslProcessor?: CslProcessor;
+  readonly rawStore?: BibStore;
   readonly store: BibStore;
 }
 
@@ -42,8 +52,23 @@ export const EMPTY_BIBLIOGRAPHY: LoadedBibliography = {
 export const EMPTY_CITATIONS: CitationRenderData = {
   backlinks: new Map(),
   citedIds: [],
+  rawStore: EMPTY_STORE,
   store: EMPTY_STORE,
 };
+
+function filterCitationStore(
+  store: BibStore,
+  options?: CitationCollectionOptions,
+): BibStore {
+  if (!options?.isLocalTarget) return store;
+  const filtered = new Map<string, CslJsonItem>();
+  for (const [id, item] of store) {
+    if (!options.isLocalTarget(id)) {
+      filtered.set(id, item);
+    }
+  }
+  return filtered;
+}
 
 export async function loadBibliographyResource(
   config: FrontmatterConfig,
@@ -78,21 +103,34 @@ export function buildCitationRenderData(
   doc: string,
   loadedBibliography: LoadedBibliography,
 ): CitationRenderData {
-  return buildCitationRenderDataFromReferences(
-    buildDocumentLabelParseSnapshot(doc).references,
+  return buildCitationRenderDataFromSnapshot(
+    buildDocumentLabelParseSnapshot(doc),
     loadedBibliography,
+  );
+}
+
+export function buildCitationRenderDataFromSnapshot(
+  snapshot: DocumentLabelParseSnapshot,
+  loadedBibliography: LoadedBibliography,
+): CitationRenderData {
+  return buildCitationRenderDataFromReferences(
+    snapshot.references,
+    loadedBibliography,
+    { isLocalTarget: createSnapshotLocalTargetLookup(snapshot) },
   );
 }
 
 export function buildCitationRenderDataFromReferences(
   references: readonly DocumentLabelReference[],
   loadedBibliography: LoadedBibliography,
+  options?: CitationCollectionOptions,
 ): CitationRenderData {
   if (loadedBibliography.store.size === 0) {
     return EMPTY_CITATIONS;
   }
 
-  const clusters = collectCitationClusters(references, loadedBibliography.store);
+  const citationStore = filterCitationStore(loadedBibliography.store, options);
+  const clusters = collectCitationClusters(references, loadedBibliography.store, options);
   const cslProcessor = loadedBibliography.cslProcessor;
   if (
     cslProcessor
@@ -103,16 +141,21 @@ export function buildCitationRenderDataFromReferences(
 
   return {
     backlinks: buildCitationBacklinkMap(
-      collectCitationBacklinksFromReferences(references, loadedBibliography.store),
+      collectCitationBacklinksFromReferences(
+        references,
+        loadedBibliography.store,
+        options,
+      ),
     ),
     citedIds: collectCitedIdsFromClusters(clusters),
     cslProcessor,
-    store: loadedBibliography.store,
+    rawStore: loadedBibliography.store,
+    store: citationStore,
   };
 }
 
 export function useCitationRenderData(
-  references: readonly DocumentLabelReference[],
+  snapshot: DocumentLabelParseSnapshot,
   config: FrontmatterConfig,
   resolver: CitationTextResourceResolver,
 ): CitationRenderData {
@@ -148,7 +191,7 @@ export function useCitationRenderData(
   }, [config.bibliography, config.csl, resolver.readProjectTextFile]);
 
   return useMemo(
-    () => buildCitationRenderDataFromReferences(references, loadedBibliography),
-    [references, loadedBibliography],
+    () => buildCitationRenderDataFromSnapshot(snapshot, loadedBibliography),
+    [snapshot, loadedBibliography],
   );
 }

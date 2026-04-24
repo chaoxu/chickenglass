@@ -5,6 +5,9 @@ import { type CslJsonItem } from "./bibtex-parser";
 import { CslProcessor } from "./csl-processor";
 import { CSS } from "../constants/css-classes";
 import defaultCslStyle from "./ieee.csl?raw";
+import { equationLabelExtension } from "../parser/equation-label";
+import { fencedDiv } from "../parser/fenced-div";
+import { mathExtension } from "../parser/math-backslash";
 import {
   createMockEditorView,
   createTestView,
@@ -55,7 +58,13 @@ const alpha: CslJsonItem = {
   "container-title": "Proceedings of CONF 2019",
 };
 
-const store = makeBibStore([karger, stein, alpha]);
+const equationCollision: CslJsonItem = {
+  id: "eq:stein2001",
+  type: "book",
+  title: "Equation collision",
+};
+
+const store = makeBibStore([karger, stein, alpha, equationCollision]);
 const ieeeCslEntryHtml = [
   '<div class="csl-entry">',
   '<div class="csl-left-margin">[1]</div>',
@@ -295,10 +304,22 @@ describe("bibliographyPlugin integration", () => {
 
   function createBibView(doc: string, useStore = true): EditorView {
     const v = createTestView(doc, {
-      extensions: [markdown(), documentSemanticsField, bibDataField, bibliographyPlugin],
+      extensions: [
+        markdown({
+          extensions: [fencedDiv, mathExtension, equationLabelExtension],
+        }),
+        documentSemanticsField,
+        bibDataField,
+        bibliographyPlugin,
+      ],
     });
     if (useStore) {
-      v.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein, alpha]) }) });
+      v.dispatch({
+        effects: bibDataEffect.of({
+          store,
+          cslProcessor: new CslProcessor([karger, stein, alpha, equationCollision]),
+        }),
+      });
     }
     return v;
   }
@@ -316,6 +337,23 @@ describe("bibliographyPlugin integration", () => {
   it("handles empty bib store", () => {
     view = createBibView("See [@karger2000].", false);
     expect(view.state.doc.toString()).toBe("See [@karger2000].");
+  });
+
+  it("does not render bibliography entries for local targets that collide with bib keys", () => {
+    view = createBibView([
+      "## Background {#alpha2019}",
+      "",
+      "::: {.theorem #karger2000}",
+      "Statement.",
+      ":::",
+      "",
+      "$$x^2$$ {#eq:stein2001}",
+      "",
+      "See [@alpha2019], [@karger2000], and [@eq:stein2001].",
+    ].join("\n"));
+
+    expect(view.dom.querySelector(`.${CSS.bibliographyEntry}`)).toBeNull();
+    expect(view.dom.querySelector(`.${CSS.bibliographyBacklink}`)).toBeNull();
   });
 
   describe("negative / edge-case", () => {
@@ -390,6 +428,52 @@ describe("bibliographyPlugin integration", () => {
       });
 
       expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
+    it("tracks citation backlink position shifts when registration order is unchanged", () => {
+      const doc = [
+        "Intro.",
+        "",
+        "See [@karger2000].",
+      ].join("\n");
+
+      view = createBibView(doc);
+      const beforeState = view.state;
+
+      view.dispatch({
+        changes: {
+          from: 0,
+          insert: "Preface.\n",
+        },
+      });
+
+      expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(true);
+    });
+
+    it("tracks when a bibliography id becomes a local target collision", () => {
+      const doc = [
+        "See [@karger2000].",
+        "",
+        "Tail paragraph.",
+      ].join("\n");
+
+      view = createBibView(doc);
+      const beforeState = view.state;
+
+      view.dispatch({
+        changes: {
+          from: 0,
+          insert: [
+            "::: {.theorem #karger2000}",
+            "Statement.",
+            ":::",
+            "",
+          ].join("\n"),
+        },
+      });
+
+      expect(bibliographyDependenciesChanged(beforeState, view.state)).toBe(true);
+      expect(view.dom.querySelector(`.${CSS.bibliographyEntry}`)).toBeNull();
     });
 
     it("does not reuse cached CSL HTML across different processors", () => {

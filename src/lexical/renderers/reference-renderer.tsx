@@ -200,6 +200,7 @@ export const ReferenceRenderer = memo(function ReferenceRenderer({
         <span
           className={wrapperClass}
           {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
+          data-coflat-citation="true"
           data-coflat-reference="true"
         >
           {text}
