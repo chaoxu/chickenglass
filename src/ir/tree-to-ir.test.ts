@@ -111,6 +111,61 @@ describe("treeToIR: blocks from fenced divs", () => {
     expect(ir.blocks[0].type).toBe("theorem");
     expect(ir.blocks[1].type).toBe("definition");
   });
+
+  it("assigns block numbers from the shared semantic counter model", () => {
+    const doc = [
+      "::: {.theorem #thm-a}",
+      "Body 1.",
+      ":::",
+      "",
+      "::: {.lemma #lem-a}",
+      "Body 2.",
+      ":::",
+      "",
+      "::: {.definition #def-a}",
+      "Body 3.",
+      ":::",
+      "",
+      "::: {.proof #proof-a}",
+      "Body 4.",
+      ":::",
+      "",
+    ].join("\n");
+    const ir = parseDoc(doc);
+
+    expect(ir.blocks.map((block) => [block.type, block.number])).toEqual([
+      ["theorem", 1],
+      ["lemma", 2],
+      ["definition", 1],
+      ["proof", undefined],
+    ]);
+  });
+
+  it("uses frontmatter custom block counters for IR block numbers", () => {
+    const doc = [
+      "---",
+      "blocks:",
+      "  claim:",
+      "    counter: theorem",
+      "    numbered: true",
+      "---",
+      "",
+      "::: {.theorem #thm-a}",
+      "Body 1.",
+      ":::",
+      "",
+      "::: {.claim #claim-a}",
+      "Body 2.",
+      ":::",
+      "",
+    ].join("\n");
+    const ir = parseDoc(doc);
+
+    expect(ir.blocks.map((block) => [block.type, block.number])).toEqual([
+      ["theorem", 1],
+      ["claim", 2],
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

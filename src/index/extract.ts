@@ -84,6 +84,7 @@ function appendBlockEntries(
     entries.push({
       type: block.type,
       label: block.label,
+      number: block.number === undefined ? undefined : String(block.number),
       title: block.title,
       file,
       position: block.range,

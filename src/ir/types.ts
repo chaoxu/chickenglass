@@ -40,6 +40,8 @@ export interface BlockNode {
   readonly title?: string;
   /** Explicit label/id from attributes (e.g. "thm-main"). */
   readonly label?: string;
+  /** Display number assigned by the shared block-numbering model, if numbered. */
+  readonly number?: number;
   readonly range: Range;
   /** Raw body content between the opening and closing fences. */
   readonly content: string;

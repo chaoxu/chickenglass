@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { extractFileIndex } from "../index/extract";
 import { createLexicalRenderResourceResolver } from "../lexical/runtime/controller/resource-resolver";
-import { buildCitationRenderData, loadBibliographyResource } from "./citation-render-data";
+import { analyzeMarkdownDocument } from "../semantics/markdown-analysis";
+import {
+  buildCitationRenderData,
+  buildCitationRenderDataFromAnalysis,
+  loadBibliographyResource,
+} from "./citation-render-data";
 
 function createTextFileReader(files: Record<string, string>) {
   return {
@@ -145,5 +151,56 @@ describe("buildCitationRenderData", () => {
     expect(citations.backlinks.get("cite:block")).toBeUndefined();
     expect(citations.backlinks.get("eq:cite")).toBeUndefined();
     expect(citations.backlinks.get("cite:real")).toHaveLength(1);
+  });
+
+  it("classifies citation targets through the same semantic artifacts as the index", () => {
+    const content = [
+      "# Intro {#cite:heading}",
+      "",
+      "::: {.theorem #cite:block}",
+      "Statement.",
+      ":::",
+      "",
+      "$$x^2$$ {#eq:cite}",
+      "",
+      "See [@cite:heading], [@cite:block], [@eq:cite], and [@cite:real].",
+    ].join("\n");
+    const artifacts = analyzeMarkdownDocument(content, "paper.md");
+    const index = extractFileIndex(content, "paper.md", artifacts);
+    const citations = buildCitationRenderDataFromAnalysis(
+      artifacts.analysis,
+      {
+        store: new Map([
+          ["cite:heading", {
+            id: "cite:heading",
+            title: "Heading collision",
+            type: "book",
+          }],
+          ["cite:block", {
+            id: "cite:block",
+            title: "Block collision",
+            type: "book",
+          }],
+          ["eq:cite", {
+            id: "eq:cite",
+            title: "Equation collision",
+            type: "book",
+          }],
+          ["cite:real", {
+            id: "cite:real",
+            title: "Actual citation",
+            type: "book",
+          }],
+        ]),
+      },
+    );
+
+    expect(index.entries.map((entry) => entry.label).filter(Boolean)).toEqual([
+      "cite:block",
+      "eq:cite",
+      "cite:heading",
+    ]);
+    expect(citations.citedIds).toEqual(["cite:real"]);
+    expect([...citations.store.keys()]).toEqual(["cite:real"]);
   });
 });

@@ -35,7 +35,7 @@ export interface IndexEntry {
   readonly type: string;
   /** Label (id) if present, e.g., "thm-1" or "eq:foo". */
   readonly label?: string;
-  /** Rendered number string matching the canonical semantic model (e.g., "1.2.3" for headings). */
+  /** Rendered number string matching the canonical semantic model (e.g., "1.2.3" for headings, "2" for blocks). */
   readonly number?: string;
   /** Title text if present (from fenced div title). */
   readonly title?: string;

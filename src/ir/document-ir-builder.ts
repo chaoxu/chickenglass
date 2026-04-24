@@ -1,7 +1,14 @@
 import type { Tree } from "@lezer/common";
-import { extractRawFrontmatter } from "../parser/frontmatter";
+import {
+  extractRawFrontmatter,
+  parseFrontmatter,
+} from "../parser/frontmatter";
 import { parse as parseYaml } from "yaml";
 import type { DocumentAnalysis, TextSource } from "../semantics/document-model";
+import {
+  computeBlockNumbers,
+  createConfiguredBlockNumberingSpecLookup,
+} from "../semantics/block-numbering";
 import type {
   BlockNode,
   DocumentIR,
@@ -188,10 +195,18 @@ export function buildDocumentIR({
     docText.length,
   );
 
+  const frontmatterConfig = parseFrontmatter(docText).config;
+  const blockNumbers = computeBlockNumbers(
+    analysis.fencedDivs,
+    createConfiguredBlockNumberingSpecLookup(frontmatterConfig.blocks),
+    frontmatterConfig.numbering ?? "grouped",
+  );
+
   const blocks: BlockNode[] = analysis.fencedDivs.map((div) => ({
     type: div.primaryClass ?? "div",
     title: div.title,
     label: div.id,
+    number: blockNumbers.byPosition.get(div.from)?.number,
     range: { from: div.from, to: div.to },
     content: extractDivBody(docText, div.openFenceTo, div.closeFenceFrom, div.to),
   }));
