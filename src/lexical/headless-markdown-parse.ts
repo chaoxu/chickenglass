@@ -22,7 +22,8 @@ import {
   type SerializedLexicalNode,
 } from "lexical";
 
-import { coflatMarkdownTransformers, withPooledHeadlessMarkdownEditor } from "./markdown";
+import { withPooledHeadlessMarkdownEditor } from "./markdown-io";
+import { coflatMarkdownTransformers } from "./markdown-transformers";
 
 /**
  * Faithful re-implementation of Lexical's internal `exportNodeToJSON`

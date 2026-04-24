@@ -1,20 +1,19 @@
-import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
-import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import {
   createEmptyHistoryState,
   HistoryPlugin,
   type HistoryState,
 } from "@lexical/react/LexicalHistoryPlugin";
-import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
-import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
-import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
-import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import type { LexicalEditor } from "lexical";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { DEBUG_EDITOR_TEST_ID } from "../debug/debug-bridge-contract.js";
 import type { EditorDocumentChange } from "../lib/string-editor-document-change";
 import {
@@ -22,69 +21,44 @@ import {
   type FocusOwnerRole,
   focusSurface,
 } from "../state/editor-focus";
-import { ActiveEditorPlugin } from "./active-editor-plugin";
-import { BibliographySection } from "./bibliography-section";
-import { BlockKeyboardAccessPlugin } from "./block-keyboard-access-plugin";
-import { CodeBlockChromePlugin } from "./code-block-chrome-plugin";
 import { CursorRevealPlugin } from "./cursor-reveal-plugin";
-import { DocumentChangeBridgeProvider } from "./document-change-bridge";
-import { LexicalSurfaceEditableProvider } from "./editability-context";
 import { EditorFocusPlugin } from "./editor-focus-plugin";
 import { RichLexicalEditorHandlePlugin } from "./editor-handle-plugin";
 import {
   DestructiveKeySelectionSyncPlugin,
   EditableSyncPlugin,
-  FormatEventPlugin,
   RootElementPlugin,
   repairBlankClickSelection,
-  ViewportTrackingPlugin,
 } from "./editor-surface-shared";
-import {
-  EmbeddedFieldFlushProvider,
-} from "./embedded-field-flush-registry";
-import { HeadingChromeAndIndexPlugin } from "./heading-chrome-index-plugin";
 import { InlineTokenBoundaryPlugin } from "./inline-token-boundary-plugin";
-import { InteractionTracePlugin } from "./interaction-trace-plugin";
 import {
   LexicalDocumentSyncPlugin,
   useLexicalDocumentSessionController,
 } from "./lexical-document-session";
-import { ListMarkerStripPlugin } from "./list-marker-strip-plugin";
 import {
-  coflatMarkdownNodes,
-  coflatMarkdownTransformers,
   createLexicalInitialEditorState,
-  lexicalMarkdownTheme,
 } from "./markdown";
 import type {
   MarkdownEditorHandle,
   MarkdownEditorSelection,
 } from "./markdown-editor-types";
-import { MarkdownExpansionPlugin } from "./markdown-expansion-plugin";
-import { ReferenceTypeaheadPlugin } from "./reference-typeahead-plugin";
 import {
-  LexicalRenderContextProvider,
+  CoflatLexicalComposerShell,
+  CoflatRichComposerPlugins,
+  createCoflatComposerConfig,
+} from "./lexical-composer-shell";
+import {
   type LexicalRenderContextValue,
 } from "./render-context";
 import { REVEAL_MODE, type RevealPresentation } from "./reveal-mode";
 import {
-  RevealPresentationProvider,
   useRevealPresentation,
 } from "./reveal-presentation-context";
 import {
-  CodeFenceExitPlugin,
-  CodeHighlightPlugin,
   CoflatClipboardPlugin,
   SelectionAlwaysOnPlugin,
 } from "./rich-editor-plugins";
-import { EditorScrollSurfaceProvider, useEditorScrollSurface } from "./runtime";
-import { SlashPickerPlugin } from "./slash-picker-plugin";
-import { SourcePositionPlugin } from "./source-position-plugin";
-import { StructureEditProvider } from "./structure-edit-plugin";
-import { TabKeyPlugin } from "./tab-key-plugin";
-import { TableActionMenuPlugin } from "./table-action-menu-plugin";
-import { TableScrollShadowPlugin } from "./table-scroll-shadow-plugin";
-import { TreeViewPlugin } from "./tree-view-plugin";
+import { useEditorScrollSurface } from "./runtime";
 
 export type { LexicalRichMarkdownEditorProps };
 
@@ -183,16 +157,11 @@ export function LexicalRichMarkdownEditor({
     nestedHistoryStateRef.current = createEmptyHistoryState();
   }
 
-  const initialConfig = useMemo(() => ({
+  const initialConfig = useMemo(() => createCoflatComposerConfig({
     editable,
     editorState: createLexicalInitialEditorState(initialDocRef.current),
     namespace,
-    nodes: [...coflatMarkdownNodes],
-    onError(error: Error) {
-      throw error;
-    },
-    theme: lexicalMarkdownTheme,
-  }), [namespace]);
+  }), [editable, namespace]);
 
   const handleChange = useCallback((
     _editorState: unknown,
@@ -218,147 +187,138 @@ export function LexicalRichMarkdownEditor({
     syncSelectionToDocLength(doc.length);
   }, [doc.length, syncSelectionToDocLength]);
 
+  const contentEditable = (
+    <ContentEditable
+      aria-label="Lexical rich editor"
+      className={resolvedEditorClassName}
+      data-testid={testId ?? undefined}
+      onBeforeInput={editable
+        ? () => {
+            userEditPendingRef.current = true;
+          }
+        : undefined}
+      onDrop={editable
+        ? () => {
+            userEditPendingRef.current = true;
+          }
+        : undefined}
+      onCut={editable
+        ? () => {
+            userEditPendingRef.current = true;
+          }
+        : undefined}
+      onKeyDown={editable
+        ? (event) => {
+            if (singleLine && event.key === "Enter") {
+              event.preventDefault();
+              return;
+            }
+            if (
+              event.key === "Backspace"
+              || event.key === "Delete"
+              || event.key === "Enter"
+            ) {
+              userEditPendingRef.current = true;
+            }
+          }
+        : undefined}
+      onPaste={editable
+        ? () => {
+            userEditPendingRef.current = true;
+          }
+        : undefined}
+      onMouseUp={editable && shouldRepairBlankClickSelection
+        ? (event: ReactMouseEvent<HTMLDivElement>) => {
+          repairBlankClickSelection(event.currentTarget, event);
+        }
+        : undefined}
+      onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
+      spellCheck={spellCheck}
+    />
+  );
+
   return (
-    <EmbeddedFieldFlushProvider registry={embeddedFieldFlushRegistry}>
-      <RevealPresentationProvider value={resolvedRevealPresentation}>
-        <LexicalRenderContextProvider doc={doc} docPath={docPath} value={renderContextValue}>
-          <LexicalSurfaceEditableProvider editable={editable}>
-        <div
-          className={shellClassName}
-          onScroll={layoutMode === "block" && showBibliography
-            ? (event) => onScrollChange?.(event.currentTarget.scrollTop)
-            : undefined}
-          ref={setSurfaceElement}
-        >
-          <EditorScrollSurfaceProvider surface={effectiveSurface}>
-            <DocumentChangeBridgeProvider
-              lastCommittedDocRef={lastCommittedDocRef}
-              onDocChange={onDocChange}
-              onTextChange={onTextChange}
-              pendingLocalEchoDocRef={pendingLocalEchoDocRef}
-            >
-              <LexicalComposer initialConfig={initialConfig}>
-                <StructureEditProvider>
-                <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
-                <EditableSyncPlugin editable={editable} />
-                {editable
-                  ? <CursorRevealPlugin editorMode={REVEAL_MODE.LEXICAL} presentation={resolvedRevealPresentation} />
-                  : <ClickableLinkPlugin />}
-                <RichLexicalEditorHandlePlugin
-                  cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
-                  canonicalBridgeEchoRef={canonicalBridgeEchoRef}
-                  focusOwner={focusOwner}
-                  flushRichDocumentSnapshot={flushRichDocumentSnapshot}
-                  lastCommittedDocRef={lastCommittedDocRef}
-                  onEditorReady={onEditorReady}
-                  onDocChange={onDocChange}
-                  onSelectionChange={onSelectionChange}
-                  onTextChange={onTextChange}
-                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
-                  selectionRef={sourceSelectionRef}
-                  userEditPendingRef={userEditPendingRef}
-                />
-                <RootElementPlugin onRootElementChange={onRootElementChange} />
-                {editable ? <InlineTokenBoundaryPlugin /> : null}
-                {editable ? <DestructiveKeySelectionSyncPlugin /> : null}
-                <LexicalDocumentSyncPlugin
-                  doc={doc}
-                  lastCommittedDocRef={lastCommittedDocRef}
-                  pendingLocalEchoDocRef={pendingLocalEchoDocRef}
-                  preserveLocalHistory={preserveLocalHistory}
-                />
-                <CoflatClipboardPlugin />
-                <RichTextPlugin
-                  contentEditable={(
-                    <ContentEditable
-                      aria-label="Lexical rich editor"
-                      className={resolvedEditorClassName}
-                      data-testid={testId ?? undefined}
-                      onBeforeInput={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      onDrop={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      onCut={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      onKeyDown={editable
-                        ? (event) => {
-                            if (singleLine && event.key === "Enter") {
-                              event.preventDefault();
-                              return;
-                            }
-                            if (
-                              event.key === "Backspace"
-                              || event.key === "Delete"
-                              || event.key === "Enter"
-                            ) {
-                              userEditPendingRef.current = true;
-                            }
-                          }
-                        : undefined}
-                      onPaste={editable
-                        ? () => {
-                            userEditPendingRef.current = true;
-                          }
-                        : undefined}
-                      onMouseUp={editable && shouldRepairBlankClickSelection
-                        ? (event: React.MouseEvent<HTMLDivElement>) => {
-                          repairBlankClickSelection(event.currentTarget, event);
-                        }
-                        : undefined}
-                      onScroll={(event) => onScrollChange?.(event.currentTarget.scrollTop)}
-                      spellCheck={spellCheck}
-                    />
-                  )}
-                  ErrorBoundary={LexicalErrorBoundary}
-                  placeholder={null}
-                />
-                <CodeHighlightPlugin />
-                <CodeFenceExitPlugin />
-                {showCodeBlockChrome ? <CodeBlockChromePlugin /> : null}
-                {editable ? <FormatEventPlugin /> : null}
-                {editable || preserveLocalHistory ? (
-                  <HistoryPlugin
-                    externalHistoryState={nestedHistoryStateRef.current ?? undefined}
-                  />
-                ) : null}
-                <ListPlugin />
-                <CheckListPlugin />
-                {editable ? <ListMarkerStripPlugin /> : null}
-                <LinkPlugin />
-                <TableScrollShadowPlugin />
-                {editable ? <TableActionMenuPlugin /> : null}
-                {editable ? <MarkdownExpansionPlugin /> : null}
-                {editable ? <BlockKeyboardAccessPlugin /> : null}
-                {editable ? <TabKeyPlugin /> : null}
-                {editable ? <ReferenceTypeaheadPlugin /> : null}
-                {editable ? <SlashPickerPlugin /> : null}
-                {showHeadingChrome ? <HeadingChromeAndIndexPlugin doc={doc} /> : null}
-                <SourcePositionPlugin doc={doc} enableNavigation={enableSourceNavigation} />
-                {showViewportTracking ? <ViewportTrackingPlugin onViewportFromChange={onViewportFromChange} /> : null}
-                {editable ? <MarkdownShortcutPlugin transformers={[...coflatMarkdownTransformers]} /> : null}
-                {editable ? <OnChangePlugin onChange={handleChange} /> : null}
-                <SelectionAlwaysOnPlugin />
-                {showBibliography ? <BibliographySection /> : null}
-                <ActiveEditorPlugin />
-                <TreeViewPlugin />
-                <InteractionTracePlugin />
-                </StructureEditProvider>
-              </LexicalComposer>
-            </DocumentChangeBridgeProvider>
-          </EditorScrollSurfaceProvider>
-        </div>
-          </LexicalSurfaceEditableProvider>
-        </LexicalRenderContextProvider>
-      </RevealPresentationProvider>
-    </EmbeddedFieldFlushProvider>
+    <CoflatLexicalComposerShell
+      doc={doc}
+      docPath={docPath}
+      editable={editable}
+      embeddedFieldFlushRegistry={embeddedFieldFlushRegistry}
+      effectiveSurface={effectiveSurface}
+      initialConfig={initialConfig}
+      lastCommittedDocRef={lastCommittedDocRef}
+      onDocChange={onDocChange}
+      onScroll={layoutMode === "block" && showBibliography
+        ? (event) => onScrollChange?.(event.currentTarget.scrollTop)
+        : undefined}
+      onTextChange={onTextChange}
+      pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+      renderContextValue={renderContextValue}
+      revealPresentation={resolvedRevealPresentation}
+      setSurfaceElement={setSurfaceElement}
+      shellClassName={shellClassName}
+    >
+      <EditorFocusPlugin onFocusOwnerChange={onFocusOwnerChange} owner={focusOwner} />
+      <EditableSyncPlugin editable={editable} />
+      {editable ? (
+        <CursorRevealPlugin
+          editorMode={REVEAL_MODE.LEXICAL}
+          presentation={resolvedRevealPresentation}
+        />
+      ) : (
+        <ClickableLinkPlugin />
+      )}
+      <RichLexicalEditorHandlePlugin
+        cancelRichDocumentSnapshot={cancelRichDocumentSnapshot}
+        canonicalBridgeEchoRef={canonicalBridgeEchoRef}
+        focusOwner={focusOwner}
+        flushRichDocumentSnapshot={flushRichDocumentSnapshot}
+        lastCommittedDocRef={lastCommittedDocRef}
+        onEditorReady={onEditorReady}
+        onDocChange={onDocChange}
+        onSelectionChange={onSelectionChange}
+        onTextChange={onTextChange}
+        pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+        selectionRef={sourceSelectionRef}
+        userEditPendingRef={userEditPendingRef}
+      />
+      <RootElementPlugin onRootElementChange={onRootElementChange} />
+      {editable ? <InlineTokenBoundaryPlugin /> : null}
+      {editable ? <DestructiveKeySelectionSyncPlugin /> : null}
+      <LexicalDocumentSyncPlugin
+        doc={doc}
+        lastCommittedDocRef={lastCommittedDocRef}
+        pendingLocalEchoDocRef={pendingLocalEchoDocRef}
+        preserveLocalHistory={preserveLocalHistory}
+      />
+      <CoflatRichComposerPlugins
+        clipboardPlugin={<CoflatClipboardPlugin />}
+        contentEditable={contentEditable}
+        doc={doc}
+        editable={editable}
+        enableSourceNavigation={enableSourceNavigation}
+        hasOnChange
+        historyPlugin={editable || preserveLocalHistory ? (
+          <HistoryPlugin
+            externalHistoryState={nestedHistoryStateRef.current ?? undefined}
+          />
+        ) : null}
+        onChange={handleChange}
+        onViewportFromChange={onViewportFromChange}
+        selectionPlugin={<SelectionAlwaysOnPlugin />}
+        showBibliography={showBibliography}
+        showBlockKeyboardAccess
+        showCodeBlockChrome={showCodeBlockChrome}
+        showHeadingChrome={showHeadingChrome}
+        showInteractionTrace
+        showListMarkerStrip
+        showMarkdownExpansion
+        showReferenceTypeahead
+        showSlashPicker
+        showSourcePosition
+        showTableChrome
+        showTabKey
+        showViewportTracking={showViewportTracking}
+      />
+    </CoflatLexicalComposerShell>
   );
 }
