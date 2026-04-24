@@ -28,7 +28,6 @@ import { logCatchError } from "../lib/log-catch-error";
 import type { HeadingEntry } from "../heading-ancestry";
 import { measureSync } from "../perf";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
-import type { ResolvedTheme } from "../theme-dom";
 import { computeLiveStats } from "../writing-stats";
 import { Breadcrumbs } from "./breadcrumbs";
 import {
@@ -47,13 +46,9 @@ interface LexicalEditorPaneProps {
   readonly onDocChange?: (changes: readonly EditorDocumentChange[]) => void;
   readonly onHeadingsChange?: (headings: HeadingEntry[]) => void;
   readonly onLexicalEditorReady?: (handle: MarkdownEditorHandle | null) => void;
-  readonly onProgrammaticDocChange?: (doc: string) => void;
   readonly onSurfaceReady?: () => void;
-  readonly onSidenotesCollapsedChange?: (collapsed: boolean) => void;
   readonly projectConfig?: ProjectConfig;
   readonly projectConfigStatus?: ProjectConfigStatus;
-  readonly sidenotesCollapsed?: boolean;
-  readonly theme?: ResolvedTheme;
 }
 
 interface LexicalPaneLiveCounts {
@@ -187,13 +182,9 @@ export function LexicalEditorPane({
   onDirtyChange,
   onHeadingsChange,
   onLexicalEditorReady,
-  onProgrammaticDocChange: _onProgrammaticDocChange,
   onSurfaceReady,
-  onSidenotesCollapsedChange: _onSidenotesCollapsedChange,
   projectConfig,
   projectConfigStatus,
-  sidenotesCollapsed: _sidenotesCollapsed,
-  theme: _theme,
   ...editorOptions
 }: LexicalEditorPaneProps) {
   const bibliographyStatusRef = useRef<BibliographyStatus>({ state: "idle" });

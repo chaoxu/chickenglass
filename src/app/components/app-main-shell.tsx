@@ -99,15 +99,9 @@ export function AppMainShell({
               docPath={currentPath}
               projectConfig={workspace.projectConfig}
               projectConfigStatus={workspace.projectConfigStatus}
-              theme={workspace.resolvedTheme}
               fs={fs}
-              sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
-              onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
               onDocChange={editor.handleDocChange}
               onDirtyChange={editor.handleDirtyChange}
-              onProgrammaticDocChange={(doc) => {
-                editor.handleProgrammaticDocChange(currentPath, doc);
-              }}
               onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
               onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
               onLexicalEditorReady={editor.handleLexicalEditorReady}

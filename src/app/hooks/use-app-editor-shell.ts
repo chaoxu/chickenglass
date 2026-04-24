@@ -377,6 +377,7 @@ export function useAppEditorShell({
     getSessionCurrentDocText,
     handleSearchResultNavigation,
     isMarkdownFile,
+    isPathOpen,
     openFile,
     queueLexicalNavigation,
     runEditorTransaction,

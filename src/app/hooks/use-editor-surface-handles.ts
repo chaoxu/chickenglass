@@ -11,6 +11,7 @@ export interface PendingLexicalNavigation {
   readonly onComplete?: () => void;
   readonly path: string;
   readonly pos: number;
+  readonly requestId: number;
 }
 
 export interface EditorSurfaceHandlesDeps {
@@ -37,7 +38,77 @@ export interface EditorSurfaceHandlesController {
   handleWatchedPathChange: (path: string) => void;
   headings: HeadingEntry[];
   queueLexicalNavigation: (navigation: PendingLexicalNavigation) => void;
-  clearPendingLexicalNavigation: () => void;
+  clearPendingLexicalNavigation: (requestId?: number) => void;
+}
+
+type SaveImage = (file: File) => Promise<string>;
+
+function selectedLineIsEmpty(doc: string, from: number): boolean {
+  const lineStart = doc.lastIndexOf("\n", Math.max(0, from - 1)) + 1;
+  const nextLineBreak = doc.indexOf("\n", from);
+  const lineEnd = nextLineBreak === -1 ? doc.length : nextLineBreak;
+  return doc.slice(lineStart, lineEnd).trim() === "" && from === lineStart;
+}
+
+async function insertImageIntoLexicalHandle(
+  lexicalHandle: MarkdownEditorHandle,
+  saveImage?: SaveImage,
+): Promise<void> {
+  const {
+    IMAGE_EXTENSIONS,
+    IMAGE_MIME_EXT,
+    altTextFromFilename,
+    escapeMarkdownPath,
+    fileToDataUrl,
+    generateImageFilename,
+    isImageMime,
+    logImageError,
+  } = await import("../../editor/image-save");
+  const { IMAGE_TIMEOUT_MS } = await import("../../constants");
+
+  return new Promise<void>((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = IMAGE_EXTENSIONS.map((ext) => `.${ext}`).join(",") + ",image/*";
+    input.style.display = "none";
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) {
+        resolve();
+        return;
+      }
+
+      if (!isImageMime(file.type)) {
+        logImageError("insert", `unsupported MIME type: ${file.type}`);
+        resolve();
+        return;
+      }
+
+      const save = saveImage ?? fileToDataUrl;
+      void save(file).then((path) => {
+        const filename = generateImageFilename(file, IMAGE_MIME_EXT[file.type] ?? "png");
+        const alt = altTextFromFilename(filename);
+        const doc = lexicalHandle.peekDoc();
+        const selection = lexicalHandle.peekSelection();
+        const prefix = selectedLineIsEmpty(doc, selection.from) ? "" : "\n";
+        lexicalHandle.insertText(`${prefix}![${alt}](${escapeMarkdownPath(path)})\n`);
+        lexicalHandle.focus();
+      }).catch((error: unknown) => {
+        logImageError("insert", error);
+      }).finally(resolve);
+    });
+
+    input.addEventListener("cancel", () => {
+      resolve();
+    });
+
+    document.body.appendChild(input);
+    input.click();
+    window.setTimeout(() => {
+      input.remove();
+    }, IMAGE_TIMEOUT_MS);
+  });
 }
 
 export function useEditorSurfaceHandles({
@@ -113,8 +184,17 @@ export function useEditorSurfaceHandles({
         if (editorViewRef.current !== view) return;
         void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
       });
+      return;
     }
-  }, [editorState?.view, editorState?.imageSaver]);
+
+    const lexicalHandle = editorHandleRef.current;
+    if (lexicalHandle) {
+      void insertImageIntoLexicalHandle(lexicalHandle);
+      return;
+    }
+
+    console.warn("[editor] Insert Image is unavailable until an editor surface is ready.");
+  }, [editorHandleRef, editorState?.view, editorState?.imageSaver]);
 
   const handleOutlineSelect = useCallback((from: number) => {
     const lexicalHandle = editorHandleRef.current;
@@ -146,9 +226,16 @@ export function useEditorSurfaceHandles({
 
   const queueLexicalNavigation = useCallback((navigation: PendingLexicalNavigation) => {
     pendingLexicalNavigationRef.current = navigation;
-  }, []);
+    completeLexicalNavigation();
+  }, [completeLexicalNavigation]);
 
-  const clearPendingLexicalNavigation = useCallback(() => {
+  const clearPendingLexicalNavigation = useCallback((requestId?: number) => {
+    if (
+      requestId !== undefined
+      && pendingLexicalNavigationRef.current?.requestId !== requestId
+    ) {
+      return;
+    }
     pendingLexicalNavigationRef.current = null;
   }, []);
 
