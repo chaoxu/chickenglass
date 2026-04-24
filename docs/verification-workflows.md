@@ -37,7 +37,10 @@ pnpm test:browser -- --filter <name>
 
 ## Heavy-Doc Perf Verification
 
-Use the heavy-doc perf mode for `typing-rich-burst` and other fixture-heavy scenarios. It raises debug/open timeouts and post-open settle time so large private fixtures can be automated reliably.
+Use the heavy-doc perf mode for `typing-rich-burst` and other fixture-heavy
+scenarios. It selects the `heavy-doc` runtime budget profile from
+`scripts/runtime-budget-profiles.mjs`; the normal browser/perf lane uses the
+`default` profile.
 
 ```bash
 pnpm perf:capture:heavy -- \
@@ -57,7 +60,7 @@ pnpm perf:compare:heavy -- \
   --baseline output/perf/typing-rich-burst-heavy.json
 ```
 
-If you need custom budgets, the supported knobs are:
+If you need custom budgets, override the selected runtime budget profile with:
 
 ```bash
 --heavy-doc

@@ -8,6 +8,10 @@ import {
 } from "./browser-lifecycle.mjs";
 import { parseChromeArgs } from "./chrome-common.mjs";
 import { createArgParser } from "./devx-cli.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
+
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 /**
  * Open a script-owned browser session and, for managed localhost sessions,
@@ -18,7 +22,7 @@ export async function openBrowserSession(argv = [], options = {}) {
     autoStartServer = true,
     defaultBrowser = "managed",
     reloadCdp = true,
-    timeoutFallback = 15000,
+    timeoutFallback = DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS,
   } = options;
   const { getFlag, getIntFlag, hasFlag } = createArgParser(argv);
   const chromeArgs = parseChromeArgs(argv, { browser: defaultBrowser });

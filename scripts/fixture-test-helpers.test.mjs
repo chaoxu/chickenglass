@@ -6,13 +6,25 @@ import { describe, expect, it } from "vitest";
 import {
   buildFixtureProjectPayload,
   COGIRTH_MAIN2_FIXTURE,
+  DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
+  DEFAULT_FIXTURE_SETTLE_MS,
   PUBLIC_SHOWCASE_FIXTURE,
   RANKDECREASE_MAIN_FIXTURE,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
 } from "./fixture-test-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 describe("fixture registry", () => {
+  it("derives fixture automation budgets from the default runtime profile", () => {
+    expect(DEFAULT_FIXTURE_OPEN_TIMEOUT_MS).toBe(
+      DEFAULT_RUNTIME_BUDGET_PROFILE.fixtureOpenTimeoutMs,
+    );
+    expect(DEFAULT_FIXTURE_SETTLE_MS).toBe(
+      DEFAULT_RUNTIME_BUDGET_PROFILE.postOpenSettleMs,
+    );
+  });
+
   it("owns shared public and heavy fixture definitions", () => {
     expect(PUBLIC_SHOWCASE_FIXTURE).toMatchObject({
       key: "index",

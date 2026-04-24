@@ -62,11 +62,11 @@ If the current run exceeds the configured thresholds, the command exits non-zero
 
 ## Supported Heavy-Doc Mode
 
-`typing-rich-burst` and other fixture-heavy scenarios should use `--heavy-doc` (or the `perf:capture:heavy` / `perf:compare:heavy` scripts) for automation. Heavy-doc mode raises:
-
-- debug-bridge timeout to `45000ms`
-- fixture-open verification timeout to `45000ms`
-- post-open settle to `800ms`
+`typing-rich-burst` and other fixture-heavy scenarios should use `--heavy-doc`
+(or the `perf:capture:heavy` / `perf:compare:heavy` scripts) for automation.
+Heavy-doc mode selects the `heavy-doc` runtime budget profile from
+`scripts/runtime-budget-profiles.mjs`; the normal browser/perf lane uses the
+`default` profile.
 
 Equivalent explicit command:
 
@@ -228,7 +228,9 @@ The scroll scenarios report custom metrics alongside the usual frontend/backend 
 
 Per-step timing uses `performance.now()` around each synchronous `view.dispatch()` call, so values measure the CM6 update/render cost directly. A 16 ms `setTimeout` between steps yields the event loop without blocking on `requestAnimationFrame` (which stalls in non-interactive CDP windows). Comparing Rich vs Source isolates rendering overhead. The `--min-delta-ms` threshold applies to ms-valued scroll metrics the same way it applies to frontend/backend spans.
 
-You can override the supported heavy-doc budgets with `--debug-timeout-ms`, `--open-timeout-ms`, and `--post-open-settle-ms` when a fixture needs different automation limits.
+You can override the selected runtime budget profile with `--debug-timeout-ms`,
+`--open-timeout-ms`, and `--post-open-settle-ms` when a fixture needs different
+automation limits.
 
 ## HTML Export Scenario
 

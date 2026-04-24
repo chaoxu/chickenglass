@@ -8,12 +8,15 @@ import {
   openFixtureDocument,
   openRegressionDocument,
 } from "./editor-test-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 const DEFAULT_URL = "http://localhost:5173";
 const DEFAULT_STEP_PX = 90;
 const DEFAULT_STEP_COUNT = 24;
 const DEFAULT_SETTLE_MS = 120;
 const DEFAULT_BOTTOM_OFFSET_PX = 2600;
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 function resolveTarget(parser) {
   const { getFlag } = parser;
@@ -96,7 +99,7 @@ async function main(argv = process.argv.slice(2)) {
   const stepCount = getIntFlag("--step-count", DEFAULT_STEP_COUNT);
   const settleMs = getIntFlag("--settle-ms", DEFAULT_SETTLE_MS);
   const bottomOffsetPx = getIntFlag("--bottom-offset-px", DEFAULT_BOTTOM_OFFSET_PX);
-  const timeout = getIntFlag("--timeout", 15000);
+  const timeout = getIntFlag("--timeout", DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS);
   const simulateWheel = hasFlag("--simulate-wheel");
 
   const session = await openBrowserSession(argv, { timeoutFallback: timeout });

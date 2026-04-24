@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_RUNTIME_BUDGET_PROFILE,
+  HEAVY_DOC_RUNTIME_BUDGET_PROFILE,
+} from "./runtime-budget-profiles.mjs";
+
+import {
   availableHtmlExportPandocCases,
   availableTypingBurstCases,
   actionablePerfSummaryRows,
@@ -546,9 +551,25 @@ Final prose line.
       }),
     ).toEqual({
       heavyDoc: true,
-      debugBridgeTimeoutMs: 45000,
-      fixtureOpenTimeoutMs: 45000,
-      postOpenSettleMs: 800,
+      profileName: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.name,
+      debugBridgeTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs,
+      fixtureOpenTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.fixtureOpenTimeoutMs,
+      postOpenSettleMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.postOpenSettleMs,
+    });
+  });
+
+  it("uses the default runtime budget profile without heavy-doc mode", () => {
+    expect(
+      resolvePerfRuntimeOptions({
+        getIntFlag: (_flag, fallback) => fallback,
+        hasFlag: () => false,
+      }),
+    ).toEqual({
+      heavyDoc: false,
+      profileName: DEFAULT_RUNTIME_BUDGET_PROFILE.name,
+      debugBridgeTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs,
+      fixtureOpenTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.fixtureOpenTimeoutMs,
+      postOpenSettleMs: DEFAULT_RUNTIME_BUDGET_PROFILE.postOpenSettleMs,
     });
   });
 

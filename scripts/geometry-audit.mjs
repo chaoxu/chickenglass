@@ -11,6 +11,7 @@ import {
   GEOMETRY_AUDIT_FIXTURES,
   PUBLIC_SHOWCASE_FIXTURE,
 } from "./fixture-test-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 import {
   clearStructure,
   getGeometrySnapshot,
@@ -22,6 +23,8 @@ import {
 } from "./editor-test-helpers.mjs";
 
 const FIXTURES = GEOMETRY_AUDIT_FIXTURES;
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 const PUBLIC_GEOMETRY_FALLBACK = {
   ...PUBLIC_SHOWCASE_FIXTURE,
@@ -41,7 +44,7 @@ Options:
   --headed                           Show the Playwright-owned browser window
   --port <n>                         CDP port for Chrome for Testing
   --url <url>                        App URL Chrome is already running against
-  --timeout <ms>                     Browser/debug bridge timeout (default: 15000)
+  --timeout <ms>                     Browser/debug bridge timeout (default: ${DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS})
   --assert-clean                     Exit non-zero if geometry deltas exceed tolerances
   --max-top-delta <px>               Allowed absolute top delta (default: 0)
   --max-height-delta <px>            Allowed absolute height delta (default: 0)
@@ -310,7 +313,7 @@ async function main(argv = process.argv.slice(2)) {
   );
   const line = getIntFlag("--line", fixture.defaultLine ?? requestedFixture.defaultLine);
   const radius = getIntFlag("--radius", 3);
-  const timeout = getIntFlag("--timeout", 15000);
+  const timeout = getIntFlag("--timeout", DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS);
   const maxTopDelta = getIntFlag("--max-top-delta", 0);
   const maxHeightDelta = getIntFlag("--max-height-delta", 0);
 

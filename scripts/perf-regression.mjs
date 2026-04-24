@@ -35,6 +35,12 @@ import {
   PERF_REPORT_VERSION,
 } from "./perf-regression-lib.mjs";
 import {
+  DEFAULT_RUNTIME_BUDGET_PROFILE,
+  formatRuntimeBudgetProfileDefaults,
+  HEAVY_DOC_RUNTIME_BUDGET_PROFILE,
+  runtimeBudgetProfileForMode,
+} from "./runtime-budget-profiles.mjs";
+import {
   COGIRTH_MAIN2_FIXTURE,
   PUBLIC_SHOWCASE_FIXTURE,
   RANKDECREASE_MAIN_FIXTURE,
@@ -106,12 +112,6 @@ async function discardDirtyPerfState(page) {
 }
 
 const SCROLL_STEP_SIZE = 30;
-const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS = 15000;
-const DEFAULT_FIXTURE_OPEN_TIMEOUT_MS = 10000;
-const DEFAULT_POST_OPEN_SETTLE_MS = 200;
-const HEAVY_DOC_DEBUG_BRIDGE_TIMEOUT_MS = 45000;
-const HEAVY_DOC_FIXTURE_OPEN_TIMEOUT_MS = 45000;
-const HEAVY_DOC_POST_OPEN_SETTLE_MS = 800;
 const LATEX_PANDOC_FROM = "markdown+fenced_divs+raw_tex+grid_tables+pipe_tables+tex_math_dollars+tex_math_single_backslash+mark";
 const PANDOC_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const HTML_EXPORT_SUPPORT_EXTENSIONS = new Set([
@@ -433,19 +433,21 @@ function resolveScrollFixture() {
 
 export function resolvePerfRuntimeOptions({ getIntFlag, hasFlag }) {
   const heavyDoc = hasFlag("--heavy-doc");
+  const profile = runtimeBudgetProfileForMode({ heavyDoc });
   return {
     heavyDoc,
+    profileName: profile.name,
     debugBridgeTimeoutMs: getIntFlag(
       "--debug-timeout-ms",
-      heavyDoc ? HEAVY_DOC_DEBUG_BRIDGE_TIMEOUT_MS : DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS,
+      profile.debugBridgeTimeoutMs,
     ),
     fixtureOpenTimeoutMs: getIntFlag(
       "--open-timeout-ms",
-      heavyDoc ? HEAVY_DOC_FIXTURE_OPEN_TIMEOUT_MS : DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
+      profile.fixtureOpenTimeoutMs,
     ),
     postOpenSettleMs: getIntFlag(
       "--post-open-settle-ms",
-      heavyDoc ? HEAVY_DOC_POST_OPEN_SETTLE_MS : DEFAULT_POST_OPEN_SETTLE_MS,
+      profile.postOpenSettleMs,
     ),
   };
 }
@@ -1928,6 +1930,12 @@ export const scenarios = {
 };
 
 function printUsage() {
+  const defaultBudgetText = formatRuntimeBudgetProfileDefaults(
+    DEFAULT_RUNTIME_BUDGET_PROFILE,
+  );
+  const heavyBudgetText = formatRuntimeBudgetProfileDefaults(
+    HEAVY_DOC_RUNTIME_BUDGET_PROFILE,
+  );
   console.log(`Usage:
   pnpm perf:capture -- --scenario open-index --output output/perf/open-index.json
   pnpm perf:compare -- --scenario open-index --baseline output/perf/open-index.json
@@ -1941,15 +1949,19 @@ Options:
   --baseline <path>        Baseline report to compare against (compare only)
   --threshold-pct <n>      Regression threshold percent (default: 25)
   --min-delta-ms <n>       Minimum absolute delta before flagging (default: 5)
-  --heavy-doc              Use long timeouts/settles for heavy-doc automation
-  --debug-timeout-ms <n>   Override debug-bridge timeout (default: 15000 / 45000 heavy)
-  --open-timeout-ms <n>    Override fixture-open verification timeout (default: 10000 / 45000 heavy)
-  --post-open-settle-ms <n> Extra settle after opening fixtures (default: 200 / 800 heavy)
+  --heavy-doc              Use the heavy-doc runtime budget profile
+  --debug-timeout-ms <n>   Override debug-bridge timeout
+  --open-timeout-ms <n>    Override fixture-open verification timeout
+  --post-open-settle-ms <n> Extra settle after opening fixtures
   --browser <managed|cdp>  Browser lane (default: managed)
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)
   --url <url>              App URL that Chrome is already running against
   --no-start-server        Do not auto-start Vite for managed localhost runs
+
+Runtime budget profiles:
+  ${DEFAULT_RUNTIME_BUDGET_PROFILE.name}: ${defaultBudgetText}
+  ${HEAVY_DOC_RUNTIME_BUDGET_PROFILE.name}: ${heavyBudgetText}
 
 Native scenarios such as html-export-pandoc skip Vite/Playwright and run local tooling directly.
 `);

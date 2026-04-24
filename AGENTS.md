@@ -217,7 +217,7 @@ Managed harness:
 Manual CDP lane:
 1. Start `pnpm dev`, then `pnpm chrome` (CDP on port 9322).
 2. Connect: `chromium.connectOverCDP("http://localhost:9322")`
-3. Use `page.evaluate()` + `__editor`/`__app` for surface-neutral actions. Use `__cmView`/`__cmDebug` only when investigating the CM6 surface. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout(10000)`.
+3. Use `page.evaluate()` + `__editor`/`__app` for surface-neutral actions. Use `__cmView`/`__cmDebug` only when investigating the CM6 surface. **Never use `locator.click()` on CM6 content.** Use `__app.openFile()` to open files. Set `page.setDefaultTimeout()` from the `default` runtime budget profile unless a repro needs a custom timeout.
 4. Screenshots: use the `screenshot()` helper from `scripts/test-helpers.mjs`, or `node scripts/screenshot.mjs [file] --output path.png`. **Do not call `page.screenshot()` directly** — headed Chrome CDP can hang there.
 5. Kill: `kill $(lsof -ti:5173 -ti:5174 -ti:5175) 2>/dev/null; pkill -f "launch-chrome" 2>/dev/null`
 
@@ -230,6 +230,7 @@ Do NOT use the Playwright MCP plugin — connect directly via CDP.
 - Use the shared perf harness in `scripts/perf-regression.mjs` and the guidance in `docs/perf-regression.md`.
 - For changed-area render/state verification, prefer `pnpm test:focused -- <tests...>` over ad hoc Vitest invocations. It pins Vitest to a single deterministic worker lane and cleans up the child worker process on exit.
 - For fixture-heavy perf scenarios, prefer `pnpm perf:capture:heavy -- --scenario typing-rich-burst ...` or `pnpm perf:compare:heavy -- ...`.
+- Browser/perf automation budgets are named in `scripts/runtime-budget-profiles.mjs`; use `default` for normal lanes and `heavy-doc` for private heavy-fixture lanes.
 - When local private fixtures are available, `fixtures/cogirth/main2.md` is the preferred heavy fixture for open/edit/scroll performance work. Otherwise use `demo/index.md` and note the limitation.
 - Scripted browser/perf fixtures resolve from repo-local `demo/` and `fixtures/` by default. For private fixture trees outside the checkout, set `COFLAT_DEMO_ROOT` or `COFLAT_FIXTURE_ROOT`; do not hard-code user-home fixture roots in scripts.
 

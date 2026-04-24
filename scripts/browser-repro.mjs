@@ -21,8 +21,11 @@ import {
   setCursor,
   switchToMode,
 } from "./editor-test-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 export { openBrowserPage, openBrowserSession };
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 const COMPARABLE_CAPTURE_FIELDS = [
   "document",
@@ -55,7 +58,7 @@ Shared browser options:
   --browser managed|cdp   Browser lane (default: managed for this script)
   --url http://localhost:5173
   --port 9322
-  --timeout 30000
+  --timeout ${DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS}
   --no-start-server
   --headed | --headless
 

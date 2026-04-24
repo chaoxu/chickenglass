@@ -1,9 +1,12 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
-export const DEFAULT_FIXTURE_OPEN_TIMEOUT_MS = 10000;
-export const DEFAULT_FIXTURE_SETTLE_MS = 200;
+export const DEFAULT_FIXTURE_OPEN_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.fixtureOpenTimeoutMs;
+export const DEFAULT_FIXTURE_SETTLE_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.postOpenSettleMs;
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 export const REPO_DEMO_ROOT = resolve(REPO_ROOT, "demo");

@@ -11,6 +11,7 @@ import {
   PUBLIC_SHOWCASE_FIXTURE,
   RANKDECREASE_MAIN_FIXTURE,
 } from "./fixture-test-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 import {
   openFixtureDocument,
   resolveFixtureDocumentWithFallback,
@@ -18,6 +19,8 @@ import {
 } from "./editor-test-helpers.mjs";
 
 export const RANKDECREASE_CURSOR_FIXTURE = RANKDECREASE_MAIN_FIXTURE;
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 const PUBLIC_CURSOR_FALLBACK = {
   ...PUBLIC_SHOWCASE_FIXTURE,
@@ -165,7 +168,7 @@ Options:
   --settle-ms <n>             Extra settle time after each move (default: 150)
   --context-radius <n>        Nearby document lines to include (default: 2)
   --min-reverse-scroll-px <n> Reverse-scroll threshold in px (default: 120)
-  --timeout <ms>              Browser/debug bridge timeout (default: 15000)
+  --timeout <ms>              Browser/debug bridge timeout (default: ${DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS})
   --assert-clean              Exit non-zero if a reverse jump is found
   --expect-anomaly            Exit non-zero if no reverse jump is found
   --json                      Print the report as JSON
@@ -174,7 +177,7 @@ Options:
 
 export function resolveCursorScrollTimeout(argv) {
   const { getIntFlag } = createArgParser(argv);
-  return getIntFlag("--timeout", 15000);
+  return getIntFlag("--timeout", DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS);
 }
 
 export function resolveCursorScrollTraceOptions(argv, direction) {

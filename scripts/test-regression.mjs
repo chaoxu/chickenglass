@@ -25,11 +25,14 @@ import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.
 import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
 import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
 import { resetEditorState } from "./editor-test-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "regression-tests");
 const SMOKE_FILTER = ["mode-switch", "index-open-rich-render", "headings", "math-render"];
 const LEXICAL_FILTER = ["lexical-smoke"];
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 const SCENARIO_FILTERS = new Map([
   ["smoke", SMOKE_FILTER],
   ["lexical", LEXICAL_FILTER],
@@ -108,7 +111,7 @@ async function main() {
   const { getFlag, getIntFlag } = createArgParser(args);
   const filterArg = getFlag("--filter", "");
   const scenarioArg = getFlag("--scenario", "");
-  const timeout = getIntFlag("--timeout", 15000);
+  const timeout = getIntFlag("--timeout", DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS);
   const filter = resolveFilter({ filterArg, scenarioArg });
 
   console.log("Browser Regression Tests");

@@ -5,6 +5,7 @@ import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
 import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 import {
   DEBUG_BRIDGE_READY_PROMISES,
   DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
@@ -15,6 +16,8 @@ const DEFAULT_PORT = 9322;
 const DEFAULT_APP_URL = "http://localhost:5173";
 const DEFAULT_BROWSER_MODE = "cdp";
 const DEFAULT_MANAGED_VIEWPORT = { width: 1280, height: 900 };
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 const browserCleanupByPage = new WeakMap();
 
@@ -61,7 +64,7 @@ export function normalizeConnectEditorOptions(portOrOptions = DEFAULT_PORT, opti
     headless: rawOptions.headless ?? browser === "managed",
     port: rawOptions.port ?? DEFAULT_PORT,
     predicate: rawOptions.predicate ?? pageHasDebugBridge,
-    timeout: rawOptions.timeout ?? 15000,
+    timeout: rawOptions.timeout ?? DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS,
     url: rawOptions.url ?? DEFAULT_APP_URL,
     viewport: rawOptions.viewport ?? DEFAULT_MANAGED_VIEWPORT,
     waitForBridge: rawOptions.waitForBridge ?? true,
@@ -70,7 +73,7 @@ export function normalizeConnectEditorOptions(portOrOptions = DEFAULT_PORT, opti
 
 export async function waitForAppUrl(
   url,
-  { timeout = 15000, intervalMs = 250 } = {},
+  { timeout = DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS, intervalMs = 250 } = {},
 ) {
   const startedAt = Date.now();
 
@@ -259,7 +262,9 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
     );
   }
   await page.bringToFront().catch(() => {});
-  page.setDefaultTimeout(Math.min(resolved.timeout, 10000));
+  page.setDefaultTimeout(
+    Math.min(resolved.timeout, DEFAULT_RUNTIME_BUDGET_PROFILE.fixtureOpenTimeoutMs),
+  );
   browserCleanupByPage.set(page, async () => {
     await browser.close();
   });
@@ -386,9 +391,12 @@ async function collectDebugBridgeDiagnostics(page) {
  *
  * @param {import("playwright").Page} page
  * @param {object} [options]
- * @param {number} [options.timeout=15000]
+ * @param {number} [options.timeout=DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs]
  */
-export async function waitForDebugBridge(page, { timeout = 15000 } = {}) {
+export async function waitForDebugBridge(
+  page,
+  { timeout = DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS } = {},
+) {
   try {
     await page.waitForFunction(
       ({ editorSelector, requiredGlobals }) => Boolean(

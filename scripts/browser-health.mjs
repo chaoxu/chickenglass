@@ -1,10 +1,14 @@
 /* global window */
 
 import { sleep, waitForDebugBridge } from "./browser-lifecycle.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 import {
   DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
   DEBUG_EDITOR_SELECTOR,
 } from "../src/debug/debug-bridge-contract.js";
+
+const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 function issueMatches(text, patterns) {
   return patterns.some((pattern) =>
@@ -282,7 +286,7 @@ export async function runBrowserDoctor(page, options = {}) {
     health = {},
     label = "browser doctor",
     targetUrl = "",
-    timeout = 15000,
+    timeout = DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS,
   } = options;
 
   assertDoctorUrl(page.url(), targetUrl);

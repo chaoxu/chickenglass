@@ -5,6 +5,7 @@ import {
   resolveCursorScrollTimeout,
   resolveCursorScrollTraceOptions,
 } from "./cursor-scroll-regression.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 const baseEntry = (overrides = {}) => ({
   step: 0,
@@ -127,7 +128,9 @@ describe("cursor scroll regression", () => {
 
   it("parses the browser/debug bridge timeout flag", () => {
     expect(resolveCursorScrollTimeout(["--timeout", "42000"])).toBe(42000);
-    expect(resolveCursorScrollTimeout([])).toBe(15000);
+    expect(resolveCursorScrollTimeout([])).toBe(
+      DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs,
+    );
     expect(() => resolveCursorScrollTimeout(["--timeout", "15s"])).toThrow(
       "Invalid integer value for --timeout: 15s",
     );
