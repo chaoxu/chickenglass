@@ -50,7 +50,7 @@ export interface WindowState {
   /** Collapsed state per sidebar section, keyed by section title. */
   sidebarSections: SidebarSectionState[];
   /** Schema version for forward compatibility. */
-  version: number;
+  version: 2;
 }
 
 interface LegacyWindowState {

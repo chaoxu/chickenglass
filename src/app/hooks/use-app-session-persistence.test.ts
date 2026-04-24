@@ -1,9 +1,14 @@
 import { act, createElement, type FC, type Dispatch, type SetStateAction } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WINDOW_STATE_KEY } from "../../constants";
 import type { FileEntry } from "../file-manager";
 import type { HotExitBackupStore } from "../hot-exit-backups";
-import type { WindowState } from "../window-state";
+import { loadWindowState, type WindowState } from "../window-state";
+import {
+  createTestWindowState,
+  type TestWindowStateOverrides,
+} from "../window-state-test-fixtures";
 import { useAppSessionPersistence } from "./use-app-session-persistence";
 
 interface Deferred<T> {
@@ -22,15 +27,8 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-function createMockWindowState(overrides?: Partial<WindowState>): WindowState {
-  return {
-    projectRoot: null,
-    currentDocument: null,
-    sidebarWidth: 220,
-    sidebarSections: [],
-    version: 1,
-    ...overrides,
-  };
+function createMockWindowState(overrides?: TestWindowStateOverrides): WindowState {
+  return createTestWindowState(overrides);
 }
 
 function createFileTree(path: string, children?: FileEntry[]): FileEntry {
@@ -78,6 +76,7 @@ function createHarness(deps: {
   workspaceRequestRef: { current: number };
   windowState: WindowState;
   saveWindowState?: (patch: Partial<WindowState>) => void;
+  startupComplete?: boolean;
   sidebarCollapsed?: boolean;
   sidebarWidth?: number;
   openFileShouldReject?: boolean;
@@ -109,7 +108,7 @@ function createHarness(deps: {
         projectRoot: deps.windowState.projectRoot,
         windowState: deps.windowState,
         saveWindowState: deps.saveWindowState ?? vi.fn(),
-        startupComplete: true,
+        startupComplete: deps.startupComplete ?? true,
       },
       sidebarLayout: {
         sidebarCollapsed: deps.sidebarCollapsed ?? false,
@@ -151,6 +150,8 @@ describe("useAppSessionPersistence", () => {
   let root: Root;
 
   beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState({}, "", "/");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -159,6 +160,8 @@ describe("useAppSessionPersistence", () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    localStorage.clear();
+    window.history.replaceState({}, "", "/");
     vi.useRealTimers();
   });
 
@@ -198,6 +201,37 @@ describe("useAppSessionPersistence", () => {
     });
 
     expect(ref.setSidebarWidthCalls).toContain(300);
+  });
+
+  it("restores from a real legacy persisted window state after migration", async () => {
+    localStorage.setItem(
+      WINDOW_STATE_KEY,
+      JSON.stringify({
+        activeTab: "legacy.md",
+        sidebarSections: [],
+        sidebarWidth: 333,
+        tabs: [
+          { path: "other.md", name: "Other" },
+          { path: "legacy.md", name: "Legacy" },
+        ],
+        version: 1,
+      }),
+    );
+    const windowState = loadWindowState();
+    const { Harness, ref } = createHarness({
+      fileTree: createFileTree("legacy.md"),
+      workspaceRequestRef: { current: 0 },
+      windowState,
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
+    expect(windowState.version).toBe(2);
+    expect(ref.openFileCalls).toContain("legacy.md");
+    expect(ref.setSidebarWidthCalls).toContain(333);
   });
 
   it("restores collapsed sidebar when width is 0", async () => {
@@ -517,28 +551,33 @@ describe("useAppSessionPersistence", () => {
     expect(ref.openFileCalls).toHaveLength(0);
   });
 
-  it("does not initialize restore until startupComplete is true", async () => {
+  it("waits for startupComplete before restoring the saved document", async () => {
     const workspaceRequestRef = { current: 0 };
     const windowState = createMockWindowState({
       currentDocument: { path: "draft.md", name: "draft.md" },
       sidebarWidth: 220,
     });
-    const { Harness, ref } = createHarness({
+    const deps = {
       fileTree: createFileTree("draft.md"),
       workspaceRequestRef,
       windowState,
-    });
-
-    // Note: createHarness sets startupComplete: true, so this tests
-    // that with startupComplete false, the restore would not run.
-    // We're testing the guard with our controlled harness.
+      startupComplete: false,
+    };
+    const { Harness, ref } = createHarness(deps);
 
     await act(async () => {
       root.render(createElement(Harness));
       await Promise.resolve();
     });
 
-    // The restore should have run after startupComplete became true
+    expect(ref.openFileCalls).toEqual([]);
+
+    deps.startupComplete = true;
+    await act(async () => {
+      root.render(createElement(Harness));
+      await Promise.resolve();
+    });
+
     expect(ref.openFileCalls).toContain("draft.md");
   });
 

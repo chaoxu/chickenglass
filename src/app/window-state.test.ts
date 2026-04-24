@@ -1,21 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WINDOW_STATE_KEY } from "../constants";
 import {
-  buildWindowState,
   getWindowStateStorageKey,
   loadWindowState,
   saveWindowStateForLabel,
-  type WindowState,
 } from "./window-state";
+import {
+  createTestWindowState,
+  DEFAULT_TEST_WINDOW_STATE,
+} from "./window-state-test-fixtures";
 
 const BASE_PATH = "/";
-const DEFAULT_WINDOW_STATE: WindowState = {
-  currentDocument: null,
-  projectRoot: null,
-  sidebarSections: [],
-  sidebarWidth: 220,
-  version: 2,
-};
 
 function persistRaw(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value));
@@ -73,7 +68,7 @@ describe("window-state launch params", () => {
     localStorage.setItem(
       WINDOW_STATE_KEY,
       JSON.stringify(
-        buildWindowState({
+        createTestWindowState({
           currentDocument: { path: "notes.md", name: "notes.md" },
           projectRoot: "/tmp/original-project",
           sidebarWidth: 312,
@@ -102,7 +97,7 @@ describe("window-state launch params", () => {
     localStorage.setItem(
       WINDOW_STATE_KEY,
       JSON.stringify(
-        buildWindowState({
+        createTestWindowState({
           currentDocument: { path: "notes.md", name: "notes.md" },
           projectRoot: "/tmp/original-project",
           sidebarWidth: 220,
@@ -184,7 +179,7 @@ describe("window-state persisted schema", () => {
 
   it("rejects malformed persisted state and falls back to defaults", () => {
     localStorage.setItem(WINDOW_STATE_KEY, "{not json");
-    expect(loadWindowState()).toEqual(DEFAULT_WINDOW_STATE);
+    expect(loadWindowState()).toEqual(DEFAULT_TEST_WINDOW_STATE);
 
     for (const malformed of [
       { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: "220", sidebarSections: [] },
@@ -195,13 +190,13 @@ describe("window-state persisted schema", () => {
       { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }], tabs: [] },
     ]) {
       persistRaw(WINDOW_STATE_KEY, malformed);
-      expect(loadWindowState()).toEqual(DEFAULT_WINDOW_STATE);
+      expect(loadWindowState()).toEqual(DEFAULT_TEST_WINDOW_STATE);
     }
   });
 
   it("falls back from a missing scoped window key to the global state", () => {
     setTauriWindowLabel("document-a");
-    persistRaw(WINDOW_STATE_KEY, buildWindowState({
+    persistRaw(WINDOW_STATE_KEY, createTestWindowState({
       currentDocument: { path: "global.md", name: "global.md" },
       projectRoot: "/project/global",
       sidebarSections: [],
@@ -217,13 +212,13 @@ describe("window-state persisted schema", () => {
 
   it("prefers scoped window state but falls back to global when scoped state is malformed", () => {
     setTauriWindowLabel("document-a");
-    persistRaw(WINDOW_STATE_KEY, buildWindowState({
+    persistRaw(WINDOW_STATE_KEY, createTestWindowState({
       currentDocument: { path: "global.md", name: "global.md" },
       projectRoot: "/project/global",
       sidebarSections: [],
       sidebarWidth: 300,
     }));
-    persistRaw(getWindowStateStorageKey("document-a"), buildWindowState({
+    persistRaw(getWindowStateStorageKey("document-a"), createTestWindowState({
       currentDocument: { path: "scoped.md", name: "scoped.md" },
       projectRoot: "/project/scoped",
       sidebarSections: [],
@@ -246,7 +241,7 @@ describe("window-state persisted schema", () => {
   });
 
   it("derives storage keys and saves snapshots for explicit window labels", () => {
-    const state = buildWindowState({
+    const state = createTestWindowState({
       currentDocument: { path: "notes.md", name: "notes.md" },
       projectRoot: "/project",
       sidebarSections: [{ title: "Files", collapsed: false }],
