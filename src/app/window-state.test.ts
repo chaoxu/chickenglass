@@ -1,17 +1,52 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WINDOW_STATE_KEY } from "../constants";
-import { buildWindowState, loadWindowState } from "./window-state";
+import {
+  buildWindowState,
+  getWindowStateStorageKey,
+  loadWindowState,
+  saveWindowStateForLabel,
+  type WindowState,
+} from "./window-state";
 
 const BASE_PATH = "/";
+const DEFAULT_WINDOW_STATE: WindowState = {
+  currentDocument: null,
+  projectRoot: null,
+  sidebarSections: [],
+  sidebarWidth: 220,
+  version: 2,
+};
+
+function persistRaw(key: string, value: unknown): void {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function setTauriWindowLabel(label: string): void {
+  Object.defineProperty(window, "__TAURI_INTERNALS__", {
+    configurable: true,
+    value: {
+      metadata: {
+        currentWindow: { label },
+      },
+    },
+  });
+}
+
+function clearTauriWindowLabel(): void {
+  delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
+}
 
 describe("window-state launch params", () => {
   beforeEach(() => {
-    localStorage.removeItem(WINDOW_STATE_KEY);
+    localStorage.clear();
+    clearTauriWindowLabel();
     window.history.replaceState({}, "", BASE_PATH);
   });
 
   afterEach(() => {
-    localStorage.removeItem(WINDOW_STATE_KEY);
+    localStorage.clear();
+    clearTauriWindowLabel();
     window.history.replaceState({}, "", BASE_PATH);
   });
 
@@ -85,5 +120,147 @@ describe("window-state launch params", () => {
 
     expect(state.projectRoot).toBe("/tmp/coflat-native-project-b");
     expect(state.currentDocument).toBeNull();
+  });
+});
+
+describe("window-state persisted schema", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    clearTauriWindowLabel();
+    window.history.replaceState({}, "", BASE_PATH);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    clearTauriWindowLabel();
+    window.history.replaceState({}, "", BASE_PATH);
+  });
+
+  it("migrates legacy v1 tabs using the matching active tab", () => {
+    persistRaw(WINDOW_STATE_KEY, {
+      activeTab: "b.md",
+      sidebarSections: [{ title: "Files", collapsed: true }],
+      sidebarWidth: 320,
+      tabs: [
+        { path: "a.md", name: "A" },
+        { path: "b.md", name: "B" },
+      ],
+      version: 1,
+    });
+
+    expect(loadWindowState()).toEqual({
+      currentDocument: { path: "b.md", name: "B" },
+      projectRoot: null,
+      sidebarSections: [{ title: "Files", collapsed: true }],
+      sidebarWidth: 320,
+      version: 2,
+    });
+  });
+
+  it("migrates legacy v1 tabs with stale or empty active-tab fallbacks", () => {
+    persistRaw(WINDOW_STATE_KEY, {
+      activeTab: "missing.md",
+      sidebarSections: [],
+      sidebarWidth: 260,
+      tabs: [{ path: "first.md", name: "First" }],
+      version: 1,
+    });
+
+    expect(loadWindowState().currentDocument).toEqual({
+      path: "first.md",
+      name: "First",
+    });
+
+    persistRaw(WINDOW_STATE_KEY, {
+      activeTab: null,
+      sidebarSections: [],
+      sidebarWidth: 260,
+      tabs: [],
+      version: 1,
+    });
+
+    expect(loadWindowState().currentDocument).toBeNull();
+  });
+
+  it("rejects malformed persisted state and falls back to defaults", () => {
+    localStorage.setItem(WINDOW_STATE_KEY, "{not json");
+    expect(loadWindowState()).toEqual(DEFAULT_WINDOW_STATE);
+
+    for (const malformed of [
+      { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: "220", sidebarSections: [] },
+      { version: 2, projectRoot: null, currentDocument: { path: "a.md" }, sidebarWidth: 220, sidebarSections: [] },
+      { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }] },
+      { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [], tabs: "nope" },
+      { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [], tabs: [{ path: "a.md" }] },
+      { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }], tabs: [] },
+    ]) {
+      persistRaw(WINDOW_STATE_KEY, malformed);
+      expect(loadWindowState()).toEqual(DEFAULT_WINDOW_STATE);
+    }
+  });
+
+  it("falls back from a missing scoped window key to the global state", () => {
+    setTauriWindowLabel("document-a");
+    persistRaw(WINDOW_STATE_KEY, buildWindowState({
+      currentDocument: { path: "global.md", name: "global.md" },
+      projectRoot: "/project/global",
+      sidebarSections: [],
+      sidebarWidth: 300,
+    }));
+
+    expect(loadWindowState()).toMatchObject({
+      currentDocument: { path: "global.md", name: "global.md" },
+      projectRoot: "/project/global",
+      sidebarWidth: 300,
+    });
+  });
+
+  it("prefers scoped window state but falls back to global when scoped state is malformed", () => {
+    setTauriWindowLabel("document-a");
+    persistRaw(WINDOW_STATE_KEY, buildWindowState({
+      currentDocument: { path: "global.md", name: "global.md" },
+      projectRoot: "/project/global",
+      sidebarSections: [],
+      sidebarWidth: 300,
+    }));
+    persistRaw(getWindowStateStorageKey("document-a"), buildWindowState({
+      currentDocument: { path: "scoped.md", name: "scoped.md" },
+      projectRoot: "/project/scoped",
+      sidebarSections: [],
+      sidebarWidth: 420,
+    }));
+
+    expect(loadWindowState()).toMatchObject({
+      currentDocument: { path: "scoped.md", name: "scoped.md" },
+      projectRoot: "/project/scoped",
+      sidebarWidth: 420,
+    });
+
+    localStorage.setItem(getWindowStateStorageKey("document-a"), "{bad json");
+
+    expect(loadWindowState()).toMatchObject({
+      currentDocument: { path: "global.md", name: "global.md" },
+      projectRoot: "/project/global",
+      sidebarWidth: 300,
+    });
+  });
+
+  it("derives storage keys and saves snapshots for explicit window labels", () => {
+    const state = buildWindowState({
+      currentDocument: { path: "notes.md", name: "notes.md" },
+      projectRoot: "/project",
+      sidebarSections: [{ title: "Files", collapsed: false }],
+      sidebarWidth: 260,
+    });
+
+    expect(getWindowStateStorageKey(null)).toBe(WINDOW_STATE_KEY);
+    expect(getWindowStateStorageKey("document-a")).toBe(`${WINDOW_STATE_KEY}:document-a`);
+
+    saveWindowStateForLabel("document-a", state);
+    expect(JSON.parse(localStorage.getItem(`${WINDOW_STATE_KEY}:document-a`) ?? "null"))
+      .toEqual(state);
+
+    saveWindowStateForLabel(null, state);
+    expect(JSON.parse(localStorage.getItem(WINDOW_STATE_KEY) ?? "null")).toEqual(state);
   });
 });
