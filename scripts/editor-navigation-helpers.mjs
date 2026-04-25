@@ -115,11 +115,8 @@ export async function jumpToTextAnchor(
 }
 
 /**
- * Cycle the editor mode button until the requested mode is active.
- *
- * @param {import("playwright").Page} page
- * @param {"rich" | "cm6-rich" | "lexical" | "source" | "CM6 Rich" | "Lexical" | "Source"} mode
-
+ * Open explicit structure editing at the current cursor.
+ */
 export async function activateStructureAtCursor(page) {
   const activated = await page.evaluate(() => window.__cmDebug.activateStructureAtCursor());
   await settleEditorLayout(page);

@@ -16,6 +16,16 @@ const AUTOCOMPLETE_TIMEOUT_MS = 5_000;
 const APP_BRIDGE_POLL_MS = 25;
 const APP_BRIDGE_WAIT_POLL_MS = 50;
 
+function selectorForEditorMode(mode) {
+  if (mode === "lexical") {
+    return ".cf-doc-flow--lexical";
+  }
+  if (mode === "source") {
+    return ".cm-editor.cf-source-mode .cm-content";
+  }
+  return ".cm-editor:not(.cf-source-mode) .cf-doc-flow--cm6";
+}
+
 export async function focusEditorEnd(page) {
   await page.evaluate(() => {
     if (window.__editor) {
@@ -147,7 +157,10 @@ export async function switchToMode(page, mode) {
   if (changedViaApp !== normalizedMode) {
     throw new Error(`Failed to switch editor mode to ${normalizedMode}; current mode is ${changedViaApp}.`);
   }
-  await waitForRenderReady(page);
+  await waitForRenderReady(page, {
+    selector: selectorForEditorMode(normalizedMode),
+    timeoutMs: APP_BRIDGE_TIMEOUT_MS,
+  });
 }
 
 /**

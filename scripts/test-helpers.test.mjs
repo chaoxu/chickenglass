@@ -3,6 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import * as editorHelperSurface from "./editor-test-helpers.mjs";
+import * as testHelperSurface from "./test-helpers.mjs";
 import {
   buildViteDevArgs,
   createBrowserArtifactRecorder,
@@ -77,6 +79,30 @@ describe("test helpers browser harness", () => {
       "5174",
       "--strictPort",
     ]);
+  });
+
+  it("keeps legacy navigation and structure helpers exported from both helper barrels", () => {
+    const legacyHelperNames = [
+      "activateStructureAtCursor",
+      "clearMotionGuards",
+      "clearStructure",
+      "findLine",
+      "jumpToTextAnchor",
+      "resolveTextAnchorInDocument",
+      "scrollTo",
+      "scrollToText",
+      "setCursor",
+      "traceVerticalCursorMotion",
+    ];
+
+    for (const helperName of legacyHelperNames) {
+      expect(editorHelperSurface[helperName], `editor-test-helpers.${helperName}`).toEqual(
+        expect.any(Function),
+      );
+      expect(testHelperSurface[helperName], `test-helpers.${helperName}`).toEqual(
+        expect.any(Function),
+      );
+    }
   });
 
   it.each([
@@ -287,6 +313,7 @@ describe("test helpers browser harness", () => {
     };
     const page = {
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
+      waitForFunction: vi.fn(async () => {}),
     };
 
     await switchToMode(page, "Lexical");
@@ -295,6 +322,61 @@ describe("test helpers browser harness", () => {
     expect(page.evaluate).toHaveBeenCalledWith(
       expect.any(Function),
       expect.objectContaining({ nextMode: "lexical" }),
+    );
+    expect(page.waitForFunction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        minCount: 1,
+        selector: ".cf-doc-flow--lexical",
+      }),
+      expect.objectContaining({ timeout: expect.any(Number) }),
+    );
+  });
+
+  it("waits for CM6 mode-specific surface classes after switching modes", async () => {
+    let mode = "cm6-rich";
+    window.__app = {
+      getMode: () => mode,
+      setMode: (nextMode) => {
+        mode = nextMode;
+      },
+    };
+    window.__editor = {
+      getDoc: () => "# Ready\n",
+    };
+    window.__cmDebug = {
+      semantics: () => ({ revision: 1 }),
+    };
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+      waitForFunction: vi.fn(async (fn, arg) => {
+        if (arg?.selector === ".cm-editor.cf-source-mode .cm-content") {
+          document.body.innerHTML = "<div class='cm-editor cf-source-mode'><div class='cm-content cf-doc-flow--cm6'></div></div>";
+        } else if (arg?.selector === ".cm-editor:not(.cf-source-mode) .cf-doc-flow--cm6") {
+          document.body.innerHTML = "<div class='cm-editor'><div class='cm-content cf-doc-flow--cm6'></div></div>";
+        }
+        expect(fn(arg)).toBe(true);
+      }),
+    };
+
+    await switchToMode(page, "Source");
+    await switchToMode(page, "CM6 Rich");
+
+    expect(page.waitForFunction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        minCount: 1,
+        selector: ".cm-editor.cf-source-mode .cm-content",
+      }),
+      expect.objectContaining({ timeout: expect.any(Number) }),
+    );
+    expect(page.waitForFunction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        minCount: 1,
+        selector: ".cm-editor:not(.cf-source-mode) .cf-doc-flow--cm6",
+      }),
+      expect.objectContaining({ timeout: expect.any(Number) }),
     );
   });
 
@@ -321,6 +403,9 @@ describe("test helpers browser harness", () => {
     const page = {
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
       waitForFunction: vi.fn(async (fn, arg) => {
+        if (arg?.selector === ".cf-doc-flow--lexical") {
+          document.body.innerHTML = "<div class='cf-doc-flow--lexical'></div>";
+        }
         expect(fn(arg)).toBe(true);
       }),
     };

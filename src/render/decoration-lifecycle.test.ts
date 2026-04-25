@@ -1,10 +1,24 @@
-import { Decoration, type DecorationSet } from "@codemirror/view";
+import { Decoration, type DecorationSet, WidgetType } from "@codemirror/view";
 import { RangeSet } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { removeDecorationsInRanges } from "./decoration-lifecycle";
 
 function makeRange(from: number, to: number): DecorationSet {
   return RangeSet.of([Decoration.mark({ class: "x" }).range(from, to)], true);
+}
+
+class TestWidget extends WidgetType {
+  toDOM(): HTMLElement {
+    return document.createElement("span");
+  }
+}
+
+function makeWidgetRange(pos: number): DecorationSet {
+  return RangeSet.of([
+    Decoration.widget({
+      widget: new TestWidget(),
+    }).range(pos),
+  ], true);
 }
 
 function rangeBounds(set: DecorationSet): Array<{ from: number; to: number }> {
@@ -33,6 +47,12 @@ describe("removeDecorationsInRanges (touch semantics)", () => {
   it("removes a decoration when an empty dirty range sits in its interior", () => {
     const decorations = makeRange(10, 20);
     const next = removeDecorationsInRanges(decorations, [{ from: 15, to: 15 }]);
+    expect(rangeBounds(next)).toHaveLength(0);
+  });
+
+  it("removes a zero-width widget at the exact empty dirty range", () => {
+    const decorations = makeWidgetRange(10);
+    const next = removeDecorationsInRanges(decorations, [{ from: 10, to: 10 }]);
     expect(rangeBounds(next)).toHaveLength(0);
   });
 
