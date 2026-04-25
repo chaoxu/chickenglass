@@ -22,6 +22,7 @@ import {
   updateFileInIndex,
 } from "./extract";
 import type {
+  DocumentIndex,
   FileIndex,
   IndexEntry,
   IndexQuery,
@@ -89,9 +90,25 @@ function yieldAfterMacrotask(): Promise<void> {
 export class BackgroundIndexer {
   private files = new Map<string, FileIndex>();
   private disposed = false;
+  private revision = 0;
+  private documentIndexSnapshot: DocumentIndex | null = null;
 
-  private getDocumentIndex(): { files: ReadonlyMap<string, FileIndex> } {
-    return { files: this.files };
+  private commitFiles(files: Map<string, FileIndex>): void {
+    this.files = files;
+    this.revision += 1;
+    this.documentIndexSnapshot = null;
+  }
+
+  private getDocumentIndex(): DocumentIndex {
+    if (this.documentIndexSnapshot) {
+      return this.documentIndexSnapshot;
+    }
+    const snapshot: DocumentIndex = Object.freeze({
+      revision: this.revision,
+      files: new Map(this.files),
+    });
+    this.documentIndexSnapshot = snapshot;
+    return snapshot;
   }
 
   /**
@@ -104,7 +121,7 @@ export class BackgroundIndexer {
     analysis?: FileIndexAnalysisInput,
   ): Promise<number> {
     if (this.disposed) throw new Error(`Indexer.updateFile("${file}"): indexer is disposed`);
-    this.files = updateFileInIndex(this.files, file, content, analysis);
+    this.commitFiles(updateFileInIndex(this.files, file, content, analysis));
     return this.files.get(file)?.entries.length ?? 0;
   }
 
@@ -138,14 +155,14 @@ export class BackgroundIndexer {
     if (shouldCancel()) {
       return null;
     }
-    this.files = updateFileInIndex(this.files, file, content, analysis);
+    this.commitFiles(updateFileInIndex(this.files, file, content, analysis));
     return this.files.get(file)?.entries.length ?? 0;
   }
 
   /** Remove a file from the index. */
   async removeFile(file: string): Promise<void> {
     if (this.disposed) throw new Error(`Indexer.removeFile("${file}"): indexer is disposed`);
-    this.files = removeFileFromIndex(this.files, file);
+    this.commitFiles(removeFileFromIndex(this.files, file));
   }
 
   /** Query the index with the given filters. */
@@ -212,7 +229,7 @@ export class BackgroundIndexer {
       nextFiles.set(file, fileIndex);
       totalEntries += fileIndex.entries.length;
     }
-    this.files = nextFiles;
+    this.commitFiles(nextFiles);
     return totalEntries;
   }
 
@@ -262,7 +279,7 @@ export class BackgroundIndexer {
     if (shouldCancel()) {
       return null;
     }
-    this.files = nextFiles;
+    this.commitFiles(nextFiles);
     return totalEntries;
   }
 
@@ -271,5 +288,7 @@ export class BackgroundIndexer {
     if (this.disposed) return;
     this.disposed = true;
     this.files.clear();
+    this.revision += 1;
+    this.documentIndexSnapshot = null;
   }
 }

@@ -124,6 +124,23 @@ describe("extractDiagnostics", () => {
     ]);
   });
 
+  it("reports local targets that collide with bibliography keys", () => {
+    const state = withBibliography(createState([
+      "# Local Karger {#karger2000}",
+      "",
+      "See [@karger2000].",
+    ].join("\n")));
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        source: "reference",
+        code: "reference.citation-local-collision",
+        message: "Local target ID \"karger2000\" shadows a bibliography entry",
+      }),
+    ]);
+  });
+
   it("does not also warn unresolved when a reference points at duplicate local targets", () => {
     const state = createState([
       "# First {#dup}",

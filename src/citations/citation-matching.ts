@@ -182,8 +182,7 @@ export function collectCitationBacklinkIndexFromReferences(
   let occurrence = 0;
 
   for (const ref of references) {
-    const ids = ref.ids.filter((id, index, arr) =>
-      isCitationId(id, store, options) && arr.indexOf(id) === index);
+    const ids = ref.ids.filter((id) => isCitationId(id, store, options));
     if (ids.length === 0) continue;
 
     occurrence += 1;
@@ -269,9 +268,7 @@ export function collectCitationBacklinksFromTokens(
 
   for (const bucket of collectTokenBuckets(references, store, options)) {
     occurrence += 1;
-    const uniqueIds = bucket
-      .map((reference) => reference.id)
-      .filter((id, index, ids) => ids.indexOf(id) === index);
+    const ids = bucket.map((reference) => reference.id);
 
     const backlink: CitationBacklink = {
       occurrence,
@@ -279,7 +276,7 @@ export function collectCitationBacklinksFromTokens(
       to: bucket[0].clusterTo,
     };
 
-    for (const id of uniqueIds) {
+    for (const id of ids) {
       const existing = backlinks.get(id);
       if (existing) {
         existing.push(backlink);
@@ -309,8 +306,7 @@ export function getAnalysisCitationBacklinkKey(
   const parts: string[] = [];
 
   for (const reference of analysis.references) {
-    const ids = reference.ids.filter((id, index, allIds) =>
-      isCitationId(id, store, options) && allIds.indexOf(id) === index);
+    const ids = reference.ids.filter((id) => isCitationId(id, store, options));
     if (ids.length === 0) continue;
     parts.push([
       reference.from,

@@ -17,6 +17,13 @@ import { BackgroundIndexer } from "./indexer";
 import type { FileIndex } from "./query-api";
 import { queryIndex } from "./query-api";
 
+interface DocumentIndexSnapshotReader {
+  getDocumentIndex(): {
+    readonly revision?: number;
+    readonly files: ReadonlyMap<string, FileIndex>;
+  };
+}
+
 function requireFileIndex(fileIndex: FileIndex | undefined): FileIndex {
   expect(fileIndex).toBeDefined();
   return fileIndex as FileIndex;
@@ -748,6 +755,22 @@ See [@thm-1].`,
 });
 
 describe("BackgroundIndexer", () => {
+  it("returns revisioned snapshots that do not observe later updates", async () => {
+    const indexer = new BackgroundIndexer();
+    await indexer.updateFile("doc.md", "# Before {#before}");
+    const snapshotReader = indexer as unknown as DocumentIndexSnapshotReader;
+    const beforeSnapshot = snapshotReader.getDocumentIndex();
+
+    await indexer.updateFile("doc.md", "# After {#after}");
+    const afterSnapshot = snapshotReader.getDocumentIndex();
+
+    expect(beforeSnapshot.revision).toBe(1);
+    expect(afterSnapshot.revision).toBe(2);
+    expect(beforeSnapshot).not.toBe(afterSnapshot);
+    expect(beforeSnapshot.files.get("doc.md")?.entries[0]?.label).toBe("before");
+    expect(afterSnapshot.files.get("doc.md")?.entries[0]?.label).toBe("after");
+  });
+
   it("replaces removed files on bulkUpdate", async () => {
     const indexer = new BackgroundIndexer();
 

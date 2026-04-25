@@ -185,6 +185,7 @@ export class CslProcessor {
   private currentStyleStatus: CslStyleStatus = { state: "ok" };
   private readonly processorId = nextProcessorId++;
   private styleGeneration = 0;
+  private activeEngineStyleGeneration = -1;
 
   constructor(entries: CslJsonItem[], styleXml?: string) {
     this.items = new Map();
@@ -246,15 +247,16 @@ export class CslProcessor {
    */
   registerCitations(clusters: CitationCluster[]): void {
     this.registeredCitationKey = null;
-    if (!this.engine) return;
+    const engine = this.currentEngine();
+    if (!engine) return;
 
     const registrationKey = getCitationRegistrationKey(clusters);
-    this.engine.updateItems([]);
+    engine.updateItems([]);
     const allIds = new Set<string>();
     for (const cluster of clusters) {
       for (const id of cluster.ids) allIds.add(id);
     }
-    this.engine.updateItems([...allIds]);
+    engine.updateItems([...allIds]);
 
     // Process citations in order so the engine assigns numbers
     const citationsPre: Array<[string, number]> = [];
@@ -267,7 +269,7 @@ export class CslProcessor {
         citationID: `cite-${i}`,
       };
       try {
-        this.engine.processCitationCluster(citation, citationsPre, []);
+        engine.processCitationCluster(citation, citationsPre, []);
         citationsPre.push([`cite-${i}`, i]);
       } catch (e: unknown) {
         // best-effort: skip malformed cluster so remaining citations still render
@@ -280,10 +282,11 @@ export class CslProcessor {
 
   /** Format a parenthetical citation for the given ids, with optional locators. */
   cite(ids: string[], locators?: (string | undefined)[]): string {
-    if (!this.engine || ids.length === 0) return "";
+    const engine = this.currentEngine();
+    if (!engine || ids.length === 0) return "";
     try {
       const items = buildCitationItems(ids, locators);
-      return this.engine.makeCitationCluster(items);
+      return engine.makeCitationCluster(items);
     } catch (e: unknown) {
       // Engine error — return raw ids as fallback
       console.warn("[csl] cite() engine error", e);
@@ -308,7 +311,8 @@ export class CslProcessor {
     const item = this.items.get(id);
     if (!item) return id;
     const author = formatNarrativeAuthor(item);
-    if (!this.engine) {
+    const engine = this.currentEngine();
+    if (!engine) {
       const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
       return `${author} (${year})`;
     }
@@ -320,12 +324,12 @@ export class CslProcessor {
     // Try author-only first (works for author-date styles like APA).
     // Numeric styles (e.g. IEEE) may throw or return [NO_PRINTED_FORM].
     try {
-      const authorOnly = this.engine.makeCitationCluster([
+      const authorOnly = engine.makeCitationCluster([
         { id, "author-only": true },
       ]).trim();
 
       if (authorOnly && !authorOnly.includes("[NO_PRINTED_FORM]")) {
-        const yearPart = this.engine.makeCitationCluster([
+        const yearPart = engine.makeCitationCluster([
           { id, "suppress-author": true },
         ]).trim();
         if (yearPart) {
@@ -339,7 +343,7 @@ export class CslProcessor {
 
     // Numeric style fallback: author name + suppress-author cite (e.g. "Karger [1]").
     try {
-      const suppressed = this.engine.makeCitationCluster([
+      const suppressed = engine.makeCitationCluster([
         { id, "suppress-author": true },
       ]).trim();
       if (suppressed) {
@@ -371,11 +375,12 @@ export class CslProcessor {
    * for which rendered entry each HTML fragment belongs to.
    */
   bibliographyEntries(citedIds: readonly string[]): CslBibliographyEntry[] {
-    if (!this.engine || citedIds.length === 0) return [];
+    const engine = this.currentEngine();
+    if (!engine || citedIds.length === 0) return [];
     try {
       const validIds = citedIds.filter((id) => this.items.has(id));
       if (validIds.length === 0) return [];
-      const [params, entries] = this.engine.makeBibliography();
+      const [params, entries] = engine.makeBibliography();
       return entries.map((html: string, index): CslBibliographyEntry => ({
         id: findKnownEntryId(params.entry_ids?.[index], this.items) ?? validIds[index] ?? "",
         html: html.trim(),
@@ -408,6 +413,15 @@ export class CslProcessor {
     }
   }
 
+  private currentEngine(): CiteprocEngine | null {
+    if (!this.engine) return null;
+    if (this.activeEngineStyleGeneration === this.styleGeneration) return this.engine;
+    if (this.activeEngineStyleGeneration === -1 && this.styleGeneration === 0) {
+      return this.engine;
+    }
+    return null;
+  }
+
   private async initEngine(
     styleGeneration: number = this.styleGeneration,
     styleXml: string = this.styleXml,
@@ -432,6 +446,7 @@ export class CslProcessor {
       const engine = cslConfig.engine(data, styleName, "en-US", "html");
       if (styleGeneration === this.styleGeneration) {
         this.engine = engine;
+        this.activeEngineStyleGeneration = styleGeneration;
         this.registeredCitationKey = null;
         this.currentStyleStatus = { state: "ok" };
       }
@@ -440,6 +455,7 @@ export class CslProcessor {
       console.warn("[csl] initEngine() failed, falling back to simple formatting", e);
       if (styleGeneration === this.styleGeneration) {
         this.engine = null;
+        this.activeEngineStyleGeneration = -1;
         this.registeredCitationKey = null;
         this.currentStyleStatus = {
           state: "error",

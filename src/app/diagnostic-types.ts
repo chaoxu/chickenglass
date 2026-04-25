@@ -6,6 +6,7 @@ export type DiagnosticSource =
   | "bibliography";
 export type DiagnosticCode =
   | "reference.duplicate-target"
+  | "reference.citation-local-collision"
   | "reference.unresolved"
   | "frontmatter.parse"
   | "project-config.read"

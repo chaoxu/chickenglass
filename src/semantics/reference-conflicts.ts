@@ -17,9 +17,16 @@ export interface UnresolvedReferenceConflict {
   readonly reference: ReferenceSemantics;
 }
 
+export interface CitationLocalTargetCollisionConflict {
+  readonly kind: "citation-local-target-collision";
+  readonly id: string;
+  readonly targets: readonly DocumentReferenceTarget[];
+}
+
 export type ReferenceConflict =
   | DuplicateReferenceTargetConflict
-  | UnresolvedReferenceConflict;
+  | UnresolvedReferenceConflict
+  | CitationLocalTargetCollisionConflict;
 
 export type ReferenceLookup = Pick<ReadonlyMap<string, unknown>, "has">;
 
@@ -31,6 +38,7 @@ export interface ReferenceConflictModelOptions {
 export interface ReferenceConflictModel {
   readonly conflicts: readonly ReferenceConflict[];
   readonly duplicatesById: ReadonlyMap<string, readonly DocumentReferenceTarget[]>;
+  readonly citationLocalTargetCollisions: readonly CitationLocalTargetCollisionConflict[];
   readonly unresolvedReferences: readonly UnresolvedReferenceConflict[];
 }
 
@@ -40,11 +48,24 @@ export function buildReferenceConflictModel(
 ): ReferenceConflictModel {
   const catalog = buildDocumentReferenceCatalog(analysis);
   const duplicates: DuplicateReferenceTargetConflict[] = [];
+  const citationLocalTargetCollisions: CitationLocalTargetCollisionConflict[] = [];
   const unresolvedReferences: UnresolvedReferenceConflict[] = [];
   const { bibliography, localOnlyWithoutBibliography = false } = options;
 
   for (const [id, targets] of catalog.duplicatesById) {
     duplicates.push({ kind: "duplicate-target", id, targets });
+  }
+
+  if (bibliography) {
+    for (const [id, targets] of catalog.targetsById) {
+      if (bibliography.has(id)) {
+        citationLocalTargetCollisions.push({
+          kind: "citation-local-target-collision",
+          id,
+          targets,
+        });
+      }
+    }
   }
 
   for (const reference of catalog.references) {
@@ -67,8 +88,9 @@ export function buildReferenceConflictModel(
   }
 
   return {
-    conflicts: [...duplicates, ...unresolvedReferences],
+    conflicts: [...duplicates, ...citationLocalTargetCollisions, ...unresolvedReferences],
     duplicatesById: catalog.duplicatesById,
+    citationLocalTargetCollisions,
     unresolvedReferences,
   };
 }

@@ -75,6 +75,7 @@ export interface FileIndex {
 
 /** Complete index across all files. */
 export interface DocumentIndex {
+  readonly revision?: number;
   readonly files: ReadonlyMap<string, FileIndex>;
 }
 
@@ -117,6 +118,16 @@ interface SourceLineIndex {
 
 const entryContentLowerCache = new WeakMap<IndexEntry, string>();
 const sourceLineIndexCache = new WeakMap<FileIndex, readonly SourceLineIndex[]>();
+const documentQueryCache = new WeakMap<DocumentIndex, DocumentIndexQueryCache>();
+
+interface DocumentIndexQueryCache {
+  readonly revision: number | undefined;
+  readonly files: ReadonlyMap<string, FileIndex>;
+  readonly allEntries: readonly IndexEntry[];
+  readonly entriesByType: ReadonlyMap<string, readonly IndexEntry[]>;
+  readonly entriesByLabel: ReadonlyMap<string, readonly IndexEntry[]>;
+  readonly sortedTargetsByLabel: ReadonlyMap<string, readonly IndexEntry[]>;
+}
 
 function normalizeResultLimit(limit: number | undefined): number | undefined {
   if (limit === undefined) return undefined;
@@ -176,6 +187,92 @@ function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function getOrCreateDocumentQueryCache(index: DocumentIndex): DocumentIndexQueryCache {
+  const cached = documentQueryCache.get(index);
+  if (
+    cached !== undefined
+    && cached.revision === index.revision
+    && cached.files === index.files
+  ) {
+    return cached;
+  }
+
+  const allEntries: IndexEntry[] = [];
+  const entriesByType = new Map<string, IndexEntry[]>();
+  const entriesByLabel = new Map<string, IndexEntry[]>();
+
+  for (const [, fileIndex] of index.files) {
+    for (const entry of fileIndex.entries) {
+      allEntries.push(entry);
+
+      const typedEntries = entriesByType.get(entry.type);
+      if (typedEntries) {
+        typedEntries.push(entry);
+      } else {
+        entriesByType.set(entry.type, [entry]);
+      }
+
+      if (entry.label !== undefined) {
+        const labelledEntries = entriesByLabel.get(entry.label);
+        if (labelledEntries) {
+          labelledEntries.push(entry);
+        } else {
+          entriesByLabel.set(entry.label, [entry]);
+        }
+      }
+    }
+  }
+
+  const sortedTargetsByLabel = new Map<string, readonly IndexEntry[]>();
+  for (const [label, entries] of entriesByLabel) {
+    sortedTargetsByLabel.set(label, [...entries].sort(compareIndexEntries));
+  }
+
+  const nextCache: DocumentIndexQueryCache = {
+    revision: index.revision,
+    files: index.files,
+    allEntries,
+    entriesByType,
+    entriesByLabel,
+    sortedTargetsByLabel,
+  };
+  documentQueryCache.set(index, nextCache);
+  return nextCache;
+}
+
+function queryCandidateEntries(
+  index: DocumentIndex,
+  query: IndexQuery,
+): readonly IndexEntry[] {
+  if (query.file !== undefined) {
+    const entries = index.files.get(query.file)?.entries ?? [];
+    if (query.type === undefined && query.label === undefined) {
+      return entries;
+    }
+    if (query.type !== undefined && query.label === undefined) {
+      return entries.filter((entry) => entry.type === query.type);
+    }
+    if (query.label !== undefined && query.type === undefined) {
+      return entries.filter((entry) => entry.label === query.label);
+    }
+    return entries.filter((entry) =>
+      entry.type === query.type && entry.label === query.label);
+  }
+
+  const cache = getOrCreateDocumentQueryCache(index);
+  if (query.type !== undefined && query.label === undefined) {
+    return cache.entriesByType.get(query.type) ?? [];
+  }
+  if (query.label !== undefined && query.type === undefined) {
+    return cache.entriesByLabel.get(query.label) ?? [];
+  }
+  if (query.type !== undefined && query.label !== undefined) {
+    const typedEntries = cache.entriesByType.get(query.type) ?? [];
+    return typedEntries.filter((entry) => entry.label === query.label);
+  }
+  return cache.allEntries;
+}
+
 /**
  * Query the document index, returning all entries matching the given filters.
  * Filters are AND-combined: an entry must match all specified fields.
@@ -189,22 +286,17 @@ export function queryIndex(
   if (limit === 0) return results;
 
   const content = query.content?.toLowerCase();
+  const candidates = queryCandidateEntries(index, query);
 
-  for (const [, fileIndex] of index.files) {
-    if (query.file !== undefined && fileIndex.file !== query.file) continue;
-
-    for (const entry of fileIndex.entries) {
-      if (query.type !== undefined && entry.type !== query.type) continue;
-      if (query.label !== undefined && entry.label !== query.label) continue;
-      if (
-        content !== undefined &&
-        !getLowerEntryContent(entry).includes(content)
-      ) {
-        continue;
-      }
-      results.push(entry);
-      if (hasReachedLimit(results, limit)) return results;
+  for (const entry of candidates) {
+    if (
+      content !== undefined &&
+      !getLowerEntryContent(entry).includes(content)
+    ) {
+      continue;
     }
+    results.push(entry);
+    if (hasReachedLimit(results, limit)) return results;
   }
 
   return results;
@@ -285,13 +377,7 @@ export function resolveLabelTargets(
   index: DocumentIndex,
   label: string,
 ): readonly IndexEntry[] {
-  const targets: IndexEntry[] = [];
-  for (const [, fileIndex] of index.files) {
-    for (const entry of fileIndex.entries) {
-      if (entry.label === label) targets.push(entry);
-    }
-  }
-  return targets.sort(compareIndexEntries);
+  return getOrCreateDocumentQueryCache(index).sortedTargetsByLabel.get(label) ?? [];
 }
 
 /**

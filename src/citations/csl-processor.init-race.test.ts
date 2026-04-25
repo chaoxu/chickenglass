@@ -10,6 +10,50 @@ afterEach(() => {
 });
 
 describe("CslProcessor init races", () => {
+  it("does not format with the old engine while setStyle is pending", async () => {
+    const templatesAdd = vi.fn();
+    const engineFactory = vi.fn((_data, styleName: string) => ({
+      styleName,
+      makeBibliography: () => [{ entry_ids: [["alpha2020"]] }, [`<div>${styleName}</div>`]],
+      makeCitationCluster: () => styleName,
+      processCitationCluster: () => undefined,
+      updateItems: () => undefined,
+    }));
+    const loader: CitationJsLoader = async () => ({
+      plugins: {
+        config: {
+          get: () => ({
+            templates: { add: templatesAdd },
+            engine: engineFactory,
+          }),
+        },
+      },
+    }) as unknown as CitationJsModules;
+
+    const { CslProcessor, setCitationJsLoaderForTest } = await import("./csl-processor");
+    setCitationJsLoaderForTest(loader);
+    const processor = await CslProcessor.create([
+      {
+        id: "alpha2020",
+        type: "article-journal",
+        author: [{ family: "Alpha" }],
+        issued: { "date-parts": [[2020]] },
+      },
+    ]);
+    const oldCitation = processor.cite(["alpha2020"]);
+
+    const setStylePromise = processor.setStyle("<style>custom</style>");
+
+    expect(processor.cite(["alpha2020"])).toBe("");
+    expect(processor.citeNarrative("alpha2020")).toBe("Alpha (2020)");
+    expect(processor.bibliography(["alpha2020"])).toEqual([]);
+
+    await setStylePromise;
+
+    expect(processor.cite(["alpha2020"])).not.toBe(oldCitation);
+    expect(processor.cite(["alpha2020"])).toBe(engineFactory.mock.results[1]?.value.styleName);
+  });
+
   it("ignores stale constructor init when a later setStyle wins", async () => {
     let releaseCoreImport: (() => void) | undefined;
     const coreImportGate = new Promise<void>((resolve) => {

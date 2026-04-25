@@ -53,6 +53,14 @@ function duplicateDiagnosticRange(target: DocumentReferenceTarget): {
   return { from: target.from, to: target.to };
 }
 
+function collisionDiagnosticRange(targets: readonly DocumentReferenceTarget[]): {
+  readonly from: number;
+  readonly to: number;
+} {
+  const target = targets[0];
+  return target ? { from: target.from, to: target.to } : { from: 0, to: 0 };
+}
+
 export function extractDiagnosticsFromAnalysis(
   analysis: DocumentAnalysis,
   options: AnalysisDiagnosticOptions = {},
@@ -78,6 +86,19 @@ export function extractDiagnosticsFromAnalysis(
           to,
         });
       }
+      continue;
+    }
+
+    if (conflict.kind === "citation-local-target-collision") {
+      const { from, to } = collisionDiagnosticRange(conflict.targets);
+      diagnostics.push({
+        severity: "warning",
+        source: "reference",
+        code: "reference.citation-local-collision",
+        message: `Local target ID "${conflict.id}" shadows a bibliography entry`,
+        from,
+        to,
+      });
       continue;
     }
 

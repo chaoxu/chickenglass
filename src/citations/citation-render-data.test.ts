@@ -67,6 +67,27 @@ describe("buildCitationRenderData", () => {
     expect(citations.backlinks.get("cite:lamport")).toHaveLength(1);
   });
 
+  it("preserves repeated citation occurrences within one cluster", () => {
+    const citations = buildCitationRenderData(
+      "See [@cite:knuth; @cite:knuth].",
+      {
+        store: new Map([
+          ["cite:knuth", {
+            id: "cite:knuth",
+            title: "Literate Programming",
+            type: "book",
+          }],
+        ]),
+      },
+    );
+
+    expect(citations.citedIds).toEqual(["cite:knuth"]);
+    expect(citations.backlinks.get("cite:knuth")).toEqual([
+      { occurrence: 1, from: 4, to: 30 },
+      { occurrence: 1, from: 4, to: 30 },
+    ]);
+  });
+
   it("ignores citation syntax embedded in inline code and fenced code blocks", () => {
     const citations = buildCitationRenderData(
       [
