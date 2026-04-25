@@ -735,6 +735,37 @@ describe("FORMAT.md coverage: Removed Features", () => {
     expect(names).not.toContain("DefinitionTerm");
     expect(names).not.toContain("DefinitionDescription");
   });
+
+  it("single-line self-closing fenced divs stay outside canonical semantics", () => {
+    const doc = "::: {.proof} QED. :::";
+    const state = createTestState(doc);
+    expect(state.field(documentSemanticsField).fencedDivs).toHaveLength(0);
+  });
+
+  it("trailing fenced-div titles stay outside canonical semantics", () => {
+    const doc = "::: {.theorem} Trailing title\nStatement.\n:::";
+    const state = createTestState(doc);
+    expect(state.field(documentSemanticsField).fencedDivs).toHaveLength(0);
+  });
+
+  it("raw LaTeX equation labels are not canonical Coflat equation labels", () => {
+    const state = createTestState("\\begin{equation}\\label{eq:raw}x=1\\end{equation}");
+    const names = getNodeNames(state);
+    expect(names).not.toContain("EquationLabel");
+    expect(collectEquationLabels(state).has("eq:raw")).toBe(false);
+    expect(state.field(documentSemanticsField).equationById.has("eq:raw")).toBe(false);
+  });
+
+  it("grid tables are not parsed into the live semantic table model", () => {
+    const state = createTestState([
+      "+-------+--------+",
+      "| Input | Output |",
+      "+=======+========+",
+      "| graph | tree   |",
+      "+-------+--------+",
+    ].join("\n"));
+    expect(getNodeNames(state)).not.toContain("Table");
+  });
 });
 
 describe("FORMAT.md coverage: Unknown Fenced Div Classes", () => {

@@ -66,9 +66,11 @@ export const BROWSER_HARNESS_SUPPORT_PATHS = [
   "scripts/browser-lane.mjs",
   "scripts/browser-lane.test.mjs",
   "scripts/browser-lanes.mjs",
+  "scripts/browser-run-manifest.mjs",
   "scripts/browser-lifecycle.mjs",
   "scripts/browser-repro.mjs",
   "scripts/browser-screenshot.mjs",
+  "scripts/document-surface-selector-contracts.mjs",
   "scripts/chrome-common.mjs",
   "scripts/devx-browser-session.mjs",
   "scripts/document-surface-parity.mjs",
@@ -79,6 +81,25 @@ export const BROWSER_HARNESS_SUPPORT_PATHS = [
   "scripts/runtime-budget-profiles.mjs",
   "scripts/test-regression.mjs",
   "scripts/test-helpers.mjs",
+  "scripts/typing-latency-helpers.mjs",
+];
+
+export const DOCUMENT_SURFACE_PARITY_PATH_PREFIXES = [
+  "src/document-surface-classes.ts",
+  "src/document-surfaces",
+  "src/editor-theme.css",
+  "src/render/block-render.ts",
+  "src/render/decoration-core.ts",
+  "src/render/markdown-render.ts",
+  "src/render/plugin-render.ts",
+  "src/render/preview-block-renderer.ts",
+  "src/lexical/editor-theme.css",
+  "src/lexical/markdown-schema.ts",
+  "src/lexical/markdown/rich-html-preview.ts",
+  "src/lexical/renderers/",
+  "scripts/document-surface-parity.mjs",
+  "scripts/document-surface-selector-contracts.mjs",
+  "scripts/regression-tests/visual-surface-parity.mjs",
 ];
 
 function filterArgs(filters) {
@@ -266,14 +287,7 @@ export function selectBrowserLanesForChangedFiles(paths, { profile = "quick" } =
     }
 
     if (
-      hasPathPrefix(path, [
-        "src/document-surface-classes.ts",
-        "src/document-surfaces",
-        "src/editor-theme.css",
-        "src/lexical/editor-theme.css",
-        "src/lexical/markdown-schema.ts",
-        "scripts/document-surface-parity.mjs",
-      ]) ||
+      hasPathPrefix(path, DOCUMENT_SURFACE_PARITY_PATH_PREFIXES) ||
       includesAny(testName, ["parity"])
     ) {
       addLane(lanes, "parity");

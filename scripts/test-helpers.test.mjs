@@ -8,6 +8,7 @@ import {
   createBrowserArtifactRecorder,
   isLoopbackAppUrl,
   normalizeConnectEditorOptions,
+  openEditorScenario,
   resolveTextAnchorInDocument,
   runBrowserDoctor,
   screenshot,
@@ -292,6 +293,48 @@ describe("test helpers browser harness", () => {
 
     expect(mode).toBe("lexical");
     expect(page.evaluate).toHaveBeenCalledWith(expect.any(Function), "lexical");
+  });
+
+  it("opens generated multi-file editor scenarios through the app bridge", async () => {
+    let currentPath = null;
+    let currentDoc = "";
+    let mode = "cm6-rich";
+    window.__app = {
+      getCurrentDocument: () => currentPath ? { path: currentPath } : null,
+      getMode: () => mode,
+      loadFixtureProject: async (files, initialPath) => {
+        currentPath = initialPath;
+        currentDoc = files.find((file) => file.path === initialPath)?.content ?? "";
+      },
+      setMode: (nextMode) => {
+        mode = nextMode;
+      },
+    };
+    window.__editor = {
+      getDoc: () => currentDoc,
+      ready: Promise.resolve(),
+    };
+    window.__cmDebug = { semantics: () => ({ revision: 1 }) };
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+      waitForFunction: vi.fn(async (fn, arg) => {
+        expect(fn(arg)).toBe(true);
+      }),
+    };
+
+    const opened = await openEditorScenario(page, {
+      entry: "main.md",
+      files: {
+        "main.md": "# Scenario\n",
+        "refs.bib": "@book{a,title={A}}",
+      },
+      mode: "lexical",
+      settleMs: 0,
+    });
+
+    expect(opened).toEqual({ entry: "main.md", method: "loadFixtureProject" });
+    expect(mode).toBe("lexical");
+    expect(currentDoc).toBe("# Scenario\n");
   });
 });
 

@@ -28,6 +28,7 @@
     "build:coflat": "pnpm build",
     "build:editor": "tsc -p tsconfig.editor.json && vite build --config vite.editor.config.ts",
     "check:lint": "pnpm lint:errors && pnpm lint:boundaries && biome lint .",
+    "check:browser-fixtures": "node scripts/check-ignored-fixture-dependencies.mjs",
     "check:staged-lint": "biome lint",
     "check:types": "pnpm typecheck && pnpm typecheck:server",
     "check:static": "pnpm check:lint && pnpm check:types && pnpm check:unused",

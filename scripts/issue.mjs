@@ -5,8 +5,22 @@ import process from "node:process";
 import { splitCliCommand } from "./devx-cli.mjs";
 
 export const DEFAULT_REPO = "chaoxu/coflat";
+export const DEFAULT_ISSUE_OWNER = "chaoxu";
 
-const COMMANDS = ["list", "view", "create", "comment", "close", "verify-close"];
+const COMMANDS = [
+  "list",
+  "open",
+  "mine",
+  "search",
+  "view",
+  "create",
+  "comment",
+  "close",
+  "reopen",
+  "label",
+  "triage",
+  "verify-close",
+];
 
 function extractValueFlag(args, flag, fallback) {
   const result = [];
@@ -36,6 +50,19 @@ export function buildTeaIssueArgs(argv = []) {
   switch (command) {
     case "list":
       return ["issues", "--repo", repo, ...args];
+    case "open":
+      return ["issues", "--repo", repo, "--state", "open", ...args];
+    case "mine": {
+      const { args: rest, value: owner } = extractValueFlag(args, "--owner", DEFAULT_ISSUE_OWNER);
+      return ["issues", "--repo", repo, "--assignee", owner, ...rest];
+    }
+    case "search": {
+      const [keyword, ...rest] = args;
+      if (!keyword) {
+        throw new Error("issue search requires a search term.");
+      }
+      return ["issues", "--repo", repo, "--keyword", keyword, ...rest];
+    }
     case "view":
       return ["issues", "--repo", repo, ...args];
     case "create":
@@ -44,6 +71,17 @@ export function buildTeaIssueArgs(argv = []) {
       return ["comment", "--repo", repo, ...args];
     case "close":
       return ["issues", "close", "--repo", repo, ...args];
+    case "reopen":
+      return ["issues", "reopen", "--repo", repo, ...args];
+    case "label": {
+      const [issue, labels, ...rest] = args;
+      if (!issue || !labels) {
+        throw new Error("issue label requires <number> <label[,label]>.");
+      }
+      return ["issues", "edit", "--repo", repo, "--add-labels", labels, ...rest, issue];
+    }
+    case "triage":
+      return ["issues", "--repo", repo, "--state", "open", "--limit", "50", ...args];
     case "verify-close":
       throw new Error("verify-close is handled by the issue wrapper, not passed directly to tea.");
     default:
@@ -220,10 +258,16 @@ export function runVerifiedIssueClose(argv = process.argv.slice(2), options = {}
 export function printIssueHelp(stream = process.stdout) {
   stream.write(`Usage:
   pnpm issue -- list [tea options]
+  pnpm issue -- open [tea options]
+  pnpm issue -- mine [--owner chaoxu] [tea options]
+  pnpm issue -- search "term" [tea options]
   pnpm issue -- view <number>
   pnpm issue -- create --title "..." --description "..."
   pnpm issue -- comment <number> "..."
   pnpm issue -- close <number>
+  pnpm issue -- reopen <number...>
+  pnpm issue -- label <number> "devx,bug"
+  pnpm issue -- triage [tea options]
   pnpm issue -- verify-close <number...> --commit <sha> --verify "pnpm test" [--dry-run]
 
 All commands default to --repo ${DEFAULT_REPO}.

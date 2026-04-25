@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTeaIssueArgs,
   buildVerifiedIssueClosePlan,
+  DEFAULT_ISSUE_OWNER,
   DEFAULT_REPO,
   formatVerifiedIssueClosePlan,
   runVerifiedIssueClose,
@@ -16,6 +17,55 @@ describe("issue CLI wrapper", () => {
       DEFAULT_REPO,
       "--limit",
       "20",
+    ]);
+  });
+
+  it("offers open and triage list shortcuts", () => {
+    expect(buildTeaIssueArgs(["open", "--limit", "10"])).toEqual([
+      "issues",
+      "--repo",
+      DEFAULT_REPO,
+      "--state",
+      "open",
+      "--limit",
+      "10",
+    ]);
+    expect(buildTeaIssueArgs(["triage"])).toEqual([
+      "issues",
+      "--repo",
+      DEFAULT_REPO,
+      "--state",
+      "open",
+      "--limit",
+      "50",
+    ]);
+  });
+
+  it("offers mine and search triage shortcuts", () => {
+    expect(buildTeaIssueArgs(["mine"])).toEqual([
+      "issues",
+      "--repo",
+      DEFAULT_REPO,
+      "--assignee",
+      DEFAULT_ISSUE_OWNER,
+    ]);
+    expect(buildTeaIssueArgs(["mine", "--owner", "someone", "--state", "closed"])).toEqual([
+      "issues",
+      "--repo",
+      DEFAULT_REPO,
+      "--assignee",
+      "someone",
+      "--state",
+      "closed",
+    ]);
+    expect(buildTeaIssueArgs(["search", "surface parity", "--state", "all"])).toEqual([
+      "issues",
+      "--repo",
+      DEFAULT_REPO,
+      "--keyword",
+      "surface parity",
+      "--state",
+      "all",
     ]);
   });
 
@@ -59,6 +109,29 @@ describe("issue CLI wrapper", () => {
       DEFAULT_REPO,
       "1399",
     ]);
+  });
+
+  it("reopens and labels issues through edit-safe tea invocations", () => {
+    expect(buildTeaIssueArgs(["reopen", "1399", "1400"])).toEqual([
+      "issues",
+      "reopen",
+      "--repo",
+      DEFAULT_REPO,
+      "1399",
+      "1400",
+    ]);
+    expect(buildTeaIssueArgs(["label", "1399", "devx,bug"])).toEqual([
+      "issues",
+      "edit",
+      "--repo",
+      DEFAULT_REPO,
+      "--add-labels",
+      "devx,bug",
+      "1399",
+    ]);
+    expect(() => buildTeaIssueArgs(["label", "1399"])).toThrow(
+      "issue label requires <number> <label[,label]>.",
+    );
   });
 
   it("supports an explicit repo override once without duplicating --repo", () => {

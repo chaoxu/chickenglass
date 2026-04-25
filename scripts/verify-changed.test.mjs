@@ -141,13 +141,27 @@ describe("verify-changed", () => {
     expect(plan.commands.map(commandDisplay)).toContain(
       "rtk pnpm test:focused -- scripts/browser-lane.test.mjs",
     );
+    expect(plan.commands.map(commandDisplay)).toContain(
+      "rtk pnpm check:browser-fixtures -- scripts/browser-lane.mjs",
+    );
     expect(plan.commands.map(commandDisplay)).not.toContain(
       "rtk pnpm test:focused -- scripts/test-regression.test.mjs scripts/browser-repro.test.mjs",
     );
   });
 
+  it("guards changed browser tests against ignored local fixture dependencies", () => {
+    const plan = buildChangedVerificationPlan(["scripts/regression-tests/new-case.mjs"]);
+
+    expect(plan.commands.map(commandDisplay)).toContain(
+      "rtk pnpm check:browser-fixtures -- scripts/regression-tests/new-case.mjs",
+    );
+  });
+
   it("selects browser lanes from changed paths", () => {
-    expect(browserLanesForChangedFiles(["src/lexical/renderers/inline-math-renderer.tsx"])).toEqual(["lexical"]);
+    expect(browserLanesForChangedFiles(["src/lexical/renderers/inline-math-renderer.tsx"])).toEqual([
+      "lexical",
+      "parity",
+    ]);
     expect(browserLanesForChangedFiles(["src/render/image-render.ts"])).toEqual(["cm6-rich", "media"]);
     expect(browserLanesForChangedFiles(["scripts/fixture-test-helpers.mjs"])).toEqual(["smoke"]);
     expect(browserLanesForChangedFiles(["scripts/regression-tests/rich-arrowdown-bounded-scroll.mjs"])).toEqual([
@@ -193,6 +207,29 @@ describe("verify-changed", () => {
 
     expect(calls).toHaveLength(4);
     expect(files).toEqual(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]);
+  });
+
+  it("can collect only staged files for pre-commit checks", () => {
+    const calls = [];
+    const files = collectChangedFiles({
+      staged: true,
+      spawnSync(command, args) {
+        calls.push([command, ...args]);
+        return {
+          status: 0,
+          stdout: "src/staged.ts\nsrc/staged.test.ts\n",
+        };
+      },
+    });
+
+    expect(calls).toEqual([[
+      "git",
+      "diff",
+      "--cached",
+      "--name-only",
+      "--diff-filter=ACMRTUXB",
+    ]]);
+    expect(files).toEqual(["src/staged.test.ts", "src/staged.ts"]);
   });
 
   it("formats plans for copyable command execution", () => {
@@ -257,5 +294,65 @@ describe("verify-changed", () => {
       ["rtk", "pnpm", "test:focused", "--", "scripts/verify-changed.test.mjs"],
       ["rtk", "pnpm", "check:pre-push"],
     ]);
+  });
+
+  it("supports --since as the base ref for collected changes", () => {
+    const stdout = createStdout();
+    const calls = [];
+    const status = runVerifyChangedCli([
+      "--since",
+      "main~2",
+      "--json",
+    ], {
+      spawnSync(command, args) {
+        calls.push([command, ...args]);
+        if (args.join(" ") === "diff --name-only --diff-filter=ACMRTUXB main~2...HEAD") {
+          return { status: 0, stdout: "src/render/reference-render.ts\n" };
+        }
+        return { status: 0, stdout: "" };
+      },
+      stdout,
+    });
+
+    expect(status).toBe(0);
+    expect(calls[0]).toEqual([
+      "git",
+      "diff",
+      "--name-only",
+      "--diff-filter=ACMRTUXB",
+      "main~2...HEAD",
+    ]);
+    expect(JSON.parse(stdout.toString()).commands.map(commandDisplay)).toContain(
+      "rtk git diff --check 'main~2...HEAD'",
+    );
+  });
+
+  it("supports a staged-only CLI plan", () => {
+    const stdout = createStdout();
+    const calls = [];
+    const status = runVerifyChangedCli(["--staged"], {
+      exists: existsFrom(["src/render/reference-render.test.ts"]),
+      spawnSync(command, args) {
+        calls.push([command, ...args]);
+        return {
+          status: 0,
+          stdout: args.includes("--cached") && args.includes("--name-only")
+            ? "src/render/reference-render.ts\n"
+            : "",
+        };
+      },
+      stdout,
+    });
+
+    expect(status).toBe(0);
+    expect(calls[0]).toEqual([
+      "git",
+      "diff",
+      "--cached",
+      "--name-only",
+      "--diff-filter=ACMRTUXB",
+    ]);
+    expect(stdout.toString()).toContain("rtk git diff --cached --check");
+    expect(stdout.toString()).not.toContain("origin/main...HEAD");
   });
 });

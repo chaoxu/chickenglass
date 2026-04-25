@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
+import { createBrowserRunManifest } from "./browser-run-manifest.mjs";
 import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
 import { runRegressionTestWithChecks } from "./regression-runner-checks.mjs";
 import { resetEditorState } from "./editor-test-helpers.mjs";
@@ -161,8 +162,17 @@ async function main() {
   // Connect to the browser harness
   let session = null;
   let page;
+  let runManifest = null;
   try {
     session = await openBrowserSession(args, { timeoutFallback: timeout });
+    runManifest = createBrowserRunManifest({
+      appUrl: session.url,
+      argv: args,
+      browserMode: session.browserMode,
+      headless: session.headless,
+      label: "test-regression",
+      root: session.artifactsRoot,
+    });
     page = session.page;
   } catch (err) {
     console.error("Failed to open the browser regression harness.");
@@ -290,6 +300,21 @@ async function main() {
     }
 
     process.exitCode = failed > 0 ? 1 : 0;
+    if (runManifest) {
+      const written = runManifest.write({
+        results,
+        status: failed > 0 ? "failed" : "passed",
+        summary: {
+          failed,
+          filter,
+          passed,
+          scenario: scenarioArg || null,
+          skipped,
+          total: results.length,
+        },
+      });
+      console.log(`Run manifest: ${written.manifestPath}`);
+    }
   } finally {
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);

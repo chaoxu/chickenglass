@@ -4,6 +4,7 @@ import {
   BROWSER_HARNESS_SUPPORT_PATHS,
   BROWSER_LANE_ORDER,
   BROWSER_LANES,
+  DOCUMENT_SURFACE_PARITY_PATH_PREFIXES,
   browserAreaTouched,
   isBrowserHarnessSupportPath,
   resolveBrowserLane,
@@ -56,6 +57,16 @@ describe("browser lanes manifest", () => {
     expect(selectBrowserLanesForChangedFiles([
       "src/lexical/editor-theme.css",
     ])).toEqual(["cm6-rich", "lexical", "parity"]);
+    expect(selectBrowserLanesForChangedFiles([
+      "src/lexical/renderers/fenced-div-renderers.tsx",
+    ])).toEqual(["lexical", "parity"]);
+    expect(selectBrowserLanesForChangedFiles([
+      "src/render/preview-block-renderer.ts",
+    ])).toEqual(["cm6-rich", "parity"]);
+    expect(DOCUMENT_SURFACE_PARITY_PATH_PREFIXES).toEqual(expect.arrayContaining([
+      "src/lexical/renderers/",
+      "scripts/regression-tests/visual-surface-parity.mjs",
+    ]));
   });
 
   it("escalates browser harness changes to all only in full profile", () => {

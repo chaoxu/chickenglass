@@ -9,8 +9,8 @@ import {
 } from "./browser-lanes.mjs";
 import { createArgParser, normalizeCliArgs } from "./devx-cli.mjs";
 
-const VALUE_FLAGS = ["--base", "--profile"];
-const BOOLEAN_FLAGS = ["--help", "-h", "--json", "--no-base", "--run"];
+const VALUE_FLAGS = ["--base", "--profile", "--since"];
+const BOOLEAN_FLAGS = ["--help", "-h", "--json", "--no-base", "--run", "--staged"];
 
 const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 const TEST_FILE_PATTERN = /\.(?:spec|test)\.(?:[cm]?[jt]sx?)$/;
@@ -142,6 +142,12 @@ function runGit(args, options = {}) {
 
 export function collectChangedFiles(options = {}) {
   const files = [];
+  if (options.staged) {
+    return unique(
+      lineList(runGit(["diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB"], options)),
+    ).sort();
+  }
+
   const includeBase = options.base && !options.noBase;
   if (includeBase) {
     files.push(
@@ -250,6 +256,14 @@ function rustTouched(paths) {
   return paths.some((path) => path.startsWith("src-tauri/") && isRustFile(path));
 }
 
+function browserFixtureGuardPath(path) {
+  return path.startsWith("scripts/regression-tests/") ||
+    path === "scripts/test-regression.mjs" ||
+    path === "scripts/fixture-test-helpers.mjs" ||
+    path === "scripts/editor-test-helpers.mjs" ||
+    path.includes("browser") && path.startsWith("scripts/");
+}
+
 function docsOnly(paths) {
   return paths.length > 0 &&
     paths.every((path) =>
@@ -304,6 +318,16 @@ export function buildChangedVerificationPlan(paths, options = {}) {
     ]));
   }
   addAreaTests(normalizedPaths, commands);
+  const fixtureGuardPaths = normalizedPaths.filter(browserFixtureGuardPath);
+  if (fixtureGuardPaths.length > 0) {
+    commands.push(createPlanCommand([
+      "rtk",
+      "pnpm",
+      "check:browser-fixtures",
+      "--",
+      ...fixtureGuardPaths,
+    ]));
+  }
 
   if (profile === "edit") {
     if (focusedTests.length === 0 && normalizedPaths.some(isCodeFile)) {
@@ -412,6 +436,8 @@ export function printVerifyChangedHelp(stream = process.stdout) {
 
 Options:
   --base <ref>      include committed changes against a base ref (default: origin/main)
+  --since <ref>     alias for --base, for "what changed since this ref" workflows
+  --staged          only inspect staged changes
   --no-base         only inspect working tree, staged changes, and untracked files
   --profile quick   fast local plan (default)
   --profile edit    inner-loop plan: diff checks + focused tests only
@@ -435,19 +461,23 @@ export function runVerifyChangedCli(argv = process.argv.slice(2), options = {}) 
   parser.assertKnownFlags([...BOOLEAN_FLAGS, ...VALUE_FLAGS]);
 
   const positionals = parser.getPositionals();
+  const baseRef = parser.getFlag("--since", parser.getFlag("--base", "origin/main"));
   const files = positionals.length > 0
     ? positionals
     : collectChangedFiles({
-      base: parser.getFlag("--base", "origin/main"),
-      noBase: parser.hasFlag("--no-base"),
+      base: baseRef,
+      noBase: parser.hasFlag("--no-base") || parser.hasFlag("--staged"),
       spawnSync: options.spawnSync,
+      staged: parser.hasFlag("--staged"),
     });
 
   const plan = buildChangedVerificationPlan(files, {
     diffCommands: parser.hasFlag("--no-base")
       ? [createPlanCommand(["rtk", "git", "diff", "--check", "HEAD"])]
+      : parser.hasFlag("--staged")
+        ? [createPlanCommand(["rtk", "git", "diff", "--cached", "--check"])]
       : [
-        createPlanCommand(["rtk", "git", "diff", "--check", `${parser.getFlag("--base", "origin/main")}...HEAD`]),
+        createPlanCommand(["rtk", "git", "diff", "--check", `${baseRef}...HEAD`]),
         createPlanCommand(["rtk", "git", "diff", "--check", "HEAD"]),
       ],
     exists: options.exists,

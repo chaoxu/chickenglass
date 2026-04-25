@@ -59,7 +59,10 @@ export async function openBrowserSession(argv = [], options = {}) {
       artifactRecorder: recorder,
       artifactsRoot: artifactsDir,
       artifactsDir,
+      browserMode: chromeArgs.browser,
+      headless: chromeArgs.headless,
       page,
+      url: chromeArgs.url,
       stopAppServer,
     };
   } catch (error) {

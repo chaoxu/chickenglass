@@ -4,10 +4,15 @@ import console from "node:console";
 import process from "node:process";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import {
+  documentSurfaceSelectorSnapshot,
+} from "./document-surface-selector-contracts.mjs";
+import {
+  openEditorScenario,
   openFixtureDocument,
   settleEditorLayout,
   switchToMode,
 } from "./test-helpers.mjs";
+import { measureEditorBridgeTypingLatency } from "./typing-latency-helpers.mjs";
 
 const PARITY_FIXTURE = {
   content: [
@@ -67,19 +72,15 @@ function assertNear(section, property, left, right, tolerance) {
 }
 
 async function waitForSurface(page, mode) {
-  await page.waitForFunction((expectedMode) => {
-    const surfaceSelector = expectedMode === "lexical"
-      ? ".cf-doc-surface--lexical"
-      : ".cf-doc-surface--cm6";
-    const flowSelector = expectedMode === "lexical"
-      ? ".cf-doc-flow--lexical"
-      : ".cf-doc-flow--cm6";
+  await page.waitForFunction(({ selectors }) => {
     return Boolean(
-      document.querySelector(surfaceSelector) &&
-        document.querySelector(flowSelector) &&
-        document.querySelector(".cf-doc-heading--h1"),
+      document.querySelector(selectors.surface) &&
+        document.querySelector(selectors.flow) &&
+        document.querySelector(selectors.headingH1),
     );
-  }, mode, { timeout: 10_000 });
+  }, {
+    selectors: documentSurfaceSelectorSnapshot(mode),
+  }, { timeout: 10_000 });
 }
 
 async function collectSurfaceMetrics(page, mode) {
@@ -87,10 +88,7 @@ async function collectSurfaceMetrics(page, mode) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
   await waitForSurface(page, mode);
 
-  return page.evaluate((expectedMode) => {
-    const selectorForMode = (cm6Selector, lexicalSelector) =>
-      expectedMode === "lexical" ? lexicalSelector : cm6Selector;
-
+  return page.evaluate(({ selectors }) => {
     const describe = (selector) => {
       const elements = [...document.querySelectorAll(selector)];
       const element = elements.find((candidate) => {
@@ -132,16 +130,18 @@ async function collectSurfaceMetrics(page, mode) {
 
     return {
       appMode: window.__app?.getMode?.() ?? null,
-      block: describe(".cf-doc-block"),
-      flow: describe(selectorForMode(".cf-doc-flow--cm6", ".cf-doc-flow--lexical")),
-      h1: describe(".cf-doc-heading--h1"),
-      math: describe(".cf-doc-display-math"),
-      paragraph: describe(".cf-doc-paragraph"),
-      surface: describe(selectorForMode(".cf-doc-surface--cm6", ".cf-doc-surface--lexical")),
-      table: describe(".cf-doc-table-block"),
-      tableCell: describe(".cf-doc-table-block th, .cf-doc-table-block td"),
+      block: describe(selectors.block),
+      flow: describe(selectors.flow),
+      h1: describe(selectors.headingH1),
+      math: describe(selectors.displayMath),
+      paragraph: describe(selectors.paragraph),
+      surface: describe(selectors.surface),
+      table: describe(selectors.table),
+      tableCell: describe(selectors.tableCell),
     };
-  }, mode);
+  }, {
+    selectors: documentSurfaceSelectorSnapshot(mode),
+  });
 }
 
 function assertParity(cm6, lexical) {
@@ -181,89 +181,7 @@ async function measureTypingLatency(page, mode) {
   });
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  return page.evaluate(async ({ anchorNeedle, insertText }) => {
-    const mean = (values) =>
-      values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
-    const percentile = (values, percentileValue) => {
-      if (values.length === 0) return 0;
-      const sorted = [...values].sort((left, right) => left - right);
-      const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
-      return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-    };
-    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const waitForFrames = () =>
-      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const waitForIdle = () =>
-      new Promise((resolve) => {
-        if (typeof window.requestIdleCallback === "function") {
-          window.requestIdleCallback(() => resolve(), { timeout: 1000 });
-          return;
-        }
-        setTimeout(resolve, 0);
-      });
-
-    const editor = window.__editor;
-    if (!editor?.getDoc || !editor?.setSelection || !editor?.insertText || !editor?.focus) {
-      throw new Error("window.__editor typing bridge is unavailable.");
-    }
-    await editor.ready;
-
-    const before = editor.getDoc();
-    const index = before.indexOf(anchorNeedle);
-    if (index < 0) {
-      throw new Error(`Typing anchor ${JSON.stringify(anchorNeedle)} is missing.`);
-    }
-    const anchor = index + anchorNeedle.length;
-    editor.setSelection(anchor, anchor);
-    editor.focus();
-    await waitForFrames();
-
-    const timings = [];
-    const wallStart = performance.now();
-    for (const char of insertText) {
-      const charStart = performance.now();
-      editor.insertText(char);
-      timings.push(performance.now() - charStart);
-    }
-    const wallMs = performance.now() - wallStart;
-
-    const expectedLength = before.length + insertText.length;
-    const expectedText = `${anchorNeedle}${insertText}`;
-    const canonicalStart = performance.now();
-    let after = editor.getDoc();
-    while (
-      performance.now() - canonicalStart < 5_000 &&
-      (after.length < expectedLength || !after.includes(expectedText))
-    ) {
-      await sleepInPage(8);
-      after = editor.getDoc();
-    }
-    const canonicalMs = performance.now() - canonicalStart;
-    if (after.length < expectedLength || !after.includes(expectedText)) {
-      throw new Error(
-        `Typing burst did not persist: expected length >= ${expectedLength}, ` +
-          `got ${after.length}, expectedText=${JSON.stringify(expectedText)}`,
-      );
-    }
-
-    const idleStart = performance.now();
-    await waitForFrames();
-    await waitForIdle();
-    const inputToIdleMs = performance.now() - wallStart;
-
-    return {
-      canonicalMs,
-      docLength: after.length,
-      inputToIdleMs,
-      insertCount: insertText.length,
-      insertMaxMs: Math.max(...timings, 0),
-      insertMeanMs: mean(timings),
-      insertP95Ms: percentile(timings, 95),
-      idleAfterInputMs: performance.now() - idleStart,
-      wallMs,
-      wallPerCharMs: wallMs / insertText.length,
-    };
-  }, {
+  return measureEditorBridgeTypingLatency(page, {
     anchorNeedle: TYPING_ANCHOR,
     insertText: TYPING_INSERT,
   });
@@ -276,9 +194,13 @@ async function main() {
     session = await openBrowserSession(process.argv.slice(2), {
       defaultBrowser: "managed",
     });
-    await openFixtureDocument(session.page, PARITY_FIXTURE, {
+    await openEditorScenario(session.page, {
+      entry: PARITY_FIXTURE.virtualPath,
+      files: {
+        [PARITY_FIXTURE.virtualPath]: PARITY_FIXTURE.content,
+      },
       mode: "cm6-rich",
-      project: "single-file",
+      waitFor: { selector: ".cf-doc-heading--h1" },
     });
     const cm6 = await collectSurfaceMetrics(session.page, "cm6-rich");
     const lexical = await collectSurfaceMetrics(session.page, "lexical");

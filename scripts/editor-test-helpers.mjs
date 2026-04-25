@@ -581,6 +581,141 @@ export async function openFixtureDocument(page, fixture, options = {}) {
   };
 }
 
+function normalizeScenarioFiles(files) {
+  if (Array.isArray(files)) {
+    return files;
+  }
+  return Object.entries(files ?? {}).map(([path, value]) => {
+    if (typeof value === "string") {
+      return { path, kind: "text", content: value };
+    }
+    return { path, ...value };
+  });
+}
+
+/**
+ * Open a generated or fixture-backed editor scenario through the same app
+ * debug bridge used by browser regressions.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{
+ *   entry?: string,
+ *   files?: Record<string, string | { kind: "text" | "binary", content?: string, base64?: string }> | Array<{ path: string, kind: "text" | "binary", content?: string, base64?: string }>,
+ *   fixture?: Parameters<typeof openFixtureDocument>[1],
+ *   mode?: "rich" | "cm6-rich" | "lexical" | "source" | "CM6 Rich" | "Lexical" | "Source",
+ *   project?: "single-file" | "full-project",
+ *   waitFor?: {
+ *     selector?: string,
+ *     minCount?: number,
+ *     timeoutMs?: number,
+ *     frameCount?: number,
+ *     delayMs?: number,
+ *   },
+ *   discardCurrent?: boolean,
+ *   timeoutMs?: number,
+ *   settleMs?: number,
+ * }} scenario
+ */
+export async function openEditorScenario(page, scenario) {
+  const {
+    entry,
+    files,
+    fixture,
+    mode = "cm6-rich",
+    project = "single-file",
+    waitFor = {},
+    discardCurrent = true,
+    timeoutMs = DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
+    settleMs = DEFAULT_FIXTURE_SETTLE_MS,
+  } = scenario ?? {};
+
+  if (fixture) {
+    const opened = await openFixtureDocument(page, fixture, {
+      discardCurrent,
+      mode,
+      project,
+      settleMs,
+      timeoutMs,
+    });
+    if (waitFor.selector) {
+      await waitForRenderReady(page, { timeoutMs, ...waitFor });
+    }
+    return {
+      entry: opened.virtualPath,
+      method: opened.method,
+    };
+  }
+
+  const projectFiles = normalizeScenarioFiles(files);
+  if (projectFiles.length === 0) {
+    throw new Error("openEditorScenario requires either fixture or files.");
+  }
+
+  const initialPath = entry ?? projectFiles.find((file) => file.kind === "text")?.path;
+  if (!initialPath) {
+    throw new Error("openEditorScenario requires an entry path for binary-only projects.");
+  }
+
+  const textEntry = projectFiles.find((file) => file.path === initialPath && file.kind === "text");
+  const expectedContent = textEntry?.content ?? null;
+
+  if (discardCurrent) {
+    await discardCurrentFile(page).catch(() => false);
+  }
+
+  const result = await page.evaluate(async ({ expectedPath, scenarioFiles }) => {
+    const app = window.__app;
+    if (!app?.loadFixtureProject && !app?.openFileWithContent) {
+      throw new Error("window.__app fixture loading helpers are unavailable.");
+    }
+    if (app.loadFixtureProject) {
+      await app.loadFixtureProject(scenarioFiles, expectedPath);
+      return { method: "loadFixtureProject" };
+    }
+
+    const entry = scenarioFiles.find((file) => file.path === expectedPath);
+    if (!entry || entry.kind !== "text" || typeof entry.content !== "string") {
+      throw new Error(`window.__app.loadFixtureProject is unavailable for multi-file scenario ${expectedPath}.`);
+    }
+    await app.openFileWithContent(expectedPath, entry.content);
+    return { method: "openFileWithContent" };
+  }, {
+    expectedPath: initialPath,
+    scenarioFiles: projectFiles,
+  });
+
+  await page.waitForFunction(
+    ({ expectedPath, expectedContent: nextExpectedContent }) => {
+      const currentPath = window.__app?.getCurrentDocument?.()?.path ?? null;
+      const text = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString();
+      if (currentPath !== expectedPath || typeof text !== "string") {
+        return false;
+      }
+      return nextExpectedContent === null || text === nextExpectedContent;
+    },
+    {
+      expectedContent,
+      expectedPath: initialPath,
+    },
+    { timeout: timeoutMs, polling: 100 },
+  );
+
+  if (mode) {
+    await switchToMode(page, mode);
+  }
+  await waitForRenderReady(page, {
+    delayMs: settleMs,
+    frameCount: 3,
+    timeoutMs,
+    ...waitFor,
+  });
+
+  return {
+    entry: initialPath,
+    method: result.method,
+  };
+}
+
 /**
  * Open a stable fixture for browser regression tests.
  *
