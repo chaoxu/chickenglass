@@ -1,8 +1,20 @@
 use std::time::Instant;
 
-use tauri::{State, command};
+use tauri::{State, WebviewWindow, command};
 
+use super::context::run_window_command;
 use super::state::{PerfSnapshot, PerfState};
+
+const GET_PERF_SNAPSHOT: super::context::CommandSpec = super::context::CommandSpec::new(
+    "tauri.get_perf_snapshot",
+    "tauri.perf.get_perf_snapshot",
+    "tauri",
+);
+const CLEAR_PERF_SNAPSHOT: super::context::CommandSpec = super::context::CommandSpec::new(
+    "tauri.clear_perf_snapshot",
+    "tauri.perf.clear_perf_snapshot",
+    "tauri",
+);
 
 pub fn measure_command<T, F>(
     perf: &State<'_, PerfState>,
@@ -33,11 +45,21 @@ where
 }
 
 #[command]
-pub fn get_perf_snapshot(perf: State<'_, PerfState>) -> Result<PerfSnapshot, String> {
-    perf.inner().snapshot()
+pub fn get_perf_snapshot(
+    window: WebviewWindow,
+    perf: State<'_, PerfState>,
+) -> Result<PerfSnapshot, String> {
+    run_window_command(&window, &perf, GET_PERF_SNAPSHOT, None, || {
+        perf.inner().snapshot()
+    })
 }
 
 #[command]
-pub fn clear_perf_snapshot(perf: State<'_, PerfState>) -> Result<(), String> {
-    perf.inner().clear()
+pub fn clear_perf_snapshot(
+    window: WebviewWindow,
+    perf: State<'_, PerfState>,
+) -> Result<(), String> {
+    run_window_command(&window, &perf, CLEAR_PERF_SNAPSHOT, None, || {
+        perf.inner().clear()
+    })
 }

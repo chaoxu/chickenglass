@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 use tauri::{State, WebviewWindow, command};
 
-use super::context::{CommandSpec, WindowCommandContext};
+use super::context::{CommandSpec, WindowCommandContext, run_window_command};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::{ProjectPathResolver, path_to_frontend_string};
 
@@ -50,22 +50,32 @@ pub fn to_project_relative_path(
 
 #[command]
 pub fn canonicalize_project_root(
+    window: WebviewWindow,
     perf: State<'_, PerfState>,
     path: String,
 ) -> Result<String, String> {
-    super::context::run_command(&perf, CANONICALIZE_PROJECT_ROOT, Some(&path), || {
-        canonicalize_project_root_path(&path)
-    })
+    run_window_command(
+        &window,
+        &perf,
+        CANONICALIZE_PROJECT_ROOT,
+        Some(&path),
+        || canonicalize_project_root_path(&path),
+    )
 }
 
 #[command]
 pub fn resolve_project_file_target(
+    window: WebviewWindow,
     perf: State<'_, PerfState>,
     path: String,
 ) -> Result<ProjectFileTarget, String> {
-    super::context::run_command(&perf, RESOLVE_PROJECT_FILE_TARGET, Some(&path), || {
-        resolve_project_file_target_path(&path)
-    })
+    run_window_command(
+        &window,
+        &perf,
+        RESOLVE_PROJECT_FILE_TARGET,
+        Some(&path),
+        || resolve_project_file_target_path(&path),
+    )
 }
 
 fn canonicalize_project_root_path(path: &str) -> Result<String, String> {

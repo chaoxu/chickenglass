@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use tauri::{State, WebviewWindow, command};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::context::{CommandSpec, WindowCommandContext, run_window_command};
 use super::state::{PerfState, ProjectRoot};
 pub use crate::services::filesystem::FileEntry;
 use crate::services::{
@@ -91,15 +91,19 @@ pub fn open_folder(
     path: String,
     generation: u64,
 ) -> Result<OpenFolderResult, String> {
-    run_command(&perf, OPEN_FOLDER, Some(&path), || {
+    run_window_command(&window, &perf, OPEN_FOLDER, Some(&path), || {
         let mut lock = root.0.lock().map_err(|e| e.to_string())?;
         open_project_root(&mut lock, window.label(), &path, generation)
     })
 }
 
 #[command]
-pub fn probe_folder(perf: State<'_, PerfState>, path: String) -> Result<ProbeFolderResult, String> {
-    run_command(&perf, PROBE_FOLDER, Some(&path), || {
+pub fn probe_folder(
+    window: WebviewWindow,
+    perf: State<'_, PerfState>,
+    path: String,
+) -> Result<ProbeFolderResult, String> {
+    run_window_command(&window, &perf, PROBE_FOLDER, Some(&path), || {
         probe_project_root(&path)
     })
 }

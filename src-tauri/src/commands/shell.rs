@@ -2,7 +2,7 @@ use std::process::Command;
 
 use tauri::{State, WebviewWindow, command};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::context::{CommandSpec, WindowCommandContext, run_window_command};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::ProjectPathResolver;
 
@@ -17,8 +17,12 @@ const REVEAL_IN_FINDER: CommandSpec = CommandSpec::new(
 ///
 /// Only `http:` and `https:` URLs are allowed — all other schemes are rejected.
 #[command]
-pub fn open_url(perf: State<'_, PerfState>, url: String) -> Result<(), String> {
-    run_command(&perf, OPEN_URL, Some(&url), || {
+pub fn open_url(
+    window: WebviewWindow,
+    perf: State<'_, PerfState>,
+    url: String,
+) -> Result<(), String> {
+    run_window_command(&window, &perf, OPEN_URL, Some(&url), || {
         let lower = url.to_ascii_lowercase();
         if !lower.starts_with("http://") && !lower.starts_with("https://") {
             return Err(format!("Blocked non-http(s) URL: {}", url));

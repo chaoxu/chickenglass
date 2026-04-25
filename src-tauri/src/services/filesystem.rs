@@ -85,7 +85,7 @@ fn write_text_file_if_hash_with_hook(
     content: &str,
     expected_hash: &str,
     hash_content: impl Fn(&str) -> String,
-    before_final_check: impl FnOnce(),
+    before_atomic_replace: impl FnOnce(),
 ) -> Result<ConditionalTextWriteResult, String> {
     let expected = match FileHandle::from_path(path) {
         Ok(handle) => handle,
@@ -114,8 +114,6 @@ fn write_text_file_if_hash_with_hook(
     let temp_path = write_same_directory_temp_file(path, content.as_bytes(), Some(permissions))
         .map_err(|e| format!("Failed to write '{}': {}", relative_path, e))?;
 
-    before_final_check();
-
     let final_content = match fs::read_to_string(path) {
         Ok(final_content) => final_content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -132,38 +130,97 @@ fn write_text_file_if_hash_with_hook(
         return Ok(ConditionalTextWriteResult::Modified(final_content));
     }
 
-    let actual = match FileHandle::from_path(path) {
-        Ok(actual) => actual,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let _ = fs::remove_file(&temp_path);
-            return Ok(ConditionalTextWriteResult::Missing);
-        }
-        Err(error) => {
-            let _ = fs::remove_file(&temp_path);
-            return Err(format!("Failed to inspect '{}': {}", relative_path, error));
-        }
-    };
-    if actual != expected {
-        let _ = fs::remove_file(&temp_path);
-        return Ok(ConditionalTextWriteResult::Modified(final_content));
-    }
-
     if let Err(error) = verify_existing_file_writable(path) {
         let _ = fs::remove_file(&temp_path);
         return Err(format!("Failed to write '{}': {}", relative_path, error));
     }
 
-    match fs::rename(&temp_path, path) {
-        Ok(()) => {
+    before_atomic_replace();
+
+    match checked_atomic_text_replace(path, &temp_path, &expected, expected_hash, &hash_content) {
+        Ok(CheckedAtomicReplaceResult::Written) => {
             sync_parent_directory(path)
                 .map_err(|e| format!("Failed to write '{}': {}", relative_path, e))?;
             Ok(ConditionalTextWriteResult::Written)
         }
+        Ok(CheckedAtomicReplaceResult::Modified(current)) => {
+            Ok(ConditionalTextWriteResult::Modified(current))
+        }
+        Ok(CheckedAtomicReplaceResult::Missing) => Ok(ConditionalTextWriteResult::Missing),
+        Err(error) => Err(format!("Failed to write '{}': {}", relative_path, error)),
+    }
+}
+
+enum CheckedAtomicReplaceResult {
+    Written,
+    Modified(String),
+    Missing,
+}
+
+fn checked_atomic_text_replace(
+    path: &Path,
+    temp_path: &Path,
+    expected: &FileHandle,
+    expected_hash: &str,
+    hash_content: &impl Fn(&str) -> String,
+) -> std::io::Result<CheckedAtomicReplaceResult> {
+    let actual = match FileHandle::from_path(path) {
+        Ok(actual) => actual,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let _ = fs::remove_file(temp_path);
+            return Ok(CheckedAtomicReplaceResult::Missing);
+        }
         Err(error) => {
-            let _ = fs::remove_file(&temp_path);
-            Err(format!("Failed to write '{}': {}", relative_path, error))
+            let _ = fs::remove_file(temp_path);
+            return Err(error);
+        }
+    };
+    if actual != *expected {
+        let current = fs::read_to_string(path)?;
+        let _ = fs::remove_file(temp_path);
+        return Ok(CheckedAtomicReplaceResult::Modified(current));
+    }
+
+    match atomic_swap_paths(temp_path, path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let _ = fs::remove_file(temp_path);
+            return Ok(CheckedAtomicReplaceResult::Missing);
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::Unsupported => {
+            fs::rename(temp_path, path)?;
+            return Ok(CheckedAtomicReplaceResult::Written);
+        }
+        Err(error) => {
+            let _ = fs::remove_file(temp_path);
+            return Err(error);
         }
     }
+
+    let swapped_out_content = match fs::read_to_string(temp_path) {
+        Ok(content) => content,
+        Err(error) => {
+            let _ = atomic_swap_paths(path, temp_path);
+            let _ = fs::remove_file(temp_path);
+            return Err(error);
+        }
+    };
+    let swapped_out_handle = match FileHandle::from_path(temp_path) {
+        Ok(handle) => handle,
+        Err(error) => {
+            let _ = atomic_swap_paths(path, temp_path);
+            let _ = fs::remove_file(temp_path);
+            return Err(error);
+        }
+    };
+    if swapped_out_handle != *expected || hash_content(&swapped_out_content) != expected_hash {
+        atomic_swap_paths(path, temp_path)?;
+        let _ = fs::remove_file(temp_path);
+        return Ok(CheckedAtomicReplaceResult::Modified(swapped_out_content));
+    }
+
+    fs::remove_file(temp_path)?;
+    Ok(CheckedAtomicReplaceResult::Written)
 }
 
 pub fn create_text_file(
@@ -388,6 +445,58 @@ fn write_same_directory_temp_file(
             "Failed to create atomic write temp file",
         )
     }))
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+fn atomic_swap_paths(first: &Path, second: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let first = CString::new(first.as_os_str().as_bytes()).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Path contains NUL byte: {}", first.display()),
+        )
+    })?;
+    let second = CString::new(second.as_os_str().as_bytes()).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Path contains NUL byte: {}", second.display()),
+        )
+    })?;
+
+    let result = atomic_swap_c_paths(first.as_c_str(), second.as_c_str());
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn atomic_swap_c_paths(first: &std::ffi::CStr, second: &std::ffi::CStr) -> libc::c_int {
+    unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            first.as_ptr(),
+            libc::AT_FDCWD,
+            second.as_ptr(),
+            libc::RENAME_EXCHANGE,
+        )
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+fn atomic_swap_c_paths(first: &std::ffi::CStr, second: &std::ffi::CStr) -> libc::c_int {
+    unsafe { libc::renamex_np(first.as_ptr(), second.as_ptr(), libc::RENAME_SWAP) }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+fn atomic_swap_paths(_first: &Path, _second: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "Atomic checked replacement is not supported on this platform",
+    ))
 }
 
 #[cfg(unix)]
@@ -744,7 +853,31 @@ mod tests {
     }
 
     #[test]
-    fn conditional_text_write_rejects_same_inode_change_before_replace() {
+    fn conditional_text_write_writes_when_hash_matches() {
+        let dir = create_temp_dir("conditional-write-success");
+        let file = dir.join("note.md");
+        fs::write(&file, "saved").unwrap();
+
+        let result = write_text_file_if_hash_with_hook(
+            &file,
+            "note.md",
+            "local edit",
+            "saved",
+            str::to_string,
+            || {},
+        )
+        .unwrap();
+
+        assert!(matches!(result, ConditionalTextWriteResult::Written));
+        assert_eq!(fs::read_to_string(&file).unwrap(), "local edit");
+        assert!(atomic_temp_paths(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+    #[test]
+    fn conditional_text_write_rejects_same_inode_change_after_final_check() {
         let dir = create_temp_dir("conditional-write-race");
         let file = dir.join("note.md");
         fs::write(&file, "saved").unwrap();
@@ -766,6 +899,36 @@ mod tests {
             ConditionalTextWriteResult::Modified(content) if content == "external edit"
         ));
         assert_eq!(fs::read_to_string(&file).unwrap(), "external edit");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+    #[test]
+    fn conditional_text_write_restores_replaced_target_after_final_check() {
+        let dir = create_temp_dir("conditional-write-replaced-race");
+        let file = dir.join("note.md");
+        fs::write(&file, "saved").unwrap();
+
+        let result = write_text_file_if_hash_with_hook(
+            &file,
+            "note.md",
+            "local edit",
+            "saved",
+            str::to_string,
+            || {
+                fs::remove_file(&file).unwrap();
+                fs::write(&file, "external replacement").unwrap();
+            },
+        )
+        .unwrap();
+
+        assert!(matches!(
+            result,
+            ConditionalTextWriteResult::Modified(content) if content == "external replacement"
+        ));
+        assert_eq!(fs::read_to_string(&file).unwrap(), "external replacement");
+        assert!(atomic_temp_paths(&dir).is_empty());
 
         let _ = fs::remove_dir_all(&dir);
     }

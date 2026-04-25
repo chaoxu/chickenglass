@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, command};
 
+use super::context::ensure_trusted_window;
 use super::state::{FileWatcherState, LastFocusedWindow, ProjectRoot, WatcherHealthEvent};
 
 fn ensure_debug_build() -> Result<(), String> {
@@ -30,8 +31,12 @@ pub struct NativeDebugState {
 }
 
 #[command]
-pub fn debug_list_windows(app: AppHandle) -> Result<Vec<NativeWindowDebugInfo>, String> {
+pub fn debug_list_windows(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<NativeWindowDebugInfo>, String> {
     ensure_debug_build()?;
+    ensure_trusted_window(&window)?;
 
     let mut windows = app
         .webview_windows()
@@ -53,6 +58,7 @@ pub fn debug_get_native_state(
     last_focused_window: State<'_, LastFocusedWindow>,
 ) -> Result<NativeDebugState, String> {
     ensure_debug_build()?;
+    ensure_trusted_window(&window)?;
 
     let label = window.label();
     let (project_root, project_generation) = {
@@ -98,6 +104,7 @@ pub fn debug_emit_file_changed(
     tree_changed: Option<bool>,
 ) -> Result<(), String> {
     ensure_debug_build()?;
+    ensure_trusted_window(&window)?;
     app.emit_to(
         window.label(),
         "file-changed",

@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow, command, path::BaseDirectory};
 
-use super::context::{CommandSpec, WindowCommandContext, run_command};
+use super::context::{CommandSpec, WindowCommandContext, run_window_command};
 use super::state::{PerfState, ProjectRoot};
 use crate::services::path::ProjectPathResolver;
 
@@ -81,10 +81,11 @@ pub struct ExportDependencyCheck {
 /// Check whether export dependencies for a target format are available.
 #[command]
 pub fn check_pandoc(
+    window: WebviewWindow,
     perf: State<'_, PerfState>,
     format: Option<String>,
 ) -> Result<ExportDependencyCheck, String> {
-    run_command(&perf, CHECK_PANDOC, None, || {
+    run_window_command(&window, &perf, CHECK_PANDOC, None, || {
         let format = format.unwrap_or_else(|| "html".to_string());
         build_export_dependency_check(&format, check_export_tool)
     })
