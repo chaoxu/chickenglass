@@ -281,6 +281,40 @@ describe("resolveCrossref", () => {
     expect(result.kind).toBe("equation");
     expect(result.label).toBe("Eq. (1)");
   });
+
+  // Resolution order is documented above resolveCrossref. The kinds in real
+  // documents are namespaced by id prefix (thm:, eq:, sec:, fig:), so genuine
+  // cross-kind collisions only happen when a user reuses a non-prefixed id.
+  // The tests below pin the precedence so a future refactor cannot quietly
+  // reorder it.
+  it("prefers block label over heading when both share an id", () => {
+    const doc = [
+      "# Intro {#shared}",
+      "",
+      "::: {.theorem #shared}",
+      "A theorem.",
+      ":::",
+    ].join("\n");
+    const state = createState(doc);
+    const result = resolveCrossref(state, "shared");
+
+    expect(result.kind).toBe("block");
+    expect(result.label).toBe("Theorem 1");
+  });
+
+  it("prefers equation label over heading when both share an id", () => {
+    const doc = [
+      "# Intro {#shared}",
+      "",
+      "$$x$$ {#shared}",
+    ].join("\n");
+    const state = createState(doc);
+    const eqLabels = new Map([["shared", { id: "shared", number: 1 }]]);
+    const result = resolveCrossref(state, "shared", eqLabels);
+
+    expect(result.kind).toBe("equation");
+    expect(result.label).toBe("Eq. (1)");
+  });
 });
 
 describe("classifyReference", () => {
