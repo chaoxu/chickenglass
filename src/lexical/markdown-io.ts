@@ -18,7 +18,12 @@ import { publishLexicalSourceBlockIdentitiesForCurrentRoot } from "./source-bloc
 
 export function createLexicalInitialEditorState(markdown: string): InitialEditorStateType {
   return () => {
-    $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
+    $convertFromMarkdownString(
+      normalizeListRawBlockSeparators(markdown),
+      coflatMarkdownTransformers,
+      undefined,
+      true,
+    );
   };
 }
 
@@ -31,6 +36,7 @@ export function setLexicalMarkdown(
   },
 ): void {
   measureSync("lexical.setLexicalMarkdown", () => {
+    const normalizedMarkdown = normalizeListRawBlockSeparators(markdown);
     const updateOptions: EditorUpdateOptions = {
       tag: options?.tag,
     };
@@ -38,8 +44,13 @@ export function setLexicalMarkdown(
       updateOptions.discrete = true;
     }
     editor.update(() => {
-      $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, true);
-      publishLexicalSourceBlockIdentitiesForCurrentRoot(editor, markdown);
+      $convertFromMarkdownString(
+        normalizedMarkdown,
+        coflatMarkdownTransformers,
+        undefined,
+        true,
+      );
+      publishLexicalSourceBlockIdentitiesForCurrentRoot(editor, normalizedMarkdown);
     }, updateOptions);
   }, { category: "lexical", detail: `${markdown.length} chars` });
 }

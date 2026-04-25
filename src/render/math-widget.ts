@@ -131,6 +131,8 @@ export class MathWidget extends ShellMacroAwareWidget {
   private readonly displayHeightBinding: BlockWidgetHeightBinding = {
     resizeObserver: null,
     resizeMeasureFrame: null,
+    reconnectObserver: null,
+    detachedMeasureWarned: false,
   };
   private readonly inlineDomCacheKey: string;
   private readonly displayMeasurementKey: string;

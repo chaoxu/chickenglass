@@ -104,6 +104,34 @@ describe("coflat clipboard helpers", () => {
     expect(getLexicalMarkdown(editor)).toBe("**bold** $x^2$");
   });
 
+  it("normalizes pasted list-owned raw blocks through the shared importer", () => {
+    const editor = createHeadlessCoflatEditor();
+    setLexicalMarkdown(editor, "seed");
+
+    editor.update(() => {
+      const textNode = $getRoot().getFirstDescendant();
+      if (!$isTextNode(textNode)) {
+        throw new Error("expected a text node");
+      }
+
+      textNode.select(0, textNode.getTextContentSize());
+    }, { discrete: true });
+
+    expect(insertCoflatMarkdownAtSelection(editor, [
+      "1. Display math:",
+      "",
+      "   $$",
+      "   x^2",
+      "   $$",
+    ].join("\n"))).toBe(true);
+    expect(getLexicalMarkdown(editor)).toBe([
+      "1. Display math:",
+      "   $$",
+      "   x^2",
+      "   $$",
+    ].join("\n"));
+  });
+
   it("does not insert coflat markdown when there is no current selection", () => {
     const editor = createHeadlessCoflatEditor();
     setLexicalMarkdown(editor, "seed");

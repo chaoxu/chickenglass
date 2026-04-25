@@ -228,6 +228,25 @@ describe("coflat lexical markdown", () => {
     expect(roundTripMarkdown(markdown)).toBe(markdown);
   });
 
+  it("normalizes imported blank separators before source-owned blocks inside lists", () => {
+    const markdown = [
+      "1. First item",
+      "2. Display math in list:",
+      "",
+      "   $$",
+      "   T(n) = 2T(n/2) + O(n)",
+      "   $$",
+    ].join("\n");
+
+    expect(roundTripMarkdown(markdown)).toBe([
+      "1. First item",
+      "2. Display math in list:",
+      "   $$",
+      "   T(n) = 2T(n/2) + O(n)",
+      "   $$",
+    ].join("\n"));
+  });
+
   it("does not inject list separators inside fenced code blocks", () => {
     const markdown = [
       "```",

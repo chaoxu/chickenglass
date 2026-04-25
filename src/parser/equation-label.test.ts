@@ -73,6 +73,14 @@ describe("plain display math with $$", () => {
     expect(nodes[0].to).toBe(text.lastIndexOf("$$") + 2);
   });
 
+  it("does not throw when an unclosed block reaches EOF", () => {
+    const text = "$$\na + b";
+    expect(() => parseNodes(text)).not.toThrow();
+    const nodes = findNodes(text, "DisplayMath");
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].to).toBe(text.length);
+  });
+
   it("produces DisplayMathMark for $$ delimiters", () => {
     const nodes = findNodes("$$x$$", "DisplayMathMark");
     expect(nodes).toHaveLength(2);

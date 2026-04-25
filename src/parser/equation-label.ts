@@ -63,6 +63,44 @@ function parseClosingSuffix(
 // are well under this budget; beyond it we conclude "unclosed" and let the
 // surrounding parser handle the opener as plain text.
 const CLOSE_LOOKAHEAD_BUDGET = 64 * 1024;
+const CLOSE_LOOKAHEAD_READ_CHUNK = 1024;
+
+interface LookaheadLine {
+  readonly text: string;
+  readonly nextLineStart: number;
+}
+
+function readLookaheadLine(
+  input: Input,
+  lineStart: number,
+  budgetEnd: number,
+): LookaheadLine | null {
+  if (lineStart >= budgetEnd) return null;
+
+  let cursor = lineStart;
+  let text = "";
+  while (cursor < budgetEnd) {
+    const chunkEnd = Math.min(cursor + CLOSE_LOOKAHEAD_READ_CHUNK, budgetEnd);
+    const chunk = input.read(cursor, chunkEnd);
+    if (chunk.length === 0) return null;
+
+    const newlineOffset = chunk.indexOf("\n");
+    if (newlineOffset >= 0) {
+      return {
+        text: text + chunk.slice(0, newlineOffset),
+        nextLineStart: cursor + newlineOffset + 1,
+      };
+    }
+
+    text += chunk;
+    cursor = chunkEnd;
+  }
+
+  return {
+    text,
+    nextLineStart: budgetEnd,
+  };
+}
 
 function validateClosingDelimiterLookahead(
   cx: BlockContext,
@@ -72,15 +110,11 @@ function validateClosingDelimiterLookahead(
 ): "valid" | "invalid" | "unclosed" {
   const input = (cx as BlockContextWithInput).input;
   const budgetEnd = Math.min(input.length, cx.lineStart + CLOSE_LOOKAHEAD_BUDGET);
-  const source = input.read(cx.lineStart, budgetEnd);
-  let lineOffset = 0;
+  let lineText = line.text;
+  let nextLineStart = cx.lineStart + line.text.length + 1;
   let firstLine = true;
 
-  while (lineOffset <= source.length) {
-    const nextBreak = source.indexOf("\n", lineOffset);
-    const lineEnd = nextBreak >= 0 ? nextBreak : source.length;
-    const lineText = source.slice(lineOffset, lineEnd);
-
+  for (;;) {
     if (!firstLine && isClosingFenceLine(lineText) >= 3) {
       return "unclosed";
     }
@@ -95,10 +129,13 @@ function validateClosingDelimiterLookahead(
       return suffix.kind;
     }
 
-    if (nextBreak < 0) {
+    const nextLine = readLookaheadLine(input, nextLineStart, budgetEnd);
+    if (nextLine === null) break;
+    if (nextLine.nextLineStart === nextLineStart && nextLine.text.length === 0) {
       break;
     }
-    lineOffset = lineEnd + 1;
+    lineText = nextLine.text;
+    nextLineStart = nextLine.nextLineStart;
     firstLine = false;
   }
 
@@ -153,7 +190,8 @@ function scanMultilineClose(
   const closeLen = closeDelimiter.length;
   let currentLineEnd = cx.lineStart + line.text.length;
   while (true) {
-    if (isClosingFenceLine(cx.peekLine()) >= 3) {
+    const nextLine = cx.peekLine() as string | null;
+    if (nextLine !== null && isClosingFenceLine(nextLine) >= 3) {
       return {
         found: false,
         endPos: currentLineEnd,

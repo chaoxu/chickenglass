@@ -18,15 +18,21 @@ function rangeBounds(set: DecorationSet): Array<{ from: number; to: number }> {
 }
 
 describe("removeDecorationsInRanges (touch semantics)", () => {
-  it("removes a decoration whose end coincides with an empty dirty range", () => {
+  it("retains a decoration whose end coincides with an empty dirty range", () => {
     const decorations = makeRange(10, 20);
     const next = removeDecorationsInRanges(decorations, [{ from: 20, to: 20 }]);
-    expect(rangeBounds(next)).toHaveLength(0);
+    expect(rangeBounds(next)).toEqual([{ from: 10, to: 20 }]);
   });
 
-  it("removes a decoration whose start coincides with an empty dirty range", () => {
+  it("retains a decoration whose start coincides with an empty dirty range", () => {
     const decorations = makeRange(10, 20);
     const next = removeDecorationsInRanges(decorations, [{ from: 10, to: 10 }]);
+    expect(rangeBounds(next)).toEqual([{ from: 10, to: 20 }]);
+  });
+
+  it("removes a decoration when an empty dirty range sits in its interior", () => {
+    const decorations = makeRange(10, 20);
+    const next = removeDecorationsInRanges(decorations, [{ from: 15, to: 15 }]);
     expect(rangeBounds(next)).toHaveLength(0);
   });
 

@@ -4,6 +4,8 @@ import { requestScrollStabilizedMeasure } from "./scroll-anchor";
 export interface BlockWidgetHeightBinding {
   resizeObserver: ResizeObserver | null;
   resizeMeasureFrame: number | null;
+  reconnectObserver: MutationObserver | null;
+  detachedMeasureWarned: boolean;
 }
 
 const MAX_DETACHED_MEASURE_ATTEMPTS = 8;
@@ -46,6 +48,44 @@ export function clearBlockWidgetHeightBinding(
   }
   binding.resizeObserver?.disconnect();
   binding.resizeObserver = null;
+  binding.reconnectObserver?.disconnect();
+  binding.reconnectObserver = null;
+}
+
+function scheduleMeasurement(
+  binding: BlockWidgetHeightBinding,
+  measure: FrameRequestCallback,
+): void {
+  if (binding.resizeMeasureFrame !== null) return;
+  binding.resizeMeasureFrame = requestAnimationFrame(measure);
+}
+
+function observeReconnect(
+  binding: BlockWidgetHeightBinding,
+  container: HTMLElement,
+  view: EditorView,
+  measure: FrameRequestCallback,
+): void {
+  if (
+    binding.reconnectObserver !== null
+    || typeof MutationObserver === "undefined"
+  ) {
+    return;
+  }
+
+  const root = (view as Partial<EditorView>).dom?.ownerDocument?.documentElement
+    ?? container.ownerDocument.documentElement;
+  if (!root) return;
+  binding.reconnectObserver = new MutationObserver(() => {
+    if (!container.isConnected) return;
+    binding.reconnectObserver?.disconnect();
+    binding.reconnectObserver = null;
+    scheduleMeasurement(binding, measure);
+  });
+  binding.reconnectObserver.observe(root, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 export function observeBlockWidgetHeight(
@@ -56,18 +96,32 @@ export function observeBlockWidgetHeight(
   key: string,
 ): void {
   clearBlockWidgetHeightBinding(binding);
+  binding.detachedMeasureWarned = false;
   let detachedMeasureAttempts = 0;
 
   const measure = (): void => {
     if (!container.isConnected) {
       binding.resizeMeasureFrame = null;
       if (detachedMeasureAttempts >= MAX_DETACHED_MEASURE_ATTEMPTS) {
+        if (!binding.detachedMeasureWarned) {
+          binding.detachedMeasureWarned = true;
+          console.warn(
+            "[coflats] block widget height measurement deferred until reconnect",
+            {
+              cachedHeight: estimatedBlockWidgetHeight(cache, key),
+              key,
+            },
+          );
+        }
+        observeReconnect(binding, container, view, measure);
         return;
       }
       detachedMeasureAttempts += 1;
-      binding.resizeMeasureFrame = requestAnimationFrame(measure);
+      scheduleMeasurement(binding, measure);
       return;
     }
+    binding.reconnectObserver?.disconnect();
+    binding.reconnectObserver = null;
     detachedMeasureAttempts = 0;
     binding.resizeMeasureFrame = null;
     const changed = cacheBlockWidgetHeight(
@@ -81,14 +135,13 @@ export function observeBlockWidgetHeight(
   };
 
   if (typeof ResizeObserver === "undefined") {
-    binding.resizeMeasureFrame = requestAnimationFrame(measure);
+    scheduleMeasurement(binding, measure);
     return;
   }
 
   binding.resizeObserver = new ResizeObserver(() => {
-    if (binding.resizeMeasureFrame !== null) return;
-    binding.resizeMeasureFrame = requestAnimationFrame(measure);
+    scheduleMeasurement(binding, measure);
   });
   binding.resizeObserver.observe(container);
-  binding.resizeMeasureFrame = requestAnimationFrame(measure);
+  scheduleMeasurement(binding, measure);
 }

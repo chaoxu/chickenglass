@@ -88,6 +88,8 @@ export class ImagePreviewWidget extends ShellWidget {
   private readonly measuredHeightBinding: BlockWidgetHeightBinding = {
     resizeObserver: null,
     resizeMeasureFrame: null,
+    reconnectObserver: null,
+    detachedMeasureWarned: false,
   };
 
   constructor(

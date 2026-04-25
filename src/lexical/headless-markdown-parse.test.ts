@@ -48,6 +48,25 @@ describe("parseMarkdownFragmentToJSON", () => {
 
     expect(serializeBlockToMarkdown(block).trim()).toBe("fresh paragraph");
   });
+
+  it("normalizes list-owned raw block separators in fragment serialization", () => {
+    const blocks = parseMarkdownFragmentToJSON([
+      "1. Display math:",
+      "",
+      "   $$",
+      "   x^2",
+      "   $$",
+    ].join("\n"));
+
+    expect(blocks.map((block) =>
+      serializeBlockToMarkdown(block).replace(/\n+$/, "")
+    ).join("\n")).toBe([
+      "1. Display math:",
+      "   $$",
+      "   x^2",
+      "   $$",
+    ].join("\n"));
+  });
 });
 
 describe("serializeBlockToMarkdown", () => {

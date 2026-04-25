@@ -23,7 +23,10 @@ import {
 } from "lexical";
 
 import { withPooledHeadlessMarkdownEditor } from "./markdown-io";
-import { coflatMarkdownTransformers } from "./markdown-transformers";
+import {
+  coflatMarkdownTransformers,
+  normalizeListRawBlockSeparators,
+} from "./markdown-transformers";
 
 /**
  * Faithful re-implementation of Lexical's internal `exportNodeToJSON`
@@ -54,6 +57,7 @@ export function $exportLexicalNodeToJSON(node: LexicalNode): SerializedLexicalNo
  */
 export function parseMarkdownFragmentToJSON(markdown: string): SerializedLexicalNode[] {
   return withPooledHeadlessMarkdownEditor((editor) => {
+    const normalizedMarkdown = normalizeListRawBlockSeparators(markdown);
     let result: SerializedLexicalNode[] = [];
     editor.update(() => {
       // shouldPreserveNewLines=false: blank lines act as paragraph
@@ -62,7 +66,12 @@ export function parseMarkdownFragmentToJSON(markdown: string): SerializedLexical
       // round-trip line counts match exactly; for a fragment the user
       // typing `\n\n` means "split into two paragraphs", not "insert an
       // empty paragraph between two".
-      $convertFromMarkdownString(markdown, coflatMarkdownTransformers, undefined, false);
+      $convertFromMarkdownString(
+        normalizedMarkdown,
+        coflatMarkdownTransformers,
+        undefined,
+        false,
+      );
       const root = $getRoot();
       result = root.getChildren().map($exportLexicalNodeToJSON);
     }, { discrete: true });
@@ -94,7 +103,9 @@ export function serializeBlockToMarkdown(blockJSON: SerializedLexicalNode): stri
       // shouldPreserveNewLines=false matches the parse side so the source
       // we hand the user round-trips through `parseMarkdownFragmentToJSON`
       // with no spurious blank-paragraph insertions.
-      result = $convertToMarkdownString(coflatMarkdownTransformers, undefined, false);
+      result = normalizeListRawBlockSeparators(
+        $convertToMarkdownString(coflatMarkdownTransformers, undefined, false),
+      );
     }, { discrete: true });
     return result;
   });

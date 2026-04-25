@@ -33,6 +33,17 @@ function fullDocumentRange(state: EditorState): readonly VisibleRange[] {
   return [{ from: 0, to: state.doc.length }];
 }
 
+export const INLINE_MATH_VIEWPORT_MARGIN_LINES = 80;
+
+function initialTopViewportRange(state: EditorState): readonly VisibleRange[] {
+  if (state.doc.length === 0) return [];
+  const endLine = Math.min(
+    state.doc.lines,
+    1 + INLINE_MATH_VIEWPORT_MARGIN_LINES,
+  );
+  return [{ from: 0, to: state.doc.line(endLine).to }];
+}
+
 function clampVisibleRanges(
   ranges: readonly VisibleRange[],
   docLength: number,
@@ -49,11 +60,31 @@ function clampVisibleRanges(
 export function computeInlineMathViewportRanges(
   view: EditorView,
 ): readonly VisibleRange[] {
-  // Inline replacement math changes line wrapping, so viewport-only mounting
-  // feeds back into CM6's height map and can cause large reverse scroll jumps
-  // on dense documents. Keep the rendered inline-math surface document-wide
-  // until we have a layout-stable local strategy.
-  return fullDocumentRange(view.state);
+  const visibleRanges = view.visibleRanges.length > 0
+    ? view.visibleRanges
+    : fullDocumentRange(view.state);
+  const doc = view.state.doc;
+
+  return mergeRanges(
+    visibleRanges.map((range) => {
+      const visibleFrom = Math.max(0, Math.min(range.from, doc.length));
+      const visibleTo = Math.max(visibleFrom, Math.min(range.to, doc.length));
+      const fromLine = doc.lineAt(visibleFrom);
+      const toLine = doc.lineAt(visibleTo);
+      const startLine = Math.max(
+        1,
+        fromLine.number - INLINE_MATH_VIEWPORT_MARGIN_LINES,
+      );
+      const endLine = Math.min(
+        doc.lines,
+        toLine.number + INLINE_MATH_VIEWPORT_MARGIN_LINES,
+      );
+      return {
+        from: doc.line(startLine).from,
+        to: doc.line(endLine).to,
+      };
+    }),
+  );
 }
 
 export const setInlineMathViewportRangesEffect =
@@ -62,7 +93,7 @@ export const setInlineMathViewportRangesEffect =
 export const inlineMathViewportRangesField =
   StateField.define<readonly VisibleRange[]>({
     create(state) {
-      return fullDocumentRange(state);
+      return initialTopViewportRange(state);
     },
 
     update(value, tr) {

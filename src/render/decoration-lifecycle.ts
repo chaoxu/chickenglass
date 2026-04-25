@@ -82,8 +82,8 @@ function rangesTouch(
   range: DecorationRangeBounds,
 ): boolean {
   if (rangeIntersectsRanges(from, to, [range])) return true;
-  if (from === to && range.from <= from && from <= range.to) return true;
-  return range.from === range.to && from <= range.from && range.from <= to;
+  if (from === to) return range.from < from && from < range.to;
+  return range.from === range.to && from < range.from && range.from < to;
 }
 
 export function removeDecorationsInRanges<T extends DecorationRangeBounds>(

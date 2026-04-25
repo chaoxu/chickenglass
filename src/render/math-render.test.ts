@@ -904,7 +904,7 @@ describe("math decoration invalidation", () => {
     });
   });
 
-  it("renders inline math document-wide while keeping display math rendered", () => {
+  it("renders inline math in the initial bounded viewport while keeping display math rendered", () => {
     const inlineLines = Array.from(
       { length: 20 },
       (_, index) => `line ${index + 1} $x_${index + 1}$`,
