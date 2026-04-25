@@ -18,9 +18,13 @@ describe("typing latency helpers", () => {
   it("measures editor bridge typing through a page evaluate probe", async () => {
     let doc = "alpha target omega";
     let selection = 0;
+    let idleTimeout = null;
     globalThis.window ??= {};
     globalThis.requestAnimationFrame ??= (callback) => setTimeout(() => callback(performance.now()), 0);
-    window.requestIdleCallback = (callback) => setTimeout(callback, 0);
+    window.requestIdleCallback = (callback, options) => {
+      idleTimeout = options?.timeout ?? null;
+      setTimeout(callback, 0);
+    };
     window.__editor = {
       focus: vi.fn(),
       getDoc: () => doc,
@@ -39,10 +43,12 @@ describe("typing latency helpers", () => {
 
     const result = await measureEditorBridgeTypingLatency(page, {
       anchorNeedle: "target",
+      idleSettleTimeoutMs: 42,
       insertText: "12",
     });
 
     expect(doc).toContain("target12");
+    expect(idleTimeout).toBe(42);
     expect(result.insertCount).toBe(2);
     expect(result.docLength).toBe(doc.length);
   });

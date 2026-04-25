@@ -55,6 +55,7 @@ import {
   waitForSemanticReady,
   waitForSidebarReady,
 } from "./editor-wait-helpers.mjs";
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 export {
   settleEditorLayout,
@@ -767,7 +768,7 @@ export async function switchToMode(page, mode) {
  * @param {"files" | "outline" | "diagnostics" | "runtime"} panel
  */
 export async function showSidebarPanel(page, panel) {
-  const changedViaApp = await page.evaluate(async (nextPanel) => {
+  const changedViaApp = await page.evaluate(async ({ nextPanel, pollIntervalMs }) => {
     const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitForAnimationFrames = () =>
       new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -789,10 +790,13 @@ export async function showSidebarPanel(page, panel) {
         await waitForAnimationFrames();
         return nextPanel;
       }
-      await sleepInPage(25);
+      await sleepInPage(pollIntervalMs);
     }
     return window.__app.getSidebarState().tab;
-  }, panel);
+  }, {
+    nextPanel: panel,
+    pollIntervalMs: DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
+  });
 
   if (changedViaApp === null) {
     throw new Error(`Failed to show sidebar panel ${panel}; app debug bridge unavailable.`);

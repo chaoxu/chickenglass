@@ -7,6 +7,7 @@
  * waitForScrollReady) live in editor-test-helpers because they reach into
  * editor-state and DOM helpers that depend on the broader test surface.
  */
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 
 /**
  * Wait for one or more browser animation frames in the app page.
@@ -123,10 +124,10 @@ export async function waitForSemanticReady(page, options = {}) {
  * overwriting a recent edit.
  *
  * @param {import("playwright").Page} page
- * @param {{ quietMs?: number, timeoutMs?: number }} [options]
+ * @param {{ pollIntervalMs?: number, quietMs?: number, timeoutMs?: number }} [options]
  */
 export async function waitForDocumentStable(page, options = {}) {
-  return page.evaluate(async ({ quietMs, timeoutMs }) => {
+  return page.evaluate(async ({ pollIntervalMs, quietMs, timeoutMs }) => {
     const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const hashText = (text) => {
       let hash = 2166136261;
@@ -153,7 +154,7 @@ export async function waitForDocumentStable(page, options = {}) {
       if (!currentKey) {
         stableSince = performance.now();
         previousKey = currentKey;
-        await sleepInPage(25);
+        await sleepInPage(pollIntervalMs);
         continue;
       }
       if (currentKey !== previousKey) {
@@ -163,10 +164,14 @@ export async function waitForDocumentStable(page, options = {}) {
       if (performance.now() - stableSince >= quietMs) {
         return true;
       }
-      await sleepInPage(25);
+      await sleepInPage(pollIntervalMs);
     }
     throw new Error(`Timed out waiting ${timeoutMs}ms for ${quietMs}ms of stable document state.`);
   }, {
+    pollIntervalMs: Math.max(
+      1,
+      options.pollIntervalMs ?? DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
+    ),
     quietMs: Math.max(0, options.quietMs ?? 250),
     timeoutMs: Math.max(1, options.timeoutMs ?? 5_000),
   });
@@ -177,7 +182,7 @@ export async function waitForDocumentStable(page, options = {}) {
  *
  * @param {import("playwright").Page} page
  * @param {"files" | "outline" | "diagnostics" | "runtime"} panel
- * @param {{ timeoutMs?: number }} [options]
+ * @param {{ pollIntervalMs?: number, timeoutMs?: number }} [options]
  */
 export async function waitForSidebarReady(page, panel, options = {}) {
   await page.waitForFunction(
@@ -186,7 +191,10 @@ export async function waitForSidebarReady(page, panel, options = {}) {
       return sidebar && !sidebar.collapsed && sidebar.tab === nextPanel;
     },
     panel,
-    { timeout: options.timeoutMs ?? 5_000, polling: 100 },
+    {
+      timeout: options.timeoutMs ?? 5_000,
+      polling: options.pollIntervalMs ?? DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
+    },
   );
   await settleEditorLayout(page, { frameCount: 2 });
 }

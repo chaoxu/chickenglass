@@ -235,8 +235,10 @@ The scroll scenarios report custom metrics alongside the usual frontend/backend 
 Per-step timing uses `performance.now()` around each synchronous `view.dispatch()` call, so values measure the CM6 update/render cost directly. A 16 ms `setTimeout` between steps yields the event loop without blocking on `requestAnimationFrame` (which stalls in non-interactive CDP windows). Comparing Rich vs Source isolates rendering overhead. The `--min-delta-ms` threshold applies to ms-valued scroll metrics the same way it applies to frontend/backend spans.
 
 You can override the selected runtime budget profile with `--debug-timeout-ms`,
-`--open-timeout-ms`, and `--post-open-settle-ms` when a fixture needs different
-automation limits.
+`--open-timeout-ms`, `--post-open-settle-ms`, `--poll-interval-ms`,
+`--idle-settle-timeout-ms`, `--sidebar-publish-timeout-ms`, and
+`--typing-canonical-timeout-ms` when a fixture needs different automation
+limits.
 
 ## HTML Export Scenario
 

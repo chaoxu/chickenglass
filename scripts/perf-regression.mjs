@@ -453,6 +453,22 @@ export function resolvePerfRuntimeOptions({ getIntFlag, hasFlag }) {
       "--post-open-settle-ms",
       profile.postOpenSettleMs,
     ),
+    pollIntervalMs: getIntFlag(
+      "--poll-interval-ms",
+      profile.pollIntervalMs,
+    ),
+    idleSettleTimeoutMs: getIntFlag(
+      "--idle-settle-timeout-ms",
+      profile.idleSettleTimeoutMs,
+    ),
+    sidebarPanelPublishTimeoutMs: getIntFlag(
+      "--sidebar-publish-timeout-ms",
+      profile.sidebarPanelPublishTimeoutMs,
+    ),
+    typingCanonicalTimeoutMs: getIntFlag(
+      "--typing-canonical-timeout-ms",
+      profile.typingCanonicalTimeoutMs,
+    ),
   };
 }
 
@@ -492,7 +508,11 @@ async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
 }
 
 async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
-  return evaluateStep(page, "measureLexicalSidebarOpen", async ({ nextPanel, publishTimeoutMs }) => {
+  return evaluateStep(page, "measureLexicalSidebarOpen", async ({
+    nextPanel,
+    pollIntervalMs,
+    publishTimeoutMs,
+  }) => {
     const findSummary = (summaries, name) =>
       summaries.find((summary) => summary.name === name) ?? null;
     const waitForAnimationFrames = () =>
@@ -505,7 +525,7 @@ async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
         if (!sidebar || (!sidebar.collapsed && sidebar.tab === nextPanel)) {
           return;
         }
-        await sleepInPage(25);
+        await sleepInPage(pollIntervalMs);
       }
       throw new Error(`Sidebar panel "${nextPanel}" did not become active.`);
     };
@@ -538,7 +558,7 @@ async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
         publishMs = Math.max(0, publishSummary.lastEndedAt - startAt);
         break;
       }
-      await sleepInPage(25);
+      await sleepInPage(pollIntervalMs);
     }
 
     if (publishMs === null) {
@@ -550,7 +570,11 @@ async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
       publishMs,
       wallMs,
     };
-  }, { nextPanel: panel, publishTimeoutMs: runtimeOptions.sidebarPanelPublishTimeoutMs });
+  }, {
+    nextPanel: panel,
+    pollIntervalMs: runtimeOptions.pollIntervalMs,
+    publishTimeoutMs: runtimeOptions.sidebarPanelPublishTimeoutMs,
+  });
 }
 
 async function measureTypingBurst(page, anchor, insertCount, runtimeOptions) {
@@ -704,7 +728,13 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount, runtim
   const result = await evaluateStep(
     page,
     "measureLexicalBridgeTypingBurst",
-    async ({ nextAnchor, count, postIdleObservationMs, idleSettleTimeoutMs }) => {
+    async ({
+      nextAnchor,
+      count,
+      postIdleObservationMs,
+      idleSettleTimeoutMs,
+      typingCanonicalTimeoutMs,
+    }) => {
       const mean = (values) =>
         values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
       const percentile = (values, percentileValue) => {
@@ -836,7 +866,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount, runtim
       const canonicalPollIntervalMs = 8;
       const visualSyncTimeoutMs = 3000;
       const semanticTimeoutMs = 3000;
-      const canonicalTimeoutMs = 5000;
+      const canonicalTimeoutMs = typingCanonicalTimeoutMs;
       let lastPerfSampleAt = Number.NEGATIVE_INFINITY;
       let deferredSyncAfter = deferredSyncBefore;
       let incrementalSyncAfter = incrementalSyncBefore;
@@ -1051,6 +1081,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount, runtim
       count: insertCount,
       postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
       idleSettleTimeoutMs: runtimeOptions.idleSettleTimeoutMs,
+      typingCanonicalTimeoutMs: runtimeOptions.typingCanonicalTimeoutMs,
     },
   );
   return finalizeLexicalBridgeObservation(result);
@@ -1931,6 +1962,10 @@ Options:
   --debug-timeout-ms <n>   Override debug-bridge timeout
   --open-timeout-ms <n>    Override fixture-open verification timeout
   --post-open-settle-ms <n> Extra settle after opening fixtures
+  --poll-interval-ms <n>   Override in-page polling interval
+  --idle-settle-timeout-ms <n> Override requestIdleCallback settle timeout
+  --sidebar-publish-timeout-ms <n> Override Lexical sidebar publish timeout
+  --typing-canonical-timeout-ms <n> Override typing canonical-doc timeout
   --browser <managed|cdp>  Browser lane (default: managed)
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)

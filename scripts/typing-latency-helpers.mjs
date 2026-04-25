@@ -1,3 +1,5 @@
+import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
+
 export function summarizeDurations(values) {
   const samples = values.filter((value) => Number.isFinite(value));
   const sorted = [...samples].sort((left, right) => left - right);
@@ -17,7 +19,8 @@ export function summarizeDurations(values) {
 export async function measureEditorBridgeTypingLatency(page, options) {
   const {
     anchorNeedle,
-    canonicalTimeoutMs = 5_000,
+    canonicalTimeoutMs = DEFAULT_RUNTIME_BUDGET_PROFILE.typingCanonicalTimeoutMs,
+    idleSettleTimeoutMs = DEFAULT_RUNTIME_BUDGET_PROFILE.idleSettleTimeoutMs,
     insertText,
   } = options;
   if (!anchorNeedle) {
@@ -30,6 +33,7 @@ export async function measureEditorBridgeTypingLatency(page, options) {
   return page.evaluate(async ({
     nextAnchorNeedle,
     nextCanonicalTimeoutMs,
+    nextIdleSettleTimeoutMs,
     nextInsertText,
   }) => {
     const summarize = (values) => {
@@ -53,7 +57,7 @@ export async function measureEditorBridgeTypingLatency(page, options) {
     const waitForIdle = () =>
       new Promise((resolve) => {
         if (typeof window.requestIdleCallback === "function") {
-          window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+          window.requestIdleCallback(() => resolve(), { timeout: nextIdleSettleTimeoutMs });
           return;
         }
         setTimeout(resolve, 0);
@@ -124,6 +128,7 @@ export async function measureEditorBridgeTypingLatency(page, options) {
   }, {
     nextAnchorNeedle: anchorNeedle,
     nextCanonicalTimeoutMs: canonicalTimeoutMs,
+    nextIdleSettleTimeoutMs: idleSettleTimeoutMs,
     nextInsertText: insertText,
   });
 }
