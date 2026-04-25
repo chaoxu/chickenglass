@@ -1,8 +1,26 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
+import fc from "fast-check";
 import { afterEach, beforeEach, vi } from "vitest";
 import { clearDocumentAnalysisCache } from "./semantics/incremental/cached-document-analysis";
-import { installLocalStorageMock } from "./test-utils";
+import { destroyAllTestViews, installLocalStorageMock } from "./test-utils";
+
+const DEFAULT_FAST_CHECK_SEED = 439;
+
+function configureFastCheck(): void {
+  const rawSeed = process.env.FC_SEED;
+  if (rawSeed === "random") {
+    return;
+  }
+  const seed = rawSeed === undefined || rawSeed === ""
+    ? DEFAULT_FAST_CHECK_SEED
+    : Number.parseInt(rawSeed, 10);
+  if (Number.isFinite(seed)) {
+    fc.configureGlobal({ seed });
+  }
+}
+
+configureFastCheck();
 
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -54,6 +72,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  destroyAllTestViews();
   if (typeof document !== "undefined") {
     cleanup();
   }

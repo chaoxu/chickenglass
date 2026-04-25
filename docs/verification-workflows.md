@@ -33,6 +33,14 @@ FOCUSED_VITEST_TIMEOUT_MS=600000 pnpm test:focused -- src/render/reference-rende
 FOCUSED_VITEST_INACTIVITY_TIMEOUT_MS=300000 pnpm test:focused -- src/render/reference-render.test.ts
 ```
 
+Fast-check property tests use a deterministic repo seed by default. Override it
+when investigating a randomized failure:
+
+```bash
+FC_SEED=-901745151 pnpm test:focused -- src/editor/rich-mode-stress.test.ts
+FC_SEED=random pnpm test:focused -- src/editor/rich-mode-stress.test.ts
+```
+
 ## Browser Regression Lane
 
 Use the managed browser harness for runtime/editor flows:

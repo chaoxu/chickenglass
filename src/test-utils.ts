@@ -163,6 +163,15 @@ export function applyStateEffects(
   }).state;
 }
 
+const activeTestViews = new Set<EditorView>();
+
+export function destroyAllTestViews(): void {
+  for (const view of [...activeTestViews]) {
+    view.destroy();
+  }
+  activeTestViews.clear();
+}
+
 export function createTestView(
   doc: string,
   options: {
@@ -184,7 +193,14 @@ export function createTestView(
     view.focus();
   }
   const originalDestroy = view.destroy.bind(view);
+  let destroyed = false;
+  activeTestViews.add(view);
   view.destroy = () => {
+    if (destroyed) {
+      return;
+    }
+    destroyed = true;
+    activeTestViews.delete(view);
     originalDestroy();
     parent.remove();
   };
