@@ -58,6 +58,12 @@ function parseClosingSuffix(
   return { kind: "valid", labelFrom: braceStart, labelTo: braceEnd };
 }
 
+// Bound the lookahead so a stray `$$` near the start of a very large doc
+// cannot force the parser to read the entire suffix. Real display-math blocks
+// are well under this budget; beyond it we conclude "unclosed" and let the
+// surrounding parser handle the opener as plain text.
+const CLOSE_LOOKAHEAD_BUDGET = 64 * 1024;
+
 function validateClosingDelimiterLookahead(
   cx: BlockContext,
   line: Line,
@@ -65,7 +71,8 @@ function validateClosingDelimiterLookahead(
   closeDelimiter: string,
 ): "valid" | "invalid" | "unclosed" {
   const input = (cx as BlockContextWithInput).input;
-  const source = input.read(cx.lineStart, input.length);
+  const budgetEnd = Math.min(input.length, cx.lineStart + CLOSE_LOOKAHEAD_BUDGET);
+  const source = input.read(cx.lineStart, budgetEnd);
   let lineOffset = 0;
   let firstLine = true;
 
