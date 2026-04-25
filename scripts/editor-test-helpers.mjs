@@ -1249,80 +1249,19 @@ export async function waitForHoverPreviewState(page, predicate, timeoutMs = 5000
   }
   return readHoverPreviewState(page);
 }
-/**
- * Return FencedDiv nodes from the current Lezer syntax tree.
- * Requires `__cmDebug` to be wired up (see use-editor.ts).
- */
-export async function getTreeDivs(page) {
-  return page.evaluate(() => window.__cmDebug.tree());
-}
 
-/**
- * Check visibility of closing fence lines.
- * Returns an array of { line, visible, height, classes } objects.
- *
- * @param {import("playwright").Page} page
- * @param {number[]} lineNumbers - line numbers to check (e.g. [73, 77, 88])
- */
-export async function checkFences(page, lineNumbers) {
-  return page.evaluate((lines) => {
-    return lines.map((ln) => {
-      const info = window.__cmDebug.line(ln);
-      if (!info) return { line: ln, visible: null, height: "no-el", classes: [], found: false };
-      const { height, hidden, classes } = info;
-      return { line: ln, visible: !hidden, height, classes, found: true };
-    });
-  }, lineNumbers);
-}
-
-/**
- * Return a full debug snapshot: tree divs, fence status, cursor position.
- */
-export async function dump(page) {
-  return page.evaluate(() => window.__cmDebug.dump());
-}
-
-/**
- * Return the compact visible rich-render snapshot.
- */
-export async function getRenderState(page) {
-  return page.evaluate(() => window.__cmDebug.renderState());
-}
-
-/**
- * Return the current debug session recorder status.
- */
-export async function getRecorderStatus(page) {
-  return page.evaluate(() => window.__cfDebug.recorderStatus());
-}
-
-/**
- * Return the latest frontend native watcher status snapshot.
- */
-export async function getWatcherStatus(page) {
-  return page.evaluate(() => window.__cfDebug.watcherStatus());
-}
-
-/**
- * Capture the current combined debug state and record it in the session log.
- */
-export async function captureDebugState(page, label = null) {
-  return page.evaluate((snapshotLabel) => window.__cfDebug.captureState(snapshotLabel), label);
-}
-
-/**
- * Return the current measured geometry snapshot for visible lines and shell surfaces.
- */
-export async function getGeometrySnapshot(page) {
-  return page.evaluate(() => window.__cmDebug.geometry());
-}
-
-/**
- * Return the active explicit structure-edit target, if any.
- */
-export async function getStructureState(page) {
-  return page.evaluate(() => window.__cmDebug.structure());
-}
+export {
+  captureDebugState,
+  checkFences,
+  dump,
+  getGeometrySnapshot,
+  getMotionGuards,
+  getRecorderStatus,
+  getRenderState,
+  getStructureState,
+  getTreeDivs,
+  getWatcherStatus,
+} from "./editor-debug-helpers.mjs";
 
 /**
  * Activate structure editing for the block/frontmatter at the current cursor.
@@ -1340,13 +1279,6 @@ export async function clearStructure(page) {
   const cleared = await page.evaluate(() => window.__cmDebug.clearStructure());
   await settleEditorLayout(page);
   return cleared;
-}
-
-/**
- * Return recent vertical-motion guard events captured by the editor.
- */
-export async function getMotionGuards(page) {
-  return page.evaluate(() => window.__cmDebug.motionGuards());
 }
 
 /**

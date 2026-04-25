@@ -8,6 +8,8 @@ export const DEFAULT_RUNTIME_BUDGET_PROFILE = Object.freeze({
   debugBridgeTimeoutMs: 15_000,
   fixtureOpenTimeoutMs: 10_000,
   postOpenSettleMs: 200,
+  idleSettleTimeoutMs: 1_000,
+  sidebarPanelPublishTimeoutMs: 5_000,
 });
 
 export const HEAVY_DOC_RUNTIME_BUDGET_PROFILE = Object.freeze({
@@ -15,6 +17,8 @@ export const HEAVY_DOC_RUNTIME_BUDGET_PROFILE = Object.freeze({
   debugBridgeTimeoutMs: 45_000,
   fixtureOpenTimeoutMs: 45_000,
   postOpenSettleMs: 800,
+  idleSettleTimeoutMs: 5_000,
+  sidebarPanelPublishTimeoutMs: 15_000,
 });
 
 export const RUNTIME_BUDGET_PROFILES = Object.freeze({

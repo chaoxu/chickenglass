@@ -491,8 +491,8 @@ async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
   );
 }
 
-async function measureLexicalSidebarOpen(page, panel) {
-  return evaluateStep(page, "measureLexicalSidebarOpen", async (nextPanel) => {
+async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
+  return evaluateStep(page, "measureLexicalSidebarOpen", async ({ nextPanel, publishTimeoutMs }) => {
     const findSummary = (summaries, name) =>
       summaries.find((summary) => summary.name === name) ?? null;
     const waitForAnimationFrames = () =>
@@ -526,8 +526,7 @@ async function measureLexicalSidebarOpen(page, panel) {
     const wallMs = performance.now() - startAt;
 
     let publishMs = null;
-    const timeoutMs = 5000;
-    while (performance.now() - startAt < timeoutMs) {
+    while (performance.now() - startAt < publishTimeoutMs) {
       const perfSnapshot = await window.__cfDebug.perfSummary();
       const perfSummaries = perfSnapshot.frontend.summaries;
       const publishSummary = findSummary(
@@ -543,7 +542,7 @@ async function measureLexicalSidebarOpen(page, panel) {
     }
 
     if (publishMs === null) {
-      throw new Error(`Lexical sidebar panel "${nextPanel}" did not publish within 5000ms.`);
+      throw new Error(`Lexical sidebar panel "${nextPanel}" did not publish within ${publishTimeoutMs}ms.`);
     }
 
     return {
@@ -551,14 +550,15 @@ async function measureLexicalSidebarOpen(page, panel) {
       publishMs,
       wallMs,
     };
-  }, panel);
+  }, { nextPanel: panel, publishTimeoutMs: runtimeOptions.sidebarPanelPublishTimeoutMs });
 }
 
-async function measureTypingBurst(page, anchor, insertCount) {
+async function measureTypingBurst(page, anchor, insertCount, runtimeOptions) {
   return evaluateStep(page, "measureTypingBurst", async ({
     nextAnchor,
     count,
     postIdleObservationMs,
+    idleSettleTimeoutMs,
   }) => {
     const mean = (values) =>
       values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
@@ -571,7 +571,7 @@ async function measureTypingBurst(page, anchor, insertCount) {
     const waitForIdle = () =>
       new Promise((resolve) => {
         if (typeof window.requestIdleCallback === "function") {
-          window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+          window.requestIdleCallback(() => resolve(), { timeout: idleSettleTimeoutMs });
           return;
         }
         setTimeout(resolve, 0);
@@ -696,14 +696,15 @@ async function measureTypingBurst(page, anchor, insertCount) {
     nextAnchor: anchor,
     count: insertCount,
     postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
+    idleSettleTimeoutMs: runtimeOptions.idleSettleTimeoutMs,
   });
 }
 
-async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
+async function measureLexicalBridgeTypingBurst(page, anchor, insertCount, runtimeOptions) {
   const result = await evaluateStep(
     page,
     "measureLexicalBridgeTypingBurst",
-    async ({ nextAnchor, count, postIdleObservationMs }) => {
+    async ({ nextAnchor, count, postIdleObservationMs, idleSettleTimeoutMs }) => {
       const mean = (values) =>
         values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
       const percentile = (values, percentileValue) => {
@@ -718,7 +719,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       const waitForIdle = () =>
         new Promise((resolve) => {
           if (typeof window.requestIdleCallback === "function") {
-            window.requestIdleCallback(() => resolve(), { timeout: 1000 });
+            window.requestIdleCallback(() => resolve(), { timeout: idleSettleTimeoutMs });
             return;
           }
           setTimeout(resolve, 0);
@@ -1049,6 +1050,7 @@ async function measureLexicalBridgeTypingBurst(page, anchor, insertCount) {
       nextAnchor: anchor,
       count: insertCount,
       postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
+      idleSettleTimeoutMs: runtimeOptions.idleSettleTimeoutMs,
     },
   );
   return finalizeLexicalBridgeObservation(result);
@@ -1725,7 +1727,7 @@ export const scenarios = {
             runtimeOptions,
           );
           const beforeSummaries = await getFrontendPerfSummaries(page);
-          const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT);
+          const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT, runtimeOptions);
           const afterSummaries = await getFrontendPerfSummaries(page);
           metrics.push(
             ...typingBurstMetrics(testCase.key, positionKey, result),
@@ -1769,6 +1771,7 @@ export const scenarios = {
             page,
             position.anchor,
             TYPING_BURST_INSERT_COUNT,
+            runtimeOptions,
           );
           const afterSummaries = await getFrontendPerfSummaries(page);
           metrics.push(
@@ -1800,7 +1803,7 @@ export const scenarios = {
           runtimeOptions,
         );
         const beforeSummaries = await getFrontendPerfSummaries(page);
-        const result = await measureLexicalSidebarOpen(page, "diagnostics");
+        const result = await measureLexicalSidebarOpen(page, "diagnostics", runtimeOptions);
         const afterSummaries = await getFrontendPerfSummaries(page);
         metrics.push(
           ...lexicalSidebarOpenMetrics(testCase.key, "diagnostics", result),

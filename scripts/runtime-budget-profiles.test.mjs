@@ -14,6 +14,8 @@ describe("runtime budget profiles", () => {
       debugBridgeTimeoutMs: 15_000,
       fixtureOpenTimeoutMs: 10_000,
       postOpenSettleMs: 200,
+      idleSettleTimeoutMs: 1_000,
+      sidebarPanelPublishTimeoutMs: 5_000,
     });
     expect(RUNTIME_BUDGET_PROFILES.default).toBe(DEFAULT_RUNTIME_BUDGET_PROFILE);
     expect(runtimeBudgetProfileForMode()).toBe(DEFAULT_RUNTIME_BUDGET_PROFILE);
@@ -25,6 +27,8 @@ describe("runtime budget profiles", () => {
       debugBridgeTimeoutMs: 45_000,
       fixtureOpenTimeoutMs: 45_000,
       postOpenSettleMs: 800,
+      idleSettleTimeoutMs: 5_000,
+      sidebarPanelPublishTimeoutMs: 15_000,
     });
     expect(RUNTIME_BUDGET_PROFILES["heavy-doc"]).toBe(HEAVY_DOC_RUNTIME_BUDGET_PROFILE);
     expect(runtimeBudgetProfileForMode({ heavyDoc: true })).toBe(

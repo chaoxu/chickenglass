@@ -43,18 +43,24 @@ jobs:
           echo "$pnpm_home/bin" >> "$GITHUB_PATH"
           "$pnpm_home/bin/pnpm" --version
       - name: Install Pandoc
+        env:
+          PANDOC_VERSION: "3.1.13"
         run: |
           if command -v pandoc >/dev/null 2>&1; then
             pandoc --version
-          elif command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y pandoc
+            exit 0
+          fi
+          if command -v dpkg >/dev/null 2>&1; then
+            curl -L -o /tmp/pandoc.deb \
+              "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-amd64.deb"
+            sudo dpkg -i /tmp/pandoc.deb
           elif command -v brew >/dev/null 2>&1; then
             brew install pandoc
           else
-            echo "Pandoc is required but neither apt-get nor brew is available." >&2
+            echo "Pandoc is required but neither dpkg nor brew is available." >&2
             exit 1
           fi
+          pandoc --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:unit
         env:
