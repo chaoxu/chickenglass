@@ -209,21 +209,18 @@ interface OpeningFenceInfo {
  */
 let parseGeneration = 0;
 
-const PACKED_COLON_BITS = 8;
-const PACKED_COLON_MASK = (1 << PACKED_COLON_BITS) - 1;
-const PACKED_GENERATION_BITS = 16;
-const PACKED_GENERATION_SHIFT = PACKED_COLON_BITS;
-const PACKED_GENERATION_MASK = (1 << PACKED_GENERATION_BITS) - 1;
+// Composite values pack colonCount (0-255) with the parse generation. The 255
+// cap pre-dates this encoding; Pandoc accepts more colons but no real document
+// uses them.
+const COLON_RANGE = 256;
+const COLON_MASK = COLON_RANGE - 1;
 
-/** Pack colon count + generation into the composite value. */
 function packValue(colonCount: number): number {
-  return (colonCount & PACKED_COLON_MASK)
-    | ((parseGeneration & PACKED_GENERATION_MASK) << PACKED_GENERATION_SHIFT);
+  return colonCount + parseGeneration * COLON_RANGE;
 }
 
-/** Extract the colon count from a packed composite value. */
 function unpackColonCount(value: number): number {
-  return value & PACKED_COLON_MASK;
+  return value & COLON_MASK;
 }
 
 type LineMarkerRange = { readonly from: number; readonly to: number };
@@ -246,9 +243,11 @@ function hasMatchedClosingFenceMarker(
  * Composite callback for FencedDiv. Called on each new line to decide
  * if the block continues. Returns `true` to continue, `false` to end.
  *
- * The `value` parameter packs the colon count (bits 0–7) and current
- * parse generation (bits 8–23). Self-closing blocks negate that value
- * so the composite callback can terminate immediately.
+ * The `value` parameter encodes the colon count (range 0-255) plus
+ * `parseGeneration * 256`. Lezer keys incremental fragment reuse on this
+ * value, and the generation is unbounded so a long edit session cannot
+ * collide with a stale fragment. Self-closing blocks negate the value so the
+ * composite callback can terminate immediately.
  */
 function fencedDivComposite(
   cx: BlockContext,
@@ -309,7 +308,7 @@ const fencedDivBlockParser: BlockParser = {
 
     // Increment parse generation to prevent incremental parser from
     // reusing old tree fragments inside this composite block.
-    parseGeneration = (parseGeneration + 1) & PACKED_GENERATION_MASK;
+    parseGeneration += 1;
     fencedDivLog(`OPEN at ${fenceStart} colons=${info.colonCount} gen=${parseGeneration}`);
 
     // Start the composite block. Negative value signals self-closing

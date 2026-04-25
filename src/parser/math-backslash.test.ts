@@ -98,6 +98,28 @@ describe("inline math with $", () => {
   });
 });
 
+describe("dollar math is suppressed inside code", () => {
+  it("backtick inline code suppresses $...$", () => {
+    expect(findNodes("Inline `$x^2$` code", "InlineMath")).toHaveLength(0);
+  });
+
+  it("backtick fenced code block suppresses $...$", () => {
+    expect(findNodes("```\n$x^2$\n```\n", "InlineMath")).toHaveLength(0);
+  });
+
+  it("tilde fenced code block suppresses $...$", () => {
+    expect(findNodes("~~~\n$x^2$\n~~~\n", "InlineMath")).toHaveLength(0);
+  });
+
+  it("backtick fenced code block suppresses $$...$$", () => {
+    expect(findNodes("```\n$$\nx^2\n$$\n```\n", "DisplayMath")).toHaveLength(0);
+  });
+
+  it("backtick inline code suppresses \\(...\\)", () => {
+    expect(findNodes("Inline `\\(x^2\\)` code", "InlineMath")).toHaveLength(0);
+  });
+});
+
 describe("both inline syntaxes produce the same node type", () => {
   it("\\(x\\) and $x$ both produce InlineMath", () => {
     const backslashNodes = findNodes("\\(x\\)", "InlineMath");
