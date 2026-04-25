@@ -119,8 +119,7 @@
 }
 
 .cf-lexical-inline-math {
-  display: inline-flex;
-  align-items: baseline;
+  display: inline;
   cursor: text;
 }
 
@@ -641,20 +640,15 @@
 }
 
 .cf-lexical-display-math {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 1rem;
-  align-items: center;
   margin: var(--cf-doc-display-math-margin, 0.5em 0);
-  text-align: initial;
+}
+
+.cf-lexical-display-math.cf-math-display-numbered > .cf-lexical-display-math-body {
+  grid-column: 2;
 }
 
 .cf-lexical-display-math-body {
-  grid-column: 2;
-  overflow-x: auto;
-  overflow-y: visible;
   padding-block: 0;
-  text-align: center;
 }
 
 .cf-lexical-display-math .katex-display {
@@ -670,10 +664,10 @@
   grid-column: 3;
   justify-self: end;
   padding-left: 1rem;
-  color: var(--cf-muted);
   font-family: inherit;
   font-size: 1em;
   font-style: normal;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

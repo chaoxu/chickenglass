@@ -10,6 +10,8 @@ interface ScrollAnchorMeasurement {
   readonly currentTop: number | null;
 }
 
+const scrollStabilizedMeasureKey = {};
+
 function captureScrollAnchorSafely(
   view: EditorView,
 ): ScrollAnchorSnapshot | null {
@@ -93,6 +95,7 @@ export function requestScrollStabilizedMeasure(
     : anchor;
 
   view.requestMeasure({
+    key: scrollStabilizedMeasureKey,
     read: () => measureScrollAnchor(view, capturedAnchor ?? null),
     write: (measurement) => {
       restoreMeasuredScrollAnchor(view, measurement as ScrollAnchorMeasurement);

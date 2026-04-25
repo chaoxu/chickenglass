@@ -10,6 +10,7 @@ import {
   DOCUMENT_SURFACE_CLASS,
   documentSurfaceClassNames,
 } from "../../document-surface-classes";
+import { CSS } from "../../constants/css-classes";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { parseFrontmatter, type FrontmatterConfig } from "../../lib/frontmatter";
 import { scanReferenceRevealTokens } from "../../lib/reference-tokens";
@@ -218,7 +219,7 @@ export function renderDisplayMathHtml(raw: string, options: RichHtmlOptions): st
   const parsed = parseDisplayMathRaw(raw);
   const equation = katex.renderToString(parsed.body, buildKatexOptions(true, options.config?.math));
   const label = parsed.id ? options.renderIndex.references.get(parsed.id)?.shortLabel : undefined;
-  return `<div class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.displayMath, "cf-lexical-display-math")}"><div class="cf-lexical-display-math-body">${equation}</div>${label ? `<div class="cf-lexical-display-math-label">${encodeHtml(label)}</div>` : ""}</div>`;
+  return `<div class="${documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.displayMath, CSS.mathDisplay, label ? CSS.mathDisplayNumbered : null, "cf-lexical-display-math")}"><div class="${CSS.mathDisplayContent} cf-lexical-display-math-body">${equation}</div>${label ? `<div class="${CSS.mathDisplayNumber} cf-lexical-display-math-label">${encodeHtml(label)}</div>` : ""}</div>`;
 }
 
 export function renderFencedDivHtml(raw: string, options: RichHtmlOptions): string {

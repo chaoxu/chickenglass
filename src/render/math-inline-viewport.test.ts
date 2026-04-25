@@ -9,11 +9,11 @@ import {
 describe("computeInlineMathViewportRanges", () => {
   it("expands visible ranges by a bounded line margin instead of the full document", () => {
     const doc = Array.from(
-      { length: 250 },
+      { length: 500 },
       (_, index) => `line ${index + 1} $x_${index + 1}$`,
     ).join("\n");
     const state = EditorState.create({ doc });
-    const visibleLine = state.doc.line(120);
+    const visibleLine = state.doc.line(250);
     const view = {
       state,
       visibleRanges: [{ from: visibleLine.from, to: visibleLine.to }],
@@ -22,8 +22,8 @@ describe("computeInlineMathViewportRanges", () => {
     const [range] = computeInlineMathViewportRanges(view);
 
     expect(range).toEqual({
-      from: state.doc.line(120 - INLINE_MATH_VIEWPORT_MARGIN_LINES).from,
-      to: state.doc.line(120 + INLINE_MATH_VIEWPORT_MARGIN_LINES).to,
+      from: state.doc.line(250 - INLINE_MATH_VIEWPORT_MARGIN_LINES).from,
+      to: state.doc.line(250 + INLINE_MATH_VIEWPORT_MARGIN_LINES).to,
     });
     expect(range.from).toBeGreaterThan(0);
     expect(range.to).toBeLessThan(state.doc.length);

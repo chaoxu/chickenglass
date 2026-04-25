@@ -340,6 +340,25 @@ describe("guardReverseScrollRemap", () => {
     });
   });
 
+  it("preserves runway when a downward wheel is under-delivered by height collapse", () => {
+    expect(guardReverseScrollRemap({
+      previousTop: 25_983,
+      previousHeight: 33_530,
+      currentTop: 26_001,
+      currentHeight: 27_191,
+      clientHeight: 876,
+      wheelDeltaY: 90,
+      wheelAgeMs: 20,
+      preservedMaxScrollTop: null,
+      preservedTargetTop: 26_073,
+    })).toEqual({
+      correctedTop: 26_073,
+      paddingBottom: 6_339,
+      preservedMaxScrollTop: 32_654,
+      observedMaxScrollTop: 26_315,
+    });
+  });
+
   it("returns null for ordinary forward scroll", () => {
     expect(guardReverseScrollRemap({
       previousTop: 1400,

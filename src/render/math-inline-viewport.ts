@@ -33,7 +33,9 @@ function fullDocumentRange(state: EditorState): readonly VisibleRange[] {
   return [{ from: 0, to: state.doc.length }];
 }
 
-export const INLINE_MATH_VIEWPORT_MARGIN_LINES = 80;
+// Keep enough ahead/behind context rendered for CM6's height map to estimate
+// long math-heavy gaps before wheel scrolling reaches them.
+export const INLINE_MATH_VIEWPORT_MARGIN_LINES = 180;
 
 function initialTopViewportRange(state: EditorState): readonly VisibleRange[] {
   if (state.doc.length === 0) return [];

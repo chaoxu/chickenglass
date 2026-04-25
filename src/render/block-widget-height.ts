@@ -103,12 +103,13 @@ export function observeBlockWidgetHeight(
     if (!container.isConnected) {
       binding.resizeMeasureFrame = null;
       if (detachedMeasureAttempts >= MAX_DETACHED_MEASURE_ATTEMPTS) {
-        if (!binding.detachedMeasureWarned) {
+        const cachedHeight = estimatedBlockWidgetHeight(cache, key);
+        if (cachedHeight < 0 && !binding.detachedMeasureWarned) {
           binding.detachedMeasureWarned = true;
           console.warn(
             "[coflats] block widget height measurement deferred until reconnect",
             {
-              cachedHeight: estimatedBlockWidgetHeight(cache, key),
+              cachedHeight,
               key,
             },
           );

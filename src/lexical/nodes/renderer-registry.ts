@@ -16,6 +16,7 @@
  */
 import { type ComponentType, createElement, type JSX } from "react";
 
+import { CSS } from "../../constants/css-classes";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
 import { rawBlockSourceAttrs } from "../source-position-contract";
 import type { RawBlockVariant } from "./raw-block-types";
@@ -92,7 +93,7 @@ function FallbackInlineImageRenderer(props: InlineImageRendererProps): JSX.Eleme
 
 function FallbackInlineMathRenderer(props: InlineMathRendererProps): JSX.Element {
   return createElement("span", {
-    className: "cf-lexical-inline-math",
+    className: `${CSS.mathInline} ${LEXICAL_NODE_CLASS.INLINE_MATH}`,
     "data-inline-math-fallback": "true",
   }, props.raw);
 }

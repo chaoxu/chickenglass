@@ -12,6 +12,7 @@ import { OPEN_CURSOR_REVEAL_COMMAND } from "../cursor-reveal-command";
 import { buildKatexOptions } from "../../lib/katex-options";
 import { useLazyVisibility } from "./shared";
 import { LEXICAL_NODE_CLASS } from "../../constants/lexical-css-classes";
+import { CSS } from "../../constants/css-classes";
 
 // `nodeKey` and `raw` are primitive props that Lexical recreates with stable
 // values whenever the underlying node hasn't changed. Memoizing skips the
@@ -58,7 +59,7 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
     // upper bound on rendered character count.
     return (
       <span
-        className={LEXICAL_NODE_CLASS.INLINE_MATH}
+        className={`${CSS.mathInline} ${LEXICAL_NODE_CLASS.INLINE_MATH}`}
         {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
         data-coflat-inline-math-key={nodeKey}
         data-coflat-inline-math-pending=""
@@ -73,7 +74,7 @@ export const InlineMathRenderer = memo(function InlineMathRenderer({
 
   return (
     <span
-      className={LEXICAL_NODE_CLASS.INLINE_MATH}
+      className={`${CSS.mathInline} ${LEXICAL_NODE_CLASS.INLINE_MATH}`}
       {...{ [INLINE_TOKEN_KEY_ATTR]: nodeKey }}
       data-coflat-inline-math-key={nodeKey}
       dangerouslySetInnerHTML={{ __html: html }}

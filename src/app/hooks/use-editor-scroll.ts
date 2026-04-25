@@ -115,9 +115,13 @@ export function guardReverseScrollRemap(
   const reversed = direction > 0
     ? actualDelta < -REVERSE_SCROLL_DRIFT_THRESHOLD
     : actualDelta > REVERSE_SCROLL_DRIFT_THRESHOLD;
-  if (!reversed || direction < 0) return null;
-
+  const heightCollapsed = currentHeight < previousHeight - HEIGHT_CORRECTION_THRESHOLD;
   const targetMagnitude = Math.max(Math.abs(wheelDeltaY), REVERSE_SCROLL_DRIFT_THRESHOLD);
+  const underDeliveredDownwardScroll = direction > 0
+    && heightCollapsed
+    && actualDelta < targetMagnitude - REVERSE_SCROLL_DRIFT_THRESHOLD;
+  if (direction < 0 || (!reversed && !underDeliveredDownwardScroll)) return null;
+
   const rawObservedMaxScrollTop = Math.max(0, currentHeight - clientHeight);
   const rawPreviousMaxScrollTop = Math.max(0, previousHeight - clientHeight);
   const nextPreservedMaxScrollTop = Math.max(

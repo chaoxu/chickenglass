@@ -41,7 +41,7 @@ describe("scroll-stabilized measures", () => {
               top: currentTop,
             }
       )),
-      requestMeasure: vi.fn((spec: { read?: () => unknown; write?: (value: unknown) => void }) => {
+      requestMeasure: vi.fn((spec: { key?: unknown; read?: () => unknown; write?: (value: unknown) => void }) => {
         onMeasure?.();
         const measured = spec.read?.();
         spec.write?.(measured);
@@ -87,6 +87,18 @@ describe("scroll-stabilized measures", () => {
 
     expect(view.requestMeasure).toHaveBeenCalledTimes(1);
     expect(view.scrollDOM.scrollTop).toBe(58);
+  });
+
+  it("coalesces repeated stabilized measures with a shared request key", () => {
+    const view = createScrollView();
+
+    requestScrollStabilizedMeasure(view);
+    requestScrollStabilizedMeasure(view);
+
+    const firstSpec = view.requestMeasure.mock.calls[0][0];
+    const secondSpec = view.requestMeasure.mock.calls[1][0];
+    expect(firstSpec.key).toBeDefined();
+    expect(secondSpec.key).toBe(firstSpec.key);
   });
 
   it("wraps DOM mutations with the same scroll compensation", () => {

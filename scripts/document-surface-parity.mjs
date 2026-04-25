@@ -39,6 +39,23 @@ const PARITY_FIXTURE = {
 const TYPING_ANCHOR = "A paragraph with";
 const TYPING_INSERT = "12345678901234567890";
 
+const MATH_SELECTORS = {
+  "cm6-rich": {
+    displayMathBody: ".cf-math-display-content",
+    displayMathKatex: ".cf-math-display .katex-display > .katex",
+    displayMathLabel: ".cf-math-display-number",
+    inlineMath: ".cf-math-inline",
+    inlineMathKatex: ".cf-math-inline > .katex",
+  },
+  lexical: {
+    displayMathBody: ".cf-lexical-display-math-body",
+    displayMathKatex: ".cf-lexical-display-math .katex-display > .katex",
+    displayMathLabel: ".cf-lexical-display-math-label",
+    inlineMath: ".cf-lexical-inline-math",
+    inlineMathKatex: ".cf-lexical-inline-math > .katex",
+  },
+};
+
 function assertCondition(condition, message, details = undefined) {
   if (condition) {
     return;
@@ -87,7 +104,7 @@ async function collectSurfaceMetrics(page, mode) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
   await waitForSurface(page, mode);
 
-  return page.evaluate(({ selectors }) => {
+  return page.evaluate(({ mathSelectors, selectors }) => {
     const describe = (selector) => {
       const elements = [...document.querySelectorAll(selector)];
       const element = elements.find((candidate) => {
@@ -120,8 +137,10 @@ async function collectSurfaceMetrics(page, mode) {
           marginRight: style.marginRight,
           marginTop: style.marginTop,
           maxWidth: style.maxWidth,
+          overflowX: style.overflowX,
           paddingLeft: style.paddingLeft,
           paddingRight: style.paddingRight,
+          textAlign: style.textAlign,
         },
         tagName: element.tagName,
       };
@@ -132,13 +151,19 @@ async function collectSurfaceMetrics(page, mode) {
       block: describe(selectors.block),
       flow: describe(selectors.flow),
       h1: describe(selectors.headingH1),
+      inlineMath: describe(mathSelectors.inlineMath),
+      inlineMathKatex: describe(mathSelectors.inlineMathKatex),
       math: describe(selectors.displayMath),
+      mathBody: describe(mathSelectors.displayMathBody),
+      mathKatex: describe(mathSelectors.displayMathKatex),
+      mathLabel: describe(mathSelectors.displayMathLabel),
       paragraph: describe(selectors.paragraph),
       surface: describe(selectors.surface),
       table: describe(selectors.table),
       tableCell: describe(selectors.tableCell),
     };
   }, {
+    mathSelectors: MATH_SELECTORS[mode],
     selectors: documentSurfaceSelectorSnapshot(mode),
   });
 }
@@ -147,7 +172,20 @@ function assertParity(cm6, lexical) {
   assertCondition(cm6.appMode === "cm6-rich", "CM6 rich mode did not activate", cm6.appMode);
   assertCondition(lexical.appMode === "lexical", "Lexical mode did not activate", lexical.appMode);
 
-  for (const key of ["surface", "flow", "h1", "block", "math", "table", "tableCell"]) {
+  for (const key of [
+    "surface",
+    "flow",
+    "h1",
+    "block",
+    "inlineMath",
+    "inlineMathKatex",
+    "math",
+    "mathBody",
+    "mathKatex",
+    "mathLabel",
+    "table",
+    "tableCell",
+  ]) {
     assertCondition(cm6[key], `CM6 rich is missing ${key}`, cm6);
     assertCondition(lexical[key], `Lexical is missing ${key}`, lexical);
   }
@@ -161,8 +199,36 @@ function assertParity(cm6, lexical) {
   for (const property of ["fontSize", "lineHeight"]) {
     assertStyleEqual("table cell", property, cm6.tableCell, lexical.tableCell);
   }
+  for (const property of ["display", "fontSize", "lineHeight"]) {
+    assertStyleEqual("inline math", property, cm6.inlineMath, lexical.inlineMath);
+  }
+  for (const property of ["display", "fontSize", "lineHeight"]) {
+    assertStyleEqual("inline math KaTeX", property, cm6.inlineMathKatex, lexical.inlineMathKatex);
+  }
+  for (const property of [
+    "display",
+    "fontSize",
+    "lineHeight",
+    "marginBottom",
+    "marginTop",
+    "textAlign",
+  ]) {
+    assertStyleEqual("display math", property, cm6.math, lexical.math);
+  }
+  for (const property of ["display", "fontSize", "lineHeight", "overflowX", "textAlign"]) {
+    assertStyleEqual("display math body", property, cm6.mathBody, lexical.mathBody);
+  }
+  for (const property of ["display", "fontSize", "lineHeight", "textAlign"]) {
+    assertStyleEqual("display math KaTeX", property, cm6.mathKatex, lexical.mathKatex);
+  }
+  for (const property of ["color", "fontSize", "fontStyle", "fontWeight", "lineHeight", "paddingLeft"]) {
+    assertStyleEqual("display math label", property, cm6.mathLabel, lexical.mathLabel);
+  }
 
   assertNear("h1", "left", cm6.h1, lexical.h1, 24);
+  assertNear("inline math", "height", cm6.inlineMath, lexical.inlineMath, 0.5);
+  assertNear("inline math KaTeX", "height", cm6.inlineMathKatex, lexical.inlineMathKatex, 0.5);
+  assertNear("display math body", "height", cm6.mathBody, lexical.mathBody, 0.5);
   assertNear("math", "left", cm6.math, lexical.math, 24);
   assertNear("table", "left", cm6.table, lexical.table, 24);
 }
@@ -216,13 +282,17 @@ async function main() {
       cm6: {
         flow: cm6.flow.rect,
         h1: cm6.h1.rect,
+        inlineMath: cm6.inlineMath.rect,
         math: cm6.math.rect,
+        mathBody: cm6.mathBody.rect,
         table: cm6.table.rect,
       },
       lexical: {
         flow: lexical.flow.rect,
         h1: lexical.h1.rect,
+        inlineMath: lexical.inlineMath.rect,
         math: lexical.math.rect,
+        mathBody: lexical.mathBody.rect,
         table: lexical.table.rect,
       },
       typing,

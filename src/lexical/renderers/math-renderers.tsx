@@ -22,6 +22,7 @@ import { EditorChromeBody, EditorChromePanel } from "../editor-chrome";
 import { useEmbeddedFieldDraftController } from "../embedded-field-draft-controller";
 import { useRegisterEmbeddedFieldFlush } from "../embedded-field-flush-registry";
 import { buildKatexOptions } from "../../lib/katex-options";
+import { CSS } from "../../constants/css-classes";
 import {
   preventKatexMouseDown,
   structureToggleProps,
@@ -138,6 +139,8 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
     <div
       className={documentSurfaceClassNames(
         DOCUMENT_SURFACE_CLASS.displayMath,
+        CSS.mathDisplay,
+        label ? CSS.mathDisplayNumbered : null,
         `cf-lexical-display-math${sourceEdit.active ? " is-editing" : ""}`,
       )}
     >
@@ -145,7 +148,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
         <>
           {equation === null ? (
             <div
-              className="cf-lexical-display-math-body"
+              className={`${CSS.mathDisplayContent} cf-lexical-display-math-body`}
               data-coflat-display-math-pending=""
               onMouseDown={preventKatexMouseDown}
               ref={bodyRef}
@@ -159,7 +162,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
             </div>
           ) : (
             <div
-              className="cf-lexical-display-math-body"
+              className={`${CSS.mathDisplayContent} cf-lexical-display-math-body`}
               dangerouslySetInnerHTML={{ __html: equation }}
               onMouseDown={preventKatexMouseDown}
               ref={bodyRef}
@@ -171,7 +174,7 @@ export const DisplayMathBlockRenderer = memo(function DisplayMathBlockRenderer({
           )}
           {label ? (
             <div
-              className="cf-lexical-display-math-label"
+              className={`${CSS.mathDisplayNumber} cf-lexical-display-math-label`}
               {...structureToggleProps(surfaceEditable, sourceEdit.activate, {
                 keyboardActivation: true,
                 onBeforeActivate: rememberSourcePosition,

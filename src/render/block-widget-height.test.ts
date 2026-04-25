@@ -49,7 +49,7 @@ describe("observeBlockWidgetHeight", () => {
     expect(binding.detachedMeasureWarned).toBe(true);
   });
 
-  it("re-arms measurement when a detached container reconnects", async () => {
+  it("re-arms measurement without warning when a detached container already has cached height", async () => {
     const callbacks: FrameRequestCallback[] = [];
     vi.stubGlobal("ResizeObserver", undefined);
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -79,7 +79,7 @@ describe("observeBlockWidgetHeight", () => {
       callback(performance.now());
     }
 
-    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).not.toHaveBeenCalled();
     expect(binding.reconnectObserver).not.toBeNull();
 
     document.body.append(container);
