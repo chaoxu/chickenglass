@@ -204,8 +204,8 @@ export function pluginFromConfig(
     ...(numbered !== undefined ? { numbered } : {}),
     ...(counter !== undefined ? { counter } : {}),
     ...(existing ? pickDefined(existing, STANDARD_PLUGIN_METADATA_KEYS) : {}),
-    ...(existing?.renderDecorations !== undefined
-      ? { renderDecorations: existing.renderDecorations }
+    ...(existing?.cm6?.renderDecorations !== undefined
+      ? { renderDecorations: existing.cm6.renderDecorations }
       : {}),
   });
 }

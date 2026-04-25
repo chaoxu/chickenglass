@@ -602,11 +602,13 @@ describe("disabled blocks show raw fences (issue #356)", () => {
           name: "callout",
           numbered: false,
           title: "Callout",
-          renderDecorations: {
-            addBodyDecorations({ items, state }) {
-              items.push(
-                Decoration.line({ class: "cf-callout-body" }).range(state.doc.line(2).from),
-              );
+          cm6: {
+            renderDecorations: {
+              addBodyDecorations({ items, state }) {
+                items.push(
+                  Decoration.line({ class: "cf-callout-body" }).range(state.doc.line(2).from),
+                );
+              },
             },
           },
         }),

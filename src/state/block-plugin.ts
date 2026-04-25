@@ -36,7 +36,14 @@ export interface BlockDecorationSpec {
   readonly header: string;
 }
 
-/** Plugin-owned context for adding rich-mode block decorations. */
+/**
+ * Plugin-owned context for adding rich-mode block decorations.
+ *
+ * CM6-specific surface: leaks `EditorState` and `Range<Decoration>` because
+ * decorations only exist in the CM6 rendering pipeline. Lives on the
+ * BlockPlugin via the `cm6` namespace so non-CM6 consumers never need to
+ * see these types.
+ */
 export interface BlockRenderDecorationContext {
   readonly adapter: PluginRenderAdapter;
   readonly state: EditorState;
@@ -50,6 +57,16 @@ export interface BlockRenderDecorationContext {
 export interface BlockRenderDecorations {
   /** Add body decorations while the block is rendered in rich mode. */
   readonly addBodyDecorations?: (context: BlockRenderDecorationContext) => void;
+}
+
+/**
+ * CM6-specific extension to BlockPlugin. A future Lexical plugin surface
+ * would add a sibling `lexical?: BlockPluginLexicalExtension` field; the
+ * neutral core fields on BlockPlugin (name, numbered, title, counter,
+ * specialBehavior, ...) stay unchanged.
+ */
+export interface BlockPluginCm6Extension {
+  readonly renderDecorations?: BlockRenderDecorations;
 }
 
 /**
@@ -101,11 +118,11 @@ export interface BlockPlugin {
   /** Whether the rendered header is block-level or inline with the first body line. */
   readonly headerPosition?: HeaderPosition;
   /**
-   * Optional plugin-owned rich-mode decoration hooks.
-   *
-   * This keeps plugin-specific rendering behavior out of `plugin-render.ts`.
+   * Surface-specific extensions. CM6 rendering hooks live under `cm6`; a
+   * future Lexical extension would land under a sibling key. Neutral
+   * consumers (registry lookup, counter, default rendering) ignore this.
    */
-  readonly renderDecorations?: BlockRenderDecorations;
+  readonly cm6?: BlockPluginCm6Extension;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
 }

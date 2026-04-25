@@ -283,10 +283,10 @@ describe("pluginFromConfig", () => {
       name: "custom",
       numbered: false,
       title: "Custom",
-      renderDecorations: { addBodyDecorations },
+      cm6: { renderDecorations: { addBodyDecorations } },
     });
     const plugin = pluginFromConfig("custom", { title: "Widget" }, existing);
-    expect(plugin.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
+    expect(plugin.cm6?.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
   });
 
   it("inherits display metadata from existing plugin when partially overridden", () => {

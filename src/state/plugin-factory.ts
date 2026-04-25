@@ -110,6 +110,6 @@ export function createStandardPlugin(options: StandardPluginSource): BlockPlugin
     title,
     render: createBlockRender(title),
     ...pickDefined(options, STANDARD_PLUGIN_METADATA_KEYS),
-    ...(renderDecorations !== undefined ? { renderDecorations } : {}),
+    ...(renderDecorations !== undefined ? { cm6: { renderDecorations } } : {}),
   };
 }

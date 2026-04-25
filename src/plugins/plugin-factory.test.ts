@@ -92,7 +92,7 @@ describe("createStandardPlugin", () => {
       numbered: false,
       renderDecorations: { addBodyDecorations },
     });
-    expect(plugin.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
+    expect(plugin.cm6?.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
   });
 
   describe("negative / edge-case", () => {

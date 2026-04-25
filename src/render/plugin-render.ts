@@ -223,7 +223,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
     } else {
       hideMultiLineClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
-      plugin.renderDecorations?.addBodyDecorations?.({
+      plugin.cm6?.renderDecorations?.addBodyDecorations?.({
         adapter: pluginRenderAdapter,
         state,
         div,
