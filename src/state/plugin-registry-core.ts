@@ -33,19 +33,11 @@ export interface PluginRegistryState {
    * unless it is explicitly in this set.
    */
   readonly disabled: ReadonlySet<string>;
-  /**
-   * Per-state cache for auto-generated fallback plugins.
-   *
-   * Scoped to the state object rather than the module so it is discarded
-   * whenever the registry is rebuilt (e.g. on frontmatter change), preventing
-   * stale fallbacks from persisting across editor sessions.
-   */
-  readonly fallbackCache: Map<string, BlockPlugin>;
 }
 
 /** Create an empty registry state. */
 export function createRegistryState(): PluginRegistryState {
-  return { plugins: new Map(), disabled: new Set(), fallbackCache: new Map() };
+  return { plugins: new Map(), disabled: new Set() };
 }
 
 /** Register a plugin, returning a new state. */
@@ -58,8 +50,7 @@ export function registerPlugin(
   // Re-enabling a previously disabled block clears it from the disabled set.
   const nextDisabled = new Set(state.disabled);
   nextDisabled.delete(plugin.name);
-  // Fresh cache: registered plugins supersede any existing fallback for this name.
-  return { plugins: next, disabled: nextDisabled, fallbackCache: new Map() };
+  return { plugins: next, disabled: nextDisabled };
 }
 
 /** Register multiple plugins at once, returning a new state. */
@@ -73,8 +64,7 @@ export function registerPlugins(
     next.set(plugin.name, plugin);
     nextDisabled.delete(plugin.name);
   }
-  // Fresh cache: registered plugins supersede any existing fallbacks.
-  return { plugins: next, disabled: nextDisabled, fallbackCache: new Map() };
+  return { plugins: next, disabled: nextDisabled };
 }
 
 /**
@@ -92,8 +82,7 @@ export function unregisterPlugin(
   next.delete(name);
   const nextDisabled = new Set(state.disabled);
   nextDisabled.add(name);
-  // Fresh cache: unregistering a plugin invalidates any fallback entry for it.
-  return { plugins: next, disabled: nextDisabled, fallbackCache: new Map() };
+  return { plugins: next, disabled: nextDisabled };
 }
 
 /** Look up a plugin by fenced div class name. */
@@ -115,11 +104,8 @@ export function getPlugin(
  * Special class names (e.g., "include") are excluded from fallback
  * generation — those are handled separately by the renderer.
  *
- * The fallback cache is stored on the PluginRegistryState object itself so
- * it is automatically scoped to the current registry snapshot. When the
- * registry is rebuilt (e.g. on frontmatter change), the old state is
- * discarded along with its cache, preventing stale fallbacks from leaking
- * across sessions.
+ * Fallback plugin creation is pure with respect to PluginRegistryState: lookup
+ * never mutates the state object stored in the CM6 StateField.
  */
 export function getPluginOrFallback(
   state: PluginRegistryState,
@@ -134,18 +120,13 @@ export function getPluginOrFallback(
 
   if (EXCLUDED_FROM_FALLBACK.has(name)) return undefined;
 
-  let fallback = state.fallbackCache.get(name);
-  if (!fallback) {
-    const title = capitalize(name);
-    fallback = {
-      name,
-      numbered: true,
-      title,
-      render: createBlockRender(title),
-    };
-    state.fallbackCache.set(name, fallback);
-  }
-  return fallback;
+  const title = capitalize(name);
+  return Object.freeze({
+    name,
+    numbered: true,
+    title,
+    render: createBlockRender(title),
+  });
 }
 
 /** Get all registered plugin names. */
@@ -198,16 +179,21 @@ export function pluginFromConfig(
     counter = config.counter;
   }
 
-  return createStandardPlugin({
+  const existingCm6 = (existing as (BlockPlugin & { readonly cm6?: unknown }) | undefined)?.cm6;
+  const plugin = createStandardPlugin({
     name,
     ...(title !== undefined ? { title } : {}),
     ...(numbered !== undefined ? { numbered } : {}),
     ...(counter !== undefined ? { counter } : {}),
     ...(existing ? pickDefined(existing, STANDARD_PLUGIN_METADATA_KEYS) : {}),
-    ...(existing?.cm6?.renderDecorations !== undefined
-      ? { renderDecorations: existing.cm6.renderDecorations }
-      : {}),
   });
+
+  if (existingCm6 !== undefined) {
+    const pluginWithCm6Extension = { ...plugin, cm6: existingCm6 };
+    return pluginWithCm6Extension;
+  }
+
+  return plugin;
 }
 
 /**

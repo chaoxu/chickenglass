@@ -7,6 +7,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigFacet } from "../app/project-config";
 import type { BlockConfig } from "../parser/frontmatter";
 import type { BlockPlugin } from "./plugin-types";
+import { getCm6RenderDecorations, withCm6BlockPlugin } from "../state/cm6-block-plugin";
 import { createEditorState as createTestEditorState, makeBlockPlugin } from "../test-utils";
 import {
   createRegistryState,
@@ -116,11 +117,13 @@ describe("getPluginOrFallback", () => {
     expect(fallback?.numbered).toBe(true);
   });
 
-  it("returns same fallback instance on repeated calls (cached)", () => {
-    const state = createRegistryState();
-    const a = getPluginOrFallback(state, "conjecture2");
-    const b = getPluginOrFallback(state, "conjecture2");
-    expect(a).toBe(b);
+  it("does not mutate registry state when creating a fallback", () => {
+    const state = Object.freeze(createRegistryState());
+    const fallback = getPluginOrFallback(state, "conjecture2");
+    expect(fallback).toBeDefined();
+    expect(Object.isFrozen(fallback)).toBe(true);
+    expect(state.plugins.size).toBe(0);
+    expect("fallbackCache" in state).toBe(false);
   });
 
   it("creates a generic fallback for unknown custom classes", () => {
@@ -279,14 +282,16 @@ describe("pluginFromConfig", () => {
 
   it("inherits render decoration hooks from existing plugin when partially overridden", () => {
     const addBodyDecorations = () => {};
-    const existing = makeBlockPlugin({
-      name: "custom",
-      numbered: false,
-      title: "Custom",
-      cm6: { renderDecorations: { addBodyDecorations } },
-    });
+    const existing = withCm6BlockPlugin(
+      makeBlockPlugin({
+        name: "custom",
+        numbered: false,
+        title: "Custom",
+      }),
+      { renderDecorations: { addBodyDecorations } },
+    );
     const plugin = pluginFromConfig("custom", { title: "Widget" }, existing);
-    expect(plugin.cm6?.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
+    expect(getCm6RenderDecorations(plugin)?.addBodyDecorations).toBe(addBodyDecorations);
   });
 
   it("inherits display metadata from existing plugin when partially overridden", () => {

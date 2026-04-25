@@ -55,6 +55,7 @@ import {
   codeMirrorPluginRenderAdapter as pluginRenderAdapter,
 } from "./plugin-adapters/chrome";
 import type { BlockAttrs } from "../state/block-plugin";
+import { getCm6RenderDecorations } from "../state/cm6-block-plugin";
 import { applySpecialBehavior } from "../plugins/special-behavior-handlers";
 
 function joinClasses(...classes: Array<string | false | null | undefined>): string {
@@ -223,7 +224,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
     } else {
       hideMultiLineClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
-      plugin.cm6?.renderDecorations?.addBodyDecorations?.({
+      getCm6RenderDecorations(plugin)?.addBodyDecorations?.({
         adapter: pluginRenderAdapter,
         state,
         div,

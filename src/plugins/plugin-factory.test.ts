@@ -85,16 +85,6 @@ describe("createStandardPlugin", () => {
     expect(plugin.specialBehavior).toBe("blockquote");
   });
 
-  it("keeps plugin-only render decoration hooks on option-based plugins", () => {
-    const addBodyDecorations = () => {};
-    const plugin = createStandardPlugin({
-      name: "custom",
-      numbered: false,
-      renderDecorations: { addBodyDecorations },
-    });
-    expect(plugin.cm6?.renderDecorations?.addBodyDecorations).toBe(addBodyDecorations);
-  });
-
   describe("negative / edge-case", () => {
     it("handles single-character name", () => {
       const plugin = createStandardPlugin({ name: "x" });

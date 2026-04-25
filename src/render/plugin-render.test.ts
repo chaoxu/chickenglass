@@ -40,6 +40,7 @@ import {
   makeBlockPlugin,
 } from "../test-utils";
 import { CSS } from "../constants/css-classes";
+import { withCm6BlockPlugin } from "../state/cm6-block-plugin";
 
 /** Create an EditorState with all extensions needed for block decorations. */
 function createTestState(doc: string, cursorPos = 0, focused = false) {
@@ -598,11 +599,13 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     const state = createTestStateWithPlugins(
       doc,
       [
-        makeBlockPlugin({
-          name: "callout",
-          numbered: false,
-          title: "Callout",
-          cm6: {
+        withCm6BlockPlugin(
+          makeBlockPlugin({
+            name: "callout",
+            numbered: false,
+            title: "Callout",
+          }),
+          {
             renderDecorations: {
               addBodyDecorations({ items, state }) {
                 items.push(
@@ -611,7 +614,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
               },
             },
           },
-        }),
+        ),
       ],
     );
 

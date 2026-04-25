@@ -6,11 +6,7 @@
  * looks up the registry to decide how to display each fenced div.
  */
 
-import type { EditorState, Range } from "@codemirror/state";
-import type { Decoration } from "@codemirror/view";
 import type { CaptionPosition, HeaderPosition, SpecialBehavior } from "../constants/block-manifest";
-import type { FencedDivInfo } from "../fenced-block/model";
-import type { PluginRenderAdapter } from "./plugin-render-adapter";
 
 /** Attributes extracted from a fenced div and enriched with numbering info. */
 export interface BlockAttrs {
@@ -34,39 +30,6 @@ export interface BlockDecorationSpec {
   readonly className: string;
   /** The header text (e.g. "Theorem 1" or "Proof"). */
   readonly header: string;
-}
-
-/**
- * Plugin-owned context for adding rich-mode block decorations.
- *
- * CM6-specific surface: leaks `EditorState` and `Range<Decoration>` because
- * decorations only exist in the CM6 rendering pipeline. Lives on the
- * BlockPlugin via the `cm6` namespace so non-CM6 consumers never need to
- * see these types.
- */
-export interface BlockRenderDecorationContext {
-  readonly adapter: PluginRenderAdapter;
-  readonly state: EditorState;
-  readonly div: FencedDivInfo;
-  readonly items: Range<Decoration>[];
-  readonly activeShell: boolean;
-  readonly openerSourceActive: boolean;
-}
-
-/** Optional decoration hooks that the core renderer dispatches generically. */
-export interface BlockRenderDecorations {
-  /** Add body decorations while the block is rendered in rich mode. */
-  readonly addBodyDecorations?: (context: BlockRenderDecorationContext) => void;
-}
-
-/**
- * CM6-specific extension to BlockPlugin. A future Lexical plugin surface
- * would add a sibling `lexical?: BlockPluginLexicalExtension` field; the
- * neutral core fields on BlockPlugin (name, numbered, title, counter,
- * specialBehavior, ...) stay unchanged.
- */
-export interface BlockPluginCm6Extension {
-  readonly renderDecorations?: BlockRenderDecorations;
 }
 
 /**
@@ -117,12 +80,6 @@ export interface BlockPlugin {
   readonly captionPosition?: CaptionPosition;
   /** Whether the rendered header is block-level or inline with the first body line. */
   readonly headerPosition?: HeaderPosition;
-  /**
-   * Surface-specific extensions. CM6 rendering hooks live under `cm6`; a
-   * future Lexical extension would land under a sibling key. Neutral
-   * consumers (registry lookup, counter, default rendering) ignore this.
-   */
-  readonly cm6?: BlockPluginCm6Extension;
   /** Produce a decoration spec from the block's attributes. */
   readonly render: (attrs: BlockAttrs) => BlockDecorationSpec;
 }
