@@ -195,7 +195,6 @@ export function useAppEditorShell({
     requestUnsavedChangesDecision,
   });
   const {
-    currentDocument,
     currentPath,
     editorDoc,
     activeDocumentSignal,
@@ -385,7 +384,7 @@ export function useAppEditorShell({
     sessionHandleDocumentSnapshot,
   });
 
-  const hasDirtyDocument = currentDocument?.dirty ?? false;
+  const hasDirtyDocument = session.hasDirtyDocument;
 
   const { handleDragOver, handleDrop } = useEditorDropOpen({ openFileWithContent });
 

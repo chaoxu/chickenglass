@@ -6,7 +6,7 @@ import {
   editorDocumentToString,
   emptyEditorDocument,
 } from "./editor-doc-change";
-import { markSessionDocumentDirty } from "./editor-session-actions";
+import { setSessionPathDirty } from "./editor-session-dirty-state";
 import { createEditorSessionState, type SessionDocument } from "./editor-session-model";
 import {
   createEditorSessionPersistence,
@@ -392,7 +392,7 @@ describe("createEditorSessionPersistence", () => {
     ref.runtime.liveDocs.set("main.md", newerDoc);
     ref.runtime.pipeline.bumpRevision("main.md");
     ref.runtime.commit(
-      markSessionDocumentDirty(ref.runtime.getState(), "main.md", true),
+      setSessionPathDirty(ref.runtime.getState(), "main.md", true),
       { editorDoc: "second edit" },
     );
 
@@ -819,7 +819,7 @@ describe("createEditorSessionPersistence", () => {
     ref.runtime.liveDocs.set("copy.md", editedDoc);
     ref.runtime.pipeline.bumpRevision("copy.md");
     ref.runtime.commit(
-      markSessionDocumentDirty(ref.runtime.getState(), "copy.md", true),
+      setSessionPathDirty(ref.runtime.getState(), "copy.md", true),
       { editorDoc: "# Local\n" },
     );
 

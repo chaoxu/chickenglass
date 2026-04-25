@@ -10,9 +10,13 @@ import {
   type ExternalDocumentConflict,
   type SessionDocument,
   hasSessionPath,
-  isSessionPathDirty,
   getCurrentSessionDocument,
 } from "./editor-session-model";
+import {
+  hasDirtySessionDocument,
+  isSessionPathDirty,
+  setSessionPathDirty,
+} from "./editor-session-dirty-state";
 import { createActiveDocumentSignal, type ActiveDocumentSignal } from "./active-document-signal";
 import { fnv1aHash, SavePipeline, type SaveSnapshot } from "./save-pipeline";
 
@@ -48,9 +52,11 @@ export interface EditorSessionRuntime {
   getCurrentPath: () => string | null;
   getEditorDoc: () => string;
   getCurrentDocText: () => string;
+  hasDirtyDocument: () => boolean;
   getPathBaselineHash: (path: string) => string | null;
   hasPath: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
+  setPathDirty: (path: string, dirty: boolean) => EditorSessionState;
   setExternalConflictBaseline: (path: string, doc: EditorDocumentText) => void;
   clearExternalConflictBaseline: (path: string) => void;
   markNewDocumentPath: (path: string) => void;
@@ -197,6 +203,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     getCurrentPath: () => state.currentDocument?.path ?? null,
     getEditorDoc: () => editorDoc,
     getCurrentDocText: () => documentForPath(state.currentDocument?.path ?? null, liveDocs, buffers),
+    hasDirtyDocument: () => hasDirtySessionDocument(state),
     getPathBaselineHash: (path) => {
       if (newDocumentPaths.has(path)) {
         return null;
@@ -210,6 +217,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     },
     hasPath: (path) => hasSessionPath(state, path),
     isPathDirty: (path) => isSessionPathDirty(state, path),
+    setPathDirty: (path, dirty) => setSessionPathDirty(state, path, dirty),
     setExternalConflictBaseline: (path, doc) => {
       externalConflictBaselines.set(path, doc);
       newDocumentPaths.delete(path);

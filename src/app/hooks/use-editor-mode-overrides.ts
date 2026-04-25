@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
 
 import {
   defaultEditorMode,
@@ -12,12 +12,12 @@ import type {
   EditorTransactionResult,
 } from "./use-editor-transactions";
 import type { PendingLexicalNavigation } from "./use-editor-surface-handles";
-
-interface PendingModeOverride {
-  path: string;
-  mode: EditorMode;
-  requestId: number;
-}
+import {
+  getCommittedModeOverride,
+  getPendingModeOverride,
+  initialEditorModeOverrideState,
+  transitionEditorModeOverride,
+} from "./editor-mode-override-state";
 
 export interface EditorModeOverridesDeps {
   clearPendingLexicalNavigation: (requestId?: number) => void;
@@ -59,29 +59,27 @@ export function useEditorModeOverrides({
   runEditorTransaction,
   sessionHandleDocumentSnapshot,
 }: EditorModeOverridesDeps): EditorModeOverridesController {
-  const [modeOverrides, setModeOverrides] = useState<Record<string, EditorMode>>({});
-  const [pendingModeOverride, setPendingModeOverride] = useState<PendingModeOverride | null>(null);
+  const [overrideState, dispatchOverrideTransition] = useReducer(
+    transitionEditorModeOverride,
+    initialEditorModeOverrideState,
+  );
   const pendingModeRequestIdRef = useRef(0);
 
-  // The pending override is owned by exactly one in-flight requestId at a
-  // time; later callbacks must not clobber a newer pending entry. Every
-  // pending-clear path goes through this so the invariant lives in one place.
   const clearPendingIfRequest = useCallback((requestId: number) => {
-    setPendingModeOverride((previous) =>
-      previous?.requestId === requestId ? null : previous,
-    );
+    dispatchOverrideTransition({ type: "clear-pending", requestId });
   }, []);
 
   const editorMode = useMemo((): EditorMode => {
-    const override = currentPath ? modeOverrides[currentPath] : undefined;
-    if (override !== undefined) {
-      return normalizeEditorMode(override, isMarkdownFile);
+    const pendingOverride = getPendingModeOverride(overrideState, currentPath);
+    if (pendingOverride !== undefined) {
+      return normalizeEditorMode(pendingOverride, isMarkdownFile);
     }
-    if (pendingModeOverride && pendingModeOverride.path === currentPath) {
-      return normalizeEditorMode(pendingModeOverride.mode, isMarkdownFile);
+    const committedOverride = getCommittedModeOverride(overrideState, currentPath);
+    if (committedOverride !== undefined) {
+      return normalizeEditorMode(committedOverride, isMarkdownFile);
     }
     return normalizeEditorMode(defaultEditorMode, isMarkdownFile);
-  }, [modeOverrides, pendingModeOverride, currentPath, isMarkdownFile]);
+  }, [overrideState, currentPath, isMarkdownFile]);
 
   const handleModeChange = useCallback((mode: EditorMode | string) => {
     const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
@@ -89,14 +87,11 @@ export function useEditorModeOverrides({
     const applyModeOverride = () => {
       const finishModeOverride = () => {
         if (currentPath) {
-          setModeOverrides((previous) => ({
-            ...previous,
-            [currentPath]: normalizedMode,
-          }));
+          dispatchOverrideTransition({
+            type: "commit",
+            target: { path: currentPath, mode: normalizedMode },
+          });
         }
-        setPendingModeOverride((previous) =>
-          previous?.path === currentPath ? null : previous,
-        );
       };
       if (
         isLexicalEditorMode(normalizedMode) &&
@@ -133,18 +128,18 @@ export function useEditorModeOverrides({
     const targetIsMarkdown = target.file.endsWith(".md");
     const normalizedMode = normalizeEditorMode(target.editorMode, targetIsMarkdown);
     const requestId = ++pendingModeRequestIdRef.current;
-    setPendingModeOverride({
-      path: target.file,
-      mode: normalizedMode,
+    dispatchOverrideTransition({
+      type: "begin",
       requestId,
+      target: { path: target.file, mode: normalizedMode },
     });
     if (isLexicalEditorMode(normalizedMode)) {
       const completeLexicalNavigation = () => {
-        clearPendingIfRequest(requestId);
-        setModeOverrides((previous) => ({
-          ...previous,
-          [target.file]: normalizedMode,
-        }));
+        dispatchOverrideTransition({
+          type: "commit",
+          requestId,
+          target: { path: target.file, mode: normalizedMode },
+        });
         onComplete?.();
       };
       queueLexicalNavigation({
@@ -169,17 +164,19 @@ export function useEditorModeOverrides({
     }
 
     void handleSearchResultNavigation(target.file, target.pos, onComplete).then((opened) => {
-      clearPendingIfRequest(requestId);
       if (!opened) {
+        clearPendingIfRequest(requestId);
         return;
       }
-      setModeOverrides((previous) => ({
-        ...previous,
-        [target.file]: normalizedMode,
-      }));
+      dispatchOverrideTransition({
+        type: "commit",
+        requestId,
+        target: { path: target.file, mode: normalizedMode },
+      });
     });
   }, [
     clearPendingLexicalNavigation,
+    clearPendingIfRequest,
     handleSearchResultNavigation,
     isPathOpen,
     openFile,

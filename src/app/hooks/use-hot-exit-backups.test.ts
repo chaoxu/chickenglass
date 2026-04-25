@@ -12,6 +12,7 @@ interface HarnessProps {
   delayMs?: number;
   getCurrentBaselineHash?: () => string | null;
   getCurrentDocText: () => string;
+  hasDirtyDocument?: boolean;
   onReady?: (controller: UseHotExitBackupsReturn) => void;
   projectRoot: string | null;
   store?: HotExitBackupStore | null;
@@ -23,6 +24,7 @@ const Harness: FC<HarnessProps> = ({
   delayMs = 1_000,
   getCurrentBaselineHash,
   getCurrentDocText,
+  hasDirtyDocument,
   onReady,
   projectRoot,
   store,
@@ -33,6 +35,7 @@ const Harness: FC<HarnessProps> = ({
     delayMs,
     getCurrentBaselineHash,
     getCurrentDocText,
+    hasDirtyDocument: hasDirtyDocument ?? currentDocument?.dirty === true,
     projectRoot,
     store,
   });

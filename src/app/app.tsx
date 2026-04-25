@@ -29,10 +29,10 @@ import type {
   AutoSaveFlushReason,
   UseAutoSaveReturn,
 } from "./hooks/use-auto-save";
-import { useAutoSave } from "./hooks/use-auto-save";
 import { useDialogs } from "./hooks/use-dialogs";
 import { useHotExitBackups } from "./hooks/use-hot-exit-backups";
 import { createHotExitBackupStore } from "./hot-exit-backups";
+import { useAppSaveLifecycle } from "./hooks/use-app-save-lifecycle";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
 import {
   type SidebarLayoutController,
@@ -40,7 +40,6 @@ import {
   useSidebarLayout,
 } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
-import { useWindowCloseGuard } from "./hooks/use-window-close-guard";
 import { useDevSettings } from "../state/dev-settings";
 import type { DebugProjectFile } from "../debug/debug-bridge-contract.js";
 
@@ -163,17 +162,17 @@ function AppInner() {
     });
   }, [editor.handleWatchedPathChange, workspace.reloadProjectConfig]);
 
-  const autoSave = useAutoSave(
-    editor.hasDirtyDocument,
-    editor.saveFile,
-    workspace.settings.autoSaveInterval,
-    unsavedChanges.status === "pending" || editor.hasUnresolvedExternalConflict,
-    unsavedChanges.suspensionVersion,
-    {
-      activeDocumentSignal: editor.activeDocumentSignal,
-      currentPath: editor.currentPath,
-    },
-  );
+  const autoSave = useAppSaveLifecycle({
+    activeDocumentSignal: editor.activeDocumentSignal,
+    autoSaveInterval: workspace.settings.autoSaveInterval,
+    autosaveSuspended:
+      unsavedChanges.status === "pending"
+      || editor.hasUnresolvedExternalConflict,
+    currentPath: editor.currentPath,
+    hasDirtyDocument: editor.hasDirtyDocument,
+    handleWindowCloseRequest: editor.handleWindowCloseRequest,
+    saveFile: editor.saveFile,
+  });
   autoSaveFlushRef.current = autoSave.flushPendingAutoSave;
 
   const hotExitBackups = useHotExitBackups({
@@ -181,6 +180,7 @@ function AppInner() {
     currentDocument: editor.currentDocument,
     getCurrentBaselineHash: editor.getCurrentBaselineHash,
     getCurrentDocText: editor.getCurrentDocText,
+    hasDirtyDocument: editor.hasDirtyDocument,
     projectRoot: workspace.projectRoot,
     store: hotExitBackupStore,
   });
@@ -251,11 +251,6 @@ function AppInner() {
     diagnostics: editor.diagnostics,
     onSelect: editor.handleOutlineSelect,
   }), [editor.diagnostics, editor.handleOutlineSelect]);
-
-  useWindowCloseGuard({
-    hasDirtyDocument: editor.hasDirtyDocument,
-    handleWindowCloseRequest: editor.handleWindowCloseRequest,
-  });
 
   useAppSessionPersistence({
     fileTree: workspace.fileTree,

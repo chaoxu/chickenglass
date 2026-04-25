@@ -19,25 +19,6 @@ export function setCurrentSessionDocument(
   return { ...state, currentDocument: { ...document } };
 }
 
-export function markSessionDocumentDirty(
-  state: EditorSessionState,
-  path: string,
-  dirty: boolean,
-): EditorSessionState {
-  const current = state.currentDocument;
-  if (!current || current.path !== path || current.dirty === dirty) {
-    return state;
-  }
-
-  return {
-    ...state,
-    currentDocument: {
-      ...current,
-      dirty,
-    },
-  };
-}
-
 export function renameSessionDocument(
   state: EditorSessionState,
   oldPath: string,

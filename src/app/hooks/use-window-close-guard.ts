@@ -13,9 +13,7 @@ export function useWindowCloseGuard({
   const handleWindowCloseRequestRef = useRef(handleWindowCloseRequest);
   const closeRequestInFlightRef = useRef(false);
 
-  useEffect(() => {
-    handleWindowCloseRequestRef.current = handleWindowCloseRequest;
-  }, [handleWindowCloseRequest]);
+  handleWindowCloseRequestRef.current = handleWindowCloseRequest;
 
   useEffect(() => {
     if (isTauri() || !hasDirtyDocument) {
@@ -27,9 +25,12 @@ export function useWindowCloseGuard({
       event.returnValue = "";
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    const abortController = new AbortController();
+    window.addEventListener("beforeunload", handleBeforeUnload, {
+      signal: abortController.signal,
+    });
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      abortController.abort();
     };
   }, [hasDirtyDocument]);
 
@@ -38,12 +39,12 @@ export function useWindowCloseGuard({
       return;
     }
 
-    let cancelled = false;
+    const abortController = new AbortController();
     let unlisten: (() => void) | null = null;
 
     void (async () => {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      if (cancelled) {
+      if (abortController.signal.aborted) {
         return;
       }
 
@@ -68,7 +69,7 @@ export function useWindowCloseGuard({
       // The component may have unmounted while we were awaiting the Tauri
       // listener registration. If so, drop the listener immediately —
       // otherwise it stays bound to a dead component.
-      if (cancelled) {
+      if (abortController.signal.aborted) {
         nextUnlisten();
         return;
       }
@@ -78,7 +79,7 @@ export function useWindowCloseGuard({
     });
 
     return () => {
-      cancelled = true;
+      abortController.abort();
       unlisten?.();
     };
   }, []);

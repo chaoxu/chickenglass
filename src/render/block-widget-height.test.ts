@@ -68,7 +68,7 @@ describe("observeBlockWidgetHeight", () => {
     const container = document.createElement("div");
     const view = {
       dom: document.createElement("div"),
-    } as EditorView;
+    } as unknown as EditorView;
     const cache = new Map<string, number>([["detached", 24]]);
 
     observeBlockWidgetHeight(binding, container, view, cache, "detached");

@@ -9,7 +9,6 @@ export type UnsavedChangesDialogStatus = "idle" | "pending" | "resolved";
 export interface UseUnsavedChangesDialogReturn {
   status: UnsavedChangesDialogStatus;
   request: UnsavedChangesRequest | null;
-  suspensionVersion: number;
   requestDecision: (
     request: UnsavedChangesRequest,
   ) => Promise<UnsavedChangesDecision>;
@@ -20,14 +19,12 @@ export interface UseUnsavedChangesDialogReturn {
 interface UnsavedChangesDialogState {
   status: UnsavedChangesDialogStatus;
   request: UnsavedChangesRequest | null;
-  suspensionVersion: number;
 }
 
 export function useUnsavedChangesDialog(): UseUnsavedChangesDialogReturn {
   const [state, setState] = useState<UnsavedChangesDialogState>({
     status: "idle",
     request: null,
-    suspensionVersion: 0,
   });
   const resolverRef = useRef<((decision: UnsavedChangesDecision) => void) | null>(null);
 
@@ -42,7 +39,6 @@ export function useUnsavedChangesDialog(): UseUnsavedChangesDialogReturn {
         ? {
           status: "resolved",
           request: null,
-          suspensionVersion: prev.suspensionVersion + 1,
         }
         : prev
     ));
@@ -67,18 +63,16 @@ export function useUnsavedChangesDialog(): UseUnsavedChangesDialogReturn {
             ? {
               status: "resolved",
               request: null,
-              suspensionVersion: prev.suspensionVersion + 1,
             }
             : prev
         ));
         previousResolve("cancel");
       }
       resolverRef.current = resolve;
-      setState((prev) => ({
+      setState({
         status: "pending",
         request: nextRequest,
-        suspensionVersion: prev.suspensionVersion + 1,
-      }));
+      });
     });
   }, []);
 
@@ -95,7 +89,6 @@ export function useUnsavedChangesDialog(): UseUnsavedChangesDialogReturn {
   return {
     status: state.status,
     request: state.request,
-    suspensionVersion: state.suspensionVersion,
     requestDecision,
     resolveDecision,
     cancel,

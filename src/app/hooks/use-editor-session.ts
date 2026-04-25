@@ -37,6 +37,7 @@ export interface UseEditorSessionReturn {
   currentPath: string | null;
   editorDoc: string;
   externalConflict: ExternalDocumentConflict | null;
+  hasDirtyDocument: boolean;
   activeDocumentSignal: ActiveDocumentSignal;
   getCurrentDocText: () => string;
   getCurrentBaselineHash: () => string | null;
@@ -131,6 +132,7 @@ export function useEditorSession({
     currentPath: snapshot.currentPath,
     editorDoc: snapshot.editorDoc,
     externalConflict: snapshot.externalConflict,
+    hasDirtyDocument: runtime.hasDirtyDocument(),
     activeDocumentSignal: runtime.activeDocumentSignal,
     getCurrentDocText: sessionService.getCurrentDocText,
     getCurrentBaselineHash: () =>

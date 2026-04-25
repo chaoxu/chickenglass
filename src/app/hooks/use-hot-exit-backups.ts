@@ -16,6 +16,7 @@ export interface UseHotExitBackupsOptions {
   delayMs?: number;
   getCurrentBaselineHash?: () => string | null;
   getCurrentDocText: () => string;
+  hasDirtyDocument: boolean;
   projectRoot: string | null;
   store?: HotExitBackupStore | null;
 }
@@ -31,6 +32,7 @@ export function useHotExitBackups({
   delayMs = DEFAULT_HOT_EXIT_BACKUP_DELAY_MS,
   getCurrentBaselineHash,
   getCurrentDocText,
+  hasDirtyDocument,
   projectRoot,
   store,
 }: UseHotExitBackupsOptions): UseHotExitBackupsReturn {
@@ -43,6 +45,7 @@ export function useHotExitBackups({
     delayMs,
     getCurrentBaselineHash,
     getCurrentDocText,
+    hasDirtyDocument,
     projectRoot,
   });
   const lastWrittenContentHashRef = useRef(new Map<string, string>());
@@ -54,6 +57,7 @@ export function useHotExitBackups({
     delayMs,
     getCurrentBaselineHash,
     getCurrentDocText,
+    hasDirtyDocument,
     projectRoot,
   };
 
@@ -87,7 +91,7 @@ export function useHotExitBackups({
       !state.activeStore
       || !state.projectRoot
       || !document
-      || !document.dirty
+      || !state.hasDirtyDocument
     ) {
       return;
     }
@@ -102,7 +106,8 @@ export function useHotExitBackups({
       if (
         !latestState.activeStore
         || latestState.projectRoot !== projectRootAtRequest
-        || !latestDocument?.dirty
+        || !latestState.hasDirtyDocument
+        || !latestDocument
         || latestDocument.path !== pathAtRequest
       ) {
         return;
@@ -130,7 +135,8 @@ export function useHotExitBackups({
     if (
       !state.activeStore
       || !state.projectRoot
-      || !state.currentDocument?.dirty
+      || !state.currentDocument
+      || !state.hasDirtyDocument
       || state.delayMs <= 0
     ) {
       return;
@@ -143,7 +149,7 @@ export function useHotExitBackups({
   }, [clearTimer, writeBackup]);
 
   useEffect(() => {
-    if (!activeStore || !projectRoot || !currentDocument?.dirty) {
+    if (!activeStore || !projectRoot || !currentDocument || !hasDirtyDocument) {
       clearTimer();
       return;
     }
@@ -151,9 +157,9 @@ export function useHotExitBackups({
   }, [
     activeStore,
     clearTimer,
-    currentDocument?.dirty,
-    currentDocument?.path,
+    currentDocument,
     delayMs,
+    hasDirtyDocument,
     projectRoot,
     scheduleBackup,
   ]);

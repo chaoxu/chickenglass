@@ -8,7 +8,6 @@ import {
 import {
   clearExternalDocumentConflict,
   clearSessionDocument,
-  markSessionDocumentDirty,
   setExternalDocumentConflict,
 } from "./editor-session-actions";
 import { getCurrentSessionDocument } from "./editor-session-model";
@@ -242,7 +241,7 @@ export function createEditorSessionPersistence({
       return false;
     }
     const currentDocument = runtime.getCurrentDocument();
-    if (currentDocument && !currentDocument.dirty) {
+    if (currentDocument && !runtime.isPathDirty(currentDocument.path)) {
       return true;
     }
 
@@ -276,7 +275,7 @@ export function createEditorSessionPersistence({
 
       runtime.commit(
         clearExternalDocumentConflict(
-          markSessionDocumentDirty(runtime.getState(), currentPath, !savedRevisionIsCurrent),
+          runtime.setPathDirty(currentPath, !savedRevisionIsCurrent),
           currentPath,
         ),
         savedRevisionIsCurrent ? { editorDoc: result.savedContent } : undefined,
@@ -349,7 +348,10 @@ export function createEditorSessionPersistence({
       currentDocument.path === path
       || currentDocument.path.startsWith(`${path}/`)
     );
-    if (deletingCurrentDocument && currentDocument.dirty) {
+    if (
+      deletingCurrentDocument
+      && runtime.isPathDirty(currentDocument.path)
+    ) {
       const decision = await requestUnsavedChangesDecision({
         reason: currentDocument.path === path ? "delete-file" : "delete-folder",
         currentDocument: {

@@ -34,7 +34,6 @@ export function useAutoSave(
   onSave: () => Promise<void>,
   delayMs = 30_000,
   suspended = false,
-  suspensionVersion = 0,
   options: UseAutoSaveOptions = {},
 ): UseAutoSaveReturn {
   const currentPath = options.currentPath ?? null;
@@ -153,7 +152,6 @@ export function useAutoSave(
     isDirty,
     scheduleDebouncedSave,
     suspended,
-    suspensionVersion,
   ]);
 
   useEffect(() => {
@@ -202,17 +200,16 @@ export function useAutoSave(
       }
     };
 
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("visibilitychange", handleVisibility);
+    const abortController = new AbortController();
+    const listenerOptions = { signal: abortController.signal };
+
+    window.addEventListener("blur", handleBlur, listenerOptions);
+    window.addEventListener("focus", handleFocus, listenerOptions);
+    window.addEventListener("pagehide", handlePageHide, listenerOptions);
+    window.addEventListener("beforeunload", handleBeforeUnload, listenerOptions);
+    document.addEventListener("visibilitychange", handleVisibility, listenerOptions);
     return () => {
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      abortController.abort();
       clearPendingEventSave();
     };
   }, [clearPendingEventSave, flushPendingAutoSave]);

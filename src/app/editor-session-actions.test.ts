@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   clearExternalDocumentConflict,
   clearSessionDocument,
-  markSessionDocumentDirty,
   renameSessionDocument,
   setCurrentSessionDocument,
   setExternalDocumentConflict,
 } from "./editor-session-actions";
+import { setSessionPathDirty } from "./editor-session-dirty-state";
 import { createEditorSessionState } from "./editor-session-model";
 
 function document(path: string, dirty = false) {
@@ -34,7 +34,7 @@ describe("editor session actions", () => {
       path: "draft.md",
     });
 
-    const next = markSessionDocumentDirty(state, "draft.md", true);
+    const next = setSessionPathDirty(state, "draft.md", true);
 
     expect(next.currentDocument).toEqual(document("draft.md", true));
     expect(next.externalConflict).toEqual({ kind: "modified", path: "draft.md" });
@@ -43,7 +43,7 @@ describe("editor session actions", () => {
   it("ignores dirty updates for a different path", () => {
     const state = createEditorSessionState(document("draft.md"));
 
-    const next = markSessionDocumentDirty(state, "other.md", true);
+    const next = setSessionPathDirty(state, "other.md", true);
 
     expect(next).toBe(state);
   });

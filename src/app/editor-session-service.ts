@@ -2,7 +2,6 @@ import { basename, dirname } from "./lib/utils";
 import {
   clearExternalDocumentConflict,
   clearSessionDocument,
-  markSessionDocumentDirty,
   setCurrentSessionDocument,
   setExternalDocumentConflict,
 } from "./editor-session-actions";
@@ -130,7 +129,7 @@ export function createEditorSessionService({
     runtime.pipeline.initPath(path, content);
     runtime.commit(
       clearExternalDocumentConflict(
-        markSessionDocumentDirty(runtime.getState(), path, false),
+        runtime.setPathDirty(path, false),
         path,
       ),
       runtime.getCurrentPath() === path
@@ -144,7 +143,7 @@ export function createEditorSessionService({
     const savedDoc = runtime.buffers.get(path) ?? emptyEditorDocument;
     runtime.liveDocs.set(path, savedDoc);
     runtime.commit(
-      markSessionDocumentDirty(runtime.getState(), path, false),
+      runtime.setPathDirty(path, false),
       runtime.getCurrentPath() === path
         ? { editorDoc: editorDocumentToString(savedDoc) }
         : undefined,
@@ -157,7 +156,7 @@ export function createEditorSessionService({
     target?: { path?: string; name: string },
   ): Promise<boolean> => {
     const currentDocument = runtime.getCurrentDocument();
-    if (!currentDocument || !currentDocument.dirty) {
+    if (!currentDocument || !runtime.isPathDirty(currentDocument.path)) {
       return true;
     }
 
@@ -202,7 +201,7 @@ export function createEditorSessionService({
         runtime.pipeline.initPath(path, diskContent);
         runtime.commit(
           clearExternalDocumentConflict(
-            markSessionDocumentDirty(runtime.getState(), path, !liveDoc.eq(diskDoc)),
+            runtime.setPathDirty(path, !liveDoc.eq(diskDoc)),
             path,
           ),
         );
@@ -244,7 +243,7 @@ export function createEditorSessionService({
       }
       runtime.commit(
         clearExternalDocumentConflict(
-          markSessionDocumentDirty(runtime.getState(), path, revisionAdvanced),
+          runtime.setPathDirty(path, revisionAdvanced),
           path,
         ),
         !revisionAdvanced && runtime.getCurrentPath() === path ? { editorDoc: content } : undefined,
@@ -309,7 +308,7 @@ export function createEditorSessionService({
       runtime.activeDocumentSignal.publish(path);
       runtime.commit(
         clearExternalDocumentConflict(
-          markSessionDocumentDirty(runtime.getState(), path, dirty),
+          runtime.setPathDirty(path, dirty),
           path,
         ),
         runtime.getCurrentPath() === path ? { editorDoc: merged.content } : undefined,
@@ -334,8 +333,7 @@ export function createEditorSessionService({
     runtime.pipeline.bumpRevision(currentPath);
     runtime.activeDocumentSignal.publish(currentPath);
 
-    const nextState = markSessionDocumentDirty(
-      runtime.getState(),
+    const nextState = runtime.setPathDirty(
       currentPath,
       !doc.eq(runtime.buffers.get(currentPath) ?? emptyEditorDocument),
     );
@@ -348,7 +346,7 @@ export function createEditorSessionService({
 
     const currentDoc = getCurrentDocText();
     const changes = createMinimalEditorDocumentChanges(currentDoc, doc);
-    let dirty = runtime.getCurrentDocument()?.dirty ?? false;
+    let dirty = runtime.isPathDirty(currentPath);
     if (changes.length > 0) {
       const previousDoc = documentTextForPath(currentPath, runtime.liveDocs, runtime.buffers);
       const nextDoc = applyEditorDocumentChanges(previousDoc, changes);
@@ -359,7 +357,7 @@ export function createEditorSessionService({
     }
 
     runtime.commit(
-      markSessionDocumentDirty(runtime.getState(), currentPath, dirty),
+      runtime.setPathDirty(currentPath, dirty),
       { editorDoc: doc },
     );
   };
@@ -372,7 +370,7 @@ export function createEditorSessionService({
 
     runtime.activeDocumentSignal.publish(currentPath);
     runtime.commit(
-      markSessionDocumentDirty(runtime.getState(), currentPath, true),
+      runtime.setPathDirty(currentPath, true),
     );
   };
 
@@ -381,14 +379,14 @@ export function createEditorSessionService({
     if (currentDocument?.path !== path) return;
 
     const nextDoc = createEditorDocumentText(doc);
-    if (!currentDocument.dirty) {
+    if (!runtime.isPathDirty(path)) {
       runtime.buffers.set(path, nextDoc);
     }
     runtime.liveDocs.set(path, nextDoc);
     runtime.commit(
-      currentDocument.dirty
+      runtime.isPathDirty(path)
         ? runtime.getState()
-        : markSessionDocumentDirty(runtime.getState(), path, false),
+        : runtime.setPathDirty(path, false),
       { editorDoc: doc },
     );
   };
@@ -526,7 +524,7 @@ export function createEditorSessionService({
       }
     }
 
-    const dirtyState = markSessionDocumentDirty(runtime.getState(), path, true);
+    const dirtyState = runtime.setPathDirty(path, true);
     runtime.commit(
       restoredConflict
         ? setExternalDocumentConflict(dirtyState, restoredConflict)
@@ -575,9 +573,9 @@ export function createEditorSessionService({
         }
       }
 
-      if (!currentDocument.dirty) {
+      if (!runtime.isPathDirty(currentDocument.path)) {
         runtime.activeDocumentSignal.publish(currentDocument.path);
-        runtime.commit(markSessionDocumentDirty(runtime.getState(), currentDocument.path, true));
+        runtime.commit(runtime.setPathDirty(currentDocument.path, true));
         return "ignore";
       }
 
@@ -603,7 +601,7 @@ export function createEditorSessionService({
     if (currentDocument?.path !== path) {
       return "ignore";
     }
-    if (currentDocument.dirty) {
+    if (runtime.isPathDirty(currentDocument.path)) {
       runtime.setExternalConflictBaseline(path, createEditorDocumentText(content));
       runtime.commit(setExternalDocumentConflict(
         runtime.getState(),
@@ -650,7 +648,7 @@ export function createEditorSessionService({
     if (!options?.discard) {
       const canClose = await prepareCurrentDocumentForTransition("close-file");
       if (!canClose) return false;
-    } else if (currentDocument.dirty) {
+    } else if (runtime.isPathDirty(currentDocument.path)) {
       notifyAfterDiscard(currentDocument.path);
     }
 

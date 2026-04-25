@@ -17,7 +17,7 @@ describe("computeInlineMathViewportRanges", () => {
     const view = {
       state,
       visibleRanges: [{ from: visibleLine.from, to: visibleLine.to }],
-    } as EditorView;
+    } as unknown as EditorView;
 
     const [range] = computeInlineMathViewportRanges(view);
 

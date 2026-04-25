@@ -2,9 +2,9 @@ import { basename } from "./lib/utils";
 import type { EditorDocumentText } from "./editor-doc-change";
 import {
   clearExternalDocumentConflict,
-  markSessionDocumentDirty,
   renameSessionDocument,
 } from "./editor-session-actions";
+import { setSessionPathDirty } from "./editor-session-dirty-state";
 import type { EditorSessionState } from "./editor-session-model";
 
 export interface ApplySaveAsResultOptions {
@@ -41,7 +41,7 @@ export function applySaveAsResult({
     liveDocs.set(newPath, doc);
 
     return clearExternalDocumentConflict(
-      markSessionDocumentDirty(
+      setSessionPathDirty(
         renameSessionDocument(state, oldPath, newPath, basename(newPath)),
         newPath,
         false,
@@ -53,7 +53,7 @@ export function applySaveAsResult({
   buffers.set(newPath, doc);
   liveDocs.set(newPath, doc);
   return clearExternalDocumentConflict(
-    markSessionDocumentDirty(state, newPath, false),
+    setSessionPathDirty(state, newPath, false),
     oldPath,
   );
 }

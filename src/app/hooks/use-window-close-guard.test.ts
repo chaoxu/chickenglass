@@ -6,8 +6,27 @@ const windowCloseGuardMockState = vi.hoisted(() => ({
   isTauri: false,
   destroy: vi.fn(async () => {}),
   closeRequestedHandler: null as null | ((event: { preventDefault: () => void }) => void | Promise<void>),
+  onCloseRequested: vi.fn(async (
+    handler: (event: { preventDefault: () => void }) => void | Promise<void>,
+  ) => {
+    windowCloseGuardMockState.closeRequestedHandler = handler;
+    return () => {
+      if (windowCloseGuardMockState.closeRequestedHandler === handler) {
+        windowCloseGuardMockState.closeRequestedHandler = null;
+      }
+    };
+  }),
   getCurrentWindow: vi.fn(() => ({
-    onCloseRequested: async (
+    onCloseRequested: windowCloseGuardMockState.onCloseRequested,
+    destroy: windowCloseGuardMockState.destroy,
+  })),
+  reset() {
+    this.isTauri = false;
+    this.destroy.mockReset();
+    this.destroy.mockImplementation(async () => {});
+    this.closeRequestedHandler = null;
+    this.onCloseRequested.mockReset();
+    this.onCloseRequested.mockImplementation(async (
       handler: (event: { preventDefault: () => void }) => void | Promise<void>,
     ) => {
       windowCloseGuardMockState.closeRequestedHandler = handler;
@@ -16,14 +35,7 @@ const windowCloseGuardMockState = vi.hoisted(() => ({
           windowCloseGuardMockState.closeRequestedHandler = null;
         }
       };
-    },
-    destroy: windowCloseGuardMockState.destroy,
-  })),
-  reset() {
-    this.isTauri = false;
-    this.destroy.mockReset();
-    this.destroy.mockImplementation(async () => {});
-    this.closeRequestedHandler = null;
+    });
     this.getCurrentWindow.mockClear();
   },
 }));
@@ -158,6 +170,38 @@ describe("useWindowCloseGuard", () => {
     expect(windowCloseGuardMockState.destroy).not.toHaveBeenCalled();
   });
 
+  it("uses the latest Tauri close handler after rerender", async () => {
+    windowCloseGuardMockState.isTauri = true;
+    const staleHandler = vi.fn(async () => false);
+    const latestHandler = vi.fn(async () => true);
+
+    await act(async () => {
+      root.render(createElement(Harness, {
+        hasDirtyDocument: true,
+        handleWindowCloseRequest: staleHandler,
+      }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness, {
+        hasDirtyDocument: true,
+        handleWindowCloseRequest: latestHandler,
+      }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await windowCloseGuardMockState.closeRequestedHandler?.({
+        preventDefault: vi.fn(),
+      });
+    });
+
+    expect(staleHandler).not.toHaveBeenCalled();
+    expect(latestHandler).toHaveBeenCalledTimes(1);
+    expect(windowCloseGuardMockState.destroy).toHaveBeenCalledTimes(1);
+  });
+
   it("drops duplicate Tauri close requests while a confirmation is already in flight", async () => {
     windowCloseGuardMockState.isTauri = true;
     const deferred = createDeferred<boolean>();
@@ -196,5 +240,38 @@ describe("useWindowCloseGuard", () => {
     });
 
     expect(windowCloseGuardMockState.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("unlistens a Tauri close listener that registers after unmount", async () => {
+    windowCloseGuardMockState.isTauri = true;
+    const registration = createDeferred<() => void>();
+    const unlisten = vi.fn();
+    windowCloseGuardMockState.onCloseRequested.mockImplementationOnce(async (
+      handler: (event: { preventDefault: () => void }) => void | Promise<void>,
+    ) => {
+      windowCloseGuardMockState.closeRequestedHandler = handler;
+      await registration.promise;
+      return unlisten;
+    });
+
+    await act(async () => {
+      root.render(createElement(Harness, {
+        hasDirtyDocument: true,
+        handleWindowCloseRequest: vi.fn(async () => true),
+      }));
+      await Promise.resolve();
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    await act(async () => {
+      registration.resolve(unlisten);
+      await registration.promise;
+      await Promise.resolve();
+    });
+
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 });

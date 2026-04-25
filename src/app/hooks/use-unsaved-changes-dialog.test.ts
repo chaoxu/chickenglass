@@ -30,7 +30,6 @@ describe("useUnsavedChangesDialog", () => {
 
     expect(result.current.status).toBe("pending");
     expect(result.current.request).toEqual(request);
-    expect(result.current.suspensionVersion).toBe(1);
 
     let decision: "save" | "discard" | "cancel" | null = null;
     await act(async () => {
@@ -44,7 +43,6 @@ describe("useUnsavedChangesDialog", () => {
     expect(decision).toBe("save");
     expect(result.current.status).toBe("resolved");
     expect(result.current.request).toBeNull();
-    expect(result.current.suspensionVersion).toBe(2);
   });
 
   it("cancels the previous request when a new one replaces it", async () => {
@@ -70,7 +68,6 @@ describe("useUnsavedChangesDialog", () => {
     await expect(firstDecision).resolves.toBe("cancel");
     expect(result.current.status).toBe("pending");
     expect(result.current.request).toEqual(second);
-    expect(result.current.suspensionVersion).toBe(3);
 
     let finalDecision: "save" | "discard" | "cancel" | null = null;
     await act(async () => {
@@ -84,7 +81,6 @@ describe("useUnsavedChangesDialog", () => {
     expect(finalDecision).toBe("discard");
     expect(result.current.status).toBe("resolved");
     expect(result.current.request).toBeNull();
-    expect(result.current.suspensionVersion).toBe(4);
   });
 
   it("cancels the pending request when the hook unmounts", async () => {

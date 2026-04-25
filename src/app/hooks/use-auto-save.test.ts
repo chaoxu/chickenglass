@@ -13,7 +13,6 @@ interface HarnessProps {
   currentPath?: string | null;
   onReady?: (controller: UseAutoSaveReturn) => void;
   suspended?: boolean;
-  suspensionVersion?: number;
 }
 
 const Harness: FC<HarnessProps> = ({
@@ -24,9 +23,8 @@ const Harness: FC<HarnessProps> = ({
   currentPath = "notes.md",
   onReady,
   suspended = false,
-  suspensionVersion = 0,
 }) => {
-  const controller = useAutoSave(isDirty, onSave, interval, suspended, suspensionVersion, {
+  const controller = useAutoSave(isDirty, onSave, interval, suspended, {
     activeDocumentSignal,
     currentPath,
   });
@@ -342,7 +340,6 @@ describe("useAutoSave", () => {
         isDirty: true,
         onSave,
         interval: 30_000,
-        suspensionVersion: 0,
       }));
     });
 
@@ -357,7 +354,6 @@ describe("useAutoSave", () => {
         onSave,
         interval: 30_000,
         suspended: true,
-        suspensionVersion: 1,
       }));
     });
 
@@ -367,7 +363,6 @@ describe("useAutoSave", () => {
         onSave,
         interval: 30_000,
         suspended: false,
-        suspensionVersion: 2,
       }));
     });
 
@@ -388,7 +383,6 @@ describe("useAutoSave", () => {
         isDirty: true,
         onSave,
         interval: 30_000,
-        suspensionVersion: 0,
       }));
     });
 
@@ -403,7 +397,6 @@ describe("useAutoSave", () => {
         onSave,
         interval: 30_000,
         suspended: true,
-        suspensionVersion: 1,
       }));
     });
 
@@ -413,7 +406,6 @@ describe("useAutoSave", () => {
         onSave,
         interval: 30_000,
         suspended: false,
-        suspensionVersion: 2,
       }));
     });
 
