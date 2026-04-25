@@ -324,19 +324,28 @@ function FloatingCursorReveal({ adapters }: { adapters: readonly RevealAdapter[]
         return;
       }
       beginRevealCommit(lifecycleRef);
-      // The user's selection may still point inside the node we are about to
-      // remove (e.g. clicking a link briefly placed a Lexical selection inside
-      // it before focus moved to the floating input). Drop the live selection
-      // before the swap so Lexical doesn't throw "selection has been lost…"
-      // when reconciling the removed subtree.
-      $setSelection(null);
-      // Floating mode never plain-swaps the subtree, so adapters expect a
-      // TextNode they can replace. Wrap the live node in a sacrificial
-      // TextNode and let the adapter rebuild from `nextRaw`.
-      const placeholder = $createTextNode(nextRaw);
-      node.replace(placeholder);
-      const replacement = current.adapter.reparse(placeholder, nextRaw);
-      finishRevealClose(lifecycleRef, replacement.getKey());
+      try {
+        // The user's selection may still point inside the node we are about
+        // to remove (e.g. clicking a link briefly placed a Lexical selection
+        // inside it before focus moved to the floating input). Drop the live
+        // selection before the swap so Lexical doesn't throw "selection has
+        // been lost…" when reconciling the removed subtree.
+        $setSelection(null);
+        // Floating mode never plain-swaps the subtree, so adapters expect a
+        // TextNode they can replace. Wrap the live node in a sacrificial
+        // TextNode and let the adapter rebuild from `nextRaw`.
+        const placeholder = $createTextNode(nextRaw);
+        node.replace(placeholder);
+        const replacement = current.adapter.reparse(placeholder, nextRaw);
+        finishRevealClose(lifecycleRef, replacement.getKey());
+      } catch (error) {
+        // Lexical rolls back the editor state on throw (discrete: true), but
+        // the lifecycle ref lives outside the editor state. Move it back to a
+        // closed state so a subsequent reveal can begin.
+        finishRevealClose(lifecycleRef, current.nodeKey);
+        console.error("[cursor-reveal] commit failed; reveal closed without applying", error);
+        throw error;
+      }
     }, { discrete: true, tag: COFLAT_NESTED_EDIT_TAG });
   };
 
