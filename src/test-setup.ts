@@ -22,6 +22,14 @@ function configureFastCheck(): void {
 
 configureFastCheck();
 
+function pendingFakeTimerCount(): number {
+  try {
+    return vi.getTimerCount();
+  } catch (_error) {
+    return 0;
+  }
+}
+
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
@@ -77,6 +85,11 @@ afterEach(() => {
     cleanup();
   }
   clearDocumentAnalysisCache();
+  const pendingTimers = pendingFakeTimerCount();
+  if (pendingTimers > 0) {
+    vi.clearAllTimers();
+    throw new Error(`test left ${pendingTimers} fake timer(s) pending`);
+  }
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
