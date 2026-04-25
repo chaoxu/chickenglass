@@ -44,6 +44,17 @@ pnpm test:browser -- --filter <name>
 
 `pnpm dev:show` is the stable no-HMR review lane on `http://localhost:5173`.
 
+Use the runtime gate when a change touches editor UI, rendering, or browser
+harness behavior and you need a compact user-facing smoke check:
+
+```bash
+pnpm check:runtime
+```
+
+It runs browser smoke coverage plus the CM6/Lexical document-surface parity
+audit, so shared visual regressions are caught without relying on manual app
+inspection.
+
 ## Heavy-Doc Perf Verification
 
 Use the heavy-doc perf mode for `typing-rich-burst` and other fixture-heavy
@@ -96,8 +107,15 @@ pnpm check:types
 
 ## Full Merge Gate
 
+`pnpm test` and `pnpm check:unit` run the full Vitest suite through a watchdog
+wrapper while keeping normal Vitest parallelism. That keeps full-suite
+automation from hanging silently: stalled workers are terminated after the
+configured run or inactivity timeout, and timeout output includes the command,
+process-group snapshot, and recent output.
+
 Use the full local merge gate before closing broad implementation or cleanup
-issues:
+issues. It includes static checks, the watchdog-protected full unit suite, and
+the compact runtime gate:
 
 ```bash
 pnpm check:merge

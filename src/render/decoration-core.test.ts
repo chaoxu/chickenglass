@@ -148,6 +148,20 @@ describe("pushWidgetDecoration", () => {
 
     expect(items[0].value.spec.widget).toBe(widget);
   });
+
+  it("skips invalid replacement ranges from stale semantic positions", () => {
+    const items: Range<Decoration>[] = [];
+    const widget = new TestWidget("w");
+
+    pushWidgetDecoration(items, widget, 5, 5);
+    pushWidgetDecoration(items, widget, 6, 5);
+    pushWidgetDecoration(items, widget, -1, 5);
+    pushWidgetDecoration(items, widget, Number.NaN, 5);
+
+    expect(items).toHaveLength(0);
+    expect(widget.sourceFrom).toBe(-1);
+    expect(widget.sourceTo).toBe(-1);
+  });
 });
 
 describe("pushBlockWidgetDecoration", () => {
@@ -170,5 +184,14 @@ describe("pushBlockWidgetDecoration", () => {
     expect(items[0].to).toBe(15);
     expect(items[0].value.spec.block).toBe(true);
     expect(items[0].value.spec.widget).toBe(widget);
+  });
+
+  it("skips invalid block replacement ranges", () => {
+    const items: Range<Decoration>[] = [];
+
+    pushBlockWidgetDecoration(items, new TestWidget("w"), 10, 10);
+    pushBlockWidgetDecoration(items, new TestWidget("w"), 12, 10);
+
+    expect(items).toHaveLength(0);
   });
 });

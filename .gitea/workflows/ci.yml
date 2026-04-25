@@ -206,6 +206,13 @@ jobs:
               failing_command="test:browser:lexical"
             }
           fi
+          if [ "$browser_status" -eq 0 ]; then
+            echo "Running CM6/Lexical document-surface parity audit."
+            pnpm test:browser:parity -- --url "http://127.0.0.1:$current_preview_port" --browser managed --timeout 30000 --artifacts-dir "$artifacts_dir" || {
+              browser_status=$?
+              failing_command="test:browser:parity"
+            }
+          fi
           if [ "$browser_status" -eq 0 ] && [ -n "$baseline_file" ]; then
             echo "Comparing open-index performance against $baseline_ref."
             pnpm perf:compare -- --scenario open-index --iterations 1 --warmup 0 --url "http://127.0.0.1:$current_preview_port" --browser managed --debug-timeout-ms 30000 --artifacts-dir "$artifacts_dir" --baseline "$baseline_file" || {

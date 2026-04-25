@@ -92,6 +92,9 @@ export function pushWidgetDecoration(
   from: number,
   to: number,
 ): void {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || from >= to) {
+    return;
+  }
   widget.updateSourceRange(from, to);
   items.push(Decoration.replace({ widget }).range(from, to));
 }
@@ -106,6 +109,9 @@ export function pushBlockWidgetDecoration(
   from: number,
   to: number,
 ): void {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || from >= to) {
+    return;
+  }
   widget.updateSourceRange(from, to);
   items.push(Decoration.replace({ widget, block: true }).range(from, to));
 }

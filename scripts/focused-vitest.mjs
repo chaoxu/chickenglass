@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
 import { normalizeCliArgs } from "./devx-cli.mjs";
 
@@ -99,8 +99,12 @@ export function findMissingExplicitPaths(argv = [], exists = existsSync) {
   return partitionFocusedVitestArgs(argv).explicitPaths.filter((path) => !exists(path));
 }
 
+export function buildVitestArgs(extraArgs = [], options = {}) {
+  return [...(options.baseArgs ?? DEFAULT_ARGS), ...extraArgs];
+}
+
 export function buildFocusedVitestArgs(extraArgs = []) {
-  return [...DEFAULT_ARGS, ...extraArgs];
+  return buildVitestArgs(extraArgs);
 }
 
 export function buildFocusedVitestRuns(argv = []) {
@@ -117,9 +121,60 @@ export function resolvePnpmCommand(platform = process.platform) {
   return platform === "win32" ? "pnpm.cmd" : "pnpm";
 }
 
-function pipeChildOutput(child, streamName, output, onOutput) {
+function shellQuote(value) {
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+export function formatCommand(argv) {
+  return argv.map(shellQuote).join(" ");
+}
+
+export function createRecentOutputBuffer(maxLines = 100) {
+  const lines = [];
+  let pending = "";
+
+  return {
+    append(chunk) {
+      const parts = `${pending}${String(chunk)}`.split(/\r?\n/);
+      pending = parts.pop() ?? "";
+      lines.push(...parts);
+      while (lines.length > maxLines) {
+        lines.shift();
+      }
+    },
+    text() {
+      const output = pending ? [...lines, pending] : lines;
+      return output.slice(-maxLines).join("\n");
+    },
+  };
+}
+
+function processGroupSnapshot(pid, options = {}) {
+  if (!pid || (options.platform ?? process.platform) === "win32") {
+    return "";
+  }
+
+  const result = (options.spawnSync ?? spawnSync)("ps", [
+    "-o",
+    "pid,ppid,pgid,stat,etime,command",
+    "-g",
+    String(pid),
+  ], {
+    encoding: "utf8",
+  });
+  if (result.error || (result.status ?? 1) !== 0) {
+    return "";
+  }
+  return String(result.stdout ?? "").trim();
+}
+
+function pipeChildOutput(child, streamName, output, onOutput, recentOutput) {
   child[streamName]?.on("data", (chunk) => {
-    onOutput();
+    recentOutput?.append(chunk);
+    onOutput(Date.now());
     output.write(chunk);
   });
 }
@@ -141,7 +196,14 @@ export async function runFocusedVitestRun(runArgs, options = {}) {
   };
 
   return new Promise((resolve, reject) => {
-    const child = spawnFn(resolvePnpmCommand(), buildFocusedVitestArgs(runArgs), {
+    const command = resolvePnpmCommand();
+    const args = buildVitestArgs(runArgs, {
+      baseArgs: options.baseArgs,
+    });
+    const startedAt = Date.now();
+    let lastOutputAt = startedAt;
+    const recentOutput = createRecentOutputBuffer(options.recentOutputLines ?? 100);
+    const child = spawnFn(command, args, {
       stdio: ["inherit", "pipe", "pipe"],
       detached: process.platform !== "win32",
       env: {
@@ -170,6 +232,18 @@ export async function runFocusedVitestRun(runArgs, options = {}) {
       if (completed || timedOut) return;
       timedOut = true;
       stderr.write(`[focused-vitest] ${reason}; terminating child process.\n`);
+      stderr.write(`[focused-vitest] command: ${formatCommand([command, ...args])}\n`);
+      stderr.write(
+        `[focused-vitest] pid=${child.pid ?? "unknown"} elapsed=${Date.now() - startedAt}ms idle=${Date.now() - lastOutputAt}ms\n`,
+      );
+      const snapshot = processGroupSnapshot(child.pid, options);
+      if (snapshot) {
+        stderr.write(`[focused-vitest] process group:\n${snapshot}\n`);
+      }
+      const recent = recentOutput.text();
+      if (recent) {
+        stderr.write(`[focused-vitest] last output:\n${recent}\n`);
+      }
       terminateFn(child, "SIGTERM");
       if (killGraceMs > 0) {
         killTimer = setTimeoutFn(() => terminateFn(child, "SIGKILL"), killGraceMs);
@@ -186,8 +260,14 @@ export async function runFocusedVitestRun(runArgs, options = {}) {
       }
     };
 
-    pipeChildOutput(child, "stdout", stdout, armInactivityTimer);
-    pipeChildOutput(child, "stderr", stderr, armInactivityTimer);
+    pipeChildOutput(child, "stdout", stdout, (time) => {
+      lastOutputAt = time;
+      armInactivityTimer();
+    }, recentOutput);
+    pipeChildOutput(child, "stderr", stderr, (time) => {
+      lastOutputAt = time;
+      armInactivityTimer();
+    }, recentOutput);
 
     if (runTimeoutMs > 0) {
       runTimer = setTimeoutFn(

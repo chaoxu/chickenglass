@@ -19,8 +19,13 @@ const PARITY_FIXTURE = {
     "",
     "A paragraph with **bold**, *italic*, `code`, ==highlight==, $x^2$, and [a link](https://example.com).",
     "",
+    "- A list item with inline math $a+b$ and **strong text**.",
+    "- A second item with `code` and a reference to [@eq:surface].",
+    "",
+    "> A blockquote with $\\alpha$ should keep the same inline rhythm.",
+    "",
     "::: {.theorem #thm:surface title=\"Shared Surface\"}",
-    "A theorem body should land on the same visual rhythm.",
+    "A theorem body should land on the same visual rhythm with $n^2$.",
     ":::",
     "",
     "$$",
@@ -38,6 +43,8 @@ const PARITY_FIXTURE = {
 
 const TYPING_ANCHOR = "A paragraph with";
 const TYPING_INSERT = "12345678901234567890";
+const MAX_TYPING_INSERT_P95_MS = 40;
+const MAX_TYPING_INPUT_TO_IDLE_MS = 1_000;
 
 const MATH_SELECTORS = {
   "cm6-rich": {
@@ -84,6 +91,34 @@ function assertNear(section, property, left, right, tolerance) {
       Math.abs(leftValue - rightValue) <= tolerance,
     `${section} ${property} drifted by more than ${tolerance}px`,
     { cm6: left ?? null, lexical: right ?? null },
+  );
+}
+
+function normalizeTex(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function assertSameValue(section, property, left, right) {
+  assertCondition(
+    left === right,
+    `${section} ${property} drifted between CM6 rich and Lexical`,
+    { cm6: left, lexical: right },
+  );
+}
+
+function assertIncludes(section, values, expected) {
+  assertCondition(
+    values.map(normalizeTex).includes(normalizeTex(expected)),
+    `${section} is missing expected TeX annotation`,
+    { expected, values },
+  );
+}
+
+function assertTextContains(section, values, expected) {
+  assertCondition(
+    values.some((value) => String(value).includes(expected)),
+    `${section} is missing expected rendered text`,
+    { expected, values },
   );
 }
 
@@ -143,18 +178,44 @@ async function collectSurfaceMetrics(page, mode) {
           textAlign: style.textAlign,
         },
         tagName: element.tagName,
+        text: element.textContent?.replace(/\s+/g, " ").trim() ?? "",
       };
     };
+    const annotations = (selector) =>
+      [...document.querySelectorAll(selector)]
+        .map((element) =>
+          element
+            .querySelector("annotation[encoding='application/x-tex']")
+            ?.textContent
+            ?.replace(/\s+/g, " ")
+            .trim()
+        )
+        .filter(Boolean);
+    const texts = (selector) =>
+      [...document.querySelectorAll(selector)]
+        .map((element) => element.textContent?.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+    const count = (selector) => document.querySelectorAll(selector).length;
 
     return {
       appMode: window.__app?.getMode?.() ?? null,
       block: describe(selectors.block),
+      counts: {
+        displayMath: count(selectors.displayMath),
+        displayMathKatex: count(mathSelectors.displayMathKatex),
+        inlineMath: count(mathSelectors.inlineMath),
+        inlineMathKatex: count(mathSelectors.inlineMathKatex),
+        katexErrors: count(".katex-error"),
+      },
       flow: describe(selectors.flow),
       h1: describe(selectors.headingH1),
       inlineMath: describe(mathSelectors.inlineMath),
+      inlineMathAnnotations: annotations(mathSelectors.inlineMath),
+      inlineMathTexts: texts(mathSelectors.inlineMath),
       inlineMathKatex: describe(mathSelectors.inlineMathKatex),
       math: describe(selectors.displayMath),
       mathBody: describe(mathSelectors.displayMathBody),
+      mathAnnotations: annotations(selectors.displayMath),
       mathKatex: describe(mathSelectors.displayMathKatex),
       mathLabel: describe(mathSelectors.displayMathLabel),
       paragraph: describe(selectors.paragraph),
@@ -189,6 +250,20 @@ function assertParity(cm6, lexical) {
     assertCondition(cm6[key], `CM6 rich is missing ${key}`, cm6);
     assertCondition(lexical[key], `Lexical is missing ${key}`, lexical);
   }
+
+  for (const [mode, metrics] of [["CM6 rich", cm6], ["Lexical", lexical]]) {
+    assertCondition(metrics.counts.katexErrors === 0, `${mode} rendered KaTeX errors`, metrics.counts);
+    assertCondition(metrics.counts.inlineMath >= 4, `${mode} rendered too few inline math nodes`, metrics.counts);
+    assertCondition(metrics.counts.displayMath >= 1, `${mode} rendered too few display math nodes`, metrics.counts);
+    assertTextContains(`${mode} inline math`, metrics.inlineMathTexts, "x2");
+    assertTextContains(`${mode} inline math`, metrics.inlineMathTexts, "a+b");
+    assertIncludes(`${mode} display math`, metrics.mathAnnotations, "x^2 + y^2 = z^2");
+  }
+
+  for (const key of ["inlineMath", "inlineMathKatex", "displayMath", "displayMathKatex", "katexErrors"]) {
+    assertSameValue("math count", key, cm6.counts[key], lexical.counts[key]);
+  }
+  assertSameValue("display math label", "text", cm6.mathLabel.text, lexical.mathLabel.text);
 
   for (const property of ["color", "fontFamily", "fontSize", "lineHeight"]) {
     assertStyleEqual("flow", property, cm6.flow, lexical.flow);
@@ -255,6 +330,19 @@ async function measureTypingLatency(page, mode) {
   });
 }
 
+function assertTypingLatency(mode, metrics) {
+  assertCondition(
+    metrics.insertP95Ms <= MAX_TYPING_INSERT_P95_MS,
+    `${mode} typing insert p95 exceeded ${MAX_TYPING_INSERT_P95_MS}ms`,
+    metrics,
+  );
+  assertCondition(
+    metrics.inputToIdleMs <= MAX_TYPING_INPUT_TO_IDLE_MS,
+    `${mode} typing input-to-idle exceeded ${MAX_TYPING_INPUT_TO_IDLE_MS}ms`,
+    metrics,
+  );
+}
+
 async function main() {
   let session = null;
 
@@ -277,6 +365,8 @@ async function main() {
       cm6: await measureTypingLatency(session.page, "cm6-rich"),
       lexical: await measureTypingLatency(session.page, "lexical"),
     };
+    assertTypingLatency("CM6 rich", typing.cm6);
+    assertTypingLatency("Lexical", typing.lexical);
     console.log(JSON.stringify({
       status: "ok",
       cm6: {

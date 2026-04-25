@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildFocusedVitestArgs,
   buildFocusedVitestRuns,
+  createRecentOutputBuffer,
   findMissingExplicitPaths,
+  formatCommand,
   getFocusedVitestTimeouts,
   partitionFocusedVitestArgs,
   resolvePnpmCommand,
@@ -132,6 +134,21 @@ describe("focused vitest wrapper", () => {
     });
   });
 
+  it("keeps a bounded recent output buffer for timeout diagnostics", () => {
+    const output = createRecentOutputBuffer(2);
+
+    output.append("one\n");
+    output.append("two\nthree");
+
+    expect(output.text()).toBe("two\nthree");
+  });
+
+  it("formats commands with shell quoting for diagnostics", () => {
+    expect(formatCommand(["pnpm", "exec", "vitest", "run", "src/a test.ts"])).toBe(
+      "pnpm exec vitest run 'src/a test.ts'",
+    );
+  });
+
   it("falls back to defaults for invalid timeout environment values", () => {
     expect(
       getFocusedVitestTimeouts({
@@ -250,6 +267,8 @@ describe("focused vitest wrapper", () => {
     await expect(run).resolves.toBe(124);
     expect(terminated).toEqual([{ signal: "SIGTERM", target: child }]);
     expect(stderr.toString()).toContain("run exceeded 10ms");
+    expect(stderr.toString()).toContain("command: pnpm exec vitest run");
+    expect(stderr.toString()).toContain("pid=1234");
   });
 
   it("terminates silent runs on the inactivity timeout", async () => {
@@ -293,5 +312,6 @@ describe("focused vitest wrapper", () => {
 
     await expect(run).resolves.toBe(124);
     expect(terminated).toEqual([{ signal: "SIGTERM", target: child }]);
+    expect(stderr.toString()).toContain("last output:\nstill alive");
   });
 });

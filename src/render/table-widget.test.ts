@@ -1,7 +1,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { StateEffect, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import { mathMacrosField } from "../state/math-macros";
@@ -40,7 +40,11 @@ class ResizeObserverStub {
     this.callback(entries, this as unknown as ResizeObserver);
   }
 }
-vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+
+beforeEach(() => {
+  ResizeObserverStub.instances.length = 0;
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+});
 
 /** Minimal parsed table for testing. */
 function makeTable(): ParsedTable {

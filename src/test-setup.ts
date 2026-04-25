@@ -58,6 +58,8 @@ afterEach(() => {
     cleanup();
   }
   clearDocumentAnalysisCache();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
   vi.useRealTimers();
 });

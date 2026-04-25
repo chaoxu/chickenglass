@@ -49,7 +49,13 @@ describe("package editor export", () => {
     expect(packageJson.scripts?.["dev:worktree"]).toBe("node scripts/dev-worktree.mjs");
     expect(packageJson.scripts?.typecheck).toBe("tsc --noEmit");
     expect(packageJson.scripts?.["check:types"]).toBe("pnpm typecheck && pnpm typecheck:server");
-    expect(packageJson.scripts?.["check:unit"]).toBe("vitest run");
+    expect(packageJson.scripts?.["check:unit"]).toBe("node scripts/watched-vitest.mjs");
+    expect(packageJson.scripts?.["check:runtime"]).toBe(
+      "pnpm test:browser:quick -- smoke && pnpm test:browser:parity",
+    );
+    expect(packageJson.scripts?.["check:merge"]).toBe(
+      "pnpm check:static && pnpm check:unit && pnpm check:runtime",
+    );
     expect(packageJson.scripts?.test).toBe("pnpm check:unit");
     expect(packageJson.scripts?.prepare).toBe("lefthook install");
   });
