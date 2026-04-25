@@ -48,7 +48,7 @@ export function useWindowCloseGuard({
       }
 
       const currentWindow = getCurrentWindow();
-      unlisten = await currentWindow.onCloseRequested(async (event) => {
+      const nextUnlisten = await currentWindow.onCloseRequested(async (event) => {
         event.preventDefault();
 
         if (closeRequestInFlightRef.current) {
@@ -65,6 +65,14 @@ export function useWindowCloseGuard({
           closeRequestInFlightRef.current = false;
         }
       });
+      // The component may have unmounted while we were awaiting the Tauri
+      // listener registration. If so, drop the listener immediately —
+      // otherwise it stays bound to a dead component.
+      if (cancelled) {
+        nextUnlisten();
+        return;
+      }
+      unlisten = nextUnlisten;
     })().catch((error: unknown) => {
       console.error("[app] window close guard failed", error);
     });

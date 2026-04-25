@@ -33,3 +33,15 @@ export function hasSessionPath(
 ): boolean {
   return state.currentDocument?.path === path;
 }
+
+export function isCurrentSessionDirty(state: EditorSessionState): boolean {
+  return state.currentDocument?.dirty === true;
+}
+
+export function isSessionPathDirty(
+  state: EditorSessionState,
+  path: string,
+): boolean {
+  return state.currentDocument?.path === path
+    && state.currentDocument.dirty === true;
+}

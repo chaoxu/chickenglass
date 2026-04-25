@@ -10,6 +10,7 @@ import {
   type ExternalDocumentConflict,
   type SessionDocument,
   hasSessionPath,
+  isSessionPathDirty,
   getCurrentSessionDocument,
 } from "./editor-session-model";
 import { createActiveDocumentSignal, type ActiveDocumentSignal } from "./active-document-signal";
@@ -208,8 +209,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
       return bufferedDoc ? fnv1aHash(editorDocumentToString(bufferedDoc)) : null;
     },
     hasPath: (path) => hasSessionPath(state, path),
-    isPathDirty: (path) => getCurrentSessionDocument(state)?.path === path
-      && getCurrentSessionDocument(state)?.dirty === true,
+    isPathDirty: (path) => isSessionPathDirty(state, path),
     setExternalConflictBaseline: (path, doc) => {
       externalConflictBaselines.set(path, doc);
       newDocumentPaths.delete(path);
