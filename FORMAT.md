@@ -160,6 +160,10 @@ $$ {#eq:einstein}
 
 The label must use the `eq:` prefix. Pandoc core parses `{#eq:einstein}` as ordinary text after the math block; Coflat treats this as canonical because pandoc-crossref recognizes it and resolves `[@eq:einstein]` when the filter runs before citeproc. Raw LaTeX `\begin{equation}\label{eq:...}...\end{equation}` is allowed as raw TeX, but it is not the canonical Coflat equation-label syntax.
 
+Equation labels must be unique within a document. Duplicate `{#eq:id}` labels are accepted by the parser but flagged by the semantic index; cross-references to the duplicated id resolve as ambiguous.
+
+**Escape rules.** A literal dollar sign in prose is written `\$` and does not open inline math. Inside `$...$` inline math, a backslash escapes the following character, so `$ \$50 $` is a math span containing a literal `$`. Display math `\[...\]` and inline math `\(...\)` are the LaTeX-style alternative syntaxes for `$$...$$` and `$...$`; the same backslash-escape applies to their contents. Dollar-math is suppressed inside fenced code blocks and inline code spans.
+
 ### Custom macros
 
 Define in frontmatter under `math:`. Available in all math expressions:
@@ -344,6 +348,8 @@ blocks:
 ## Cross-References
 
 Reference fenced blocks and headings by their `#id` attribute. Reference labeled equations by their pandoc-crossref `{#eq:...}` display-math label.
+
+> **Parser vs. semantics scope.** `[@id]` and `@id` are not tokenized by Coflat's markdown parser; they appear in the syntax tree as ordinary text (matching Pandoc core, which leaves them for `pandoc-crossref` and `citeproc` to resolve). The reference index, renderer, and LaTeX exporter recognize and resolve them as a downstream semantic pass. Tooling that needs to highlight or rewrite these tokens should run against the semantic index, not the parse tree.
 
 ### ID prefixes
 

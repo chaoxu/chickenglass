@@ -13,7 +13,7 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 
 - This repo is hosted on a local Gitea instance at `http://localhost:3001`; see the Gitea / issue tracking section below for `tea` usage.
 - For terminal agents that support it, prefix repo-local shell commands with `rtk`.
-- For browser inspection, use the managed Playwright harness (`pnpm browser:inspect`, `pnpm test:browser`, `pnpm doctor:browser`). Do NOT drive CDP on port 9322 unless the user explicitly asks.
+- For browser inspection, use the managed Playwright harness (`pnpm browser:inspect`, `pnpm test:browser`, `pnpm doctor:browser`). The CDP lane on port 9322 (`pnpm chrome`) is reserved for human-in-the-loop visual debugging — agents must not drive it unless the user explicitly asks. See "Manual CDP lane" below for the full rule.
 
 ## Stack
 

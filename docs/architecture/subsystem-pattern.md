@@ -218,8 +218,6 @@ When these areas are changed, the goal is not just to make the code shorter.
 The goal is to make the owner, transitions, adapters, and invariants explicit.
 Shared CM6 document state for those areas belongs in `src/state/` per
 [Document State Module](./document-state-module.md).
-Shared CM6 document state for those areas belongs in `src/state/` per
-[Document State Module](./document-state-module.md).
 
 ## Good subsystem examples in the repo
 
