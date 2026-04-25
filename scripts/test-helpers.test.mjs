@@ -88,11 +88,14 @@ describe("test helpers browser harness", () => {
       "clearStructure",
       "findLine",
       "jumpToTextAnchor",
+      "pickAutocompleteOption",
+      "readAutocompleteOptions",
       "resolveTextAnchorInDocument",
       "scrollTo",
       "scrollToText",
       "setCursor",
       "traceVerticalCursorMotion",
+      "waitForAutocomplete",
     ];
 
     for (const helperName of legacyHelperNames) {

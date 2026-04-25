@@ -299,6 +299,34 @@ export async function readAutocompleteOptions(page) {
 }
 
 /**
+ * Pick a CM6 autocomplete option by substring match.
+ *
+ * @param {import("playwright").Page} page
+ * @param {string} needle
+ */
+export async function pickAutocompleteOption(page, needle) {
+  const picked = await page.evaluate((matchText) => {
+    const option = [...document.querySelectorAll(".cm-tooltip-autocomplete li")]
+      .find((item) => (item.textContent ?? "").includes(matchText));
+    if (!(option instanceof HTMLElement)) {
+      return false;
+    }
+    for (const type of ["mousedown", "mouseup", "click"]) {
+      option.dispatchEvent(new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      }));
+    }
+    return true;
+  }, needle);
+  if (!picked) {
+    throw new Error(`Failed to pick autocomplete option matching ${JSON.stringify(needle)}`);
+  }
+  await waitForSemanticReady(page);
+}
+
+/**
  * Insert text into the active CM6 selection using a typed-input userEvent.
  *
  * @param {import("playwright").Page} page

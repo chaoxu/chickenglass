@@ -417,14 +417,15 @@ export async function resetEditorState(page) {
   if (!discarded) {
     throw new Error("Failed to discard the current document during reset");
   }
-  await page.evaluate(() => {
-    window.__app.setMode("cm6-rich");
-  });
   await openRegressionDocument(page);
+  await switchToMode(page, "cm6-rich");
   await page.waitForFunction(
     () => {
       const doc = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString() ?? "";
-      return doc.includes("Coflat Feature Showcase") && doc.includes("SearchNeedle");
+      return window.__app?.getMode?.() === "cm6-rich" &&
+        Boolean(window.__cmView) &&
+        doc.includes("Coflat Feature Showcase") &&
+        doc.includes("SearchNeedle");
     },
     { timeout: RESET_EDITOR_STATE_TIMEOUT_MS },
   );
