@@ -78,8 +78,12 @@ If you need custom budgets, override the selected runtime budget profile with:
 --post-open-settle-ms <n>
 --poll-interval-ms <n>
 --idle-settle-timeout-ms <n>
+--document-stable-timeout-ms <n>
+--sidebar-ready-timeout-ms <n>
 --sidebar-publish-timeout-ms <n>
 --typing-canonical-timeout-ms <n>
+--typing-visual-sync-timeout-ms <n>
+--typing-semantic-timeout-ms <n>
 ```
 
 ## Repo-Wide Typecheck

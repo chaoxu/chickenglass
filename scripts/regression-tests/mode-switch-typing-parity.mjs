@@ -4,7 +4,7 @@
  */
 
 import {
-  openFixtureDocument,
+  openEditorScenario,
   readEditorText,
   settleEditorLayout,
   switchToMode,
@@ -97,7 +97,14 @@ async function assertModeCanReadDocument(page, mode, expectedDoc) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, FIXTURE, { mode: "cm6-rich" });
+  await openEditorScenario(page, {
+    entry: FIXTURE.virtualPath,
+    files: {
+      [FIXTURE.virtualPath]: FIXTURE.content,
+    },
+    mode: "cm6-rich",
+    waitFor: { selector: ".cf-doc-flow--cm6 .cf-doc-heading" },
+  });
 
   let needle = ANCHOR;
   for (const step of STEPS) {

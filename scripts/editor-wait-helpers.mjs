@@ -7,7 +7,16 @@
  * waitForScrollReady) live in editor-test-helpers because they reach into
  * editor-state and DOM helpers that depend on the broader test surface.
  */
+
 import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
+
+const DOCUMENT_STABILITY_POLL_MS = DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs;
+const DEFAULT_DOCUMENT_STABLE_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.documentStableTimeoutMs;
+const DEFAULT_SEMANTIC_READY_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
+const DEFAULT_SIDEBAR_READY_TIMEOUT_MS =
+  DEFAULT_RUNTIME_BUDGET_PROFILE.sidebarReadyTimeoutMs;
 
 /**
  * Wait for one or more browser animation frames in the app page.
@@ -67,7 +76,7 @@ export async function settleEditorLayout(page, options = {}) {
  * @param {{ timeoutMs?: number, stableFrames?: number }} [options]
  */
 export async function waitForSemanticReady(page, options = {}) {
-  const timeoutMs = Math.max(1, options.timeoutMs ?? 5_000);
+  const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_SEMANTIC_READY_TIMEOUT_MS);
   const stableFrames = Math.max(1, options.stableFrames ?? 2);
   return page.evaluate(async ({ nextTimeoutMs, nextStableFrames }) => {
     const waitForFrame = () =>
@@ -168,12 +177,9 @@ export async function waitForDocumentStable(page, options = {}) {
     }
     throw new Error(`Timed out waiting ${timeoutMs}ms for ${quietMs}ms of stable document state.`);
   }, {
-    pollIntervalMs: Math.max(
-      1,
-      options.pollIntervalMs ?? DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
-    ),
+    pollIntervalMs: Math.max(1, options.pollIntervalMs ?? DOCUMENT_STABILITY_POLL_MS),
     quietMs: Math.max(0, options.quietMs ?? 250),
-    timeoutMs: Math.max(1, options.timeoutMs ?? 5_000),
+    timeoutMs: Math.max(1, options.timeoutMs ?? DEFAULT_DOCUMENT_STABLE_TIMEOUT_MS),
   });
 }
 
@@ -192,7 +198,7 @@ export async function waitForSidebarReady(page, panel, options = {}) {
     },
     panel,
     {
-      timeout: options.timeoutMs ?? 5_000,
+      timeout: options.timeoutMs ?? DEFAULT_SIDEBAR_READY_TIMEOUT_MS,
       polling: options.pollIntervalMs ?? DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
     },
   );

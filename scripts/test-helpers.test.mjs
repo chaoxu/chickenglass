@@ -292,7 +292,10 @@ describe("test helpers browser harness", () => {
     await switchToMode(page, "Lexical");
 
     expect(mode).toBe("lexical");
-    expect(page.evaluate).toHaveBeenCalledWith(expect.any(Function), "lexical");
+    expect(page.evaluate).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ nextMode: "lexical" }),
+    );
   });
 
   it("opens generated multi-file editor scenarios through the app bridge", async () => {

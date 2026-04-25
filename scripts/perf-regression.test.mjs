@@ -557,8 +557,12 @@ Final prose line.
       postOpenSettleMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.postOpenSettleMs,
       pollIntervalMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
       idleSettleTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.idleSettleTimeoutMs,
+      documentStableTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.documentStableTimeoutMs,
+      sidebarReadyTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.sidebarReadyTimeoutMs,
       sidebarPanelPublishTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.sidebarPanelPublishTimeoutMs,
       typingCanonicalTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.typingCanonicalTimeoutMs,
+      typingVisualSyncTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.typingVisualSyncTimeoutMs,
+      typingSemanticTimeoutMs: HEAVY_DOC_RUNTIME_BUDGET_PROFILE.typingSemanticTimeoutMs,
     });
   });
 
@@ -576,8 +580,12 @@ Final prose line.
       postOpenSettleMs: DEFAULT_RUNTIME_BUDGET_PROFILE.postOpenSettleMs,
       pollIntervalMs: DEFAULT_RUNTIME_BUDGET_PROFILE.pollIntervalMs,
       idleSettleTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.idleSettleTimeoutMs,
+      documentStableTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.documentStableTimeoutMs,
+      sidebarReadyTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.sidebarReadyTimeoutMs,
       sidebarPanelPublishTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.sidebarPanelPublishTimeoutMs,
       typingCanonicalTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.typingCanonicalTimeoutMs,
+      typingVisualSyncTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.typingVisualSyncTimeoutMs,
+      typingSemanticTimeoutMs: DEFAULT_RUNTIME_BUDGET_PROFILE.typingSemanticTimeoutMs,
     });
   });
 
@@ -587,16 +595,24 @@ Final prose line.
         getIntFlag: (flag, fallback) => ({
           "--poll-interval-ms": 99,
           "--idle-settle-timeout-ms": 123,
+          "--document-stable-timeout-ms": 234,
+          "--sidebar-ready-timeout-ms": 345,
           "--sidebar-publish-timeout-ms": 456,
           "--typing-canonical-timeout-ms": 789,
+          "--typing-visual-sync-timeout-ms": 890,
+          "--typing-semantic-timeout-ms": 901,
         })[flag] ?? fallback,
         hasFlag: () => false,
       }),
     ).toMatchObject({
       pollIntervalMs: 99,
       idleSettleTimeoutMs: 123,
+      documentStableTimeoutMs: 234,
+      sidebarReadyTimeoutMs: 345,
       sidebarPanelPublishTimeoutMs: 456,
       typingCanonicalTimeoutMs: 789,
+      typingVisualSyncTimeoutMs: 890,
+      typingSemanticTimeoutMs: 901,
     });
   });
 

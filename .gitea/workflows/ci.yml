@@ -45,22 +45,18 @@ jobs:
       - name: Install Pandoc
         env:
           PANDOC_VERSION: "3.1.13"
+          PANDOC_DEB_SHA256: "b51029afd2e302679aabb9464cd96bda378145d48bb853bd32d93c57b93a293d"
         run: |
-          if command -v pandoc >/dev/null 2>&1; then
-            pandoc --version
-            exit 0
-          fi
           if command -v dpkg >/dev/null 2>&1; then
             curl -L -o /tmp/pandoc.deb \
               "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-amd64.deb"
+            echo "${PANDOC_DEB_SHA256}  /tmp/pandoc.deb" | sha256sum -c -
             sudo dpkg -i /tmp/pandoc.deb
-          elif command -v brew >/dev/null 2>&1; then
-            brew install pandoc
           else
-            echo "Pandoc is required but neither dpkg nor brew is available." >&2
+            echo "Pandoc is pinned for CI through the checked .deb artifact; dpkg is required." >&2
             exit 1
           fi
-          pandoc --version
+          pandoc --version | head -1 | grep -Fx "pandoc ${PANDOC_VERSION}"
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:unit
         env:

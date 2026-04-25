@@ -8,7 +8,6 @@ import {
 } from "./document-surface-selector-contracts.mjs";
 import {
   openEditorScenario,
-  openFixtureDocument,
   settleEditorLayout,
   switchToMode,
 } from "./test-helpers.mjs";
@@ -174,9 +173,12 @@ async function measureTypingLatency(page, mode) {
     displayPath: `fixture:document-surface-parity-${mode}.md`,
     virtualPath: `document-surface-parity-${mode}.md`,
   };
-  await openFixtureDocument(page, fixture, {
+  await openEditorScenario(page, {
+    entry: fixture.virtualPath,
+    files: {
+      [fixture.virtualPath]: fixture.content,
+    },
     mode,
-    project: "single-file",
     settleMs: 100,
   });
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });

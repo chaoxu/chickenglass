@@ -236,9 +236,10 @@ Per-step timing uses `performance.now()` around each synchronous `view.dispatch(
 
 You can override the selected runtime budget profile with `--debug-timeout-ms`,
 `--open-timeout-ms`, `--post-open-settle-ms`, `--poll-interval-ms`,
-`--idle-settle-timeout-ms`, `--sidebar-publish-timeout-ms`, and
-`--typing-canonical-timeout-ms` when a fixture needs different automation
-limits.
+`--idle-settle-timeout-ms`, `--document-stable-timeout-ms`,
+`--sidebar-ready-timeout-ms`, `--sidebar-publish-timeout-ms`,
+`--typing-canonical-timeout-ms`, `--typing-visual-sync-timeout-ms`, and
+`--typing-semantic-timeout-ms` when a fixture needs different automation limits.
 
 ## HTML Export Scenario
 

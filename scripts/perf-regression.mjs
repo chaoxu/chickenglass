@@ -47,6 +47,10 @@ import {
   SCROLL_HEAVY_FIXTURE,
 } from "./fixture-test-helpers.mjs";
 import {
+  measureCm6TypingBurst,
+  measureLexicalBridgeTypingBurst,
+} from "./typing-burst-helpers.mjs";
+import {
   hasFixtureDocument,
   openFixtureDocument,
   resolveFixtureDocument,
@@ -239,7 +243,6 @@ export const TYPING_BURST_CASES = [
   },
 ];
 const TYPING_BURST_INSERT_COUNT = 100;
-const POST_TYPING_IDLE_OBSERVATION_MS = 500;
 
 export const HTML_EXPORT_PANDOC_CASES = [
   PUBLIC_SHOWCASE_FIXTURE,
@@ -461,6 +464,14 @@ export function resolvePerfRuntimeOptions({ getIntFlag, hasFlag }) {
       "--idle-settle-timeout-ms",
       profile.idleSettleTimeoutMs,
     ),
+    documentStableTimeoutMs: getIntFlag(
+      "--document-stable-timeout-ms",
+      profile.documentStableTimeoutMs,
+    ),
+    sidebarReadyTimeoutMs: getIntFlag(
+      "--sidebar-ready-timeout-ms",
+      profile.sidebarReadyTimeoutMs,
+    ),
     sidebarPanelPublishTimeoutMs: getIntFlag(
       "--sidebar-publish-timeout-ms",
       profile.sidebarPanelPublishTimeoutMs,
@@ -468,6 +479,14 @@ export function resolvePerfRuntimeOptions({ getIntFlag, hasFlag }) {
     typingCanonicalTimeoutMs: getIntFlag(
       "--typing-canonical-timeout-ms",
       profile.typingCanonicalTimeoutMs,
+    ),
+    typingVisualSyncTimeoutMs: getIntFlag(
+      "--typing-visual-sync-timeout-ms",
+      profile.typingVisualSyncTimeoutMs,
+    ),
+    typingSemanticTimeoutMs: getIntFlag(
+      "--typing-semantic-timeout-ms",
+      profile.typingSemanticTimeoutMs,
     ),
   };
 }
@@ -510,6 +529,7 @@ async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
 async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
   return evaluateStep(page, "measureLexicalSidebarOpen", async ({
     nextPanel,
+    panelActiveTimeoutMs,
     pollIntervalMs,
     publishTimeoutMs,
   }) => {
@@ -520,7 +540,7 @@ async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
     const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitForSidebarPanel = async () => {
       const settleStart = performance.now();
-      while (performance.now() - settleStart < 2_000) {
+      while (performance.now() - settleStart < panelActiveTimeoutMs) {
         const sidebar = window.__app?.getSidebarState?.();
         if (!sidebar || (!sidebar.collapsed && sidebar.tab === nextPanel)) {
           return;
@@ -572,519 +592,10 @@ async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
     };
   }, {
     nextPanel: panel,
+    panelActiveTimeoutMs: runtimeOptions.sidebarReadyTimeoutMs,
     pollIntervalMs: runtimeOptions.pollIntervalMs,
     publishTimeoutMs: runtimeOptions.sidebarPanelPublishTimeoutMs,
   });
-}
-
-async function measureTypingBurst(page, anchor, insertCount, runtimeOptions) {
-  return evaluateStep(page, "measureTypingBurst", async ({
-    nextAnchor,
-    count,
-    postIdleObservationMs,
-    idleSettleTimeoutMs,
-  }) => {
-    const mean = (values) =>
-      values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
-    const percentile = (values, percentileValue) => {
-      if (values.length === 0) return 0;
-      const sorted = [...values].sort((left, right) => left - right);
-      const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
-      return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-    };
-    const waitForIdle = () =>
-      new Promise((resolve) => {
-        if (typeof window.requestIdleCallback === "function") {
-          window.requestIdleCallback(() => resolve(), { timeout: idleSettleTimeoutMs });
-          return;
-        }
-        setTimeout(resolve, 0);
-      });
-    const createLongTaskRecorder = () => {
-      const entries = [];
-      const supported = Boolean(
-        typeof PerformanceObserver === "function"
-        && PerformanceObserver.supportedEntryTypes?.includes("longtask"),
-      );
-      let observer = null;
-      if (supported) {
-        observer = new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            entries.push({ startTime: entry.startTime, duration: entry.duration });
-          }
-        });
-        observer.observe({ type: "longtask", buffered: false });
-      }
-      const summarize = (from, to = Number.POSITIVE_INFINITY) => {
-        const matched = entries.filter((entry) =>
-          entry.startTime >= from && entry.startTime < to
-        );
-        const durations = matched.map((entry) => entry.duration);
-        return {
-          count: matched.length,
-          totalMs: durations.reduce((sum, value) => sum + value, 0),
-          maxMs: Math.max(...durations, 0),
-        };
-      };
-      return {
-        supported,
-        disconnect() {
-          observer?.disconnect();
-        },
-        summarize,
-      };
-    };
-    const measureEventLoopLag = async (durationMs) => {
-      const expectedFrameMs = 1000 / 60;
-      const values = [];
-      const end = performance.now() + durationMs;
-      let last = performance.now();
-      while (performance.now() < end) {
-        const now = await new Promise((resolve) => {
-          if (typeof requestAnimationFrame === "function") {
-            requestAnimationFrame((timestamp) => resolve(timestamp));
-            return;
-          }
-          setTimeout(() => resolve(performance.now()), 16);
-        });
-        values.push(Math.max(0, now - last - expectedFrameMs));
-        last = now;
-      }
-      return {
-        samples: values.length,
-        meanMs: mean(values),
-        p95Ms: percentile(values, 95),
-        maxMs: Math.max(...values, 0),
-      };
-    };
-
-    const view = window.__cmView;
-    view.dispatch({ selection: { anchor: nextAnchor }, scrollIntoView: true });
-    view.focus();
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-    const longTaskRecorder = createLongTaskRecorder();
-    const timings = [];
-    const observationStart = performance.now();
-    const wallStart = observationStart;
-    for (let i = 0; i < count; i += 1) {
-      const pos = view.state.selection.main.anchor;
-      const t0 = performance.now();
-      view.dispatch({
-        changes: { from: pos, to: pos, insert: "1" },
-        selection: { anchor: pos + 1 },
-      });
-      timings.push(performance.now() - t0);
-    }
-    const wallMs = performance.now() - wallStart;
-    const settleStart = performance.now();
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const settleMs = performance.now() - settleStart;
-    const idleStart = performance.now();
-    await waitForIdle();
-    const idleMs = performance.now() - idleStart;
-    const postIdleStart = performance.now();
-    const postIdleLag = await measureEventLoopLag(postIdleObservationMs);
-    const postIdleEnd = performance.now();
-    // Let buffered PerformanceObserver long-task entries flush before summarizing.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const longTasks = longTaskRecorder.summarize(observationStart, postIdleStart);
-    const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
-    longTaskRecorder.disconnect();
-
-    return {
-      insertCount: count,
-      wallMs,
-      meanDispatchMs: mean(timings),
-      p95DispatchMs: percentile(timings, 95),
-      maxDispatchMs: Math.max(...timings, 0),
-      settleMs,
-      idleMs,
-      inputToIdleMs: wallMs + settleMs + idleMs,
-      wallPerCharMs: wallMs / count,
-      inputToIdlePerCharMs: (wallMs + settleMs + idleMs) / count,
-      longTaskSupported: longTaskRecorder.supported ? 1 : 0,
-      longTaskCount: longTasks.count,
-      longTaskTotalMs: longTasks.totalMs,
-      longTaskMaxMs: longTasks.maxMs,
-      postIdleWindowMs: postIdleObservationMs,
-      postIdleLongTaskCount: postIdleLongTasks.count,
-      postIdleLongTaskTotalMs: postIdleLongTasks.totalMs,
-      postIdleLongTaskMaxMs: postIdleLongTasks.maxMs,
-      postIdleLagSamples: postIdleLag.samples,
-      postIdleLagMeanMs: postIdleLag.meanMs,
-      postIdleLagP95Ms: postIdleLag.p95Ms,
-      postIdleLagMaxMs: postIdleLag.maxMs,
-    };
-  }, {
-    nextAnchor: anchor,
-    count: insertCount,
-    postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
-    idleSettleTimeoutMs: runtimeOptions.idleSettleTimeoutMs,
-  });
-}
-
-async function measureLexicalBridgeTypingBurst(page, anchor, insertCount, runtimeOptions) {
-  const result = await evaluateStep(
-    page,
-    "measureLexicalBridgeTypingBurst",
-    async ({
-      nextAnchor,
-      count,
-      postIdleObservationMs,
-      idleSettleTimeoutMs,
-      typingCanonicalTimeoutMs,
-    }) => {
-      const mean = (values) =>
-        values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
-      const percentile = (values, percentileValue) => {
-        if (values.length === 0) return 0;
-        const sorted = [...values].sort((left, right) => left - right);
-        const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
-        return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-      };
-      const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const waitForAnimationFrames = () =>
-        new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const waitForIdle = () =>
-        new Promise((resolve) => {
-          if (typeof window.requestIdleCallback === "function") {
-            window.requestIdleCallback(() => resolve(), { timeout: idleSettleTimeoutMs });
-            return;
-          }
-          setTimeout(resolve, 0);
-        });
-      const createLongTaskRecorder = () => {
-        const entries = [];
-        const supported = Boolean(
-          typeof PerformanceObserver === "function"
-          && PerformanceObserver.supportedEntryTypes?.includes("longtask"),
-        );
-        let observer = null;
-        if (supported) {
-          observer = new PerformanceObserver((list) => {
-            for (const entry of list.getEntries()) {
-              entries.push({ startTime: entry.startTime, duration: entry.duration });
-            }
-          });
-          observer.observe({ type: "longtask", buffered: false });
-        }
-        const summarize = (from, to = Number.POSITIVE_INFINITY) => {
-          const matched = entries.filter((entry) =>
-            entry.startTime >= from && entry.startTime < to
-          );
-          const durations = matched.map((entry) => entry.duration);
-          return {
-            count: matched.length,
-            totalMs: durations.reduce((sum, value) => sum + value, 0),
-            maxMs: Math.max(...durations, 0),
-          };
-        };
-        return {
-          supported,
-          disconnect() {
-            observer?.disconnect();
-          },
-          summarize,
-        };
-      };
-      const measureEventLoopLag = async (durationMs) => {
-        const expectedFrameMs = 1000 / 60;
-        const values = [];
-        const end = performance.now() + durationMs;
-        let last = performance.now();
-        while (performance.now() < end) {
-          const now = await new Promise((resolve) => {
-            if (typeof requestAnimationFrame === "function") {
-              requestAnimationFrame((timestamp) => resolve(timestamp));
-              return;
-            }
-            setTimeout(() => resolve(performance.now()), 16);
-          });
-          values.push(Math.max(0, now - last - expectedFrameMs));
-          last = now;
-        }
-        return {
-          samples: values.length,
-          meanMs: mean(values),
-          p95Ms: percentile(values, 95),
-          maxMs: Math.max(...values, 0),
-        };
-      };
-      const findSummary = (summaries, name) =>
-        summaries.find((summary) => summary.name === name) ?? null;
-
-      const editor = window.__editor;
-      if (!editor) {
-        throw new Error("window.__editor is unavailable in Lexical mode.");
-      }
-      await editor.ready;
-      const readCanonicalDoc = () =>
-        typeof editor.peekDoc === "function" ? editor.peekDoc() : editor.getDoc();
-
-      const beforeLength = readCanonicalDoc().length;
-      const beforePerfSnapshot = await window.__cfDebug.perfSummary();
-      const beforePerfSummaries = beforePerfSnapshot.frontend.summaries;
-      const semanticBefore = findSummary(beforePerfSummaries, "lexical.deriveSemanticState");
-      const semanticCountBefore = semanticBefore?.count ?? 0;
-      const getMarkdownBefore = findSummary(beforePerfSummaries, "lexical.getLexicalMarkdown");
-      const publishSnapshotBefore = findSummary(
-        beforePerfSummaries,
-        "lexical.publishRichDocumentSnapshot",
-      );
-      const deferredSyncBefore = findSummary(beforePerfSummaries, "lexical.setLexicalMarkdown");
-      const incrementalSyncBefore = findSummary(
-        beforePerfSummaries,
-        "lexical.incrementalRichSync",
-      );
-      editor.setSelection(nextAnchor);
-      editor.focus();
-      await waitForAnimationFrames();
-      const sourceSpanIndexBefore = findSummary(
-        beforePerfSummaries,
-        "lexical.createSourceSpanIndex",
-      );
-
-      const longTaskRecorder = createLongTaskRecorder();
-      const timings = [];
-      const beforeDeferredCount = deferredSyncBefore?.count ?? 0;
-      const beforeDeferredTotalMs = deferredSyncBefore?.totalMs ?? 0;
-      const beforeIncrementalCount = incrementalSyncBefore?.count ?? 0;
-      const beforeIncrementalTotalMs = incrementalSyncBefore?.totalMs ?? 0;
-      const expectedLength = beforeLength + count;
-      const observationStart = performance.now();
-      const wallStart = observationStart;
-      for (let i = 0; i < count; i += 1) {
-        const t0 = performance.now();
-        editor.insertText("1");
-        timings.push(performance.now() - t0);
-      }
-      const wallMs = performance.now() - wallStart;
-
-      const syncObservationStart = performance.now();
-      const perfPollIntervalMs = 25;
-      const canonicalPollIntervalMs = 8;
-      const visualSyncTimeoutMs = 3000;
-      const semanticTimeoutMs = 3000;
-      const canonicalTimeoutMs = typingCanonicalTimeoutMs;
-      let lastPerfSampleAt = Number.NEGATIVE_INFINITY;
-      let deferredSyncAfter = deferredSyncBefore;
-      let incrementalSyncAfter = incrementalSyncBefore;
-      let semanticAfter = semanticBefore;
-      let finalLength = readCanonicalDoc().length;
-      let canonicalMs = finalLength >= expectedLength ? 0 : null;
-      let visualSyncMs = null;
-      let semanticMs = null;
-      let visualSyncObserved = false;
-      let semanticObserved = false;
-      let finalTimeoutPerfSampleTaken = false;
-      const samplePerfSummary = async () => {
-        const perfSnapshot = await window.__cfDebug.perfSummary();
-        const perfSampleAt = performance.now();
-        lastPerfSampleAt = perfSampleAt;
-        const perfSummaries = perfSnapshot.frontend.summaries;
-        deferredSyncAfter = findSummary(perfSummaries, "lexical.setLexicalMarkdown");
-        incrementalSyncAfter = findSummary(perfSummaries, "lexical.incrementalRichSync");
-        semanticAfter = findSummary(perfSummaries, "lexical.deriveSemanticState");
-        if (
-          !visualSyncObserved
-          && (
-            (deferredSyncAfter?.count ?? 0) > beforeDeferredCount
-            || (incrementalSyncAfter?.count ?? 0) > beforeIncrementalCount
-          )
-        ) {
-          visualSyncObserved = true;
-          visualSyncMs = perfSampleAt - syncObservationStart;
-        }
-        if (
-          !semanticObserved
-          && (semanticAfter?.count ?? 0) > semanticCountBefore
-        ) {
-          semanticObserved = true;
-          semanticMs = perfSampleAt - syncObservationStart;
-        }
-      };
-      while (true) {
-        const now = performance.now();
-        if (canonicalMs == null) {
-          finalLength = readCanonicalDoc().length;
-          if (finalLength >= expectedLength) {
-            canonicalMs = now - syncObservationStart;
-          }
-        }
-        const elapsedMs = now - syncObservationStart;
-        const visualWaitExpired = elapsedMs >= visualSyncTimeoutMs;
-        const semanticWaitExpired = elapsedMs >= semanticTimeoutMs;
-        const canonicalWaitExpired = elapsedMs >= canonicalTimeoutMs;
-        const needsSummaryPolling =
-          (!visualSyncObserved && !visualWaitExpired)
-          || (!semanticObserved && !semanticWaitExpired);
-        if (
-          needsSummaryPolling
-          && now - lastPerfSampleAt >= perfPollIntervalMs
-        ) {
-          await samplePerfSummary();
-        }
-        const canClassify =
-          (visualSyncObserved || visualWaitExpired)
-          && (semanticObserved || semanticWaitExpired)
-          && (canonicalMs != null || canonicalWaitExpired);
-        if (
-          canClassify
-          && !finalTimeoutPerfSampleTaken
-          && (!visualSyncObserved || !semanticObserved)
-        ) {
-          finalTimeoutPerfSampleTaken = true;
-          await samplePerfSummary();
-          continue;
-        }
-        if (canClassify) {
-          break;
-        }
-        await sleepInPage(canonicalMs == null ? canonicalPollIntervalMs : perfPollIntervalMs);
-      }
-      const syncObservationEnd = performance.now();
-      if (canonicalMs == null) {
-        canonicalMs = syncObservationEnd - syncObservationStart;
-      }
-      if (semanticMs == null) {
-        semanticMs = syncObservationEnd - syncObservationStart;
-      }
-      finalLength = readCanonicalDoc().length;
-      if (finalLength < expectedLength) {
-        throw new Error(
-          `Lexical bridge insert did not update canonical markdown: expected length >= ${expectedLength}, got ${finalLength}.`,
-        );
-      }
-
-      const settleStart = performance.now();
-      await waitForAnimationFrames();
-      await waitForIdle();
-      const settleMs = performance.now() - settleStart;
-      const postIdleStart = performance.now();
-      const postIdleLag = await measureEventLoopLag(postIdleObservationMs);
-      const postIdleEnd = performance.now();
-      // Let buffered PerformanceObserver long-task entries flush before summarizing.
-      await sleepInPage(0);
-      const longTasks = longTaskRecorder.summarize(observationStart, postIdleStart);
-      const postIdleLongTasks = longTaskRecorder.summarize(postIdleStart, postIdleEnd);
-      longTaskRecorder.disconnect();
-
-      const afterPerfSnapshot = await window.__cfDebug.perfSummary();
-      const afterPerfSummaries = afterPerfSnapshot.frontend.summaries;
-      const deferredSyncFinal = findSummary(afterPerfSummaries, "lexical.setLexicalMarkdown");
-      const incrementalSyncFinal = findSummary(afterPerfSummaries, "lexical.incrementalRichSync");
-      const sourceSpanIndexAfter = findSummary(
-        afterPerfSummaries,
-        "lexical.createSourceSpanIndex",
-      );
-      const getMarkdownAfter = findSummary(afterPerfSummaries, "lexical.getLexicalMarkdown");
-      const publishSnapshotAfter = findSummary(
-        afterPerfSummaries,
-        "lexical.publishRichDocumentSnapshot",
-      );
-      const semanticAfterFinal = findSummary(
-        afterPerfSummaries,
-        "lexical.deriveSemanticState",
-      );
-      const deferredSyncCount = Math.max(
-        0,
-        (deferredSyncFinal?.count ?? 0) - beforeDeferredCount,
-      );
-      const deferredSyncWorkMs = Math.max(
-        0,
-        (deferredSyncFinal?.totalMs ?? 0) - beforeDeferredTotalMs,
-      );
-      const incrementalSyncCount = Math.max(
-        0,
-        (incrementalSyncFinal?.count ?? 0) - beforeIncrementalCount,
-      );
-      const incrementalSyncWorkMs = Math.max(
-        0,
-        (incrementalSyncFinal?.totalMs ?? 0) - beforeIncrementalTotalMs,
-      );
-      const sourceSpanIndexCount = Math.max(
-        0,
-        (sourceSpanIndexAfter?.count ?? 0) - (sourceSpanIndexBefore?.count ?? 0),
-      );
-      const sourceSpanIndexWorkMs = Math.max(
-        0,
-        (sourceSpanIndexAfter?.totalMs ?? 0) - (sourceSpanIndexBefore?.totalMs ?? 0),
-      );
-      const semanticWorkCount = Math.max(
-        0,
-        (semanticAfterFinal?.count ?? 0) - (semanticBefore?.count ?? 0),
-      );
-      const semanticWorkMs = Math.max(
-        0,
-        (semanticAfterFinal?.totalMs ?? 0) - (semanticBefore?.totalMs ?? 0),
-      );
-      const getMarkdownWorkCount = Math.max(
-        0,
-        (getMarkdownAfter?.count ?? 0) - (getMarkdownBefore?.count ?? 0),
-      );
-      const getMarkdownWorkMs = Math.max(
-        0,
-        (getMarkdownAfter?.totalMs ?? 0) - (getMarkdownBefore?.totalMs ?? 0),
-      );
-      const publishSnapshotWorkCount = Math.max(
-        0,
-        (publishSnapshotAfter?.count ?? 0) - (publishSnapshotBefore?.count ?? 0),
-      );
-      const publishSnapshotWorkMs = Math.max(
-        0,
-        (publishSnapshotAfter?.totalMs ?? 0) - (publishSnapshotBefore?.totalMs ?? 0),
-      );
-
-      return {
-        insertCount: count,
-        wallMs,
-        wallPerCharMs: wallMs / count,
-        meanInsertMs: mean(timings),
-        p95InsertMs: percentile(timings, 95),
-        maxInsertMs: Math.max(...timings, 0),
-        canonicalMs,
-        visualSyncMs: visualSyncMs ?? 0,
-        visualSyncObserved,
-        visualSyncTimeoutMs,
-        semanticMs,
-        semanticObserved,
-        semanticWorkCount,
-        semanticWorkMs,
-        getMarkdownWorkCount,
-        getMarkdownWorkMs,
-        publishSnapshotWorkCount,
-        publishSnapshotWorkMs,
-        settleMs,
-        deferredSyncCount,
-        deferredSyncWorkMs,
-        incrementalSyncCount,
-        incrementalSyncWorkMs,
-        sourceSpanIndexCount,
-        sourceSpanIndexWorkMs,
-        longTaskSupported: longTaskRecorder.supported ? 1 : 0,
-        longTaskCount: longTasks.count,
-        longTaskTotalMs: longTasks.totalMs,
-        longTaskMaxMs: longTasks.maxMs,
-        postIdleWindowMs: postIdleObservationMs,
-        postIdleLongTaskCount: postIdleLongTasks.count,
-        postIdleLongTaskTotalMs: postIdleLongTasks.totalMs,
-        postIdleLongTaskMaxMs: postIdleLongTasks.maxMs,
-        postIdleLagSamples: postIdleLag.samples,
-        postIdleLagMeanMs: postIdleLag.meanMs,
-        postIdleLagP95Ms: postIdleLag.p95Ms,
-        postIdleLagMaxMs: postIdleLag.maxMs,
-      };
-    },
-    {
-      nextAnchor: anchor,
-      count: insertCount,
-      postIdleObservationMs: POST_TYPING_IDLE_OBSERVATION_MS,
-      idleSettleTimeoutMs: runtimeOptions.idleSettleTimeoutMs,
-      typingCanonicalTimeoutMs: runtimeOptions.typingCanonicalTimeoutMs,
-    },
-  );
-  return finalizeLexicalBridgeObservation(result);
 }
 
 export function typingBurstMetrics(caseKey, positionKey, result) {
@@ -1758,7 +1269,12 @@ export const scenarios = {
             runtimeOptions,
           );
           const beforeSummaries = await getFrontendPerfSummaries(page);
-          const result = await measureTypingBurst(page, position.anchor, TYPING_BURST_INSERT_COUNT, runtimeOptions);
+          const result = await measureCm6TypingBurst(
+            page,
+            position.anchor,
+            TYPING_BURST_INSERT_COUNT,
+            runtimeOptions,
+          );
           const afterSummaries = await getFrontendPerfSummaries(page);
           metrics.push(
             ...typingBurstMetrics(testCase.key, positionKey, result),
@@ -1798,11 +1314,13 @@ export const scenarios = {
             runtimeOptions,
           );
           const beforeSummaries = await getFrontendPerfSummaries(page);
-          const result = await measureLexicalBridgeTypingBurst(
-            page,
-            position.anchor,
-            TYPING_BURST_INSERT_COUNT,
-            runtimeOptions,
+          const result = finalizeLexicalBridgeObservation(
+            await measureLexicalBridgeTypingBurst(
+              page,
+              position.anchor,
+              TYPING_BURST_INSERT_COUNT,
+              runtimeOptions,
+            ),
           );
           const afterSummaries = await getFrontendPerfSummaries(page);
           metrics.push(
@@ -1964,8 +1482,12 @@ Options:
   --post-open-settle-ms <n> Extra settle after opening fixtures
   --poll-interval-ms <n>   Override in-page polling interval
   --idle-settle-timeout-ms <n> Override requestIdleCallback settle timeout
+  --document-stable-timeout-ms <n> Override document-stability wait timeout
+  --sidebar-ready-timeout-ms <n> Override sidebar-active wait timeout
   --sidebar-publish-timeout-ms <n> Override Lexical sidebar publish timeout
   --typing-canonical-timeout-ms <n> Override typing canonical-doc timeout
+  --typing-visual-sync-timeout-ms <n> Override Lexical visual-sync timeout
+  --typing-semantic-timeout-ms <n> Override Lexical semantic-sync timeout
   --browser <managed|cdp>  Browser lane (default: managed)
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)

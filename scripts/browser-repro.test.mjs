@@ -283,8 +283,11 @@ describe("browser repro helpers", () => {
       artifactRecorder: expect.any(Object),
       artifactsRoot: undefined,
       artifactsDir: undefined,
+      browserMode: "managed",
+      headless: true,
       page: browserReproMocks.page,
       stopAppServer: browserReproMocks.stopAppServer,
+      url: "http://localhost:5173",
     });
   });
 
