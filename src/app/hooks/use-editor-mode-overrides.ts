@@ -63,6 +63,15 @@ export function useEditorModeOverrides({
   const [pendingModeOverride, setPendingModeOverride] = useState<PendingModeOverride | null>(null);
   const pendingModeRequestIdRef = useRef(0);
 
+  // The pending override is owned by exactly one in-flight requestId at a
+  // time; later callbacks must not clobber a newer pending entry. Every
+  // pending-clear path goes through this so the invariant lives in one place.
+  const clearPendingIfRequest = useCallback((requestId: number) => {
+    setPendingModeOverride((previous) =>
+      previous?.requestId === requestId ? null : previous,
+    );
+  }, []);
+
   const editorMode = useMemo((): EditorMode => {
     const override = currentPath ? modeOverrides[currentPath] : undefined;
     if (override !== undefined) {
@@ -131,12 +140,7 @@ export function useEditorModeOverrides({
     });
     if (isLexicalEditorMode(normalizedMode)) {
       const completeLexicalNavigation = () => {
-        setPendingModeOverride((previous) => {
-          if (!previous || previous.requestId !== requestId) {
-            return previous;
-          }
-          return null;
-        });
+        clearPendingIfRequest(requestId);
         setModeOverrides((previous) => ({
           ...previous,
           [target.file]: normalizedMode,
@@ -152,22 +156,12 @@ export function useEditorModeOverrides({
       void openFile(target.file).then(() => {
         if (!isPathOpen(target.file)) {
           clearPendingLexicalNavigation(requestId);
-          setPendingModeOverride((previous) => {
-            if (!previous || previous.requestId !== requestId) {
-              return previous;
-            }
-            return null;
-          });
+          clearPendingIfRequest(requestId);
           onComplete?.();
         }
       }).catch((error: unknown) => {
         clearPendingLexicalNavigation(requestId);
-        setPendingModeOverride((previous) => {
-          if (!previous || previous.requestId !== requestId) {
-            return previous;
-          }
-          return null;
-        });
+        clearPendingIfRequest(requestId);
         console.error("[editor] handleSearchResult: failed to open file", target.file, error);
         onComplete?.();
       });
@@ -175,12 +169,7 @@ export function useEditorModeOverrides({
     }
 
     void handleSearchResultNavigation(target.file, target.pos, onComplete).then((opened) => {
-      setPendingModeOverride((previous) => {
-        if (!previous || previous.requestId !== requestId) {
-          return previous;
-        }
-        return null;
-      });
+      clearPendingIfRequest(requestId);
       if (!opened) {
         return;
       }
