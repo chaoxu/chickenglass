@@ -8,7 +8,7 @@ import { sleep } from "./browser-lifecycle.mjs";
 import { closeBrowserSession, openBrowserSession } from "./devx-browser-session.mjs";
 import { createArgParser } from "./devx-cli.mjs";
 import {
-  PUBLIC_SHOWCASE_FIXTURE,
+  PUBLIC_SCROLL_STRESS_FIXTURE,
   RANKDECREASE_MAIN_FIXTURE,
 } from "./fixture-test-helpers.mjs";
 import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
@@ -23,8 +23,8 @@ const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
   DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 const PUBLIC_CURSOR_FALLBACK = {
-  ...PUBLIC_SHOWCASE_FIXTURE,
-  defaultLine: 139,
+  ...PUBLIC_SCROLL_STRESS_FIXTURE,
+  defaultLine: PUBLIC_SCROLL_STRESS_FIXTURE.defaultLine,
 };
 
 function traceWindow(trace, index, radius = 1) {

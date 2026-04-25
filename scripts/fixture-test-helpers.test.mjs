@@ -10,6 +10,7 @@ import {
   DEFAULT_FIXTURE_SETTLE_MS,
   isMissingFixtureError,
   MissingFixtureError,
+  PUBLIC_SCROLL_STRESS_FIXTURE,
   PUBLIC_SHOWCASE_FIXTURE,
   RANKDECREASE_MAIN_FIXTURE,
   resolveFixtureDocument,
@@ -33,6 +34,14 @@ describe("fixture registry", () => {
       displayPath: "demo/index.md",
       virtualPath: "index.md",
     });
+    expect(PUBLIC_SCROLL_STRESS_FIXTURE).toMatchObject({
+      key: "public_scroll_stress",
+      displayPath: "generated/public-scroll-stress.md",
+      virtualPath: "generated/public-scroll-stress.md",
+      defaultLine: 420,
+    });
+    expect(PUBLIC_SCROLL_STRESS_FIXTURE.content).toContain("# Introduction");
+    expect(PUBLIC_SCROLL_STRESS_FIXTURE.content.split("\n").length).toBeGreaterThan(900);
     expect(RANKDECREASE_MAIN_FIXTURE).toMatchObject({
       key: "rankdecrease",
       displayPath: "fixtures/rankdecrease/main.md",
@@ -57,6 +66,19 @@ describe("fixture registry", () => {
     expect(resolved.displayPath).toBe("demo/index.md");
     expect(resolved.virtualPath).toBe("index.md");
     expect(resolved.content.length).toBeGreaterThan(0);
+  });
+
+  it("resolves private scroll fixture fallbacks to generated public content", () => {
+    const resolved = resolveFixtureDocumentWithFallback({
+      displayPath: "fixtures/missing/private-scroll.md",
+      virtualPath: "missing/private-scroll.md",
+      candidates: [resolve("/tmp/coflat-missing-private-scroll.md")],
+    }, PUBLIC_SCROLL_STRESS_FIXTURE);
+
+    expect(resolved.displayPath).toBe("generated/public-scroll-stress.md");
+    expect(resolved.virtualPath).toBe("generated/public-scroll-stress.md");
+    expect(resolved.resolvedPath).toBeNull();
+    expect(resolved.content).toContain("Synthetic theorem 5");
   });
 
   it("throws a typed error for missing required fixtures", () => {

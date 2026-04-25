@@ -3,11 +3,14 @@ import {
   settleEditorLayout,
   waitForRenderReady,
 } from "../test-helpers.mjs";
+import {
+  PUBLIC_SCROLL_STRESS_FIXTURE,
+  RANKDECREASE_MAIN_FIXTURE,
+  resolveFixtureDocumentWithFallback,
+} from "../fixture-test-helpers.mjs";
 
 export const name = "heading-number-stability";
-export const optionalFixtures = true;
 
-const FIXTURE = "rankdecrease/main.md";
 const NEEDLE = "# Introduction";
 
 function summarizeSamples(samples, baselineCount) {
@@ -183,7 +186,11 @@ async function sampleDuringStructuralEdits(page, baselineCount) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, FIXTURE, {
+  const fixture = resolveFixtureDocumentWithFallback(
+    RANKDECREASE_MAIN_FIXTURE,
+    PUBLIC_SCROLL_STRESS_FIXTURE,
+  );
+  await openFixtureDocument(page, fixture, {
     mode: "cm6-rich",
     project: "full-project",
   });

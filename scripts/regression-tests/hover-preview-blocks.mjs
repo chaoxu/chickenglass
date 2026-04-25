@@ -20,6 +20,10 @@ import {
 
 export const name = "hover-preview-blocks";
 export const optionalFixtures = true;
+export const runtimeIssues = {
+  ignoreHttpStatuses: [/missing-preview\.pdf/u],
+  ignoreRequestFailures: [/missing-preview\.pdf/u],
+};
 
 const TABLE_REF = '.cf-crossref[aria-label="[@tbl:hover]"]';
 const FIGURE_REF = '.cf-crossref[aria-label="[@fig:hover]"]';

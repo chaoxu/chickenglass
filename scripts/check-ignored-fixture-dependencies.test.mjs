@@ -11,6 +11,7 @@ describe("ignored fixture dependency guard", () => {
     expect(collectFixtureReferences(`
       const path = "fixtures/private/main.md";
       const ok = "demo/index.md";
+      const helperTemplate = \`fixtures/\${virtualPath}\`;
     `)).toEqual(["fixtures/private/main.md"]);
   });
 

@@ -78,7 +78,7 @@ describe("browser regression missing fixture policy", () => {
     })).toBe(true);
   });
 
-  it("marks private-fixture browser regressions as optional", () => {
+  it("marks private-fixture browser regressions as optional or gives them public fallbacks", () => {
     const regressionDir = join(__dirname, "regression-tests");
     const privateMarkers = [
       "cogirth/",
@@ -96,7 +96,14 @@ describe("browser regression missing fixture policy", () => {
     expect(privateFixtureFiles).not.toEqual([]);
     for (const file of privateFixtureFiles) {
       const content = readFileSync(join(regressionDir, file), "utf8");
-      expect(content, file).toContain("export const optionalFixtures = true");
+      const hasOptionalFixtureSkip = content.includes("export const optionalFixtures = true");
+      const hasGeneratedPublicFallback =
+        content.includes("resolveFixtureDocumentWithFallback") &&
+        content.includes("PUBLIC_SCROLL_STRESS_FIXTURE");
+      expect(
+        hasOptionalFixtureSkip || hasGeneratedPublicFallback,
+        file,
+      ).toBe(true);
     }
   });
 });

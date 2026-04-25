@@ -10,7 +10,7 @@ export function collectFixtureReferences(content) {
   const references = [];
   for (const match of content.matchAll(FIXTURE_REFERENCE_PATTERN)) {
     const reference = match[1]?.replace(/[.:]+$/u, "");
-    if (reference) {
+    if (reference && !reference.includes("${")) {
       references.push(reference);
     }
   }

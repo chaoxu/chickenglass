@@ -11,27 +11,68 @@ const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
   DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
 function issueMatches(text, patterns) {
-  return patterns.some((pattern) =>
-    typeof pattern === "string" ? text.includes(pattern) : pattern.test(text));
+  return patterns.some((pattern) => {
+    if (typeof pattern === "string") {
+      return text.includes(pattern);
+    }
+    pattern.lastIndex = 0;
+    return pattern.test(text);
+  });
+}
+
+const DEFAULT_IGNORED_REQUEST_FAILURES = [
+  /net::ERR_ABORTED/u,
+  /\/__coflat\/debug-event(?:[?#]|$)/u,
+  /\/favicon\.ico(?:[?#]|$)/u,
+];
+const DEFAULT_IGNORED_HTTP_STATUSES = [
+  /\/__coflat\/debug-event(?:[?#]|$)/u,
+  /\/favicon\.ico(?:[?#]|$)/u,
+];
+
+function requestMethod(request) {
+  return typeof request?.method === "function" ? request.method() : "REQUEST";
+}
+
+function requestUrl(request) {
+  return typeof request?.url === "function" ? request.url() : "<unknown-url>";
+}
+
+function requestFailureText(request) {
+  const failure = typeof request?.failure === "function" ? request.failure() : null;
+  return failure?.errorText ?? "request failed";
 }
 
 /**
  * Capture runtime issues emitted during a browser scenario.
  *
- * Collects `console.error(...)` messages and uncaught page errors while the
- * callback runs, then returns both the callback result and any captured issues.
+ * Collects `console.error(...)` messages, uncaught page errors, unexpected
+ * request failures, and HTTP 4xx/5xx responses while the callback runs, then
+ * returns both the callback result and any captured issues.
  *
  * @param {import("playwright").Page} page
  * @param {() => Promise<unknown>} run
  * @param {{
+ *   captureNetwork?: boolean,
  *   ignoreConsole?: Array<string | RegExp>,
+ *   ignoreHttpStatuses?: Array<string | RegExp>,
  *   ignorePageErrors?: Array<string | RegExp>,
+ *   ignoreRequestFailures?: Array<string | RegExp>,
  * }} [options]
  */
 export async function withRuntimeIssueCapture(page, run, options = {}) {
   const issues = [];
+  const captureNetwork = options.captureNetwork !== false;
   const ignoreConsole = options.ignoreConsole ?? [];
+  const ignoreHttpStatuses = [
+    ...DEFAULT_IGNORED_HTTP_STATUSES,
+    ...(options.ignoreHttpStatuses ?? []),
+  ];
   const ignorePageErrors = options.ignorePageErrors ?? [];
+  const ignoreRequestFailures = [
+    ...DEFAULT_IGNORED_REQUEST_FAILURES,
+    ...(options.ignoreRequestFailures ?? []),
+  ];
 
   const onConsole = (msg) => {
     if (msg.type() !== "error") return;
@@ -52,8 +93,27 @@ export async function withRuntimeIssueCapture(page, run, options = {}) {
     issues.push({ source: "pageerror", text });
   };
 
+  const onRequestFailed = (request) => {
+    const text = `${requestMethod(request)} ${requestUrl(request)} ${requestFailureText(request)}`;
+    if (issueMatches(text, ignoreRequestFailures)) return;
+    issues.push({ source: "requestfailed", text });
+  };
+
+  const onResponse = (response) => {
+    const status = typeof response?.status === "function" ? response.status() : 0;
+    if (status < 400) return;
+    const request = typeof response?.request === "function" ? response.request() : null;
+    const text = `${status} ${requestMethod(request)} ${typeof response?.url === "function" ? response.url() : "<unknown-url>"}`;
+    if (issueMatches(text, ignoreHttpStatuses)) return;
+    issues.push({ source: "response", text });
+  };
+
   page.on("console", onConsole);
   page.on("pageerror", onPageError);
+  if (captureNetwork) {
+    page.on("requestfailed", onRequestFailed);
+    page.on("response", onResponse);
+  }
 
   try {
     const value = await run();
@@ -62,6 +122,10 @@ export async function withRuntimeIssueCapture(page, run, options = {}) {
   } finally {
     page.off("console", onConsole);
     page.off("pageerror", onPageError);
+    if (captureNetwork) {
+      page.off("requestfailed", onRequestFailed);
+      page.off("response", onResponse);
+    }
   }
 }
 

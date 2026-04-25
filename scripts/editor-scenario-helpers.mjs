@@ -1,5 +1,6 @@
-/* global window */
+/* global document, HTMLElement, window */
 
+import { assertEditorHealth } from "./browser-health.mjs";
 import {
   buildFixtureProjectPayload,
   DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
@@ -14,6 +15,7 @@ import {
   discardCurrentFile,
   replaceEditorText,
   saveCurrentFile,
+  showSidebarPanel,
   switchToMode,
 } from "./editor-state-helpers.mjs";
 
@@ -407,18 +409,100 @@ export async function withRestoredFixture(page, fixture, run) {
 
   return result;
 }
-export async function resetEditorState(page) {
+
+async function clearTransientScenarioState(page) {
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.keyboard.press("Escape").catch(() => {});
   await page.mouse.move(2, 2).catch(() => {});
   await waitForAnimationFrames(page, 1);
   await page.evaluate(() => {
     window.__app?.setSearchOpen?.(false);
+    window.__cmDebug?.clearStructure?.();
+    window.__cmDebug?.clearMotionGuards?.();
+    window.__cfDebug?.clearScrollGuards?.();
+    window.__cfDebug?.clearInteractionLog?.();
+
+    for (const tooltip of document.querySelectorAll(".cf-hover-preview-tooltip")) {
+      if (tooltip instanceof HTMLElement) {
+        tooltip.setAttribute("data-visible", "false");
+        tooltip.style.display = "none";
+      }
+    }
+
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && (
+      active.closest('[role="dialog"]') ||
+      active.closest(".cm-tooltip-autocomplete") ||
+      active.closest(".cf-hover-preview-tooltip")
+    )) {
+      active.blur();
+    }
+
+    window.__cfDebug?.clearSession?.();
   }).catch(() => {});
+  await waitForAnimationFrames(page, 2);
+}
+
+async function collectResetState(page) {
+  return page.evaluate(() => {
+    const isVisible = (el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    };
+    const visibleCount = (selector) =>
+      [...document.querySelectorAll(selector)].filter((el) => isVisible(el)).length;
+
+    return {
+      autocompleteCount: visibleCount(".cm-tooltip-autocomplete"),
+      dialogCount: visibleCount('[role="dialog"]'),
+      hoverPreviewCount: visibleCount(".cf-hover-preview-tooltip"),
+      interactionLogCount: window.__cfDebug?.interactionLog?.()?.length ?? 0,
+      mode: window.__app?.getMode?.() ?? null,
+      recorderStatus: window.__cfDebug?.recorderStatus?.() ?? null,
+      scrollGuardCount: window.__cfDebug?.scrollGuards?.()?.length ?? 0,
+      sidebar: window.__app?.getSidebarState?.() ?? null,
+    };
+  });
+}
+
+async function assertResetState(page) {
+  await assertEditorHealth(page, "resetEditorState", {
+    maxAutocompleteTooltips: 0,
+    maxVisibleDialogs: 0,
+    maxVisibleHoverPreviews: 0,
+  });
+
+  const state = await collectResetState(page);
+  const issues = [];
+  if (state.sidebar?.collapsed !== false || state.sidebar?.tab !== "files") {
+    issues.push(`sidebar not reset: ${JSON.stringify(state.sidebar)}`);
+  }
+  if (state.scrollGuardCount !== 0) {
+    issues.push(`scroll guards not cleared: ${state.scrollGuardCount}`);
+  }
+  if (state.interactionLogCount !== 0) {
+    issues.push(`interaction log not cleared: ${state.interactionLogCount}`);
+  }
+  if ((state.recorderStatus?.queued ?? 0) !== 0 || (state.recorderStatus?.localEventCount ?? 0) !== 0) {
+    issues.push(`debug recorder not cleared: ${JSON.stringify(state.recorderStatus)}`);
+  }
+
+  if (issues.length > 0) {
+    throw new Error(`resetEditorState: ${issues.join("; ")}`);
+  }
+}
+
+export async function resetEditorState(page) {
+  await clearTransientScenarioState(page);
   const discarded = await discardCurrentFile(page).catch(() => false);
   if (!discarded) {
     throw new Error("Failed to discard the current document during reset");
   }
   await openRegressionDocument(page);
   await switchToMode(page, "cm6-rich");
+  await showSidebarPanel(page, "files");
+  await clearTransientScenarioState(page);
   await page.waitForFunction(
     () => {
       const doc = window.__editor?.getDoc?.() ?? window.__cmView?.state?.doc?.toString() ?? "";
@@ -429,4 +513,5 @@ export async function resetEditorState(page) {
     },
     { timeout: RESET_EDITOR_STATE_TIMEOUT_MS },
   );
+  await assertResetState(page);
 }

@@ -12,10 +12,13 @@ import {
   openFixtureDocument,
   waitForScrollReady,
 } from "../test-helpers.mjs";
-import { RANKDECREASE_MAIN_FIXTURE } from "../fixture-test-helpers.mjs";
+import {
+  PUBLIC_SCROLL_STRESS_FIXTURE,
+  RANKDECREASE_MAIN_FIXTURE,
+  resolveFixtureDocumentWithFallback,
+} from "../fixture-test-helpers.mjs";
 
 export const name = "scroll-stability";
-export const optionalFixtures = true;
 
 const STEP_PX = 180;
 const STEP_COUNT = 8;
@@ -65,7 +68,11 @@ function findScrollAnomalies(samples) {
 }
 
 export async function run(page) {
-  await openFixtureDocument(page, RANKDECREASE_MAIN_FIXTURE, { mode: "rich" });
+  const fixture = resolveFixtureDocumentWithFallback(
+    RANKDECREASE_MAIN_FIXTURE,
+    PUBLIC_SCROLL_STRESS_FIXTURE,
+  );
+  await openFixtureDocument(page, fixture, { mode: "rich" });
   await waitForScrollReady(page, { stableFrames: 3, timeoutMs: 10_000 });
 
   const samples = await page.evaluate(

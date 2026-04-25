@@ -80,6 +80,67 @@ export const PUBLIC_SHOWCASE_FIXTURE = {
   ...demoFixture({ key: "index", virtualPath: "index.md" }),
 };
 
+function buildPublicScrollStressFixtureContent() {
+  const lines = [
+    "---",
+    "title: Public Scroll Stress Fixture",
+    "---",
+    "",
+    "# Introduction",
+    "",
+    "This generated document is committed as code so browser scroll regressions have a public long-document fallback. It intentionally mixes headings, prose, math, tables, and fenced blocks.",
+    "",
+  ];
+
+  for (let index = 1; index <= 180; index += 1) {
+    lines.push(
+      `## Section ${index}`,
+      "",
+      `Paragraph ${index} keeps enough wrapped prose on screen to exercise line measurement while referencing [@eq:scroll-${index}] and inline math $a_${index}+b_${index}=c_${index}$. The sentence is deliberately long enough to wrap in the editor viewport and make scroll geometry observable across rich rendering passes.`,
+      "",
+      `$$`,
+      `x_${index}^2 + y_${index}^2 = z_${index}^2`,
+      `$$ {#eq:scroll-${index}}`,
+      "",
+    );
+
+    if (index % 5 === 0) {
+      lines.push(
+        `::: {.theorem #thm:scroll-${index}} Synthetic theorem ${index}`,
+        `The public fallback theorem ${index} gives the rich renderer a titled fenced div with cross-reference metadata.`,
+        ":::",
+        "",
+        "::: {.proof}",
+        `The proof for theorem ${index} has a short body so hidden fence behavior and block-shell geometry are both exercised.`,
+        ":::",
+        "",
+      );
+    }
+
+    if (index % 9 === 0) {
+      lines.push(
+        `::: {.table #tbl:scroll-${index}} Synthetic table ${index}`,
+        "| Column | Value |",
+        "|---|---:|",
+        `| alpha | ${index} |`,
+        `| beta | ${index * 2} |`,
+        ":::",
+        "",
+      );
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+export const PUBLIC_SCROLL_STRESS_FIXTURE = {
+  key: "public_scroll_stress",
+  displayPath: "generated/public-scroll-stress.md",
+  virtualPath: "generated/public-scroll-stress.md",
+  content: buildPublicScrollStressFixtureContent(),
+  defaultLine: 420,
+};
+
 export const RANKDECREASE_MAIN_FIXTURE = repoFixture({
   key: "rankdecrease",
   virtualPath: "rankdecrease/main.md",
