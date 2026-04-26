@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { AppMainShell } from "./components/app-main-shell";
 import { AppSidebarShell } from "./components/app-sidebar-shell";
 import { ErrorBoundary } from "./components/error-boundary";
@@ -34,6 +34,7 @@ import { useHotExitBackups } from "./hooks/use-hot-exit-backups";
 import { createHotExitBackupStore } from "./hot-exit-backups";
 import { useAppSaveLifecycle } from "./hooks/use-app-save-lifecycle";
 import { useProjectFileWatcher } from "./hooks/use-project-file-watcher";
+import { base64ToUint8Array } from "./lib/utils";
 import {
   type SidebarLayoutController,
   type SidebarTab,
@@ -41,10 +42,15 @@ import {
 } from "./hooks/use-sidebar-layout";
 import { useUnsavedChangesDialog } from "./hooks/use-unsaved-changes-dialog";
 import { useDevSettings } from "../state/dev-settings";
+import type { EditorMode } from "../editor-display-mode";
 import type { DebugProjectFile } from "../debug/debug-bridge-contract.js";
 
 interface FixtureProjectFileSystem extends FileSystem {
   replaceAll(entries: readonly MemoryFileSystemEntry[]): void;
+}
+
+interface DevFixtureFilesPayload {
+  readonly files: readonly DebugProjectFile[];
 }
 
 function canLoadFixtureProject(fs: FileSystem): fs is FixtureProjectFileSystem {
@@ -114,6 +120,56 @@ function ConnectedAppOverlays({
       />
     </Suspense>
   );
+}
+
+function requestedDevFixtureOptions(): {
+  readonly openPath: string | null;
+  readonly shouldLoadFixtures: boolean;
+} {
+  if (!import.meta.env.DEV) {
+    return { openPath: null, shouldLoadFixtures: false };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const fixture = params.get("fixture");
+  if (fixture && /^[a-zA-Z0-9._-]+$/.test(fixture)) {
+    return {
+      openPath: `fixtures/${fixture}/main.md`,
+      shouldLoadFixtures: true,
+    };
+  }
+  const openPath = params.get("open");
+  const safeOpenPath = openPath && /^fixtures\/[a-zA-Z0-9._/-]+\.md$/.test(openPath)
+    ? openPath
+    : null;
+  return {
+    openPath: safeOpenPath,
+    shouldLoadFixtures: params.get("fixtures") === "1" || safeOpenPath !== null,
+  };
+}
+
+function requestedDevFixtureMode(): EditorMode {
+  const mode = new URLSearchParams(window.location.search).get("mode");
+  if (mode === "lexical" || mode === "source" || mode === "cm6-rich") {
+    return mode;
+  }
+  return "cm6-rich";
+}
+
+async function mergeDevFixtureFiles(
+  fs: FileSystem,
+  files: readonly DebugProjectFile[],
+): Promise<void> {
+  for (const file of files) {
+    if (file.kind === "binary") {
+      await fs.writeFileBinary(file.path, base64ToUint8Array(file.base64));
+      continue;
+    }
+    if (await fs.exists(file.path)) {
+      await fs.writeFile(file.path, file.content);
+    } else {
+      await fs.createFile(file.path, file.content);
+    }
+  }
 }
 
 function AppInner() {
@@ -213,6 +269,58 @@ function AppInner() {
       }
     };
   }, [editor, fs, workspace]);
+  const setSidebarCollapsed = sidebarLayout.setSidebarCollapsed;
+  const setSidebarTab = sidebarLayout.setSidebarTab;
+  const lastLoadedUrlFixtureRef = useRef<string | null>(null);
+  useEffect(() => {
+    const { openPath, shouldLoadFixtures } = requestedDevFixtureOptions();
+    const requestKey = `${shouldLoadFixtures ? "fixtures" : "none"}:${openPath ?? ""}`;
+    if (
+      !shouldLoadFixtures ||
+      !workspace.startupComplete ||
+      lastLoadedUrlFixtureRef.current === requestKey
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch("/__coflat/fixture-files");
+      if (!response.ok) {
+        throw new Error(`Failed to load local fixtures: ${response.status}`);
+      }
+      const payload = await response.json() as DevFixtureFilesPayload;
+      if (cancelled) {
+        return;
+      }
+      await mergeDevFixtureFiles(fs, payload.files);
+      await workspace.refreshTree();
+      if (openPath) {
+        await editor.closeCurrentFile({ discard: true });
+        await editor.openFile(openPath);
+        editor.handleModeChange(requestedDevFixtureMode());
+      }
+      setSidebarTab("files");
+      setSidebarCollapsed(false);
+      lastLoadedUrlFixtureRef.current = requestKey;
+    })().catch((error: unknown) => {
+      lastLoadedUrlFixtureRef.current = null;
+      console.error("[dev-fixture] URL fixture load failed", error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    editor.closeCurrentFile,
+    editor.handleModeChange,
+    editor.openFile,
+    fs,
+    setSidebarCollapsed,
+    setSidebarTab,
+    workspace.refreshTree,
+    workspace.startupComplete,
+  ]);
 
   const fileDialogs = useAppFileDialogs({
     editor,
@@ -222,8 +330,8 @@ function AppInner() {
   });
   const sidebarShellLayout = useMemo(() => ({
     sidebarTab: sidebarLayout.sidebarTab,
-    setSidebarTab: sidebarLayout.setSidebarTab,
-  }), [sidebarLayout.sidebarTab, sidebarLayout.setSidebarTab]);
+    setSidebarTab,
+  }), [sidebarLayout.sidebarTab, setSidebarTab]);
   const sidebarFileTreeController = useMemo(() => ({
     activePath: editor.currentPath,
     createDirectory: editor.createDirectory,

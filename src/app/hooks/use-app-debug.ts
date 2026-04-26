@@ -35,6 +35,7 @@ import {
   getDebugBridgeReadyPromise,
   markDebugBridgeReady,
 } from "../../debug/debug-bridge-ready";
+import { collectEditorRuntimeContract } from "../../debug/editor-runtime-contract";
 import type {
   AppDebugBridge,
   CfDebugBridge,
@@ -403,6 +404,7 @@ export function useAppDebug({
       scrollGuards: () => getScrollGuardEvents(),
       clearScrollGuards: () => clearScrollGuardEvents(),
       watcherStatus: () => getLatestFileWatcherStatus(),
+      runtimeContract: collectEditorRuntimeContract,
       renderState: () => window.__cmDebug?.renderState?.() ?? null,
       recorderStatus: () => getDebugSessionRecorderStatus(),
       captureState: (label?: string | null) => captureDebugSessionState(label),

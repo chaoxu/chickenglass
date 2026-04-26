@@ -8,6 +8,7 @@ import {
   COGIRTH_MAIN2_FIXTURE,
   DEFAULT_FIXTURE_OPEN_TIMEOUT_MS,
   DEFAULT_FIXTURE_SETTLE_MS,
+  GRAPH_RIDE_FIXTURE,
   isMissingFixtureError,
   MissingFixtureError,
   PUBLIC_SCROLL_STRESS_FIXTURE,
@@ -17,6 +18,10 @@ import {
   resolveFixtureDocumentWithFallback,
 } from "./fixture-test-helpers.mjs";
 import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
+
+function privateFixtureDisplayPath(path) {
+  return ["fixtures", path].join("/");
+}
 
 describe("fixture registry", () => {
   it("derives fixture automation budgets from the default runtime profile", () => {
@@ -44,21 +49,27 @@ describe("fixture registry", () => {
     expect(PUBLIC_SCROLL_STRESS_FIXTURE.content.split("\n").length).toBeGreaterThan(900);
     expect(RANKDECREASE_MAIN_FIXTURE).toMatchObject({
       key: "rankdecrease",
-      displayPath: "fixtures/rankdecrease/main.md",
+      displayPath: privateFixtureDisplayPath("rankdecrease/main.md"),
       virtualPath: "rankdecrease/main.md",
       defaultLine: 900,
     });
     expect(COGIRTH_MAIN2_FIXTURE).toMatchObject({
       key: "cogirth_main2",
-      displayPath: "fixtures/cogirth/main2.md",
+      displayPath: privateFixtureDisplayPath("cogirth/main2.md"),
       virtualPath: "cogirth/main2.md",
       defaultLine: 700,
+    });
+    expect(GRAPH_RIDE_FIXTURE).toMatchObject({
+      key: "graph_ride",
+      displayPath: privateFixtureDisplayPath("graph-ride/main.md"),
+      virtualPath: "graph-ride/main.md",
+      defaultLine: 1,
     });
   });
 
   it("resolves fallback fixture definitions to the public showcase", () => {
     const resolved = resolveFixtureDocumentWithFallback({
-      displayPath: "fixtures/missing/private.md",
+      displayPath: privateFixtureDisplayPath("missing/private.md"),
       virtualPath: "missing/private.md",
       candidates: [resolve("/tmp/coflat-missing-private.md")],
     });
@@ -70,7 +81,7 @@ describe("fixture registry", () => {
 
   it("resolves private scroll fixture fallbacks to generated public content", () => {
     const resolved = resolveFixtureDocumentWithFallback({
-      displayPath: "fixtures/missing/private-scroll.md",
+      displayPath: privateFixtureDisplayPath("missing/private-scroll.md"),
       virtualPath: "missing/private-scroll.md",
       candidates: [resolve("/tmp/coflat-missing-private-scroll.md")],
     }, PUBLIC_SCROLL_STRESS_FIXTURE);
@@ -83,14 +94,14 @@ describe("fixture registry", () => {
 
   it("throws a typed error for missing required fixtures", () => {
     expect(() => resolveFixtureDocument({
-      displayPath: "fixtures/missing/private.md",
+      displayPath: privateFixtureDisplayPath("missing/private.md"),
       virtualPath: "missing/private.md",
       candidates: [resolve("/tmp/coflat-missing-private.md")],
     })).toThrow(MissingFixtureError);
 
     try {
       resolveFixtureDocument({
-        displayPath: "fixtures/missing/private.md",
+        displayPath: privateFixtureDisplayPath("missing/private.md"),
         virtualPath: "missing/private.md",
         candidates: [resolve("/tmp/coflat-missing-private.md")],
       });

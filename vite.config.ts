@@ -1,5 +1,13 @@
 import { execSync } from "node:child_process";
-import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { defineConfig, type Connect, type Plugin } from "vite";
@@ -9,13 +17,34 @@ import { visualizer } from "rollup-plugin-visualizer";
 
 const DEBUG_EVENT_ENDPOINT = "/__coflat/debug-event";
 const DEBUG_EVENT_DIR = path.join(tmpdir(), "coflat-debug");
+const DEV_FIXTURE_PROJECT_ENDPOINT = "/__coflat/fixture-project/";
+const DEV_FIXTURE_FILES_ENDPOINT = "/__coflat/fixture-files";
 const DEFAULT_APP_STARTUP_BUNDLE_LIMIT_KB = 1500;
+
+const TEXT_FIXTURE_EXTENSIONS = new Set([
+  ".bib",
+  ".csl",
+  ".css",
+  ".html",
+  ".js",
+  ".json",
+  ".md",
+  ".svg",
+  ".ts",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
 
 interface DebugEventPayload {
   readonly sessionId: string;
   readonly sessionKind?: "human" | "webdriver";
   readonly events: unknown[];
 }
+
+type DevFixtureProjectFile =
+  | { readonly path: string; readonly kind: "text"; readonly content: string }
+  | { readonly path: string; readonly kind: "binary"; readonly base64: string };
 
 type BundleChunkLike = {
   readonly type: "chunk";
@@ -115,6 +144,166 @@ function debugSessionSinkPlugin(): Plugin {
   };
 }
 
+function safeFixtureKey(rawKey: string): string | null {
+  const key = decodeURIComponent(rawKey).trim();
+  if (!/^[a-zA-Z0-9._-]+$/.test(key)) {
+    return null;
+  }
+  return key;
+}
+
+function readDevFixtureProject(key: string): {
+  readonly files: readonly DevFixtureProjectFile[];
+  readonly initialPath: string;
+} {
+  const fixturesRoot = path.join(__dirname, "fixtures");
+  const projectRoot = path.join(fixturesRoot, key);
+  const projectStat = statSync(projectRoot);
+  if (!projectStat.isDirectory()) {
+    throw new Error(`Fixture project is not a directory: ${key}`);
+  }
+
+  const files: DevFixtureProjectFile[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const fixtureRelativePath = path.relative(fixturesRoot, absolutePath).replaceAll(path.sep, "/");
+      const extension = path.extname(entry.name).toLowerCase();
+      if (TEXT_FIXTURE_EXTENSIONS.has(extension)) {
+        files.push({
+          path: fixtureRelativePath,
+          kind: "text",
+          content: readFileSync(absolutePath, "utf8"),
+        });
+        continue;
+      }
+
+      files.push({
+        path: fixtureRelativePath,
+        kind: "binary",
+        base64: readFileSync(absolutePath).toString("base64"),
+      });
+    }
+  };
+
+  visit(projectRoot);
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  return {
+    files,
+    initialPath: `${key}/main.md`,
+  };
+}
+
+function readDevFixtureFiles(): { readonly files: readonly DevFixtureProjectFile[] } {
+  const fixturesRoot = path.join(__dirname, "fixtures");
+  const fixturesStat = statSync(fixturesRoot);
+  if (!fixturesStat.isDirectory()) {
+    throw new Error("fixtures root is not a directory");
+  }
+
+  const files: DevFixtureProjectFile[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const fixtureRelativePath = path.relative(fixturesRoot, absolutePath).replaceAll(path.sep, "/");
+      const projectPath = `fixtures/${fixtureRelativePath}`;
+      const extension = path.extname(entry.name).toLowerCase();
+      if (TEXT_FIXTURE_EXTENSIONS.has(extension)) {
+        files.push({
+          path: projectPath,
+          kind: "text",
+          content: readFileSync(absolutePath, "utf8"),
+        });
+        continue;
+      }
+
+      files.push({
+        path: projectPath,
+        kind: "binary",
+        base64: readFileSync(absolutePath).toString("base64"),
+      });
+    }
+  };
+
+  visit(fixturesRoot);
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  return { files };
+}
+
+function devFixtureProjectMiddleware(): Connect.NextHandleFunction {
+  return (req, res, next) => {
+    const url = req.url ?? "";
+    if (url.split(/[?#]/u)[0] === DEV_FIXTURE_FILES_ENDPOINT && req.method === "GET") {
+      try {
+        const payload = readDevFixtureFiles();
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(payload));
+      } catch (error: unknown) {
+        res.statusCode = 404;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({
+          error: error instanceof Error ? error.message : "fixture files not found",
+        }));
+      }
+      return;
+    }
+
+    if (!url.startsWith(DEV_FIXTURE_PROJECT_ENDPOINT) || req.method !== "GET") {
+      next();
+      return;
+    }
+
+    try {
+      const rawKey = url.slice(DEV_FIXTURE_PROJECT_ENDPOINT.length).split(/[?#]/u)[0] ?? "";
+      const key = safeFixtureKey(rawKey);
+      if (!key) {
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "invalid fixture key" }));
+        return;
+      }
+
+      const payload = readDevFixtureProject(key);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(payload));
+    } catch (error: unknown) {
+      res.statusCode = 404;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({
+        error: error instanceof Error ? error.message : "fixture project not found",
+      }));
+    }
+  };
+}
+
+function devFixtureProjectPlugin(): Plugin {
+  return {
+    name: "coflat-dev-fixture-projects",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(devFixtureProjectMiddleware());
+    },
+  };
+}
+
 function readAppStartupBundleLimitKb(): number {
   const rawLimit = process.env.COFLAT_APP_STARTUP_BUNDLE_LIMIT_KB;
   if (!rawLimit) {
@@ -201,6 +390,7 @@ export default defineConfig(({ mode }) => {
       reactPlugin,
       tailwindcss(),
       debugSessionSinkPlugin(),
+      devFixtureProjectPlugin(),
       appStartupBundleBudgetPlugin(readAppStartupBundleLimitKb()),
       mode === "analyze" &&
         visualizer({

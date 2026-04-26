@@ -180,6 +180,25 @@ describe("useAppEditorShell", () => {
     expect(ref.result.handleEditorDocumentReady).toBeTypeOf("function");
   });
 
+  it("uses the saved editor mode as the default for markdown files", async () => {
+    const { Harness, ref } = createHarness({
+      files: {
+        "notes.md": "# Notes\n",
+      },
+      settings: {
+        editorMode: "lexical",
+      },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("notes.md");
+    });
+
+    expect(ref.result.editorMode).toBe("lexical");
+  });
+
   it("preserves the current file mode when search navigation fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { Harness, ref } = createHarness({

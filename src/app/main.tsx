@@ -8,6 +8,7 @@ import {
   clearDynamicImportRecoveryFlag,
   installDynamicImportRecovery,
 } from "./dynamic-import-recovery";
+import { installTauriRenderDiagnostics } from "../debug/editor-runtime-contract";
 import { installRuntimeLogging } from "./runtime-logger";
 import "../globals.css";
 
@@ -43,6 +44,8 @@ async function bootstrap(): Promise<void> {
       <AppShell fs={fs} />
     </StrictMode>,
   );
+
+  void installTauriRenderDiagnostics();
 
   if (import.meta.env.DEV) {
     clearDynamicImportRecoveryFlag();

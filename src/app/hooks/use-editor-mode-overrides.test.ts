@@ -59,6 +59,7 @@ describe("useEditorModeOverrides", () => {
     const mergedDeps: EditorModeOverridesDeps = {
       clearPendingLexicalNavigation: vi.fn(),
       currentPath: "notes.md",
+      defaultMode: "cm6-rich",
       editorDoc: "",
       getSessionCurrentDocText: () => "",
       handleSearchResultNavigation: vi.fn(async () => true),
@@ -138,6 +139,12 @@ describe("useEditorModeOverrides", () => {
       await firstNavigation.promise;
       await Promise.resolve();
     });
+
+    expect(getController().editorMode).toBe("lexical");
+  });
+
+  it("uses the configured default mode when the active markdown file has no override", () => {
+    render({ defaultMode: "lexical" });
 
     expect(getController().editorMode).toBe("lexical");
   });

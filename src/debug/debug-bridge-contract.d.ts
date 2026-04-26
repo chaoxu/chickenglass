@@ -15,6 +15,7 @@ import type {
   DebugSessionCapture,
   DebugSessionRecorderStatus,
 } from "./session-recorder";
+import type { EditorRuntimeContractSnapshot } from "./editor-runtime-contract";
 
 export const CORE_DEBUG_GLOBAL_NAMES: readonly ["__app", "__cfDebug"];
 export const DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES: readonly ["__app", "__editor", "__cfDebug"];
@@ -100,6 +101,7 @@ export interface CfDebugBridge {
   scrollGuards: () => readonly ScrollGuardEvent[];
   clearScrollGuards: () => void;
   watcherStatus: () => FileWatcherStatus;
+  runtimeContract: () => Promise<EditorRuntimeContractSnapshot>;
   renderState: () => DebugRenderState | null;
   recorderStatus: () => DebugSessionRecorderStatus;
   captureState: (label?: string | null) => DebugSessionCapture;

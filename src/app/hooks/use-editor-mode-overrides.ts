@@ -22,6 +22,7 @@ import {
 export interface EditorModeOverridesDeps {
   clearPendingLexicalNavigation: (requestId?: number) => void;
   currentPath: string | null;
+  defaultMode: EditorMode;
   editorDoc: string;
   getSessionCurrentDocText: () => string;
   handleSearchResultNavigation: (
@@ -49,6 +50,7 @@ export interface EditorModeOverridesController {
 export function useEditorModeOverrides({
   clearPendingLexicalNavigation,
   currentPath,
+  defaultMode,
   editorDoc,
   getSessionCurrentDocText,
   handleSearchResultNavigation,
@@ -78,8 +80,8 @@ export function useEditorModeOverrides({
     if (committedOverride !== undefined) {
       return normalizeEditorMode(committedOverride, isMarkdownFile);
     }
-    return normalizeEditorMode(defaultEditorMode, isMarkdownFile);
-  }, [overrideState, currentPath, isMarkdownFile]);
+    return normalizeEditorMode(defaultMode ?? defaultEditorMode, isMarkdownFile);
+  }, [overrideState, currentPath, defaultMode, isMarkdownFile]);
 
   const handleModeChange = useCallback((mode: EditorMode | string) => {
     const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);

@@ -153,6 +153,12 @@ export const COGIRTH_MAIN2_FIXTURE = repoFixture({
   defaultLine: 700,
 });
 
+export const GRAPH_RIDE_FIXTURE = repoFixture({
+  key: "graph_ride",
+  virtualPath: "graph-ride/main.md",
+  defaultLine: 1,
+});
+
 export const SCROLL_HEAVY_FIXTURE = COGIRTH_MAIN2_FIXTURE;
 export const GEOMETRY_AUDIT_FIXTURES = {
   rankdecrease: RANKDECREASE_MAIN_FIXTURE,

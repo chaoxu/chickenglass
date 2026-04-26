@@ -110,6 +110,20 @@ describe("useSettings", () => {
       expect(result.current.settings.theme).toBe("system");
     });
 
+    it.each([
+      ["read", "cm6-rich"],
+      ["rich", "cm6-rich"],
+      ["bad-mode", "cm6-rich"],
+      [42, "cm6-rich"],
+    ])("normalizes persisted editorMode %j", (editorMode, expected) => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ editorMode }),
+      );
+      const { result } = renderHook(() => useSettings());
+      expect(result.current.settings.editorMode).toBe(expected);
+    });
+
     it("handles corrupt JSON in localStorage gracefully", () => {
       localStorage.setItem(STORAGE_KEY, "not-json{{{");
       const { result } = renderHook(() => useSettings());

@@ -373,6 +373,7 @@ export function useAppEditorShell({
   } = useEditorModeOverrides({
     clearPendingLexicalNavigation,
     currentPath,
+    defaultMode: settings.editorMode,
     editorDoc,
     getSessionCurrentDocText,
     handleSearchResultNavigation,

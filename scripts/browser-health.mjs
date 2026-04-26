@@ -164,7 +164,7 @@ export async function collectEditorHealth(page, options = {}) {
     maxAutocompleteTooltips = 1,
   } = options;
 
-  return page.evaluate((limits) => {
+  return page.evaluate(async (limits) => {
     const issues = [];
     const modeLabels = new Set(["cm6-rich", "lexical", "source"]);
 
@@ -204,6 +204,9 @@ export async function collectEditorHealth(page, options = {}) {
         : null;
     const semantics = window.__cmDebug?.semantics?.() ?? null;
     const treeString = window.__cmDebug?.treeString?.() ?? "";
+    const runtimeContract = await window.__cfDebug?.runtimeContract?.().catch((error) => ({
+      issues: [`runtime contract threw: ${error instanceof Error ? error.message : String(error)}`],
+    })) ?? null;
     const dialogCount = visibleCount('[role="dialog"]');
     const hoverPreviewCount = visibleCount(".cf-hover-preview-tooltip");
     const autocompleteCount = visibleCount(".cm-tooltip-autocomplete");
@@ -244,12 +247,16 @@ export async function collectEditorHealth(page, options = {}) {
         `too many autocomplete tooltips: ${autocompleteCount}/${limits.maxAutocompleteTooltips}`,
       );
     }
+    for (const issue of runtimeContract?.issues ?? []) {
+      issues.push(`runtime contract: ${issue}`);
+    }
 
     return {
       mode,
       docLength,
       selection,
       semantics,
+      runtimeContract,
       treeErrorNodeCount: typeof treeString === "string" ? (treeString.match(/⚠/g) ?? []).length : 0,
       dialogCount,
       hoverPreviewCount,

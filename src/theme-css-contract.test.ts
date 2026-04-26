@@ -32,4 +32,14 @@ describe("theme CSS contract", () => {
       "color: var(--cf-muted);",
     );
   });
+
+  it("owns critical CM6 layout CSS statically", () => {
+    const css = readRepoFile("src/editor-theme.css");
+
+    expect(cssRuleBody(css, ".cm-editor")).toContain("display: flex !important;");
+    expect(cssRuleBody(css, ".cm-scroller")).toContain("display: flex !important;");
+    expect(cssRuleBody(css, ".cm-scroller")).toContain("overflow: auto;");
+    expect(cssRuleBody(css, ".cm-content")).toContain("min-height: 100%;");
+    expect(cssRuleBody(css, ".cm-content")).toContain("white-space: pre;");
+  });
 });
