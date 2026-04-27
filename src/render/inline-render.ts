@@ -201,6 +201,13 @@ function renderFragment(
       span.setAttribute("role", "img");
       span.setAttribute("aria-label", fragment.latex);
       try {
+        // "html" output (no .katex-mathml branch) is intentional here:
+        // the rich-mode inline render path is on the typing hot path and
+        // emitting MathML doubled the per-keystroke render cost on dense
+        // documents (see 8121177d). Accessibility is preserved via the
+        // role + aria-label above. Display math still uses the default
+        // "htmlAndMathml" output (math-render.ts) so copy-as-MathML works
+        // there; only inline CM6 trades the semantic branch for latency.
         span.innerHTML = renderKatexToHtml(fragment.latex, false, macros, "html");
       } catch (_e) {
         // best-effort: KaTeX render failed — show raw LaTeX source as fallback
