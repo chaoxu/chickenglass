@@ -1,6 +1,6 @@
 /**
- * Regression test: bibliography backlink arrows use a compact hover preview
- * surface instead of the browser-native title tooltip.
+ * Regression test: bibliography backlink arrows use a compact rich hover
+ * preview surface instead of the browser-native title tooltip.
  */
 
 import {
@@ -60,25 +60,27 @@ export async function run(page) {
   if (tooltip.hasNativeTitle !== false) {
     return { pass: false, message: "bibliography backlink still exposes a native title tooltip" };
   }
-  if (!tooltip.hasBody || tooltip.hasBold || tooltip.hasKatex) {
+  if (!tooltip.hasBody || !tooltip.hasBold || !tooltip.hasKatex) {
     return {
       pass: false,
-      message: `bibliography backlink preview should be plain context text: ${JSON.stringify(tooltip)}`,
+      message: `bibliography backlink preview should render rich line context: ${JSON.stringify(tooltip)}`,
     };
   }
   if (
     !tooltip.text.includes("Line 7")
-    || !tooltip.text.includes("See **Karger** with inline math $x^2$ [@karger2000].")
-    || tooltip.text.includes("Karger, 2000")
+    || tooltip.text.includes("**Karger**")
+    || tooltip.text.includes("[@karger2000]")
+    || !tooltip.citationText
+    || tooltip.citationText === "karger2000"
   ) {
     return {
       pass: false,
-      message: `bibliography backlink preview missing citation context: ${JSON.stringify(tooltip)}`,
+      message: `bibliography backlink preview missing rendered citation context: ${JSON.stringify(tooltip)}`,
     };
   }
 
   return {
     pass: true,
-    message: "bibliography backlink arrow shows compact plain citation-context preview",
+    message: "bibliography backlink arrow shows compact rich citation-context preview",
   };
 }

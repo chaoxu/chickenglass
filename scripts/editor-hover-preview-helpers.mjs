@@ -88,6 +88,7 @@ export async function readHoverPreviewState(page) {
       captionText: tooltip.querySelector(".cf-block-caption")?.textContent ?? "",
       hasBody: Boolean(tooltip.querySelector(".cf-hover-preview-body")),
       hasBold: Boolean(tooltip.querySelector("strong, b")),
+      citationText: tooltip.querySelector(".cf-citation")?.textContent ?? null,
       hasKatex: Boolean(tooltip.querySelector(".katex")),
       hasNativeTitle: document.querySelector(".cf-bibliography-backlink")?.hasAttribute("title") ?? null,
       imageSrc: tooltip.querySelector(".cf-block-figure img")?.getAttribute("src") ?? null,

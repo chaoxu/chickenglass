@@ -378,7 +378,7 @@ describe("bibliographyPlugin integration", () => {
     expect(view.dom.querySelector(`.${CSS.bibliographyBacklink}`)).toBeNull();
   });
 
-  it("shows a compact plain-text preview instead of a native title on citation backlinks", async () => {
+  it("shows a compact rich preview instead of a native title on citation backlinks", async () => {
     vi.useFakeTimers();
     view = createBibView("See **Karger** and $x$ [@karger2000].");
     const backlink = view.dom.querySelector<HTMLElement>(`.${CSS.bibliographyBacklink}`);
@@ -390,10 +390,14 @@ describe("bibliographyPlugin integration", () => {
 
     const tooltip = document.body.querySelector<HTMLElement>(`.${CSS.hoverPreviewTooltip}`);
     expect(tooltip?.textContent).toContain("Line 1");
-    expect(tooltip?.textContent).toContain("See **Karger** and $x$ [@karger2000].");
+    expect(tooltip?.textContent).toContain("Karger");
     expect(tooltip?.querySelector(`.${CSS.hoverPreviewBody}`)).not.toBeNull();
-    expect(tooltip?.querySelector(`.${CSS.hoverPreviewBody}`)?.textContent).toBe("See **Karger** and $x$ [@karger2000].");
-    expect(tooltip?.querySelector("strong, b, .katex")).toBeNull();
+    expect(tooltip?.querySelector(`.${CSS.hoverPreviewBody}`)?.textContent).not.toContain("**Karger**");
+    expect(tooltip?.querySelector("strong, b")).not.toBeNull();
+    expect(tooltip?.querySelector(".katex")).not.toBeNull();
+    const citationText = tooltip?.querySelector(`.${CSS.citation}`)?.textContent;
+    expect(citationText).toBeTruthy();
+    expect(citationText).not.toBe("karger2000");
   });
 
   describe("negative / edge-case", () => {
