@@ -57,6 +57,7 @@
     "tauri:dev": "pnpm exec tauri dev",
     "tauri:build": "pnpm exec tauri build --bundles app",
     "tauri:build:dmg": "pnpm exec tauri build --bundles dmg",
+    "tauri:visual:capture": "node scripts/tauri-visual-capture.mjs",
     "chrome": "pnpm chrome:app --",
     "chrome:app": "node scripts/launch-chrome.mjs --activate",
     "chrome:cdp": "node scripts/launch-chrome.mjs --no-activate",
