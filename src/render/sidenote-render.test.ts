@@ -687,7 +687,8 @@ describe("FootnoteSectionWidget", () => {
     const entry = dom.querySelector<HTMLElement>(`.${CSS.bibliographyEntry}`);
     const number = dom.querySelector<HTMLElement>(`.${CSS.bibliographyEntryNumber}`);
 
-    expect(section?.classList.contains(CSS.bibliographyFootnotes)).toBe(true);
+    expect(section?.classList.contains(CSS.footnoteSection)).toBe(true);
+    expect(section?.classList.contains(CSS.bibliography)).toBe(false);
     expect(section?.getAttribute("style")).toBeNull();
     expect(entry?.getAttribute("style")).toBeNull();
     expect(number?.getAttribute("style")).toBeNull();

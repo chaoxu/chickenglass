@@ -341,7 +341,8 @@
 
 /* ── Bibliography / References section ──────────────────────────────────── */
 
-.cf-bibliography {
+.cf-bibliography,
+.cf-footnote-section {
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;
@@ -349,11 +350,11 @@
   -webkit-hyphens: manual;
 }
 
-.cf-bibliography-footnotes {
+.cf-footnote-section {
   margin-top: 2em;
 }
 
-.cf-bibliography-footnotes .cf-bibliography-entry {
+.cf-footnote-section .cf-bibliography-entry {
   cursor: pointer;
   font-size: 0.85em;
   line-height: 1.6;

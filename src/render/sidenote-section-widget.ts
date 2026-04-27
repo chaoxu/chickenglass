@@ -26,7 +26,7 @@ export class FootnoteSectionWidget extends RenderWidget {
   createDOM(): HTMLElement {
     return this.createCachedDOM(() => {
       const section = document.createElement("div");
-      section.className = `${CSS.bibliography} ${CSS.bibliographyFootnotes}`;
+      section.className = CSS.footnoteSection;
 
       const heading = document.createElement("h2");
       heading.className = CSS.bibliographyHeading;

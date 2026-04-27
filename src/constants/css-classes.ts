@@ -92,9 +92,13 @@ export const CSS = {
   sidenoteDefBody: "cf-sidenote-def-body",
   sidenoteDefLabel: "cf-sidenote-def-label",
 
-  /** Bibliography. */
+  /** Bibliography (References section only). Footnotes use `footnoteSection`
+   * below; the two used to share `cf-bibliography` which made it impossible
+   * for parity diagnostics or styling rules to target one without the other. */
   bibliography: "cf-bibliography",
-  bibliographyFootnotes: "cf-bibliography-footnotes",
+  /** Footnotes section root. Replaces the old `cf-bibliography cf-bibliography-footnotes`
+   * pair so the section's class no longer overlaps with the references block. */
+  footnoteSection: "cf-footnote-section",
   bibliographyHeading: "cf-bibliography-heading",
   bibliographyList: "cf-bibliography-list",
   bibliographyEntry: "cf-bibliography-entry",
