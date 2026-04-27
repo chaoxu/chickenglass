@@ -145,7 +145,9 @@ async function screenshotElement(page, selector, outPath) {
     if (!el) return false;
     await el.screenshot({ path: outPath });
     return true;
-  } catch {
+  } catch (_error) {
+    // Best-effort screenshot — diagnostic continues without this artifact
+    // if the selector is missing in one of the two surfaces.
     return false;
   }
 }
