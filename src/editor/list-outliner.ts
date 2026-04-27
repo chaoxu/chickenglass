@@ -18,8 +18,8 @@
  * Reference: obsidian-outliner plugin (TypeScript, CM6-based).
  */
 
-import { type Extension } from "@codemirror/state";
-import { type EditorView, keymap } from "@codemirror/view";
+import { type Extension, Prec } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
 import {
   foldService,
   foldGutter,
@@ -178,6 +178,27 @@ function getListMarkerInfo(
   };
 }
 
+function emptyListMarkerLineContentStart(lineText: string): number | null {
+  const match = /^(\s*)(?:[-+*]|\d+[.)])\s*$/.exec(lineText);
+  return match ? lineText.length : null;
+}
+
+function exitEmptyListMarkerLine(view: EditorView): boolean {
+  const cursorPos = view.state.selection.main.head;
+  if (!view.state.selection.main.empty) return false;
+
+  const line = view.state.doc.lineAt(cursorPos);
+  const contentStart = emptyListMarkerLineContentStart(line.text);
+  if (contentStart === null) return false;
+  if (cursorPos !== line.from + contentStart) return false;
+
+  view.dispatch({
+    changes: { from: line.from, to: line.to },
+    selection: { anchor: line.from },
+  });
+  return true;
+}
+
 /**
  * Find the parent ListItem of the given ListItem node.
  * In the Lezer tree: ListItem -> BulletList/OrderedList -> ListItem (parent).
@@ -261,12 +282,33 @@ function indentListItem(view: EditorView): boolean {
  * INDENT_UNIT from each line. The item must have a parent list item
  * (i.e., it's a nested item) to be outdented.
  */
-function outdentListItem(view: EditorView): boolean {
+function removeListMarkerFromCurrentLine(
+  view: EditorView,
+  listItem: SyntaxNode,
+): boolean {
+  const doc = view.state.doc;
+  const cursorPos = view.state.selection.main.head;
+  const line = doc.lineAt(cursorPos);
+  const markerInfo = getListMarkerInfo(doc, listItem, line);
+  if (!markerInfo) return false;
+
+  view.dispatch({
+    changes: { from: line.from, to: markerInfo.contentStart },
+    selection: {
+      anchor: Math.max(line.from, cursorPos - (markerInfo.contentStart - line.from)),
+    },
+  });
+  return true;
+}
+
+export function outdentListItem(view: EditorView): boolean {
   const listItem = findListItemAtCursor(view);
   if (!listItem) return false;
 
-  // Must have a parent list item to outdent from
-  if (!findParentListItem(listItem)) return false;
+  // Top-level Shift-Tab demotes the current item to a plain paragraph.
+  if (!findParentListItem(listItem)) {
+    return removeListMarkerFromCurrentLine(view, listItem);
+  }
 
   const doc = view.state.doc;
   const startLine = doc.lineAt(listItem.from);
@@ -385,7 +427,9 @@ function moveListItemDown(view: EditorView): boolean {
  * - If the item is empty (just the marker), remove it and exit the list
  * - Otherwise, split at cursor and create a new sibling item
  */
-function enterInListItem(view: EditorView): boolean {
+export function enterInListItem(view: EditorView): boolean {
+  if (exitEmptyListMarkerLine(view)) return true;
+
   const listItem = findListItemAtCursor(view);
   if (!listItem) return false;
 
@@ -402,13 +446,10 @@ function enterInListItem(view: EditorView): boolean {
   const contentAfterMarker = lineText.slice(markerInfo.contentStart - line.from).trim();
 
   if (contentAfterMarker.length === 0) {
-    // Empty item: remove the entire line (including the newline before it if possible)
-    const removeFrom = line.number > 1 ? doc.line(line.number - 1).to : line.from;
-    const removeTo = line.to;
-
+    // Empty item: remove the marker, leaving a plain paragraph line.
     view.dispatch({
-      changes: { from: removeFrom, to: removeTo },
-      selection: { anchor: removeFrom },
+      changes: { from: line.from, to: line.to },
+      selection: { anchor: line.from },
     });
     return true;
   }
@@ -445,6 +486,8 @@ function enterInListItem(view: EditorView): boolean {
  * previous item. Returns false for first items and non-list contexts.
  */
 export function backspaceAtListItemStart(view: EditorView): boolean {
+  if (exitEmptyListMarkerLine(view)) return true;
+
   const listItem = findListItemAtCursor(view);
   if (!listItem) return false;
 
@@ -465,6 +508,11 @@ export function backspaceAtListItemStart(view: EditorView): boolean {
   // Only trigger if cursor is exactly at content start (right after marker)
   if (cursorPos !== contentStart) return false;
 
+  const currentContent = lineText.slice(contentStart - line.from);
+  if (currentContent.trim().length === 0) {
+    return removeListMarkerFromCurrentLine(view, listItem);
+  }
+
   // Find the previous ListItem sibling
   const prevItem = findPrevSibling(listItem);
   if (!prevItem) return false;
@@ -473,9 +521,6 @@ export function backspaceAtListItemStart(view: EditorView): boolean {
   // The previous item's first line is where we append
   const prevLine = doc.lineAt(prevItem.from);
   const prevLineEnd = prevLine.to;
-
-  // Get the content of the current item (text after marker)
-  const currentContent = lineText.slice(contentStart - line.from);
 
   // Remove only the current item's marker line, leaving both the
   // previous item's nested content and the current item's nested
@@ -498,7 +543,7 @@ export function backspaceAtListItemStart(view: EditorView): boolean {
 // Keymap
 // ---------------------------------------------------------------------------
 
-const listOutlinerKeymap = keymap.of([
+const listOutlinerKeymap = Prec.high(keymap.of([
   {
     key: "Tab",
     run: indentListItem,
@@ -524,7 +569,25 @@ const listOutlinerKeymap = keymap.of([
     run: backspaceAtListItemStart,
   },
   ...foldKeymap,
-]);
+]));
+
+const listOutlinerDomHandlers: Extension = EditorView.domEventHandlers({
+  keydown(event, view) {
+    let handled = false;
+    if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      handled = enterInListItem(view);
+    } else if (event.key === "Backspace" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      handled = backspaceAtListItemStart(view);
+    } else if (event.key === "Tab" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      handled = outdentListItem(view);
+    }
+
+    if (!handled) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Combined extension
@@ -535,5 +598,6 @@ export const listOutlinerExtension: Extension = [
   listFoldService,
   codeFolding(),
   foldGutter(),
+  Prec.highest(listOutlinerDomHandlers),
   listOutlinerKeymap,
 ];
