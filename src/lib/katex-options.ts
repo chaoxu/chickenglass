@@ -7,6 +7,20 @@
 
 import type { KatexOptions } from "katex";
 
+function normalizeKatexMacros(
+  macros: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!macros) return undefined;
+
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(macros)) {
+    if (!key.startsWith("\\")) continue;
+    normalized[key] = value;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 /**
  * Build canonical KaTeX options for `katex.renderToString`.
  *
@@ -18,6 +32,7 @@ export function buildKatexOptions(
   displayMode: boolean,
   macros?: Record<string, string>,
 ): KatexOptions {
+  const normalizedMacros = normalizeKatexMacros(macros);
   return {
     displayMode,
     throwOnError: false,
@@ -25,6 +40,6 @@ export function buildKatexOptions(
       (context.command === "\\href" || context.command === "\\url") &&
       context.url != null &&
       /^https?:\/\//.test(context.url),
-    ...(macros ? { macros: { ...macros } } : {}),
+    ...(normalizedMacros ? { macros: normalizedMacros } : {}),
   };
 }

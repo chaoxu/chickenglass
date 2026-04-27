@@ -67,12 +67,15 @@ function katexCacheKey(
   isDisplay: boolean,
   macros: Record<string, string>,
   outputMode: KatexRenderOutputMode,
+  throwOnError: boolean,
 ): string {
   return serializeKatexMacros(macros)
     + "\0"
     + (isDisplay ? "D" : "I")
     + "\0"
     + outputMode
+    + "\0"
+    + (throwOnError ? "E" : "e")
     + "\0"
     + latex;
 }
@@ -123,8 +126,9 @@ export function renderKatexToHtml(
   isDisplay: boolean,
   macros: Record<string, string>,
   outputMode: KatexRenderOutputMode = "htmlAndMathml",
+  throwOnError = false,
 ): string {
-  const key = katexCacheKey(latex, isDisplay, macros, outputMode);
+  const key = katexCacheKey(latex, isDisplay, macros, outputMode, throwOnError);
   const cached = katexHtmlCache.get(key);
   if (cached !== undefined) {
     return cached;
@@ -135,6 +139,7 @@ export function renderKatexToHtml(
     html = katex.renderToString(latex, {
       ...buildKatexOptions(isDisplay, macros),
       output: outputMode,
+      throwOnError,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

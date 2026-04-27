@@ -1,9 +1,12 @@
 import type { EditorState } from "@codemirror/state";
+import katex from "katex";
 import { documentAnalysisField } from "../state/document-analysis";
 import { bibDataField } from "../state/bib-data";
 import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigStatusFacet } from "../project-config";
 import type { DocumentAnalysis } from "../semantics/document";
+import { buildKatexOptions } from "../lib/katex-options";
+import { mathMacrosField } from "../state/math-macros";
 import type { DiagnosticEntry } from "./diagnostic-types";
 import {
   buildReferenceConflictModel,
@@ -119,6 +122,33 @@ export function extractDiagnosticsFromAnalysis(
   return diagnostics;
 }
 
+function extractMathDiagnostics(
+  analysis: DocumentAnalysis,
+  macros: Record<string, string>,
+): DiagnosticEntry[] {
+  const diagnostics: DiagnosticEntry[] = [];
+  for (const region of analysis.mathRegions) {
+    try {
+      katex.renderToString(region.latex, {
+        ...buildKatexOptions(region.isDisplay, macros),
+        throwOnError: true,
+        output: "html",
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      diagnostics.push({
+        severity: "error",
+        source: "math",
+        code: "math.render",
+        message: `Invalid math: ${message}`,
+        from: region.contentFrom,
+        to: region.contentTo,
+      });
+    }
+  }
+  return diagnostics;
+}
+
 export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   const analysis = state.field(documentAnalysisField);
   const bibData = state.field(bibDataField, false);
@@ -132,6 +162,10 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
     bibliography: bibliographyUnavailable ? undefined : bibData?.store,
     localOnlyWithoutBibliography: bibliographyUnavailable,
   });
+  diagnostics.push(...extractMathDiagnostics(
+    analysis,
+    state.field(mathMacrosField, false) ?? {},
+  ));
   const frontmatterStatus = state.field(frontmatterField, false)?.status;
   const frontmatterDiagnostic = diagnosticFromFrontmatterStatus(frontmatterStatus);
   if (frontmatterDiagnostic) diagnostics.push(frontmatterDiagnostic);

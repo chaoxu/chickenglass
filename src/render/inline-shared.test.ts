@@ -98,6 +98,14 @@ describe("buildKatexOptions", () => {
     expect(opts.macros).not.toBe(original);
   });
 
+  it("drops bare-letter macro keys before passing options to KaTeX", () => {
+    const opts = buildKatexOptions(false, {
+      R: "\\mathbb{R}",
+      "\\N": "\\mathbb{N}",
+    });
+    expect(opts.macros).toEqual({ "\\N": "\\mathbb{N}" });
+  });
+
   describe("trust callback", () => {
     const opts = buildKatexOptions(false);
     const trust = opts.trust as (ctx: {

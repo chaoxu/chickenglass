@@ -152,6 +152,48 @@ describe("fenced div parser", () => {
       expect(divCount).toBe(3);
     });
 
+    it("parses canonical 5/4/3-colon theorem-proof-blockquote nesting", () => {
+      const text = [
+        '::::: {.theorem title="Outer"}',
+        "outside",
+        ":::: {.proof}",
+        "outer proof",
+        "::: {.blockquote}",
+        "quote inside",
+        ":::",
+        "back in proof",
+        "::::",
+        "back in theorem",
+        ":::::",
+      ].join("\n");
+      const infos = nodeInfos(text);
+
+      const divs = infos.filter((n) => n.name === "FencedDiv");
+      expect(divs).toHaveLength(3);
+      expect(divs.map((n) => n.text.split("\n")[0])).toEqual([
+        '::::: {.theorem title="Outer"}',
+        ":::: {.proof}",
+        "::: {.blockquote}",
+      ]);
+
+      const attrs = infos.filter((n) => n.name === "FencedDivAttributes");
+      expect(attrs.map((n) => n.text)).toEqual([
+        '{.theorem title="Outer"}',
+        "{.proof}",
+        "{.blockquote}",
+      ]);
+
+      const fences = infos.filter((n) => n.name === "FencedDivFence");
+      expect(fences.map((n) => n.text)).toEqual([
+        ":::::",
+        "::::",
+        ":::",
+        ":::",
+        "::::",
+        ":::::",
+      ]);
+    });
+
     it("closing fence matches by colon count", () => {
       const text =
         ":::: {.outer}\nBefore.\n::: {.inner}\nInner.\n:::\nAfter.\n::::";

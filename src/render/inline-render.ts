@@ -200,6 +200,11 @@ function renderFragment(
       span.className = CSS.mathInline;
       span.setAttribute("role", "img");
       span.setAttribute("aria-label", fragment.latex);
+      const renderRawError = (label: string): void => {
+        span.className = `${CSS.mathInline} ${CSS.mathError}`;
+        span.setAttribute("aria-label", label);
+        span.textContent = fragment.raw;
+      };
       try {
         // "html" output (no .katex-mathml branch) is intentional here:
         // the rich-mode inline render path is on the typing hot path and
@@ -208,10 +213,16 @@ function renderFragment(
         // role + aria-label above. Display math still uses the default
         // "htmlAndMathml" output (math-render.ts) so copy-as-MathML works
         // there; only inline CM6 trades the semantic branch for latency.
-        span.innerHTML = renderKatexToHtml(fragment.latex, false, macros, "html");
-      } catch (_e) {
-        // best-effort: KaTeX render failed — show raw LaTeX source as fallback
-        span.textContent = fragment.raw;
+        const html = renderKatexToHtml(fragment.latex, false, macros, "html", true);
+        if (html.includes("katex-error")) {
+          renderRawError("KaTeX error");
+        } else {
+          span.innerHTML = html;
+        }
+      } catch (error: unknown) {
+        renderRawError(
+          error instanceof Error ? `KaTeX error: ${error.message}` : "KaTeX error",
+        );
       }
       container.appendChild(span);
       return;

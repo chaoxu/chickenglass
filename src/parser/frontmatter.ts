@@ -219,9 +219,14 @@ function validateBlocks(
 function validateMath(raw: Record<string, unknown>): Record<string, string> {
   const math: Record<string, string> = {};
   for (const [macro, expansion] of Object.entries(raw)) {
-    if (typeof expansion === "string") {
-      math[macro] = expansion;
+    if (typeof expansion !== "string") continue;
+    if (!macro.startsWith("\\")) {
+      console.warn(
+        `[frontmatter] math.${macro}: macro keys must start with "\\\\". Ignoring entry.`,
+      );
+      continue;
     }
+    math[macro] = expansion;
   }
   return math;
 }

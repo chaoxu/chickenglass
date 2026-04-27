@@ -1,6 +1,7 @@
 export type DiagnosticSeverity = "error" | "warning";
 export type DiagnosticSource =
   | "reference"
+  | "math"
   | "frontmatter"
   | "project-config"
   | "bibliography";
@@ -8,6 +9,7 @@ export type DiagnosticCode =
   | "reference.duplicate-target"
   | "reference.citation-local-collision"
   | "reference.unresolved"
+  | "math.render"
   | "frontmatter.parse"
   | "project-config.read"
   | "project-config.parse"

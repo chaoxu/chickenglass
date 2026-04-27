@@ -12,6 +12,7 @@ export interface SidebarDiagnosticsSliceRevisions {
   readonly equations: number;
   readonly fencedDivs: number;
   readonly headings: number;
+  readonly mathRegions: number;
   readonly references: number;
 }
 
@@ -52,6 +53,7 @@ function diagnosticSliceRevisions(
     equations: getDocumentAnalysisSliceRevision(analysis, "equations"),
     fencedDivs: getDocumentAnalysisSliceRevision(analysis, "fencedDivs"),
     headings: getDocumentAnalysisSliceRevision(analysis, "headings"),
+    mathRegions: getDocumentAnalysisSliceRevision(analysis, "mathRegions"),
     references: getDocumentAnalysisSliceRevision(analysis, "references"),
   };
 }
@@ -63,6 +65,7 @@ function sameDiagnosticSliceRevisions(
   return before?.equations === after?.equations
     && before?.fencedDivs === after?.fencedDivs
     && before?.headings === after?.headings
+    && before?.mathRegions === after?.mathRegions
     && before?.references === after?.references;
 }
 

@@ -1112,11 +1112,16 @@
   cursor: pointer;
 }
 
-/* Unresolved cross-reference — dashed underline + muted color to signal breakage */
+/* Unresolved cross-reference — preserve source shape and make breakage visible */
 .cf-crossref-unresolved {
-  color: var(--cf-muted);
+  color: var(--cf-math-error-fg);
+  background: var(--cf-math-error-bg);
+  border-radius: var(--cf-border-radius);
+  padding: 0 2px;
+  text-decoration-line: underline;
   text-decoration-style: dashed;
-  text-decoration-color: var(--cf-muted);
+  text-decoration-color: currentColor;
+  text-underline-offset: 2px;
 }
 
 /* cf-citation — citation widget (editor). Intentionally unstyled: citations

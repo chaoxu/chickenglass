@@ -5,7 +5,9 @@ import { bibDataField } from "../../state/bib-data";
 import { blockCounterField } from "../../state/block-counter";
 import { documentSemanticsField } from "../../state/document-analysis";
 import { frontmatterField } from "../../state/frontmatter-state";
+import { mathMacrosField } from "../../state/math-macros";
 import { projectConfigStatusFacet } from "../../project-config";
+import { serializeMacros } from "../../render/render-core";
 import type { HeadingEntry } from "../heading-ancestry";
 
 export interface HeadingSidebarMetadata {
@@ -26,6 +28,8 @@ interface DiagnosticsSidebarMetadata {
   readonly equationIds: readonly string[];
   readonly frontmatterStatus: string;
   readonly headingIds: readonly string[];
+  readonly mathMacros: string;
+  readonly mathRegions: readonly string[];
   readonly processorRevision: number;
   readonly projectConfigStatus: string;
   readonly references: readonly ReferenceSidebarMetadata[];
@@ -90,6 +94,17 @@ function selectEquationIdMetadata(state: EditorState): readonly string[] {
   return analysis.equations.map((equation) => equation.id);
 }
 
+function selectMathRegionMetadata(state: EditorState): readonly string[] {
+  const analysis = state.field(documentSemanticsField);
+  return analysis.mathRegions.map((region) =>
+    `${region.isDisplay ? "D" : "I"}:${region.latex}`
+  );
+}
+
+function selectMathMacroMetadata(state: EditorState): string {
+  return serializeMacros(state.field(mathMacrosField, false) ?? {});
+}
+
 function selectBlockIdMetadata(state: EditorState): readonly string[] {
   return (state.field(blockCounterField, false)?.blocks ?? []).map((block) => block.id ?? "");
 }
@@ -122,6 +137,8 @@ export function createDiagnosticsSidebarMetadata(
     equationIds: selectEquationIdMetadata(state),
     frontmatterStatus: selectFrontmatterStatusMetadata(state),
     headingIds: selectHeadingIdMetadata(state),
+    mathMacros: selectMathMacroMetadata(state),
+    mathRegions: selectMathRegionMetadata(state),
     processorRevision: state.field(bibDataField, false)?.processorRevision ?? 0,
     projectConfigStatus: selectProjectConfigStatusMetadata(state),
     references: selectReferenceSidebarMetadata(state),
@@ -145,6 +162,14 @@ export function createDiagnosticsSidebarChangeChecker(): ChangeChecker {
     {
       get: selectEquationIdMetadata,
       equals: sameStringArray,
+    },
+    {
+      get: selectMathRegionMetadata,
+      equals: sameStringArray,
+    },
+    {
+      get: selectMathMacroMetadata,
+      equals: (before, after) => before === after,
     },
     {
       get: selectBlockIdMetadata,

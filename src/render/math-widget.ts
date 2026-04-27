@@ -63,20 +63,33 @@ export function renderKatex(
   isDisplay: boolean,
   macros: Record<string, string>,
 ): void {
+  const renderRawError = (label: string): void => {
+    element.className = "cf-math-error";
+    element.setAttribute("role", "alert");
+    element.setAttribute("aria-label", label);
+    element.textContent = isDisplay ? `$$${latex}$$` : `$${latex}$`;
+  };
+
   try {
     // Inline widgets dominate large-doc mounted DOM. Keep display math on the
     // full KaTeX output path, but drop the duplicated MathML subtree for inline
     // widgets because the wrapper already provides an accessible label.
-    element.innerHTML = renderKatexToHtml(
+    const html = renderKatexToHtml(
       latex,
       isDisplay,
       macros,
       isDisplay ? "htmlAndMathml" : "html",
+      true,
     );
+    if (html.includes("katex-error")) {
+      renderRawError("KaTeX error");
+      return;
+    }
+    element.innerHTML = html;
   } catch (err: unknown) {
-    element.className = "cf-math-error";
-    element.setAttribute("role", "alert");
-    element.textContent = err instanceof Error ? err.message : "KaTeX error";
+    renderRawError(
+      err instanceof Error ? `KaTeX error: ${err.message}` : "KaTeX error",
+    );
   }
 }
 

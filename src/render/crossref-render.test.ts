@@ -55,13 +55,12 @@ describe("CrossrefWidget", () => {
 });
 
 describe("UnresolvedRefWidget", () => {
-  it("renders with warning style and strips bracket syntax (#406)", () => {
+  it("renders with warning style and preserves bracket syntax", () => {
     const widget = new UnresolvedRefWidget("[@unknown]");
     const el = widget.toDOM();
     expect(el.tagName).toBe("SPAN");
     expect(el.className).toContain(CSS.crossref);
-    // Display text strips brackets for visual parity with table display path
-    expect(el.textContent).toBe("unknown");
+    expect(el.textContent).toBe("[@unknown]");
     expect(el.getAttribute("aria-label")).toBe("Unresolved reference");
   });
 

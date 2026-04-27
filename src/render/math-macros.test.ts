@@ -65,6 +65,13 @@ describe("getMathMacros", () => {
     const macros = getMathMacros(view.state);
     expect(macros).toEqual({});
   });
+
+  it("ignores frontmatter macros that do not start with a backslash", () => {
+    const doc = "---\nmath:\n  R: \\mathbb{R}\n  \\N: \\mathbb{N}\n---\nContent";
+    view = createView(doc);
+    const macros = getMathMacros(view.state);
+    expect(macros).toEqual({ "\\N": "\\mathbb{N}" });
+  });
 });
 
 describe("getMathMacros with project config", () => {
@@ -113,6 +120,13 @@ describe("macros in MathWidget (inline)", () => {
     expect(el.querySelector(".katex")).not.toBeNull();
     // The rendered output should contain the expanded macro
     expect(el.textContent).toContain("R");
+  });
+
+  it("does not render bare-letter macro recursion errors as document text", () => {
+    const widget = new MathWidget("\\R", "$\\R$", false, { R: "\\mathbb{R}" });
+    const el = widget.toDOM();
+    expect(el.textContent).not.toContain("Maximum call stack size exceeded");
+    expect(el.querySelector(".katex")).not.toBeNull();
   });
 
   it("eq returns false when macros differ", () => {

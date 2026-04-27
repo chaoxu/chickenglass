@@ -8,6 +8,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";
+import { mathMacrosField } from "../state/math-macros";
 import { bibDataEffect, bibDataField, type BibliographyStatus } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import { projectConfigStatusFacet } from "../project-config";
@@ -35,6 +36,7 @@ function createState(doc: string): EditorState {
       }),
       frontmatterField,
       documentSemanticsField,
+      mathMacrosField,
       createPluginRegistryField(testPlugins),
       blockCounterField,
       bibDataField,
@@ -75,6 +77,36 @@ describe("extractDiagnostics", () => {
         message: "Unresolved reference \"@thm:missing\"",
       }),
     ]);
+  });
+
+  it("reports invalid inline math", () => {
+    const state = createState("Text $\\oops{x}$ more.");
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        source: "math",
+        code: "math.render",
+        message: expect.stringContaining("Invalid math:"),
+        from: "Text $".length,
+        to: "Text $\\oops{x}".length,
+      }),
+    ]);
+  });
+
+  it("filters unsafe bare macro keys before validating math", () => {
+    const state = createState([
+      "---",
+      "math:",
+      '  R: "\\\\mathbb{R}"',
+      "---",
+      "",
+      "Text $\\R$ more.",
+    ].join("\n"));
+
+    expect(extractDiagnostics(state).map((diagnostic) => diagnostic.message)).not.toContain(
+      "Maximum call stack size exceeded",
+    );
   });
 
   it("reports cross-namespace local target collisions", () => {

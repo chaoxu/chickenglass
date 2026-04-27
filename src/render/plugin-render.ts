@@ -178,7 +178,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
       addHeaderWidgetDecoration(
         pluginRenderAdapter,
         div,
-        spec.header,
+        plugin.displayHeader === false ? "" : spec.header,
         openerSourceActive,
         macros,
         items,

@@ -177,8 +177,22 @@ describe("renderKatex", () => {
     expect(el.querySelectorAll("[data-loc-start]").length).toBeGreaterThan(0);
   });
 
+  it("renders raw math instead of exception text when KaTeX throws", () => {
+    vi.spyOn(katex, "renderToString").mockImplementation(() => {
+      throw new Error("Maximum call stack size exceeded");
+    });
+
+    const el = document.createElement("span");
+    renderKatex(el, "\\R", false, {});
+
+    expect(el.className).toBe("cf-math-error");
+    expect(el.textContent).toBe("$\\R$");
+    expect(el.textContent).not.toContain("Maximum call stack size exceeded");
+    expect(el.getAttribute("aria-label")).toContain("Maximum call stack size exceeded");
+  });
+
   it("reuses cached KaTeX HTML across widget and inline renderers", () => {
-    renderKatexToHtml("x^2", false, {}, "html");
+    renderKatexToHtml("x^2", false, {}, "html", true);
     vi.spyOn(katex, "renderToString").mockImplementation(() => {
       throw new Error("cache miss");
     });

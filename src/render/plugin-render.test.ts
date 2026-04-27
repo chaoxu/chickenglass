@@ -40,6 +40,7 @@ import {
   makeBlockPlugin,
 } from "../test-utils";
 import { CSS } from "../constants/css-classes";
+import { defaultPlugins } from "../plugins/default-plugins";
 import { withCm6BlockPlugin } from "../state/cm6-block-plugin";
 
 /** Create an EditorState with all extensions needed for block decorations. */
@@ -120,6 +121,40 @@ const TWO_BLOCKS = [
 ].join("\n");
 
 describe("blockDecorationField", () => {
+  it("renders canonical 5/4/3-colon theorem-proof-blockquote nesting", () => {
+    const doc = [
+      '::::: {.theorem title="Outer"}',
+      "outside",
+      ":::: {.proof}",
+      "outer proof",
+      "::: {.blockquote}",
+      "quote inside",
+      ":::",
+      "back in proof",
+      "::::",
+      "back in theorem",
+      ":::::",
+    ].join("\n");
+    const state = createTestStateWithPlugins(doc, [...defaultPlugins]);
+    const specs = getDecoSpecs(state);
+
+    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockHeaderCollapsed)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(4).from, CSS.blockHeader)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.blockHeaderCollapsed)).toBe(true);
+
+    expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(9).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasLineClassAt(specs, state.doc.line(11).from, CSS.blockClosingFence)).toBe(true);
+
+    const headerWidgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
+    expect(headerWidgets).toHaveLength(2);
+    expect(headerWidgets.map((spec) => `${spec.from}:${spec.to}`)).toEqual([
+      `${state.doc.line(1).from}:${state.doc.line(1).to}`,
+      `${state.doc.line(4).from}:${state.doc.line(4).from}`,
+    ]);
+  });
+
   it("renders header widget when cursor is not on fence (unfocused)", () => {
     const state = createTestState(TWO_BLOCKS);
     const specs = getDecoSpecs(state);
