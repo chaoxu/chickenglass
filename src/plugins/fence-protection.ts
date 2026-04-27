@@ -168,7 +168,7 @@ function buildFenceProtectionCache(
     openingFenceColonRanges: buildOpeningFenceColonRanges(state, inputs.protectedDivs),
     openingFenceBacktickRanges: buildOpeningFenceBacktickRanges(inputs.codeBlocks),
     openingMathDelimiterRanges: buildOpeningMathDelimiterRanges(inputs.displayMathBlocks),
-    closingFenceAtomicRanges: buildClosingFenceAtomicRanges(state, closingFenceRanges),
+    closingFenceAtomicRanges: buildClosingFenceAtomicRanges(closingFenceRanges),
     sourceState: currentFenceProtectionSourceState(state),
   };
 }

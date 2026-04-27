@@ -275,6 +275,15 @@ describe("closingFenceProtection", () => {
     });
     expect(tr.state.doc.toString()).toBe("after");
   });
+
+  it("allows insertion immediately after a closing fence", () => {
+    const state = createProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.to, to: closingLine.to, insert: "\nafter" },
+    });
+    expect(tr.state.doc.toString()).toBe(`${doc}\nafter`);
+  });
 });
 
 describe("openingFenceDeletionCleanup", () => {
@@ -518,6 +527,15 @@ describe("closingFenceProtection (code blocks)", () => {
     });
     expect(tr.state.doc.toString()).toBe("");
   });
+
+  it("allows insertion immediately after a code block closing fence", () => {
+    const state = createCodeBlockProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.to, to: closingLine.to, insert: "\nafter" },
+    });
+    expect(tr.state.doc.toString()).toBe(`${doc}\nafter`);
+  });
 });
 
 describe("openingFenceDeletionCleanup (code blocks)", () => {
@@ -755,6 +773,15 @@ describe("closingFenceProtection (display math $$)", () => {
       changes: { from: contentLine.from, to: doc.length, insert: "" },
     });
     expect(tr.state.doc.toString()).not.toBe(doc);
+  });
+
+  it("allows insertion immediately after closing $$", () => {
+    const state = createMathProtectedState(doc);
+    const closingLine = state.doc.line(3);
+    const tr = state.update({
+      changes: { from: closingLine.to, to: closingLine.to, insert: "\nafter" },
+    });
+    expect(tr.state.doc.toString()).toBe(`${doc}\nafter`);
   });
 });
 

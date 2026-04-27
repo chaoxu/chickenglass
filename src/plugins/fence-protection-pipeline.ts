@@ -69,6 +69,13 @@ function isClosingFenceChangeBlocked(
   docLength: number,
 ): boolean {
   if (change.from > range.to || change.to < range.from) return false;
+  if (
+    change.insertedLength > 0
+    && change.from === change.to
+    && change.from === range.to
+  ) {
+    return false;
+  }
 
   const extendsBeforeFence = change.from < range.from - 1 || change.from === 0;
   const extendsAfterFence = change.to >= range.to + 1 || change.to >= docLength;

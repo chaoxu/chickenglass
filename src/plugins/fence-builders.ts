@@ -116,7 +116,6 @@ export function buildOpeningMathDelimiterRanges(
 }
 
 export function buildClosingFenceAtomicRanges(
-  state: EditorState,
   fenceRanges: readonly FenceRange[],
 ): RangeSet<Decoration> {
   if (fenceRanges.length === 0) return Decoration.none;
@@ -124,8 +123,7 @@ export function buildClosingFenceAtomicRanges(
   const ranges: Range<Decoration>[] = [];
   for (const fence of fenceRanges) {
     const atomicFrom = fence.from > 0 ? fence.from - 1 : fence.from;
-    const atomicTo = fence.to < state.doc.length ? fence.to + 1 : fence.to;
-    ranges.push(closingFenceAtomicMark.range(atomicFrom, atomicTo));
+    ranges.push(closingFenceAtomicMark.range(atomicFrom, fence.to));
   }
   return RangeSet.of(ranges, true);
 }
