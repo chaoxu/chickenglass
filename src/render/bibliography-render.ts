@@ -37,11 +37,8 @@ import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 import {
   documentAnalysisField,
 } from "../state/document-analysis";
-import { mathMacrosField } from "../state/math-macros";
 import { HOVER_DELAY_MS } from "../constants";
 import { createPreviewSurfaceBody } from "../preview-surface";
-import { renderPreviewBlockContentToDom } from "./preview-block-renderer";
-import { buildPreviewBlockOptions } from "./hover-preview-block-options";
 import {
   createHoverPreviewContent,
   createHoverPreviewHeader,
@@ -249,26 +246,20 @@ function buildCitationBacklinkTooltipPlan(
 
   const position = Math.max(0, Math.min(from, view.state.doc.length));
   const line = view.state.doc.lineAt(position);
-  const context = buildCitationBacklinkContextFromDoc(view.state.doc, { from });
-  const macros = view.state.field(mathMacrosField, false) ?? {};
 
   return {
     buildContent: () => {
       const container = createHoverPreviewContent();
-      container.appendChild(createHoverPreviewHeader(context, macros));
+      container.appendChild(createHoverPreviewHeader(`Line ${line.number}`));
 
       const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
-      renderPreviewBlockContentToDom(
-        body,
-        line.text,
-        buildPreviewBlockOptions(view, macros),
-      );
+      body.textContent = line.text;
       container.appendChild(body);
       return container;
     },
     cacheScope: view.state,
-    dependsOnBibliography: true,
-    dependsOnMacros: true,
+    dependsOnBibliography: false,
+    dependsOnMacros: false,
     key: `citation-backlink\0${from}\0${line.number}\0${line.text}`,
     mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
   };
