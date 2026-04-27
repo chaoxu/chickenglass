@@ -27,6 +27,7 @@ import {
 import { documentSemanticsField } from "../state/document-analysis";
 import { buildDecorations } from "./decoration-core";
 import { SyntaxParseScheduler } from "./syntax-parse-scheduler";
+import { DOCUMENT_SURFACE_CLASS } from "../document-surface-classes";
 
 /**
  * Maps Lezer syntax node type names to HTML tag names.
@@ -58,10 +59,17 @@ const TREE_ONLY_TAG_NAME_MAP: Readonly<Record<string, string>> = {
 
 const CONTAINER_NODE_TYPES = new Set(Object.keys(TAG_NAME_MAP));
 const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
+const LINE_CLASS_BY_TAG: Readonly<Record<string, string>> = {
+  p: DOCUMENT_SURFACE_CLASS.paragraph,
+};
+
 const LINE_DECORATION_BY_TAG = Object.freeze(Object.fromEntries(
   [...HEADING_TAGS, "ul", "ol", "code", "hr", "div", "p"].map((tag) => [
     tag,
-    Decoration.line({ attributes: { "data-tag-name": tag } }),
+    Decoration.line({
+      attributes: { "data-tag-name": tag },
+      class: LINE_CLASS_BY_TAG[tag],
+    }),
   ]),
 ) as Record<string, Decoration>);
 

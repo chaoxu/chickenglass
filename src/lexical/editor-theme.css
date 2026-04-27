@@ -622,9 +622,13 @@
 
 .cf-lexical-bibliography {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0 48px 2rem;
+  width: 100%;
   max-width: var(--cf-content-max-width);
+  margin: 0;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 var(--cf-doc-content-padding-inline, 48px) 2rem;
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;

@@ -75,6 +75,14 @@ const SURFACES = [
     style: ["color", "fontFamily", "fontSize", "fontStyle", "fontWeight", "lineHeight"],
   },
   {
+    key: "paragraph",
+    cm6Selector: ".cm-line[data-tag-name='p']",
+    lexicalSelector: ".cf-doc-paragraph",
+    minScreenshotBytes: 120,
+    textIncludes: "Paragraph text",
+    style: ["color", "fontFamily", "fontSize", "lineHeight", "marginTop", "marginBottom"],
+  },
+  {
     key: "unordered-list-item",
     cm6Selector: ".cm-line:has(.cf-list-bullet)",
     lexicalSelector: ".cf-doc-list--unordered > .cf-doc-list-item",
@@ -154,6 +162,14 @@ const SURFACES = [
     lexicalSelector: "table.cf-lexical-table-block",
     style: ["color", "fontFamily", "fontSize", "lineHeight"],
   },
+  {
+    key: "bibliography-entry",
+    cm6Scope: "surface",
+    lexicalScope: "surface",
+    selector: ".cf-bibliography-entry",
+    textIncludes: "Knuth",
+    style: ["color", "fontFamily", "fontSize", "lineHeight", "marginTop", "marginBottom"],
+  },
 ];
 
 function clip(rect) {
@@ -165,8 +181,13 @@ function clip(rect) {
   };
 }
 
-function visualSelector(mode, selector) {
-  const flowClass = mode === "lexical" ? ".cf-doc-flow--lexical" : ".cf-doc-flow--cm6";
+function visualSelector(mode, selector, surface) {
+  const useSurfaceScope = mode === "lexical"
+    ? surface.lexicalScope === "surface"
+    : surface.cm6Scope === "surface";
+  const flowClass = mode === "lexical"
+    ? useSurfaceScope ? ".cf-doc-surface--lexical" : ".cf-doc-flow--lexical"
+    : useSurfaceScope ? ".cf-doc-surface--cm6" : ".cf-doc-flow--cm6";
   return `${flowClass} ${selector}`;
 }
 
@@ -181,18 +202,21 @@ function surfaceSelector(mode, surface) {
 }
 
 async function captureSurface(page, mode, surface) {
-  const selector = visualSelector(mode, surfaceSelector(mode, surface));
+  const selector = visualSelector(mode, surfaceSelector(mode, surface), surface);
   try {
     await page.waitForFunction(
-      ({ selector }) => {
+      ({ selector, textIncludes }) => {
         const element = [...document.querySelectorAll(selector)]
           .find((candidate) => {
             const box = candidate.getBoundingClientRect();
-            return candidate instanceof HTMLElement && box.width > 0 && box.height > 0;
+            return candidate instanceof HTMLElement &&
+              box.width > 0 &&
+              box.height > 0 &&
+              (!textIncludes || (candidate.textContent ?? "").includes(textIncludes));
           });
         return Boolean(element);
       },
-      { selector },
+      { selector, textIncludes: surface.textIncludes },
       { timeout: 10_000, polling: 100 },
     );
   } catch (error) {
@@ -201,34 +225,40 @@ async function captureSurface(page, mode, surface) {
         `${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const rect = await page.evaluate(({ selector }) => {
+  const rect = await page.evaluate(({ selector, textIncludes }) => {
     const element = [...document.querySelectorAll(selector)]
       .find((candidate) => {
         const box = candidate.getBoundingClientRect();
-        return candidate instanceof HTMLElement && box.width > 0 && box.height > 0;
+        return candidate instanceof HTMLElement &&
+          box.width > 0 &&
+          box.height > 0 &&
+          (!textIncludes || (candidate.textContent ?? "").includes(textIncludes));
       });
     if (!(element instanceof HTMLElement)) {
       return null;
     }
     element.scrollIntoView({ block: "center", inline: "nearest" });
     return element.getBoundingClientRect().toJSON();
-  }, { selector });
+  }, { selector, textIncludes: surface.textIncludes });
   if (!rect) {
     throw new Error(`Missing ${mode} visual surface ${surface.key}`);
   }
 
   await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
-  const settledRect = await page.evaluate(({ selector }) => {
+  const settledRect = await page.evaluate(({ selector, textIncludes }) => {
     const element = [...document.querySelectorAll(selector)]
       .find((candidate) => {
         const box = candidate.getBoundingClientRect();
-        return candidate instanceof HTMLElement && box.width > 0 && box.height > 0;
+        return candidate instanceof HTMLElement &&
+          box.width > 0 &&
+          box.height > 0 &&
+          (!textIncludes || (candidate.textContent ?? "").includes(textIncludes));
       });
     if (!(element instanceof HTMLElement)) {
       return null;
     }
     return element.getBoundingClientRect().toJSON();
-  }, { selector });
+  }, { selector, textIncludes: surface.textIncludes });
   if (!settledRect) {
     throw new Error(`Missing ${mode} visual surface ${surface.key} after layout settle`);
   }
@@ -239,11 +269,14 @@ async function captureSurface(page, mode, surface) {
     fallback: false,
   });
 
-  const metrics = await page.evaluate(({ properties, selector }) => {
+  const metrics = await page.evaluate(({ properties, selector, textIncludes }) => {
     const element = [...document.querySelectorAll(selector)]
       .find((candidate) => {
         const box = candidate.getBoundingClientRect();
-        return candidate instanceof HTMLElement && box.width > 0 && box.height > 0;
+        return candidate instanceof HTMLElement &&
+          box.width > 0 &&
+          box.height > 0 &&
+          (!textIncludes || (candidate.textContent ?? "").includes(textIncludes));
       });
     if (!(element instanceof HTMLElement)) {
       return null;
@@ -261,6 +294,7 @@ async function captureSurface(page, mode, surface) {
   }, {
     properties: surface.style,
     selector,
+    textIncludes: surface.textIncludes,
   });
 
   if (!metrics) {
@@ -342,12 +376,12 @@ function assertSurfaceParity(cm6, lexical) {
     const widthError = assertNear(
       left.rect.width,
       right.rect.width,
-      24,
+      12,
       `${surface.key} visual width drift`,
     );
     if (widthError) return widthError;
 
-    const heightTolerance = Math.max(14, Math.max(left.rect.height, right.rect.height) * 0.35);
+    const heightTolerance = Math.max(8, Math.max(left.rect.height, right.rect.height) * 0.05);
     const heightError = assertNear(
       left.rect.height,
       right.rect.height,

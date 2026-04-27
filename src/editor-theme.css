@@ -160,8 +160,8 @@
   --cf-doc-content-padding-block-start: 24px;
   --cf-doc-content-padding-block-end: 64px;
   --cf-doc-content-padding-inline: 48px;
-  --cf-doc-paragraph-margin: 0.8em 0;
-  --cf-doc-heading-margin: 1.5em 0 0.5em;
+  --cf-doc-paragraph-margin: 0;
+  --cf-doc-heading-margin: 0;
   --cf-doc-list-margin: 0.8em 0;
   --cf-doc-list-item-margin: 0.2em 0;
   --cf-doc-code-block-margin: 1em 0;
@@ -357,6 +357,7 @@
 
 .cf-bibliography,
 .cf-footnote-section {
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;
@@ -384,11 +385,17 @@
   margin-top: 0.15em;
 }
 
-.cf-bibliography-entry > .csl-entry {
+.cf-bibliography-entry > .csl-entry,
+.cf-bibliography-entry-content > .csl-entry {
   margin: 0;
 }
 
-.cf-bibliography-entry > .csl-entry:has(> .csl-left-margin):has(> .csl-right-inline) {
+.cf-bibliography-entry-content {
+  display: contents;
+}
+
+.cf-bibliography-entry > .csl-entry:has(> .csl-left-margin):has(> .csl-right-inline),
+.cf-bibliography-entry-content > .csl-entry:has(> .csl-left-margin):has(> .csl-right-inline) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: 0.5em;
@@ -396,15 +403,19 @@
 }
 
 .cf-bibliography-entry > .csl-entry > .csl-left-margin,
-.cf-bibliography-entry > .csl-entry > .csl-right-inline {
+.cf-bibliography-entry > .csl-entry > .csl-right-inline,
+.cf-bibliography-entry-content > .csl-entry > .csl-left-margin,
+.cf-bibliography-entry-content > .csl-entry > .csl-right-inline {
   margin: 0;
 }
 
-.cf-bibliography-entry > .csl-entry > .csl-left-margin {
+.cf-bibliography-entry > .csl-entry > .csl-left-margin,
+.cf-bibliography-entry-content > .csl-entry > .csl-left-margin {
   white-space: nowrap;
 }
 
-.cf-bibliography-entry > .csl-entry > .csl-right-inline {
+.cf-bibliography-entry > .csl-entry > .csl-right-inline,
+.cf-bibliography-entry-content > .csl-entry > .csl-right-inline {
   min-width: 0;
   overflow-wrap: anywhere;
 }
