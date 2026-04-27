@@ -502,6 +502,20 @@ function collectActiveMathDirtyRanges(
   return mergeDirtyRanges(ranges);
 }
 
+function decorationIntersectsMathDirtyRanges(
+  from: number,
+  to: number,
+  dirtyRanges: readonly DirtyRange[],
+): boolean {
+  if (rangeIntersectsDirtyRanges(from, to, dirtyRanges)) {
+    return true;
+  }
+  if (from !== to) {
+    return false;
+  }
+  return dirtyRanges.some((range) => from === range.to);
+}
+
 function equationNumberingChanged(
   before: DocumentAnalysis,
   after: DocumentAnalysis,
@@ -669,7 +683,7 @@ const mathDecorationField = createDecorationStateField({
             next = next.update({
               filterFrom: range.from,
               filterTo: range.to,
-              filter: (from, to) => !rangeIntersectsDirtyRanges(from, to, [range]),
+              filter: (from, to) => !decorationIntersectsMathDirtyRanges(from, to, [range]),
             });
           }
           if (dirtyRegions.length > 0) {

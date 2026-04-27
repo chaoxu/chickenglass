@@ -252,6 +252,70 @@ async function checkRowTokenParity(page, rowLabel, tokens) {
   return null;
 }
 
+async function checkPlainTextClickAvoidsInitialZeroCursor(page, rowLabel) {
+  await clearTableEditing(page);
+  const target = await getPlainTextTarget(page, rowLabel);
+  if (!target) {
+    return `missing plain-text click target for ${rowLabel}`;
+  }
+
+  await page.evaluate(() => {
+    window.__tableCellSelectionEvents = [];
+    window.__tableCellSelectionListener = () => {
+      const selection = window.getSelection();
+      const content = document.querySelector(".cf-table-cell-editing .cm-content");
+      window.__tableCellSelectionEvents.push({
+        anchorOffset: selection?.anchorOffset ?? null,
+        focusOffset: selection?.focusOffset ?? null,
+        anchorText: selection?.anchorNode?.textContent ?? null,
+        inInlineEditor: Boolean(content?.contains(selection?.anchorNode ?? null)),
+      });
+    };
+    document.addEventListener(
+      "selectionchange",
+      window.__tableCellSelectionListener,
+      { capture: true },
+    );
+  });
+
+  await page.mouse.click(target.x, target.y);
+  await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
+
+  const state = await page.evaluate(() => {
+    const selection = window.getSelection();
+    const content = document.querySelector(".cf-table-cell-editing .cm-content");
+    const events = window.__tableCellSelectionEvents ?? [];
+    const listener = window.__tableCellSelectionListener;
+    if (listener) {
+      document.removeEventListener("selectionchange", listener, { capture: true });
+    }
+    delete window.__tableCellSelectionEvents;
+    delete window.__tableCellSelectionListener;
+    return {
+      editingCellCount: document.querySelectorAll(".cf-table-cell-editing").length,
+      finalOffset: selection?.anchorOffset ?? null,
+      finalInInlineEditor: Boolean(content?.contains(selection?.anchorNode ?? null)),
+      sawInlineZeroOffset: events.some((event) =>
+        event.inInlineEditor && event.anchorOffset === 0,
+      ),
+      events,
+    };
+  });
+
+  if (state.editingCellCount !== 1 || !state.finalInInlineEditor) {
+    return `plain-text click did not activate a table cell editor for ${rowLabel}`;
+  }
+
+  if (state.sawInlineZeroOffset || state.finalOffset === 0) {
+    return (
+      `plain-text click transiently placed the cursor at cell start for ${rowLabel}: ` +
+      JSON.stringify(state.events)
+    );
+  }
+
+  return null;
+}
+
 export async function run(page) {
   await openRegressionDocument(page, "index.md");
   await scrollToText(page, "Rich table for edit/display parity");
@@ -276,6 +340,15 @@ export async function run(page) {
     }
     await clearTableEditing(page);
   }
+
+  const plainTextClickError = await checkPlainTextClickAvoidsInitialZeroCursor(
+    page,
+    "emphasis + math",
+  );
+  if (plainTextClickError) {
+    return { pass: false, message: plainTextClickError };
+  }
+  await clearTableEditing(page);
 
   const pureMathTarget = await getTokenTarget(page, "Quicksort", ".katex");
   if (!pureMathTarget) {
@@ -377,6 +450,7 @@ export async function run(page) {
   if (typingError) {
     return { pass: false, message: typingError };
   }
+  await clearTableEditing(page);
 
   return {
     pass: true,

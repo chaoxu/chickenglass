@@ -1032,6 +1032,25 @@ describe("live math widget metadata", () => {
       expect(dWidget.dataset.sourceTo).toBe("43");
     });
   });
+
+  it("keeps one display widget while editing active display math repeatedly", () => {
+    const initialDoc = ["Before", "", "$$", "x", "$$", "", "After"].join("\n");
+    view = createMathRenderView(initialDoc, initialDoc.indexOf("x"));
+    const currentView = view;
+    activateDisplayMathSourceView(currentView, initialDoc.indexOf("x"));
+
+    for (const ch of ["_", "1", " ", "+", " ", "y"]) {
+      const head = currentView.state.selection.main.head;
+      currentView.dispatch({
+        changes: { from: head, insert: ch },
+        selection: { anchor: head + ch.length },
+      });
+
+      const widgets = getDecorationSpecs(currentView.state.field(mathDecorationField))
+        .filter((spec) => spec.widgetClass === "MathWidget" && spec.block === true);
+      expect(widgets).toHaveLength(1);
+    }
+  });
 });
 
 describe("inline math mouse selection integration", () => {

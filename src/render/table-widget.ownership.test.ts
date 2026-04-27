@@ -191,6 +191,40 @@ describe("TableWidget cross-widget editor ownership", () => {
 
     newWidget.destroy(dom);
   });
+
+  it("places rendered-token cell selections before focusing the inline editor", () => {
+    const tableText = "| A |\n|---|\n| **old** and $x$ |";
+    const table: ParsedTable = {
+      header: { cells: [{ content: "A" }] },
+      alignments: ["none"],
+      rows: [{ cells: [{ content: "**old** and $x$" }] }],
+    };
+    const view = makeRootView(10, tableText);
+    const body = makeInlineController("**old** and $x$");
+    createInlineEditorControllerMock.mockReturnValueOnce(body);
+
+    const widget = new TableWidget(table, tableText, 10, {});
+    const dom = widget.toDOM(view);
+    const renderedToken = dom.querySelector("strong");
+    if (!renderedToken) {
+      throw new Error("expected rendered bold token to exist");
+    }
+
+    renderedToken.dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    expect(body.view.dispatch).toHaveBeenCalledTimes(1);
+    expect(body.view.focus).toHaveBeenCalled();
+    expect(
+      vi.mocked(body.view.dispatch).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(body.view.focus).mock.invocationCallOrder[0],
+    );
+
+    widget.destroy(dom);
+  });
 });
 
 describe("TableWidget module ownership", () => {

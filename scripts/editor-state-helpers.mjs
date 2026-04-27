@@ -286,36 +286,6 @@ export async function waitForAutocomplete(page) {
 }
 
 /**
- * Pick the autocomplete tooltip entry whose text contains `needle`. Several
- * regression tests still depend on this helper; restored after the harness
- * consolidation removed it.
- *
- * @param {import("playwright").Page} page
- * @param {string} needle
- */
-export async function pickAutocompleteOption(page, needle) {
-  const picked = await page.evaluate((matchText) => {
-    const option = [...document.querySelectorAll(".cm-tooltip-autocomplete li")]
-      .find((item) => (item.textContent ?? "").includes(matchText));
-    if (!(option instanceof HTMLElement)) {
-      return false;
-    }
-    for (const type of ["mousedown", "mouseup", "click"]) {
-      option.dispatchEvent(new MouseEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      }));
-    }
-    return true;
-  }, needle);
-  if (!picked) {
-    throw new Error(`Failed to pick autocomplete option matching ${JSON.stringify(needle)}`);
-  }
-  await waitForSemanticReady(page);
-}
-
-/**
  * Read the visible CM6 autocomplete labels.
  *
  * @param {import("playwright").Page} page

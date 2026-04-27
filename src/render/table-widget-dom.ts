@@ -289,10 +289,30 @@ export function buildTableWidgetDOM(options: TableWidgetDomOptions): HTMLTableEl
       editorView.focus();
     };
 
+    let hasInitialSelection = false;
+
     const applyInitialSelection = (anchor: number): void => {
       if (getActiveInlineEditor()?.view !== editorView) return;
       editorView.dispatch({ selection: { anchor } });
-      editorView.focus();
+      hasInitialSelection = true;
+    };
+
+    const applyClickPlacement = (): boolean => {
+      if (getActiveInlineEditor()?.view !== editorView) return false;
+      const point = { x: clickX, y: clickY };
+      const precise = preciseHitTestPosition(editorView, point);
+      if (precise) {
+        applyInitialSelection(precise.pos);
+        return true;
+      }
+
+      const coarse = coarseHitTestPosition(editorView, point);
+      if (coarse) {
+        applyInitialSelection(coarse.pos);
+        return true;
+      }
+
+      return false;
     };
 
     if (typeof initialAnchor === "number") {
@@ -300,31 +320,32 @@ export function buildTableWidgetDOM(options: TableWidgetDomOptions): HTMLTableEl
     } else if (placeAtEnd) {
       const docLen = editorView.state.doc.length;
       applyInitialSelection(docLen);
+    } else if (useClickPlacement) {
+      applyClickPlacement();
     }
-    refocusEditor();
-    requestAnimationFrame(() => {
+
+    if (hasInitialSelection || !useClickPlacement) {
+      refocusEditor();
+    }
+
+    const scheduleRefocus = (): void => {
       requestAnimationFrame(() => {
-        refocusEditor();
+        requestAnimationFrame(() => {
+          refocusEditor();
+        });
       });
-    });
+    };
 
-    if (useClickPlacement) {
+    if (!useClickPlacement || hasInitialSelection) {
+      scheduleRefocus();
+    } else {
       requestAnimationFrame(() => {
-        if (getActiveInlineEditor()?.view !== editorView) return;
-        const point = { x: clickX, y: clickY };
-        const precise = preciseHitTestPosition(editorView, point);
-        if (precise) {
-          applyInitialSelection(precise.pos);
+        if (!hasInitialSelection && applyClickPlacement()) {
+          refocusEditor();
+          scheduleRefocus();
           return;
         }
-
-        const coarse = coarseHitTestPosition(editorView, point);
-        if (coarse) {
-          applyInitialSelection(coarse.pos);
-          return;
-        }
-
-        editorView.focus();
+        refocusEditor();
       });
     }
   };
