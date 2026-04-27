@@ -120,6 +120,33 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     expect(view.state.doc.toString()).toBe(doc);
   });
 
+  it("replaces bullet list source markers with bullet glyph widgets", () => {
+    view = createView("- top one\n- top two", 0);
+    const specs = getAllDecorationSpecs(view);
+
+    expect(specs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 0,
+          to: 1,
+          widgetClass: "BulletListMarkerWidget",
+        }),
+        expect.objectContaining({
+          from: 10,
+          to: 11,
+          widgetClass: "BulletListMarkerWidget",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps ordered list markers as styled source text", () => {
+    view = createView("1. top one\n2. top two", 0);
+    const specs = getAllDecorationSpecs(view);
+    expect(hasMarkClassInRange(specs, 0, 2, CSS.listNumber)).toBe(true);
+    expect(specs.some((spec) => spec.widgetClass === "BulletListMarkerWidget")).toBe(false);
+  });
+
   it("replaces horizontal rule source with an hr widget outside the cursor", () => {
     view = createView("before\n\n---\n\nafter", 0);
     const specs = getAllDecorationSpecs(view);

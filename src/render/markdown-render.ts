@@ -109,9 +109,6 @@ const inlineCodeDecoration = Decoration.mark({ class: CSS.inlineCode });
 const subscriptDecoration = Decoration.mark({ tagName: "sub" });
 const superscriptDecoration = Decoration.mark({ tagName: "sup" });
 
-/** Decoration to style bullet list markers. */
-const bulletListDecoration = Decoration.mark({ class: CSS.listBullet });
-
 /** Decoration to style ordered list markers. */
 const numberListDecoration = Decoration.mark({ class: CSS.listNumber });
 
@@ -147,6 +144,21 @@ class HardBreakWidget extends WidgetType {
     return other instanceof HardBreakWidget;
   }
 }
+
+class BulletListMarkerWidget extends WidgetType {
+  override toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = CSS.listBullet;
+    span.textContent = "•";
+    return span;
+  }
+
+  override eq(other: WidgetType): boolean {
+    return other instanceof BulletListMarkerWidget;
+  }
+}
+
+const bulletListMarkerWidget = new BulletListMarkerWidget();
 
 function isCanonicalHtmlBreak(source: string): boolean {
   return /^<br\s*\/?>$/i.test(source);
@@ -403,16 +415,21 @@ function handleEscape(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
   ctx.items.push(Decoration.replace({}).range(node.from, node.from + 1));
 }
 
-/** ListMark: always style bullet/number markers (no source revert).
- * List markers aren't source syntax like # or $ — they should keep
- * the content font even when the cursor is on them. */
+/** ListMark: always render list markers (no source revert).
+ * Ordered markers use their source text because "1." is the rendered form.
+ * Unordered markers must be replacement widgets because "-", "*", and "+"
+ * are source alternatives for the same rendered bullet glyph.
+ */
 function handleListMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
   const grandparent = node.node.parent?.parent?.name;
-  const deco =
-    grandparent === "BulletList"
-      ? bulletListDecoration
-      : numberListDecoration;
-  ctx.items.push(deco.range(node.from, node.to));
+  if (grandparent === "BulletList") {
+    ctx.items.push(
+      Decoration.replace({ widget: bulletListMarkerWidget }).range(node.from, node.to),
+    );
+    return;
+  }
+
+  ctx.items.push(numberListDecoration.range(node.from, node.to));
 }
 
 // ── Registry population ────────────────────────────────────────────────
