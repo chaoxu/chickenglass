@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { undoDepth } from "@codemirror/commands";
 import {
+  captureEditorHistoryState,
   createEditor,
   editorModeField,
   markdownEditorModes,
@@ -33,6 +35,26 @@ describe("createEditor", () => {
     expect(view.state.doc.toString()).toBe(doc);
 
     view.destroy();
+  });
+
+  it("restores an initial CM6 history state", () => {
+    const parent = document.createElement("div");
+    const view = createEditor({ parent, doc: "" });
+
+    view.dispatch({ changes: { from: 0, insert: "draft" } });
+    const history = captureEditorHistoryState(view.state);
+    expect(undoDepth(view.state)).toBeGreaterThan(0);
+    view.destroy();
+
+    const restoredParent = document.createElement("div");
+    const restored = createEditor({
+      parent: restoredParent,
+      doc: "draft",
+      initialHistoryState: history,
+    });
+
+    expect(undoDepth(restored.state)).toBeGreaterThan(0);
+    restored.destroy();
   });
 });
 

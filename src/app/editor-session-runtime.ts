@@ -207,7 +207,9 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     getCurrentDocText: () => documentForPath(state.currentDocument?.path ?? null, liveDocs, buffers),
     hasDirtyDocument: () => {
       const currentPath = state.currentDocument?.path;
-      return currentPath ? dirtyPaths.has(currentPath) : hasDirtySessionDocument(state);
+      return currentPath
+        ? dirtyPaths.has(currentPath) || isSessionPathDirty(state, currentPath)
+        : hasDirtySessionDocument(state);
     },
     getPathBaselineHash: (path) => {
       if (newDocumentPaths.has(path)) {

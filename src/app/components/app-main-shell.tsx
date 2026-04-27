@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { DebugSidebarProvider } from "./debug-sidebar";
 import { EditorPane } from "./editor-pane";
 import { ExternalConflictBanner } from "./external-conflict-banner";
@@ -9,6 +10,7 @@ import { useAppEditorController } from "../contexts/app-editor-context";
 import { useFileSystem } from "../contexts/file-system-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
+import type { Cm6HistoryCache } from "../hooks/use-editor";
 import { getEditorModeAdapter } from "../editor-mode-adapter";
 
 ensureLexicalEditorPaneBootstrapped();
@@ -28,6 +30,7 @@ export function AppMainShell({
   onOpenSettings,
 }: AppMainShellProps) {
   const fs = useFileSystem();
+  const cm6HistoryCache = useRef<Cm6HistoryCache>(new Map());
   const workspace = useAppWorkspaceController();
   const editor = useAppEditorController();
   const currentPath = editor.currentPath;
@@ -88,6 +91,7 @@ export function AppMainShell({
               editor.handleProgrammaticDocChange(currentPath, doc);
             }}
             onStateChange={editor.handleEditorStateChange}
+            cm6HistoryCache={cm6HistoryCache}
             onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
             onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
             onDocumentReady={editor.handleEditorDocumentReady}

@@ -1,6 +1,7 @@
 import { indentUnit, LanguageDescription } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { historyField } from "@codemirror/commands";
 import { treeView } from "@overleaf/codemirror-tree-view";
 import {
   DOCUMENT_SURFACE_CLASS,
@@ -115,6 +116,14 @@ export interface EditorConfig {
   pluginManager?: EditorPluginManager;
   /** Additional CM6 extensions to include. */
   extensions?: Extension[];
+  /** Optional restored CodeMirror history state for remounting the same document. */
+  initialHistoryState?: Cm6HistoryState | null;
+}
+
+export type Cm6HistoryState = unknown;
+
+export function captureEditorHistoryState(state: EditorState): Cm6HistoryState | undefined {
+  return state.field(historyField, false);
 }
 
 function hasCompartmentContent(extension: Extension | undefined): boolean {
@@ -194,6 +203,10 @@ export function createEditor(config: EditorConfig): EditorView {
 
       // Editor chrome (folding, outliner, keybindings, picker, theme)
       ...editorChromeExtensions(isDark),
+
+      ...(config.initialHistoryState
+        ? [historyField.init(() => config.initialHistoryState)]
+        : []),
 
       // User-provided extensions last
       ...(config.extensions ?? []),

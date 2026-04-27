@@ -13,15 +13,17 @@
  * - Keep a single EditorView alive while synchronising external document switches
  */
 
-import { useRef, useEffect, useState, useMemo, type RefObject } from "react";
+import { useRef, useEffect, useState, useMemo, type MutableRefObject, type RefObject } from "react";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { Annotation, Compartment, EditorSelection, type Extension, type Text } from "@codemirror/state";
 
 import {
   createEditor,
+  captureEditorHistoryState,
   EditorPluginManager,
   defaultEditorPlugins,
   frontmatterField,
+  type Cm6HistoryState,
   type FrontmatterState,
 } from "../../editor";
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
@@ -44,6 +46,46 @@ import { normalizeCmTextString, textMatchesString } from "../codemirror-text";
 export type { ResolvedTheme } from "../theme-dom";
 
 const knownProgrammaticDocumentTextAnnotation = Annotation.define<string>();
+const MAX_CM6_HISTORY_CACHE_ENTRIES = 8;
+
+export interface CachedCm6History {
+  readonly doc: string;
+  readonly history: Cm6HistoryState;
+}
+
+export type Cm6HistoryCache = Map<string, CachedCm6History>;
+
+function cm6HistoryKey(docPath: string | undefined): string | null {
+  return docPath ?? null;
+}
+
+function getCachedCm6History(
+  cache: ReadonlyMap<string, CachedCm6History>,
+  docPath: string | undefined,
+  doc: string,
+): Cm6HistoryState | null {
+  const key = cm6HistoryKey(docPath);
+  if (!key) return null;
+  const cached = cache.get(key);
+  return cached?.doc === doc ? cached.history : null;
+}
+
+function setCachedCm6History(
+  cache: Map<string, CachedCm6History>,
+  docPath: string | undefined,
+  doc: string,
+  history: Cm6HistoryState | undefined,
+): void {
+  const key = cm6HistoryKey(docPath);
+  if (!key || !history) return;
+  cache.delete(key);
+  cache.set(key, { doc, history });
+  while (cache.size > MAX_CM6_HISTORY_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) break;
+    cache.delete(oldestKey);
+  }
+}
 
 /** Options accepted by useEditor. */
 export interface UseEditorOptions {
@@ -71,6 +113,8 @@ export interface UseEditorOptions {
   onFrontmatterChange?: (fm: FrontmatterState | undefined) => void;
   /** Called after the current `doc`/`docPath` has been applied to the live EditorView. */
   onDocumentReady?: (view: EditorView, docPath: string | undefined) => void;
+  /** App-instance scoped CM6 history cache, used to survive mode-switch remounts. */
+  cm6HistoryCache?: MutableRefObject<Cm6HistoryCache>;
   /**
    * External plugin manager. When provided, useEditor uses it instead of
    * creating its own. This allows the caller (e.g., AppInner) to share a
@@ -95,10 +139,32 @@ function collectDocumentChanges(update: ViewUpdate): EditorDocumentChange[] {
     changes.push({
       from: fromA,
       to: toA,
-      insert: inserted.toString(),
+      insert: cmTextToString(inserted),
     });
   });
   return changes;
+}
+
+function cmTextToString(text: Text): string {
+  let value = "";
+  const cursor = text.iter();
+  while (!cursor.next().done) {
+    value += cursor.value;
+  }
+  return value;
+}
+
+function applyDocumentChanges(
+  doc: string,
+  changes: readonly EditorDocumentChange[],
+): string {
+  let nextDoc = "";
+  let pos = 0;
+  for (const change of changes) {
+    nextDoc += doc.slice(pos, change.from) + change.insert;
+    pos = change.to;
+  }
+  return nextDoc + doc.slice(pos);
 }
 
 function clampPosition(pos: number, docLength: number): number {
@@ -158,7 +224,10 @@ export function useEditor(
   });
   const debugBridge = useEditorDebugBridge();
   const documentContextCompartmentRef = useRef(new Compartment());
+  const fallbackCm6HistoryCacheRef = useRef(new Map<string, CachedCm6History>());
+  const cm6HistoryCacheRef = options.cm6HistoryCache ?? fallbackCm6HistoryCacheRef;
   const lastLoadedDocRef = useRef(doc);
+  const latestLiveDocRef = useRef(doc);
   const lastLoadedPathRef = useRef(docPath);
 
   // Delegate scroll tracking to useEditorScroll hook.
@@ -195,6 +264,7 @@ export function useEditor(
     onFrontmatterChangeRef.current?.(fm);
     initializeViewRef.current(targetView, fm);
     lastLoadedDocRef.current = newDoc;
+    latestLiveDocRef.current = newDoc;
     lastLoadedPathRef.current = newPath;
     onDocumentReadyRef.current?.(targetView, newPath);
   }
@@ -224,13 +294,22 @@ export function useEditor(
 
       if (update.docChanged) {
         if (!programmaticDocChange) {
-          onDocChangeRef.current?.(collectDocumentChanges(update));
+          const changes = collectDocumentChanges(update);
+          latestLiveDocRef.current = applyDocumentChanges(
+            latestLiveDocRef.current,
+            changes,
+          );
+          onDocChangeRef.current?.(changes);
         } else {
           const annotatedDoc = update.transactions.find((tr) =>
             tr.annotation(knownProgrammaticDocumentTextAnnotation) !== undefined
           )?.annotation(knownProgrammaticDocumentTextAnnotation);
-          const docStr = annotatedDoc ?? update.state.doc.toString();
+          const docStr = annotatedDoc ?? applyDocumentChanges(
+            latestLiveDocRef.current,
+            collectDocumentChanges(update),
+          );
           lastLoadedDocRef.current = docStr;
+          latestLiveDocRef.current = docStr;
           onProgrammaticDocChangeRef.current?.(docStr);
         }
 
@@ -276,6 +355,11 @@ export function useEditor(
       projectConfig,
       projectConfigStatus,
       pluginManager,
+      initialHistoryState: getCachedCm6History(
+        cm6HistoryCacheRef.current,
+        docPath,
+        normalizeCmTextString(doc),
+      ),
       extensions: extraExtensions,
     }), { category: "editor" });
 
@@ -289,13 +373,19 @@ export function useEditor(
         wordCountTimerRef.current = null;
       }
       pendingWordCountDocRef.current = null;
+      setCachedCm6History(
+        cm6HistoryCacheRef.current,
+        lastLoadedPathRef.current,
+        latestLiveDocRef.current,
+        captureEditorHistoryState(newView.state),
+      );
       telemetry.reset();
       resetServicesRef.current();
       debugBridge.clearDebugView(newView);
       newView.destroy();
       setView(null);
     };
-  }, [containerRef, debugBridge, extensions, pluginManager, projectConfig, projectConfigStatus, resetScroll]);
+  }, [containerRef, cm6HistoryCacheRef, debugBridge, extensions, pluginManager, projectConfig, projectConfigStatus, resetScroll]);
 
   useEffect(() => {
     if (!view) return;

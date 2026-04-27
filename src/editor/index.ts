@@ -1,11 +1,13 @@
 export { getEditorCommands, createHeadingCommands } from "./commands";
 export {
+  captureEditorHistoryState,
   createEditor,
   tabSizeExtension,
   themeCompartment,
   wordWrapCompartment,
   lineNumbersCompartment,
   tabSizeCompartment,
+  type Cm6HistoryState,
   type EditorConfig,
 } from "./editor";
 export {
