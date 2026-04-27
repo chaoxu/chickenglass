@@ -6,6 +6,7 @@ import { frontmatterField } from "../editor/frontmatter-state";
 import { projectConfigStatusFacet } from "../project-config";
 import type { DocumentAnalysis } from "../semantics/document";
 import { buildKatexOptions } from "../lib/katex-options";
+import { findFencedDivOpenerTrailingContent } from "../parser/fenced-div";
 import { mathMacrosField } from "../state/math-macros";
 import type { DiagnosticEntry } from "./diagnostic-types";
 import {
@@ -181,6 +182,26 @@ function extractFootnoteDiagnostics(analysis: DocumentAnalysis): DiagnosticEntry
   return diagnostics;
 }
 
+function extractFencedDivOpenerDiagnostics(state: EditorState): DiagnosticEntry[] {
+  const diagnostics: DiagnosticEntry[] = [];
+  const doc = state.doc;
+  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
+    const line = doc.line(lineNumber);
+    const trailing = findFencedDivOpenerTrailingContent(line.text);
+    if (!trailing) continue;
+    diagnostics.push({
+      severity: "warning",
+      source: "fenced-div",
+      code: "fenced-div.opener-trailing",
+      message:
+        "Fenced-div opener has unexpected content after the attribute block; merge classes, ID, and key=value pairs into a single {...} block.",
+      from: line.from + trailing.from,
+      to: line.from + trailing.to,
+    });
+  }
+  return diagnostics;
+}
+
 export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   const analysis = state.field(documentAnalysisField);
   const bibData = state.field(bibDataField, false);
@@ -199,6 +220,7 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
     state.field(mathMacrosField, false) ?? {},
   ));
   diagnostics.push(...extractFootnoteDiagnostics(analysis));
+  diagnostics.push(...extractFencedDivOpenerDiagnostics(state));
   const frontmatterStatus = state.field(frontmatterField, false)?.status;
   const frontmatterDiagnostic = diagnosticFromFrontmatterStatus(frontmatterStatus);
   if (frontmatterDiagnostic) diagnostics.push(frontmatterDiagnostic);

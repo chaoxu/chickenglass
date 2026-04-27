@@ -1,7 +1,7 @@
 import { parser } from "@lezer/markdown";
 import { describe, expect, it } from "vitest";
 
-import { fencedDiv } from "./fenced-div";
+import { fencedDiv, findFencedDivOpenerTrailingContent } from "./fenced-div";
 import { markdownExtensions } from "./index";
 import { findNodeInfo, parseNodeInfos, parseNodeNames, type NodeInfo } from "../test-utils";
 
@@ -505,6 +505,37 @@ describe("fenced div parser", () => {
     it("self-closing div with many trailing colons is still rejected", () => {
       const text = "::::: {.lemma} Statement :::::";
       expect(nodeNames(text)).not.toContain("FencedDiv");
+    });
+  });
+
+  describe("findFencedDivOpenerTrailingContent", () => {
+    it("flags a second appended attribute block", () => {
+      const text = '::: {.theorem} {#thm:squares title="Sum of squares"}';
+      const trailing = findFencedDivOpenerTrailingContent(text);
+      expect(trailing).toEqual({
+        from: text.indexOf("{#"),
+        to: text.length,
+      });
+    });
+
+    it("flags a trailing title after a braced block", () => {
+      const text = "::: {.theorem} Main result";
+      const trailing = findFencedDivOpenerTrailingContent(text);
+      expect(trailing).toEqual({
+        from: text.indexOf("Main"),
+        to: text.length,
+      });
+    });
+
+    it("returns undefined for a canonical opener", () => {
+      expect(
+        findFencedDivOpenerTrailingContent('::: {.theorem #thm:1 title="x"}'),
+      ).toBeUndefined();
+    });
+
+    it("returns undefined for a closing fence or unrelated text", () => {
+      expect(findFencedDivOpenerTrailingContent(":::")).toBeUndefined();
+      expect(findFencedDivOpenerTrailingContent("regular paragraph")).toBeUndefined();
     });
   });
 });

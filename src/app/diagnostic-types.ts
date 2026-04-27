@@ -5,7 +5,8 @@ export type DiagnosticSource =
   | "footnote"
   | "frontmatter"
   | "project-config"
-  | "bibliography";
+  | "bibliography"
+  | "fenced-div";
 export type DiagnosticCode =
   | "reference.duplicate-target"
   | "reference.citation-local-collision"
@@ -18,7 +19,8 @@ export type DiagnosticCode =
   | "project-config.parse"
   | "bibliography.read"
   | "bibliography.parse"
-  | "bibliography.style";
+  | "bibliography.style"
+  | "fenced-div.opener-trailing";
 
 export interface DiagnosticEntry {
   readonly severity: DiagnosticSeverity;

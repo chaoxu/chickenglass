@@ -321,4 +321,30 @@ describe("extractDiagnostics", () => {
       }),
     ]);
   });
+
+  it("warns when a fenced-div opener has a second attribute block appended", () => {
+    const state = createState([
+      "::: {.theorem} {#thm:squares title=\"Sum of squares\"}",
+      "Body.",
+      ":::",
+    ].join("\n"));
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        source: "fenced-div",
+        code: "fenced-div.opener-trailing",
+      }),
+    ]);
+  });
+
+  it("does not warn on a canonical single-block fenced-div opener", () => {
+    const state = createState([
+      "::: {.theorem #thm:squares title=\"Sum of squares\"}",
+      "Body.",
+      ":::",
+    ].join("\n"));
+
+    expect(extractDiagnostics(state)).toEqual([]);
+  });
 });

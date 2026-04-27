@@ -181,6 +181,31 @@ export function isCanonicalFencedDivOpeningLine(text: string): boolean {
   return parseOpeningFence(text, readFencePrefix(text, skipSpaceTab(text, 0))) !== undefined;
 }
 
+/**
+ * Detect a near-miss fenced-div opener: colons + a valid attribute block,
+ * but with extra non-whitespace content after it (e.g. a second `{...}`
+ * block, or a trailing title). The line is rejected by `parseOpeningFence`,
+ * so the diagnostics layer uses this to surface the trailing span.
+ *
+ * Returns the line-relative range of the trailing content, or `undefined`
+ * when the line is either a valid opener or not opener-shaped at all.
+ */
+export function findFencedDivOpenerTrailingContent(
+  text: string,
+): { from: number; to: number } | undefined {
+  const prefix = readFencePrefix(text, skipSpaceTab(text, 0));
+  if (!prefix) return undefined;
+  const stage1 = parseFenceColonsAndAttrs(text, prefix);
+  if (!stage1) return undefined;
+
+  let from = stage1.cursorAfterAttr;
+  while (from < text.length && isSpaceTab(text.charCodeAt(from))) from++;
+  if (from >= text.length) return undefined;
+  let to = text.length;
+  while (to > from && isSpaceTab(text.charCodeAt(to - 1))) to--;
+  return { from, to };
+}
+
 interface OpeningFenceInfo {
   readonly colonCount: number;
   readonly attrFrom: number;
