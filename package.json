@@ -98,7 +98,8 @@
       "lefthook"
     ],
     "patchedDependencies": {
-      "katex@0.16.38": "patches/katex@0.16.38.patch"
+      "katex@0.16.38": "patches/katex@0.16.38.patch",
+      "@lezer/markdown@1.6.3": "patches/@lezer__markdown@1.6.3.patch"
     }
   },
   "dependencies": {

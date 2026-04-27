@@ -28,7 +28,6 @@ import {
   userSettingsExtensions,
 } from "./extension-builders";
 import { headingFold } from "./heading-fold";
-import { fencedDivIncrementalReparseExtension } from "./fenced-div-incremental-reparse";
 import { editorKeybindings } from "./keybindings";
 import { listOutlinerExtension } from "./list-outliner";
 import { editorModeField } from "./editor-mode-state";
@@ -88,7 +87,6 @@ const codeLanguageDescriptions: LanguageDescription[] = [
 function editorChromeExtensions(isDark: boolean): Extension[] {
   return [
     headingFold,
-    fencedDivIncrementalReparseExtension,
     listOutlinerExtension,
     editorKeybindings,
     widgetStopIndexCleanupExtension,

@@ -1,0 +1,100 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index c7a9a0635880e92239067e985e3d03a73c2f3281..12c4ebee0be98c0ef438a91ff46547abb9e5137d 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -1843,6 +1843,16 @@ function injectMarks(elements, marks) {
+ // These are blocks that can span blank lines, and should thus only be
+ // reused if their next sibling is also being reused.
+ const NotLast = [Type.CodeBlock, Type.ListItem, Type.OrderedList, Type.BulletList];
++function isClosedFencedDiv(tree) {
++    let cursor = tree.cursor(), fenceCount = 0;
++    if (!cursor.firstChild())
++        return false;
++    do {
++        if (cursor.type.name == "FencedDivFence")
++            fenceCount++;
++    } while (cursor.nextSibling());
++    return fenceCount >= 2;
++}
+ class FragmentCursor {
+     constructor(fragments, input) {
+         this.fragments = fragments;
+@@ -1896,6 +1906,12 @@ class FragmentCursor {
+     }
+     takeNodes(cx) {
+         let cur = this.cursor, off = this.fragment.offset, fragEnd = this.fragmentEnd - (this.fragment.openEnd ? 1 : 0);
++        // Coflat's Pandoc-style FencedDiv can become closed when a later edit adds
++        // a `:::` line. Reusing an old unclosed FencedDiv would skip its composite
++        // callback, so only reject reuse for unclosed FencedDiv fragments. Closed
++        // blocks keep the normal markdown fragment-reuse fast path.
++        if (cur.type.name == "FencedDiv" && cur.tree && !isClosedFencedDiv(cur.tree))
++            return 0;
+         let start = cx.absoluteLineStart, end = start, blockI = cx.block.children.length;
+         let prevEnd = end, prevI = blockI;
+         for (;;) {
+diff --git a/dist/index.js b/dist/index.js
+index 07ce727452fe191aba6d5b3090c4585dd2135853..82a1b5ce543c8cb85e0b67d1ea76766f9074cd18 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1841,6 +1841,16 @@ function injectMarks(elements, marks) {
+ // These are blocks that can span blank lines, and should thus only be
+ // reused if their next sibling is also being reused.
+ const NotLast = [Type.CodeBlock, Type.ListItem, Type.OrderedList, Type.BulletList];
++function isClosedFencedDiv(tree) {
++    let cursor = tree.cursor(), fenceCount = 0;
++    if (!cursor.firstChild())
++        return false;
++    do {
++        if (cursor.type.name == "FencedDivFence")
++            fenceCount++;
++    } while (cursor.nextSibling());
++    return fenceCount >= 2;
++}
+ class FragmentCursor {
+     constructor(fragments, input) {
+         this.fragments = fragments;
+@@ -1894,6 +1904,12 @@ class FragmentCursor {
+     }
+     takeNodes(cx) {
+         let cur = this.cursor, off = this.fragment.offset, fragEnd = this.fragmentEnd - (this.fragment.openEnd ? 1 : 0);
++        // Coflat's Pandoc-style FencedDiv can become closed when a later edit adds
++        // a `:::` line. Reusing an old unclosed FencedDiv would skip its composite
++        // callback, so only reject reuse for unclosed FencedDiv fragments. Closed
++        // blocks keep the normal markdown fragment-reuse fast path.
++        if (cur.type.name == "FencedDiv" && cur.tree && !isClosedFencedDiv(cur.tree))
++            return 0;
+         let start = cx.absoluteLineStart, end = start, blockI = cx.block.children.length;
+         let prevEnd = end, prevI = blockI;
+         for (;;) {
+diff --git a/src/markdown.ts b/src/markdown.ts
+index 52c151ed6a2aa97bdd719fb80a5f46b493215812..886e4cc7760ef02d957b76730b6e673ed3ae754b 100644
+--- a/src/markdown.ts
++++ b/src/markdown.ts
+@@ -1820,6 +1820,15 @@ function injectMarks(elements: readonly (Element | TreeElement)[], marks: Elemen
+ // reused if their next sibling is also being reused.
+ const NotLast = [Type.CodeBlock, Type.ListItem, Type.OrderedList, Type.BulletList]
+
++function isClosedFencedDiv(tree: Tree) {
++  let cursor = tree.cursor(), fenceCount = 0
++  if (!cursor.firstChild()) return false
++  do {
++    if (cursor.type.name == "FencedDivFence") fenceCount++
++  } while (cursor.nextSibling())
++  return fenceCount >= 2
++}
++
+ class FragmentCursor {
+   // Index into fragment array
+   i = 0
+@@ -1870,6 +1879,11 @@ class FragmentCursor {
+
+   takeNodes(cx: BlockContext) {
+     let cur = this.cursor!, off = this.fragment!.offset, fragEnd = this.fragmentEnd - (this.fragment!.openEnd ? 1 : 0)
++    // Coflat's Pandoc-style FencedDiv can become closed when a later edit adds
++    // a `:::` line. Reusing an old unclosed FencedDiv would skip its composite
++    // callback, so only reject reuse for unclosed FencedDiv fragments. Closed
++    // blocks keep the normal markdown fragment-reuse fast path.
++    if (cur.type.name == "FencedDiv" && cur.tree && !isClosedFencedDiv(cur.tree)) return 0
+     let start = cx.absoluteLineStart, end = start, blockI = cx.block.children.length
+     let prevEnd = end, prevI = blockI
+     for (;;) {

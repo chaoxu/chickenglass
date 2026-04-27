@@ -220,23 +220,15 @@ interface OpeningFenceInfo {
 }
 
 /**
- * Generation counter that changes between parser invocations.
+ * Monotonic fenced-div context generation.
  *
- * Lezer's incremental parser reuses tree fragments when the composite
- * block's hash matches. For fenced divs, `takeNodes` can copy the
- * closing FencedDivFence from the old tree without calling the composite
- * callback, so the block never ends and swallows subsequent content.
- *
- * By encoding a changing generation in the composite value, the hash
- * differs between parses, preventing fragment reuse inside fenced divs.
- * This forces a full reparse of fenced div content (typically a few
- * lines — negligible performance cost).
+ * The patched @lezer/markdown fragment cursor rejects reuse of old unclosed
+ * FencedDiv nodes. When that makes the opener parse again, this generation
+ * gives the new FencedDiv context a fresh hash, preventing stale interior
+ * fragments from being reused before the composite callback sees a newly typed
+ * closing fence.
  */
 let parseGeneration = 0;
-
-// Composite values pack colonCount (0-255) with the parse generation. The 255
-// cap pre-dates this encoding; Pandoc accepts more colons but no real document
-// uses them.
 const COLON_RANGE = 256;
 const COLON_MASK = COLON_RANGE - 1;
 
@@ -268,11 +260,9 @@ function hasMatchedClosingFenceMarker(
  * Composite callback for FencedDiv. Called on each new line to decide
  * if the block continues. Returns `true` to continue, `false` to end.
  *
- * The `value` parameter encodes the colon count (range 0-255) plus
- * `parseGeneration * 256`. Lezer keys incremental fragment reuse on this
- * value, and the generation is unbounded so a long edit session cannot
- * collide with a stale fragment. Self-closing blocks negate the value so the
- * composite callback can terminate immediately.
+ * The `value` parameter stores the opening-fence colon count plus a monotonic
+ * generation. Self-closing blocks negate the value so the composite callback
+ * can terminate immediately.
  */
 function fencedDivComposite(
   cx: BlockContext,
@@ -308,10 +298,6 @@ const fencedDivBlockParser: BlockParser = {
   before: "FencedCode",
 
   parse(cx: BlockContext, line: Line) {
-    if (cx.lineStart === 0 && line.pos === 0) {
-      parseGeneration = 0;
-    }
-
     const prefix = readFencePrefix(line.text, line.pos);
 
     // Check for closing fence that was rejected by composite callback.
@@ -331,8 +317,6 @@ const fencedDivBlockParser: BlockParser = {
     const fenceStart = cx.lineStart + line.pos;
     const fenceEnd = cx.lineStart + line.pos + info.colonCount;
 
-    // Increment parse generation to prevent incremental parser from
-    // reusing old tree fragments inside this composite block.
     parseGeneration += 1;
     fencedDivLog(`OPEN at ${fenceStart} colons=${info.colonCount} gen=${parseGeneration}`);
 

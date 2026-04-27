@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@lezer/markdown@1.6.3':
+    hash: d12bb99b8bdbb5e568d62506a2f0c515614315535c45867ae2f6a3e41d816479
+    path: patches/@lezer__markdown@1.6.3.patch
   katex@0.16.38:
     hash: 803df0b4b4e1809179417a58b26839e80f2dee2847a6cb2434e98657f788465f
     path: patches/katex@0.16.38.patch
@@ -117,7 +120,7 @@ importers:
         version: 1.2.3
       '@lezer/markdown':
         specifier: ^1.6.3
-        version: 1.6.3
+        version: 1.6.3(patch_hash=d12bb99b8bdbb5e568d62506a2f0c515614315535c45867ae2f6a3e41d816479)
       '@radix-ui/react-checkbox':
         specifier: ^1.3.3
         version: 1.3.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -3261,7 +3264,7 @@ snapshots:
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.40.0
       '@lezer/common': 1.5.1
-      '@lezer/markdown': 1.6.3
+      '@lezer/markdown': 1.6.3(patch_hash=d12bb99b8bdbb5e568d62506a2f0c515614315535c45867ae2f6a3e41d816479)
 
   '@codemirror/lang-python@6.2.1':
     dependencies:
@@ -3744,7 +3747,7 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.1
 
-  '@lezer/markdown@1.6.3':
+  '@lezer/markdown@1.6.3(patch_hash=d12bb99b8bdbb5e568d62506a2f0c515614315535c45867ae2f6a3e41d816479)':
     dependencies:
       '@lezer/common': 1.5.1
       '@lezer/highlight': 1.2.3
