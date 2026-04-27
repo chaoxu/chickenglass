@@ -125,6 +125,8 @@ let nextPickerRequestId = 1;
 let activePicker: {
   requestId: number;
   view: EditorView;
+  triggerFrom: number;
+  triggerTo: number;
   ancestorFences: AncestorFence[];
 } | null = null;
 
@@ -238,7 +240,7 @@ function showPicker(
 
   // Clean up any prior picker state so event listeners don't leak
   // when showPicker is called without a preceding hidePicker (#500).
-  hidePicker();
+  hidePicker({ restoreTrigger: true });
 
   const el = getPickerEl();
   el.style.display = "";
@@ -247,11 +249,13 @@ function showPicker(
   activePicker = {
     requestId,
     view,
+    triggerFrom: lineFrom,
+    triggerTo: lineTo,
     ancestorFences,
   };
   const coords = view.coordsAtPos(lineFrom);
   if (!coords) {
-    hidePicker();
+    hidePicker({ restoreTrigger: true });
     return;
   }
 
@@ -262,7 +266,7 @@ function showPicker(
       hidePicker();
     },
     onClose: () => {
-      hidePicker();
+      hidePicker({ restoreTrigger: true });
       view.focus();
     },
   });
@@ -296,9 +300,26 @@ function showPicker(
   });
 }
 
+function restorePickerTrigger(picker: NonNullable<typeof activePicker>): void {
+  const { view, triggerFrom, triggerTo } = picker;
+  if (!view.dom.isConnected) return;
+  const docLength = view.state.doc.length;
+  const from = Math.min(triggerFrom, docLength);
+  const to = Math.min(Math.max(triggerTo, from), docLength);
+  view.dispatch({
+    changes: { from, to, insert: ":::" },
+    selection: { anchor: from + 3 },
+    annotations: fenceOperationAnnotation.of(true),
+  });
+}
+
 /** Hide the picker and clean up. */
-function hidePicker(): void {
+function hidePicker(options: { restoreTrigger?: boolean } = {}): void {
+  const picker = activePicker;
   activePicker = null;
+  if (options.restoreTrigger && picker) {
+    restorePickerTrigger(picker);
+  }
   renderPickerMenu(null);
   if (!pickerEl) return;
   pickerEl.setAttribute("data-visible", "false");
@@ -388,9 +409,7 @@ const pickerLifecyclePlugin = ViewPlugin.define((view) => {
     if (activePicker?.view !== view) return;
     const target = e.target as HTMLElement;
     if (!pickerEl?.contains(target)) {
-      // The `::` was already removed when the picker appeared.
-      // Just dismiss the picker on outside click.
-      hidePicker();
+      hidePicker({ restoreTrigger: true });
       view.focus();
     }
   };

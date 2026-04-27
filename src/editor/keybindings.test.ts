@@ -10,10 +10,15 @@ import { documentSemanticsField } from "../state/document-analysis";
 import { editorFocusField } from "../render/render-core";
 import { mathMacrosField } from "../state/math-macros";
 import {
+  exitCurrentBlockBelow,
   moveDownAcrossNestedClosingFences,
   toggleInlineMarker,
   toggleLink,
 } from "./keybindings";
+import {
+  activeStructureEditField,
+  activateStructureEditAt,
+} from "../state/cm-structure-edit";
 import { frontmatterField } from "./frontmatter-state";
 import { createTestView, makeBlockPlugin } from "../test-utils";
 
@@ -50,6 +55,7 @@ function makeFencedView(
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathMacrosField,
       createPluginRegistryField(plugins),
@@ -136,6 +142,40 @@ describe("moveDownAcrossNestedClosingFences", () => {
 
     expect(moveDownAcrossNestedClosingFences(view)).toBe(false);
     expect(view.state.selection.main.head).toBe(innerLineEnd);
+  });
+});
+
+describe("exitCurrentBlockBelow", () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it("creates a paragraph after the current fenced div closing fence", () => {
+    const doc = "::: {.theorem}\nbody line\n:::";
+    const bodyEnd = doc.indexOf("body line") + "body line".length;
+    view = makeFencedView(doc, bodyEnd);
+
+    expect(exitCurrentBlockBelow(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("::: {.theorem}\nbody line\n:::\n\n");
+    expect(view.state.selection.main.head).toBe(
+      view.state.doc.line(4).from,
+    );
+  });
+
+  it("creates a paragraph after an active display math block", () => {
+    const doc = "$$\nx\n$$";
+    const mathPos = doc.indexOf("x");
+    view = makeFencedView(doc, mathPos);
+    expect(activateStructureEditAt(view, mathPos)).toBe(true);
+
+    expect(exitCurrentBlockBelow(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("$$\nx\n$$\n\n");
+    expect(view.state.selection.main.head).toBe(
+      view.state.doc.line(4).from,
+    );
   });
 });
 

@@ -9,11 +9,17 @@ import { EditorSelection, type EditorState, type Extension, Prec } from "@codemi
 import { EditorView, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { MODE_CHANGE_EVENT } from "../constants/events";
-import { getClosingFenceRanges } from "../plugins/fence-protection";
+import {
+  fenceOperationAnnotation,
+  getClosingFenceRanges,
+} from "../plugins/fence-protection";
 import { toggleDebugInspector } from "../render/debug-inspector";
 import { toggleFocusMode } from "../render/focus-mode";
 import { editorModeField, markdownEditorModes, setEditorMode } from "./editor-mode-state";
-import { clearStructureEditTarget } from "../state/cm-structure-edit";
+import {
+  clearStructureEditTarget,
+  getActiveStructureEditTarget,
+} from "../state/cm-structure-edit";
 import { moveVerticallyInRichView } from "./vertical-motion";
 
 /** Cycle to the next editor mode. */
@@ -303,6 +309,79 @@ export function moveDownAcrossNestedClosingFences(view: EditorView): boolean {
   return true;
 }
 
+function findEnclosingFencedDiv(state: EditorState, pos: number): SyntaxNode | null {
+  for (const bias of [-1, 1, 0] as const) {
+    let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, bias);
+    while (node) {
+      if (node.name === "FencedDiv") return node;
+      node = node.parent;
+    }
+  }
+  return null;
+}
+
+function findClosingFence(node: SyntaxNode): SyntaxNode | null {
+  let closingFence: SyntaxNode | null = null;
+  let child = node.firstChild;
+  while (child) {
+    if (child.name === "FencedDivFence") {
+      closingFence = child;
+    }
+    child = child.nextSibling;
+  }
+  return closingFence;
+}
+
+function moveToParagraphBelowPosition(view: EditorView, pos: number): boolean {
+  const line = view.state.doc.lineAt(pos);
+  const insertPos = line.to;
+  const after = view.state.sliceDoc(
+    insertPos,
+    Math.min(view.state.doc.length, insertPos + 2),
+  );
+  const anchor = insertPos + 1;
+
+  if (after.startsWith("\n\n")) {
+    view.dispatch({
+      selection: EditorSelection.cursor(anchor),
+      scrollIntoView: true,
+      userEvent: "select",
+    });
+    return true;
+  }
+
+  view.dispatch({
+    changes: {
+      from: insertPos,
+      insert: after.startsWith("\n") ? "\n" : "\n\n",
+    },
+    selection: EditorSelection.cursor(anchor),
+    scrollIntoView: true,
+    userEvent: "input",
+    annotations: fenceOperationAnnotation.of(true),
+  });
+  return true;
+}
+
+export function exitCurrentBlockBelow(view: EditorView): boolean {
+  if (!isRichMode(view)) return false;
+  const range = view.state.selection.main;
+  if (!range.empty) return false;
+
+  const activeStructure = getActiveStructureEditTarget(view.state);
+  if (activeStructure?.kind === "display-math") {
+    const exitPos = activeStructure.to;
+    clearStructureEditTarget(view);
+    return moveToParagraphBelowPosition(view, exitPos);
+  }
+
+  const fencedDiv = findEnclosingFencedDiv(view.state, range.head);
+  if (!fencedDiv) return false;
+  const closingFence = findClosingFence(fencedDiv);
+  if (!closingFence || closingFence === fencedDiv.firstChild) return false;
+  return moveToParagraphBelowPosition(view, closingFence.to);
+}
+
 function moveWithReverseScrollGuard(
   view: EditorView,
   direction: "up" | "down",
@@ -349,6 +428,8 @@ export const editorKeybindings: Extension = [
   Prec.high(
     keymap.of([
       { key: "Escape", run: clearActiveStructureEdit },
+      { key: "Mod-Enter", run: exitCurrentBlockBelow },
+      { key: "Shift-Enter", run: exitCurrentBlockBelow },
       { key: "ArrowUp", run: (view) => moveWithReverseScrollGuard(view, "up") },
       { key: "ArrowDown", run: (view) => moveWithReverseScrollGuard(view, "down") },
     ]),

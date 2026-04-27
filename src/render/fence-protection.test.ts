@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
+import { EditorView } from "@codemirror/view";
 import { markdownExtensions } from "../parser";
 import {
   fenceOperationAnnotation,
@@ -32,7 +33,12 @@ import { editorFocusField } from "./render-core";
 import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "./code-block-render";
 import { frontmatterField } from "../editor/frontmatter-state";
 import {
+  activeStructureEditField,
+  getActiveStructureEditTarget,
+} from "../state/cm-structure-edit";
+import {
   createEditorState,
+  createTestView,
   makeBlockPlugin,
 } from "../test-utils";
 
@@ -48,6 +54,7 @@ function createProtectedState(
     extensions: [
       markdown({ extensions: markdownExtensions }),
       frontmatterField,
+      activeStructureEditField,
       documentSemanticsField,
       mathMacrosField,
       createPluginRegistryField(plugins),
@@ -57,6 +64,41 @@ function createProtectedState(
       fenceProtectionExtension,
     ],
   });
+}
+
+function createProtectedView(doc: string, cursorPos = 0) {
+  return createTestView(doc, {
+    cursorPos,
+    extensions: [
+      markdown({ extensions: markdownExtensions }),
+      frontmatterField,
+      activeStructureEditField,
+      documentSemanticsField,
+      mathMacrosField,
+      createPluginRegistryField([makeBlockPlugin({ name: "theorem" })]),
+      blockCounterField,
+      editorFocusField,
+      blockDecorationField,
+      fenceProtectionExtension,
+    ],
+  });
+}
+
+function typeThroughInputHandlers(view: EditorView, text: string): void {
+  for (const char of text) {
+    const from = view.state.selection.main.from;
+    const to = view.state.selection.main.to;
+    const defaultInsert = () => view.state.update({
+      changes: { from, to, insert: char },
+      selection: { anchor: from + char.length },
+      userEvent: "input.type",
+    });
+    const handled = view.state.facet(EditorView.inputHandler)
+      .some((handler) => handler(view, from, to, char, defaultInsert));
+    if (!handled) {
+      view.dispatch(defaultInsert());
+    }
+  }
 }
 
 describe("openingFenceColonProtection", () => {
@@ -791,6 +833,36 @@ describe("openingFenceDeletionCleanup (display math \\[)", () => {
 // ---------------------------------------------------------------------------
 
 describe("emptyMathBlockBackspaceCleanup ($$)", () => {
+  it("activates display-math source editing after paired $$ entry", () => {
+    const view = createProtectedView("");
+    try {
+      typeThroughInputHandlers(view, "$$");
+
+      expect(view.state.doc.toString()).toBe("$$\n\n$$");
+      expect(getActiveStructureEditTarget(view.state)).toMatchObject({
+        kind: "display-math",
+      });
+      expect(view.state.selection.main.head).toBe(3);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("activates display-math source editing after paired \\[ entry", () => {
+    const view = createProtectedView("");
+    try {
+      typeThroughInputHandlers(view, "\\[");
+
+      expect(view.state.doc.toString()).toBe("\\[\n\n\\]");
+      expect(getActiveStructureEditTarget(view.state)).toMatchObject({
+        kind: "display-math",
+      });
+      expect(view.state.selection.main.head).toBe(3);
+    } finally {
+      view.destroy();
+    }
+  });
+
   it("removes entire empty $$ block on backspace from blank content line", () => {
     // After pairedMathEntry: $$\n\n$$ with cursor at position 3 (start of blank line)
     // Backspace deletes the newline at position 2-3

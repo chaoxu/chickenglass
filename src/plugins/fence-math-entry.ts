@@ -1,5 +1,17 @@
 import type { AnnotationType } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import {
+  activateStructureEditTarget,
+  createStructureEditTargetAt,
+} from "../state/cm-structure-edit";
+
+function activateInsertedMathBlock(view: EditorView, anchor: number): void {
+  activateStructureEditTarget(
+    view,
+    createStructureEditTargetAt(view.state, anchor),
+    anchor,
+  );
+}
 
 export function createPairedMathEntry(
   fenceOperationAnnotation: AnnotationType<true>,
@@ -30,11 +42,13 @@ export function createPairedMathEntry(
 
       // Preserve indentation: keep the leading whitespace on all three lines.
       const indent = before.slice(0, before.length - beforeTrimmed.length);
+      const anchor = line.from + indent.length + 3;
       view.dispatch({
         changes: { from: line.from, to: line.to, insert: `${indent}$$\n\n${indent}$$` },
-        selection: { anchor: line.from + indent.length + 3 },
+        selection: { anchor },
         annotations: fenceOperationAnnotation.of(true),
       });
+      activateInsertedMathBlock(view, anchor);
       return true;
     }
 
@@ -56,11 +70,13 @@ export function createPairedMathEntry(
 
       // Preserve indentation: keep the leading whitespace on all three lines.
       const indent = before.slice(0, before.length - beforeTrimmed.length);
+      const anchor = line.from + indent.length + 3;
       view.dispatch({
         changes: { from: line.from, to: line.to, insert: `${indent}\\[\n\n${indent}\\]` },
-        selection: { anchor: line.from + indent.length + 3 },
+        selection: { anchor },
         annotations: fenceOperationAnnotation.of(true),
       });
+      activateInsertedMathBlock(view, anchor);
       return true;
     }
 

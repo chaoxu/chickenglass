@@ -452,6 +452,7 @@ describe("picker UI", () => {
     await waitForTick();
 
     expect(isPickerVisible()).toBe(false);
+    expect(view.state.doc.toString()).toBe("\n:::");
   });
 
   it("closes cleanly when picker coordinates are unavailable", async () => {
@@ -466,6 +467,7 @@ describe("picker UI", () => {
       await waitForTick();
 
       expect(isPickerVisible()).toBe(false);
+      expect(view.state.doc.toString()).toBe("\n:::");
       const picker = document.querySelector(".cf-block-picker");
       expect(picker?.querySelector("[cmdk-root]")).toBeNull();
       expect(consoleError).not.toHaveBeenCalled();
