@@ -70,6 +70,10 @@ describe("parseTable", () => {
     expect(parseTable(["hello", "world"])).toBeNull();
   });
 
+  it("does not parse an incomplete separator row before all header columns exist", () => {
+    expect(parseTable(["| A | B |", "| --- |"])).toBeNull();
+  });
+
   it("parses table without leading/trailing pipes", () => {
     const result = mustParse(["A | B", "--- | ---", "1 | 2"]);
     expect(result.header.cells).toEqual([

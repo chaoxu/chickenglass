@@ -7,9 +7,64 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText, waitForRenderReady } from "../test-helpers.mjs";
+import {
+  openEditorScenario,
+  openRegressionDocument,
+  readEditorText,
+  scrollToText,
+  settleEditorLayout,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "tables";
+
+async function assertKeyboardTableAuthoring(page) {
+  await openEditorScenario(page, {
+    entry: "keyboard-table-authoring.md",
+    files: {
+      "keyboard-table-authoring.md": "",
+    },
+    mode: "cm6-rich",
+    waitFor: { selector: ".cm-content" },
+  });
+
+  await page.locator(".cm-content").first().click();
+  await page.keyboard.type("| A | B |");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("| --- |");
+  await settleEditorLayout(page, { frameCount: 2, delayMs: 16 });
+
+  const partialSeparatorDoc = await readEditorText(page);
+  if (partialSeparatorDoc !== "| A | B |\n| --- |") {
+    return `incomplete separator row was normalized early: ${JSON.stringify(partialSeparatorDoc)}`;
+  }
+
+  await page.keyboard.type(" --- |");
+  await page.keyboard.press("Enter");
+  await settleEditorLayout(page, { frameCount: 4, delayMs: 32 });
+
+  const afterSeparator = await page.evaluate(() => ({
+    doc: window.__editor.getDoc(),
+    editingCells: document.querySelectorAll(".cf-table-cell-editing").length,
+  }));
+
+  if (afterSeparator.editingCells !== 1) {
+    return `completed table did not open a cell editor: ${JSON.stringify(afterSeparator)}`;
+  }
+
+  await page.keyboard.type("1");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("2");
+  await page.keyboard.press("Escape");
+  await settleEditorLayout(page, { frameCount: 4, delayMs: 32 });
+
+  const finalDoc = await readEditorText(page);
+  if (finalDoc !== "| A   | B   |\n| --- | --- |\n| 1   | 2   |") {
+    return `keyboard-authored table row was not preserved: ${JSON.stringify(finalDoc)}`;
+  }
+
+  return null;
+}
 
 export async function run(page) {
   await openRegressionDocument(page);
@@ -48,10 +103,15 @@ export async function run(page) {
     };
   }
 
+  const authoringError = await assertKeyboardTableAuthoring(page);
+  if (authoringError) {
+    return { pass: false, message: authoringError };
+  }
+
   return {
     pass: true,
     message:
       `${tableStatus.headerCellCount + tableStatus.bodyCellCount} table cells ` +
-      `(${tableStatus.headerCellCount} headers) rendered`,
+      `(${tableStatus.headerCellCount} headers) rendered; keyboard table authoring preserved`,
   };
 }

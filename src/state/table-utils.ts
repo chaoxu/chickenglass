@@ -112,10 +112,12 @@ export function parseTable(lines: readonly string[]): ParsedTable | null {
   if (!isTableRow(lines[0]) || !isSeparatorRow(lines[1])) return null;
 
   const headerCells = splitRow(lines[0]);
-  const alignments = detectAlignment(lines[1]);
+  const separatorCells = splitRow(lines[1]);
 
   // Normalize column count to header width
   const colCount = headerCells.length;
+  if (separatorCells.length < colCount) return null;
+  const alignments = separatorCells.map(parseAlignmentCell);
 
   const padCells = (cells: string[]): TableCell[] => {
     const result: TableCell[] = [];

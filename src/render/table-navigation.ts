@@ -1,7 +1,5 @@
 import { Prec, type Extension } from "@codemirror/state";
 import { keymap, type EditorView } from "@codemirror/view";
-import { addRow } from "./table-utils";
-import { applyTableMutation } from "./table-actions";
 import {
   findCellBounds,
   findTableAtCursor,
@@ -9,6 +7,7 @@ import {
   getCursorColIndex,
   skipSeparator,
 } from "./table-discovery";
+import { appendTableWidgetRowAndFocus } from "./table-widget-mutations";
 
 /** Move cursor to the next cell (Tab). Returns true if handled. */
 function nextCell(view: EditorView): boolean {
@@ -35,7 +34,13 @@ function nextCell(view: EditorView): boolean {
 
   const totalLines = table.lines.length;
   if (nextLineIdx >= totalLines) {
-    applyTableMutation(view, table, (parsed) => addRow(parsed));
+    appendTableWidgetRowAndFocus({
+      rootView: view,
+      tableRange: table,
+      tableFrom: table.from,
+      bodyRowCount: table.parsed.rows.length,
+      targetCol: 0,
+    });
     const newTables = findTablesInState(view.state);
     const nextTable = findTableAtCursor(newTables, table.from);
     if (nextTable) {
@@ -105,16 +110,23 @@ function nextRow(view: EditorView): boolean {
   const lineIdx = cursorLine.number - table.startLineNumber;
   const colIdx = getCursorColIndex(view, table);
   if (colIdx === null) return false;
+  const targetColIdx = lineIdx === 1 ? 0 : colIdx;
 
   const nextLineIdx = skipSeparator(lineIdx + 1, 1);
 
   const totalLines = table.lines.length;
   if (nextLineIdx >= totalLines) {
-    applyTableMutation(view, table, (parsed) => addRow(parsed));
+    appendTableWidgetRowAndFocus({
+      rootView: view,
+      tableRange: table,
+      tableFrom: table.from,
+      bodyRowCount: table.parsed.rows.length,
+      targetCol: targetColIdx,
+    });
     const targetLineNum = table.startLineNumber + totalLines;
     if (targetLineNum <= view.state.doc.lines) {
       const targetLine = view.state.doc.line(targetLineNum);
-      const bounds = findCellBounds(targetLine.text, targetLine.from, colIdx);
+      const bounds = findCellBounds(targetLine.text, targetLine.from, targetColIdx);
       if (bounds) {
         view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
       }
@@ -124,7 +136,7 @@ function nextRow(view: EditorView): boolean {
 
   const targetLineNum = table.startLineNumber + nextLineIdx;
   const targetLine = doc.line(targetLineNum);
-  const bounds = findCellBounds(targetLine.text, targetLine.from, colIdx);
+  const bounds = findCellBounds(targetLine.text, targetLine.from, targetColIdx);
   if (bounds) {
     view.dispatch({ selection: { anchor: bounds.from }, scrollIntoView: false });
   }
