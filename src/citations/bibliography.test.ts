@@ -26,6 +26,7 @@ import {
   buildBibliographyDecorations,
   bibliographyPlugin,
 } from "../render/bibliography-render";
+import { destroyFloatingTooltip } from "../render/hover-tooltip";
 import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { documentSemanticsField } from "../state/document-analysis";
 
@@ -252,7 +253,7 @@ describe("BibliographyWidget", () => {
     expect(backlink).not.toBeNull();
     expect(backlink?.getAttribute("href")).toBe("#cite-ref-1");
     expect(backlink?.textContent).toBe("↩");
-    expect(backlink?.getAttribute("title")).toBe("Line 1: See [@karger2000].");
+    expect(backlink?.hasAttribute("title")).toBe(false);
     expect(backlink?.getAttribute("aria-label")).toBe("Jump to citation. Line 1: See [@karger2000].");
   });
 
@@ -319,6 +320,8 @@ describe("bibliographyPlugin integration", () => {
 
   afterEach(() => {
     view?.destroy();
+    destroyFloatingTooltip();
+    vi.useRealTimers();
   });
 
   function createBibView(doc: string, useStore = true): EditorView {
@@ -373,6 +376,22 @@ describe("bibliographyPlugin integration", () => {
 
     expect(view.dom.querySelector(`.${CSS.bibliographyEntry}`)).toBeNull();
     expect(view.dom.querySelector(`.${CSS.bibliographyBacklink}`)).toBeNull();
+  });
+
+  it("shows a rendered preview instead of a native title on citation backlinks", async () => {
+    vi.useFakeTimers();
+    view = createBibView("See **Karger** and $x$ [@karger2000].");
+    const backlink = view.dom.querySelector<HTMLElement>(`.${CSS.bibliographyBacklink}`);
+    expect(backlink).not.toBeNull();
+    expect(backlink?.hasAttribute("title")).toBe(false);
+
+    backlink?.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    await vi.runAllTimersAsync();
+
+    const tooltip = document.body.querySelector<HTMLElement>(`.${CSS.hoverPreviewTooltip}`);
+    expect(tooltip?.textContent).toContain("Line 1");
+    expect(tooltip?.textContent).toContain("Karger");
+    expect(tooltip?.querySelector(`.${CSS.hoverPreviewBody}`)).not.toBeNull();
   });
 
   describe("negative / edge-case", () => {

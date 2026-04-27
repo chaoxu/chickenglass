@@ -86,6 +86,10 @@ export async function readHoverPreviewState(page) {
       hasTable: Boolean(tooltip.querySelector(".cf-block-table table")),
       hasCaption: Boolean(tooltip.querySelector(".cf-block-caption")),
       captionText: tooltip.querySelector(".cf-block-caption")?.textContent ?? "",
+      hasBody: Boolean(tooltip.querySelector(".cf-hover-preview-body")),
+      hasBold: Boolean(tooltip.querySelector("strong, b")),
+      hasKatex: Boolean(tooltip.querySelector(".katex")),
+      hasNativeTitle: document.querySelector(".cf-bibliography-backlink")?.hasAttribute("title") ?? null,
       imageSrc: tooltip.querySelector(".cf-block-figure img")?.getAttribute("src") ?? null,
     };
   });

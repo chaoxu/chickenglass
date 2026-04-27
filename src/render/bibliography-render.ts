@@ -37,6 +37,22 @@ import { type BibStore, bibDataEffect, bibDataField } from "../state/bib-data";
 import {
   documentAnalysisField,
 } from "../state/document-analysis";
+import { mathMacrosField } from "../state/math-macros";
+import { HOVER_DELAY_MS } from "../constants";
+import { createPreviewSurfaceBody } from "../preview-surface";
+import { renderPreviewBlockContentToDom } from "./preview-block-renderer";
+import { buildPreviewBlockOptions } from "./hover-preview-block-options";
+import {
+  createHoverPreviewContent,
+  createHoverPreviewHeader,
+} from "./hover-preview-elements";
+import {
+  floatingTooltipContains,
+  hideFloatingTooltip,
+  showFloatingTooltip,
+  type TooltipPlan,
+} from "./hover-tooltip";
+import { EMPTY_LOCAL_MEDIA_DEPENDENCIES } from "./media-preview";
 import { buildDecorations, createDecorationsField, RenderWidget } from "./render-core";
 
 /** Widget that renders the full bibliography section. */
@@ -44,7 +60,10 @@ export class BibliographyWidget extends RenderWidget {
   private readonly domEventHandlers = new WeakMap<HTMLElement, {
     mouseDown: (event: MouseEvent) => void;
     mouseOver: (event: MouseEvent) => void;
+    mouseOut: (event: MouseEvent) => void;
     focusIn: (event: FocusEvent) => void;
+    focusOut: (event: FocusEvent) => void;
+    destroy: () => void;
   }>();
 
   constructor(
@@ -97,12 +116,19 @@ export class BibliographyWidget extends RenderWidget {
   override toDOM(view?: EditorView): HTMLElement {
     const section = this.createDOM();
     if (!view) return section;
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+    let currentPreviewLink: HTMLElement | null = null;
+
+    const clearHoverTimer = (): void => {
+      if (hoverTimer === null) return;
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    };
 
     const refreshBacklinkContext = (link: HTMLElement): void => {
       const from = Number(link.dataset.sourceFrom ?? "-1");
       if (from < 0) return;
       const context = buildCitationBacklinkContextFromDoc(view.state.doc, { from });
-      link.title = context;
       link.setAttribute("aria-label", buildCitationBacklinkAriaLabel(context));
     };
 
@@ -114,6 +140,24 @@ export class BibliographyWidget extends RenderWidget {
           : null;
       const link = origin?.closest<HTMLElement>(`.${CSS.bibliographyBacklink}`);
       return link && section.contains(link) ? link : null;
+    };
+
+    const showBacklinkPreview = (link: HTMLElement, delay: number): void => {
+      refreshBacklinkContext(link);
+      clearHoverTimer();
+      currentPreviewLink = link;
+      hoverTimer = setTimeout(() => {
+        if (!link.isConnected || currentPreviewLink !== link) return;
+        const plan = buildCitationBacklinkTooltipPlan(view, link);
+        if (!plan) return;
+        showFloatingTooltip(link, plan);
+      }, delay);
+    };
+
+    const hideBacklinkPreview = (): void => {
+      clearHoverTimer();
+      currentPreviewLink = null;
+      hideFloatingTooltip();
     };
 
     const handleMouseDown = (event: MouseEvent): void => {
@@ -132,13 +176,28 @@ export class BibliographyWidget extends RenderWidget {
     const handleMouseOver = (event: MouseEvent): void => {
       const link = getBacklink(event.target);
       if (!link) return;
-      refreshBacklinkContext(link);
+      if (link === currentPreviewLink) return;
+      showBacklinkPreview(link, HOVER_DELAY_MS);
+    };
+
+    const handleMouseOut = (event: MouseEvent): void => {
+      const relatedTarget = event.relatedTarget;
+      if (floatingTooltipContains(relatedTarget)) return;
+      if (getBacklink(relatedTarget)) return;
+      hideBacklinkPreview();
     };
 
     const handleFocusIn = (event: FocusEvent): void => {
       const link = getBacklink(event.target);
       if (!link) return;
-      refreshBacklinkContext(link);
+      showBacklinkPreview(link, 0);
+    };
+
+    const handleFocusOut = (event: FocusEvent): void => {
+      const relatedTarget = event.relatedTarget;
+      if (floatingTooltipContains(relatedTarget)) return;
+      if (getBacklink(relatedTarget)) return;
+      hideBacklinkPreview();
     };
 
     section.querySelectorAll<HTMLElement>(`.${CSS.bibliographyBacklink}`)
@@ -147,11 +206,16 @@ export class BibliographyWidget extends RenderWidget {
     this.domEventHandlers.set(section, {
       mouseDown: handleMouseDown,
       mouseOver: handleMouseOver,
+      mouseOut: handleMouseOut,
       focusIn: handleFocusIn,
+      focusOut: handleFocusOut,
+      destroy: hideBacklinkPreview,
     });
     section.addEventListener("mousedown", handleMouseDown);
     section.addEventListener("mouseover", handleMouseOver);
+    section.addEventListener("mouseout", handleMouseOut);
     section.addEventListener("focusin", handleFocusIn);
+    section.addEventListener("focusout", handleFocusOut);
     return section;
   }
 
@@ -160,7 +224,10 @@ export class BibliographyWidget extends RenderWidget {
     if (!handlers) return;
     dom.removeEventListener("mousedown", handlers.mouseDown);
     dom.removeEventListener("mouseover", handlers.mouseOver);
+    dom.removeEventListener("mouseout", handlers.mouseOut);
     dom.removeEventListener("focusin", handlers.focusIn);
+    dom.removeEventListener("focusout", handlers.focusOut);
+    handlers.destroy();
     this.domEventHandlers.delete(dom);
   }
 
@@ -171,6 +238,40 @@ export class BibliographyWidget extends RenderWidget {
     if (!this.cslHtml.every((html, i) => html === other.cslHtml[i])) return false;
     return this.entries.every((entry) => sameBacklinks(this.backlinks.get(entry.id), other.backlinks.get(entry.id)));
   }
+}
+
+function buildCitationBacklinkTooltipPlan(
+  view: EditorView,
+  link: HTMLElement,
+): TooltipPlan | null {
+  const from = Number(link.dataset.sourceFrom ?? "-1");
+  if (from < 0) return null;
+
+  const position = Math.max(0, Math.min(from, view.state.doc.length));
+  const line = view.state.doc.lineAt(position);
+  const context = buildCitationBacklinkContextFromDoc(view.state.doc, { from });
+  const macros = view.state.field(mathMacrosField, false) ?? {};
+
+  return {
+    buildContent: () => {
+      const container = createHoverPreviewContent();
+      container.appendChild(createHoverPreviewHeader(context, macros));
+
+      const body = createPreviewSurfaceBody(CSS.hoverPreviewBody);
+      renderPreviewBlockContentToDom(
+        body,
+        line.text,
+        buildPreviewBlockOptions(view, macros),
+      );
+      container.appendChild(body);
+      return container;
+    },
+    cacheScope: view.state,
+    dependsOnBibliography: true,
+    dependsOnMacros: true,
+    key: `citation-backlink\0${from}\0${line.number}\0${line.text}`,
+    mediaDependencies: EMPTY_LOCAL_MEDIA_DEPENDENCIES,
+  };
 }
 
 function sameBacklinks(
