@@ -1,5 +1,5 @@
 import type { InlineRenderSurface } from "./inline-surface";
-import { renderInlineMarkdown } from "./render/inline-render";
+import { renderInlineMarkdown, type InlineReferenceRenderContext } from "./render/inline-render";
 
 export type DocumentSurfaceMode = InlineRenderSurface | "document-body";
 
@@ -14,6 +14,7 @@ export interface DocumentSurfaceFragment {
   kind: DocumentFragmentKind;
   text: string;
   macros?: Record<string, string>;
+  referenceContext?: InlineReferenceRenderContext;
   surface?: DocumentSurfaceMode;
 }
 
@@ -38,6 +39,7 @@ export function renderDocumentFragmentToDom(
     fragment.text,
     fragment.macros ?? {},
     resolveSurface(fragment),
+    fragment.referenceContext,
   );
 }
 

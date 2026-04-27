@@ -233,6 +233,38 @@ describe("editor session lower-layer invariants", () => {
     await expect(fs.readFile("main (1).md")).resolves.toBe("# Generated");
   });
 
+  it("preserves dirty inactive file buffers when switching away and back", async () => {
+    const fs = new MemoryFileSystem({
+      "a.md": "A\n",
+      "b.md": "B\n",
+    });
+    const { runtime, service } = createSessionHarness(fs);
+
+    await service.openFile("a.md");
+    service.handleDocumentSnapshot("A edited\n");
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "a.md",
+      name: "a.md",
+      dirty: true,
+    });
+
+    await service.openFile("b.md");
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "b.md",
+      name: "b.md",
+      dirty: false,
+    });
+
+    await service.openFile("a.md");
+    expect(runtime.getCurrentDocument()).toEqual({
+      path: "a.md",
+      name: "a.md",
+      dirty: true,
+    });
+    expect(runtime.getEditorDoc()).toBe("A edited\n");
+    expect(service.isPathDirty("a.md")).toBe(true);
+  });
+
   it("surfaces a conflict instead of overwriting when a generated target appears before save", async () => {
     const fs = new MemoryFileSystem();
     const { runtime, persistence, service } = createSessionHarness(fs);

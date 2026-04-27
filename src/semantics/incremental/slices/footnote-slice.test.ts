@@ -107,6 +107,29 @@ function mergeAndRebuild(
 }
 
 describe("footnote slice", () => {
+  it("numbers and orders orphan definitions after referenced footnotes", () => {
+    const state = createState([
+      "Alpha[^a].",
+      "",
+      "[^a]: first",
+      "[^orphan]: orphan body",
+    ].join("\n"));
+    const slice = analyzeFootnoteSlice(state);
+
+    expect(Array.from(slice.numberById.entries())).toEqual([
+      ["a", 1],
+      ["orphan", 2],
+    ]);
+    expect(slice.orderedEntries.map((entry) => ({
+      id: entry.id,
+      number: entry.number,
+      content: entry.def.content,
+    }))).toEqual([
+      { id: "a", number: 1, content: "first" },
+      { id: "orphan", number: 2, content: "orphan body" },
+    ]);
+  });
+
   it("preserves unrelated definition identity when editing one footnote definition", () => {
     const doc = [
       "Alpha[^a] Beta[^b].",

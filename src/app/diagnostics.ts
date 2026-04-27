@@ -149,6 +149,38 @@ function extractMathDiagnostics(
   return diagnostics;
 }
 
+function extractFootnoteDiagnostics(analysis: DocumentAnalysis): DiagnosticEntry[] {
+  const diagnostics: DiagnosticEntry[] = [];
+  const referenced = new Set(analysis.footnotes.refs.map((ref) => ref.id));
+  const defined = new Set(analysis.footnotes.defs.keys());
+
+  for (const ref of analysis.footnotes.refs) {
+    if (defined.has(ref.id)) continue;
+    diagnostics.push({
+      severity: "warning",
+      source: "footnote",
+      code: "footnote.missing-definition",
+      message: `Missing footnote definition "[^${ref.id}]"`,
+      from: ref.from,
+      to: ref.to,
+    });
+  }
+
+  for (const def of analysis.footnotes.defs.values()) {
+    if (referenced.has(def.id)) continue;
+    diagnostics.push({
+      severity: "warning",
+      source: "footnote",
+      code: "footnote.orphan-definition",
+      message: `Footnote definition "[^${def.id}]" is never referenced`,
+      from: def.labelFrom,
+      to: def.labelTo,
+    });
+  }
+
+  return diagnostics;
+}
+
 export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   const analysis = state.field(documentAnalysisField);
   const bibData = state.field(bibDataField, false);
@@ -166,6 +198,7 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
     analysis,
     state.field(mathMacrosField, false) ?? {},
   ));
+  diagnostics.push(...extractFootnoteDiagnostics(analysis));
   const frontmatterStatus = state.field(frontmatterField, false)?.status;
   const frontmatterDiagnostic = diagnosticFromFrontmatterStatus(frontmatterStatus);
   if (frontmatterDiagnostic) diagnostics.push(frontmatterDiagnostic);

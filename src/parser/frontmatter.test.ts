@@ -51,6 +51,14 @@ describe("extractRawFrontmatter", () => {
     expect(result).not.toBeNull();
     expect(doc.slice(result?.end ?? 0)).toBe("Body");
   });
+
+  it("accepts a leading UTF-8 BOM before the opening delimiter", () => {
+    const doc = "\ufeff---\ntitle: Hello\n---\nBody";
+    const result = extractRawFrontmatter(doc);
+    expect(result).not.toBeNull();
+    expect(result?.raw).toBe("title: Hello");
+    expect(doc.slice(result?.end ?? 0)).toBe("Body");
+  });
 });
 
 describe("parseFrontmatter", () => {
@@ -59,6 +67,14 @@ describe("parseFrontmatter", () => {
     const { config, end } = parseFrontmatter(doc);
     expect(config.title).toBe("My Document");
     expect(end).toBeGreaterThan(0);
+  });
+
+  it("parses frontmatter after a leading UTF-8 BOM", () => {
+    const doc = "\ufeff---\ntitle: My Document\n---\nBody";
+    const { config, end, status } = parseFrontmatter(doc);
+    expect(config.title).toBe("My Document");
+    expect(status.state).toBe("ok");
+    expect(doc.slice(end)).toBe("Body");
   });
 
   it("parses bibliography field", () => {

@@ -73,12 +73,18 @@ describe("plain display math with $$", () => {
     expect(nodes[0].to).toBe(text.lastIndexOf("$$") + 2);
   });
 
-  it("does not throw when an unclosed block reaches EOF", () => {
+  it("does not parse unclosed block math at EOF as DisplayMath", () => {
     const text = "$$\na + b";
     expect(() => parseNodes(text)).not.toThrow();
     const nodes = findNodes(text, "DisplayMath");
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].to).toBe(text.length);
+    expect(nodes).toHaveLength(0);
+  });
+
+  it("does not parse unclosed backslash display math at EOF as DisplayMath", () => {
+    const text = "\\[\na + b";
+    expect(() => parseNodes(text)).not.toThrow();
+    const nodes = findNodes(text, "DisplayMath");
+    expect(nodes).toHaveLength(0);
   });
 
   it("produces DisplayMathMark for $$ delimiters", () => {
@@ -267,8 +273,8 @@ describe("stale currentLineEnd on fence break (REGRESSION)", () => {
     return nodes;
   }
 
-  it("unclosed \\[ before ::: does not extend past the fence", () => {
-    // Unclosed \[ inside a fenced div should end before the closing :::
+  it("unclosed \\[ before ::: does not parse as display math", () => {
+    // Unclosed \[ inside a fenced div should stay editable as source.
     const text = [
       "::: {.theorem}",
       "\\[",
@@ -277,14 +283,10 @@ describe("stale currentLineEnd on fence break (REGRESSION)", () => {
     ].join("\n");
     const nodes = parseFull(text);
     const displayMath = nodes.filter((n) => n.name === "DisplayMath");
-    expect(displayMath.length).toBeGreaterThanOrEqual(1);
-    const dm = displayMath[0];
-    // The DisplayMath should NOT extend past the ::: line
-    const fenceLineStart = text.lastIndexOf(":::");
-    expect(dm.to).toBeLessThanOrEqual(fenceLineStart);
+    expect(displayMath).toHaveLength(0);
   });
 
-  it("unclosed $$ before ::: does not extend past the fence", () => {
+  it("unclosed $$ before ::: does not parse as display math", () => {
     const text = [
       "::: {.theorem}",
       "$$",
@@ -293,10 +295,7 @@ describe("stale currentLineEnd on fence break (REGRESSION)", () => {
     ].join("\n");
     const nodes = parseFull(text);
     const displayMath = nodes.filter((n) => n.name === "DisplayMath");
-    expect(displayMath.length).toBeGreaterThanOrEqual(1);
-    const dm = displayMath[0];
-    const fenceLineStart = text.lastIndexOf(":::");
-    expect(dm.to).toBeLessThanOrEqual(fenceLineStart);
+    expect(displayMath).toHaveLength(0);
   });
 });
 

@@ -243,10 +243,16 @@ function findFirstReferenceChangeIndex(
 
 function buildNumberById(
   refs: readonly FootnoteReference[],
+  definitions: readonly FootnoteDefinition[],
   previous?: FootnoteSlice,
   firstRefChangeIndex: number = 0,
 ): ReadonlyMap<string, number> {
-  if (previous && firstRefChangeIndex === -1) {
+  if (
+    previous
+    && firstRefChangeIndex === -1
+    && definitions.length === previous.definitions.length
+    && definitions.every((def, index) => sameFootnoteDefinition(def, previous.definitions[index]))
+  ) {
     return previous.numberById;
   }
 
@@ -272,6 +278,12 @@ function buildNumberById(
     numbers.set(id, nextNumber++);
   }
 
+  for (const def of definitions) {
+    if (seen.has(def.id)) continue;
+    seen.add(def.id);
+    numbers.set(def.id, nextNumber++);
+  }
+
   if (
     previous
     && numbers.size === previous.numberById.size
@@ -287,6 +299,7 @@ function buildNumberById(
 
 function buildOrderedEntries(
   refs: readonly FootnoteReference[],
+  definitions: readonly FootnoteDefinition[],
   defs: ReadonlyMap<string, FootnoteDefinition>,
   numberById: ReadonlyMap<string, number>,
   previous?: FootnoteSlice,
@@ -317,6 +330,28 @@ function buildOrderedEntries(
 
     entries.push({
       id: ref.id,
+      number,
+      def,
+    });
+  }
+
+  for (const def of definitions) {
+    if (seen.has(def.id)) continue;
+    seen.add(def.id);
+
+    const number = numberById.get(def.id) ?? 0;
+    const previousEntry = previousEntries?.get(def.id);
+    if (
+      previousEntry
+      && previousEntry.number === number
+      && previousEntry.def === def
+    ) {
+      entries.push(previousEntry);
+      continue;
+    }
+
+    entries.push({
+      id: def.id,
       number,
       def,
     });
@@ -354,8 +389,8 @@ export function createFootnoteSlice(
     footnoteDefByFrom.set(def.from, def);
   }
 
-  const numberById = buildNumberById(refs, previous, firstRefChangeIndex);
-  const orderedEntries = buildOrderedEntries(refs, footnoteDefs, numberById, previous);
+  const numberById = buildNumberById(refs, definitions, previous, firstRefChangeIndex);
+  const orderedEntries = buildOrderedEntries(refs, definitions, footnoteDefs, numberById, previous);
 
   return {
     refs,

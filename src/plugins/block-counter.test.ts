@@ -76,7 +76,7 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[1].type).toBe("theorem");
   });
 
-  it("shares counter between theorem and lemma", () => {
+  it("uses separate grouped counters for theorem and lemma by default", () => {
     const doc = [
       "::: {.theorem}",
       "A theorem.",
@@ -99,9 +99,9 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[0].type).toBe("theorem");
     expect(result.blocks[0].number).toBe(1);
     expect(result.blocks[1].type).toBe("lemma");
-    expect(result.blocks[1].number).toBe(2);
+    expect(result.blocks[1].number).toBe(1);
     expect(result.blocks[2].type).toBe("theorem");
-    expect(result.blocks[2].number).toBe(3);
+    expect(result.blocks[2].number).toBe(2);
   });
 
   it("uses separate counters for different groups", () => {
@@ -365,7 +365,7 @@ describe("computeBlockNumbers", () => {
     expect(result.blocks[1].number).toBe(1); // definition 1
   });
 
-  it("grouped numbering preserves existing counter group behavior", () => {
+  it("grouped numbering uses one counter per block type", () => {
     const doc = [
       "::: {.theorem}",
       "T1.",
@@ -384,9 +384,9 @@ describe("computeBlockNumbers", () => {
     const registry = testRegistry();
     const result = computeBlockNumbers(state, registry, "grouped");
 
-    // theorem and lemma share "theorem" counter, definition is separate
+    // grouped mode follows FORMAT.md: each block type has its own sequence.
     expect(result.blocks[0].number).toBe(1); // theorem 1
-    expect(result.blocks[1].number).toBe(2); // lemma 2 (shared with theorem)
+    expect(result.blocks[1].number).toBe(1); // lemma 1
     expect(result.blocks[2].number).toBe(1); // definition 1
   });
 

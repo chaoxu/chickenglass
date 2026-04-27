@@ -70,7 +70,7 @@ function counterGroupForSpec(
 ): string {
   return numbering === "global"
     ? GLOBAL_COUNTER
-    : (spec.counter ?? spec.name);
+    : spec.name;
 }
 
 function buildNumberedBlocks(

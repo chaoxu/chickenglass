@@ -52,12 +52,8 @@ export function resolveBlockNumbering(
     return { numbered: true };
   }
 
-  const baseCounterGroup = overrideConfig?.counter
-    ?? manifestEntry?.counterGroup
-    ?? blockType;
-
   return {
-    counterGroup: config?.numbering === "global" ? "__global__" : baseCounterGroup,
+    counterGroup: config?.numbering === "global" ? "__global__" : blockType,
     numbered: true,
   };
 }

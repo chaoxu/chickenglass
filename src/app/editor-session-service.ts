@@ -112,6 +112,7 @@ export function createEditorSessionService({
     runtime.pipeline.clear(path);
     runtime.buffers.delete(path);
     runtime.liveDocs.delete(path);
+    runtime.forgetPath(path);
     runtime.clearExternalConflictBaseline(path);
     runtime.clearNewDocumentPath(path);
     runtime.commit(clearExternalDocumentConflict(runtime.getState(), path));
@@ -157,6 +158,10 @@ export function createEditorSessionService({
   ): Promise<boolean> => {
     const currentDocument = runtime.getCurrentDocument();
     if (!currentDocument || !runtime.isPathDirty(currentDocument.path)) {
+      return true;
+    }
+
+    if (reason === "switch-file") {
       return true;
     }
 
@@ -410,6 +415,29 @@ export function createEditorSessionService({
 
     return withPerfOperation("open_file", async (operation) => {
       try {
+        const existingDoc = runtime.liveDocs.get(path) ?? runtime.buffers.get(path);
+        if (existingDoc) {
+          const previousPath = runtime.getCurrentPath();
+          if (
+            previousPath &&
+            previousPath !== path &&
+            !runtime.isPathDirty(previousPath)
+          ) {
+            clearPathBuffers(previousPath);
+          }
+          const content = editorDocumentToString(existingDoc);
+          runtime.commit(
+            setCurrentSessionDocument(runtime.getState(), {
+              path,
+              name: targetName,
+              dirty: runtime.isPathDirty(path),
+            }),
+            { editorDoc: content },
+          );
+          addRecentFile(path);
+          return;
+        }
+
         const content = await operation.measureAsync(
           "open_file.read",
           () => fs.readFile(path),
@@ -421,7 +449,11 @@ export function createEditorSessionService({
         }
 
         const previousPath = runtime.getCurrentPath();
-        if (previousPath && previousPath !== path) {
+        if (
+          previousPath &&
+          previousPath !== path &&
+          !runtime.isPathDirty(previousPath)
+        ) {
           clearPathBuffers(previousPath);
         }
 
@@ -475,7 +507,11 @@ export function createEditorSessionService({
     if (!canLeave || !runtime.isLatestOpenFileRequest(requestId)) return;
 
     const previousPath = runtime.getCurrentPath();
-    if (previousPath && previousPath !== path) {
+    if (
+      previousPath &&
+      previousPath !== path &&
+      !runtime.isPathDirty(previousPath)
+    ) {
       clearPathBuffers(previousPath);
     }
 

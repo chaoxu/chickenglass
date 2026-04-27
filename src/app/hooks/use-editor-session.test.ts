@@ -760,7 +760,7 @@ describe("useEditorSession", () => {
     expect(ref.result.currentDocument?.dirty).toBe(true);
   });
 
-  it("cancels file switching when the unsaved-changes prompt says cancel", async () => {
+  it("switches files without discarding dirty inactive buffers", async () => {
     const fs = new MemoryFileSystem({
       "draft.md": "hello",
       "other.md": "world",
@@ -784,24 +784,20 @@ describe("useEditorSession", () => {
       await ref.result.openFile("other.md");
     });
 
-    expect(requestUnsavedChangesDecision).toHaveBeenCalledWith({
-      reason: "switch-file",
-      currentDocument: {
-        path: "draft.md",
-        name: "draft.md",
-      },
-      target: {
-        path: "other.md",
-        name: "other.md",
-      },
+    expect(requestUnsavedChangesDecision).not.toHaveBeenCalled();
+    expect(ref.result.currentPath).toBe("other.md");
+    expect(ref.result.currentDocument?.dirty).toBe(false);
+
+    await act(async () => {
+      await ref.result.openFile("draft.md");
     });
+
     expect(ref.result.currentPath).toBe("draft.md");
-    expect(ref.result.editorDoc).toBe("hello");
-    expect(ref.result.getCurrentDocText()).toBe("hello!");
+    expect(ref.result.editorDoc).toBe("hello!");
     expect(ref.result.currentDocument?.dirty).toBe(true);
   });
 
-  it("notifies after dirty edits are explicitly discarded during file switch", async () => {
+  it("does not discard dirty edits during file switch", async () => {
     const onAfterDiscard = vi.fn();
     const fs = new MemoryFileSystem({
       "draft.md": "hello",
@@ -826,8 +822,15 @@ describe("useEditorSession", () => {
       await ref.result.openFile("other.md");
     });
 
-    expect(onAfterDiscard).toHaveBeenCalledWith("draft.md");
+    expect(onAfterDiscard).not.toHaveBeenCalled();
     expect(ref.result.currentPath).toBe("other.md");
+
+    await act(async () => {
+      await ref.result.openFile("draft.md");
+    });
+
+    expect(ref.result.getCurrentDocText()).toBe("local draft");
+    expect(ref.result.currentDocument?.dirty).toBe(true);
   });
 
   it("rejects real save-as failures instead of treating them like cancel", async () => {

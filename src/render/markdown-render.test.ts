@@ -119,6 +119,54 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     expect(view.state.doc.toString()).toBe(doc);
   });
 
+  it("replaces horizontal rule source with an hr widget outside the cursor", () => {
+    view = createView("before\n\n---\n\nafter", 0);
+    const specs = getAllDecorationSpecs(view);
+    const from = view.state.doc.toString().indexOf("---");
+
+    expect(specs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from,
+          to: from + 3,
+          widgetClass: "HorizontalRuleWidget",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps horizontal rule source visible when the cursor is inside", () => {
+    const doc = "before\n\n---\n\nafter";
+    const from = doc.indexOf("---");
+    view = createView(doc, from + 1);
+    const specs = getAllDecorationSpecs(view);
+
+    expect(specs.some((spec) => spec.widgetClass === "HorizontalRuleWidget")).toBe(false);
+  });
+
+  it("replaces canonical HTML br tags with break widgets outside the cursor", () => {
+    view = createView("line<br />break", 0);
+    const specs = getAllDecorationSpecs(view);
+    const from = view.state.doc.toString().indexOf("<br />");
+
+    expect(specs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from,
+          to: from + "<br />".length,
+          widgetClass: "HardBreakWidget",
+        }),
+      ]),
+    );
+  });
+
+  it("does not render noncanonical inline HTML tags", () => {
+    view = createView("H<sub>2</sub>O", 0);
+    const specs = getAllDecorationSpecs(view);
+
+    expect(specs.some((spec) => spec.widgetClass === "HardBreakWidget")).toBe(false);
+  });
+
   it("does not throw when cursor is at beginning", () => {
     view = createView("# Hello\n\n**bold**", 0);
     expect(view.state.doc.toString()).toBe("# Hello\n\n**bold**");

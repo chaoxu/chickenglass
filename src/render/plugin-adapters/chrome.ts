@@ -1,6 +1,7 @@
 import { type Range } from "@codemirror/state";
 import {
   Decoration,
+  type EditorView,
   WidgetType,
 } from "@codemirror/view";
 import { CSS } from "../../constants/css-classes";
@@ -17,6 +18,10 @@ import {
   addPluginMarkerReplacement,
   type PluginRenderAdapter,
 } from "../../state/plugin-render-adapter";
+import {
+  createEditorReferencePresentationController,
+  type ReferencePresentationController,
+} from "../../references/presentation";
 
 class SimpleTextWidget extends WidgetType {
   constructor(
@@ -70,6 +75,7 @@ function captionClassName(active: boolean): string {
 
 abstract class MacroRenderingWidget extends ShellMacroAwareWidget {
   protected readonly macros: Record<string, string>;
+  private referenceContext: ReferencePresentationController | undefined;
 
   constructor(macros: Record<string, string>) {
     super(macros);
@@ -90,12 +96,25 @@ abstract class MacroRenderingWidget extends ShellMacroAwareWidget {
     return true;
   }
 
+  protected withReferenceContext<T>(view: EditorView | undefined, render: () => T): T {
+    const previous = this.referenceContext;
+    this.referenceContext = view
+      ? createEditorReferencePresentationController(view.state)
+      : undefined;
+    try {
+      return render();
+    } finally {
+      this.referenceContext = previous;
+    }
+  }
+
   protected renderBlockTitle(el: HTMLElement, text: string): void {
     el.textContent = "";
     renderDocumentFragmentToDom(el, {
       kind: "block-title",
       text,
       macros: this.macros,
+      referenceContext: this.referenceContext,
     });
   }
 }
@@ -117,15 +136,19 @@ export class BlockHeaderWidget extends MacroRenderingWidget {
     });
   }
 
+  override toDOM(view?: EditorView): HTMLElement {
+    return this.withReferenceContext(view, () => super.toDOM(view));
+  }
+
   eq(other: BlockHeaderWidget): boolean {
     return this.header === other.header && this.macrosKey === other.macrosKey;
   }
 
-  updateDOM(dom: HTMLElement): boolean {
-    return this.refreshRenderedDOM(dom, (el) => {
+  updateDOM(dom: HTMLElement, view?: EditorView): boolean {
+    return this.withReferenceContext(view, () => this.refreshRenderedDOM(dom, (el) => {
       el.className = CSS.blockHeaderRendered;
       this.renderBlockTitle(el, this.header);
-    });
+    }));
   }
 }
 
@@ -164,8 +187,8 @@ export class BlockCaptionWidget extends MacroRenderingWidget {
     });
   }
 
-  override toDOM(view?: import("@codemirror/view").EditorView): HTMLElement {
-    const el = this.createDOM();
+  override toDOM(view?: EditorView): HTMLElement {
+    const el = this.withReferenceContext(view, () => this.createDOM());
     this.syncWidgetAttrs(el, view);
     el.dataset.activeFenceGuides = "true";
     syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
@@ -186,13 +209,13 @@ export class BlockCaptionWidget extends MacroRenderingWidget {
 
   updateDOM(
     dom: HTMLElement,
-    view?: import("@codemirror/view").EditorView,
+    view?: EditorView,
   ): boolean {
     if (!dom.classList.contains("cf-block-caption")) return false;
-    this.refreshRenderedDOM(dom, (el) => {
+    this.withReferenceContext(view, () => this.refreshRenderedDOM(dom, (el) => {
       el.className = captionClassName(this.active);
       this.renderCaptionContent(el);
-    });
+    }));
     this.syncWidgetAttrs(dom, view);
     dom.dataset.activeFenceGuides = "true";
     syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
@@ -235,15 +258,19 @@ class AttributeTitleWidget extends MacroRenderingWidget {
     });
   }
 
+  override toDOM(view?: EditorView): HTMLElement {
+    return this.withReferenceContext(view, () => super.toDOM(view));
+  }
+
   eq(other: AttributeTitleWidget): boolean {
     return this.title === other.title && this.macrosKey === other.macrosKey;
   }
 
-  updateDOM(dom: HTMLElement): boolean {
+  updateDOM(dom: HTMLElement, view?: EditorView): boolean {
     if (!dom.classList.contains(CSS.blockAttrTitle)) return false;
-    return this.refreshRenderedDOM(dom, (el) => {
+    return this.withReferenceContext(view, () => this.refreshRenderedDOM(dom, (el) => {
       this.renderAttributeTitle(el);
-    });
+    }));
   }
 }
 /**

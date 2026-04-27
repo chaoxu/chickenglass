@@ -2,6 +2,7 @@ import {
   Decoration,
   type EditorView,
   type ViewUpdate,
+  WidgetType,
 } from "@codemirror/view";
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -92,9 +93,6 @@ const headingLineByLevel: Record<string, Decoration> = {
   }),
 };
 
-/** Decoration to style horizontal rules. */
-const hrDecoration = Decoration.mark({ class: "cf-hr" });
-
 /** Decoration to style highlighted text. Always applied (like headings). */
 const highlightDecoration = Decoration.mark({ class: "cf-highlight" });
 
@@ -117,6 +115,35 @@ const styleMap: Readonly<Record<string, Decoration>> = {
   Strikethrough: strikethroughDecoration,
   InlineCode: inlineCodeDecoration,
 };
+
+class HorizontalRuleWidget extends WidgetType {
+  override toDOM(): HTMLElement {
+    const hr = document.createElement("hr");
+    hr.className = "cf-hr";
+    hr.setAttribute("aria-hidden", "true");
+    return hr;
+  }
+
+  override eq(other: WidgetType): boolean {
+    return other instanceof HorizontalRuleWidget;
+  }
+}
+
+class HardBreakWidget extends WidgetType {
+  override toDOM(): HTMLElement {
+    const br = document.createElement("br");
+    br.className = "cf-html-break";
+    return br;
+  }
+
+  override eq(other: WidgetType): boolean {
+    return other instanceof HardBreakWidget;
+  }
+}
+
+function isCanonicalHtmlBreak(source: string): boolean {
+  return /^<br\s*\/?>$/i.test(source);
+}
 
 // ── Markdown node handler registry ─────────────────────────────────────
 
@@ -272,10 +299,31 @@ function handleHidden(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
 
 /** HorizontalRule: style if cursor is not inside. */
 function handleHorizontalRule(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
-  if (cursorInRange(ctx.view, node.from, node.to)) {
+  if (cursorInRange(ctx.view.state, node.from, node.to)) {
     return false as const;
   }
-  ctx.items.push(hrDecoration.range(node.from, node.to));
+  ctx.items.push(
+    Decoration.replace({
+      widget: new HorizontalRuleWidget(),
+    }).range(node.from, node.to),
+  );
+}
+
+/** HTMLTag: only canonical `<br>` line-break HTML is rendered in rich mode. */
+function handleHtmlTag(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  if (cursorInRange(ctx.view.state, node.from, node.to)) {
+    return false as const;
+  }
+  const source = ctx.view.state.sliceDoc(node.from, node.to);
+  if (!isCanonicalHtmlBreak(source)) {
+    return undefined;
+  }
+  ctx.items.push(
+    Decoration.replace({
+      widget: new HardBreakWidget(),
+    }).range(node.from, node.to),
+  );
+  return false as const;
 }
 
 /** Escape: hide the backslash (\$ → $, \* → *) unless cursor is on it. */
@@ -323,6 +371,7 @@ for (const name of ["EmphasisMark", "CodeMark", "LinkMark", "URL", "HardBreak", 
   MARKDOWN_HANDLERS.set(name, { cursorSensitive: false, handle: handleHidden });
 }
 MARKDOWN_HANDLERS.set("HorizontalRule", { cursorSensitive: true, handle: handleHorizontalRule });
+MARKDOWN_HANDLERS.set("HTMLTag", { cursorSensitive: true, handle: handleHtmlTag });
 MARKDOWN_HANDLERS.set("Escape", { cursorSensitive: true, handle: handleEscape });
 MARKDOWN_HANDLERS.set("ListMark", { cursorSensitive: false, handle: handleListMark });
 

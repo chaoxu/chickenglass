@@ -21,6 +21,15 @@ describe("frontmatterField", () => {
     expect(fm.end).toBeGreaterThan(0);
   });
 
+  it("parses frontmatter with a leading UTF-8 BOM", () => {
+    const state = createState(
+      "\ufeff---\ntitle: Hello\n---\nContent",
+    );
+    const fm = state.field(frontmatterField);
+    expect(fm.config.title).toBe("Hello");
+    expect(fm.end).toBeGreaterThan(0);
+  });
+
   it("returns empty config when no frontmatter", () => {
     const state = createState("# No frontmatter\nJust content.");
     const fm = state.field(frontmatterField);
@@ -208,4 +217,3 @@ describe("frontmatterField", () => {
     expect(fm.end).toBeGreaterThan(4096);
   });
 });
-

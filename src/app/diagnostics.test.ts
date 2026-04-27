@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
+import { footnoteExtension } from "../parser/footnote";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { frontmatterField } from "../editor/frontmatter-state";
@@ -32,7 +33,7 @@ function createState(doc: string): EditorState {
   return createEditorState(doc, {
     extensions: [
       markdown({
-        extensions: [fencedDiv, mathExtension, equationLabelExtension],
+        extensions: [fencedDiv, mathExtension, equationLabelExtension, footnoteExtension],
       }),
       frontmatterField,
       documentSemanticsField,
@@ -107,6 +108,32 @@ describe("extractDiagnostics", () => {
     expect(extractDiagnostics(state).map((diagnostic) => diagnostic.message)).not.toContain(
       "Maximum call stack size exceeded",
     );
+  });
+
+  it("warns when a footnote reference has no definition", () => {
+    const state = createState("Text[^missing].");
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        source: "footnote",
+        code: "footnote.missing-definition",
+        message: 'Missing footnote definition "[^missing]"',
+      }),
+    ]);
+  });
+
+  it("warns when a footnote definition is never referenced", () => {
+    const state = createState("[^orphan]: orphan body");
+
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        source: "footnote",
+        code: "footnote.orphan-definition",
+        message: 'Footnote definition "[^orphan]" is never referenced',
+      }),
+    ]);
   });
 
   it("reports cross-namespace local target collisions", () => {

@@ -350,6 +350,9 @@ export function collectMath(
   }
 
   const contentFrom = firstMarkTo ?? node.from;
+  if (isDisplay && markCount < 2) {
+    return;
+  }
   const contentTo = markCount >= 2 && lastMarkFrom !== undefined
     ? lastMarkFrom
     : node.to;

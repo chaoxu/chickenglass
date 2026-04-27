@@ -57,6 +57,7 @@ export interface EditorSessionRuntime {
   hasPath: (path: string) => boolean;
   isPathDirty: (path: string) => boolean;
   setPathDirty: (path: string, dirty: boolean) => EditorSessionState;
+  forgetPath: (path: string) => void;
   setExternalConflictBaseline: (path: string, doc: EditorDocumentText) => void;
   clearExternalConflictBaseline: (path: string) => void;
   markNewDocumentPath: (path: string) => void;
@@ -154,6 +155,7 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
   const liveDocs = new Map<string, EditorDocumentText>();
   const externalConflictBaselines = new Map<string, EditorDocumentText>();
   const newDocumentPaths = new Set<string>();
+  const dirtyPaths = new Set<string>();
   const listeners = new Set<SessionListener>();
   const activeDocumentSignal = createActiveDocumentSignal();
   const pipeline = new SavePipeline((path, snapshot) =>
@@ -203,7 +205,10 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
     getCurrentPath: () => state.currentDocument?.path ?? null,
     getEditorDoc: () => editorDoc,
     getCurrentDocText: () => documentForPath(state.currentDocument?.path ?? null, liveDocs, buffers),
-    hasDirtyDocument: () => hasDirtySessionDocument(state),
+    hasDirtyDocument: () => {
+      const currentPath = state.currentDocument?.path;
+      return currentPath ? dirtyPaths.has(currentPath) : hasDirtySessionDocument(state);
+    },
     getPathBaselineHash: (path) => {
       if (newDocumentPaths.has(path)) {
         return null;
@@ -215,9 +220,23 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
       const bufferedDoc = buffers.get(path);
       return bufferedDoc ? fnv1aHash(editorDocumentToString(bufferedDoc)) : null;
     },
-    hasPath: (path) => hasSessionPath(state, path),
-    isPathDirty: (path) => isSessionPathDirty(state, path),
-    setPathDirty: (path, dirty) => setSessionPathDirty(state, path, dirty),
+    hasPath: (path) =>
+      hasSessionPath(state, path)
+      || buffers.has(path)
+      || liveDocs.has(path)
+      || dirtyPaths.has(path),
+    isPathDirty: (path) => dirtyPaths.has(path) || isSessionPathDirty(state, path),
+    setPathDirty: (path, dirty) => {
+      if (dirty) {
+        dirtyPaths.add(path);
+      } else {
+        dirtyPaths.delete(path);
+      }
+      return setSessionPathDirty(state, path, dirty);
+    },
+    forgetPath: (path) => {
+      dirtyPaths.delete(path);
+    },
     setExternalConflictBaseline: (path, doc) => {
       externalConflictBaselines.set(path, doc);
       newDocumentPaths.delete(path);
@@ -253,6 +272,9 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
       for (const path of newDocumentPaths) {
         addRemappedPath(path);
       }
+      for (const path of dirtyPaths) {
+        addRemappedPath(path);
+      }
       const currentDocument = getCurrentSessionDocument(state);
       if (currentDocument) {
         addRemappedPath(currentDocument.path);
@@ -281,6 +303,9 @@ export function createEditorSessionRuntime(): EditorSessionRuntime {
         }
         if (wasNewDocument) {
           newDocumentPaths.add(newDocumentPath);
+        }
+        if (dirtyPaths.delete(oldDocumentPath)) {
+          dirtyPaths.add(newDocumentPath);
         }
 
         pipeline.clear(oldDocumentPath);

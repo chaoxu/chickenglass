@@ -139,11 +139,12 @@ function isStandaloneDelimiter(
 export function extractRawFrontmatter(
   doc: string,
 ): { raw: string; end: number } | null {
-  if (!doc.startsWith("---")) return null;
+  const start = doc.charCodeAt(0) === 0xfeff ? 1 : 0;
+  if (!doc.startsWith("---", start)) return null;
 
-  const opening = findLineBoundary(doc, 0);
+  const opening = findLineBoundary(doc, start);
   if (opening.next === doc.length) return null;
-  if (!isStandaloneDelimiter(doc, 0, opening.lineEnd)) return null;
+  if (!isStandaloneDelimiter(doc, start, opening.lineEnd)) return null;
 
   let lineStart = opening.next;
   while (lineStart < doc.length) {

@@ -2,6 +2,7 @@ export type DiagnosticSeverity = "error" | "warning";
 export type DiagnosticSource =
   | "reference"
   | "math"
+  | "footnote"
   | "frontmatter"
   | "project-config"
   | "bibliography";
@@ -10,6 +11,8 @@ export type DiagnosticCode =
   | "reference.citation-local-collision"
   | "reference.unresolved"
   | "math.render"
+  | "footnote.orphan-definition"
+  | "footnote.missing-definition"
   | "frontmatter.parse"
   | "project-config.read"
   | "project-config.parse"

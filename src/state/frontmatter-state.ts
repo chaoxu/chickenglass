@@ -47,7 +47,10 @@ function parseFrontmatterFromState(state: EditorState): FrontmatterResult {
 
 function sliceFrontmatterPrefix(doc: Text): string | null {
   const firstLine = doc.line(1);
-  if (!isFrontmatterDelimiterLine(firstLine.text) || doc.lines < 2) {
+  const firstLineText = firstLine.text.charCodeAt(0) === 0xfeff
+    ? firstLine.text.slice(1)
+    : firstLine.text;
+  if (!isFrontmatterDelimiterLine(firstLineText) || doc.lines < 2) {
     return null;
   }
 
@@ -118,7 +121,10 @@ export const frontmatterField = StateField.define<FrontmatterStateInternal>({
 
     if (value.end === -1) {
       const startsWithDelimiter = tr.state.doc.length >= 3
-        && tr.state.doc.sliceString(0, 3) === "---";
+        && (
+          tr.state.doc.sliceString(0, 3) === "---"
+          || tr.state.doc.sliceString(0, 4) === "\ufeff---"
+        );
       tr.changes.iterChangedRanges((fromA) => {
         if (fromA === 0 || startsWithDelimiter) affectsFrontmatter = true;
       });

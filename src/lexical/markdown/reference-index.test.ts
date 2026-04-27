@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildRenderIndex } from "./reference-index";
 
 describe("buildRenderIndex", () => {
-  it("shares theorem-family counters and keeps dedicated definition/algorithm counters", () => {
+  it("uses grouped per-type counters by default", () => {
     const doc = [
       '::: {.theorem #thm:a title="A"}',
       "Body",
@@ -29,8 +29,8 @@ describe("buildRenderIndex", () => {
     const index = buildRenderIndex(doc);
 
     expect(index.references.get("thm:a")?.label).toBe("Theorem 1");
-    expect(index.references.get("lem:b")?.label).toBe("Lemma 2");
-    expect(index.references.get("prob:c")?.label).toBe("Problem 3");
+    expect(index.references.get("lem:b")?.label).toBe("Lemma 1");
+    expect(index.references.get("prob:c")?.label).toBe("Problem 1");
     expect(index.references.get("def:d")?.label).toBe("Definition 1");
     expect(index.references.get("alg:e")?.label).toBe("Algorithm 1");
   });

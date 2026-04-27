@@ -89,6 +89,11 @@ export function numberFootnotes(
       numbers.set(ref.id, nextNumber++);
     }
   }
+  for (const [id] of footnotes.defs) {
+    if (!numbers.has(id)) {
+      numbers.set(id, nextNumber++);
+    }
+  }
   return numbers;
 }
 
@@ -110,6 +115,16 @@ export function orderedFootnoteEntries(
     entries.push({
       id: ref.id,
       number: numbers.get(ref.id) ?? 0,
+      def,
+    });
+  }
+
+  for (const [id, def] of footnotes.defs) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    entries.push({
+      id,
+      number: numbers.get(id) ?? 0,
       def,
     });
   }

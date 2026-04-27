@@ -253,7 +253,7 @@ function makeDisplayMathParser(
         openDelimiter,
         closeDelimiter,
       );
-      if (closeValidation === "invalid") return false;
+      if (closeValidation === "invalid" || closeValidation === "unclosed") return false;
 
       const start = cx.lineStart + line.pos;
 
@@ -276,18 +276,15 @@ function makeDisplayMathParser(
 
       // Multi-line: scan subsequent lines for closing delimiter
       const scan = scanMultilineClose(cx, line, closeDelimiter);
+      if (!scan.found) return false;
 
       const openMark = cx.elt("DisplayMathMark", start, start + openLen);
-      const children = scan.found
-        ? [openMark, cx.elt("DisplayMathMark", scan.endPos - closeLen, scan.endPos)]
-        : [openMark];
+      const children = [openMark, cx.elt("DisplayMathMark", scan.endPos - closeLen, scan.endPos)];
 
-      const blockEnd = scan.found
-        ? appendLabelIfPresent(
-            cx, children, scan.closingLineText, scan.closingLineStart,
-            scan.endPos - scan.closingLineStart, scan.endPos,
-          )
-        : scan.endPos;
+      const blockEnd = appendLabelIfPresent(
+        cx, children, scan.closingLineText, scan.closingLineStart,
+        scan.endPos - scan.closingLineStart, scan.endPos,
+      );
 
       cx.addElement(cx.elt("DisplayMath", start, blockEnd, children));
       if (scan.stoppedBeforeFence) {
