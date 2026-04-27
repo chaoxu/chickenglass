@@ -132,6 +132,20 @@ describe("structure-edit-state", () => {
     expect(target?.kind).toBe("display-math");
   });
 
+  it("does not create a fenced-opener structure target from prose body text", () => {
+    const doc = [
+      "::: {.proof}",
+      "By induction on n.",
+      ":::",
+    ].join("\n");
+    const state = createState(doc);
+
+    expect(createStructureEditTargetAt(state, doc.indexOf("induction"))).toBeNull();
+    expect(createStructureEditTargetAt(state, doc.indexOf("{.proof}"))?.kind).toBe(
+      "fenced-opener",
+    );
+  });
+
   it("prefers the innermost fenced block opener in nested fenced divs", () => {
     const doc = [
       ':::: {.theorem title="Hover Preview Stress Test"}',

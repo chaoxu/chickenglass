@@ -360,6 +360,43 @@ describe("blockDecorationField", () => {
     expect(hasLineClassAt(specs, proofCloseLine, CSS.blockClosingFence)).toBe(true);
   });
 
+  it.each([
+    {
+      name: "theorem",
+      plugin: makeBlockPlugin({ name: "theorem", title: "Theorem" }),
+      doc: `::: {.theorem}\nBody text\n:::`,
+      headerLine: 1,
+    },
+    {
+      name: "proof",
+      plugin: makeBlockPlugin({
+        name: "proof",
+        numbered: false,
+        title: "Proof",
+        headerPosition: "inline",
+      }),
+      doc: `::: {.proof}\nBody text\n:::`,
+      headerLine: 2,
+    },
+  ])("keeps $name rendered when a stale fenced structure target has body selection", ({
+    plugin,
+    doc,
+    headerLine,
+  }) => {
+    const base = createTestStateWithPlugins(doc, [plugin], doc.indexOf("Body"), true);
+    const staleBodyTarget = base.update({
+      selection: { anchor: doc.indexOf("Body") },
+      effects: setStructureEditTargetEffect.of(createFencedStructureEditTarget(base, 0)),
+    }).state;
+    const specs = getDecoSpecs(staleBodyTarget);
+
+    expect(hasLineClassAt(specs, staleBodyTarget.doc.line(headerLine).from, CSS.blockHeader)).toBe(true);
+    expect(
+      hasLineClassAt(specs, staleBodyTarget.doc.line(3).from, CSS.blockClosingFence),
+    ).toBe(true);
+    expect(specs.some((spec) => spec.widgetClass === "BlockHeaderWidget")).toBe(true);
+  });
+
   it("trailing title text prevents block header rendering", () => {
     const doc = `::: {.theorem} **Main Result**\nContent\n:::`;
     const state = createTestState(doc);

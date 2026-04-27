@@ -72,6 +72,29 @@ function findInnermostFencedDivAt(
   return divs[0];
 }
 
+function fencedDivStructureContainsPos(div: FencedDivInfo, pos: number): boolean {
+  return containsPos(
+    { from: getFencedDivRevealFrom(div), to: getFencedDivRevealTo(div) },
+    pos,
+  );
+}
+
+function findInnermostFencedDivStructureAt(
+  state: EditorState,
+  pos: number,
+): FencedDivInfo | null {
+  const divs = collectFencedDivs(state).filter((div) =>
+    fencedDivStructureContainsPos(div, pos)
+  );
+  if (divs.length === 0) return null;
+  divs.sort((left, right) => {
+    const leftSpan = getFencedDivRevealTo(left) - getFencedDivRevealFrom(left);
+    const rightSpan = getFencedDivRevealTo(right) - getFencedDivRevealFrom(right);
+    return leftSpan - rightSpan || left.from - right.from;
+  });
+  return divs[0];
+}
+
 function frontmatterTargetFromState(
   state: EditorState,
 ): FrontmatterStructureEditTarget | null {
@@ -293,7 +316,7 @@ export function createStructureEditTargetAt(
     return frontmatter;
   }
   const candidates: StructureEditTarget[] = [];
-  const fencedDiv = findInnermostFencedDivAt(state, pos);
+  const fencedDiv = findInnermostFencedDivStructureAt(state, pos);
   if (fencedDiv) candidates.push(fencedTargetFromDiv(fencedDiv));
   const codeFence = createCodeFenceStructureEditTargetAt(state, pos);
   if (codeFence) candidates.push(codeFence);
@@ -398,6 +421,22 @@ export function isFencedStructureEditActive(
   return (
     active?.kind === "fenced-opener" &&
     active.openFenceFrom === div.openFenceFrom
+  );
+}
+
+export function isFencedStructureSourceEditActive(
+  state: EditorState,
+  div: Pick<FencedDivInfo, "openFenceFrom">,
+): boolean {
+  const active = getActiveStructureEditTarget(state);
+  return (
+    active?.kind === "fenced-opener" &&
+    active.openFenceFrom === div.openFenceFrom &&
+    selectionWithinStructureTarget(
+      active,
+      state.selection.main.from,
+      state.selection.main.to,
+    )
   );
 }
 

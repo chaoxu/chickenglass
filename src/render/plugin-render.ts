@@ -22,7 +22,7 @@ import { CSS } from "../constants/css-classes";
 import { activeFencedOpenFenceStarts } from "../state/shell-ownership";
 import {
   hasStructureEditEffect,
-  isFencedStructureEditActive,
+  isFencedStructureSourceEditActive,
 } from "../state/cm-structure-edit";
 import { createChangeChecker } from "../state/change-detection";
 import { collectFencedDivs, docChangeTouchesFencedDivStructure } from "../fenced-block/model";
@@ -106,7 +106,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
     if (!plugin) return;
 
-    const structureEditActive = isFencedStructureEditActive(state, div);
+    const structureEditActive = isFencedStructureSourceEditActive(state, div);
     const activeShell = activeShellStarts.has(div.openFenceFrom);
 
     const numberEntry = counterState?.byPosition.get(div.from);
