@@ -40,6 +40,43 @@ describe("parseInlineFragments", () => {
     ]);
   });
 
+  it("parses reference-style links with their resolved target", () => {
+    expect(parseInlineFragments("[text][ref]\n\n[ref]: https://example.com")[0]).toEqual({
+      kind: "link",
+      href: "https://example.com",
+      children: [{ kind: "text", text: "text" }],
+    });
+  });
+
+  it("parses bare URLs as link fragments", () => {
+    expect(parseInlineFragments("https://example.com")).toEqual([
+      {
+        kind: "link",
+        href: "https://example.com",
+        children: [{ kind: "text", text: "https://example.com" }],
+      },
+    ]);
+  });
+
+  it("parses canonical inline HTML fragments", () => {
+    expect(parseInlineFragments("H<sub>2</sub>O x<sup>2</sup><br>next")).toEqual([
+      { kind: "text", text: "H" },
+      {
+        kind: "html-element",
+        tagName: "sub",
+        children: [{ kind: "text", text: "2" }],
+      },
+      { kind: "text", text: "O x" },
+      {
+        kind: "html-element",
+        tagName: "sup",
+        children: [{ kind: "text", text: "2" }],
+      },
+      { kind: "hard-break" },
+      { kind: "text", text: "next" },
+    ]);
+  });
+
   it("finds a neutral plain-text anchor between rich inline fragments", () => {
     expect(findInlineNeutralAnchor("**Bold** and $x^2$")).toBe(9);
     expect(findInlineNeutralAnchor("[@cormen2009] and ==highlight==")).toBe(14);

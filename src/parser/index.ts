@@ -18,7 +18,7 @@ export { removeIndentedCode } from "./remove-indented-code";
 export { strikethroughExtension } from "./strikethrough";
 export { tableExtension } from "./table";
 
-import { TaskList } from "@lezer/markdown";
+import { Autolink, TaskList } from "@lezer/markdown";
 import { equationLabelExtension } from "./equation-label";
 import { fencedDiv } from "./fenced-div";
 import { footnoteExtension } from "./footnote";
@@ -44,6 +44,7 @@ export const markdownExtensions = [
   highlightExtension,
   footnoteExtension,
   tableExtension,
+  Autolink,
   TaskList,
 ];
 
@@ -65,5 +66,6 @@ export const htmlRenderExtensions = [
   highlightExtension,
   footnoteExtension,
   tableExtension,
+  Autolink,
   TaskList,
 ];

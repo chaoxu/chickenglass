@@ -25,12 +25,13 @@ import {
   hasMarkClassInRange,
 } from "../test-utils";
 import { CSS } from "../constants/css-classes";
+import { markdownExtensions } from "../parser";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createView(doc: string, cursorPos?: number): EditorView {
   return createTestView(doc, {
     cursorPos,
-    extensions: [markdown(), markdownRenderPlugin],
+    extensions: [markdown({ extensions: markdownExtensions }), markdownRenderPlugin],
   });
 }
 
@@ -160,11 +161,45 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     );
   });
 
-  it("does not render noncanonical inline HTML tags", () => {
+  it("renders paired subscript and superscript HTML tags", () => {
     view = createView("H<sub>2</sub>O", 0);
-    const specs = getAllDecorationSpecs(view);
+    const subItems = collectMarkdownItems(
+      view,
+      [{ from: 0, to: view.state.doc.length }],
+      () => false,
+    );
 
-    expect(specs.some((spec) => spec.widgetClass === "HardBreakWidget")).toBe(false);
+    expect(subItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 6,
+          to: 7,
+          value: expect.objectContaining({
+            spec: expect.objectContaining({ tagName: "sub" }),
+          }),
+        }),
+      ]),
+    );
+
+    view.destroy();
+    view = createView("x<sup>2</sup>", 0);
+    const supItems = collectMarkdownItems(
+      view,
+      [{ from: 0, to: view.state.doc.length }],
+      () => false,
+    );
+
+    expect(supItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 6,
+          to: 7,
+          value: expect.objectContaining({
+            spec: expect.objectContaining({ tagName: "sup" }),
+          }),
+        }),
+      ]),
+    );
   });
 
   it("does not throw when cursor is at beginning", () => {
@@ -361,6 +396,42 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       );
 
       expect(linkDecorationCacheSize()).toBeLessThanOrEqual(256);
+    });
+
+    it("renders reference-style links through shared link definitions", () => {
+      const doc = "[target][ref]\n\n[ref]: https://example.com";
+      view = createView(doc, doc.indexOf("\n"));
+
+      const specs = getAllDecorationSpecs(view);
+      const linkTextFrom = doc.indexOf("target");
+      const definitionFrom = doc.indexOf("[ref]:");
+
+      expect(hasMarkClassInRange(specs, linkTextFrom, linkTextFrom + "target".length, CSS.linkRendered)).toBe(true);
+      expect(hasMarkClassInRange(specs, definitionFrom, doc.length, CSS.hidden)).toBe(true);
+    });
+
+    it("renders bare autolink URLs as clickable text", () => {
+      const doc = "Visit https://example.com now";
+      view = createView(doc, 0);
+
+      const specs = getAllDecorationSpecs(view);
+      const urlFrom = doc.indexOf("https://example.com");
+
+      expect(hasMarkClassInRange(specs, urlFrom, urlFrom + "https://example.com".length, CSS.linkRendered)).toBe(true);
+    });
+
+    it("hides HTML comments outside the cursor and reveals them for editing", () => {
+      const doc = "before\n<!-- hidden note -->\nafter";
+      const commentFrom = doc.indexOf("<!--");
+      const commentTo = doc.indexOf("-->") + 3;
+      view = createView(doc, 0);
+
+      expect(hasMarkClassInRange(getAllDecorationSpecs(view), commentFrom, commentTo, CSS.hidden)).toBe(true);
+
+      view.destroy();
+      view = createView(doc, commentFrom + 5);
+
+      expect(hasMarkClassInRange(getAllDecorationSpecs(view), commentFrom, commentTo, CSS.hidden)).toBe(false);
     });
   });
 

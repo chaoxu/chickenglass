@@ -364,6 +364,11 @@ describe("renderInlineMarkdown — surface policies", () => {
     expect(html).toBe('<img src="image.png" alt="alt text">');
   });
 
+  it("renders Pandoc-compatible inline HTML sub/sup and br fragments", () => {
+    const html = render("H<sub>2</sub>O x<sup>2</sup><br>next");
+    expect(html).toBe("H<sub>2</sub>O x<sup>2</sup><br>next");
+  });
+
   it("renders footnote refs as inert superscripts in ui-chrome-inline", () => {
     const html = render("Title[^1]", {}, "ui-chrome-inline");
     expect(html).toBe("Title<sup>1</sup>");

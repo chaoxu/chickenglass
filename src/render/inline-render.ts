@@ -195,6 +195,13 @@ function renderFragment(
       return;
     }
 
+    case "html-element": {
+      const el = document.createElement(fragment.tagName);
+      renderFragments(el, fragment.children, macros, surface, referenceContext);
+      container.appendChild(el);
+      return;
+    }
+
     case "math": {
       const span = document.createElement("span");
       span.className = CSS.mathInline;

@@ -32,6 +32,11 @@ import {
   DOCUMENT_SURFACE_CLASS,
   documentSurfaceClassNames,
 } from "../document-surface-classes";
+import {
+  collectLinkReferencesFromState,
+  resolveLinkReference,
+  type LinkReferenceMap,
+} from "../lib/markdown/link-references";
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
@@ -101,6 +106,8 @@ const boldDecoration = Decoration.mark({ class: CSS.bold });
 const italicDecoration = Decoration.mark({ class: CSS.italic });
 const strikethroughDecoration = Decoration.mark({ class: CSS.strikethrough });
 const inlineCodeDecoration = Decoration.mark({ class: CSS.inlineCode });
+const subscriptDecoration = Decoration.mark({ tagName: "sub" });
+const superscriptDecoration = Decoration.mark({ tagName: "sup" });
 
 /** Decoration to style bullet list markers. */
 const bulletListDecoration = Decoration.mark({ class: CSS.listBullet });
@@ -145,12 +152,22 @@ function isCanonicalHtmlBreak(source: string): boolean {
   return /^<br\s*\/?>$/i.test(source);
 }
 
+function htmlTagName(source: string): "sub" | "sup" | "/sub" | "/sup" | null {
+  const normalized = source.trim().toLocaleLowerCase();
+  if (normalized === "<sub>") return "sub";
+  if (normalized === "</sub>") return "/sub";
+  if (normalized === "<sup>") return "sup";
+  if (normalized === "</sup>") return "/sup";
+  return null;
+}
+
 // ── Markdown node handler registry ─────────────────────────────────────
 
 /** Shared mutable context passed to handlers during tree iteration. */
 interface MarkdownHandlerContext {
   readonly view: EditorView;
   readonly items: Range<Decoration>[];
+  readonly linkReferences: LinkReferenceMap;
   /** Set by ATXHeading handler, read by HeaderMark handler. */
   cursorInHeading: boolean;
 }
@@ -245,6 +262,14 @@ function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   const urlChild = linkNode.getChild("URL");
   if (urlChild) {
     url = view.state.sliceDoc(urlChild.from, urlChild.to);
+  } else {
+    const labelChild = linkNode.getChild("LinkLabel");
+    if (labelChild) {
+      url = resolveLinkReference(
+        ctx.linkReferences,
+        view.state.sliceDoc(labelChild.from, labelChild.to),
+      ) ?? "";
+    }
   }
   // Find the link text range: between first [ and ]
   // The text is between the first LinkMark end and second LinkMark start
@@ -266,6 +291,20 @@ function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
     }
   }
   // Walk children to hide markers (LinkMark, URL) via hidden handler
+}
+
+/** Bare URL autolinks: style as clickable links unless they are link targets. */
+function handleUrl(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  const parentName = node.node.parent?.name;
+  if (parentName === "Link" || parentName === "LinkReference") {
+    ctx.items.push(decorationHidden.range(node.from, node.to));
+    return;
+  }
+  if (cursorInRange(ctx.view, node.from, node.to)) {
+    return false as const;
+  }
+  const url = ctx.view.state.sliceDoc(node.from, node.to);
+  ctx.items.push(getLinkDecoration(url).range(node.from, node.to));
 }
 
 /** Inline elements: ALWAYS apply content styling, toggle marker visibility. */
@@ -309,20 +348,51 @@ function handleHorizontalRule(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) 
   );
 }
 
-/** HTMLTag: only canonical `<br>` line-break HTML is rendered in rich mode. */
+/** HTMLTag: render allowlisted Pandoc-compatible inline HTML in rich mode. */
 function handleHtmlTag(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   if (cursorInRange(ctx.view.state, node.from, node.to)) {
     return false as const;
   }
   const source = ctx.view.state.sliceDoc(node.from, node.to);
-  if (!isCanonicalHtmlBreak(source)) {
+  if (isCanonicalHtmlBreak(source)) {
+    ctx.items.push(
+      Decoration.replace({
+        widget: new HardBreakWidget(),
+      }).range(node.from, node.to),
+    );
+    return false as const;
+  }
+
+  const tag = htmlTagName(source);
+  if (tag === "/sub" || tag === "/sup") {
+    ctx.items.push(decorationHidden.range(node.from, node.to));
+    return false as const;
+  }
+  if (tag !== "sub" && tag !== "sup") {
     return undefined;
   }
-  ctx.items.push(
-    Decoration.replace({
-      widget: new HardBreakWidget(),
-    }).range(node.from, node.to),
-  );
+
+  let close = node.node.nextSibling;
+  while (close) {
+    if (close.name === "HTMLTag" && htmlTagName(ctx.view.state.sliceDoc(close.from, close.to)) === `/${tag}`) {
+      const decoration = tag === "sub" ? subscriptDecoration : superscriptDecoration;
+      ctx.items.push(decoration.range(node.to, close.from));
+      ctx.items.push(decorationHidden.range(node.from, node.to));
+      return false as const;
+    }
+    close = close.nextSibling;
+  }
+
+  // Unmatched sub/sup tags stay visible as source because hiding one side is ambiguous.
+  return undefined;
+}
+
+/** Hide source-only blocks such as link definitions and HTML comments outside edits. */
+function handleHiddenBlock(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
+  if (cursorInRange(ctx.view.state, node.from, node.to)) {
+    return false as const;
+  }
+  ctx.items.push(decorationHidden.range(node.from, node.to));
   return false as const;
 }
 
@@ -367,11 +437,14 @@ for (const name of ["Emphasis", "StrongEmphasis", "InlineCode", "Image", "Strike
   MARKDOWN_HANDLERS.set(name, { cursorSensitive: true, handle: handleElement });
 }
 MARKDOWN_HANDLERS.set("FencedCode", { cursorSensitive: false, handle: handleFencedCode });
-for (const name of ["EmphasisMark", "CodeMark", "LinkMark", "URL", "HardBreak", "StrikethroughMark", "HighlightMark"]) {
+for (const name of ["EmphasisMark", "CodeMark", "LinkMark", "LinkLabel", "HardBreak", "StrikethroughMark", "HighlightMark"]) {
   MARKDOWN_HANDLERS.set(name, { cursorSensitive: false, handle: handleHidden });
 }
+MARKDOWN_HANDLERS.set("URL", { cursorSensitive: true, handle: handleUrl });
 MARKDOWN_HANDLERS.set("HorizontalRule", { cursorSensitive: true, handle: handleHorizontalRule });
 MARKDOWN_HANDLERS.set("HTMLTag", { cursorSensitive: true, handle: handleHtmlTag });
+MARKDOWN_HANDLERS.set("CommentBlock", { cursorSensitive: true, handle: handleHiddenBlock });
+MARKDOWN_HANDLERS.set("LinkReference", { cursorSensitive: true, handle: handleHiddenBlock });
 MARKDOWN_HANDLERS.set("Escape", { cursorSensitive: true, handle: handleEscape });
 MARKDOWN_HANDLERS.set("ListMark", { cursorSensitive: false, handle: handleListMark });
 
@@ -626,7 +699,12 @@ function collectMarkdownItems(
   ranges: readonly VisibleRange[],
   skip: (nodeFrom: number) => boolean,
 ): Range<Decoration>[] {
-  const ctx: MarkdownHandlerContext = { view, items: [], cursorInHeading: false };
+  const ctx: MarkdownHandlerContext = {
+    view,
+    items: [],
+    linkReferences: collectLinkReferencesFromState(view.state),
+    cursorInHeading: false,
+  };
   const tree = syntaxTree(view.state);
   const seenNodes = new Set<string>();
 
