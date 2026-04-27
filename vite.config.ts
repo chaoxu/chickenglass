@@ -19,7 +19,11 @@ const DEBUG_EVENT_ENDPOINT = "/__coflat/debug-event";
 const DEBUG_EVENT_DIR = path.join(tmpdir(), "coflat-debug");
 const DEV_FIXTURE_PROJECT_ENDPOINT = "/__coflat/fixture-project/";
 const DEV_FIXTURE_FILES_ENDPOINT = "/__coflat/fixture-files";
-const DEFAULT_APP_STARTUP_BUNDLE_LIMIT_KB = 1500;
+// Editor surfaces are startup-critical in Coflats. The budget intentionally
+// allows CM6 and Lexical to be part of the initial graph so browser and Tauri
+// initialize the same editor/runtime/style modules before the user starts
+// editing.
+const DEFAULT_APP_STARTUP_BUNDLE_LIMIT_KB = 3500;
 
 const TEXT_FIXTURE_EXTENSIONS = new Set([
   ".bib",

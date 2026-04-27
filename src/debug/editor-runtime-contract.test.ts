@@ -25,8 +25,15 @@ function visibleElement(
       fontFamily: "KaTeX_Main",
       fontSize: "16px",
       lineHeight: "24px",
+      marginLeft: "auto",
+      marginRight: "224px",
+      maxWidth: "800px",
       opacity: "1",
       overflow: "auto",
+      paddingBottom: "24px",
+      paddingLeft: "48px",
+      paddingRight: "48px",
+      paddingTop: "24px",
       visibility: "visible",
     },
     ...overrides,
@@ -96,6 +103,32 @@ describe("editor runtime contract", () => {
 
     expect(issues).toContain("CM6 editor display must be flex, got block");
     expect(issues).toContain("CM6 content is displaced below viewport by 18242px");
+  });
+
+  it("flags CM6 document-column drift even when the editor is visible", () => {
+    const issues = evaluateEditorRuntimeContract(snapshot({
+      elements: {
+        ...snapshot().elements,
+        content: visibleElement(".cm-content", {
+          rect: {
+            left: 233,
+            top: 0,
+            width: 949,
+            height: 11_668,
+            right: 1182,
+            bottom: 11_668,
+          },
+          style: {
+            ...visibleElement(".cm-content").style,
+            marginLeft: "0px",
+            maxWidth: "none",
+          },
+        }),
+      },
+    }));
+
+    expect(issues).toContain("CM6 content max-width must be 800px, got none");
+    expect(issues).toContain("CM6 content must keep the shared document column left margin");
   });
 
   it("accepts a healthy Lexical surface", () => {

@@ -39,7 +39,17 @@ describe("theme CSS contract", () => {
     expect(cssRuleBody(css, ".cm-editor")).toContain("display: flex !important;");
     expect(cssRuleBody(css, ".cm-scroller")).toContain("display: flex !important;");
     expect(cssRuleBody(css, ".cm-scroller")).toContain("overflow: auto;");
+    expect(cssRuleBody(css, ".cm-content")).toContain(
+      "max-width: var(--cf-content-max-width, 800px);",
+    );
+    expect(cssRuleBody(css, ".cm-content")).toContain("margin-left: auto;");
+    expect(cssRuleBody(css, ".cm-content")).toContain(
+      "margin-right: max(var(--cf-sidenote-width, 224px), calc((100% - var(--cf-content-max-width, 800px)) / 2));",
+    );
     expect(cssRuleBody(css, ".cm-content")).toContain("min-height: 100%;");
+    expect(cssRuleBody(css, ".cm-content")).toContain(
+      "padding: var(--cf-doc-content-padding-block-start, 24px) var(--cf-doc-content-padding-inline, 48px) var(--cf-doc-content-padding-block-end, 24px) var(--cf-doc-content-padding-inline, 48px);",
+    );
     expect(cssRuleBody(css, ".cm-content")).toContain("white-space: pre;");
   });
 });

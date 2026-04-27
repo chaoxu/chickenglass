@@ -23,8 +23,15 @@ export interface RuntimeContractElementSnapshot {
     readonly fontFamily: string;
     readonly fontSize: string;
     readonly lineHeight: string;
+    readonly marginLeft: string;
+    readonly marginRight: string;
+    readonly maxWidth: string;
     readonly opacity: string;
     readonly overflow: string;
+    readonly paddingBottom: string;
+    readonly paddingLeft: string;
+    readonly paddingRight: string;
+    readonly paddingTop: string;
     readonly visibility: string;
   };
 }
@@ -104,8 +111,15 @@ function elementSnapshot(selector: string): RuntimeContractElementSnapshot | nul
       fontFamily: style.fontFamily,
       fontSize: style.fontSize,
       lineHeight: style.lineHeight,
+      marginLeft: style.marginLeft,
+      marginRight: style.marginRight,
+      maxWidth: style.maxWidth,
       opacity: style.opacity,
       overflow: style.overflow,
+      paddingBottom: style.paddingBottom,
+      paddingLeft: style.paddingLeft,
+      paddingRight: style.paddingRight,
+      paddingTop: style.paddingTop,
       visibility: style.visibility,
     },
   };
@@ -181,6 +195,15 @@ export function evaluateEditorRuntimeContract(
     }
     if (elements.scroller && elements.scroller.style.display !== "flex") {
       issues.push(`CM6 scroller display must be flex, got ${elements.scroller.style.display}`);
+    }
+    if (elements.content && elements.content.style.maxWidth !== "800px") {
+      issues.push(`CM6 content max-width must be 800px, got ${elements.content.style.maxWidth}`);
+    }
+    if (elements.content && elements.content.style.marginLeft === "0px") {
+      issues.push("CM6 content must keep the shared document column left margin");
+    }
+    if (elements.content && !elements.content.style.fontFamily.includes("KaTeX_Main")) {
+      issues.push(`CM6 content font must use KaTeX_Main, got ${elements.content.style.fontFamily}`);
     }
     if (docLength !== null && docLength > 0 && counts.cmLine === 0) {
       issues.push("CM6 document has no visible line nodes");

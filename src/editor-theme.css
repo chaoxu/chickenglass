@@ -222,7 +222,13 @@
   text-align: left;
 }
 
-/* ── CodeMirror 6 overrides ─────────────────────────────────────────────────── */
+/* ── CodeMirror 6 static runtime contract ─────────────────────────────────────
+ * Coflats intentionally owns CM6's layout-critical CSS in this static bundle.
+ * CodeMirror also injects generated base/theme rules at runtime, but packaged
+ * Tauri/WebKit can drift from browser dev when those generated rules do not
+ * land with the same timing/precedence. The rules below mirror the CM6 base
+ * layout plus Coflats' document-column contract so the editor remains identical
+ * in browser and desktop runtimes. */
 
 .cm-editor {
   position: relative !important;
@@ -230,6 +236,8 @@
   display: flex !important;
   flex-direction: column;
   height: 100%;
+  font-family: var(--cf-content-font, KaTeX_Main, "Times New Roman", serif);
+  font-size: var(--cf-base-font-size, 16px);
 }
 
 .cm-scroller {
@@ -248,8 +256,14 @@
   display: block;
   flex-grow: 2;
   flex-shrink: 0;
+  max-width: var(--cf-content-max-width, 800px);
+  margin-left: auto;
+  margin-right: max(var(--cf-sidenote-width, 224px), calc((100% - var(--cf-content-max-width, 800px)) / 2));
   min-height: 100%;
   outline: none;
+  overflow: visible;
+  padding: var(--cf-doc-content-padding-block-start, 24px) var(--cf-doc-content-padding-inline, 48px) var(--cf-doc-content-padding-block-end, 24px) var(--cf-doc-content-padding-inline, 48px);
+  line-height: var(--cf-line-height, 1.5);
   white-space: pre;
   word-wrap: normal;
 }

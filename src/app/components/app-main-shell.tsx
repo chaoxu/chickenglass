@@ -1,6 +1,8 @@
-import { lazy, Suspense, useEffect } from "react";
 import { DebugSidebarProvider } from "./debug-sidebar";
+import { EditorPane } from "./editor-pane";
 import { ExternalConflictBanner } from "./external-conflict-banner";
+import { LexicalEditorPane } from "./lexical-editor-pane";
+import { ensureLexicalEditorPaneBootstrapped } from "./lexical-editor-pane-bootstrap";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
@@ -9,20 +11,7 @@ import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 import { getEditorModeAdapter } from "../editor-mode-adapter";
 
-const LexicalEditorPane = lazy(async () => {
-  const bootstrap = await import("./lexical-editor-pane-bootstrap");
-  bootstrap.ensureLexicalEditorPaneBootstrapped();
-  const module = await import("./lexical-editor-pane");
-  return {
-    default: module.LexicalEditorPane,
-  };
-});
-
-const EditorPane = lazy(() =>
-  import("./editor-pane").then((module) => ({
-    default: module.EditorPane,
-  })),
-);
+ensureLexicalEditorPaneBootstrapped();
 
 interface AppMainShellProps {
   sidebarLayout: Pick<
@@ -31,23 +20,6 @@ interface AppMainShellProps {
   >;
   onOpenPalette: () => void;
   onOpenSettings: () => void;
-}
-
-interface LexicalEditorPaneFallbackProps {
-  onLexicalEditorReady: (handle: null) => void;
-  onSurfaceReady: () => void;
-}
-
-function LexicalEditorPaneFallback({
-  onLexicalEditorReady,
-  onSurfaceReady,
-}: LexicalEditorPaneFallbackProps) {
-  useEffect(() => {
-    onLexicalEditorReady(null);
-    onSurfaceReady();
-  }, [onLexicalEditorReady, onSurfaceReady]);
-
-  return <div className="flex-1 bg-[var(--cf-bg)]" />;
 }
 
 export function AppMainShell({
@@ -86,52 +58,41 @@ export function AppMainShell({
       />
       <DebugSidebarProvider>
         {currentPath && modeAdapter.usesLexicalSurface ? (
-          <Suspense
-            fallback={
-              <LexicalEditorPaneFallback
-                onLexicalEditorReady={editor.handleLexicalEditorReady}
-                onSurfaceReady={editor.handleLexicalSurfaceReady}
-              />
-            }
-          >
-            <LexicalEditorPane
-              doc={editor.editorDoc}
-              docPath={currentPath}
-              projectConfig={workspace.projectConfig}
-              projectConfigStatus={workspace.projectConfigStatus}
-              fs={fs}
-              onDocChange={editor.handleDocChange}
-              onDirtyChange={editor.handleDirtyChange}
-              onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-              onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-              onLexicalEditorReady={editor.handleLexicalEditorReady}
-              onSurfaceReady={editor.handleLexicalSurfaceReady}
-              revealMode={modeAdapter.lexicalRevealMode}
-            />
-          </Suspense>
+          <LexicalEditorPane
+            doc={editor.editorDoc}
+            docPath={currentPath}
+            projectConfig={workspace.projectConfig}
+            projectConfigStatus={workspace.projectConfigStatus}
+            fs={fs}
+            onDocChange={editor.handleDocChange}
+            onDirtyChange={editor.handleDirtyChange}
+            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+            onLexicalEditorReady={editor.handleLexicalEditorReady}
+            onSurfaceReady={editor.handleLexicalSurfaceReady}
+            revealMode={modeAdapter.lexicalRevealMode}
+          />
         ) : currentPath ? (
-          <Suspense fallback={<div className="flex-1 bg-[var(--cf-bg)]" />}>
-            <EditorPane
-              doc={editor.editorDoc}
-              docPath={currentPath}
-              projectConfig={workspace.projectConfig}
-              projectConfigStatus={workspace.projectConfigStatus}
-              theme={workspace.resolvedTheme}
-              fs={fs}
-              settings={workspace.settings}
-              sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
-              onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
-              onDocChange={editor.handleDocChange}
-              onProgrammaticDocChange={(doc) => {
-                editor.handleProgrammaticDocChange(currentPath, doc);
-              }}
-              onStateChange={editor.handleEditorStateChange}
-              onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-              onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-              onDocumentReady={editor.handleEditorDocumentReady}
-              editorMode={modeAdapter.cm6Mode}
-            />
-          </Suspense>
+          <EditorPane
+            doc={editor.editorDoc}
+            docPath={currentPath}
+            projectConfig={workspace.projectConfig}
+            projectConfigStatus={workspace.projectConfigStatus}
+            theme={workspace.resolvedTheme}
+            fs={fs}
+            settings={workspace.settings}
+            sidenotesCollapsed={sidebarLayout.sidenotesCollapsed}
+            onSidenotesCollapsedChange={sidebarLayout.setSidenotesCollapsed}
+            onDocChange={editor.handleDocChange}
+            onProgrammaticDocChange={(doc) => {
+              editor.handleProgrammaticDocChange(currentPath, doc);
+            }}
+            onStateChange={editor.handleEditorStateChange}
+            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
+            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
+            onDocumentReady={editor.handleEditorDocumentReady}
+            editorMode={modeAdapter.cm6Mode}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">
             Open a file to start editing

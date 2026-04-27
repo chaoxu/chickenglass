@@ -60,6 +60,34 @@ Headings h1–h6: each has `-size`, `-weight`, `-style` (18 tokens total)
 | `tables` | Tables | `--cf-border`, all table tokens, code-font |
 | `tooltipAndHover` | Hover previews, crossref tooltips | `--cf-bg-overlay`, border-overlay, fg/muted/border, all preview tokens |
 
+## Static Editor Runtime Contract
+
+Coflats owns layout-critical editor CSS statically. This is intentional even
+when it overlaps CodeMirror's generated base/theme rules. Runtime-injected
+editor styles are treated as enhancement, not as the source of truth for
+whether an editor surface is visible, centered, scrollable, or typographically
+aligned.
+
+The static contract lives in `src/editor-theme.css` and covers:
+
+- CM6 structural layout: `.cm-editor`, `.cm-scroller`, `.cm-content`,
+  `.cm-lineWrapping`, and `.cm-line`
+- Coflats document column: `800px` max width, centered margins, content
+  padding, line height, and content font
+- Shared surface identity: `.cf-doc-surface` and `.cf-doc-flow`
+- Lexical static surface rules in `src/lexical/editor-theme.css`
+
+Reason: browser dev/preview and packaged Tauri run in different WebView
+environments. CodeMirror's base/theme CSS is generated through `style-mod` at
+runtime rather than shipped as a normal stylesheet. Even with eager editor
+imports, packaged Tauri can miss those generated document-column rules. We
+therefore duplicate the critical subset in our own stylesheet and test it as a
+first-party product contract.
+
+The runtime check is `window.__cfDebug.runtimeContract()`. Browser regression
+health and Tauri diagnostics consume the same contract, so drift such as a
+visible-but-not-centered CM6 document column fails as a runtime issue.
+
 ## Theme sources
 
 Theme sources are distinct from application:
