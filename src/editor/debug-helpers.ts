@@ -22,92 +22,58 @@ import {
   toggleTreeView,
 } from "./editor";
 import {
-  documentAnalysisField,
-  getDocumentAnalysisRevisionInfo,
-} from "../state/document-analysis";
-import { getClosingFenceRanges } from "../plugins/fence-protection";
-import {
   clearVerticalMotionGuardEvents,
-  getVerticalMotionGuardEvents,
   moveVerticallyInRichView,
   type VerticalMotionGuardEvent,
 } from "./vertical-motion";
 import {
   activateStructureEditAt,
   clearStructureEditTarget,
-  getActiveStructureEditTarget,
   type StructureEditTarget,
 } from "../state/cm-structure-edit";
 import {
   clearDebugTimelineEvents,
-  getDebugTimelineEvents,
   type DebugTimelineEvent,
 } from "./debug-timeline";
-import {
-  measureShellSurfaceSnapshot,
-  type ShellSurfaceSnapshot,
-} from "./shell-surface-model";
+import type { ShellSurfaceSnapshot } from "./shell-surface-model";
 import type {
   DebugRenderState,
   SelectionInfo,
-  VisibleRawFencedOpener,
 } from "../lib/debug-types";
+import {
+  collectDebugFenceStatuses,
+  collectDebugTreeDivs,
+  getDebugSelectionInfo,
+  getDebugSemanticInfo,
+  getDebugSnapshot,
+  getDebugStructureTarget,
+  getDebugMotionGuards,
+  getDebugTimeline,
+  inspectDebugLine,
+  measureDebugGeometry,
+  measureDebugRenderState,
+  type DebugDivInfo,
+  type DebugFenceStatus,
+  type DebugLineInfo,
+  type DebugSnapshot,
+  type SemanticDebugInfo,
+} from "./debug-snapshot";
 export type {
   DebugRenderState,
   SelectionInfo,
   VisibleRawFencedOpener,
 } from "../lib/debug-types";
-
-interface DivInfo {
-  readonly from: number;
-  readonly to: number;
-  readonly text: string;
-}
-
-interface LineInfo {
-  readonly line: number;
-  readonly text: string;
-  readonly classes: string[];
-  readonly height: string;
-  readonly hidden: boolean;
-}
-
-type FenceStatus = Pick<LineInfo, "line" | "height" | "hidden" | "classes">;
-
-interface DebugSnapshot {
-  readonly divs: DivInfo[];
-  readonly fences: FenceStatus[];
-  readonly cursorLine: number;
-  readonly focused: boolean;
-  readonly semantics: SemanticDebugInfo;
-  readonly structure: StructureEditTarget | null;
-  readonly geometry: ShellSurfaceSnapshot;
-  readonly render: DebugRenderState;
-  readonly motionGuards: readonly VerticalMotionGuardEvent[];
-  readonly timeline: readonly DebugTimelineEvent[];
-}
-
-interface SemanticDebugInfo {
-  readonly revision: number;
-  readonly slices: {
-    readonly headings: number;
-    readonly footnotes: number;
-    readonly fencedDivs: number;
-    readonly equations: number;
-    readonly mathRegions: number;
-    readonly references: number;
-  };
-}
+export type { DebugSnapshot } from "./debug-snapshot";
 
 export interface DebugHelpers {
   /** Return all FencedDiv nodes from the current syntax tree. */
-  tree: () => DivInfo[];
+  tree: () => DebugDivInfo[];
   /** Return full syntax tree as a readable string (built-in CM6 format). */
   treeString: () => string;
   /** Return closing fence visibility for all protected fenced blocks. */
-  fences: () => FenceStatus[];
+  fences: () => DebugFenceStatus[];
   /** Return DOM state (classes, height, hidden) for a specific line number. */
-  line: (lineNum: number) => LineInfo | null;
+  line: (lineNum: number) => DebugLineInfo | null;
   /** Return current document-analysis revision info for perf/debug checks. */
   semantics: () => SemanticDebugInfo;
   /** Return current selection position, range, and line/column. */
@@ -146,116 +112,10 @@ export interface DebugHelpers {
   toggleTreeView: () => boolean;
 }
 
-function getLineElement(view: EditorView, lineNum: number): HTMLElement | null {
-  if (lineNum < 1 || lineNum > view.state.doc.lines) return null;
-  const lines = view.contentDOM.querySelectorAll<HTMLElement>(".cm-line");
-  for (const el of lines) {
-    try {
-      const pos = view.posAtDOM(el, 0);
-      if (view.state.doc.lineAt(pos).number === lineNum) {
-        return el;
-      }
-    } catch (_error) {
-      continue;
-    }
-  }
-  try {
-    const lineObj = view.state.doc.line(lineNum);
-    const domPos = view.domAtPos(lineObj.from);
-    let el: Node | null = domPos.node;
-    if (el.nodeType === Node.TEXT_NODE) el = el.parentNode;
-    while (el && !(el instanceof HTMLElement && el.classList.contains("cm-line"))) {
-      el = el.parentNode;
-    }
-    if (!(el instanceof HTMLElement)) return null;
-    const pos = view.posAtDOM(el, 0);
-    return view.state.doc.lineAt(pos).number === lineNum ? el : null;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function inspectLine(view: EditorView, lineNum: number): LineInfo | null {
-  const el = getLineElement(view, lineNum);
-  if (!el) return null;
-  const cs = window.getComputedStyle(el);
-  return {
-    line: lineNum,
-    text: el.textContent?.slice(0, 60) ?? "",
-    classes: Array.from(el.classList).filter((c) => c.startsWith("cf-")),
-    height: cs.height,
-    hidden: cs.height === "0px",
-  };
-}
-
-function isElementVisibleInViewport(el: Element): boolean {
-  const rect = el.getBoundingClientRect();
-  return rect.bottom > 0 && rect.top < window.innerHeight;
-}
-
-function lineNumberAtElement(view: EditorView, el: HTMLElement): number | null {
-  try {
-    return view.state.doc.lineAt(view.posAtDOM(el, 0)).number;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function collectVisibleRawFencedOpeners(view: EditorView): VisibleRawFencedOpener[] {
-  const result: VisibleRawFencedOpener[] = [];
-  const lines = view.contentDOM.querySelectorAll<HTMLElement>(".cm-line");
-  for (const line of lines) {
-    if (!isElementVisibleInViewport(line)) continue;
-    const visibleText = (line.innerText ?? "").trim();
-    if (!visibleText) continue;
-    if (!/^:{3,}/.test(visibleText)) continue;
-    result.push({
-      line: lineNumberAtElement(view, line),
-      text: visibleText,
-      classes: Array.from(line.classList).filter((name) => name.startsWith("cf-")),
-    });
-  }
-  return result;
-}
-
-function measureRenderState(view: EditorView): DebugRenderState {
-  const inView = (el: Element) => isElementVisibleInViewport(el);
-  return {
-    renderedBlockHeaders: Array.from(
-      view.dom.querySelectorAll(".cf-block-header-rendered"),
-    ).filter(inView).length,
-    inlineMath: Array.from(view.dom.querySelectorAll(".cf-math-inline")).filter(inView).length,
-    displayMath: Array.from(view.dom.querySelectorAll(".cf-math-display")).filter(inView).length,
-    citations: Array.from(view.dom.querySelectorAll(".cf-citation")).filter(inView).length,
-    crossrefs: Array.from(
-      view.dom.querySelectorAll(".cf-crossref, .cross-ref"),
-    ).filter(inView).length,
-    tables: Array.from(view.dom.querySelectorAll(".cf-table-widget")).filter(inView).length,
-    figures: Array.from(
-      view.dom.querySelectorAll(".cf-block-figure, .cf-image-wrapper"),
-    ).filter(inView).length,
-    visibleRawFencedOpeners: collectVisibleRawFencedOpeners(view),
-  };
-}
-
 export function createDebugHelpers(view: EditorView): DebugHelpers {
   return {
     tree() {
-      const state = view.state;
-      const tree = syntaxTree(state);
-      const divs: DivInfo[] = [];
-      tree.iterate({
-        enter(node) {
-          if (node.type.name === "FencedDiv") {
-            divs.push({
-              from: node.from,
-              to: node.to,
-              text: state.doc.sliceString(node.from, Math.min(node.to, node.from + 40)),
-            });
-          }
-        },
-      });
-      return divs;
+      return collectDebugTreeDivs(view);
     },
 
     treeString() {
@@ -263,47 +123,19 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
     },
 
     fences() {
-      const results: FenceStatus[] = [];
-      for (const range of getClosingFenceRanges(view.state)) {
-        const lineNumber = view.state.doc.lineAt(range.from).number;
-        const info = inspectLine(view, lineNumber);
-        if (info) {
-          const { line, height, hidden, classes } = info;
-          results.push({ line, height, hidden, classes });
-        } else {
-          results.push({
-            line: lineNumber,
-            height: "0px",
-            hidden: true,
-            classes: [],
-          });
-        }
-      }
-      return results;
+      return collectDebugFenceStatuses(view);
     },
 
     line(lineNum: number) {
-      return inspectLine(view, lineNum);
+      return inspectDebugLine(view, lineNum);
     },
 
     semantics() {
-      return getDocumentAnalysisRevisionInfo(
-        view.state.field(documentAnalysisField),
-      );
+      return getDebugSemanticInfo(view);
     },
 
     selection() {
-      const sel = view.state.selection.main;
-      const line = view.state.doc.lineAt(sel.head);
-      return {
-        anchor: sel.anchor,
-        head: sel.head,
-        from: sel.from,
-        to: sel.to,
-        empty: sel.empty,
-        line: line.number,
-        col: sel.head - line.from + 1,
-      };
+      return getDebugSelectionInfo(view);
     },
 
     history() {
@@ -314,40 +146,27 @@ export function createDebugHelpers(view: EditorView): DebugHelpers {
     },
 
     structure() {
-      return getActiveStructureEditTarget(view.state);
+      return getDebugStructureTarget(view);
     },
 
     motionGuards() {
-      return getVerticalMotionGuardEvents(view);
+      return getDebugMotionGuards(view);
     },
 
     timeline() {
-      return getDebugTimelineEvents(view);
+      return getDebugTimeline(view);
     },
 
     geometry() {
-      return measureShellSurfaceSnapshot(view);
+      return measureDebugGeometry(view);
     },
 
     renderState() {
-      return measureRenderState(view);
+      return measureDebugRenderState(view);
     },
 
     dump() {
-      const cursor = view.state.selection.main;
-      const cursorLine = view.state.doc.lineAt(cursor.from).number;
-      return {
-        divs: this.tree(),
-        fences: this.fences(),
-        cursorLine,
-        focused: view.hasFocus,
-        semantics: this.semantics(),
-        structure: this.structure(),
-        geometry: this.geometry(),
-        render: this.renderState(),
-        motionGuards: this.motionGuards(),
-        timeline: this.timeline(),
-      };
+      return getDebugSnapshot(view);
     },
 
     activateStructureAt(pos: number) {

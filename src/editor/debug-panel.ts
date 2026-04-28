@@ -6,8 +6,6 @@ import {
   editorHitTestSnapshot,
 } from "../lib/editor-hit-test";
 import { frontmatterField } from "./frontmatter-state";
-import { getActiveStructureEditTarget } from "../state/cm-structure-edit";
-import { getVerticalMotionGuardEvents } from "./vertical-motion";
 import { getDebugSessionRecorderStatus } from "../debug/session-recorder";
 import { activeShellPath, type CodeShellInfo } from "../state/shell-ownership";
 import {
@@ -19,6 +17,12 @@ import {
   clearDebugTimelineEvents,
   getDebugTimelineEvents,
 } from "./debug-timeline";
+import {
+  getDebugSelectionInfo,
+  getDebugSnapshot,
+  getDebugStructureTarget,
+  getDebugStructureSummary,
+} from "./debug-snapshot";
 
 const MAX_DOC_INSERT_PREVIEW_CHARS = 120;
 const MIN_SCROLL_LOG_DELTA_PX = 48;
@@ -107,34 +111,18 @@ function surfaceSummary(view: EditorView): string {
   }).join("\n");
 }
 
-function structureSummary(view: EditorView): string {
-  const target = getActiveStructureEditTarget(view.state);
-  if (!target) return "none";
-  if (target.kind === "frontmatter") return `frontmatter 0-${target.to}`;
-  if (target.kind === "code-fence") {
-    return `code-fence @ L${view.state.doc.lineAt(target.openFenceFrom).number}`;
-  }
-  if (target.kind === "fenced-opener") {
-    return `${target.kind} @ L${view.state.doc.lineAt(target.openFenceFrom).number}`;
-  }
-  if (target.kind === "footnote-label") {
-    return `footnote-label:${target.id} @ L${view.state.doc.lineAt(target.labelFrom).number}`;
-  }
-  return `${target.kind} @ L${view.state.doc.lineAt(target.from).number}`;
-}
-
 function renderPanel(view: EditorView): string {
-  const sel = view.state.selection.main;
+  const snapshot = getDebugSnapshot(view);
+  const sel = getDebugSelectionInfo(view);
   const line = view.state.doc.lineAt(sel.head);
   const selectionSummary = sel.empty
     ? `caret=L${line.number}:${sel.head - line.from + 1}`
     : `range=L${view.state.doc.lineAt(sel.from).number}-${view.state.doc.lineAt(sel.to).number}`;
-  const structure = getActiveStructureEditTarget(view.state);
   const path = activeShellPath(view.state);
   const frontmatter = view.state.field(frontmatterField);
   const lineClasses = currentLineClasses(view);
-  const guards = getVerticalMotionGuardEvents(view).slice(-8);
-  const timeline = getDebugTimelineEvents(view).slice(-14);
+  const guards = snapshot.motionGuards.slice(-8);
+  const timeline = snapshot.timeline.slice(-14);
   const recorder = getDebugSessionRecorderStatus();
   const surfacesText = surfaceSummary(view);
   const pathText = path.length > 0
@@ -150,16 +138,16 @@ function renderPanel(view: EditorView): string {
       return `${event.kind}: L${event.beforeLine} -> L${event.afterLine}, scroll ${Math.round(event.beforeScrollTop)} -> ${Math.round(event.afterScrollTop)} -> ${Math.round(event.correctedScrollTop)}`;
     }).join("\n")
     : "clean";
-  const structureText = structure ? JSON.stringify(structure, null, 2) : "null";
+  const structureText = snapshot.structure ? JSON.stringify(snapshot.structure, null, 2) : "null";
   const frontmatterText = frontmatter.end > 0
     ? `title=${frontmatter.config.title ?? "(none)"}\nrange=0-${frontmatter.end}`
     : "none";
-  const viewportFromLine = view.state.doc.lineAt(view.viewport.from).number;
-  const viewportToLine = view.state.doc.lineAt(view.viewport.to).number;
+  const viewportFromLine = snapshot.geometry.viewportFromLine;
+  const viewportToLine = snapshot.geometry.viewportToLine;
   const sessionPath = recorder.sessionId
     ? `/tmp/coflat-debug/${recorder.sessionId}.jsonl`
     : "(none)";
-  const runtimeText = `scrollTop=${Math.round(view.scrollDOM.scrollTop)}
+  const runtimeText = `scrollTop=${snapshot.geometry.scrollTop}
 viewport=L${viewportFromLine}-L${viewportToLine}
 docLines=${view.state.doc.lines}
 guards=${guards.length}
@@ -278,7 +266,7 @@ class DebugPanelView {
     this.lastScrollEventAt = 0;
     this.lastSelectionHead = view.state.selection.main.head;
     this.lastFocus = view.hasFocus;
-    this.lastStructureSummary = structureSummary(view);
+    this.lastStructureSummary = getDebugStructureSummary(view);
     this.renderFrame = null;
     this.handleScroll = () => {
       const nextScrollTop = Math.round(this.view.scrollDOM.scrollTop);
@@ -416,7 +404,7 @@ class DebugPanelView {
           empty: selection.empty,
           rangeFromLine,
           rangeToLine,
-          structure: structureSummary(update.view),
+          structure: getDebugStructureSummary(update.view),
           path: activePathSummary(update.view),
           caret: caretDetail(update.view, nextSelectionHead),
         },
@@ -437,7 +425,7 @@ class DebugPanelView {
             line,
             head: update.state.selection.main.head,
             anchor: update.state.selection.main.anchor,
-            structure: structureSummary(update.view),
+            structure: getDebugStructureSummary(update.view),
             path: activePathSummary(update.view),
             newDocLength: update.state.doc.length,
             changes: (() => {
@@ -471,19 +459,19 @@ class DebugPanelView {
         type: "focus",
         summary: update.view.hasFocus ? "focus" : "blur",
         detail: {
-          structure: structureSummary(update.view),
+          structure: getDebugStructureSummary(update.view),
           path: activePathSummary(update.view),
         },
       });
     }
-    const nextStructure = structureSummary(update.view);
+    const nextStructure = getDebugStructureSummary(update.view);
     if (nextStructure !== this.lastStructureSummary) {
       this.lastStructureSummary = nextStructure;
       appendDebugTimelineEvent(update.view, {
         timestamp: Date.now(),
         type: "structure",
         summary: nextStructure,
-        detail: getActiveStructureEditTarget(update.state),
+        detail: getDebugStructureTarget(update.view),
       });
     }
     if (

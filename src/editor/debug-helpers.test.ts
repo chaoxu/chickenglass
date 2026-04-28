@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { forceParsing } from "@codemirror/language";
 import { createDebugHelpers } from "./debug-helpers";
+import { getDebugSnapshot } from "./debug-snapshot";
 import { createEditor, toggleTreeView } from "./editor";
 
 const mountedViews: EditorView[] = [];
@@ -80,6 +81,30 @@ describe("createDebugHelpers", () => {
     const helpers = createDebugHelpers(view);
 
     expect(helpers.fences().map((fence) => fence.line)).toEqual([3, 7, 11]);
+  });
+
+  it("uses the shared debug snapshot for dump data", () => {
+    const view = createMountedEditor(
+      [
+        "::: {.theorem} Shared Snapshot",
+        "Statement.",
+        ":::",
+      ].join("\n"),
+    );
+
+    const helpers = createDebugHelpers(view);
+    const snapshot = getDebugSnapshot(view);
+    const dump = helpers.dump();
+
+    expect(dump.divs).toEqual(snapshot.divs);
+    expect(dump.fences).toEqual(snapshot.fences);
+    expect(dump.cursorLine).toBe(snapshot.cursorLine);
+    expect(dump.focused).toBe(snapshot.focused);
+    expect(dump.semantics).toEqual(snapshot.semantics);
+    expect(dump.structure).toEqual(snapshot.structure);
+    expect(dump.render).toEqual(snapshot.render);
+    expect(dump.motionGuards).toEqual(snapshot.motionGuards);
+    expect(dump.timeline).toEqual(snapshot.timeline);
   });
 
   it("captures the visible render state snapshot", () => {
