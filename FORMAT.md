@@ -121,7 +121,7 @@ ATX headings (`#` through `######`). Auto-numbered unless marked unnumbered. Exp
 ## Background {#sec:background} --> cross-ref target "Section 1.1"
 ```
 
-Trailing Pandoc attribute blocks are supported on headings. The editor currently uses them primarily for `#id`, `{-}`, and `{.unnumbered}`. These attributes are hidden when the cursor is outside the heading in both CM6 rich mode and Lexical mode.
+Trailing Pandoc attribute blocks are supported on headings. Coflat uses them primarily for `#id`, `{-}`, and `{.unnumbered}`.
 
 ## Math
 
