@@ -13,6 +13,7 @@ import {
 } from "./fixture-test-helpers.mjs";
 import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 import {
+  activateStructureAtCursor,
   clearStructure,
   getGeometrySnapshot,
   openFixtureDocument,
@@ -172,7 +173,7 @@ async function runStructureScenario(page, line, radius) {
   await scrollTo(page, line);
   await setCursor(page, line, 0);
   const before = await takeSnapshot(page, "before", line, radius);
-  const activated = await page.evaluate(() => window.__cmDebug.activateStructureAtCursor());
+  const activated = await activateStructureAtCursor(page);
   const opened = await takeSnapshot(page, "opened", line, radius);
   await clearStructure(page);
   const closed = await takeSnapshot(page, "closed", line, radius);

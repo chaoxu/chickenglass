@@ -7,7 +7,12 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText, waitForRenderReady } from "../test-helpers.mjs";
+import {
+  getTreeString,
+  openRegressionDocument,
+  scrollToText,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "code-blocks";
 
@@ -16,7 +21,7 @@ export async function run(page) {
   await waitForRenderReady(page);
 
   // Check for FencedCode in syntax tree
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
+  const tree = await getTreeString(page);
   const hasFencedCode = tree.includes("FencedCode");
 
   if (!hasFencedCode) {

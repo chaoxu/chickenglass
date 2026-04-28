@@ -1,4 +1,8 @@
 import {
+  clearMotionGuards,
+  clearStructure,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   scrollTo,
   setCursor,
@@ -14,19 +18,24 @@ const MAX_DOWN_SCROLL_DELTA_PX = 170;
 const MAX_REVERSE_SCROLL_DELTA_PX = 16;
 
 function sample(page) {
-  return page.evaluate(() => {
-    const selection = window.__cmDebug.selection();
+  return Promise.all([
+    getSelectionState(page),
+    getStructureState(page),
+    page.evaluate(() => {
     const scroller = window.__cmView.scrollDOM;
     return {
-      line: selection.line,
-      head: selection.head,
       scrollTop: Math.round(scroller.scrollTop),
       maxScrollTop: Math.round(scroller.scrollHeight - scroller.clientHeight),
-      structure: window.__cmDebug.structure()?.kind ?? null,
       activeTableCells: document.querySelectorAll(".cf-table-cell-active").length,
       editingTableCells: document.querySelectorAll(".cf-table-cell-editing").length,
     };
-  });
+    }),
+  ]).then(([selection, structure, domState]) => ({
+    ...domState,
+    line: selection.line,
+    head: selection.head,
+    structure: structure?.kind ?? null,
+  }));
 }
 
 function describeSample(state) {
@@ -48,9 +57,9 @@ export async function run(page) {
   await setCursor(page, START_LINE, 0);
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   let previous = await sample(page);

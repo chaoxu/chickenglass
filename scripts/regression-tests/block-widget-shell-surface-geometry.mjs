@@ -5,7 +5,7 @@
  * so the shell-surface overlay has to measure the rendered widgets directly.
  */
 
-import { openFixtureDocument, waitForRenderReady } from "../test-helpers.mjs";
+import { getGeometrySnapshot, openFixtureDocument, waitForRenderReady } from "../test-helpers.mjs";
 
 export const name = "block-widget-shell-surface-geometry";
 
@@ -38,7 +38,7 @@ export async function run(page) {
   );
   await waitForRenderReady(page, { selector: ".cf-math-display" });
 
-  const status = await page.evaluate(async () => {
+  const setup = await page.evaluate(async () => {
     const view = window.__cmView;
     const doc = view.state.doc.toString();
     const cursorPos = doc.indexOf("Prelude");
@@ -50,7 +50,16 @@ export async function run(page) {
     view.dispatch({ selection: { anchor: cursorPos + 1 }, scrollIntoView: false });
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    const snapshot = window.__cmDebug.geometry();
+    return { ok: true };
+  });
+  if (!setup.ok) {
+    return { pass: false, message: "failed to prepare geometry fixture" };
+  }
+
+  const snapshot = await getGeometrySnapshot(page);
+  const status = await page.evaluate((geometrySnapshot) => {
+    const view = window.__cmView;
+    const snapshot = geometrySnapshot;
     const surface = snapshot.surfaces[0];
     if (!surface?.rect) {
       return { error: "missing active shell surface rect" };
@@ -79,7 +88,7 @@ export async function run(page) {
       table: encloses(".cf-table-widget"),
       surfaceRect,
     };
-  });
+  }, snapshot);
 
   if (status.error) {
     return {

@@ -15,7 +15,9 @@ import { sleep } from "./browser-lifecycle.mjs";
 import { createArgParser, splitCliCommand } from "./devx-cli.mjs";
 import {
   captureDebugState,
+  activateStructureAtCursor,
   jumpToTextAnchor,
+  moveVertically,
   openFixtureDocument,
   openFile,
   setCursor,
@@ -576,7 +578,7 @@ async function runStep(page, step, captures) {
       await switchToMode(page, step.mode);
       return;
     case "activateStructure": {
-      const activated = await page.evaluate(() => window.__cmDebug.activateStructureAtCursor());
+      const activated = await activateStructureAtCursor(page);
       if (!activated) {
         throw new Error("activateStructure step failed at the current cursor.");
       }
@@ -585,7 +587,7 @@ async function runStep(page, step, captures) {
     }
     case "moveVertically":
       for (let index = 0; index < step.count; index += 1) {
-        const moved = await page.evaluate((direction) => window.__cmDebug.moveVertically(direction), step.direction);
+        const moved = await moveVertically(page, step.direction);
         if (!moved) {
           throw new Error(`moveVertically(${step.direction}) failed on iteration ${index + 1}.`);
         }

@@ -23,13 +23,20 @@ export {
   captureDebugState,
   checkFences,
   dump,
+  getFenceState,
   getGeometrySnapshot,
+  getHistoryState,
+  getLineInfo,
   getMotionGuards,
   getRecorderStatus,
   getRenderState,
+  getSelectionState,
+  getSemanticState,
   getStructureState,
+  getTreeString,
   getTreeDivs,
   getWatcherStatus,
+  isDebugLaneEnabled,
 } from "./editor-debug-helpers.mjs";
 export * from "./editor-render-helpers.mjs";
 export * from "./editor-state-helpers.mjs";

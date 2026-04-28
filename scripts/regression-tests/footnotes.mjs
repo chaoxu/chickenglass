@@ -8,6 +8,7 @@
 /* global window */
 
 import {
+  getTreeString,
   openRegressionDocument,
   scrollToText,
   switchToMode,
@@ -52,7 +53,7 @@ export async function run(page) {
   });
 
   // Check syntax tree for FootnoteRef nodes
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
+  const tree = await getTreeString(page);
   const hasFootnoteRef = tree.includes("FootnoteRef");
 
   if (!hasFootnoteRef) {

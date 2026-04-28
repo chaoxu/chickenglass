@@ -7,7 +7,12 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText, waitForRenderReady } from "../test-helpers.mjs";
+import {
+  getTreeString,
+  openRegressionDocument,
+  scrollToText,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "headings";
 
@@ -15,7 +20,7 @@ export async function run(page) {
   await openRegressionDocument(page);
   await waitForRenderReady(page);
 
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
+  const tree = await getTreeString(page);
 
   const hasH1 = tree.includes("ATXHeading1");
   const hasH2 = tree.includes("ATXHeading2");

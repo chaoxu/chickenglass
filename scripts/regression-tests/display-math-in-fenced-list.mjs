@@ -1,4 +1,5 @@
 import {
+  getStructureState,
   openRegressionDocument,
   scrollToText,
   settleEditorLayout,
@@ -28,8 +29,9 @@ export async function run(page) {
 
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const state = await page.evaluate(() => {
-    const structure = window.__cmDebug?.structure?.();
+  const [structure, state] = await Promise.all([
+    getStructureState(page),
+    page.evaluate(() => {
     const lineTexts = Array.from(window.__cmView.dom.querySelectorAll(".cm-line"))
       .map((el) => ({
         text: el.textContent ?? "",
@@ -44,15 +46,15 @@ export async function run(page) {
         || entry.text.includes("Next item"),
       );
     return {
-      structure,
       lineTexts,
     };
-  });
+    }),
+  ]);
 
-  if (state.structure?.kind !== "display-math") {
+  if (structure?.kind !== "display-math") {
     return {
       pass: false,
-      message: `expected display-math structure, got ${state.structure?.kind ?? "none"}`,
+      message: `expected display-math structure, got ${structure?.kind ?? "none"}`,
     };
   }
 

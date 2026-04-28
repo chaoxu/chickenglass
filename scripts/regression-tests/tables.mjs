@@ -8,6 +8,7 @@
 /* global window */
 
 import {
+  getTreeString,
   openEditorScenario,
   openRegressionDocument,
   readEditorText,
@@ -71,7 +72,7 @@ export async function run(page) {
   await waitForRenderReady(page);
 
   // Check for Table node in syntax tree
-  const tree = await page.evaluate(() => window.__cmDebug.treeString());
+  const tree = await getTreeString(page);
   const hasTable = tree.includes("Table");
 
   if (!hasTable) {

@@ -1,5 +1,8 @@
 import {
+  clearMotionGuards,
+  clearStructure,
   findLine,
+  getSelectionState,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -9,19 +12,23 @@ import {
 export const name = "table-vertical-handoff";
 
 function snapshot(page) {
-  return page.evaluate(() => {
-    const selection = window.__cmDebug.selection();
+  return Promise.all([
+    getSelectionState(page),
+    page.evaluate(() => {
     const active = document.activeElement;
     return {
-      line: selection.line,
-      col: selection.col,
-      head: selection.head,
       editingCells: document.querySelectorAll(".cf-table-cell-editing").length,
       activeCells: document.querySelectorAll(".cf-table-cell-active").length,
       activeTag: active?.tagName ?? null,
       activeClass: active?.className ?? null,
     };
-  });
+    }),
+  ]).then(([selection, domState]) => ({
+    ...domState,
+    line: selection.line,
+    col: selection.col,
+    head: selection.head,
+  }));
 }
 
 export async function run(page) {
@@ -44,9 +51,9 @@ export async function run(page) {
   await setCursor(page, firstTableLine - 1, 0);
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
 
   let entered = false;

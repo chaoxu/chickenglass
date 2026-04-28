@@ -12,6 +12,10 @@ export async function getTreeDivs(page) {
   return page.evaluate(() => window.__cmDebug.tree());
 }
 
+export async function getTreeString(page) {
+  return page.evaluate(() => window.__cmDebug.treeString());
+}
+
 /**
  * Check visibility of closing fence lines.
  * Returns an array of { line, visible, height, classes } objects.
@@ -54,10 +58,34 @@ export async function getGeometrySnapshot(page) {
   return page.evaluate(() => window.__cmDebug.geometry());
 }
 
+export async function getFenceState(page) {
+  return page.evaluate(() => window.__cmDebug.fences());
+}
+
+export async function getLineInfo(page, lineNumber) {
+  return page.evaluate((ln) => window.__cmDebug.line(ln), lineNumber);
+}
+
+export async function getSelectionState(page) {
+  return page.evaluate(() => window.__cmDebug.selection());
+}
+
 export async function getStructureState(page) {
   return page.evaluate(() => window.__cmDebug.structure());
 }
 
 export async function getMotionGuards(page) {
   return page.evaluate(() => window.__cmDebug.motionGuards());
+}
+
+export async function getHistoryState(page) {
+  return page.evaluate(() => window.__cmDebug.history());
+}
+
+export async function getSemanticState(page) {
+  return page.evaluate(() => window.__cmDebug.semantics());
+}
+
+export async function isDebugLaneEnabled(page) {
+  return page.evaluate(() => window.__cmDebug?.debugLaneEnabled?.() ?? false);
 }

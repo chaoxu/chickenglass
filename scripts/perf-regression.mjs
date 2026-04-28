@@ -52,6 +52,7 @@ import {
 } from "./typing-burst-helpers.mjs";
 import {
   hasFixtureDocument,
+  getSemanticState,
   openFixtureDocument,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
@@ -96,7 +97,7 @@ async function getFrontendPerfSummaries(page) {
 }
 
 async function getSemanticRevisionInfo(page) {
-  return page.evaluate(() => window.__cmDebug.semantics());
+  return getSemanticState(page);
 }
 
 async function discardDirtyPerfState(page) {

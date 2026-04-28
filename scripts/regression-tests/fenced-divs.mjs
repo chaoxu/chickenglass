@@ -7,7 +7,13 @@
 
 /* global window */
 
-import { openRegressionDocument, scrollToText, waitForRenderReady } from "../test-helpers.mjs";
+import {
+  getFenceState,
+  getTreeDivs,
+  openRegressionDocument,
+  scrollToText,
+  waitForRenderReady,
+} from "../test-helpers.mjs";
 
 export const name = "fenced-divs";
 
@@ -16,7 +22,7 @@ export async function run(page) {
   await waitForRenderReady(page);
 
   // Check Lezer tree for FencedDiv nodes
-  const treeDivs = await page.evaluate(() => window.__cmDebug.tree());
+  const treeDivs = await getTreeDivs(page);
 
   if (!Array.isArray(treeDivs) || treeDivs.length === 0) {
     return { pass: false, message: "No FencedDiv nodes found in syntax tree" };
@@ -38,7 +44,7 @@ export async function run(page) {
   }
 
   // Verify closing fences are hidden (zero height)
-  const fences = await page.evaluate(() => window.__cmDebug.fences());
+  const fences = await getFenceState(page);
   const visibleCloseFences = Array.isArray(fences)
     ? fences.filter((f) => f.visible === true)
     : [];

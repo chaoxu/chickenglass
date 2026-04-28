@@ -3,6 +3,7 @@
  */
 
 import {
+  getHistoryState,
   openEditorScenario,
   readEditorText,
   settleEditorLayout,
@@ -20,7 +21,7 @@ const FIXTURE = {
 };
 
 async function cm6History(page) {
-  return page.evaluate(() => window.__cmDebug?.history?.() ?? null);
+  return getHistoryState(page);
 }
 
 async function insertInActiveEditor(page, text) {

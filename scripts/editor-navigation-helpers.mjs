@@ -141,6 +141,15 @@ export async function clearMotionGuards(page) {
 }
 
 /**
+ * Move the CM6 rich cursor vertically through the debug bridge.
+ */
+export async function moveVertically(page, direction) {
+  const moved = await page.evaluate((dir) => window.__cmDebug.moveVertically(dir), direction);
+  await settleEditorLayout(page);
+  return moved;
+}
+
+/**
  * Place cursor at a specific line and column, with focus.
  */
 export async function setCursor(page, line, col = 0) {
