@@ -38,7 +38,6 @@ import {
   serializeBlockToMarkdown,
 } from "./headless-markdown-parse";
 import {
-  parseMarkdownLinkSource,
   serializeMarkdownLinkSource,
 } from "./markdown/inline-source";
 import {
@@ -61,7 +60,6 @@ import {
   inlineMathBodyStartOffset,
   inlineMathSourceOffsetFromTarget,
 } from "./math-source-position";
-import { parseInlineMathSource } from "./inline-math-source";
 import {
   $createInlineMathNode,
   $isInlineMathNode,
@@ -70,8 +68,7 @@ import {
 import { $isRawBlockNode } from "./nodes/raw-block-node";
 import { $createReferenceNode, $isReferenceNode, type ReferenceNode } from "./nodes/reference-node";
 import type { RevealChromePreview } from "./reveal-chrome-types";
-import { isMarkdownImageLine } from "../lib/markdown-image";
-import { isReferenceTokenSource } from "../lib/reference-tokens";
+import { parseInlineSourceExact } from "./inline-source-model";
 import { $getVisibleTextOffset } from "./visible-source-traversal";
 
 export type RevealBoundaryDirection = "backward" | "forward";
@@ -240,8 +237,8 @@ const linkAdapter: RevealAdapter = {
     };
   },
   reparse(live, raw) {
-    const parsed = parseMarkdownLinkSource(raw.trim());
-    if (!parsed) {
+    const parsed = parseInlineSourceExact(raw.trim());
+    if (!parsed || parsed.kind !== "link") {
       // Invalid syntax — leave whatever the user typed as plain text.
       return live;
     }
@@ -318,8 +315,8 @@ const inlineMathAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    const parsed = parseInlineMathSource(trimmed);
-    if (!parsed) {
+    const parsed = parseInlineSourceExact(trimmed);
+    if (!parsed || parsed.kind !== "inline-math") {
       return live;
     }
     const math = $createInlineMathNode(trimmed, parsed.delimiter, live.getFormat());
@@ -345,7 +342,8 @@ const inlineImageAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    if (!isMarkdownImageLine(trimmed)) {
+    const parsed = parseInlineSourceExact(trimmed);
+    if (!parsed || parsed.kind !== "inline-image") {
       return live;
     }
     const image = $createInlineImageNode(trimmed, live.getFormat());
@@ -422,7 +420,8 @@ const referenceAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    if (!isReferenceTokenSource(trimmed)) {
+    const parsed = parseInlineSourceExact(trimmed);
+    if (!parsed || parsed.kind !== "reference") {
       return live;
     }
     const ref = $createReferenceNode(trimmed, live.getFormat());
@@ -430,8 +429,6 @@ const referenceAdapter: RevealAdapter = {
     return ref;
   },
 };
-
-const FOOTNOTE_REFERENCE = /^\[\^[^\]\n]+\]$/;
 
 const footnoteReferenceAdapter: RevealAdapter = {
   id: "footnote-reference",
@@ -450,7 +447,8 @@ const footnoteReferenceAdapter: RevealAdapter = {
   },
   reparse(live, raw) {
     const trimmed = raw.trim();
-    if (!FOOTNOTE_REFERENCE.test(trimmed)) {
+    const parsed = parseInlineSourceExact(trimmed);
+    if (!parsed || parsed.kind !== "footnote-reference") {
       return live;
     }
     const ref = $createFootnoteReferenceNode(trimmed, live.getFormat());

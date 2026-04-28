@@ -404,6 +404,32 @@ export function parseMarkdownLinkSource(raw: string): ParsedMarkdownLinkSource |
   };
 }
 
+export function parseMarkdownLinkSourceAt(
+  markdown: string,
+  from: number,
+  to = markdown.length,
+): MarkdownLinkSourceMatch | null {
+  if (from < 0 || from >= to || markdown[from] !== "[" || markdown[from - 1] === "!") {
+    return null;
+  }
+  const labelEnd = findLabelEnd(markdown, from);
+  if (labelEnd < 0 || labelEnd >= to || markdown[labelEnd + 1] !== "(") {
+    return null;
+  }
+  const linkEnd = findLinkDestinationEnd(markdown, labelEnd + 1);
+  if (linkEnd < 0 || linkEnd >= to) {
+    return null;
+  }
+  const parsed = parseMarkdownLinkSource(markdown.slice(from, linkEnd + 1));
+  return parsed
+    ? {
+        ...parsed,
+        from,
+        to: linkEnd + 1,
+      }
+    : null;
+}
+
 function linkNodeMatchesParsedSource(node: LinkNode, parsed: ParsedMarkdownLinkSource): boolean {
   const serializedLabel = serializeInlineChildrenSource(node);
   return (
@@ -428,26 +454,11 @@ export function findMatchingMarkdownLinkSource(
       cursor = labelStart + 1;
       continue;
     }
-    const labelEnd = findLabelEnd(markdown, labelStart);
-    if (labelEnd < 0 || markdown[labelEnd + 1] !== "(") {
-      cursor = labelStart + 1;
-      continue;
-    }
-    const linkEnd = findLinkDestinationEnd(markdown, labelEnd + 1);
-    if (linkEnd < 0) {
-      cursor = labelStart + 1;
-      continue;
-    }
-    const raw = markdown.slice(labelStart, linkEnd + 1);
-    const parsed = parseMarkdownLinkSource(raw);
+    const parsed = parseMarkdownLinkSourceAt(markdown, labelStart);
     if (parsed && linkNodeMatchesParsedSource(node, parsed)) {
-      return {
-        ...parsed,
-        from: labelStart,
-        to: linkEnd + 1,
-      };
+      return parsed;
     }
-    cursor = linkEnd + 1;
+    cursor = parsed?.to ?? labelStart + 1;
   }
   return null;
 }

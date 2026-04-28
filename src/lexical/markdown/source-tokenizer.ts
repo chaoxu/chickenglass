@@ -1,20 +1,17 @@
 import { HEADING_TRAILING_ATTRIBUTES_RE, parseHeadingLine } from "../../lib/markdown/heading-syntax";
-import { findNextInlineMathSource } from "../../lib/inline-math-source";
-import { MARKDOWN_IMAGE_IMPORT_RE } from "../../lib/markdown-image";
-import {
-  scanReferenceRevealTokens,
-  type ReferenceRevealToken,
-} from "../../lib/reference-tokens";
 import { findTableCellSpans } from "../../lib/table-inline-span";
 import {
   getInlineTextFormatSpecs,
   type InlineTextFormatFamily,
 } from "../runtime";
 import {
+  parseInlineSource,
+  type InlineSourceSpan,
+} from "../inline-source-model";
+import {
   collectSourceBlockRanges,
   type SourceBlockRange,
 } from "./block-scanner";
-import { parseMarkdownLinkSource } from "./inline-source";
 
 export type ParsedSourceRevealAdapterId =
   | "footnote-reference"
@@ -54,13 +51,6 @@ export type ParsedSourceToken = ParsedSourceTextToken | ParsedSourceRevealToken;
 
 const MARKDOWN_ESCAPE_RE = /\\([\\`*{}[\]()#+\-.!_>"])/g;
 const FENCED_CODE_START_RE = /^(\s*)(`{3,}|~{3,}).*$/;
-
-interface LinkAtSource {
-  readonly labelFrom: number;
-  readonly labelMarkdown: string;
-  readonly raw: string;
-  readonly to: number;
-}
 
 function lineOffsets(lines: readonly string[]): number[] {
   const offsets: number[] = [];
@@ -119,159 +109,6 @@ function textToken(
       };
 }
 
-function findLabelEnd(source: string, labelStart: number, limit: number): number {
-  let depth = 0;
-  for (let index = labelStart; index < limit; index += 1) {
-    const char = source[index];
-    if (isEscaped(source, index)) {
-      continue;
-    }
-    if (char === "[") {
-      depth += 1;
-    } else if (char === "]") {
-      depth -= 1;
-      if (depth === 0) {
-        return index;
-      }
-    }
-  }
-  return -1;
-}
-
-function findLinkDestinationEnd(source: string, openParen: number, limit: number): number {
-  let depth = 0;
-  let inAngleDestination = false;
-  for (let index = openParen; index < limit; index += 1) {
-    const char = source[index];
-    if (isEscaped(source, index)) {
-      continue;
-    }
-    if (inAngleDestination) {
-      if (char === ">") {
-        inAngleDestination = false;
-      }
-      continue;
-    }
-    if (char === "<" && index === openParen + 1) {
-      inAngleDestination = true;
-      continue;
-    }
-    if (char === "(") {
-      depth += 1;
-    } else if (char === ")") {
-      depth -= 1;
-      if (depth === 0) {
-        return index;
-      }
-    }
-  }
-  return -1;
-}
-
-function parseLinkAt(source: string, from: number, to: number): LinkAtSource | null {
-  if (source[from] !== "[" || source[from - 1] === "!") {
-    return null;
-  }
-  const labelEnd = findLabelEnd(source, from, to);
-  if (labelEnd < 0 || source[labelEnd + 1] !== "(") {
-    return null;
-  }
-  const linkEnd = findLinkDestinationEnd(source, labelEnd + 1, to);
-  if (linkEnd < 0) {
-    return null;
-  }
-  const raw = source.slice(from, linkEnd + 1);
-  const parsed = parseMarkdownLinkSource(raw);
-  return parsed
-    ? {
-        labelFrom: from + 1,
-        labelMarkdown: parsed.labelMarkdown,
-        raw,
-        to: linkEnd + 1,
-      }
-    : null;
-}
-
-function anchoredMatch(
-  regex: RegExp,
-  source: string,
-  from: number,
-  to: number,
-): RegExpMatchArray | null {
-  const match = source.slice(from, to).match(regex);
-  return match?.index === 0 ? match : null;
-}
-
-function parseInlineMathAt(
-  source: string,
-  from: number,
-  to: number,
-): ParsedSourceRevealToken | null {
-  const parsed = findNextInlineMathSource(source.slice(from, to), 0, {
-    requireTightDollar: true,
-  });
-  return parsed?.from === 0
-    ? {
-        adapterId: "inline-math",
-        from,
-        kind: "reveal",
-        source: parsed.raw,
-        to: from + parsed.raw.length,
-      }
-    : null;
-}
-
-function parseInlineImageAt(
-  source: string,
-  from: number,
-  to: number,
-): ParsedSourceRevealToken | null {
-  const match = anchoredMatch(MARKDOWN_IMAGE_IMPORT_RE, source, from, to);
-  return match
-    ? {
-        adapterId: "inline-image",
-        from,
-        kind: "reveal",
-        source: match[0],
-        to: from + match[0].length,
-      }
-    : null;
-}
-
-function parseFootnoteReferenceAt(
-  source: string,
-  from: number,
-  to: number,
-): ParsedSourceRevealToken | null {
-  const match = anchoredMatch(/^\[\^[^\]\n]+\]/, source, from, to);
-  return match
-    ? {
-        adapterId: "footnote-reference",
-        from,
-        kind: "reveal",
-        source: match[0],
-        to: from + match[0].length,
-      }
-    : null;
-}
-
-function parseReferenceAt(
-  from: number,
-  to: number,
-  referenceRevealsByFrom: ReadonlyMap<number, ReferenceRevealToken>,
-): ParsedSourceRevealToken | null {
-  const reveal = referenceRevealsByFrom.get(from);
-  if (!reveal || reveal.to > to) {
-    return null;
-  }
-  return {
-    adapterId: "reference",
-    from,
-    kind: "reveal",
-    source: reveal.source,
-    to: reveal.to,
-  };
-}
 
 const FORMAT_CANDIDATES = [
   { close: "**", family: "bold" as const, open: "**" },
@@ -343,54 +180,48 @@ function parseSpecialInlineAt(
   from: number,
   to: number,
   formats: readonly InlineTextFormatFamily[],
-  referenceRevealsByFrom: ReadonlyMap<number, ReferenceRevealToken>,
+  inlineSourceSpansByFrom: ReadonlyMap<number, InlineSourceSpan>,
 ): { readonly tokens: readonly ParsedSourceToken[]; readonly to: number } | null {
   const formatted = parseFormatAt(source, from, to, formats);
   if (formatted) {
     return formatted;
   }
 
-  const inlineMath = parseInlineMathAt(source, from, to);
-  if (inlineMath) {
-    return { tokens: [inlineMath], to: inlineMath.to };
-  }
-
-  const inlineImage = parseInlineImageAt(source, from, to);
-  if (inlineImage) {
-    return { tokens: [inlineImage], to: inlineImage.to };
-  }
-
-  const link = parseLinkAt(source, from, to);
-  if (link) {
-    return {
-      to: link.to,
-      tokens: [{
-        adapterId: "link",
-        children: parseInlineSegment(
-          link.labelMarkdown,
-          0,
-          link.labelMarkdown.length,
-          formats,
-        ).map((token) => shiftToken(token, link.labelFrom)),
-        from,
-        kind: "reveal",
-        source: link.raw,
-        to: link.to,
-      }],
-    };
-  }
-
-  const footnote = parseFootnoteReferenceAt(source, from, to);
-  if (footnote) {
-    return { tokens: [footnote], to: footnote.to };
-  }
-
-  const reference = parseReferenceAt(from, to, referenceRevealsByFrom);
-  if (reference) {
-    return { tokens: [reference], to: reference.to };
+  const inlineSource = inlineSourceSpansByFrom.get(from);
+  if (inlineSource && inlineSource.to <= to) {
+    const token = tokenFromInlineSourceSpan(inlineSource, formats);
+    return { tokens: [token], to: inlineSource.to };
   }
 
   return null;
+}
+
+function tokenFromInlineSourceSpan(
+  span: InlineSourceSpan,
+  formats: readonly InlineTextFormatFamily[],
+): ParsedSourceRevealToken {
+  if (span.kind === "link") {
+    return {
+      adapterId: "link",
+      children: parseInlineSegment(
+        span.labelMarkdown,
+        0,
+        span.labelMarkdown.length,
+        formats,
+      ).map((token) => shiftToken(token, span.labelFrom)),
+      from: span.from,
+      kind: "reveal",
+      source: span.source,
+      to: span.to,
+    };
+  }
+  return {
+    adapterId: span.kind,
+    from: span.from,
+    kind: "reveal",
+    source: span.source,
+    to: span.to,
+  };
 }
 
 function shiftToken(token: ParsedSourceToken, offset: number): ParsedSourceToken {
@@ -416,6 +247,31 @@ function shiftToken(token: ParsedSourceToken, offset: number): ParsedSourceToken
   };
 }
 
+function shiftInlineSourceSpan(span: InlineSourceSpan, offset: number): InlineSourceSpan {
+  if (span.kind === "link") {
+    return {
+      ...span,
+      from: span.from + offset,
+      labelFrom: span.labelFrom + offset,
+      to: span.to + offset,
+    };
+  }
+  if (span.kind === "inline-math") {
+    return {
+      ...span,
+      bodyFrom: span.bodyFrom + offset,
+      bodyTo: span.bodyTo + offset,
+      from: span.from + offset,
+      to: span.to + offset,
+    };
+  }
+  return {
+    ...span,
+    from: span.from + offset,
+    to: span.to + offset,
+  };
+}
+
 function parseInlineSegment(
   source: string,
   from: number,
@@ -423,16 +279,10 @@ function parseInlineSegment(
   formats: readonly InlineTextFormatFamily[],
 ): readonly ParsedSourceToken[] {
   const tokens: ParsedSourceToken[] = [];
-  const referenceRevealsByFrom = new Map(
-    scanReferenceRevealTokens(source.slice(from, to)).map((reveal) => {
-      const absoluteFrom = from + reveal.from;
-      const absoluteTo = from + reveal.to;
-      return [absoluteFrom, {
-        ...reveal,
-        from: absoluteFrom,
-        source: source.slice(absoluteFrom, absoluteTo),
-        to: absoluteTo,
-      }] as const;
+  const inlineSourceSpansByFrom = new Map(
+    parseInlineSource(source.slice(from, to)).map((span) => {
+      const absoluteSpan = shiftInlineSourceSpan(span, from);
+      return [absoluteSpan.from, absoluteSpan] as const;
     }),
   );
   let cursor = from;
@@ -446,7 +296,7 @@ function parseInlineSegment(
   };
 
   while (cursor < to) {
-    const parsed = parseSpecialInlineAt(source, cursor, to, formats, referenceRevealsByFrom);
+    const parsed = parseSpecialInlineAt(source, cursor, to, formats, inlineSourceSpansByFrom);
     if (parsed) {
       flushText(cursor);
       tokens.push(...parsed.tokens);

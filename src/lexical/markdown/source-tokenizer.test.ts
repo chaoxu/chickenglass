@@ -12,6 +12,12 @@ function referenceSources(markdown: string): string[] {
     .map((token) => token.source);
 }
 
+function revealSources(markdown: string): string[] {
+  return parseMarkdownSourceTokens(markdown)
+    .filter((token): token is ParsedSourceRevealToken => token.kind === "reveal")
+    .map((token) => token.source);
+}
+
 describe("parseMarkdownSourceTokens", () => {
   it("tokenizes table cells with pipes inside math and code spans", () => {
     const markdown = [
@@ -76,6 +82,17 @@ describe("parseMarkdownSourceTokens", () => {
   it("does not reveal narrative references inside malformed bracket clusters", () => {
     expect(referenceSources("No [see @id] or [@id; see @other], yes [@id].")).toEqual([
       "[@id]",
+    ]);
+  });
+
+  it("tokenizes inline reveal sources through the shared model", () => {
+    const markdown = "See [**rich** link](<https://example.com/a b> 'title'), $x$, [^n], and @sec:intro.";
+
+    expect(revealSources(markdown)).toEqual([
+      "[**rich** link](<https://example.com/a b> 'title')",
+      "$x$",
+      "[^n]",
+      "@sec:intro",
     ]);
   });
 });
