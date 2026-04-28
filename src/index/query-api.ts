@@ -116,18 +116,66 @@ interface SourceLineIndex {
   readonly lowerText: string;
 }
 
-const entryContentLowerCache = new WeakMap<IndexEntry, string>();
-const sourceLineIndexCache = new WeakMap<FileIndex, readonly SourceLineIndex[]>();
-const documentQueryCache = new WeakMap<DocumentIndex, DocumentIndexQueryCache>();
-
 interface DocumentIndexQueryCache {
-  readonly revision: number | undefined;
-  readonly files: ReadonlyMap<string, FileIndex>;
   readonly allEntries: readonly IndexEntry[];
   readonly entriesByType: ReadonlyMap<string, readonly IndexEntry[]>;
   readonly entriesByLabel: ReadonlyMap<string, readonly IndexEntry[]>;
   readonly sortedTargetsByLabel: ReadonlyMap<string, readonly IndexEntry[]>;
 }
+
+interface DocumentQueryCacheRevision {
+  readonly revision: number | undefined;
+  readonly files: ReadonlyMap<string, FileIndex>;
+}
+
+interface CachedComputationEntry<Value, Revision> {
+  readonly revision: Revision;
+  readonly value: Value;
+}
+
+function areRevisionsEqual<Revision>(left: Revision, right: Revision): boolean {
+  return Object.is(left, right);
+}
+
+class CachedComputation<
+  Key extends object,
+  Value,
+  Revision = unknown,
+> {
+  private readonly values = new WeakMap<Key, CachedComputationEntry<Value, Revision>>();
+
+  get(
+    key: Key,
+    revision: Revision,
+    compute: () => Value,
+    revisionsEqual: (left: Revision, right: Revision) => boolean = areRevisionsEqual,
+  ): Value {
+    const cached = this.values.get(key);
+    if (
+      cached !== undefined
+      && revisionsEqual(cached.revision, revision)
+    ) {
+      return cached.value;
+    }
+
+    const value = compute();
+    this.values.set(key, { revision, value });
+    return value;
+  }
+}
+
+const entryContentLowerCache = new CachedComputation<IndexEntry, string>();
+
+const sourceLineIndexCache = new CachedComputation<
+  FileIndex,
+  readonly SourceLineIndex[]
+>();
+
+const documentQueryCache = new CachedComputation<
+  DocumentIndex,
+  DocumentIndexQueryCache,
+  DocumentQueryCacheRevision
+>();
 
 function normalizeResultLimit(limit: number | undefined): number | undefined {
   if (limit === undefined) return undefined;
@@ -139,17 +187,14 @@ function hasReachedLimit(results: readonly IndexEntry[], limit: number | undefin
 }
 
 function getLowerEntryContent(entry: IndexEntry): string {
-  const cached = entryContentLowerCache.get(entry);
-  if (cached !== undefined) return cached;
-  const lowerContent = entry.content.toLowerCase();
-  entryContentLowerCache.set(entry, lowerContent);
-  return lowerContent;
+  return entryContentLowerCache.get(
+    entry,
+    undefined,
+    () => entry.content.toLowerCase(),
+  );
 }
 
-function getSourceLineIndex(fileIndex: FileIndex): readonly SourceLineIndex[] {
-  const cached = sourceLineIndexCache.get(fileIndex);
-  if (cached !== undefined) return cached;
-
+function buildSourceLineIndex(fileIndex: FileIndex): readonly SourceLineIndex[] {
   const lines = fileIndex.sourceText.split("\n");
   const indexedLines: SourceLineIndex[] = [];
   let offset = 0;
@@ -165,8 +210,15 @@ function getSourceLineIndex(fileIndex: FileIndex): readonly SourceLineIndex[] {
     offset += text.length + 1;
   }
 
-  sourceLineIndexCache.set(fileIndex, indexedLines);
   return indexedLines;
+}
+
+function getSourceLineIndex(fileIndex: FileIndex): readonly SourceLineIndex[] {
+  return sourceLineIndexCache.get(
+    fileIndex,
+    undefined,
+    () => buildSourceLineIndex(fileIndex),
+  );
 }
 
 function compareIndexEntries(left: IndexEntry, right: IndexEntry): number {
@@ -187,16 +239,7 @@ function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function getOrCreateDocumentQueryCache(index: DocumentIndex): DocumentIndexQueryCache {
-  const cached = documentQueryCache.get(index);
-  if (
-    cached !== undefined
-    && cached.revision === index.revision
-    && cached.files === index.files
-  ) {
-    return cached;
-  }
-
+function buildDocumentQueryCache(index: DocumentIndex): DocumentIndexQueryCache {
   const allEntries: IndexEntry[] = [];
   const entriesByType = new Map<string, IndexEntry[]>();
   const entriesByLabel = new Map<string, IndexEntry[]>();
@@ -229,15 +272,31 @@ function getOrCreateDocumentQueryCache(index: DocumentIndex): DocumentIndexQuery
   }
 
   const nextCache: DocumentIndexQueryCache = {
-    revision: index.revision,
-    files: index.files,
     allEntries,
     entriesByType,
     entriesByLabel,
     sortedTargetsByLabel,
   };
-  documentQueryCache.set(index, nextCache);
   return nextCache;
+}
+
+function areDocumentQueryCacheRevisionsEqual(
+  left: DocumentQueryCacheRevision,
+  right: DocumentQueryCacheRevision,
+): boolean {
+  return left.revision === right.revision && left.files === right.files;
+}
+
+function getOrCreateDocumentQueryCache(index: DocumentIndex): DocumentIndexQueryCache {
+  return documentQueryCache.get(
+    index,
+    {
+      revision: index.revision,
+      files: index.files,
+    },
+    () => buildDocumentQueryCache(index),
+    areDocumentQueryCacheRevisionsEqual,
+  );
 }
 
 function queryCandidateEntries(

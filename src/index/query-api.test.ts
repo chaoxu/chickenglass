@@ -109,6 +109,36 @@ describe("queryIndex", () => {
       "chapter2.md",
     ]);
   });
+
+  it("refreshes cached document lookups when the index revision changes", () => {
+    const first = makeEntry({ type: "theorem", label: "first", file: "main.md" });
+    const second = makeEntry({ type: "theorem", label: "second", file: "main.md" });
+    const files = new Map<string, FileIndex>([
+      [
+        "main.md",
+        {
+          file: "main.md",
+          sourceText: "",
+          entries: [first],
+          references: [],
+        },
+      ],
+    ]);
+    const index = { revision: 1, files } satisfies DocumentIndex;
+
+    expect(queryIndex(index, { label: "first" })).toEqual([first]);
+
+    files.set("main.md", {
+      file: "main.md",
+      sourceText: "",
+      entries: [second],
+      references: [],
+    });
+    index.revision = 2;
+
+    expect(queryIndex(index, { label: "second" })).toEqual([second]);
+    expect(queryIndex(index, { label: "first" })).toEqual([]);
+  });
 });
 
 describe("querySourceText", () => {
