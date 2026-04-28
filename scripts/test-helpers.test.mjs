@@ -8,9 +8,12 @@ import * as testHelperSurface from "./test-helpers.mjs";
 import {
   buildViteDevArgs,
   createBrowserArtifactRecorder,
+  DEBUG_EDITOR_SELECTOR,
+  hasDebugBridgeGlobals,
   isLoopbackAppUrl,
   normalizeConnectEditorOptions,
   openEditorScenario,
+  pageHasDebugBridge,
   resolveTextAnchorInDocument,
   runBrowserDoctor,
   screenshot,
@@ -106,6 +109,37 @@ describe("test helpers browser harness", () => {
         expect.any(Function),
       );
     }
+  });
+
+  it("uses one predicate for debug bridge page discovery and readiness waits", async () => {
+    window.__app = { ready: Promise.resolve() };
+    window.__editor = { ready: Promise.resolve() };
+    window.__cfDebug = { ready: Promise.resolve() };
+    const args = {
+      editorSelector: DEBUG_EDITOR_SELECTOR,
+      requiredGlobals: ["__app", "__editor", "__cfDebug"],
+    };
+
+    expect(hasDebugBridgeGlobals(args)).toBe(false);
+
+    document.body.innerHTML = "<div data-testid='lexical-editor'></div>";
+    expect(hasDebugBridgeGlobals(args)).toBe(true);
+
+    document.body.innerHTML = "";
+    window.__cmView = {};
+    expect(hasDebugBridgeGlobals(args)).toBe(true);
+
+    const page = {
+      evaluate: vi.fn(async (fn, arg) => fn(arg)),
+    };
+    await expect(pageHasDebugBridge(page)).resolves.toBe(true);
+    expect(page.evaluate).toHaveBeenCalledWith(
+      hasDebugBridgeGlobals,
+      expect.objectContaining({
+        editorSelector: DEBUG_EDITOR_SELECTOR,
+        requiredGlobals: ["__app", "__editor", "__cfDebug"],
+      }),
+    );
   });
 
   it.each([

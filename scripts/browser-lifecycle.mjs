@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
-import { findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
+import { connectToChrome, findAppPage, inspectBrowserPages } from "./chrome-common.mjs";
 import { DEFAULT_RUNTIME_BUDGET_PROFILE } from "./runtime-budget-profiles.mjs";
 import {
   DEBUG_BRIDGE_READY_PROMISES,
@@ -28,16 +28,24 @@ function formatInspectablePages(pages) {
     .join(" | ");
 }
 
-async function pageHasDebugBridge(page) {
+function debugBridgePredicateArgs() {
+  return {
+    editorSelector: DEBUG_EDITOR_SELECTOR,
+    requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
+  };
+}
+
+export function hasDebugBridgeGlobals({ editorSelector, requiredGlobals }) {
+  return Boolean(
+    requiredGlobals.every((name) => Boolean(window[name]))
+      && (window.__cmView || document.querySelector(editorSelector)),
+  );
+}
+
+export async function pageHasDebugBridge(page) {
   return page.evaluate(
-    ({ editorSelector, requiredGlobals }) => Boolean(
-      requiredGlobals.every((name) => Boolean(window[name]))
-        && (window.__cmView || document.querySelector(editorSelector)),
-    ),
-    {
-      editorSelector: DEBUG_EDITOR_SELECTOR,
-      requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
-    },
+    hasDebugBridgeGlobals,
+    debugBridgePredicateArgs(),
   ).catch(() => false);
 }
 
@@ -240,7 +248,12 @@ export async function connectEditor(portOrOptions = DEFAULT_PORT, options = {}) 
     return page;
   }
 
-  const browser = await chromium.connectOverCDP(`http://localhost:${resolved.port}`);
+  const browser = await connectToChrome(resolved.port);
+  if (!browser) {
+    throw new Error(
+      `Unable to connect to Chrome over CDP on port ${resolved.port}. Start Chrome with pnpm chrome or use browser: "managed".`,
+    );
+  }
   let page = await findAppPage(browser, {
     targetUrl: resolved.url,
     predicate: resolved.predicate,
@@ -408,14 +421,8 @@ export async function waitForDebugBridge(
 ) {
   try {
     await page.waitForFunction(
-      ({ editorSelector, requiredGlobals }) => Boolean(
-        requiredGlobals.every((name) => Boolean(window[name]))
-          && (window.__cmView || document.querySelector(editorSelector)),
-      ),
-      {
-        editorSelector: DEBUG_EDITOR_SELECTOR,
-        requiredGlobals: DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES,
-      },
+      hasDebugBridgeGlobals,
+      debugBridgePredicateArgs(),
       { timeout, polling: 100 },
     );
     await waitForDebugBridgeReady(page, timeout);
