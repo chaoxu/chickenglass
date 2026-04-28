@@ -507,6 +507,10 @@ These standard markdown features are **not canonical**, even if Pandoc's markdow
 | Indented code blocks | Conflicts with fenced div content indentation | Use fenced code blocks |
 | `>` blockquotes | Limited (no math, no nesting with fenced divs) | Use `::: {.blockquote}` fenced divs |
 | Pandoc definition lists (`Term` followed by `: Definition`) | Not part of the Coflat semantic model | Use `::: {.definition}` fenced divs for mathematical definitions, or ordinary lists/tables for glossaries |
+| Raw inline HTML (`<br>`, `<sub>`, `<sup>`, etc.) | Coflat's reader does not enable Pandoc's `+raw_html`; rendering pure-Pandoc markdown only | Use `\\` for line breaks in math; use raw LaTeX (`\textsubscript{...}`) for sub/superscript outside math |
+| HTML comments (`<!-- ... -->`) | Not part of the canonical Coflat surface; not hidden in render | Strip before authoring, or use a `::: {.remark}` block |
+| Reference-style links (`[text][id]` with `[id]: url` definitions) | Authors should use inline `[text](url)` form to keep one source location per link | Inline links `[text](url)` |
+| Bare URL autolink (`https://example.com` without brackets) | Pandoc's `+autolink_bare_uris` is not enabled | Wrap in `[https://example.com](https://example.com)` or `<https://example.com>` |
 
 The read/export pipeline still parses standard `>` blockquotes for compatibility with imported markdown, but the editor authoring format does not use them.
 

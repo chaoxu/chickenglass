@@ -297,6 +297,8 @@ This codebase values **architectural cleanliness**. When making changes:
 
 Pandoc-flavored markdown: no indented code blocks, `$`/`$$` and `\(\)`/`\[\]` for math, fenced divs (`::: {.class #id} Title`), `[@id]` for cross-refs/citations, equation labels `$$ ... $$ {#eq:foo}`. See `FORMAT.md` for the canonical document-format spec. All markdown files in this repo must follow `FORMAT.md`.
 
+Coflat does NOT implement every CommonMark feature. Raw inline HTML, HTML comments, reference-style links, bare-URL autolink, `>` blockquotes, indented code blocks, and Pandoc definition lists are intentionally out of scope. Before filing a "missing markdown feature" bug, check **`FORMAT.md` § Removed Features**.
+
 ## Gitea / issue tracking
 
 This repo is hosted on a local Gitea instance at `http://localhost:3001`. Use the repo issue wrapper for issues; it calls **`tea`** with the command order required by the local install. Use raw `tea` only for pulls, PRs, and login inspection. Do not use `gh` or raw curl for forge work.
