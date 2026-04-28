@@ -17,6 +17,7 @@
 - **Shared app modes**: Browser dev mode loads demo content. Tauri app starts with demo content and lets the user open real files or folders.
 - **Document configuration has neutral owners**: Frontmatter/project config parsing must stay consumable by both editor engines. CM6 may cache derived values in StateFields; shared semantics should not require a CM6 view.
 - **CM6 widgets stay in the CM6 layer**: `RenderWidget` and decoration-specific behavior are implementation details of the CM6 editor surface.
+- **Block-boundary ownership depends on runtime surface**: `src/lib/markdown/block-scanner.ts` owns CM6-free source-text block boundaries for Lexical/source sync. CM6 fence protection should keep using editor-state geometry owners (`src/fenced-block/model.ts` and `src/state/code-block-structure.ts`) because those caches preserve semantics, code-block structure, and transaction mapping. Do not create a shared helper that makes Lexical depend on CM6 `EditorState` or makes CM6 fence protection rescan source text.
 
 ## Design philosophy
 
