@@ -173,23 +173,24 @@ export function collectCitationBacklinksFromAnalysis(
   });
 }
 
-export function collectCitationBacklinkIndexFromReferences(
-  references: readonly CitationReferenceCluster[],
-  store: CitationIdLookup,
-  options?: CitationCollectionOptions,
+function aggregateBacklinksFromMatches<T>(
+  matches: readonly T[],
+  extractIds: (match: T) => readonly string[],
+  extractPosition: (match: T) => { readonly from: number; readonly to: number },
 ): CitationBacklinkIndex {
   const backlinks = new Map<string, CitationBacklink[]>();
   let occurrence = 0;
 
-  for (const ref of references) {
-    const ids = ref.ids.filter((id) => isCitationId(id, store, options));
+  for (const match of matches) {
+    const ids = extractIds(match);
     if (ids.length === 0) continue;
 
     occurrence += 1;
+    const position = extractPosition(match);
     const backlink: CitationBacklink = {
       occurrence,
-      from: ref.from ?? 0,
-      to: ref.to ?? 0,
+      from: position.from,
+      to: position.to,
     };
 
     for (const id of ids) {
@@ -203,6 +204,18 @@ export function collectCitationBacklinkIndexFromReferences(
   }
 
   return { backlinks };
+}
+
+export function collectCitationBacklinkIndexFromReferences(
+  references: readonly CitationReferenceCluster[],
+  store: CitationIdLookup,
+  options?: CitationCollectionOptions,
+): CitationBacklinkIndex {
+  return aggregateBacklinksFromMatches(
+    references,
+    (ref) => ref.ids.filter((id) => isCitationId(id, store, options)),
+    (ref) => ({ from: ref.from ?? 0, to: ref.to ?? 0 }),
+  );
 }
 
 function collectTokenBuckets(
@@ -263,30 +276,11 @@ export function collectCitationBacklinksFromTokens(
   store: CitationIdLookup,
   options?: CitationCollectionOptions,
 ): ReadonlyMap<string, readonly CitationBacklink[]> {
-  const backlinks = new Map<string, CitationBacklink[]>();
-  let occurrence = 0;
-
-  for (const bucket of collectTokenBuckets(references, store, options)) {
-    occurrence += 1;
-    const ids = bucket.map((reference) => reference.id);
-
-    const backlink: CitationBacklink = {
-      occurrence,
-      from: bucket[0].clusterFrom,
-      to: bucket[0].clusterTo,
-    };
-
-    for (const id of ids) {
-      const existing = backlinks.get(id);
-      if (existing) {
-        existing.push(backlink);
-      } else {
-        backlinks.set(id, [backlink]);
-      }
-    }
-  }
-
-  return backlinks;
+  return aggregateBacklinksFromMatches(
+    collectTokenBuckets(references, store, options),
+    (bucket) => bucket.map((reference) => reference.id),
+    (bucket) => ({ from: bucket[0].clusterFrom, to: bucket[0].clusterTo }),
+  ).backlinks;
 }
 
 export function getAnalysisCitationRegistrationKey(
