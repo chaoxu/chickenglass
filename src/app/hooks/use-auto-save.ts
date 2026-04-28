@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { isTauri } from "../../lib/tauri";
 import type { ActiveDocumentSignal } from "../active-document-signal";
 import { logCatchError } from "../lib/log-catch-error";
+import { useLatest } from "./use-latest";
 
 const TAURI_EVENT_SAVE_DELAY_MS = 250;
 
@@ -37,7 +38,7 @@ export function useAutoSave(
   options: UseAutoSaveOptions = {},
 ): UseAutoSaveReturn {
   const currentPath = options.currentPath ?? null;
-  const stateRef = useRef({
+  const stateRef = useLatest({
     currentPath,
     delayMs,
     isDirty,
@@ -48,14 +49,6 @@ export function useAutoSave(
   const savePromiseRef = useRef<Promise<void> | null>(null);
   const saveAgainAfterCurrentRef = useRef<AutoSaveFlushOptions | null>(null);
   const pendingEventSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  stateRef.current = {
-    currentPath,
-    delayMs,
-    isDirty,
-    onSave,
-    suspended,
-  };
 
   const clearDebounceTimer = useCallback(() => {
     if (debounceTimerRef.current !== null) {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type CslJsonItem } from "./bibtex-parser";
 import { findCitations } from "./citation-finder";
-import { findCitations as legacyFindCitations } from "./citation-render";
 import { makeBibStore } from "../test-utils";
 
 const karger: CslJsonItem = {
@@ -24,10 +23,6 @@ const stein: CslJsonItem = {
 const store = makeBibStore([karger, stein]);
 
 describe("findCitations", () => {
-  it("preserves the citation-render export path", () => {
-    expect(legacyFindCitations).toBe(findCitations);
-  });
-
   it("finds a single parenthetical citation", () => {
     const matches = findCitations("See [@karger2000] for details.", store);
     expect(matches).toHaveLength(1);

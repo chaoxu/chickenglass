@@ -78,13 +78,13 @@ function closingFenceColonCount(
  * Check if a line is a closing fence (3+ colons followed by only whitespace).
  * Returns the colon count or -1 if not a closing fence.
  */
-export function isClosingFence(text: string, pos: number): number {
+export function closingFenceColonCountAt(text: string, pos: number): number {
   return closingFenceColonCount(text, readFencePrefix(text, pos));
 }
 
 /** Check a raw line of source for a standalone closing fence. */
-export function isClosingFenceLine(text: string): number {
-  return isClosingFence(text, skipSpaceTab(text, 0));
+export function closingFenceColonCountLine(text: string): number {
+  return closingFenceColonCountAt(text, skipSpaceTab(text, 0));
 }
 
 /**

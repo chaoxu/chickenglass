@@ -3,6 +3,7 @@ import type { FileEntry } from "../file-manager";
 import { FileTreeNode } from "./file-tree-node";
 import { FileTreeProvider } from "../contexts/file-tree-context";
 import { useFileTreeController, type PersistentTreeState } from "../hooks/use-file-tree-controller";
+import { useLatest } from "../hooks/use-latest";
 import type { HeadlessTreeRowProps } from "../hooks/use-tree-node-row";
 
 interface FileTreeProps {
@@ -34,8 +35,8 @@ export function FileTree({
 }: FileTreeProps) {
   const controller = useFileTreeController({ root, onSelect, persistRef, onLoadChildren });
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const saveScrollRef = useRef(controller.saveScrollPosition);
-  const actionsRef = useRef({
+  const saveScrollRef = useLatest(controller.saveScrollPosition);
+  const actionsRef = useLatest({
     onSelect,
     onDoubleClick,
     onRename,
@@ -43,15 +44,6 @@ export function FileTree({
     onCreateFile,
     onCreateDir,
   });
-  actionsRef.current = {
-    onSelect,
-    onDoubleClick,
-    onRename,
-    onDelete,
-    onCreateFile,
-    onCreateDir,
-  };
-  saveScrollRef.current = controller.saveScrollPosition;
 
   // Restore scroll position on mount, save on unmount.
   // The file tree lives inside a Radix ScrollArea whose Viewport element

@@ -1,3 +1,4 @@
+import type { EditorMode } from "../editor-display-mode";
 import type {
   DebugDocumentState,
   DebugRenderState,
@@ -25,7 +26,7 @@ export type DebugSessionKind = "human" | "webdriver";
 
 export interface DebugSessionContext {
   readonly document: DebugDocumentState | null;
-  readonly mode: string | null;
+  readonly mode: EditorMode | null;
   readonly selection: SelectionInfo | null;
   readonly render: DebugRenderState | null;
   readonly structure: StructureEditTarget | null;

@@ -7,6 +7,7 @@ import {
   type HotExitBackupStore,
 } from "../hot-exit-backups";
 import type { SessionDocument } from "../editor-session-model";
+import { useLatest } from "./use-latest";
 
 const DEFAULT_HOT_EXIT_BACKUP_DELAY_MS = 7_500;
 
@@ -39,7 +40,7 @@ export function useHotExitBackups({
   const defaultStore = useMemo(() => createHotExitBackupStore(), []);
   const activeStore = store === undefined ? defaultStore : store;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stateRef = useRef({
+  const stateRef = useLatest({
     activeStore,
     currentDocument,
     delayMs,
@@ -50,16 +51,6 @@ export function useHotExitBackups({
   });
   const lastWrittenContentHashRef = useRef(new Map<string, string>());
   const operationChainRef = useRef(new Map<string, Promise<void>>());
-
-  stateRef.current = {
-    activeStore,
-    currentDocument,
-    delayMs,
-    getCurrentBaselineHash,
-    getCurrentDocText,
-    hasDirtyDocument,
-    projectRoot,
-  };
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {

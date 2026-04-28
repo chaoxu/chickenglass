@@ -180,7 +180,11 @@ export function StatusBar({
         <div className="flex shrink-0 items-center gap-1 pr-1">
           {saveStatus !== "idle" && (
             <span
+              aria-label={saveStatusMessage ?? SAVE_STATUS_LABELS[saveStatus]}
+              aria-live="polite"
+              data-save-status={saveStatus}
               data-testid="save-status"
+              role="status"
               className={cn(
                 "px-1 tabular-nums",
                 (saveStatus === "conflict" || saveStatus === "failed")

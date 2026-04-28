@@ -27,7 +27,7 @@ import {
   searchPanelOpen,
   setSearchQuery,
 } from "@codemirror/search";
-import { type Extension, StateEffect, StateField } from "@codemirror/state";
+import { type Extension, StateEffect, StateField, type Text } from "@codemirror/state";
 import {
   type EditorView,
   keymap,
@@ -328,7 +328,7 @@ interface SearchPanelContext {
 /** Reference-identity cache to avoid rescanning on every ViewUpdate. */
 export interface SearchMatchCacheSnapshot {
   /** CM6 Text object from state.doc — used for reference equality. */
-  readonly doc: object;
+  readonly doc: Text;
   readonly selFrom: number;
   readonly selTo: number;
   readonly query: SearchQuery;

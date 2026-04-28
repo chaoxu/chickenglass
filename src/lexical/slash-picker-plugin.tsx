@@ -75,7 +75,11 @@ function SlashPickerMenu({
 }) {
   return (
     <EditorChromePanel className="cf-slash-picker-tooltip">
-      <ul className="cf-slash-picker-list" role="listbox">
+      <ul
+        aria-activedescendant={selectedIndex === null ? undefined : `slash-picker-item-${selectedIndex}`}
+        className="cf-slash-picker-list"
+        role="listbox"
+      >
         {options.map((option, index) => {
           const selected = selectedIndex === index;
           return (

@@ -8,7 +8,7 @@ import type {
 } from "@lezer/markdown";
 import type { Input } from "@lezer/common";
 import { OPEN_BRACE, CLOSE_BRACE, skipSpaceTab } from "./char-utils";
-import { isClosingFenceLine } from "./fenced-div";
+import { closingFenceColonCountLine } from "./fenced-div";
 import { parseBracedId } from "./label-utils";
 
 interface BlockContextWithInput extends BlockContext {
@@ -115,7 +115,7 @@ function validateClosingDelimiterLookahead(
   let firstLine = true;
 
   for (;;) {
-    if (!firstLine && isClosingFenceLine(lineText) >= 3) {
+    if (!firstLine && closingFenceColonCountLine(lineText) >= 3) {
       return "unclosed";
     }
 
@@ -191,7 +191,7 @@ function scanMultilineClose(
   let currentLineEnd = cx.lineStart + line.text.length;
   while (true) {
     const nextLine = cx.peekLine() as string | null;
-    if (nextLine !== null && isClosingFenceLine(nextLine) >= 3) {
+    if (nextLine !== null && closingFenceColonCountLine(nextLine) >= 3) {
       return {
         found: false,
         endPos: currentLineEnd,

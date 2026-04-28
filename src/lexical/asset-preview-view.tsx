@@ -1,9 +1,10 @@
+import type { HTMLAttributes } from "react";
 import type { AssetPreviewState } from "./media-preview";
 
 type AssetPreviewLayout = "block" | "inline";
 
 interface AssetPreviewViewProps {
-  readonly activationProps?: Record<string, unknown>;
+  readonly activationProps?: HTMLAttributes<HTMLElement>;
   readonly alt: string;
   readonly imageClassName: string;
   readonly layout: AssetPreviewLayout;

@@ -40,6 +40,11 @@ export interface EditorSessionService {
   handleDocumentSnapshot: (doc: string) => void;
   markCurrentDocumentDirty: () => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
+  prepareCurrentDocumentForTransition: (
+    reason: UnsavedChangesRequest["reason"],
+    target?: { path?: string; name: string },
+    options?: { promptOnSwitchFile?: boolean },
+  ) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
   restoreDocumentFromRecovery: (
@@ -155,13 +160,14 @@ export function createEditorSessionService({
   const prepareCurrentDocumentForTransition = async (
     reason: UnsavedChangesRequest["reason"],
     target?: { path?: string; name: string },
+    options?: { promptOnSwitchFile?: boolean },
   ): Promise<boolean> => {
     const currentDocument = runtime.getCurrentDocument();
     if (!currentDocument || !runtime.isPathDirty(currentDocument.path)) {
       return true;
     }
 
-    if (reason === "switch-file") {
+    if (reason === "switch-file" && options?.promptOnSwitchFile !== true) {
       return true;
     }
 
@@ -712,6 +718,7 @@ export function createEditorSessionService({
     handleDocumentSnapshot,
     markCurrentDocumentDirty,
     handleProgrammaticDocChange,
+    prepareCurrentDocumentForTransition,
     openFile,
     openFileWithContent,
     restoreDocumentFromRecovery,

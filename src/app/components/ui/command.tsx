@@ -2,7 +2,7 @@ import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { Dialog, DialogContent, DialogTitle } from "./dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./dialog";
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -40,9 +40,11 @@ function CommandDialog({
           "overflow-hidden p-0 shadow-lg",
           contentClassName,
         )}
-        aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search available commands and choose one to run.
+        </DialogDescription>
         <Command className={commandClassName}>{children}</Command>
       </DialogContent>
     </Dialog>

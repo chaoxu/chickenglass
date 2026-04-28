@@ -11,7 +11,7 @@ import { Search } from "lucide-react";
 import type { IndexEntry } from "../../index/query-api";
 import { basename } from "../lib/utils";
 import type { AppSearchMode } from "../search";
-import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -153,9 +153,11 @@ export function SearchPanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="top-[10vh] flex max-h-[70vh] w-full max-w-xl -translate-y-0 flex-col overflow-hidden p-0"
-        aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">Search</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search the current project and choose a result to jump to it.
+        </DialogDescription>
         {/* Header: search input + type filter */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--cf-border)] shrink-0">
           <Search

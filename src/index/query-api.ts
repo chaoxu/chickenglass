@@ -128,8 +128,8 @@ interface DocumentQueryCacheRevision {
   readonly files: ReadonlyMap<string, FileIndex>;
 }
 
-interface CachedComputationEntry<Value, Revision> {
-  readonly revision: Revision;
+interface CachedComputationEntry<Value> {
+  readonly revision: unknown;
   readonly value: Value;
 }
 
@@ -137,14 +137,10 @@ function areRevisionsEqual<Revision>(left: Revision, right: Revision): boolean {
   return Object.is(left, right);
 }
 
-class CachedComputation<
-  Key extends object,
-  Value,
-  Revision = unknown,
-> {
-  private readonly values = new WeakMap<Key, CachedComputationEntry<Value, Revision>>();
+class CachedComputation<Key extends object, Value> {
+  private readonly values = new WeakMap<Key, CachedComputationEntry<Value>>();
 
-  get(
+  get<Revision>(
     key: Key,
     revision: Revision,
     compute: () => Value,
@@ -153,7 +149,7 @@ class CachedComputation<
     const cached = this.values.get(key);
     if (
       cached !== undefined
-      && revisionsEqual(cached.revision, revision)
+      && revisionsEqual(cached.revision as Revision, revision)
     ) {
       return cached.value;
     }
@@ -173,8 +169,7 @@ const sourceLineIndexCache = new CachedComputation<
 
 const documentQueryCache = new CachedComputation<
   DocumentIndex,
-  DocumentIndexQueryCache,
-  DocumentQueryCacheRevision
+  DocumentIndexQueryCache
 >();
 
 function normalizeResultLimit(limit: number | undefined): number | undefined {

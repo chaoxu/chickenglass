@@ -294,7 +294,7 @@ describe("inline editor citation state wiring (#406)", () => {
   it("does not crash with citation content and bib data provided", () => {
     // Verifies the full stack (parser + semantics + bibData + referenceRenderPlugin)
     // wires together without errors, matching the existing referenceRenderPlugin
-    // test pattern in citation-render.test.ts.
+    // test pattern in citation-finder.test.ts.
     const parent = document.createElement("div");
     document.body.appendChild(parent);
 

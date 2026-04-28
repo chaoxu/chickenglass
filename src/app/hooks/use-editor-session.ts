@@ -48,6 +48,11 @@ export interface UseEditorSessionReturn {
   handleDocumentSnapshot: (doc: string) => void;
   markCurrentDocumentDirty: () => void;
   handleProgrammaticDocChange: (path: string, doc: string) => void;
+  prepareCurrentDocumentForTransition: (
+    reason: UnsavedChangesRequest["reason"],
+    target?: { path?: string; name: string },
+    options?: { promptOnSwitchFile?: boolean },
+  ) => Promise<boolean>;
   openFile: (path: string) => Promise<void>;
   openFileWithContent: (name: string, content: string) => Promise<void>;
   restoreDocumentFromRecovery: (
@@ -144,6 +149,8 @@ export function useEditorSession({
     handleDocumentSnapshot: sessionService.handleDocumentSnapshot,
     markCurrentDocumentDirty: sessionService.markCurrentDocumentDirty,
     handleProgrammaticDocChange: sessionService.handleProgrammaticDocChange,
+    prepareCurrentDocumentForTransition:
+      sessionService.prepareCurrentDocumentForTransition,
     openFile: sessionService.openFile,
     openFileWithContent: sessionService.openFileWithContent,
     restoreDocumentFromRecovery: sessionService.restoreDocumentFromRecovery,

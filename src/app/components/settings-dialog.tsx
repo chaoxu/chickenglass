@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogCloseButton,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
@@ -54,9 +55,11 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="flex max-h-[80vh] w-[560px] flex-col overflow-hidden p-0"
-        aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">Settings</DialogTitle>
+        <DialogDescription className="sr-only">
+          Change editor, appearance, plugin, and export preferences.
+        </DialogDescription>
 
         <DialogHeader>
           <h2 className="text-base font-semibold text-[var(--cf-fg)]">Settings</h2>

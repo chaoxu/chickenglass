@@ -48,12 +48,12 @@ export function resolveBlockNumbering(
     return { numbered: false };
   }
 
-  if (overrideConfig?.counter === null) {
-    return { numbered: true };
-  }
-
   return {
-    counterGroup: config?.numbering === "global" ? "__global__" : blockType,
+    counterGroup: config?.numbering === "global"
+      ? "__global__"
+      : (overrideConfig?.counter === null
+        ? blockType
+        : (overrideConfig?.counter ?? manifestEntry?.counterGroup ?? blockType)),
     numbered: true,
   };
 }

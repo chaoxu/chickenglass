@@ -17,6 +17,10 @@ describe("block-metadata", () => {
 
   it("respects numbering defaults and global numbering", () => {
     expect(resolveBlockNumbering("proof")).toEqual({ numbered: false });
+    expect(resolveBlockNumbering("lemma")).toEqual({
+      counterGroup: "theorem",
+      numbered: true,
+    });
     expect(resolveBlockNumbering("custom-note")).toEqual({
       counterGroup: "custom-note",
       numbered: true,
@@ -25,6 +29,27 @@ describe("block-metadata", () => {
       blocks: {
         problem: {
           counter: "custom-problem",
+        },
+      },
+      numbering: "global",
+    })).toEqual({
+      counterGroup: "__global__",
+      numbered: true,
+    });
+    expect(resolveBlockNumbering("problem", {
+      blocks: {
+        problem: {
+          counter: null,
+        },
+      },
+    })).toEqual({
+      counterGroup: "problem",
+      numbered: true,
+    });
+    expect(resolveBlockNumbering("problem", {
+      blocks: {
+        problem: {
+          counter: null,
         },
       },
       numbering: "global",

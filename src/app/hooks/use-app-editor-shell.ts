@@ -199,6 +199,7 @@ export function useAppEditorShell({
     editorDoc,
     activeDocumentSignal,
     getCurrentDocText: getSessionCurrentDocText,
+    prepareCurrentDocumentForTransition,
     openFile: sessionOpenFile,
     isPathOpen,
     isPathDirty,
@@ -279,17 +280,50 @@ export function useAppEditorShell({
     await flushPendingHotExitBackup();
   }, [currentPath, flushPendingHotExitBackup, isPathDirty]);
 
+  const prepareCurrentDocumentForNavigation = useCallback(async (
+    target: { path?: string; name: string },
+  ): Promise<boolean> => {
+    if (
+      !currentPath ||
+      !isPathDirty(currentPath)
+    ) {
+      return true;
+    }
+
+    if (settings.autoSaveInterval > 0 && flushPendingAutoSave) {
+      await flushPendingAutoSave("navigation", { force: true });
+      return true;
+    }
+
+    return prepareCurrentDocumentForTransition(
+      "switch-file",
+      target,
+      { promptOnSwitchFile: true },
+    );
+  }, [
+    currentPath,
+    flushPendingAutoSave,
+    isPathDirty,
+    prepareCurrentDocumentForTransition,
+    settings.autoSaveInterval,
+  ]);
+
   const openFile = useCallback(async (path: string) => {
     if (path !== currentPath) {
       runEditorTransaction("search-navigation", () => undefined);
       await flushCurrentHotExitBackup();
-      await flushDirtyCurrentDocument("navigation");
+      if (!(await prepareCurrentDocumentForNavigation({
+        path,
+        name: path.split("/").pop() ?? path,
+      }))) {
+        return;
+      }
     }
     await sessionOpenFile(path);
   }, [
     currentPath,
     flushCurrentHotExitBackup,
-    flushDirtyCurrentDocument,
+    prepareCurrentDocumentForNavigation,
     runEditorTransaction,
     sessionOpenFile,
   ]);
@@ -297,11 +331,13 @@ export function useAppEditorShell({
   const openFileWithContent = useCallback(async (name: string, content: string) => {
     runEditorTransaction("search-navigation", () => undefined);
     await flushCurrentHotExitBackup();
-    await flushDirtyCurrentDocument("navigation");
+    if (!(await prepareCurrentDocumentForNavigation({ name }))) {
+      return;
+    }
     await sessionOpenFileWithContent(name, content);
   }, [
     flushCurrentHotExitBackup,
-    flushDirtyCurrentDocument,
+    prepareCurrentDocumentForNavigation,
     runEditorTransaction,
     sessionOpenFileWithContent,
   ]);

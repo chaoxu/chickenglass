@@ -197,7 +197,11 @@ function useBreadcrumbVisibility(hasAncestry: boolean) {
     return unsub;
   }, [clearHideTimer, hasAncestry, scheduleHide, state.hovered]);
 
-  useEffect(() => clearHideTimer, [clearHideTimer]);
+  useEffect(() => {
+    return () => {
+      clearHideTimer();
+    };
+  }, [clearHideTimer]);
 
   useEffect(() => {
     if (!hasAncestry) {

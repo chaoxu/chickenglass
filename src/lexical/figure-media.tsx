@@ -1,3 +1,4 @@
+import type { HTMLAttributes } from "react";
 import { AssetPreviewView } from "./asset-preview-view";
 import { useAssetPreview } from "./media-preview";
 
@@ -6,7 +7,7 @@ export function FigureMedia({
   alt,
   src,
 }: {
-  readonly activationProps?: Record<string, unknown>;
+  readonly activationProps?: HTMLAttributes<HTMLElement>;
   readonly alt: string;
   readonly src: string;
 }) {

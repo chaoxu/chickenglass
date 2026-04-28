@@ -474,6 +474,9 @@ fn atomic_swap_paths(first: &Path, second: &Path) -> std::io::Result<()> {
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn atomic_swap_c_paths(first: &std::ffi::CStr, second: &std::ffi::CStr) -> libc::c_int {
+    // SAFETY: `first` and `second` are validated `CString` values from `atomic_swap_paths`,
+    // so their pointers are non-null, NUL-terminated, and live for this call.
+    // `renameat2` does not retain the pointers after returning.
     unsafe {
         libc::renameat2(
             libc::AT_FDCWD,
@@ -487,6 +490,9 @@ fn atomic_swap_c_paths(first: &std::ffi::CStr, second: &std::ffi::CStr) -> libc:
 
 #[cfg(target_vendor = "apple")]
 fn atomic_swap_c_paths(first: &std::ffi::CStr, second: &std::ffi::CStr) -> libc::c_int {
+    // SAFETY: `first` and `second` are validated `CString` values from `atomic_swap_paths`,
+    // so their pointers are non-null, NUL-terminated, and live for this call.
+    // `renamex_np` does not retain the pointers after returning.
     unsafe { libc::renamex_np(first.as_ptr(), second.as_ptr(), libc::RENAME_SWAP) }
 }
 

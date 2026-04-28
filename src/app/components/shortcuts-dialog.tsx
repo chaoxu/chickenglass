@@ -11,6 +11,7 @@ import {
   DialogBody,
   DialogCloseButton,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -109,10 +110,12 @@ export function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="flex max-h-[80vh] w-[520px] max-w-[95vw] flex-col overflow-hidden p-0"
-        aria-describedby={undefined}
       >
         <DialogHeader>
           <DialogTitle>Keyboard Shortcuts</DialogTitle>
+          <DialogDescription className="sr-only">
+            Search and review available keyboard shortcuts.
+          </DialogDescription>
           <DialogCloseButton aria-label="Close keyboard shortcuts" />
         </DialogHeader>
 

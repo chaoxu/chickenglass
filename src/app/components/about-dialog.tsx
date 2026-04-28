@@ -91,7 +91,6 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="min-w-[320px] w-full max-w-[480px]"
-        aria-describedby={undefined}
       >
         <DialogHeader className="items-start">
           <div className="flex min-w-0 items-center gap-4">

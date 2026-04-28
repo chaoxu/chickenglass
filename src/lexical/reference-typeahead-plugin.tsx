@@ -73,7 +73,11 @@ function ReferenceCompletionMenu({
 }) {
   return (
     <EditorChromePanel className="cf-reference-completion-tooltip">
-      <ul className="cf-reference-completion-list" role="listbox">
+      <ul
+        aria-activedescendant={selectedIndex === null ? undefined : `typeahead-item-${selectedIndex}`}
+        className="cf-reference-completion-list"
+        role="listbox"
+      >
         {options.map((option, index) => {
           const selected = selectedIndex === index;
           return (

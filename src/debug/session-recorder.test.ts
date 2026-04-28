@@ -40,7 +40,7 @@ describe("session-recorder capture policy", () => {
         name: "index.md",
         dirty: false,
       },
-      mode: "rich",
+      mode: "cm6-rich",
       selection: {
         anchor: 12,
         head: 12,
@@ -61,7 +61,7 @@ describe("session-recorder capture policy", () => {
         name: "index.md",
         dirty: false,
       },
-      mode: "rich",
+      mode: "cm6-rich",
       selection: null,
       render: null,
       structure: structureState,
@@ -72,7 +72,7 @@ describe("session-recorder capture policy", () => {
   it("keeps render context for pointer events", () => {
     const compacted = compactDebugContextForEvent("pointer", {
       document: null,
-      mode: "rich",
+      mode: "cm6-rich",
       selection: null,
       render: renderState,
       structure: structureState,
@@ -86,7 +86,7 @@ describe("session-recorder capture policy", () => {
   it("keeps full capture context for snapshot events", () => {
     const compacted = compactDebugContextForEvent("snapshot", {
       document: null,
-      mode: "rich",
+      mode: "cm6-rich",
       selection: {
         anchor: 4,
         head: 7,

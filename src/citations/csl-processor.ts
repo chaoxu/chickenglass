@@ -473,7 +473,7 @@ export class CslProcessor {
 /**
  * Register citation matches with a CSL processor in document order.
  *
- * Both the CM6 editor (citation-render.ts) and preview renderers need this
+ * Both the CM6 editor and preview renderers need this
  * step so numeric styles assign numbers
  * in document order. Extracted here to avoid duplication.
  */

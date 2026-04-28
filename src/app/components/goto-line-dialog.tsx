@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { parseTarget } from "../goto-line";
-import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 
 interface GotoLineDialogProps {
@@ -46,10 +46,12 @@ export function GotoLineDialog({ open, onOpenChange, onGoto, currentLine }: Goto
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="top-24 w-72 -translate-y-0 p-3"
-        aria-describedby={undefined}
         overlayClassName="bg-transparent"
       >
         <DialogTitle className="sr-only">Go to line</DialogTitle>
+        <DialogDescription className="sr-only">
+          Enter a line number or line and column to move the editor cursor.
+        </DialogDescription>
         <Input
           type="text"
           className="bg-[var(--cf-bg-secondary)] font-mono"

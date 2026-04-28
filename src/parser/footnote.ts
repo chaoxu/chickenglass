@@ -8,7 +8,7 @@ import type {
   InlineContext,
 } from "@lezer/markdown";
 import { OPEN_BRACKET, CARET, CLOSE_BRACKET, COLON, SPACE, NEWLINE, CR, TAB } from "./char-utils";
-import { isClosingFenceLine } from "./fenced-div";
+import { closingFenceColonCountLine } from "./fenced-div";
 
 /**
  * Inline parser for [^id] footnote references.
@@ -66,7 +66,7 @@ function scanFootnoteDefPrefix(text: string, start: number): number {
 }
 
 function isFootnoteContinuationLine(text: string): boolean {
-  if (isClosingFenceLine(text) >= 3) return false;
+  if (closingFenceColonCountLine(text) >= 3) return false;
 
   let indent = 0;
   let pos = 0;

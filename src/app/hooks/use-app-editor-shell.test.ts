@@ -93,7 +93,7 @@ function createHarness(
     themeName: "default",
     writingTheme: "academic",
     customCss: "",
-    skipDirtyConfirm: true,
+    skipDirtyConfirm: false,
     ...options.settings,
   };
 
@@ -574,6 +574,104 @@ describe("useAppEditorShell", () => {
     expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
     expect(ref.result.currentPath).toBe("a.md");
     await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
+  });
+
+  it("discards dirty edits before switching files when autosave is off", async () => {
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("discard");
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+        "b.md": "# B\n",
+      },
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    await act(async () => {
+      await ref.result.openFile("b.md");
+    });
+
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    expect(ref.result.currentPath).toBe("b.md");
+    await expect(fs.readFile("a.md")).resolves.toBe("# A\n");
+  });
+
+  it("stays on the dirty file when save-before-switch hits a write conflict", async () => {
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("save");
+    const { Harness, fs, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+        "b.md": "# B\n",
+      },
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    await fs.writeFile("a.md", "# A external\n");
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    await act(async () => {
+      await ref.result.openFile("b.md");
+    });
+
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    expect(ref.result.currentPath).toBe("a.md");
+    expect(ref.result.isPathDirty("a.md")).toBe(true);
+    await expect(fs.readFile("a.md")).resolves.toBe("# A external\n");
+  });
+
+  it("prompts before opening dropped content when autosave is off", async () => {
+    const requestUnsavedChangesDecision = vi
+      .fn<() => Promise<"save" | "discard" | "cancel">>()
+      .mockResolvedValue("cancel");
+    const { Harness, ref } = createHarness({
+      files: {
+        "a.md": "# A\n",
+      },
+      requestUnsavedChangesDecision,
+      settings: { autoSaveInterval: 0 },
+    });
+
+    act(() => root.render(createElement(Harness)));
+
+    await act(async () => {
+      await ref.result.openFile("a.md");
+    });
+
+    act(() => {
+      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A draft\n"));
+    });
+
+    await act(async () => {
+      await ref.result.openFileWithContent("scratch.md", "# Scratch\n");
+    });
+
+    expect(requestUnsavedChangesDecision).toHaveBeenCalledTimes(1);
+    expect(ref.result.currentPath).toBe("a.md");
+    expect(ref.result.getCurrentDocText()).toBe("# A draft\n");
   });
 
   it("does not force autosave before closing a dirty file when autosave is off", async () => {
