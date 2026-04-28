@@ -1,4 +1,8 @@
 import {
+  clearMotionGuards,
+  clearStructure,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -9,18 +13,22 @@ export const name = "rankdecrease-proposition-proof-arrowdown";
 export const optionalFixtures = true;
 
 function selectionSignature(page) {
-  return page.evaluate(() => {
-    const root = window.__cmDebug.selection();
+  return Promise.all([
+    getSelectionState(page),
+    getStructureState(page),
+    page.evaluate(() => {
     const scroller = window.__cmView?.scrollDOM;
-    const structure = window.__cmDebug.structure()?.kind ?? null;
     return {
-      rootHead: root.head,
-      rootLine: root.line,
-      rootCol: root.col,
-      structure,
       editorScrollTop: Math.round(scroller?.scrollTop ?? 0),
     };
-  });
+    }),
+  ]).then(([root, structure, domState]) => ({
+    ...domState,
+    rootHead: root.head,
+    rootLine: root.line,
+    rootCol: root.col,
+    structure: structure?.kind ?? null,
+  }));
 }
 
 export async function run(page) {
@@ -29,9 +37,9 @@ export async function run(page) {
   await setCursor(page, 1033, 0);
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   let previousState = await selectionSignature(page);

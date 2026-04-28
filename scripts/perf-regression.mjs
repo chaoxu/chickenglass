@@ -1184,7 +1184,7 @@ export const scenarios = {
         timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
       });
       const before = await getSemanticRevisionInfo(page);
-      const after = await page.evaluate((previous) => {
+      await page.evaluate(() => {
         const view = window.__cmView;
         const docText = view.state.doc.toString();
         const inlineMath = /\$([^$\n]+)\$/.exec(docText);
@@ -1207,17 +1207,14 @@ export const scenarios = {
           },
           selection: { anchor: changeFrom + 1 },
         });
-
-        const next = window.__cmDebug.semantics();
-        const changedSlices = Object.entries(next.slices)
-          .filter(([name, value]) => value !== previous.slices[name])
-          .map(([name]) => name);
-
-        return {
-          revisionDelta: next.revision - previous.revision,
-          changedSlices,
-        };
-      }, before);
+      });
+      const next = await getSemanticRevisionInfo(page);
+      const after = {
+        revisionDelta: next.revision - before.revision,
+        changedSlices: Object.entries(next.slices)
+          .filter(([name, value]) => value !== before.slices[name])
+          .map(([name]) => name),
+      };
 
       return {
         metrics: [

@@ -4,6 +4,7 @@
  */
 
 import {
+  getRenderState,
   openFile,
   openRegressionDocument,
   scrollToText,
@@ -193,8 +194,8 @@ export async function run(page) {
   await scrollToText(page, "Block Hover Preview Coverage");
   await settleEditorLayout(page, { frameCount: 4, delayMs: 80 });
 
-  const theoremStatus = await page.evaluate(() => {
-    const renderState = window.__cmDebug?.renderState?.() ?? null;
+  const theoremRenderState = await getRenderState(page);
+  const theoremStatus = await page.evaluate((renderState) => {
     const openerLine = Array.from(document.querySelectorAll(".cm-line")).find((el) =>
       (el.textContent ?? "").includes("Hover Preview Stress Test")
     );
@@ -209,7 +210,7 @@ export async function run(page) {
       openerText: openerLine?.textContent ?? null,
       visibleRawFencedOpeners: renderState?.visibleRawFencedOpeners ?? [],
     };
-  });
+  }, theoremRenderState);
 
   if (theoremStatus.rawVisible) {
     return {
@@ -241,12 +242,10 @@ export async function run(page) {
   await scrollToText(page, "Blockquote with Math");
   await settleEditorLayout(page, { frameCount: 4, delayMs: 80 });
 
-  const blockquoteStatus = await page.evaluate(() => {
-    const renderState = window.__cmDebug?.renderState?.() ?? null;
-    return {
-      visibleRawFencedOpeners: renderState?.visibleRawFencedOpeners ?? [],
-    };
-  });
+  const blockquoteRenderState = await getRenderState(page);
+  const blockquoteStatus = {
+    visibleRawFencedOpeners: blockquoteRenderState?.visibleRawFencedOpeners ?? [],
+  };
 
   if (
     blockquoteStatus.visibleRawFencedOpeners.some((entry) =>

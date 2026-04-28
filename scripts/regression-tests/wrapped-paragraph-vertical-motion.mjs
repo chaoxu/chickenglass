@@ -4,6 +4,7 @@
  */
 
 import {
+  getLineInfo,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -13,7 +14,7 @@ import {
 export const name = "wrapped-paragraph-vertical-motion";
 
 async function captureCursor(page) {
-  return page.evaluate(() => {
+  const cursor = await page.evaluate(() => {
     const view = window.__cmView;
     const selection = view.state.selection.main;
     const coords = view.coordsAtPos(selection.head, 1)
@@ -23,11 +24,14 @@ async function captureCursor(page) {
       head: selection.head,
       line: line.number,
       lineText: line.text,
-      lineInfo: window.__cmDebug.line(line.number),
       cursorTop: coords?.top ?? null,
       cursorBottom: coords?.bottom ?? null,
     };
   });
+  return {
+    ...cursor,
+    lineInfo: await getLineInfo(page, cursor.line),
+  };
 }
 
 export async function run(page) {

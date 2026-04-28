@@ -1,4 +1,8 @@
 import {
+  clearMotionGuards,
+  clearStructure,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   settleEditorLayout,
   switchToMode,
@@ -13,21 +17,22 @@ export async function run(page) {
 
   await page.evaluate(() => {
     const view = window.__cmView;
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
     view.focus();
     view.dispatch({ selection: { anchor: 0 } });
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
 
   const states = [];
   for (let i = 0; i < 6; i += 1) {
     await page.keyboard.press("ArrowDown");
     await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
-    states.push(await page.evaluate(() => ({
-      structure: window.__cmDebug.structure(),
-      selection: window.__cmDebug.selection(),
-    })));
+    const [structure, selection] = await Promise.all([
+      getStructureState(page),
+      getSelectionState(page),
+    ]);
+    states.push({ structure, selection });
   }
 
   if (states[0]?.structure?.kind !== "frontmatter") {

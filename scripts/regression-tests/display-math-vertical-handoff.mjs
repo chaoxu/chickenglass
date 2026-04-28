@@ -1,5 +1,9 @@
 import {
+  clearMotionGuards,
+  clearStructure,
   findLine,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -29,19 +33,20 @@ export async function run(page) {
   await setCursor(page, displayMathLine - 1, 0);
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
 
   const states = [];
   for (let i = 0; i < 5; i += 1) {
     await page.keyboard.press("ArrowDown");
     await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
-    states.push(await page.evaluate(() => ({
-      structure: window.__cmDebug.structure(),
-      selection: window.__cmDebug.selection(),
-    })));
+    const [structure, selection] = await Promise.all([
+      getStructureState(page),
+      getSelectionState(page),
+    ]);
+    states.push({ structure, selection });
   }
 
   const entered = states[0];

@@ -7,7 +7,12 @@
  */
 
 import {
+  clearMotionGuards,
+  clearStructure,
   findLine,
+  getMotionGuards,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -22,6 +27,26 @@ async function resetToRichIndex(page) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 }
 
+async function focusAndClearCmState(page) {
+  await page.evaluate(() => {
+    window.__cmView.focus();
+  });
+  await clearStructure(page);
+  await clearMotionGuards(page);
+}
+
+async function captureStructureEditState(page) {
+  const [structure, selection, motionGuards] = await Promise.all([
+    getStructureState(page),
+    getSelectionState(page),
+    getMotionGuards(page),
+  ]);
+  const sourceLine = structure?.kind === "display-math"
+    ? await page.evaluate((from) => window.__cmView.state.doc.lineAt(from).text, structure.from)
+    : null;
+  return { structure, selection, motionGuards, sourceLine };
+}
+
 export async function run(page) {
   await resetToRichIndex(page);
 
@@ -31,11 +56,7 @@ export async function run(page) {
   }
 
   await setCursor(page, standardLine, 0);
-  await page.evaluate(() => {
-    window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
-  });
+  await focusAndClearCmState(page);
   await page.keyboard.press("ArrowDown");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
   await page.keyboard.press("ArrowDown");
@@ -43,16 +64,7 @@ export async function run(page) {
   await page.keyboard.type("X");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const displayDown = await page.evaluate(() => ({
-    structure: window.__cmDebug.structure(),
-    selection: window.__cmDebug.selection(),
-    sourceLine: (() => {
-      const structure = window.__cmDebug.structure();
-      if (!structure || structure.kind !== "display-math") return null;
-      return window.__cmView.state.doc.lineAt(structure.from).text;
-    })(),
-    motionGuards: window.__cmDebug.motionGuards(),
-  }));
+  const displayDown = await captureStructureEditState(page);
 
   if (displayDown.structure?.kind !== "display-math") {
     return {
@@ -76,20 +88,20 @@ export async function run(page) {
   }
 
   await setCursor(page, backslashLine, 0);
-  await page.evaluate(() => {
-    window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
-  });
+  await focusAndClearCmState(page);
   await page.keyboard.press("ArrowUp");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
   await page.keyboard.press("ArrowUp");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const displayUp = await page.evaluate(() => ({
-    structure: window.__cmDebug.structure(),
-    motionGuards: window.__cmDebug.motionGuards(),
-  }));
+  const [displayUpStructure, displayUpMotionGuards] = await Promise.all([
+    getStructureState(page),
+    getMotionGuards(page),
+  ]);
+  const displayUp = {
+    structure: displayUpStructure,
+    motionGuards: displayUpMotionGuards,
+  };
 
   if (displayUp.structure?.kind !== "display-math") {
     return {
@@ -106,25 +118,27 @@ export async function run(page) {
   }
 
   await setCursor(page, firstTableLine - 1, 0);
-  await page.evaluate(() => {
-    window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
-  });
+  await focusAndClearCmState(page);
   await page.keyboard.press("ArrowDown");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
   await page.keyboard.type("Z");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const tableEntry = await page.evaluate(() => {
+  const [tableEntryDom, tableMotionGuards] = await Promise.all([
+    page.evaluate(() => {
     const editingCell = document.querySelector(".cf-table-cell-editing");
     return {
       editingCells: document.querySelectorAll(".cf-table-cell-editing").length,
       nestedEditors: document.querySelectorAll(".cf-table-cell-editing .cm-editor").length,
       text: editingCell?.textContent ?? "",
-      motionGuards: window.__cmDebug.motionGuards(),
     };
-  });
+    }),
+    getMotionGuards(page),
+  ]);
+  const tableEntry = {
+    ...tableEntryDom,
+    motionGuards: tableMotionGuards,
+  };
 
   if (tableEntry.editingCells === 0 || tableEntry.nestedEditors === 0) {
     return {

@@ -4,6 +4,8 @@
  */
 
 import {
+  getFenceState,
+  getTreeString,
   openEditorScenario,
   settleEditorLayout,
   waitForRenderReady,
@@ -46,13 +48,20 @@ export async function run(page) {
   }, DOC);
   await settleEditorLayout(page, { frameCount: 6, delayMs: 64 });
 
-  const state = await page.evaluate(() => ({
-    tree: globalThis.__cmDebug.treeString(),
-    fences: globalThis.__cmDebug.fences(),
-    visibleLines: [...globalThis.__cmView.dom.querySelectorAll(".cm-line")]
-      .filter((line) => getComputedStyle(line).height !== "0px")
-      .map((line) => line.textContent ?? ""),
-  }));
+  const [tree, fences, visibleLines] = await Promise.all([
+    getTreeString(page),
+    getFenceState(page),
+    page.evaluate(() =>
+      [...globalThis.__cmView.dom.querySelectorAll(".cm-line")]
+        .filter((line) => getComputedStyle(line).height !== "0px")
+        .map((line) => line.textContent ?? "")
+    ),
+  ]);
+  const state = {
+    tree,
+    fences,
+    visibleLines,
+  };
 
   if (!/FencedDiv\([^)]*FencedDivFence[^)]*\)/s.test(state.tree)) {
     return {

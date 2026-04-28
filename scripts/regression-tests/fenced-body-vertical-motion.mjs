@@ -1,5 +1,9 @@
 import {
+  clearMotionGuards,
+  clearStructure,
   findLine,
+  getLineInfo,
+  getStructureState,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -9,7 +13,7 @@ import {
 export const name = "fenced-body-vertical-motion";
 
 async function captureCursor(page) {
-  return page.evaluate(() => {
+  const cursor = await page.evaluate(() => {
     const view = window.__cmView;
     const selection = view.state.selection.main;
     const coords = view.coordsAtPos(selection.head, 1)
@@ -19,12 +23,15 @@ async function captureCursor(page) {
       head: selection.head,
       line: line.number,
       lineText: line.text,
-      lineInfo: window.__cmDebug.line(line.number),
       cursorTop: coords?.top ?? null,
       cursorBottom: coords?.bottom ?? null,
-      structure: window.__cmDebug.structure(),
     };
   });
+  const [lineInfo, structure] = await Promise.all([
+    getLineInfo(page, cursor.line),
+    getStructureState(page),
+  ]);
+  return { ...cursor, lineInfo, structure };
 }
 
 export async function run(page) {
@@ -46,9 +53,9 @@ export async function run(page) {
   await setCursor(page, bodyLine, 0);
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const before = await captureCursor(page);

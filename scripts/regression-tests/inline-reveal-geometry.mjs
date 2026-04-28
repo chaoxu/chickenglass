@@ -1,4 +1,6 @@
 import {
+  activateStructureAtCursor,
+  clearStructure,
   openFixtureDocument,
   settleEditorLayout,
 } from "../test-helpers.mjs";
@@ -89,8 +91,8 @@ function formatDelta(value) {
 }
 
 async function clearRevealState(page) {
+  await clearStructure(page);
   await page.evaluate(() => {
-    window.__cmDebug?.clearStructure?.();
     const view = window.__cmView;
     view.focus();
     view.dispatch({ selection: { anchor: 0 } });
@@ -234,12 +236,12 @@ async function revealCase(page, testCase) {
           anchor: line.from + tokenIndex + tokenOffset,
         },
       });
-      if (activateStructure) {
-        window.__cmDebug?.activateStructureAtCursor?.();
-      }
     },
     testCase,
   );
+  if (testCase.activateStructure) {
+    await activateStructureAtCursor(page);
+  }
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 }
 

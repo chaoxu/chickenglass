@@ -1,5 +1,10 @@
 import {
+  clearMotionGuards,
+  clearStructure,
   findLine,
+  getMotionGuards,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   setCursor,
   settleEditorLayout,
@@ -27,18 +32,19 @@ export async function run(page) {
   await setCursor(page, beforeInnerBlockquoteLine + 1, 0);
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 2, delayMs: 32 });
   await page.keyboard.press("ArrowDown");
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const result = await page.evaluate(() => ({
-    structure: window.__cmDebug.structure(),
-    selection: window.__cmDebug.selection(),
-    motionGuards: window.__cmDebug.motionGuards(),
-  }));
+  const [structure, selection, motionGuards] = await Promise.all([
+    getStructureState(page),
+    getSelectionState(page),
+    getMotionGuards(page),
+  ]);
+  const result = { structure, selection, motionGuards };
 
   if (result.structure?.kind !== "fenced-opener") {
     return {

@@ -1,4 +1,8 @@
 import {
+  clearMotionGuards,
+  clearStructure,
+  getSelectionState,
+  getStructureState,
   openRegressionDocument,
   settleEditorLayout,
   switchToMode,
@@ -8,19 +12,23 @@ export const name = "rankdecrease-arrowdown-sweep";
 export const optionalFixtures = true;
 
 function selectionSignature(page) {
-  return page.evaluate(() => {
-    const root = window.__cmDebug.selection();
+  return Promise.all([
+    getSelectionState(page),
+    getStructureState(page),
+    page.evaluate(() => {
     const scroller = window.__cmView?.scrollDOM;
-    const structure = window.__cmDebug.structure()?.kind ?? null;
     return {
       docLines: window.__cmView.state.doc.lines,
-      rootHead: root.head,
-      rootLine: root.line,
-      rootCol: root.col,
-      structure,
       editorScrollTop: Math.round(scroller?.scrollTop ?? 0),
     };
-  });
+    }),
+  ]).then(([root, structure, domState]) => ({
+    ...domState,
+    rootHead: root.head,
+    rootLine: root.line,
+    rootCol: root.col,
+    structure: structure?.kind ?? null,
+  }));
 }
 
 export async function run(page) {
@@ -28,9 +36,9 @@ export async function run(page) {
   await switchToMode(page, "rich");
   await page.evaluate(() => {
     window.__cmView.focus();
-    window.__cmDebug.clearStructure();
-    window.__cmDebug.clearMotionGuards();
   });
+  await clearStructure(page);
+  await clearMotionGuards(page);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   let repeated = 0;

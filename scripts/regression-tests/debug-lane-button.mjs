@@ -1,4 +1,8 @@
-import { openRegressionDocument, settleEditorLayout } from "../test-helpers.mjs";
+import {
+  isDebugLaneEnabled,
+  openRegressionDocument,
+  settleEditorLayout,
+} from "../test-helpers.mjs";
 
 export const name = "debug-lane-button";
 
@@ -7,11 +11,11 @@ export async function run(page) {
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
   const button = page.getByTestId("debug-lane-button");
-  const initialState = await page.evaluate(() => ({
-    enabled: window.__cmDebug?.debugLaneEnabled?.() ?? false,
+  const initialState = await page.evaluate((enabled) => ({
+    enabled,
     panelVisible: Boolean(document.querySelector(".cf-debug-panel")),
     pressed: document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed"),
-  }));
+  }), await isDebugLaneEnabled(page));
 
   if (initialState.enabled || initialState.panelVisible || initialState.pressed !== "false") {
     return {
@@ -23,14 +27,14 @@ export async function run(page) {
   await button.click();
   await page.waitForFunction(() => (
     Boolean(document.querySelector(".cf-debug-panel"))
-      && Boolean(window.__cmDebug?.debugLaneEnabled?.())
+      && document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed") === "true"
   ));
 
-  const enabledState = await page.evaluate(() => ({
-    enabled: window.__cmDebug?.debugLaneEnabled?.() ?? false,
+  const enabledState = await page.evaluate((enabled) => ({
+    enabled,
     panelVisible: Boolean(document.querySelector(".cf-debug-panel")),
     pressed: document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed"),
-  }));
+  }), await isDebugLaneEnabled(page));
 
   if (!enabledState.enabled || !enabledState.panelVisible || enabledState.pressed !== "true") {
     return {
@@ -42,14 +46,14 @@ export async function run(page) {
   await button.click();
   await page.waitForFunction(() => (
     !document.querySelector(".cf-debug-panel")
-      && !window.__cmDebug?.debugLaneEnabled?.()
+      && document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed") === "false"
   ));
 
-  const disabledState = await page.evaluate(() => ({
-    enabled: window.__cmDebug?.debugLaneEnabled?.() ?? false,
+  const disabledState = await page.evaluate((enabled) => ({
+    enabled,
     panelVisible: Boolean(document.querySelector(".cf-debug-panel")),
     pressed: document.querySelector('[data-testid="debug-lane-button"]')?.getAttribute("aria-pressed"),
-  }));
+  }), await isDebugLaneEnabled(page));
 
   if (disabledState.enabled || disabledState.panelVisible || disabledState.pressed !== "false") {
     return {

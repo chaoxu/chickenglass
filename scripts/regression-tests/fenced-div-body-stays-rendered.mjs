@@ -4,6 +4,9 @@
  */
 
 import {
+  activateStructureAtCursor,
+  getFenceState,
+  getStructureState,
   openEditorScenario,
   setCursor,
   settleEditorLayout,
@@ -39,21 +42,26 @@ export async function run(page) {
   });
 
   await setCursor(page, 2, 3);
-  const activatedFromBody = await page.evaluate(() =>
-    window.__cmDebug.activateStructureAtCursor()
-  );
+  const activatedFromBody = await activateStructureAtCursor(page);
   await settleEditorLayout(page, { frameCount: 3, delayMs: 64 });
 
-  const state = await page.evaluate((activated) => ({
-    activatedFromBody: activated,
-    structure: window.__cmDebug.structure(),
-    lines: [...window.__cmView.dom.querySelectorAll(".cm-line")].map((line) => ({
-      text: line.textContent ?? "",
-      hidden: getComputedStyle(line).height === "0px",
-      classes: [...line.classList],
+  const [structure, fences, lineState] = await Promise.all([
+    getStructureState(page),
+    getFenceState(page),
+    page.evaluate(() => ({
+      lines: [...window.__cmView.dom.querySelectorAll(".cm-line")].map((line) => ({
+        text: line.textContent ?? "",
+        hidden: getComputedStyle(line).height === "0px",
+        classes: [...line.classList],
+      })),
     })),
-    fences: window.__cmDebug.fences(),
-  }), activatedFromBody);
+  ]);
+  const state = {
+    activatedFromBody,
+    structure,
+    fences,
+    ...lineState,
+  };
 
   const visibleText = state.lines
     .filter((line) => !line.hidden)
