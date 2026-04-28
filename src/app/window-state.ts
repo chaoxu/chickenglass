@@ -60,16 +60,7 @@ export interface WindowState {
   version: 3;
 }
 
-interface LegacyV2WindowState {
-  projectRoot: string | null;
-  currentDocument: CurrentDocumentState | null;
-  sidebarWidth: number;
-  sidebarSections: SidebarSectionState[];
-  version: 2;
-}
-
 const STATE_VERSION = 3;
-const PREVIOUS_STATE_VERSION = 2;
 const WINDOW_LAUNCH_PROJECT_ROOT_PARAM = "projectRoot";
 const WINDOW_LAUNCH_FILE_PARAM = "file";
 
@@ -150,36 +141,6 @@ function normalizeLayoutState(value: unknown): WorkspaceLayoutState | null {
   };
 }
 
-function layoutFromLegacySidebarWidth(sidebarWidth: number): WorkspaceLayoutState {
-  return {
-    ...DEFAULT_WORKSPACE_LAYOUT_STATE,
-    sidebarCollapsed: sidebarWidth === 0,
-    sidebarWidth: sidebarWidth > 0
-      ? sidebarWidth
-      : DEFAULT_WORKSPACE_LAYOUT_STATE.sidebarWidth,
-  };
-}
-
-function parseV2WindowState(value: unknown): LegacyV2WindowState | null {
-  if (typeof value !== "object" || value === null) return null;
-  const candidate = value as Record<string, unknown>;
-  if (candidate["version"] !== PREVIOUS_STATE_VERSION) return null;
-  if (typeof candidate["projectRoot"] !== "string" && candidate["projectRoot"] !== null) return null;
-  if (!isCurrentDocumentState(candidate["currentDocument"])) return null;
-  if (typeof candidate["sidebarWidth"] !== "number") return null;
-  if (!Array.isArray(candidate["sidebarSections"])) return null;
-  const sections = (candidate["sidebarSections"] as unknown[]).filter(isSidebarSectionState);
-  if (sections.length !== (candidate["sidebarSections"] as unknown[]).length) return null;
-
-  return {
-    currentDocument: candidate["currentDocument"],
-    projectRoot: candidate["projectRoot"] as string | null,
-    sidebarWidth: candidate["sidebarWidth"],
-    sidebarSections: sections,
-    version: PREVIOUS_STATE_VERSION,
-  };
-}
-
 function migrateWindowState(value: unknown): WindowState | null {
   if (isWindowState(value)) {
     return {
@@ -187,17 +148,6 @@ function migrateWindowState(value: unknown): WindowState | null {
       layout: normalizeLayoutState(value.layout) ?? DEFAULT_WORKSPACE_LAYOUT_STATE,
     };
   }
-
-  const previous = parseV2WindowState(value);
-  if (previous) {
-    return {
-      projectRoot: previous.projectRoot,
-      currentDocument: previous.currentDocument,
-      layout: layoutFromLegacySidebarWidth(previous.sidebarWidth),
-      version: STATE_VERSION,
-    };
-  }
-
   return null;
 }
 
@@ -375,10 +325,4 @@ function isCurrentDocumentObject(value: unknown): value is CurrentDocumentState 
 function isCurrentDocumentState(value: unknown): value is CurrentDocumentState | null {
   if (value === null) return true;
   return isCurrentDocumentObject(value);
-}
-
-function isSidebarSectionState(value: unknown): value is SidebarSectionState {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return typeof v["title"] === "string" && typeof v["collapsed"] === "boolean";
 }

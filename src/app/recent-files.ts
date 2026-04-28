@@ -36,7 +36,7 @@ function isRecentFileEntry(value: unknown): value is RecentFileEntry {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;
   return typeof candidate["path"] === "string"
-    && (typeof candidate["projectRoot"] === "string" || candidate["projectRoot"] === null || candidate["projectRoot"] === undefined);
+    && (typeof candidate["projectRoot"] === "string" || candidate["projectRoot"] === null);
 }
 
 function readRecentFileEntries(): RecentFileEntry[] {
@@ -44,11 +44,8 @@ function readRecentFileEntries(): RecentFileEntry[] {
   if (!Array.isArray(parsed)) return [];
 
   return parsed.flatMap((entry): RecentFileEntry[] => {
-    if (typeof entry === "string") {
-      return [{ path: entry, projectRoot: null }];
-    }
     if (isRecentFileEntry(entry)) {
-      return [{ path: entry.path, projectRoot: entry.projectRoot ?? null }];
+      return [{ path: entry.path, projectRoot: entry.projectRoot }];
     }
     return [];
   });

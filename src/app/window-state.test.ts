@@ -133,28 +133,6 @@ describe("window-state persisted schema", () => {
     window.history.replaceState({}, "", BASE_PATH);
   });
 
-  it("migrates v2 sidebar width into the canonical layout model", () => {
-    persistRaw(WINDOW_STATE_KEY, {
-      currentDocument: null,
-      projectRoot: "/project",
-      sidebarSections: [{ title: "Files", collapsed: true }],
-      sidebarWidth: 0,
-      version: 2,
-    });
-
-    expect(loadWindowState()).toEqual({
-      currentDocument: null,
-      layout: {
-        sidebarCollapsed: true,
-        sidebarTab: "files",
-        sidebarWidth: 220,
-        sidenotesCollapsed: true,
-      },
-      projectRoot: "/project",
-      version: 3,
-    });
-  });
-
   it("rejects malformed persisted state and falls back to defaults", () => {
     localStorage.setItem(WINDOW_STATE_KEY, "{not json");
     expect(loadWindowState()).toEqual(DEFAULT_TEST_WINDOW_STATE);
@@ -163,6 +141,7 @@ describe("window-state persisted schema", () => {
       { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: "220", sidebarSections: [] },
       { version: 2, projectRoot: null, currentDocument: { path: "a.md" }, sidebarWidth: 220, sidebarSections: [] },
       { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }] },
+      { version: 2, projectRoot: "/project", currentDocument: null, sidebarWidth: 0, sidebarSections: [] },
       { version: 3, projectRoot: null, currentDocument: null, layout: { sidebarCollapsed: false, sidebarWidth: 220, sidebarTab: "nope", sidenotesCollapsed: true } },
       { version: 3, projectRoot: null, currentDocument: null, layout: { sidebarCollapsed: false, sidebarWidth: "220", sidebarTab: "files", sidenotesCollapsed: true } },
     ]) {

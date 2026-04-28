@@ -71,24 +71,21 @@ describe("recordRecentFile", () => {
     expect(getRecentFiles("/projects/b")).toEqual(["/projects/b/index.md"]);
   });
 
-  it("migrates legacy strings and filters malformed recent-file payloads", () => {
+  it("filters malformed recent-file payloads", () => {
     localStorage.setItem(RECENT_FILES_KEY, JSON.stringify([
-      "/legacy.md",
       { path: "/scoped.md", projectRoot: "/projects/a" },
+      { path: "/unscoped.md", projectRoot: null },
+      "/legacy.md",
       { path: "/implicit-null.md" },
       { path: 123, projectRoot: "/projects/a" },
       null,
     ]));
 
     expect(getRecentFileEntries()).toEqual([
-      { path: "/legacy.md", projectRoot: null },
       { path: "/scoped.md", projectRoot: "/projects/a" },
-      { path: "/implicit-null.md", projectRoot: null },
+      { path: "/unscoped.md", projectRoot: null },
     ]);
-    expect(getRecentFiles(null)).toEqual([
-      "/legacy.md",
-      "/implicit-null.md",
-    ]);
+    expect(getRecentFiles(null)).toEqual(["/unscoped.md"]);
   });
 
   it("returns an empty file list for non-array stored payloads", () => {
