@@ -212,6 +212,7 @@ export function createEditorSessionService({
         );
         return;
       } catch (_error: unknown) {
+        // If the external baseline can no longer be read, treat the conflict as a deletion.
         runtime.commit(setExternalDocumentConflict(runtime.getState(), {
           kind: "deleted",
           path,
@@ -319,6 +320,7 @@ export function createEditorSessionService({
         runtime.getCurrentPath() === path ? { editorDoc: merged.content } : undefined,
       );
     } catch (_error: unknown) {
+      // If the disk side of the merge is gone, preserve the local doc as a deleted-file conflict.
       runtime.commit(setExternalDocumentConflict(runtime.getState(), {
         kind: "deleted",
         path,
@@ -539,6 +541,7 @@ export function createEditorSessionService({
     try {
       await openFile(path);
     } catch (_error: unknown) {
+      // Recovery can restore content even when the original path no longer opens.
       await openFileWithContent(path, content);
       if (options?.baselineHash) {
         restoredConflict = { kind: "deleted", path };
@@ -594,6 +597,7 @@ export function createEditorSessionService({
     try {
       content = await fs.readFile(path);
     } catch (_error: unknown) {
+      // Watcher events may arrive after a file or ancestor has disappeared.
       const currentDocument = runtime.getCurrentDocument();
       if (!currentDocument || !pathAffectsDocument(path, currentDocument.path)) {
         return "ignore";

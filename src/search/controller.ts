@@ -257,6 +257,7 @@ function createSearchRegExp(
   try {
     return new RegExp(source, flags);
   } catch (_error) {
+    // Invalid user-entered regex means the query cannot produce matches.
     return null;
   }
 }
@@ -293,6 +294,7 @@ function createReplacementRegExp(
   try {
     return new RegExp(query, flags);
   } catch (_error) {
+    // Invalid replacement regex falls back to literal replacement text.
     return null;
   }
 }

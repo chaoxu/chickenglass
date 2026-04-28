@@ -9,6 +9,7 @@ export function domTextOffsetWithin(root: HTMLElement, node: Node, offset: numbe
   try {
     range.setEnd(node, offset);
   } catch (_error) {
+    // Detached or incompatible selection nodes cannot be mapped to text offsets.
     return null;
   }
   return range.toString().length;

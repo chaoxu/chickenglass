@@ -24,7 +24,7 @@ async function readLocalImageDataUrl(
         return next;
       }
     } catch (_error) {
-      // Try the next candidate.
+      // Candidate paths are speculative; unreadable files fall through to the next location.
     }
   }
   return null;
@@ -104,7 +104,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
           }
           return;
         } catch (_error) {
-          // Try the next candidate.
+          // Candidate paths are speculative; unreadable or unrasterizable PDFs fall through.
         }
       }
 
