@@ -20,7 +20,11 @@ import type { Settings } from "../lib/types";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 const overlayHookState = vi.hoisted(() => ({
-  hotkeys: [] as Array<{ key: string; handler: () => void }>,
+  hotkeys: [] as Array<{
+    allowInInputs?: boolean;
+    key: string;
+    handler: (event: KeyboardEvent) => void;
+  }>,
   menuHandlers: {} as Record<string, () => void>,
   reset() {
     overlayHookState.hotkeys = [];
@@ -279,13 +283,14 @@ function getCommand(commands: readonly PaletteCommand[], id: string): PaletteCom
   return command;
 }
 
-function getHotkeyHandler(key: string): () => void {
+function getHotkeyHandler(key: string): (event?: KeyboardEvent) => void {
   const binding = overlayHookState.hotkeys.find((candidate) => candidate.key === key);
   expect(binding, `expected hotkey ${key}`).toBeDefined();
   if (!binding) {
     throw new Error(`missing hotkey ${key}`);
   }
-  return binding.handler;
+  return (event = new KeyboardEvent("keydown", { cancelable: true, key })) =>
+    binding.handler(event);
 }
 
 function flushAsyncImports(): Promise<void> {
@@ -616,6 +621,28 @@ describe("useAppOverlays", () => {
     expect(editor.openFile).toHaveBeenCalledWith("notes/recent.md");
     expect(Object.values(overlayHookState.menuHandlers)).not.toContain(recentCommand.action);
     expect(overlayHookState.hotkeys.map((binding) => binding.handler)).not.toContain(recentCommand.action);
+  });
+
+  it("wires the documented command palette hotkeys", async () => {
+    const { props, dialogs } = await createHookProps();
+
+    renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
+      initialProps: props,
+    });
+
+    const cmdP = overlayHookState.hotkeys.find((binding) => binding.key === "mod+p");
+    const cmdShiftP = overlayHookState.hotkeys.find((binding) => binding.key === "mod+shift+p");
+    expect(cmdP).toMatchObject({ allowInInputs: true });
+    expect(cmdShiftP).toMatchObject({ allowInInputs: true });
+
+    const event = new KeyboardEvent("keydown", { cancelable: true, key: "p" });
+    cmdP?.handler(event);
+    cmdShiftP?.handler(new KeyboardEvent("keydown", { cancelable: true, key: "p" }));
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(dialogs.setPaletteOpen).toHaveBeenCalledTimes(2);
+    expect(dialogs.setPaletteOpen).toHaveBeenNthCalledWith(1, expect.any(Function));
+    expect(dialogs.setPaletteOpen).toHaveBeenNthCalledWith(2, expect.any(Function));
   });
 
   it("keeps command wiring stable across same-view editor text updates", async () => {

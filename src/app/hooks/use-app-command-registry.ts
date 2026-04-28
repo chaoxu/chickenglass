@@ -317,7 +317,14 @@ export function useAppCommandRegistry({
   const commands = useMemo(() => toPaletteCommands(commandDefs), [commandDefs]);
 
   const hotkeys = useMemo(() => [
-    { key: "mod+shift+p", handler: () => dialogs.setPaletteOpen((value) => !value) },
+    { key: "mod+p", handler: (event: KeyboardEvent) => {
+      event.preventDefault();
+      dialogs.setPaletteOpen((value) => !value);
+    }, allowInInputs: true },
+    { key: "mod+shift+p", handler: (event: KeyboardEvent) => {
+      event.preventDefault();
+      dialogs.setPaletteOpen((value) => !value);
+    }, allowInInputs: true },
     ...toHotkeyBindings(commandDefs),
   ], [commandDefs, dialogs]);
 
