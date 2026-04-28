@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Settings } from "../lib/types";
 import { useSettings } from "./use-settings";
-import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
+import { SETTINGS_KEY } from "../../constants";
 
 const STORAGE_KEY = SETTINGS_KEY;
 
@@ -30,7 +30,6 @@ describe("useSettings", () => {
         tabSize: 2,
         showLineNumbers: false,
         wordWrap: true,
-        spellCheck: false,
         editorMode: "cm6-rich",
         theme: "system",
         defaultExportFormat: "pdf",
@@ -54,51 +53,15 @@ describe("useSettings", () => {
       expect(result.current.settings.editorMode).toBe("cm6-rich");
     });
 
-    it("migrates legacy spellCheck into enabledPlugins", () => {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ spellCheck: true }),
-      );
-      const { result } = renderHook(() => useSettings());
-      expect(result.current.settings.enabledPlugins.spellcheck).toBe(true);
-    });
-
-    it("does not overwrite existing enabledPlugins.spellcheck", () => {
+    it("does not overwrite persisted enabledPlugins.spellcheck", () => {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
-          spellCheck: true,
           enabledPlugins: { spellcheck: false },
         }),
       );
       const { result } = renderHook(() => useSettings());
       expect(result.current.settings.enabledPlugins.spellcheck).toBe(false);
-    });
-
-    it("migrates legacy cf-theme key into settings.theme", () => {
-      localStorage.setItem(LEGACY_THEME_KEY, "dark");
-      const { result } = renderHook(() => useSettings());
-      expect(result.current.settings.theme).toBe("dark");
-      // Legacy key should be cleaned up
-      expect(localStorage.getItem(LEGACY_THEME_KEY)).toBeNull();
-    });
-
-    it("ignores invalid legacy cf-theme values", () => {
-      localStorage.setItem(LEGACY_THEME_KEY, "neon");
-      const { result } = renderHook(() => useSettings());
-      expect(result.current.settings.theme).toBe("system");
-      // Key still removed after migration attempt
-      expect(localStorage.getItem(LEGACY_THEME_KEY)).toBeNull();
-    });
-
-    it("does not migrate legacy theme when settings already have a theme", () => {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ theme: "light" }),
-      );
-      localStorage.setItem(LEGACY_THEME_KEY, "dark");
-      const { result } = renderHook(() => useSettings());
-      expect(result.current.settings.theme).toBe("light");
     });
 
     it("falls back to 'system' for corrupt theme value", () => {
@@ -214,13 +177,13 @@ describe("useSettings", () => {
       expect(stored?.theme).toBe("system");
     });
 
-    it("clears customised enabledPlugins", () => {
+    it("resets enabledPlugins to defaults", () => {
       const { result } = renderHook(() => useSettings());
       act(() => {
         result.current.updateSetting("enabledPlugins", { spellcheck: true, foo: false });
         result.current.resetSettings();
       });
-      expect(result.current.settings.enabledPlugins).toEqual({});
+      expect(result.current.settings.enabledPlugins).toEqual({ spellcheck: false });
     });
   });
 });

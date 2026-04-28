@@ -10,7 +10,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { Settings } from "../lib/types";
 import { readLocalStorage, writeLocalStorage } from "../lib/utils";
-import { SETTINGS_KEY, LEGACY_THEME_KEY } from "../../constants";
+import { SETTINGS_KEY } from "../../constants";
 import { defaultEditorMode, normalizeEditorMode } from "../../editor-display-mode";
 import {
   emitLocalStorageKeyChange,
@@ -24,11 +24,10 @@ const DEFAULT_SETTINGS: Settings = {
   tabSize: 2,
   showLineNumbers: false,
   wordWrap: true,
-  spellCheck: false,
   editorMode: defaultEditorMode,
   theme: "system",
   defaultExportFormat: "pdf",
-  enabledPlugins: {},
+  enabledPlugins: { spellcheck: false },
   themeName: "default",
   writingTheme: "academic",
   customCss: "",
@@ -42,27 +41,6 @@ function isValidTheme(value: unknown): value is Settings["theme"] {
 function loadSettings(): Settings {
   const parsed = readLocalStorage<Partial<Settings>>(SETTINGS_KEY, {});
   const loaded = { ...DEFAULT_SETTINGS, ...parsed };
-
-  // Migrate legacy spellCheck boolean into enabledPlugins
-  if (loaded.spellCheck !== undefined && loaded.enabledPlugins?.spellcheck === undefined) {
-    loaded.enabledPlugins = { ...loaded.enabledPlugins, spellcheck: loaded.spellCheck };
-  }
-
-  // Migrate legacy standalone theme key ("cf-theme") into unified settings.
-  // Only applies when settings don't already have a non-default theme and the
-  // legacy key exists.
-  if (loaded.theme === "system" && !parsed.theme) {
-    try {
-      const legacy = localStorage.getItem(LEGACY_THEME_KEY);
-      if (isValidTheme(legacy)) {
-        loaded.theme = legacy;
-      }
-      // Clean up legacy key after migration
-      localStorage.removeItem(LEGACY_THEME_KEY);
-    } catch (_e) {
-      // best-effort: localStorage unavailable (private browsing or test environment)
-    }
-  }
 
   // Validate theme value in case of corrupt data
   if (!isValidTheme(loaded.theme)) {
@@ -87,7 +65,6 @@ function readSettingsStorageSignature(): string {
   try {
     return JSON.stringify({
       settings: localStorage.getItem(SETTINGS_KEY),
-      legacyTheme: localStorage.getItem(LEGACY_THEME_KEY),
     });
   } catch (_error) {
     return "";
@@ -109,10 +86,8 @@ function subscribeSettings(listener: () => void): () => void {
     listener();
   };
   const unsubscribeSettings = subscribeLocalStorageKey(SETTINGS_KEY, handleChange);
-  const unsubscribeLegacyTheme = subscribeLocalStorageKey(LEGACY_THEME_KEY, handleChange);
   return () => {
     unsubscribeSettings();
-    unsubscribeLegacyTheme();
   };
 }
 

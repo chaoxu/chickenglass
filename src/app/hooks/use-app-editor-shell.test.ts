@@ -86,7 +86,6 @@ function createHarness(
     tabSize: 2,
     showLineNumbers: false,
     wordWrap: true,
-    spellCheck: false,
     editorMode: "cm6-rich",
     theme: "system",
     defaultExportFormat: "pdf",

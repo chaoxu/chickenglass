@@ -133,31 +133,6 @@ describe("window-state persisted schema", () => {
     window.history.replaceState({}, "", BASE_PATH);
   });
 
-  it("migrates legacy v1 tabs using the matching active tab", () => {
-    persistRaw(WINDOW_STATE_KEY, {
-      activeTab: "b.md",
-      sidebarSections: [{ title: "Files", collapsed: true }],
-      sidebarWidth: 320,
-      tabs: [
-        { path: "a.md", name: "A" },
-        { path: "b.md", name: "B" },
-      ],
-      version: 1,
-    });
-
-    expect(loadWindowState()).toEqual({
-      currentDocument: { path: "b.md", name: "B" },
-      layout: {
-        sidebarCollapsed: false,
-        sidebarTab: "files",
-        sidebarWidth: 320,
-        sidenotesCollapsed: true,
-      },
-      projectRoot: null,
-      version: 3,
-    });
-  });
-
   it("migrates v2 sidebar width into the canonical layout model", () => {
     persistRaw(WINDOW_STATE_KEY, {
       currentDocument: null,
@@ -180,31 +155,6 @@ describe("window-state persisted schema", () => {
     });
   });
 
-  it("migrates legacy v1 tabs with stale or empty active-tab fallbacks", () => {
-    persistRaw(WINDOW_STATE_KEY, {
-      activeTab: "missing.md",
-      sidebarSections: [],
-      sidebarWidth: 260,
-      tabs: [{ path: "first.md", name: "First" }],
-      version: 1,
-    });
-
-    expect(loadWindowState().currentDocument).toEqual({
-      path: "first.md",
-      name: "First",
-    });
-
-    persistRaw(WINDOW_STATE_KEY, {
-      activeTab: null,
-      sidebarSections: [],
-      sidebarWidth: 260,
-      tabs: [],
-      version: 1,
-    });
-
-    expect(loadWindowState().currentDocument).toBeNull();
-  });
-
   it("rejects malformed persisted state and falls back to defaults", () => {
     localStorage.setItem(WINDOW_STATE_KEY, "{not json");
     expect(loadWindowState()).toEqual(DEFAULT_TEST_WINDOW_STATE);
@@ -215,9 +165,6 @@ describe("window-state persisted schema", () => {
       { version: 2, projectRoot: null, currentDocument: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }] },
       { version: 3, projectRoot: null, currentDocument: null, layout: { sidebarCollapsed: false, sidebarWidth: 220, sidebarTab: "nope", sidenotesCollapsed: true } },
       { version: 3, projectRoot: null, currentDocument: null, layout: { sidebarCollapsed: false, sidebarWidth: "220", sidebarTab: "files", sidenotesCollapsed: true } },
-      { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [], tabs: "nope" },
-      { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [], tabs: [{ path: "a.md" }] },
-      { version: 1, activeTab: null, sidebarWidth: 220, sidebarSections: [{ title: "Files" }], tabs: [] },
     ]) {
       persistRaw(WINDOW_STATE_KEY, malformed);
       expect(loadWindowState()).toEqual(DEFAULT_TEST_WINDOW_STATE);

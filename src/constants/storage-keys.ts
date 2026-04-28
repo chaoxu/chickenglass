@@ -8,12 +8,6 @@
 /** Unified application settings (theme, font size, editor mode, etc.). */
 export const SETTINGS_KEY = "cf-settings";
 
-/**
- * Legacy standalone theme key, kept only for migration in `useSettings`.
- * @deprecated Migrated into `SETTINGS_KEY` on first load.
- */
-export const LEGACY_THEME_KEY = "cf-theme";
-
 /** Most-recently-opened file paths (array of strings). */
 export const RECENT_FILES_KEY = "cf-recent-files";
 

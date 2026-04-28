@@ -20,14 +20,6 @@ import {
   subscribeLocalStorageKey,
 } from "./stores/local-storage-subscription";
 
-/** Persisted state for a single editor tab in the legacy multi-tab model. */
-export interface TabState {
-  /** Absolute file path. */
-  path: string;
-  /** Display name cached from last session. */
-  name: string;
-}
-
 /** Persisted state for the current document. */
 export interface CurrentDocumentState {
   /** Project-relative file path. */
@@ -76,17 +68,8 @@ interface LegacyV2WindowState {
   version: 2;
 }
 
-interface LegacyWindowState {
-  tabs: TabState[];
-  activeTab: string | null;
-  sidebarWidth: number;
-  sidebarSections: SidebarSectionState[];
-  version: 1;
-}
-
 const STATE_VERSION = 3;
 const PREVIOUS_STATE_VERSION = 2;
-const LEGACY_STATE_VERSION = 1;
 const WINDOW_LAUNCH_PROJECT_ROOT_PARAM = "projectRoot";
 const WINDOW_LAUNCH_FILE_PARAM = "file";
 
@@ -143,30 +126,6 @@ export function getWindowStateStorageKey(
   windowLabel: string | null = getCurrentWindowLabel(),
 ): string {
   return windowLabel ? `${WINDOW_STATE_KEY}:${windowLabel}` : WINDOW_STATE_KEY;
-}
-
-function parseLegacyWindowState(value: unknown): LegacyWindowState | null {
-  if (typeof value !== "object" || value === null) return null;
-  const candidate = value as Record<string, unknown>;
-
-  if (candidate["version"] !== LEGACY_STATE_VERSION) return null;
-  if (typeof candidate["activeTab"] !== "string" && candidate["activeTab"] !== null) return null;
-  if (typeof candidate["sidebarWidth"] !== "number") return null;
-  if (!Array.isArray(candidate["tabs"])) return null;
-  if (!Array.isArray(candidate["sidebarSections"])) return null;
-
-  const tabs = (candidate["tabs"] as unknown[]).filter(isTabState);
-  const sections = (candidate["sidebarSections"] as unknown[]).filter(isSidebarSectionState);
-  if (tabs.length !== (candidate["tabs"] as unknown[]).length) return null;
-  if (sections.length !== (candidate["sidebarSections"] as unknown[]).length) return null;
-
-  return {
-    tabs,
-    activeTab: candidate["activeTab"] as string | null,
-    sidebarWidth: candidate["sidebarWidth"] as number,
-    sidebarSections: sections,
-    version: LEGACY_STATE_VERSION,
-  };
 }
 
 function isSidebarTab(value: unknown): value is SidebarTab {
@@ -239,19 +198,7 @@ function migrateWindowState(value: unknown): WindowState | null {
     };
   }
 
-  const legacy = parseLegacyWindowState(value);
-  if (!legacy) return null;
-
-  const currentDocument = legacy.activeTab
-    ? legacy.tabs.find((tab) => tab.path === legacy.activeTab) ?? legacy.tabs[0] ?? null
-    : legacy.tabs[0] ?? null;
-
-  return {
-    projectRoot: null,
-    currentDocument,
-    layout: layoutFromLegacySidebarWidth(legacy.sidebarWidth),
-    version: STATE_VERSION,
-  };
+  return null;
 }
 
 function consumeWindowLaunchStateFromUrl(): Partial<WindowState> | null {
@@ -419,7 +366,7 @@ function isWindowState(value: unknown): value is WindowState {
   return true;
 }
 
-function isTabState(value: unknown): value is TabState {
+function isCurrentDocumentObject(value: unknown): value is CurrentDocumentState {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return typeof v["path"] === "string" && typeof v["name"] === "string";
@@ -427,7 +374,7 @@ function isTabState(value: unknown): value is TabState {
 
 function isCurrentDocumentState(value: unknown): value is CurrentDocumentState | null {
   if (value === null) return true;
-  return isTabState(value);
+  return isCurrentDocumentObject(value);
 }
 
 function isSidebarSectionState(value: unknown): value is SidebarSectionState {

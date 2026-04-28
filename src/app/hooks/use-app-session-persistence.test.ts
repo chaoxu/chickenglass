@@ -1,10 +1,9 @@
 import { act, createElement, type FC, type Dispatch, type SetStateAction } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WINDOW_STATE_KEY } from "../../constants";
 import type { FileEntry } from "../file-manager";
 import type { HotExitBackupStore } from "../hot-exit-backups";
-import { loadWindowState, type WindowState } from "../window-state";
+import type { WindowState } from "../window-state";
 import {
   createTestWindowState,
   type TestWindowStateOverrides,
@@ -219,37 +218,6 @@ describe("useAppSessionPersistence", () => {
     });
 
     expect(ref.setSidebarWidthCalls).toContain(300);
-  });
-
-  it("restores from a real legacy persisted window state after migration", async () => {
-    localStorage.setItem(
-      WINDOW_STATE_KEY,
-      JSON.stringify({
-        activeTab: "legacy.md",
-        sidebarSections: [],
-        sidebarWidth: 333,
-        tabs: [
-          { path: "other.md", name: "Other" },
-          { path: "legacy.md", name: "Legacy" },
-        ],
-        version: 1,
-      }),
-    );
-    const windowState = loadWindowState();
-    const { Harness, ref } = createHarness({
-      fileTree: createFileTree("legacy.md"),
-      workspaceRequestRef: { current: 0 },
-      windowState,
-    });
-
-    await act(async () => {
-      root.render(createElement(Harness));
-      await Promise.resolve();
-    });
-
-    expect(windowState.version).toBe(3);
-    expect(ref.openFileCalls).toContain("legacy.md");
-    expect(ref.setSidebarWidthCalls).toContain(333);
   });
 
   it("restores collapsed sidebar when width is 0", async () => {
