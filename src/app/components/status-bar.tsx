@@ -208,7 +208,7 @@ export function StatusBar({
             <button
               type="button"
               data-testid="command-palette-button"
-              aria-label="Command Palette (⇧⌘P)"
+              aria-label="Command Palette (⌘P)"
               onClick={onOpenPalette}
               className="px-1 rounded hover:bg-[var(--cf-hover)] transition-colors"
             >

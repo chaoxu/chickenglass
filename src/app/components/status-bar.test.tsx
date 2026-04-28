@@ -71,4 +71,21 @@ describe("StatusBar", () => {
     });
     expect(onModeChange).toHaveBeenCalledWith("lexical");
   });
+
+  it("advertises the documented command palette shortcut", () => {
+    act(() => {
+      root.render(createElement(StatusBar, {
+        editorMode: "cm6-rich",
+        onModeChange: vi.fn(),
+        onOpenPalette: vi.fn(),
+        saveStatus: "idle",
+      }));
+    });
+
+    const paletteButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='command-palette-button']",
+    );
+
+    expect(paletteButton?.getAttribute("aria-label")).toBe("Command Palette (⌘P)");
+  });
 });
