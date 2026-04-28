@@ -33,8 +33,8 @@ export function readLocalStorage<T>(key: string, fallback: T): T {
     if (raw === null) return fallback;
     const parsed: unknown = JSON.parse(raw);
     return parsed as T;
-  } catch (_e) {
-    // best-effort: corrupt JSON or unavailable storage — return fallback
+  } catch (error) {
+    console.error("[storage] failed to read localStorage key", key, error);
     return fallback;
   }
 }
@@ -47,7 +47,7 @@ export function readLocalStorage<T>(key: string, fallback: T): T {
 export function writeLocalStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (_e) {
-    // best-effort: localStorage unavailable (quota exceeded, private browsing, tests)
+  } catch (error) {
+    console.error("[storage] failed to write localStorage key", key, error);
   }
 }

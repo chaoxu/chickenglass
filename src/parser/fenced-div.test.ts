@@ -453,6 +453,35 @@ describe("fenced div parser", () => {
       expect(divs[1].text).toBe("::: {.proof}\nProof content\n:::");
     });
 
+    it("same-colon nesting does not hide the second block boundary", () => {
+      const fullParser = parser.configure(markdownExtensions);
+      const text = [
+        "::: {.theorem}",
+        "::: {.proof}",
+        "Proof content.",
+        ":::",
+        ":::",
+      ].join("\n");
+      const divs: NodeInfo[] = [];
+
+      fullParser.parse(text).iterate({
+        enter(node) {
+          if (node.name === "FencedDiv") {
+            divs.push({
+              name: node.name,
+              from: node.from,
+              to: node.to,
+              text: text.slice(node.from, node.to),
+            });
+          }
+        },
+      });
+
+      expect(divs).toHaveLength(2);
+      expect(divs[0].text).toBe("::: {.theorem}\n::: {.proof}\nProof content.\n:::");
+      expect(divs[1].text).toBe("::: {.proof}\nProof content.");
+    });
+
     it("sequential divs with display math before closing fence", () => {
       const fullParser = parser.configure(markdownExtensions);
       const text = [
@@ -537,5 +566,15 @@ describe("fenced div parser", () => {
       expect(findFencedDivOpenerTrailingContent(":::")).toBeUndefined();
       expect(findFencedDivOpenerTrailingContent("regular paragraph")).toBeUndefined();
     });
+  });
+});
+
+describe("non-canonical Pandoc features", () => {
+  it("does not enable Pandoc definition-list nodes", () => {
+    const fullParser = parser.configure(markdownExtensions);
+    const names = parseNodeNames("Term\n: Definition", fullParser);
+
+    expect(names).not.toContain("DefinitionList");
+    expect(names).not.toContain("Definition");
   });
 });

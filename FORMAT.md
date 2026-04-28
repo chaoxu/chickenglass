@@ -230,6 +230,8 @@ Short statement.
 
 Single-line self-closing divs such as `::: {.theorem} Short statement. :::` are not canonical because Pandoc treats them as unclosed divs or literal paragraph text.
 
+Unclosed fenced divs at end of file are tolerated while editing and during import recovery, but they are not canonical. A saved canonical document must include the matching closing fence line.
+
 ### Nesting
 
 Use more colons for outer divs:
@@ -259,6 +261,8 @@ Same-colon nesting is not supported. For example, this is invalid and will parse
 Use `::::` for the outer block and `:::` for the inner block instead.
 
 The parser uses a generation counter to prevent incremental fragment reuse across composite block boundaries.
+
+Display math and fenced divs are independent block structures. A display math opener inside a fenced div must close before the fenced div closes; otherwise the fenced div closer still wins as the block boundary and the math is treated as incomplete authoring state.
 
 ### Built-in block types
 

@@ -901,7 +901,7 @@
   min-height: 28rem;
   border: 1px solid var(--cf-border);
   border-radius: var(--cf-border-radius);
-  background: #fff;
+  background: var(--cf-bg);
 }
 
 table.cf-lexical-table-block {

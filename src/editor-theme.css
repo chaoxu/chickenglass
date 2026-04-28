@@ -170,6 +170,10 @@
 }
 
 [data-theme="dark"] {
+  --cf-ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --cf-content-font: KaTeX_Main, "Times New Roman", serif;
+  --cf-code-font: Monaco, "DejaVu Sans Mono", Consolas, monospace;
+
   --cf-bg: #0a0a0a;
   --cf-bg-secondary: #0a0a0a;
   --cf-fg: #fafafa;
@@ -194,6 +198,89 @@
   --cf-active-shell-border-width: 2px;
   --cf-bg-overlay: rgba(10, 10, 10, 0.82);
   --cf-border-overlay: rgba(63, 63, 70, 0.6);
+
+  --cf-layer-inline-chrome: 1;
+  --cf-layer-preview-surface: 1000;
+  --cf-layer-block-picker: 1010;
+
+  --cf-block-header-accent: var(--cf-fg);
+  --cf-block-header-border-width: 0px;
+  --cf-block-theorem-accent: var(--cf-block-header-accent);
+  --cf-block-lemma-accent: var(--cf-block-header-accent);
+  --cf-block-corollary-accent: var(--cf-block-header-accent);
+  --cf-block-proposition-accent: var(--cf-block-header-accent);
+  --cf-block-conjecture-accent: var(--cf-block-header-accent);
+  --cf-block-definition-accent: var(--cf-block-header-accent);
+  --cf-block-problem-accent: var(--cf-block-header-accent);
+  --cf-block-example-accent: var(--cf-block-header-accent);
+  --cf-block-remark-accent: var(--cf-block-header-accent);
+  --cf-block-proof-accent: var(--cf-block-header-accent);
+  --cf-block-algorithm-accent: var(--cf-block-header-accent);
+  --cf-block-figure-accent: var(--cf-block-header-accent);
+  --cf-block-table-accent: var(--cf-block-header-accent);
+  --cf-block-title-color: var(--cf-fg);
+  --cf-block-title-weight: 700;
+  --cf-block-theorem-style: italic;
+  --cf-block-lemma-style: italic;
+  --cf-block-corollary-style: italic;
+  --cf-block-proposition-style: italic;
+  --cf-block-conjecture-style: italic;
+  --cf-block-definition-style: normal;
+  --cf-block-problem-style: normal;
+  --cf-block-example-style: normal;
+  --cf-block-remark-style: normal;
+  --cf-block-proof-style: normal;
+  --cf-block-algorithm-style: normal;
+  --cf-block-figure-style: normal;
+  --cf-block-table-style: normal;
+  --cf-block-nest-1: var(--cf-border);
+  --cf-block-nest-2: var(--cf-active);
+  --cf-block-nest-3: var(--cf-muted);
+  --cf-block-nest-4: var(--cf-fg);
+  --cf-proof-marker: "\220E";
+  --cf-proof-marker-color: var(--cf-fg);
+  --cf-proof-marker-size: 1.2em;
+  --cf-blockquote-border: var(--cf-border);
+  --cf-blockquote-color: var(--cf-fg);
+  --cf-block-margin: 0.6em 0;
+  --cf-block-title-display: inline;
+  --cf-block-title-separator: ".\2002\2002";
+  --cf-table-border: var(--cf-border);
+  --cf-table-header-border: var(--cf-border);
+  --cf-table-edit-outline: var(--cf-active);
+  --cf-table-cell-padding: 0.5em 0.75em;
+  --cf-table-font-size: 0.9em;
+  --cf-table-line-height: 1.5;
+
+  --cf-border-radius: 2px;
+  --cf-border-radius-lg: 4px;
+  --cf-spacing-xs: 4px;
+  --cf-spacing-sm: 8px;
+  --cf-spacing-md: 12px;
+  --cf-spacing-lg: 16px;
+  --cf-preview-surface-max-width: 400px;
+  --cf-preview-surface-max-height: 300px;
+  --cf-preview-surface-padding-block: var(--cf-spacing-md);
+  --cf-preview-surface-padding-inline: var(--cf-spacing-lg);
+  --cf-preview-surface-font-size: 0.9em;
+  --cf-ui-font-size-sm: 12px;
+  --cf-ui-font-size-base: 14px;
+  --cf-border-width: 1px;
+  --cf-border-width-accent: 2px;
+  --cf-transition: 0.15s ease;
+  --cf-content-max-width: 800px;
+  --cf-sidenote-width: 224px;
+  --cf-fence-guide-width: 3px;
+  --cf-doc-content-padding-block-start: 24px;
+  --cf-doc-content-padding-block-end: 64px;
+  --cf-doc-content-padding-inline: 48px;
+  --cf-doc-paragraph-margin: 0;
+  --cf-doc-heading-margin: 0;
+  --cf-doc-list-margin: 0.8em 0;
+  --cf-doc-list-item-margin: 0.2em 0;
+  --cf-doc-code-block-margin: 1em 0;
+  --cf-doc-display-math-margin: 0;
+  --cf-doc-blockquote-margin: 1em 0;
 }
 
 /* ── Font utility classes ──────────────────────────────────────────────────── */
@@ -814,7 +901,7 @@
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--cf-active-shell-border);
-  color: #fff;
+  color: var(--cf-bg);
   font-family: var(--cf-code-font, Monaco, "DejaVu Sans Mono", Consolas, monospace);
   font-size: 10px;
   font-weight: 700;
