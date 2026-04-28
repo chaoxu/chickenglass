@@ -6,11 +6,6 @@ import {
   matchBracketedReference,
   NARRATIVE_REFERENCE_RE,
 } from "./semantics/reference-parts";
-import {
-  collectLinkReferencesFromTree,
-  resolveLinkReference,
-  type LinkReferenceMap,
-} from "./lib/markdown/link-references";
 
 const inlineParser = baseParser.configure(markdownExtensions);
 
@@ -21,7 +16,6 @@ export type InlineFragment =
   | { kind: "strikethrough"; children: readonly InlineFragment[] }
   | { kind: "highlight"; children: readonly InlineFragment[] }
   | { kind: "code"; text: string }
-  | { kind: "html-element"; tagName: "sub" | "sup"; children: readonly InlineFragment[] }
   | { kind: "math"; latex: string; raw: string }
   | { kind: "link"; href?: string; children: readonly InlineFragment[] }
   | {
@@ -78,54 +72,49 @@ function getDelimitedRange(
 function buildLinkChildren(
   node: SyntaxNode,
   doc: string,
-  linkReferences?: LinkReferenceMap,
 ): readonly InlineFragment[] {
   const range = getDelimitedRange(node, "LinkMark");
   if (!range) {
     return [createTextFragment(doc.slice(node.from, node.to))].filter(Boolean) as InlineFragment[];
   }
-  return buildInlineFragmentsRaw(node, doc, range.from, range.to, linkReferences);
+  return buildInlineFragmentsRaw(node, doc, range.from, range.to);
 }
 
 function buildLinkFragment(
   node: SyntaxNode,
   doc: string,
-  linkReferences?: LinkReferenceMap,
-): InlineFragment {
+): InlineFragment[] {
   const raw = doc.slice(node.from, node.to);
   const referenceMatch = matchBracketedReference(raw);
   if (referenceMatch) {
-    return {
+    return [{
       kind: "reference",
       parenthetical: true,
       rawText: referenceMatch.raw,
       ids: referenceMatch.ids,
       locators: referenceMatch.locators,
-    };
+    }];
   }
 
   const hrefNode = node.getChild("URL");
-  const labelNode = node.getChild("LinkLabel");
-  const href = hrefNode
-    ? doc.slice(hrefNode.from, hrefNode.to).trim()
-    : labelNode && linkReferences
-      ? resolveLinkReference(linkReferences, doc.slice(labelNode.from, labelNode.to))
-      : undefined;
-  return {
+  if (!hrefNode) {
+    const text = createTextFragment(raw);
+    return text ? [text] : [];
+  }
+  return [{
     kind: "link",
-    href,
-    children: buildLinkChildren(node, doc, linkReferences),
-  };
+    href: doc.slice(hrefNode.from, hrefNode.to).trim(),
+    children: buildLinkChildren(node, doc),
+  }];
 }
 
 function buildImageFragment(
   node: SyntaxNode,
   doc: string,
-  linkReferences?: LinkReferenceMap,
 ): InlineFragment {
   const range = getDelimitedRange(node, "LinkMark");
   const rawAlt = range ? doc.slice(range.from, range.to) : "";
-  const alt = range ? buildInlineFragmentsRaw(node, doc, range.from, range.to, linkReferences) : [];
+  const alt = range ? buildInlineFragmentsRaw(node, doc, range.from, range.to) : [];
   const srcNode = node.getChild("URL");
   const src = srcNode ? doc.slice(srcNode.from, srcNode.to).trim() : undefined;
   return {
@@ -134,6 +123,16 @@ function buildImageFragment(
     alt,
     src,
   };
+}
+
+function buildAutolinkFragment(node: SyntaxNode, doc: string): InlineFragment[] {
+  const urlNode = node.getChild("URL");
+  if (!urlNode) {
+    const text = createTextFragment(doc.slice(node.from, node.to));
+    return text ? [text] : [];
+  }
+  const href = doc.slice(urlNode.from, urlNode.to);
+  return [{ kind: "link", href, children: [{ kind: "text", text: href }] }];
 }
 
 function buildFootnoteFragment(node: SyntaxNode, doc: string): InlineFragment {
@@ -145,20 +144,9 @@ function buildFootnoteFragment(node: SyntaxNode, doc: string): InlineFragment {
   };
 }
 
-function htmlTagName(source: string): "br" | "sub" | "sup" | "/sub" | "/sup" | null {
-  const normalized = source.trim().toLocaleLowerCase();
-  if (/^<br\s*\/?>$/.test(normalized)) return "br";
-  if (normalized === "<sub>") return "sub";
-  if (normalized === "</sub>") return "/sub";
-  if (normalized === "<sup>") return "sup";
-  if (normalized === "</sup>") return "/sup";
-  return null;
-}
-
 function buildInlineFragment(
   node: SyntaxNode,
   doc: string,
-  linkReferences?: LinkReferenceMap,
 ): InlineFragment[] {
   if (MARK_NODES.has(node.name)) {
     return [];
@@ -166,13 +154,13 @@ function buildInlineFragment(
 
   switch (node.name) {
     case "Emphasis":
-      return [{ kind: "emphasis", children: buildInlineFragmentsRaw(node, doc, undefined, undefined, linkReferences) }];
+      return [{ kind: "emphasis", children: buildInlineFragmentsRaw(node, doc) }];
     case "StrongEmphasis":
-      return [{ kind: "strong", children: buildInlineFragmentsRaw(node, doc, undefined, undefined, linkReferences) }];
+      return [{ kind: "strong", children: buildInlineFragmentsRaw(node, doc) }];
     case "Strikethrough":
-      return [{ kind: "strikethrough", children: buildInlineFragmentsRaw(node, doc, undefined, undefined, linkReferences) }];
+      return [{ kind: "strikethrough", children: buildInlineFragmentsRaw(node, doc) }];
     case "Highlight":
-      return [{ kind: "highlight", children: buildInlineFragmentsRaw(node, doc, undefined, undefined, linkReferences) }];
+      return [{ kind: "highlight", children: buildInlineFragmentsRaw(node, doc) }];
     case "InlineCode":
       return [{ kind: "code", text: getCodeText(node, doc) }];
     case "InlineMath": {
@@ -180,13 +168,19 @@ function buildInlineFragment(
       return [{ kind: "math", latex, raw }];
     }
     case "Link":
-      return [buildLinkFragment(node, doc, linkReferences)];
+      return buildLinkFragment(node, doc);
+    case "Autolink":
+      return buildAutolinkFragment(node, doc);
     case "URL": {
+      if (node.parent?.name !== "Autolink") {
+        const text = createTextFragment(doc.slice(node.from, node.to));
+        return text ? [text] : [];
+      }
       const href = doc.slice(node.from, node.to);
       return [{ kind: "link", href, children: [{ kind: "text", text: href }] }];
     }
     case "Image":
-      return [buildImageFragment(node, doc, linkReferences)];
+      return [buildImageFragment(node, doc)];
     case "FootnoteRef":
       return [buildFootnoteFragment(node, doc)];
     case "Escape": {
@@ -195,10 +189,6 @@ function buildInlineFragment(
     }
     case "HardBreak":
       return [{ kind: "hard-break" }];
-    case "HTMLTag": {
-      const tag = htmlTagName(doc.slice(node.from, node.to));
-      return tag === "br" ? [{ kind: "hard-break" }] : [];
-    }
     default: {
       const text = createTextFragment(doc.slice(node.from, node.to));
       return text ? [text] : [];
@@ -252,7 +242,6 @@ function normalizeNarrativeReferences(
       case "strong":
       case "strikethrough":
       case "highlight":
-      case "html-element":
         normalized.push({
           ...fragment,
           children: normalizeNarrativeReferences(fragment.children),
@@ -273,7 +262,6 @@ function buildInlineFragmentsRaw(
   doc: string,
   rangeFrom?: number,
   rangeTo?: number,
-  linkReferences?: LinkReferenceMap,
 ): InlineFragment[] {
   const from = rangeFrom ?? node.from;
   const to = rangeTo ?? node.to;
@@ -281,43 +269,13 @@ function buildInlineFragmentsRaw(
   let pos = from;
   let child = node.firstChild;
 
-  childLoop:
   while (child) {
     if (child.to > from && child.from < to) {
-      if (child.name === "HTMLTag") {
-        const tag = htmlTagName(doc.slice(child.from, child.to));
-        if (tag === "sub" || tag === "sup") {
-          let close = child.nextSibling;
-          while (close) {
-            if (close.name === "HTMLTag" && htmlTagName(doc.slice(close.from, close.to)) === `/${tag}`) {
-              if (child.from > pos) {
-                const text = createTextFragment(doc.slice(pos, child.from));
-                if (text) fragments.push(text);
-              }
-              fragments.push({
-                kind: "html-element",
-                tagName: tag,
-                children: buildInlineFragmentsRaw(
-                  node,
-                  doc,
-                  child.to,
-                  close.from,
-                  linkReferences,
-                ),
-              });
-              pos = close.to;
-              child = close.nextSibling;
-              continue childLoop;
-            }
-            close = close.nextSibling;
-          }
-        }
-      }
       if (child.from > pos) {
         const text = createTextFragment(doc.slice(pos, child.from));
         if (text) fragments.push(text);
       }
-      fragments.push(...buildInlineFragment(child, doc, linkReferences));
+      fragments.push(...buildInlineFragment(child, doc));
       pos = child.to;
     }
     child = child.nextSibling;
@@ -331,12 +289,22 @@ function buildInlineFragmentsRaw(
   return fragments;
 }
 
-function getRootNode(node: SyntaxNode): SyntaxNode {
-  let root = node;
-  while (root.parent) {
-    root = root.parent;
+function mergeAdjacentTextFragments(
+  fragments: readonly InlineFragment[],
+): InlineFragment[] {
+  const merged: InlineFragment[] = [];
+  for (const fragment of fragments) {
+    const previous = merged.at(-1);
+    if (previous?.kind === "text" && fragment.kind === "text") {
+      merged[merged.length - 1] = {
+        kind: "text",
+        text: previous.text + fragment.text,
+      };
+      continue;
+    }
+    merged.push(fragment);
   }
-  return root;
+  return merged;
 }
 
 export function buildInlineFragments(
@@ -346,13 +314,12 @@ export function buildInlineFragments(
   rangeTo?: number,
 ): InlineFragment[] {
   return normalizeNarrativeReferences(
-    buildInlineFragmentsRaw(
+    mergeAdjacentTextFragments(buildInlineFragmentsRaw(
       node,
       doc,
       rangeFrom,
       rangeTo,
-      collectLinkReferencesFromTree(getRootNode(node), doc),
-    ),
+    )),
   );
 }
 
@@ -360,7 +327,6 @@ export function parseInlineFragments(text: string): InlineFragment[] {
   if (!text) return [];
 
   const tree = inlineParser.parse(text);
-  const linkReferences = collectLinkReferencesFromTree(tree, text);
   const doc = tree.topNode;
   const para = doc.firstChild;
   if (!para) {
@@ -371,11 +337,11 @@ export function parseInlineFragments(text: string): InlineFragment[] {
   if (para.from > 0) {
     fragments.push({ kind: "text", text: text.slice(0, para.from) });
   }
-  fragments.push(...buildInlineFragmentsRaw(para, text, undefined, undefined, linkReferences));
+  fragments.push(...buildInlineFragmentsRaw(para, text));
   if (para.to < text.length) {
     fragments.push({ kind: "text", text: text.slice(para.to) });
   }
-  return normalizeNarrativeReferences(fragments);
+  return normalizeNarrativeReferences(mergeAdjacentTextFragments(fragments));
 }
 
 function findNeutralGapAnchor(

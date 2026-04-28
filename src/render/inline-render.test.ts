@@ -364,9 +364,9 @@ describe("renderInlineMarkdown — surface policies", () => {
     expect(html).toBe('<img src="image.png" alt="alt text">');
   });
 
-  it("renders Pandoc-compatible inline HTML sub/sup and br fragments", () => {
+  it("escapes raw inline HTML because it is not canonical FORMAT.md", () => {
     const html = render("H<sub>2</sub>O x<sup>2</sup><br>next");
-    expect(html).toBe("H<sub>2</sub>O x<sup>2</sup><br>next");
+    expect(html).toBe("H&lt;sub&gt;2&lt;/sub&gt;O x&lt;sup&gt;2&lt;/sup&gt;&lt;br&gt;next");
   });
 
   it("renders footnote refs as inert superscripts in ui-chrome-inline", () => {

@@ -172,23 +172,20 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
     expect(specs.some((spec) => spec.widgetClass === "HorizontalRuleWidget")).toBe(false);
   });
 
-  it("replaces canonical HTML br tags with break widgets outside the cursor", () => {
+  it("keeps raw HTML br tags visible as noncanonical source", () => {
     view = createView("line<br />break", 0);
     const specs = getAllDecorationSpecs(view);
     const from = view.state.doc.toString().indexOf("<br />");
 
-    expect(specs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from,
-          to: from + "<br />".length,
-          widgetClass: "HardBreakWidget",
-        }),
-      ]),
-    );
+    expect(specs.some((spec) =>
+      spec.from === from &&
+      spec.to === from + "<br />".length &&
+      spec.widgetClass === "HardBreakWidget"
+    )).toBe(false);
+    expect(hasMarkClassInRange(specs, from, from + "<br />".length, CSS.hidden)).toBe(false);
   });
 
-  it("renders paired subscript and superscript HTML tags", () => {
+  it("keeps raw subscript and superscript HTML tags visible as source", () => {
     view = createView("H<sub>2</sub>O", 0);
     const subItems = collectMarkdownItems(
       view,
@@ -196,17 +193,8 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       () => false,
     );
 
-    expect(subItems).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 6,
-          to: 7,
-          value: expect.objectContaining({
-            spec: expect.objectContaining({ tagName: "sub" }),
-          }),
-        }),
-      ]),
-    );
+    expect(subItems.some((item) => item.value.spec.tagName === "sub")).toBe(false);
+    expect(subItems.some((item) => item.value.spec.class === CSS.hidden)).toBe(false);
 
     view.destroy();
     view = createView("x<sup>2</sup>", 0);
@@ -216,17 +204,8 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       () => false,
     );
 
-    expect(supItems).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 6,
-          to: 7,
-          value: expect.objectContaining({
-            spec: expect.objectContaining({ tagName: "sup" }),
-          }),
-        }),
-      ]),
-    );
+    expect(supItems.some((item) => item.value.spec.tagName === "sup")).toBe(false);
+    expect(supItems.some((item) => item.value.spec.class === CSS.hidden)).toBe(false);
   });
 
   it("does not throw when cursor is at beginning", () => {
@@ -425,7 +404,7 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       expect(linkDecorationCacheSize()).toBeLessThanOrEqual(256);
     });
 
-    it("renders reference-style links through shared link definitions", () => {
+    it("keeps reference-style links and link definitions visible as noncanonical source", () => {
       const doc = "[target][ref]\n\n[ref]: https://example.com";
       view = createView(doc, doc.indexOf("\n"));
 
@@ -433,12 +412,22 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       const linkTextFrom = doc.indexOf("target");
       const definitionFrom = doc.indexOf("[ref]:");
 
-      expect(hasMarkClassInRange(specs, linkTextFrom, linkTextFrom + "target".length, CSS.linkRendered)).toBe(true);
-      expect(hasMarkClassInRange(specs, definitionFrom, doc.length, CSS.hidden)).toBe(true);
+      expect(hasMarkClassInRange(specs, linkTextFrom, linkTextFrom + "target".length, CSS.linkRendered)).toBe(false);
+      expect(hasMarkClassInRange(specs, definitionFrom, doc.length, CSS.hidden)).toBe(false);
     });
 
-    it("renders bare autolink URLs as clickable text", () => {
+    it("keeps bare URL autolinks visible as noncanonical source", () => {
       const doc = "Visit https://example.com now";
+      view = createView(doc, 0);
+
+      const specs = getAllDecorationSpecs(view);
+      const urlFrom = doc.indexOf("https://example.com");
+
+      expect(hasMarkClassInRange(specs, urlFrom, urlFrom + "https://example.com".length, CSS.linkRendered)).toBe(false);
+    });
+
+    it("renders angle autolinks as clickable canonical links", () => {
+      const doc = "Visit <https://example.com> now";
       view = createView(doc, 0);
 
       const specs = getAllDecorationSpecs(view);
@@ -447,16 +436,11 @@ describe("markdownRenderPlugin (Decoration.mark approach)", () => {
       expect(hasMarkClassInRange(specs, urlFrom, urlFrom + "https://example.com".length, CSS.linkRendered)).toBe(true);
     });
 
-    it("hides HTML comments outside the cursor and reveals them for editing", () => {
+    it("keeps HTML comments visible as noncanonical source", () => {
       const doc = "before\n<!-- hidden note -->\nafter";
       const commentFrom = doc.indexOf("<!--");
       const commentTo = doc.indexOf("-->") + 3;
       view = createView(doc, 0);
-
-      expect(hasMarkClassInRange(getAllDecorationSpecs(view), commentFrom, commentTo, CSS.hidden)).toBe(true);
-
-      view.destroy();
-      view = createView(doc, commentFrom + 5);
 
       expect(hasMarkClassInRange(getAllDecorationSpecs(view), commentFrom, commentTo, CSS.hidden)).toBe(false);
     });

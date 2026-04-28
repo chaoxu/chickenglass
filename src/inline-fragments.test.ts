@@ -40,16 +40,21 @@ describe("parseInlineFragments", () => {
     ]);
   });
 
-  it("parses reference-style links with their resolved target", () => {
+  it("keeps reference-style links as noncanonical source text", () => {
     expect(parseInlineFragments("[text][ref]\n\n[ref]: https://example.com")[0]).toEqual({
-      kind: "link",
-      href: "https://example.com",
-      children: [{ kind: "text", text: "text" }],
+      kind: "text",
+      text: "[text][ref]\n\n[ref]: https://example.com",
     });
   });
 
-  it("parses bare URLs as link fragments", () => {
+  it("keeps bare URLs as noncanonical source text", () => {
     expect(parseInlineFragments("https://example.com")).toEqual([
+      { kind: "text", text: "https://example.com" },
+    ]);
+  });
+
+  it("parses angle autolinks as link fragments", () => {
+    expect(parseInlineFragments("<https://example.com>")).toEqual([
       {
         kind: "link",
         href: "https://example.com",
@@ -58,22 +63,9 @@ describe("parseInlineFragments", () => {
     ]);
   });
 
-  it("parses canonical inline HTML fragments", () => {
+  it("keeps raw inline HTML as noncanonical source text", () => {
     expect(parseInlineFragments("H<sub>2</sub>O x<sup>2</sup><br>next")).toEqual([
-      { kind: "text", text: "H" },
-      {
-        kind: "html-element",
-        tagName: "sub",
-        children: [{ kind: "text", text: "2" }],
-      },
-      { kind: "text", text: "O x" },
-      {
-        kind: "html-element",
-        tagName: "sup",
-        children: [{ kind: "text", text: "2" }],
-      },
-      { kind: "hard-break" },
-      { kind: "text", text: "next" },
+      { kind: "text", text: "H<sub>2</sub>O x<sup>2</sup><br>next" },
     ]);
   });
 
