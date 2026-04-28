@@ -6,7 +6,7 @@ import {
 } from "@codemirror/view";
 import { type EditorState, type Range, type Extension } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import type { SyntaxNodeRef } from "@lezer/common";
+import type { SyntaxNodeRef, Tree } from "@lezer/common";
 import {
   normalizeDirtyRange,
   type VisibleRange,
@@ -473,6 +473,38 @@ const CURSOR_SENSITIVE_NODES = new Set(
   [...MARKDOWN_HANDLERS].filter(([, h]) => h.cursorSensitive).map(([name]) => name),
 );
 
+function uniqueNodeKey(node: SyntaxNodeRef): string {
+  return `${node.name}:${node.from}:${node.to}`;
+}
+
+function nodeRangeKey(node: SyntaxNodeRef): string {
+  return `${node.from}:${node.to}`;
+}
+
+function iterateTreeUnique(
+  tree: Tree,
+  options: {
+    readonly from: number;
+    readonly to: number;
+    readonly key?: (node: SyntaxNodeRef) => string;
+    readonly seen?: Set<string>;
+    readonly enter: (node: SyntaxNodeRef) => false | undefined;
+  },
+): void {
+  const seenNodes = options.seen ?? new Set<string>();
+  const keyForNode = options.key ?? uniqueNodeKey;
+  tree.iterate({
+    from: options.from,
+    to: options.to,
+    enter(node) {
+      const key = keyForNode(node);
+      if (seenNodes.has(key)) return undefined;
+      seenNodes.add(key);
+      return options.enter(node);
+    },
+  });
+}
+
 function mapNodeRange(
   update: ViewUpdate,
   from: number,
@@ -492,20 +524,21 @@ function collectMarkdownDirtyRangesInState(
   pushRange: (from: number, to: number) => void,
 ): void {
   const tree = syntaxTree(state);
-  const seen = new Set<string>();
-  const pushNodeRange = (from: number, to: number) => {
+  const seenRanges = new Set<string>();
+  const pushUniqueRange = (from: number, to: number) => {
     const key = `${from}:${to}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    if (seenRanges.has(key)) return;
+    seenRanges.add(key);
     pushRange(from, to);
   };
 
-  tree.iterate({
+  iterateTreeUnique(tree, {
     from: rangeFrom,
     to: rangeTo,
+    key: nodeRangeKey,
     enter(node) {
       if (MARKDOWN_HANDLERS.has(node.name)) {
-        pushNodeRange(node.from, node.to);
+        pushUniqueRange(node.from, node.to);
       }
     },
   });
@@ -517,7 +550,7 @@ function collectMarkdownDirtyRangesInState(
       let node = tree.resolveInner(clampedPos, side);
       while (true) {
         if (MARKDOWN_HANDLERS.has(node.name)) {
-          pushNodeRange(node.from, node.to);
+          pushUniqueRange(node.from, node.to);
         }
         const parent = node.parent;
         if (!parent) break;
@@ -726,21 +759,17 @@ function collectMarkdownItems(
   const seenNodes = new Set<string>();
 
   for (const { from, to } of ranges) {
-    tree.iterate({
+    iterateTreeUnique(tree, {
       from,
       to,
+      seen: seenNodes,
       enter(node) {
         const handler = MARKDOWN_HANDLERS.get(node.name);
         if (!handler) return undefined;
-        const nodeKey = `${node.name}:${node.from}:${node.to}`;
-        if (seenNodes.has(nodeKey)) {
-          return undefined;
-        }
-        seenNodes.add(nodeKey);
         if (skip(node.from) && node.from < from) {
           return undefined;
         }
-        return handler.handle(node, ctx);
+        return handler.handle(node, ctx) === false ? false : undefined;
       },
     });
   }
