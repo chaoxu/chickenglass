@@ -415,12 +415,12 @@ async function clearTransientScenarioState(page) {
   await page.keyboard.press("Escape").catch(() => {});
   await page.mouse.move(2, 2).catch(() => {});
   await waitForAnimationFrames(page, 1);
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     window.__app?.setSearchOpen?.(false);
     window.__cmDebug?.clearStructure?.();
     window.__cmDebug?.clearMotionGuards?.();
     window.__cfDebug?.clearScrollGuards?.();
-    window.__cfDebug?.clearInteractionLog?.();
+    await window.__cfDebug?.clearAllDebugBuffers?.();
 
     for (const tooltip of document.querySelectorAll(".cf-hover-preview-tooltip")) {
       if (tooltip instanceof HTMLElement) {
@@ -437,8 +437,6 @@ async function clearTransientScenarioState(page) {
     )) {
       active.blur();
     }
-
-    window.__cfDebug?.clearSession?.();
   }).catch(() => {});
   await waitForAnimationFrames(page, 2);
 }

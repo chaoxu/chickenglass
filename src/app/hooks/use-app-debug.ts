@@ -415,6 +415,27 @@ export function useAppDebug({
           currentDocument: options?.includeDocument === false ? null : getCurrentDocText(),
         }),
       clearSession: clearDebugSessionEvents,
+      captureFullSession: async (options?: {
+        includeDocument?: boolean;
+        label?: string | null;
+      }) => {
+        const capture = captureDebugSessionState(options?.label ?? "full-session");
+        const [perf] = await Promise.all([getCombinedPerfSnapshot()]);
+        return {
+          capturedAt: Date.now(),
+          capture,
+          interactions: getInteractionLog(),
+          perf,
+          session: exportDebugSessionEvents({
+            currentDocument: options?.includeDocument === false ? null : getCurrentDocText(),
+          }),
+        };
+      },
+      clearAllDebugBuffers: async () => {
+        clearDebugSessionEvents();
+        clearInteractionLog();
+        await clearCombinedPerf();
+      },
     } satisfies CfDebugBridge;
     window.__cfDebug = cfDebugBridge;
     markDebugBridgeReady("cfDebug");

@@ -80,9 +80,9 @@ async function evaluateStep(page, label, callback, arg) {
   }
 }
 
-async function clearPerf(page) {
-  await evaluateStep(page, "clearPerf", async () => {
-    await window.__cfDebug.clearPerf();
+async function clearDebugBuffers(page) {
+  await evaluateStep(page, "clearDebugBuffers", async () => {
+    await window.__cfDebug.clearAllDebugBuffers();
   });
 }
 
@@ -1534,7 +1534,7 @@ async function runScenarioSamples(
     await discardDirtyPerfState(page);
     await page.goto(appUrl, { waitUntil: "domcontentloaded" });
     await waitForDebugBridge(page, { timeout: runtimeOptions.debugBridgeTimeoutMs });
-    await clearPerf(page);
+    await clearDebugBuffers(page);
     const scenarioResult = await scenario.run(page, runtimeOptions);
     await waitForDocumentStable(page, {
       quietMs: settleMs,

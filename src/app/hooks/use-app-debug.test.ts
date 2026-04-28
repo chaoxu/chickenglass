@@ -135,6 +135,13 @@ describe("useAppDebug", () => {
     expect(window.__cfDebug?.exportSession()).toMatchObject({
       currentDocument: "# Notes",
     });
+    await expect(window.__cfDebug?.captureFullSession()).resolves.toMatchObject({
+      session: {
+        currentDocument: "# Notes",
+      },
+      interactions: [],
+    });
+    await expect(window.__cfDebug?.clearAllDebugBuffers()).resolves.toBeUndefined();
     expect(window.__tauriSmoke).toBeDefined();
 
     const snapshot = await window.__tauriSmoke?.getWindowState();

@@ -214,6 +214,8 @@ __cfDebug.interactionLog()                      — recent Lexical interaction t
 __cfDebug.clearInteractionLog()                 — clear Lexical interaction trace entries
 __cfDebug.exportSession()                       — export locally recorded debug session events
 __cfDebug.clearSession()                        — clear locally recorded debug session events
+__cfDebug.captureFullSession()                  — combined debug export with session events, interactions, perf, and current capture
+__cfDebug.clearAllDebugBuffers()                — clear session events, interactions, and frontend/backend perf spans
 __tauriSmoke.openProject("/abs/path")           — dev-only Tauri helper to switch project roots deterministically
 __tauriSmoke.openFile("/abs/path")              — dev-only Tauri helper to open a file
 __tauriSmoke.requestNativeClose()               — dev-only Tauri helper to request native close handling

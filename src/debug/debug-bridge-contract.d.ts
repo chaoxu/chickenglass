@@ -12,6 +12,7 @@ import type {
 export type { DebugDocumentState } from "../lib/debug-types";
 import type {
   DebugSessionCapture,
+  DebugSessionExport,
   DebugSessionRecorderStatus,
 } from "./session-recorder";
 import type { EditorRuntimeContractSnapshot } from "./editor-runtime-contract";
@@ -107,6 +108,19 @@ export interface CfDebugBridge {
   clearInteractionLog: () => void;
   exportSession: (options?: { includeDocument?: boolean }) => unknown;
   clearSession: () => void;
+  captureFullSession: (options?: {
+    includeDocument?: boolean;
+    label?: string | null;
+  }) => Promise<CfDebugFullSession>;
+  clearAllDebugBuffers: () => Promise<void>;
+}
+
+export interface CfDebugFullSession {
+  readonly capturedAt: number;
+  readonly capture: DebugSessionCapture;
+  readonly interactions: readonly InteractionTraceEntry[];
+  readonly perf: unknown;
+  readonly session: DebugSessionExport;
 }
 
 export interface TauriSmokeBridge {
