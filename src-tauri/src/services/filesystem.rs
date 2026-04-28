@@ -46,14 +46,18 @@ pub fn install_project_root(
 }
 
 pub fn read_text_file(path: &Path, relative_path: &str) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|e| format!("Failed to read '{}': {}", relative_path, e))
+    fs::read_to_string(path).map_err(|e| fs_error("read", relative_path, e))
 }
 
 pub fn write_text_file(path: &Path, relative_path: &str, content: &str) -> Result<(), String> {
     write_existing_file(path, content).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => format!("File not found: {}", relative_path),
-        _ => format!("Failed to write '{}': {}", relative_path, e),
+        _ => fs_error("write", relative_path, e),
     })
+}
+
+fn fs_error(action: &str, target: &str, error: impl std::fmt::Display) -> String {
+    format!("Failed to {action} '{target}': {error}")
 }
 
 pub enum ConditionalTextWriteResult {
@@ -93,7 +97,7 @@ fn write_text_file_if_hash_with_hook(
             return Ok(ConditionalTextWriteResult::Missing);
         }
         Err(error) => {
-            return Err(format!("Failed to inspect '{}': {}", relative_path, error));
+            return Err(fs_error("inspect", relative_path, error));
         }
     };
     let current = match fs::read_to_string(path) {
@@ -102,7 +106,7 @@ fn write_text_file_if_hash_with_hook(
             return Ok(ConditionalTextWriteResult::Missing);
         }
         Err(error) => {
-            return Err(format!("Failed to read '{}': {}", relative_path, error));
+            return Err(fs_error("read", relative_path, error));
         }
     };
     if hash_content(&current) != expected_hash {
@@ -110,9 +114,9 @@ fn write_text_file_if_hash_with_hook(
     }
 
     let permissions = existing_file_permissions_for_atomic_write(path)
-        .map_err(|e| format!("Failed to inspect '{}': {}", relative_path, e))?;
+        .map_err(|e| fs_error("inspect", relative_path, e))?;
     let temp_path = write_same_directory_temp_file(path, content.as_bytes(), Some(permissions))
-        .map_err(|e| format!("Failed to write '{}': {}", relative_path, e))?;
+        .map_err(|e| fs_error("write", relative_path, e))?;
 
     let final_content = match fs::read_to_string(path) {
         Ok(final_content) => final_content,
@@ -122,7 +126,7 @@ fn write_text_file_if_hash_with_hook(
         }
         Err(error) => {
             let _ = fs::remove_file(&temp_path);
-            return Err(format!("Failed to read '{}': {}", relative_path, error));
+            return Err(fs_error("read", relative_path, error));
         }
     };
     if hash_content(&final_content) != expected_hash {
@@ -132,22 +136,21 @@ fn write_text_file_if_hash_with_hook(
 
     if let Err(error) = verify_existing_file_writable(path) {
         let _ = fs::remove_file(&temp_path);
-        return Err(format!("Failed to write '{}': {}", relative_path, error));
+        return Err(fs_error("write", relative_path, error));
     }
 
     before_atomic_replace();
 
     match checked_atomic_text_replace(path, &temp_path, &expected, expected_hash, &hash_content) {
         Ok(CheckedAtomicReplaceResult::Written) => {
-            sync_parent_directory(path)
-                .map_err(|e| format!("Failed to write '{}': {}", relative_path, e))?;
+            sync_parent_directory(path).map_err(|e| fs_error("write", relative_path, e))?;
             Ok(ConditionalTextWriteResult::Written)
         }
         Ok(CheckedAtomicReplaceResult::Modified(current)) => {
             Ok(ConditionalTextWriteResult::Modified(current))
         }
         Ok(CheckedAtomicReplaceResult::Missing) => Ok(ConditionalTextWriteResult::Missing),
-        Err(error) => Err(format!("Failed to write '{}': {}", relative_path, error)),
+        Err(error) => Err(fs_error("write", relative_path, error)),
     }
 }
 
@@ -233,7 +236,7 @@ pub fn create_text_file(
     }
     write_new_file(path, content.unwrap_or_default().as_bytes()).map_err(|e| match e.kind() {
         std::io::ErrorKind::AlreadyExists => format!("File already exists: {}", relative_path),
-        _ => format!("Failed to create '{}': {}", relative_path, e),
+        _ => fs_error("create", relative_path, e),
     })
 }
 
@@ -245,7 +248,7 @@ pub fn create_directory(path: &Path, relative_path: &str) -> Result<(), String> 
         std::io::ErrorKind::AlreadyExists => {
             format!("Directory already exists: {}", relative_path)
         }
-        _ => format!("Failed to create directory '{}': {}", relative_path, e),
+        _ => fs_error("create directory", relative_path, e),
     })
 }
 
@@ -267,13 +270,11 @@ pub fn rename_path(
 }
 
 pub fn delete_path(path: &Path, relative_path: &str) -> Result<(), String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|e| format!("Failed to inspect '{}': {}", relative_path, e))?;
+    let metadata = fs::symlink_metadata(path).map_err(|e| fs_error("inspect", relative_path, e))?;
     if metadata.file_type().is_dir() {
-        fs::remove_dir_all(path)
-            .map_err(|e| format!("Failed to delete directory '{}': {}", relative_path, e))
+        fs::remove_dir_all(path).map_err(|e| fs_error("delete directory", relative_path, e))
     } else {
-        fs::remove_file(path).map_err(|e| format!("Failed to delete '{}': {}", relative_path, e))
+        fs::remove_file(path).map_err(|e| fs_error("delete", relative_path, e))
     }
 }
 
@@ -290,13 +291,11 @@ pub fn write_binary_file(
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
     }
 
-    write_binary_bytes(path, &bytes)
-        .map_err(|e| format!("Failed to write binary file '{}': {}", relative_path, e))
+    write_binary_bytes(path, &bytes).map_err(|e| fs_error("write binary file", relative_path, e))
 }
 
 pub fn read_binary_file(path: &Path, relative_path: &str) -> Result<String, String> {
-    let bytes = fs::read(path)
-        .map_err(|e| format!("Failed to read binary file '{}': {}", relative_path, e))?;
+    let bytes = fs::read(path).map_err(|e| fs_error("read binary file", relative_path, e))?;
     Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }
 
@@ -513,8 +512,8 @@ fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
 }
 
 fn read_directory_children(dir: &Path, relative_path: &str) -> Result<Vec<FileEntry>, String> {
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("Failed to read directory '{}': {}", dir.display(), e))?;
+    let dir_path = dir.display().to_string();
+    let entries = fs::read_dir(dir).map_err(|e| fs_error("read directory", &dir_path, e))?;
 
     let mut children = Vec::new();
     for entry in entries {
@@ -560,8 +559,8 @@ fn sort_entries(entries: &mut [FileEntry]) {
 
 fn build_tree(dir: &Path, name: &str, relative_path: &str) -> Result<FileEntry, String> {
     let mut children = Vec::new();
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("Failed to read directory '{}': {}", dir.display(), e))?;
+    let dir_path = dir.display().to_string();
+    let entries = fs::read_dir(dir).map_err(|e| fs_error("read directory", &dir_path, e))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
