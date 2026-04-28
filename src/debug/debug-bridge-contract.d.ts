@@ -2,7 +2,6 @@ import type { FormatEventDetail } from "../constants/events";
 import type { EditorMode } from "../editor-display-mode";
 import type {
   DebugDocumentState,
-  DebugRenderState,
   FileWatcherStatus,
   InteractionTraceEntry,
   MarkdownEditorSelection,
@@ -102,7 +101,6 @@ export interface CfDebugBridge {
   clearScrollGuards: () => void;
   watcherStatus: () => FileWatcherStatus;
   runtimeContract: () => Promise<EditorRuntimeContractSnapshot>;
-  renderState: () => DebugRenderState | null;
   recorderStatus: () => DebugSessionRecorderStatus;
   captureState: (label?: string | null) => DebugSessionCapture;
   interactionLog: () => readonly InteractionTraceEntry[];

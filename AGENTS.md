@@ -208,7 +208,6 @@ __cfDebug.scrollGuards()                        — recent scroll guard events
 __cfDebug.clearScrollGuards()                   — clear recent scroll guard events
 __cfDebug.watcherStatus()                       — latest frontend native watcher health status
 __cfDebug.runtimeContract()                     — computed editor runtime contract snapshot with drift issues
-__cfDebug.renderState()                         — proxy to the current visible rich-render snapshot
 __cfDebug.recorderStatus()                      — debug recorder queue/connectivity/capture-mode snapshot
 __cfDebug.captureState("label")                 — combined selection/render/raw-fence/structure snapshot + recorder event
 __cfDebug.interactionLog()                      — recent Lexical interaction trace entries

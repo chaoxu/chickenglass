@@ -406,7 +406,6 @@ export function useAppDebug({
       clearScrollGuards: () => clearScrollGuardEvents(),
       watcherStatus: () => getLatestFileWatcherStatus(),
       runtimeContract: collectEditorRuntimeContract,
-      renderState: () => window.__cmDebug?.renderState?.() ?? null,
       recorderStatus: () => getDebugSessionRecorderStatus(),
       captureState: (label?: string | null) => captureDebugSessionState(label),
       interactionLog: getInteractionLog,

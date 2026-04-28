@@ -88,7 +88,6 @@ async function collectDebugState(page, label) {
       cfDebug: await safeAsync(async () => ({
         captureState: await window.__cfDebug?.captureState?.(snapshotLabel),
         recorderStatus: window.__cfDebug?.recorderStatus?.() ?? null,
-        renderState: window.__cfDebug?.renderState?.() ?? null,
       })),
       cmDebug: safe(() => ({
         fences: window.__cmDebug?.fences?.() ?? null,
