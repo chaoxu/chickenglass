@@ -2,7 +2,8 @@
  * CommandPalette — React modal command palette built on cmdk.
  *
  * Renders a Command.Dialog with search input, category-grouped items,
- * and keyboard navigation. Toggle via Cmd+P (wired in the parent).
+ * and keyboard navigation. Toggle via Cmd+P, wired by
+ * `useAppCommandRegistry`.
  *
  * ## Fuzzy search
  *
@@ -106,7 +107,7 @@ const ShortcutBadge = memo(function ShortcutBadge({ shortcut }: { shortcut: stri
  *
  * - `open` / `onOpenChange`: controlled visibility (parent owns state).
  * - `commands`: flat list; grouped by `category` field.
- * - Cmd+P toggle should be wired in the parent component.
+ * - Cmd+P toggle is owned by `useAppCommandRegistry`.
  */
 export function CommandPalette({
   open,
