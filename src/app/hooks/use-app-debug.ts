@@ -176,6 +176,7 @@ export function useAppDebug({
     view.dispatch({
       changes: { from: selection.from, to: selection.to, insert: text },
       selection: { anchor: selection.from + text.length },
+      userEvent: "input.type",
     });
   };
 
