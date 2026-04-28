@@ -540,6 +540,7 @@ function collectMarkdownDirtyRangesInState(
       if (MARKDOWN_HANDLERS.has(node.name)) {
         pushUniqueRange(node.from, node.to);
       }
+      return undefined;
     },
   });
 

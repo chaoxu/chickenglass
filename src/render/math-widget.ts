@@ -12,21 +12,14 @@ import { clearKatexHtmlCache, renderKatexToHtml } from "./inline-shared";
 import { resolveClickToSourcePos } from "./math-interactions";
 import { findMathRegionAtPos } from "./math-source";
 import { widgetSourceMap } from "./source-widget";
-import { ShellMacroAwareWidget } from "./shell-widget";
-import {
-  clearActiveFenceGuideClasses,
-  syncActiveFenceGuideClasses,
-} from "./source-widget";
 import {
   activateStructureEditTarget,
   createStructureEditTargetAt,
 } from "../state/cm-structure-edit";
 import {
-  clearBlockWidgetHeightBinding,
-  estimatedBlockWidgetHeight,
-  observeBlockWidgetHeight,
-  type BlockWidgetHeightBinding,
-} from "./block-widget-height";
+  LazyMacroAwareWidget,
+  type LazyWidgetHeightSpec,
+} from "./lazy-widget-base";
 import { cloneRenderedHTMLElement } from "./widget-core";
 
 const displayMathHeightCache = new Map<string, number>();
@@ -140,13 +133,7 @@ function resolveLiveMathRegion(
 }
 
 /** Unified widget that renders both inline and display math via KaTeX. */
-export class MathWidget extends ShellMacroAwareWidget {
-  private readonly displayHeightBinding: BlockWidgetHeightBinding = {
-    resizeObserver: null,
-    resizeMeasureFrame: null,
-    reconnectObserver: null,
-    detachedMeasureWarned: false,
-  };
+export class MathWidget extends LazyMacroAwareWidget {
   private readonly inlineDomCacheKey: string;
   private readonly displayMeasurementKey: string;
   private readonly displayDomCacheKey: string;
@@ -177,12 +164,8 @@ export class MathWidget extends ShellMacroAwareWidget {
     ].join("\u0001");
   }
 
-  override updateSourceRange(from: number, to: number): void {
-    super.updateSourceRange(from, to);
-    if (!this.isDisplay) {
-      this.shellSurfaceFrom = -1;
-      this.shellSurfaceTo = -1;
-    }
+  protected get usesLazyBlockShell(): boolean {
+    return this.isDisplay;
   }
 
   private syncDisplayLayout(el: HTMLElement): void {
@@ -305,8 +288,12 @@ export class MathWidget extends ShellMacroAwareWidget {
     });
   }
 
-  private heightBinding(): BlockWidgetHeightBinding {
-    return this.displayHeightBinding;
+  private displayHeightSpec(): LazyWidgetHeightSpec {
+    return {
+      cache: displayMathHeightCache,
+      key: this.displayMeasurementKey,
+      fallbackHeight: estimateDisplayMathHeight(this.latex),
+    };
   }
 
   private observeDisplayHeight(
@@ -314,22 +301,14 @@ export class MathWidget extends ShellMacroAwareWidget {
     view: EditorView,
   ): void {
     if (!this.isDisplay) return;
-    observeBlockWidgetHeight(
-      this.heightBinding(),
-      el,
-      view,
-      displayMathHeightCache,
-      this.displayMeasurementKey,
-    );
+    this.observeLazyWidgetHeight(el, view, this.displayHeightSpec());
   }
 
   override toDOM(view?: EditorView): HTMLElement {
     if (!this.isDisplay) return super.toDOM(view);
 
     const el = this.createDOM();
-    this.syncWidgetAttrs(el, view);
-    el.dataset.activeFenceGuides = "true";
-    syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
+    this.syncLazyWidgetAttrs(el, view, true);
 
     if (this.sourceFrom >= 0 && view) {
       const content = el.querySelector<HTMLElement>(`.${CSS.mathDisplayContent}`);
@@ -364,7 +343,7 @@ export class MathWidget extends ShellMacroAwareWidget {
     if (dom.tagName !== expectedTag) return false;
 
     if (from instanceof MathWidget) {
-      from.clearDisplayHeightMeasurement();
+      from.clearLazyWidgetHeight();
     }
 
     dom.className = this.isDisplay
@@ -384,35 +363,16 @@ export class MathWidget extends ShellMacroAwareWidget {
       renderKatex(dom, this.latex, false, this.macros);
     }
 
-    this.syncWidgetAttrs(dom, view);
-    if (this.isDisplay) {
-      dom.dataset.activeFenceGuides = "true";
-      syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
-    } else {
-      delete dom.dataset.activeFenceGuides;
-      clearActiveFenceGuideClasses(dom);
-    }
+    this.syncLazyWidgetAttrs(dom, view, this.isDisplay);
     if (this.isDisplay && view) {
       this.observeDisplayHeight(dom, view);
     }
     return true;
   }
 
-  private clearDisplayHeightMeasurement(): void {
-    clearBlockWidgetHeightBinding(this.heightBinding());
-  }
-
-  destroy(_dom?: HTMLElement): void {
-    this.clearDisplayHeightMeasurement();
-  }
-
   get estimatedHeight(): number {
     if (!this.isDisplay) return -1;
-    const cached = estimatedBlockWidgetHeight(
-      displayMathHeightCache,
-      this.displayMeasurementKey,
-    );
-    return cached >= 0 ? cached : estimateDisplayMathHeight(this.latex);
+    return this.estimatedLazyWidgetHeight(this.displayHeightSpec());
   }
 
   override ignoreEvent(): boolean {

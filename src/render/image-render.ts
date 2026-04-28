@@ -21,11 +21,6 @@ import {
   pushWidgetDecoration,
 } from "./decoration-core";
 import { RenderWidget } from "./source-widget";
-import {
-  clearActiveFenceGuideClasses,
-  syncActiveFenceGuideClasses,
-} from "./source-widget";
-import { ShellWidget } from "./shell-widget";
 import { imageUrlField } from "../state/image-url";
 import {
   collectChangedLocalMediaPathsFromIndex,
@@ -36,16 +31,14 @@ import { readMarkdownImageContent } from "../state/markdown-image";
 import { pdfPreviewField } from "../state/pdf-preview";
 import { getPdfCanvas } from "./pdf-preview-cache";
 import {
-  clearBlockWidgetHeightBinding,
-  estimatedBlockWidgetHeight,
-  observeBlockWidgetHeight,
-  type BlockWidgetHeightBinding,
-} from "./block-widget-height";
-import {
   resolveLocalMediaPreview,
   resolveLocalMediaPreviewFromState,
   type MediaPreviewResult,
 } from "./media-preview";
+import {
+  LazyWidgetBase,
+  type LazyWidgetHeightSpec,
+} from "./lazy-widget-base";
 import { CSS } from "../constants/css-classes";
 import { createChangeChecker } from "../state/change-detection";
 import {
@@ -84,14 +77,7 @@ const IMAGE_PREVIEW_PREFETCH_MARGIN = 4_000;
  * Identity includes the preview state so CM6 does not treat a loading widget
  * as equivalent to its later ready/error version and keep stale DOM mounted.
  */
-export class ImagePreviewWidget extends ShellWidget {
-  private readonly measuredHeightBinding: BlockWidgetHeightBinding = {
-    resizeObserver: null,
-    resizeMeasureFrame: null,
-    reconnectObserver: null,
-    detachedMeasureWarned: false,
-  };
-
+export class ImagePreviewWidget extends LazyWidgetBase {
   constructor(
     readonly alt: string,
     readonly src: string,
@@ -101,12 +87,8 @@ export class ImagePreviewWidget extends ShellWidget {
     super();
   }
 
-  override updateSourceRange(from: number, to: number): void {
-    super.updateSourceRange(from, to);
-    if (!this.isBlock) {
-      this.shellSurfaceFrom = -1;
-      this.shellSurfaceTo = -1;
-    }
+  protected get usesLazyBlockShell(): boolean {
+    return this.isBlock;
   }
 
   private stateKey(): string {
@@ -128,21 +110,19 @@ export class ImagePreviewWidget extends ShellWidget {
     return wrapper;
   }
 
-  private heightBinding(): BlockWidgetHeightBinding {
-    return this.measuredHeightBinding;
+  private heightSpec(): LazyWidgetHeightSpec {
+    return {
+      cache: imagePreviewHeightCache,
+      key: this.src,
+      fallbackHeight: this.state.kind === "loading" ? 100 : -1,
+    };
   }
 
   private observeMeasuredHeight(
     wrapper: HTMLElement,
     view: EditorView,
   ): void {
-    observeBlockWidgetHeight(
-      this.heightBinding(),
-      wrapper,
-      view,
-      imagePreviewHeightCache,
-      this.src,
-    );
+    this.observeLazyWidgetHeight(wrapper, view, this.heightSpec());
   }
 
   eq(other: WidgetType): boolean {
@@ -157,14 +137,7 @@ export class ImagePreviewWidget extends ShellWidget {
 
   override toDOM(view?: EditorView): HTMLElement {
     const el = this.createDOM();
-    this.syncWidgetAttrs(el, view);
-    if (this.isBlock) {
-      el.dataset.activeFenceGuides = "true";
-      syncActiveFenceGuideClasses(el, view, this.sourceFrom, this.sourceTo);
-    } else {
-      delete el.dataset.activeFenceGuides;
-      clearActiveFenceGuideClasses(el);
-    }
+    this.syncLazyWidgetAttrs(el, view, this.isBlock);
     if (this.sourceFrom >= 0 && view) {
       this.bindSourceReveal(el, view);
     }
@@ -178,36 +151,19 @@ export class ImagePreviewWidget extends ShellWidget {
     const expectedTag = this.isBlock ? "DIV" : "SPAN";
     if (dom.tagName !== expectedTag) return false;
     if (from instanceof ImagePreviewWidget) {
-      from.clearMeasuredHeight();
+      from.clearLazyWidgetHeight();
     }
     dom.textContent = "";
     this.renderInto(dom);
-    this.syncWidgetAttrs(dom, view);
-    if (this.isBlock) {
-      dom.dataset.activeFenceGuides = "true";
-      syncActiveFenceGuideClasses(dom, view, this.sourceFrom, this.sourceTo);
-    } else {
-      delete dom.dataset.activeFenceGuides;
-      clearActiveFenceGuideClasses(dom);
-    }
+    this.syncLazyWidgetAttrs(dom, view, this.isBlock);
     if (view) {
       this.observeMeasuredHeight(dom, view);
     }
     return true;
   }
 
-  private clearMeasuredHeight(): void {
-    clearBlockWidgetHeightBinding(this.heightBinding());
-  }
-
-  destroy(_dom?: HTMLElement): void {
-    this.clearMeasuredHeight();
-  }
-
   get estimatedHeight(): number {
-    const cached = estimatedBlockWidgetHeight(imagePreviewHeightCache, this.src);
-    if (cached >= 0) return cached;
-    return this.state.kind === "loading" ? 100 : -1;
+    return this.estimatedLazyWidgetHeight(this.heightSpec());
   }
 
   private renderInto(wrapper: HTMLElement): void {
