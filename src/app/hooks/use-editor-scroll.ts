@@ -14,7 +14,6 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
-import type { ScrollGuardEvent } from "../../lib/debug-types";
 import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
 
 /**
@@ -23,128 +22,6 @@ import { useEditorTelemetryStore } from "../stores/editor-telemetry-store";
  * hasn't caught up; requestMeasure() forces a remeasure cycle.
  */
 const LARGE_SCROLL_THRESHOLD = 2000;
-const WHEEL_INTENT_WINDOW_MS = 250;
-const REVERSE_SCROLL_DRIFT_THRESHOLD = 48;
-const HEIGHT_CORRECTION_THRESHOLD = 256;
-const MAX_SCROLL_GUARD_EVENTS = 100;
-const SCROLL_GUARD_RELEASE_THRESHOLD = 64;
-
-export type { ScrollGuardEvent } from "../../lib/debug-types";
-
-const scrollGuardEvents: ScrollGuardEvent[] = [];
-
-function pushScrollGuardEvent(event: ScrollGuardEvent): void {
-  scrollGuardEvents.push(event);
-  if (scrollGuardEvents.length > MAX_SCROLL_GUARD_EVENTS) {
-    scrollGuardEvents.splice(0, scrollGuardEvents.length - MAX_SCROLL_GUARD_EVENTS);
-  }
-}
-
-export function getScrollGuardEvents(): readonly ScrollGuardEvent[] {
-  return scrollGuardEvents;
-}
-
-export function clearScrollGuardEvents(): void {
-  scrollGuardEvents.length = 0;
-}
-
-interface ReverseScrollGuardArgs {
-  readonly previousTop: number;
-  readonly previousHeight: number;
-  readonly currentTop: number;
-  readonly currentHeight: number;
-  readonly clientHeight: number;
-  readonly wheelDeltaY: number;
-  readonly wheelAgeMs: number;
-  readonly preservedMaxScrollTop: number | null;
-  readonly preservedTargetTop: number | null;
-}
-
-export interface ReverseScrollGuardResult {
-  readonly correctedTop: number;
-  readonly paddingBottom: number;
-  readonly preservedMaxScrollTop: number;
-  readonly observedMaxScrollTop: number;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function setScrollGuardPadding(
-  host: HTMLElement,
-  paddingBottom: number,
-): void {
-  if (paddingBottom > 0) {
-    host.style.paddingBottom = `${paddingBottom}px`;
-  } else {
-    host.style.removeProperty("padding-bottom");
-  }
-}
-
-export function computeScrollGuardPadding(
-  currentHeight: number,
-  clientHeight: number,
-  preservedMaxScrollTop: number | null,
-): number {
-  if (preservedMaxScrollTop === null) return 0;
-  const observedMaxScrollTop = Math.max(0, currentHeight - clientHeight);
-  return Math.max(0, Math.round(preservedMaxScrollTop - observedMaxScrollTop));
-}
-
-export function guardReverseScrollRemap(
-  args: ReverseScrollGuardArgs,
-): ReverseScrollGuardResult | null {
-  const {
-    previousTop,
-    previousHeight,
-    currentTop,
-    currentHeight,
-    clientHeight,
-    wheelDeltaY,
-    wheelAgeMs,
-    preservedMaxScrollTop,
-    preservedTargetTop,
-  } = args;
-  if (!Number.isFinite(wheelDeltaY) || wheelDeltaY === 0) return null;
-  if (!Number.isFinite(wheelAgeMs) || wheelAgeMs > WHEEL_INTENT_WINDOW_MS) return null;
-  if (Math.abs(currentHeight - previousHeight) < HEIGHT_CORRECTION_THRESHOLD) return null;
-
-  const direction = Math.sign(wheelDeltaY);
-  const actualDelta = currentTop - previousTop;
-  const reversed = direction > 0
-    ? actualDelta < -REVERSE_SCROLL_DRIFT_THRESHOLD
-    : actualDelta > REVERSE_SCROLL_DRIFT_THRESHOLD;
-  const heightCollapsed = currentHeight < previousHeight - HEIGHT_CORRECTION_THRESHOLD;
-  const targetMagnitude = Math.max(Math.abs(wheelDeltaY), REVERSE_SCROLL_DRIFT_THRESHOLD);
-  const underDeliveredDownwardScroll = direction > 0
-    && heightCollapsed
-    && actualDelta < targetMagnitude - REVERSE_SCROLL_DRIFT_THRESHOLD;
-  if (direction < 0 || (!reversed && !underDeliveredDownwardScroll)) return null;
-
-  const rawObservedMaxScrollTop = Math.max(0, currentHeight - clientHeight);
-  const rawPreviousMaxScrollTop = Math.max(0, previousHeight - clientHeight);
-  const nextPreservedMaxScrollTop = Math.max(
-    preservedMaxScrollTop ?? 0,
-    rawPreviousMaxScrollTop,
-  );
-  const paddingBottom = Math.max(
-    0,
-    Math.round(nextPreservedMaxScrollTop - rawObservedMaxScrollTop),
-  );
-  const correctedMaxScrollTop = rawObservedMaxScrollTop + paddingBottom;
-  const rawTarget = Number.isFinite(preservedTargetTop ?? NaN)
-    ? Math.round(preservedTargetTop ?? 0)
-    : Math.round(previousTop + direction * targetMagnitude);
-  const correctedTop = clamp(rawTarget, 0, correctedMaxScrollTop);
-  if (correctedTop <= currentTop) return null;
-  return {
-    correctedTop,
-    paddingBottom,
-    preservedMaxScrollTop: nextPreservedMaxScrollTop,
-    observedMaxScrollTop: rawObservedMaxScrollTop,
-  };
-}
 
 export interface UseEditorScrollReturn {
   /** Reset scroll state (call when editor is recreated). */
@@ -154,48 +31,19 @@ export interface UseEditorScrollReturn {
 export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn {
   const rafRef = useRef<number>(0);
   const lastScrollTopRef = useRef(0);
-  const lastScrollHeightRef = useRef(0);
-  const lastWheelIntentRef = useRef<{
-    deltaY: number;
-    at: number;
-    targetTop: number | null;
-  } | null>(null);
-  const scrollGuardPaddingRef = useRef(0);
-  const preservedMaxScrollTopRef = useRef<number | null>(null);
 
   const resetScroll = useCallback(() => {
     useEditorTelemetryStore.getState().setScroll(0, 0);
     lastScrollTopRef.current = 0;
-    lastScrollHeightRef.current = 0;
-    lastWheelIntentRef.current = null;
-    scrollGuardPaddingRef.current = 0;
-    preservedMaxScrollTopRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!view) return;
 
     const scroller = view.scrollDOM;
-    const paddingHost = view.contentDOM;
     lastScrollTopRef.current = scroller.scrollTop;
-    lastScrollHeightRef.current = scroller.scrollHeight;
 
     let cancelled = false;
-
-    const onWheel = (event: WheelEvent) => {
-      if (event.deltaY === 0) return;
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      lastWheelIntentRef.current = {
-        deltaY: event.deltaY,
-        at: now,
-        targetTop: clamp(
-          Math.round(scroller.scrollTop + event.deltaY),
-          0,
-          maxScrollTop,
-        ),
-      };
-    };
 
     const onScroll = () => {
       if (rafRef.current) {
@@ -205,78 +53,10 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = 0;
         if (cancelled) return;
-        let currentTop = scroller.scrollTop;
+        const currentTop = scroller.scrollTop;
         const previousTop = lastScrollTopRef.current;
-        const currentHeight = Math.max(0, scroller.scrollHeight - scrollGuardPaddingRef.current);
-        const previousHeight = lastScrollHeightRef.current;
-        const wheelIntent = lastWheelIntentRef.current;
-        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-        const guardResult = wheelIntent
-          ? guardReverseScrollRemap({
-              previousTop,
-              previousHeight,
-              currentTop,
-              currentHeight,
-              clientHeight: scroller.clientHeight,
-              wheelDeltaY: wheelIntent.deltaY,
-              wheelAgeMs: now - wheelIntent.at,
-              preservedMaxScrollTop: preservedMaxScrollTopRef.current,
-              preservedTargetTop: wheelIntent.targetTop,
-            })
-          : null;
-        if (guardResult && guardResult.correctedTop !== currentTop) {
-          scrollGuardPaddingRef.current = guardResult.paddingBottom;
-          preservedMaxScrollTopRef.current = guardResult.preservedMaxScrollTop;
-          setScrollGuardPadding(paddingHost, guardResult.paddingBottom);
-          const preservesWheelTarget = wheelIntent
-            && wheelIntent.deltaY > 0
-            && wheelIntent.targetTop !== null
-            && Math.abs(guardResult.correctedTop - wheelIntent.targetTop) <= 1;
-          if (!preservesWheelTarget) {
-            pushScrollGuardEvent({
-              timestamp: Date.now(),
-              wheelDeltaY: wheelIntent?.deltaY ?? 0,
-              previousTop,
-              correctedTop: guardResult.correctedTop,
-              observedTop: currentTop,
-              previousHeight,
-              currentHeight,
-              paddingBottom: guardResult.paddingBottom,
-              preservedMaxScrollTop: guardResult.preservedMaxScrollTop,
-              observedMaxScrollTop: guardResult.observedMaxScrollTop,
-            });
-          }
-          scroller.scrollTop = guardResult.correctedTop;
-          currentTop = guardResult.correctedTop;
-          if (wheelIntent) {
-            lastWheelIntentRef.current = {
-              ...wheelIntent,
-              targetTop: guardResult.correctedTop,
-            };
-          }
-          view.requestMeasure();
-        }
-        if (preservedMaxScrollTopRef.current !== null) {
-          const observedMaxScrollTop = Math.max(0, currentHeight - scroller.clientHeight);
-          const needsPreservedRunway = currentTop >= observedMaxScrollTop - SCROLL_GUARD_RELEASE_THRESHOLD;
-          const nextPadding = needsPreservedRunway
-            ? computeScrollGuardPadding(
-                currentHeight,
-                scroller.clientHeight,
-                preservedMaxScrollTopRef.current,
-              )
-            : 0;
-          if (nextPadding !== scrollGuardPaddingRef.current) {
-            scrollGuardPaddingRef.current = nextPadding;
-            setScrollGuardPadding(paddingHost, nextPadding);
-          }
-          if (nextPadding === 0) {
-            preservedMaxScrollTopRef.current = null;
-          }
-        }
         const delta = Math.abs(currentTop - previousTop);
         lastScrollTopRef.current = currentTop;
-        lastScrollHeightRef.current = currentHeight;
 
         // Use lineBlockAtHeight for accurate position
         const topPos = view.lineBlockAtHeight(currentTop).from;
@@ -293,14 +73,11 @@ export function useEditorScroll(view: EditorView | null): UseEditorScrollReturn 
       });
     };
 
-    scroller.addEventListener("wheel", onWheel, { passive: true });
     scroller.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
       cancelled = true;
-      scroller.removeEventListener("wheel", onWheel);
       scroller.removeEventListener("scroll", onScroll);
-      setScrollGuardPadding(paddingHost, 0);
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = 0;

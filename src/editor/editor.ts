@@ -34,6 +34,7 @@ import { editorModeField } from "./editor-mode-state";
 import { type ProjectConfig, type ProjectConfigStatus } from "./project-config";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
+import { scrollStabilityExtension } from "./scroll-stability";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
 import { coflatDarkTheme, coflatTheme } from "./theme";
 import { widgetStopIndexCleanupExtension } from "./widget-stop-index";
@@ -90,6 +91,7 @@ function editorChromeExtensions(isDark: boolean): Extension[] {
     listOutlinerExtension,
     editorKeybindings,
     widgetStopIndexCleanupExtension,
+    scrollStabilityExtension,
     richMouseSelectionStyle,
     blockTypePickerExtension,
     debugLaneCompartment.of(defaultDebugLaneExtensions),

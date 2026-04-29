@@ -16,10 +16,6 @@ import { createElement, useState, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import {
-  clearScrollGuardEvents,
-  computeScrollGuardPadding,
-  getScrollGuardEvents,
-  guardReverseScrollRemap,
   useEditorScroll,
   type UseEditorScrollReturn,
 } from "./use-editor-scroll";
@@ -118,7 +114,6 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     useEditorTelemetryStore.getState().reset();
-    clearScrollGuardEvents();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -288,128 +283,4 @@ describe("useEditorScroll — document-to-document scroll restoration", () => {
     expect(getStoredScroll().scrollTop).toBe(300);
   });
 
-  it("guards a wheel-driven reverse remap after a large height correction", () => {
-    const { Harness, ref } = createHarness();
-    const mockView = createMockView();
-
-    act(() => root.render(createElement(Harness)));
-    act(() => ref.setView(mockView));
-
-    mockView.scrollDOM.scrollTop = 1400;
-    act(() => {
-      dispatchScrollAndFlush(mockView.scrollDOM);
-    });
-    expect(getStoredScroll().scrollTop).toBe(1400);
-
-    mockView.scrollDOM.dispatchEvent(new WheelEvent("wheel", { deltaY: 90 }));
-    Object.defineProperty(mockView.scrollDOM, "scrollHeight", {
-      configurable: true,
-      writable: true,
-      value: 2400,
-    });
-    mockView.scrollDOM.scrollTop = 1000;
-    act(() => {
-      dispatchScrollAndFlush(mockView.scrollDOM);
-    });
-
-    expect(mockView.scrollDOM.scrollTop).toBe(1490);
-    expect(getStoredScroll().scrollTop).toBe(1490);
-    expect(mockView.requestMeasure).toHaveBeenCalledTimes(1);
-    expect(getScrollGuardEvents()).toHaveLength(0);
-  });
-
-});
-
-describe("guardReverseScrollRemap", () => {
-  it("returns a corrected forward target plus preserved runway for reversed downward drift", () => {
-    expect(guardReverseScrollRemap({
-      previousTop: 1400,
-      previousHeight: 3000,
-      currentTop: 1000,
-      currentHeight: 2400,
-      clientHeight: 600,
-      wheelDeltaY: 90,
-      wheelAgeMs: 20,
-      preservedMaxScrollTop: null,
-      preservedTargetTop: null,
-    })).toEqual({
-      correctedTop: 1490,
-      paddingBottom: 600,
-      preservedMaxScrollTop: 2400,
-      observedMaxScrollTop: 1800,
-    });
-  });
-
-  it("preserves runway when a downward wheel is under-delivered by height collapse", () => {
-    expect(guardReverseScrollRemap({
-      previousTop: 25_983,
-      previousHeight: 33_530,
-      currentTop: 26_001,
-      currentHeight: 27_191,
-      clientHeight: 876,
-      wheelDeltaY: 90,
-      wheelAgeMs: 20,
-      preservedMaxScrollTop: null,
-      preservedTargetTop: 26_073,
-    })).toEqual({
-      correctedTop: 26_073,
-      paddingBottom: 6_339,
-      preservedMaxScrollTop: 32_654,
-      observedMaxScrollTop: 26_315,
-    });
-  });
-
-  it("returns null for ordinary forward scroll", () => {
-    expect(guardReverseScrollRemap({
-      previousTop: 1400,
-      previousHeight: 3000,
-      currentTop: 1490,
-      currentHeight: 3000,
-      clientHeight: 600,
-      wheelDeltaY: 90,
-      wheelAgeMs: 20,
-      preservedMaxScrollTop: null,
-      preservedTargetTop: null,
-    })).toBeNull();
-  });
-
-  it("returns null without a large height correction", () => {
-    expect(guardReverseScrollRemap({
-      previousTop: 1400,
-      previousHeight: 3000,
-      currentTop: 1000,
-      currentHeight: 2850,
-      clientHeight: 600,
-      wheelDeltaY: 90,
-      wheelAgeMs: 20,
-      preservedMaxScrollTop: null,
-      preservedTargetTop: null,
-    })).toBeNull();
-  });
-
-  it("reuses the preserved wheel target instead of adding another wheel step", () => {
-    expect(guardReverseScrollRemap({
-      previousTop: 1490,
-      previousHeight: 2400,
-      currentTop: 1200,
-      currentHeight: 1800,
-      clientHeight: 600,
-      wheelDeltaY: 90,
-      wheelAgeMs: 20,
-      preservedMaxScrollTop: 2400,
-      preservedTargetTop: 1490,
-    })).toEqual({
-      correctedTop: 1490,
-      paddingBottom: 1200,
-      preservedMaxScrollTop: 2400,
-      observedMaxScrollTop: 1200,
-    });
-  });
-});
-
-describe("computeScrollGuardPadding", () => {
-  it("preserves prior runway until raw height catches up", () => {
-    expect(computeScrollGuardPadding(2400, 600, 2400)).toBe(600);
-    expect(computeScrollGuardPadding(3000, 600, 2400)).toBe(0);
-  });
 });

@@ -12,7 +12,7 @@ import {
 import {
   clearScrollGuardEvents,
   getScrollGuardEvents,
-} from "./use-editor-scroll";
+} from "../../editor/scroll-stability";
 import {
   clearCombinedPerf,
   getCombinedPerfSnapshot,
