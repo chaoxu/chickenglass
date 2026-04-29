@@ -780,6 +780,64 @@ describe("imageRenderPlugin cache-only invalidation", () => {
     expect(view.dom.querySelectorAll(`.${CSS.imageWrapper}`)).toHaveLength(1);
   });
 
+  it("requests a scroll-stabilized measure when a tracked local image preview resolves", () => {
+    const doc = "![first](../assets/first.png)";
+    view = createTestView(doc, {
+      cursorPos: doc.length,
+      extensions: [
+        markdown(),
+        documentPathFacet.of("posts/math.md"),
+        imageUrlField,
+        pdfPreviewField,
+        imageRenderPlugin,
+      ],
+    });
+    const requestMeasure = vi.spyOn(view, "requestMeasure").mockImplementation(() => undefined);
+
+    view.dispatch({
+      effects: imageUrlEffect.of({ path: "assets/first.png", entry: { status: "loading" } }),
+    });
+    requestMeasure.mockClear();
+
+    view.dispatch({
+      effects: imageUrlEffect.of({ path: "assets/first.png", entry: { status: "ready" } }),
+    });
+
+    expect(requestMeasure).toHaveBeenCalled();
+  });
+
+  it("requests a scroll-stabilized measure when a tracked local PDF preview resolves", () => {
+    const doc = "![diagram](../assets/diagram.pdf)";
+    view = createTestView(doc, {
+      cursorPos: doc.length,
+      extensions: [
+        markdown(),
+        documentPathFacet.of("posts/math.md"),
+        imageUrlField,
+        pdfPreviewField,
+        imageRenderPlugin,
+      ],
+    });
+    const requestMeasure = vi.spyOn(view, "requestMeasure").mockImplementation(() => undefined);
+
+    view.dispatch({
+      effects: pdfPreviewEffect.of({
+        path: "assets/diagram.pdf",
+        entry: { status: "loading" },
+      }),
+    });
+    requestMeasure.mockClear();
+
+    view.dispatch({
+      effects: pdfPreviewEffect.of({
+        path: "assets/diagram.pdf",
+        entry: { status: "ready" },
+      }),
+    });
+
+    expect(requestMeasure).toHaveBeenCalled();
+  });
+
   it("requests near-viewport image previews without prefetching offscreen images", () => {
     const lateImages = Array.from(
       { length: 12 },

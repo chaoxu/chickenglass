@@ -182,7 +182,7 @@ export function getDebugStructureTarget(
 
 function isElementVisibleInViewport(el: Element): boolean {
   const rect = el.getBoundingClientRect();
-  return rect.bottom > 0 && rect.top < window.innerHeight;
+  return rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
 }
 
 function lineNumberAtElement(view: EditorView, el: HTMLElement): number | null {

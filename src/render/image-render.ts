@@ -39,6 +39,7 @@ import {
   LazyWidgetBase,
   type LazyWidgetHeightSpec,
 } from "./lazy-widget-base";
+import { requestScrollStabilizedMeasure } from "./scroll-anchor";
 import { CSS } from "../constants/css-classes";
 import { createChangeChecker } from "../state/change-detection";
 import {
@@ -572,6 +573,10 @@ const imageRequestPlugin = ViewPlugin.fromClass(class {
   }
 
   update(update: ViewUpdate): void {
+    if (localMediaCacheChangedForTrackedImage(update)) {
+      requestScrollStabilizedMeasure(update.view);
+    }
+
     if (update.docChanged) {
       const dirtyRanges = dirtyRangesFromChanges(
         update.changes,
@@ -606,6 +611,24 @@ const imageRequestPlugin = ViewPlugin.fromClass(class {
     requestImagePreviewsForInfos(view, infos, this.requestedSrcs);
   }
 });
+
+function localMediaCacheChangedForTrackedImage(update: ViewUpdate): boolean {
+  const oldPdfCache = update.startState.field(pdfPreviewField, false) || new Map<string, unknown>();
+  const newPdfCache = update.state.field(pdfPreviewField, false) || new Map<string, unknown>();
+  const oldImageCache = update.startState.field(imageUrlField, false) || new Map<string, unknown>();
+  const newImageCache = update.state.field(imageUrlField, false) || new Map<string, unknown>();
+  if (oldPdfCache === newPdfCache && oldImageCache === newImageCache) return false;
+
+  const mediaIndex = update.state.field(mediaIndexField, false);
+  if (!mediaIndex) return false;
+  return collectChangedLocalMediaPathsFromIndex(
+    mediaIndex,
+    oldPdfCache,
+    newPdfCache,
+    oldImageCache,
+    newImageCache,
+  ).size > 0;
+}
 
 export { imageDecorationField as _imageDecorationFieldForTest };
 
