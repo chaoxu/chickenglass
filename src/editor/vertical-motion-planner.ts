@@ -29,7 +29,8 @@ export function shouldFallbackRootMotion(
   targetLine: number,
   forward: boolean,
 ): boolean {
-  return hasReversedVerticalDirection(beforeLine, targetLine, forward);
+  return hasReversedVerticalDirection(beforeLine, targetLine, forward) ||
+    Math.abs(targetLine - beforeLine) > SUSPICIOUS_STRUCTURE_EXIT_LINE_DELTA;
 }
 
 export function shouldCorrectStructureExit(

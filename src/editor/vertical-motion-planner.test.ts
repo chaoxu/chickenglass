@@ -58,6 +58,12 @@ describe("vertical motion planner", () => {
     expect(shouldFallbackRootMotion(10, 11, true)).toBe(false);
   });
 
+  it("requests root-motion fallback when CM6 jumps too far in the requested direction", () => {
+    expect(shouldFallbackRootMotion(1094, 1149, true)).toBe(true);
+    expect(shouldFallbackRootMotion(1149, 1094, false)).toBe(true);
+    expect(shouldFallbackRootMotion(1094, 1096, true)).toBe(false);
+  });
+
   it("corrects active-structure exits that reverse direction or jump too far", () => {
     expect(shouldCorrectStructureExit(10, 11, true, true)).toBe(false);
     expect(shouldCorrectStructureExit(10, 9, false, true)).toBe(true);
