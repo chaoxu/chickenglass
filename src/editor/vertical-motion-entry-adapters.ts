@@ -109,6 +109,7 @@ export function activateHiddenWidgetStop(
   view: EditorView,
   stop: HiddenWidgetStop,
   forward: boolean,
+  landedHead?: number,
 ): number | null {
   const lineForStop = view.state.doc.lineAt(stop.from).number;
   const targetPos = forward ? stop.from : Math.max(stop.from, stop.to - 1);
@@ -131,12 +132,39 @@ export function activateHiddenWidgetStop(
     })();
 
   if (target?.kind === "display-math") {
-    const anchor = forward ? target.contentFrom : target.contentTo;
+    const anchor = landedHead === undefined
+      ? forward ? target.contentFrom : target.contentTo
+      : Math.max(
+        target.contentFrom,
+        Math.min(landedHead, target.contentTo),
+      );
+    if (!activateStructureEditTarget(view, target, anchor)) return null;
+    return view.state.doc.lineAt(anchor).number;
+  }
+  if (target && landedHead !== undefined) {
+    const anchor = Math.max(
+      stop.from,
+      Math.min(landedHead, Math.max(stop.from, stop.to - 1)),
+    );
     if (!activateStructureEditTarget(view, target, anchor)) return null;
     return view.state.doc.lineAt(anchor).number;
   }
   if (target && activateStructureEditAt(view, targetPos)) {
     return view.state.doc.lineAt(view.state.selection.main.head).number;
+  }
+
+  if (stop.kind === "block-image" && landedHead !== undefined) {
+    const targetLineNumber = forward
+      ? Math.min(view.state.doc.lines, stop.endLine + 1)
+      : Math.max(1, stop.startLine - 1);
+    const targetLine = view.state.doc.line(targetLineNumber);
+    const imageExitPos = forward ? targetLine.from : targetLine.to;
+    view.dispatch({
+      selection: EditorSelection.cursor(imageExitPos, forward ? 1 : -1),
+      scrollIntoView: false,
+      userEvent: "select",
+    });
+    return targetLineNumber;
   }
 
   view.dispatch({

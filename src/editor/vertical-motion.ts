@@ -27,7 +27,7 @@ import {
   snapshotVerticalMotion,
 } from "./vertical-motion-scroll";
 import { type VerticalMotionSnapshot } from "./vertical-motion-scroll-model";
-import { getWidgetStopIndex } from "./widget-stop-index";
+import { getWidgetStopIndex, hiddenWidgetStopAtPos } from "./widget-stop-index";
 
 export {
   boundedDirectionalScrollTop,
@@ -91,8 +91,9 @@ function activatePlannedStop(
 ): number | null {
   switch (plan.kind) {
     case "hidden-crossed":
-    case "hidden-landed":
       return activateHiddenWidgetStop(view, plan.stop, forward);
+    case "hidden-landed":
+      return activateHiddenWidgetStop(view, plan.stop, forward, plan.landedHead);
     case "table-crossed":
     case "table-landed":
       return activateTableStop(view, plan.table, forward);
@@ -171,6 +172,20 @@ function handleRootMotion(
     from: motionStartLine.from,
     to: motionEndLine.to,
   }]);
+  const currentHiddenStop = hiddenWidgetStopAtPos(widgetStops, before.head);
+  if (currentHiddenStop) {
+    const correctedTargetLine = activateHiddenWidgetStop(
+      view,
+      currentHiddenStop,
+      forward,
+      before.head,
+    );
+    if (correctedTargetLine !== null) {
+      recordCorrectedLineJump(view, before, rawTargetLine, correctedTargetLine, forward);
+      finishHandledMotion(view, before, forward);
+      return true;
+    }
+  }
   const stopPlan = planVerticalMotionStop(
     widgetStops,
     before.line,

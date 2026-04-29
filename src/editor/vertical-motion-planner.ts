@@ -13,7 +13,11 @@ export const SUSPICIOUS_STRUCTURE_EXIT_LINE_DELTA = 25;
 export type VerticalMotionStopPlan =
   | { readonly kind: "hidden-crossed"; readonly stop: HiddenWidgetStop }
   | { readonly kind: "table-crossed"; readonly table: TableRange }
-  | { readonly kind: "hidden-landed"; readonly stop: HiddenWidgetStop }
+  | {
+      readonly kind: "hidden-landed";
+      readonly landedHead: number;
+      readonly stop: HiddenWidgetStop;
+    }
   | { readonly kind: "table-landed"; readonly table: TableRange };
 
 export function hasReversedVerticalDirection(
@@ -74,7 +78,7 @@ export function planVerticalMotionStop(
   }
 
   if (landedWidgetStop) {
-    return { kind: "hidden-landed", stop: landedWidgetStop };
+    return { kind: "hidden-landed", landedHead, stop: landedWidgetStop };
   }
 
   if (landedTableStop) {

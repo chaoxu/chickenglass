@@ -94,6 +94,7 @@ describe("vertical motion planner", () => {
 
     expect(planVerticalMotionStop(index, 4, 5, 25, true)).toEqual({
       kind: "hidden-landed",
+      landedHead: 25,
       stop: hidden,
     });
   });
