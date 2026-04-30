@@ -1,5 +1,3 @@
-// Tauri client modules lazy-imported at call sites to keep them out of
-// the browser startup bundle (#446).
 import {
   PERF_PANEL_REFRESH_EVENT,
   PERF_PANEL_TOGGLE_EVENT,
@@ -10,6 +8,7 @@ import {
   measureAsync,
   type PerfSnapshot,
 } from "../lib/perf";
+import { invokeTauriCommandRaw } from "./tauri-client/core";
 
 export * from "../lib/perf";
 
@@ -77,7 +76,6 @@ export async function invokeWithPerf<T>(
   args?: Record<string, unknown>,
 ): Promise<T> {
   return measureAsync(`tauri.invoke.${command}`, async () => {
-    const { invokeTauriCommandRaw } = await import("./tauri-client/core");
     return invokeTauriCommandRaw<T>(command, args);
   }, {
     category: "tauri",

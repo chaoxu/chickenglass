@@ -51,7 +51,7 @@ describe("package editor export", () => {
     expect(packageJson.scripts?.["check:types"]).toBe("pnpm typecheck && pnpm typecheck:server");
     expect(packageJson.scripts?.["check:unit"]).toBe("node scripts/watched-vitest.mjs");
     expect(packageJson.scripts?.["check:runtime"]).toBe(
-      "pnpm test:browser:quick -- smoke && pnpm test:browser:parity",
+      "pnpm test:browser:quick -- smoke && pnpm test:browser:parity && pnpm test:browser:scroll-jump",
     );
     expect(packageJson.scripts?.["check:merge"]).toBe(
       "pnpm check:static && pnpm check:unit && pnpm check:runtime",
