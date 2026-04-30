@@ -69,7 +69,7 @@ describe("StatusBar", () => {
     act(() => {
       modeButton?.click();
     });
-    expect(onModeChange).toHaveBeenCalledWith("lexical");
+    expect(onModeChange).toHaveBeenCalledWith("source");
   });
 
   it("advertises the documented command palette shortcut", () => {

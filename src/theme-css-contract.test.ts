@@ -48,9 +48,6 @@ describe("theme CSS contract", () => {
     expect(cssRuleBody(css, ".cf-shell-surface-label")).toContain(
       "color: var(--cf-bg);",
     );
-    expect(cssRuleBody(readRepoFile("src/lexical/editor-theme.css"), ".cf-lexical-media-object")).toContain(
-      "background: var(--cf-bg);",
-    );
   });
 
   it("owns critical CM6 layout CSS statically", () => {

@@ -17,7 +17,6 @@ import { createActiveDocumentSignal } from "../active-document-signal";
 import type { PaletteCommand } from "../components/command-palette";
 import { MemoryFileSystem } from "../file-manager";
 import type { Settings } from "../lib/types";
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 const overlayHookState = vi.hoisted(() => ({
   hotkeys: [] as Array<{
@@ -121,7 +120,6 @@ function createSidebarLayout(): UseAppOverlaysProps["sidebarLayout"] {
 interface EditorHarnessOptions {
   currentPath?: string | null;
   currentDocText?: string;
-  lexicalEditorHandle?: MarkdownEditorHandle | null;
   view?: EditorView | null;
 }
 
@@ -147,7 +145,6 @@ function createEditorHarness(
       currentPath: options.currentPath ?? null,
       activeDocumentSignal,
       getCurrentDocText: vi.fn(() => currentDocText),
-      getLexicalEditorHandle: vi.fn(() => options.lexicalEditorHandle ?? null),
       editorState: editorState as UseAppOverlaysProps["editor"]["editorState"],
       openFile: vi.fn(async () => {}),
       saveFile: vi.fn(async () => {}),
@@ -175,7 +172,6 @@ interface HookHarnessOptions {
   files?: Record<string, string>;
   currentPath?: string | null;
   currentDocText?: string;
-  lexicalEditorHandle?: MarkdownEditorHandle | null;
   view?: EditorView | null;
   dialogs?: Partial<UseAppOverlaysProps["dialogs"]>;
   recentFiles?: string[];
@@ -202,7 +198,6 @@ async function createHookProps(
   const { editor, activeDocumentSignal, setCurrentDocText } = createEditorHarness({
     currentPath: options.currentPath,
     currentDocText: options.currentDocText,
-    lexicalEditorHandle: options.lexicalEditorHandle,
     view: options.view,
   });
   const onOpenFile = vi.fn();
@@ -734,123 +729,6 @@ describe("useAppOverlays", () => {
       );
     });
     expect(alertSpy).toHaveBeenCalledWith("Exported to notes/current.html");
-  });
-
-  it("applies format commands through the Lexical editor handle", async () => {
-    const applyChanges = vi.fn();
-    const setSelection = vi.fn();
-    const focus = vi.fn();
-    const handle = {
-      applyChanges,
-      focus,
-      flushPendingEdits: vi.fn(),
-      getDoc: vi.fn(() => "alpha beta"),
-      getSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 10,
-        from: 6,
-        to: 10,
-      })),
-      peekDoc: vi.fn(() => "alpha beta"),
-      peekSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 10,
-        from: 6,
-        to: 10,
-      })),
-      insertText: vi.fn(),
-      setDoc: vi.fn(),
-      setSelection,
-    } satisfies MarkdownEditorHandle;
-    const { props } = await createHookProps({
-      currentDocText: "alpha beta",
-      lexicalEditorHandle: handle,
-    });
-
-    const { result } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
-      initialProps: props,
-    });
-
-    act(() => {
-      getCommand(result.current.commands, "format.bold").action();
-    });
-
-    await vi.waitFor(() => {
-      expect(applyChanges).toHaveBeenCalledWith([{
-        from: 6,
-        to: 10,
-        insert: "**beta**",
-      }]);
-      expect(setSelection).toHaveBeenCalledWith(8, 12);
-      expect(focus).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("does not apply a lazy format command to a stale Lexical handle", async () => {
-    const staleApplyChanges = vi.fn();
-    const staleHandle = {
-      applyChanges: staleApplyChanges,
-      focus: vi.fn(),
-      flushPendingEdits: vi.fn(),
-      getDoc: vi.fn(() => "alpha beta"),
-      getSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 10,
-        from: 6,
-        to: 10,
-      })),
-      peekDoc: vi.fn(() => "alpha beta"),
-      peekSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 10,
-        from: 6,
-        to: 10,
-      })),
-      insertText: vi.fn(),
-      setDoc: vi.fn(),
-      setSelection: vi.fn(),
-    } satisfies MarkdownEditorHandle;
-    const currentHandle = {
-      ...staleHandle,
-      applyChanges: vi.fn(),
-      getDoc: vi.fn(() => "gamma delta"),
-      getSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 11,
-        from: 6,
-        to: 11,
-      })),
-      peekDoc: vi.fn(() => "gamma delta"),
-      peekSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 11,
-        from: 6,
-        to: 11,
-      })),
-    } satisfies MarkdownEditorHandle;
-    const first = await createHookProps({
-      currentPath: "a.md",
-      currentDocText: "alpha beta",
-      lexicalEditorHandle: staleHandle,
-    });
-    const second = await createHookProps({
-      currentPath: "b.md",
-      currentDocText: "gamma delta",
-      lexicalEditorHandle: currentHandle,
-    });
-
-    const { result, rerender } = renderHook((hookProps: UseAppOverlaysProps) => useAppOverlays(hookProps), {
-      initialProps: first.props,
-    });
-
-    act(() => {
-      getCommand(result.current.commands, "format.bold").action();
-      rerender(second.props);
-    });
-    await flushAsyncImports();
-
-    expect(staleApplyChanges).not.toHaveBeenCalled();
-    expect(currentHandle.applyChanges).not.toHaveBeenCalled();
   });
 
   it("renames a local label through the hook command flow", async () => {

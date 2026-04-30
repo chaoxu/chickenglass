@@ -1,5 +1,4 @@
 import type { EditorMode } from "../editor-display-mode";
-import { isCm6EditorMode, isLexicalEditorMode } from "../editor-display-mode";
 import { isTauri } from "../lib/tauri";
 
 export const TAURI_RENDER_DIAGNOSTICS_KEY = "cf-tauri-render-diagnostics";
@@ -58,7 +57,6 @@ export interface EditorRuntimeContractSnapshot {
     readonly cmLine: number;
     readonly cmBlockWidget: number;
     readonly katex: number;
-    readonly lexicalEditor: number;
   };
   readonly elements: {
     readonly app: RuntimeContractElementSnapshot | null;
@@ -67,7 +65,6 @@ export interface EditorRuntimeContractSnapshot {
     readonly content: RuntimeContractElementSnapshot | null;
     readonly firstLine: RuntimeContractElementSnapshot | null;
     readonly katex: RuntimeContractElementSnapshot | null;
-    readonly lexical: RuntimeContractElementSnapshot | null;
   };
   readonly issues: readonly string[];
 }
@@ -224,7 +221,7 @@ export function evaluateEditorRuntimeContract(
     issues.push(`invalid document length: ${String(docLength)}`);
   }
 
-  if (mode && isCm6EditorMode(mode)) {
+  if (mode) {
     const isSourceMode = mode === "source";
     if (counts.cmEditor !== 1) issues.push(`expected one CM6 editor, found ${counts.cmEditor}`);
     if (counts.cmScroller !== 1) issues.push(`expected one CM6 scroller, found ${counts.cmScroller}`);
@@ -266,11 +263,6 @@ export function evaluateEditorRuntimeContract(
         issues.push(`CM6 content is displaced below viewport by ${Math.round(offset)}px`);
       }
     }
-  }
-
-  if (mode && isLexicalEditorMode(mode)) {
-    if (counts.lexicalEditor < 1) issues.push("expected a Lexical editor root");
-    if (!isVisibleElement(elements.lexical)) issues.push("Lexical editor is not visible");
   }
 
   if (counts.katex > 0) {
@@ -316,7 +308,6 @@ export async function collectEditorRuntimeContract(): Promise<EditorRuntimeContr
       cmLine: countRootCmLines(),
       cmBlockWidget: countRootCmBlockWidgets(),
       katex: document.querySelectorAll(".katex").length,
-      lexicalEditor: document.querySelectorAll(".cf-lexical-editor:not(.cf-lexical-nested-editor)").length,
     },
     elements: {
       app: elementSnapshot("#app"),
@@ -328,7 +319,6 @@ export async function collectEditorRuntimeContract(): Promise<EditorRuntimeContr
         rootCmContent()?.querySelector<HTMLElement>(":scope > .cm-line") ?? null,
       ),
       katex: elementSnapshot(".katex"),
-      lexical: elementSnapshot(".cf-lexical-editor:not(.cf-lexical-nested-editor)"),
     },
   } satisfies Omit<EditorRuntimeContractSnapshot, "issues">;
 

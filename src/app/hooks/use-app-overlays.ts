@@ -23,7 +23,7 @@ interface AppOverlayDeps {
   >;
   editor: Pick<
     AppEditorShellController,
-    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "getLexicalEditorHandle" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "handleInsertImage" | "editorMode"
+    "currentPath" | "activeDocumentSignal" | "getCurrentDocText" | "editorState" | "openFile" | "saveFile" | "saveAs" | "closeCurrentFile" | "hasDirtyDocument" | "handleInsertImage" | "editorMode"
   >;
   onOpenFile: () => void;
   onOpenFolder: () => void;

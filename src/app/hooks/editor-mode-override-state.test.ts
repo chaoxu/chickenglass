@@ -20,11 +20,11 @@ describe("editor mode override state", () => {
     const pending = transitionEditorModeOverride(committed, {
       type: "begin",
       requestId: 1,
-      target: { path: "notes.md", mode: "lexical" },
+      target: { path: "notes.md", mode: "source" },
     });
 
     expect(getCommittedModeOverride(pending, "notes.md")).toBe("source");
-    expect(getPendingModeOverride(pending, "notes.md")).toBe("lexical");
+    expect(getPendingModeOverride(pending, "notes.md")).toBe("source");
   });
 
   it("does not let an older request clear or commit a newer pending request", () => {
@@ -39,7 +39,7 @@ describe("editor mode override state", () => {
     const secondPending = transitionEditorModeOverride(firstPending, {
       type: "begin",
       requestId: 2,
-      target: { path: "notes.md", mode: "lexical" },
+      target: { path: "notes.md", mode: "source" },
     });
 
     const staleCleared = transitionEditorModeOverride(secondPending, {
@@ -53,7 +53,7 @@ describe("editor mode override state", () => {
     });
 
     expect(staleCommitted).toBe(staleCleared);
-    expect(getPendingModeOverride(staleCommitted, "notes.md")).toBe("lexical");
+    expect(getPendingModeOverride(staleCommitted, "notes.md")).toBe("source");
     expect(getCommittedModeOverride(staleCommitted, "notes.md")).toBeUndefined();
   });
 
@@ -63,17 +63,17 @@ describe("editor mode override state", () => {
       {
         type: "begin",
         requestId: 5,
-        target: { path: "paper.md", mode: "lexical" },
+        target: { path: "paper.md", mode: "source" },
       },
     );
 
     const committed = transitionEditorModeOverride(pending, {
       type: "commit",
       requestId: 5,
-      target: { path: "paper.md", mode: "lexical" },
+      target: { path: "paper.md", mode: "source" },
     });
 
     expect(getPendingModeOverride(committed, "paper.md")).toBeUndefined();
-    expect(getCommittedModeOverride(committed, "paper.md")).toBe("lexical");
+    expect(getCommittedModeOverride(committed, "paper.md")).toBe("source");
   });
 });

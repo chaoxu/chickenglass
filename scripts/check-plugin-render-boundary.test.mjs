@@ -209,39 +209,6 @@ describe("import boundary checker", () => {
     }])).toEqual([]);
   });
 
-  it("rejects src/lib imports from Lexical internals", () => {
-    const repoRoot = "/repo";
-    const libFile = path.join(repoRoot, "src", "lib", "markdown", "label-parser.ts");
-
-    expect(
-      findBoundaryViolations(
-        [
-          {
-            filePath: libFile,
-            sourceText: 'import { x } from "../../lexical/markdown/block-scanner";',
-          },
-        ],
-        repoRoot,
-        [
-          {
-            name: "lib neutral",
-            from: ["lib"],
-            to: ["lexical"],
-            allow: [],
-          },
-        ],
-      ),
-    ).toEqual([
-      {
-        filePath: libFile,
-        line: 1,
-        rule: "lib neutral",
-        specifier: "../../lexical/markdown/block-scanner",
-        targetPath: null,
-      },
-    ]);
-  });
-
   it("rejects src/render imports from app modules", () => {
     const repoRoot = "/repo";
     const renderFile = path.join(repoRoot, "src", "render", "hover-preview-media.ts");
@@ -270,31 +237,6 @@ describe("import boundary checker", () => {
         line: 1,
         rule: "render neutral",
         specifier: "../app/pdf-image-previews",
-        targetPath: null,
-      },
-    ]);
-  });
-
-  it("rejects production src/lexical imports from app modules", () => {
-    const repoRoot = "/repo";
-    const lexicalFile = path.join(repoRoot, "src", "lexical", "render-context.tsx");
-
-    expect(
-      findBoundaryViolations(
-        [
-          {
-            filePath: lexicalFile,
-            sourceText: 'import { useFileSystem } from "../app/contexts/file-system-context";',
-          },
-        ],
-        repoRoot,
-      ),
-    ).toEqual([
-      {
-        filePath: lexicalFile,
-        line: 1,
-        rule: "src/lexical production modules must not import app modules",
-        specifier: "../app/contexts/file-system-context",
         targetPath: null,
       },
     ]);

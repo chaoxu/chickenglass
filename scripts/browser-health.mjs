@@ -166,7 +166,7 @@ export async function collectEditorHealth(page, options = {}) {
 
   return page.evaluate(async (limits) => {
     const issues = [];
-    const modeLabels = new Set(["cm6-rich", "lexical", "source"]);
+    const modeLabels = new Set(["cm6-rich", "source"]);
 
     const isVisible = (el) => {
       if (!(el instanceof HTMLElement)) return false;
@@ -325,7 +325,7 @@ async function collectBrowserDoctorState(page) {
       debugGlobals: {
         ...Object.fromEntries(requiredGlobals.map((name) => [name, Boolean(window[name])])),
         __cmView: Boolean(window.__cmView),
-        lexicalEditor: Boolean(document.querySelector(editorSelector)),
+        editorPresent: Boolean(document.querySelector(editorSelector)),
       },
       readyState: document.readyState,
       title: document.title,

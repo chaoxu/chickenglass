@@ -1,8 +1,8 @@
 # Coflat
 
 Semantic document editor for mathematical writing. The app can switch at
-runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode. The
-document format, file IO, semantic services, and Tauri backend are shared.
+runtime between CM6 rich mode and CM6 source mode. The document format, file
+IO, semantic services, and Tauri backend are shared.
 
 ## Shared file
 
@@ -18,7 +18,7 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 ## Stack
 
 - **Language**: TypeScript (strict mode) + Rust (Tauri backend)
-- **Editors**: CodeMirror 6 for rich/source markdown editing; Lexical for WYSIWYG editing
+- **Editors**: CodeMirror 6 for rich/source markdown editing
 - **Parser**: Lezer (`@lezer/markdown` with custom extensions)
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (smaller bundles, native webview)
@@ -31,7 +31,6 @@ Keep them as one source of truth. If the shared guidance changes, update the can
 ```
 src/
   editor/        # CM6 setup, keybindings, theme, debug-helpers
-  lexical/       # Lexical WYSIWYG editor surface and markdown serialization
   parser/        # Lezer markdown extensions (fenced-div, math, footnotes, etc.)
   plugins/       # Block plugin system (theorem, proof, definition, embed, etc.)
   render/        # CM6 ViewPlugins for Typora-style rendering
@@ -81,9 +80,8 @@ pnpm tauri:build     # build Coflat production desktop app bundle
 pnpm tauri:build:dmg # build Coflat macOS DMG installer
 pnpm test:browser    # stable managed-browser regression harness
 pnpm test:browser:quick
-                     # named quick browser lanes: smoke/cm6-rich/lexical/media/navigation/scroll/render/parity/all/one
+                     # named quick browser lanes: smoke/cm6-rich/media/navigation/scroll/render/all/one
 pnpm test:browser:cm6-rich
-pnpm test:browser:lexical
 pnpm test:browser:media
 pnpm test:browser:navigation
 pnpm test:browser:scroll
@@ -152,9 +150,9 @@ Workflow at `.gitea/workflows/ci.yml`. Runs on push/PR to `main`.
 
 Debug globals are exposed on `window` for console and Playwright testing:
 
-Prefer the surface-neutral `__editor` bridge when a helper can work in both
-CM6 and Lexical. Use `__cmView` / `__cmDebug` only for CM6-specific rendering,
-parser, geometry, and scroll investigations.
+Use `__editor` for surface-neutral document and selection access. Use
+`__cmView` / `__cmDebug` for CM6-specific rendering, parser, geometry, and
+scroll investigations.
 
 ```
 __cmView                                        — CM6 EditorView (dispatch, state, focus)
@@ -180,7 +178,7 @@ __app.openFileWithContent(name, content)        — open generated content as an
 __app.loadFixtureProject(files, initialPath)    — load an in-memory fixture project for tests
 __app.closeFile({ discard })                    — close the active document
 __app.setSearchOpen(true)                       — open or close app search
-__app.setMode("lexical")                        — switch editor mode (cm6-rich/lexical/source)
+__app.setMode("source")                         — switch editor mode (cm6-rich/source)
 __app.showSidebarPanel("diagnostics")           — open a specific sidebar panel
 __app.getSidebarState()                         — current sidebar { collapsed, tab }
 __app.saveFile()                                — save current file
@@ -190,7 +188,7 @@ __app.isDirty()                                 — whether any open document ha
 __app.ready                                     — resolves after the app debug bridge is connected
 __editor.ready                                  — resolves after the product-neutral editor bridge is connected
 __editor.focus()                                — focus the active editor surface
-__editor.getDoc()                               — current document text for CM6 or Lexical
+__editor.getDoc()                               — current document text
 __editor.setDoc(text)                           — replace current document text through the active editor
 __editor.peekDoc()                              — current document text without forcing editor focus
 __editor.getSelection()                         — current active editor selection
@@ -210,12 +208,10 @@ __cfDebug.watcherStatus()                       — latest frontend native watch
 __cfDebug.runtimeContract()                     — computed editor runtime contract snapshot with drift issues
 __cfDebug.recorderStatus()                      — debug recorder queue/connectivity/capture-mode snapshot
 __cfDebug.captureState("label")                 — combined selection/render/raw-fence/structure snapshot + recorder event
-__cfDebug.interactionLog()                      — recent Lexical interaction trace entries
-__cfDebug.clearInteractionLog()                 — clear Lexical interaction trace entries
 __cfDebug.exportSession()                       — export locally recorded debug session events
 __cfDebug.clearSession()                        — clear locally recorded debug session events
-__cfDebug.captureFullSession()                  — combined debug export with session events, interactions, perf, and current capture
-__cfDebug.clearAllDebugBuffers()                — clear session events, interactions, and frontend/backend perf spans
+__cfDebug.captureFullSession()                  — combined debug export with session events, perf, and current capture
+__cfDebug.clearAllDebugBuffers()                — clear session events and frontend/backend perf spans
 __tauriSmoke.openProject("/abs/path")           — dev-only Tauri helper to switch project roots deterministically
 __tauriSmoke.openFile("/abs/path")              — dev-only Tauri helper to open a file
 __tauriSmoke.requestNativeClose()               — dev-only Tauri helper to request native close handling
@@ -238,10 +234,10 @@ When asked to start the preview server, prefer `pnpm build && pnpm preview`. The
 
 **Rule**: Do NOT use the CDP lane (port 9322, `pnpm chrome`, `chromium.connectOverCDP`) unless the user explicitly asks for it or is already driving the shared app window visually. The CDP lane is for human-in-the-loop visual debugging, not for automated inspection by agents. It has known pitfalls (headed `page.screenshot` hangs, stuck WebSocket connections, state lost on fallback) that the managed harness avoids.
 
-For any automated Lexical/CM6 inspection — DOM audits, screenshots, mode switches, reference/render checks — use the managed Playwright harness.
+For any automated CM6 inspection — DOM audits, screenshots, mode switches, reference/render checks — use the managed Playwright harness.
 
 Managed harness (the default):
-1. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:quick -- cm6-rich`, `pnpm test:browser:quick -- parity`, `pnpm test:browser:lexical`, `pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "..."`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
+1. Run `pnpm doctor:browser` when the harness itself looks suspect, or scripts like `pnpm test:browser`, `pnpm test:browser:quick -- cm6-rich`, `pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "..."`, `node scripts/perf-regression.mjs ...`, `node scripts/cursor-scroll-regression.mjs ...`, or `node scripts/browser-repro.mjs capture --fixture index.md --line 40`.
 2. Managed localhost runs auto-start Vite when needed. Use `--no-start-server` only when you intentionally manage the app server yourself.
 3. Default mode is Playwright-owned Chromium. Use `--browser cdp` only when the user explicitly asks for the manual shared app window.
 4. Browser setup and regression failures write artifacts under `/tmp/coflat-browser-artifacts` by default. Use `--artifacts-dir /tmp/coflat-*` to force a specific output directory for a run.

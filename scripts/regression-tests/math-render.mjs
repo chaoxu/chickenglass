@@ -22,11 +22,6 @@ const MODE_SELECTORS = {
     displayMathLabel: ".cf-math-display-number",
     inlineMath: ".cf-math-inline",
   },
-  lexical: {
-    displayMath: ".cf-lexical-display-math",
-    displayMathLabel: ".cf-lexical-display-math-label",
-    inlineMath: ".cf-lexical-inline-math",
-  },
 };
 
 async function collectMathStats(page, mode) {
@@ -67,48 +62,42 @@ export async function run(page) {
   await openRegressionDocument(page);
 
   const cm6 = await collectMathStats(page, "cm6-rich");
-  const lexical = await collectMathStats(page, "lexical");
 
-  for (const [mode, stats] of [["CM6 rich", cm6], ["Lexical", lexical]]) {
-    if (stats.katexCount === 0) {
-      return { pass: false, message: `${mode}: no .katex elements found in DOM` };
-    }
-    if (stats.errorCount > 0) {
-      return {
-        pass: false,
-        message: `${mode}: found ${stats.katexCount} .katex elements but ${stats.errorCount} .katex-error nodes`,
-      };
-    }
-    if (stats.inlineCount === 0 || stats.displayCount === 0) {
-      return {
-        pass: false,
-        message: `${mode}: expected inline and display math, got inline=${stats.inlineCount}, display=${stats.displayCount}`,
-      };
-    }
+  if (cm6.katexCount === 0) {
+    return { pass: false, message: "CM6 rich: no .katex elements found in DOM" };
+  }
+  if (cm6.errorCount > 0) {
+    return {
+      pass: false,
+      message: `CM6 rich: found ${cm6.katexCount} .katex elements but ${cm6.errorCount} .katex-error nodes`,
+    };
+  }
+  if (cm6.inlineCount === 0 || cm6.displayCount === 0) {
+    return {
+      pass: false,
+      message: `CM6 rich: expected inline and display math, got inline=${cm6.inlineCount}, display=${cm6.displayCount}`,
+    };
+  }
+
+  if (!renderedTextIncludes(cm6, "x2")) {
+    return {
+      pass: false,
+      message: "CM6 rich: missing rendered inline math text for x^2",
+    };
   }
 
   const cm6Annotations = normalizedAnnotationSet(cm6);
-  const lexicalAnnotations = normalizedAnnotationSet(lexical);
-  for (const [mode, stats] of [["CM6 rich", cm6], ["Lexical", lexical]]) {
-    if (!renderedTextIncludes(stats, "x2")) {
-      return {
-        pass: false,
-        message: `${mode}: missing rendered inline math text for x^2`,
-      };
-    }
-  }
-
   for (const expected of ["\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}"]) {
-    if (!cm6Annotations.has(expected) || !lexicalAnnotations.has(expected)) {
+    if (!cm6Annotations.has(expected)) {
       return {
         pass: false,
-        message: `missing expected KaTeX annotation "${expected}" (cm6=${cm6Annotations.has(expected)}, lexical=${lexicalAnnotations.has(expected)})`,
+        message: `missing expected KaTeX annotation "${expected}"`,
       };
     }
   }
 
   return {
     pass: true,
-    message: `CM6 ${cm6.inlineCount} inline/${cm6.displayCount} display, Lexical ${lexical.inlineCount} inline/${lexical.displayCount} display math rendered`,
+    message: `CM6 ${cm6.inlineCount} inline/${cm6.displayCount} display math rendered`,
   };
 }

@@ -51,17 +51,13 @@ import {
   RANKDECREASE_MAIN_FIXTURE,
   SCROLL_HEAVY_FIXTURE,
 } from "./fixture-test-helpers.mjs";
-import {
-  measureCm6TypingBurst,
-  measureLexicalBridgeTypingBurst,
-} from "./typing-burst-helpers.mjs";
+import { measureCm6TypingBurst } from "./typing-burst-helpers.mjs";
 import {
   hasFixtureDocument,
   getSemanticState,
   openFixtureDocument,
   resolveFixtureDocument,
   resolveFixtureDocumentWithFallback,
-  showSidebarPanel,
   switchToMode,
   waitForDocumentStable,
   waitForRenderReady,
@@ -162,46 +158,11 @@ export const TYPING_BURST_REQUIRED_METRICS = [
   "typing.input_to_idle_ms",
 ];
 
-export const LEXICAL_TYPING_BURST_REQUIRED_METRICS = [
-  "lexical.typing.wall_ms",
-  "lexical.typing.insert_mean_ms",
-  "lexical.typing.insert_max_ms",
-  "lexical.typing.canonical_ms",
-  "lexical.typing.visual_sync_ms",
-  "lexical.typing.semantic_ms",
-  "lexical.typing.deferred_sync_work_ms",
-  "lexical.typing.deferred_sync_count",
-  "lexical.typing.incremental_sync_work_ms",
-  "lexical.typing.incremental_sync_count",
-  "lexical.typing.source_span_index_work_ms",
-  "lexical.typing.source_span_index_count",
-  "lexical.typing.input_to_semantic_ms",
-];
-
-export const LEXICAL_SIDEBAR_OPEN_REQUIRED_METRICS = [
-  "lexical.sidebar_open.wall_ms",
-  "lexical.sidebar_open.publish_ms",
-];
-
 export const HTML_EXPORT_PANDOC_REQUIRED_METRICS = [
   "export.html.wall_ms",
   "export.html.input_bytes",
   "export.html.output_bytes",
 ];
-
-export function finalizeLexicalBridgeObservation(result) {
-  const visualSyncSeen = result.visualSyncObserved;
-  const visualSyncMs = visualSyncSeen ? result.visualSyncMs : 0;
-  const inputToSemanticMs =
-    result.wallMs + Math.max(result.canonicalMs, result.semanticMs) + result.settleMs;
-  return {
-    ...result,
-    visualSyncObserved: visualSyncSeen,
-    visualSyncMs,
-    inputToSemanticMs,
-    inputToSemanticPerCharMs: inputToSemanticMs / result.insertCount,
-  };
-}
 
 const DEFAULT_TYPING_BURST_POSITION_KEYS = ["after_frontmatter", "near_end"];
 
@@ -481,26 +442,6 @@ export function resolvePerfRuntimeOptions({ getIntFlag, hasFlag }) {
       "--document-stable-timeout-ms",
       profile.documentStableTimeoutMs,
     ),
-    sidebarReadyTimeoutMs: getIntFlag(
-      "--sidebar-ready-timeout-ms",
-      profile.sidebarReadyTimeoutMs,
-    ),
-    sidebarPanelPublishTimeoutMs: getIntFlag(
-      "--sidebar-publish-timeout-ms",
-      profile.sidebarPanelPublishTimeoutMs,
-    ),
-    typingCanonicalTimeoutMs: getIntFlag(
-      "--typing-canonical-timeout-ms",
-      profile.typingCanonicalTimeoutMs,
-    ),
-    typingVisualSyncTimeoutMs: getIntFlag(
-      "--typing-visual-sync-timeout-ms",
-      profile.typingVisualSyncTimeoutMs,
-    ),
-    typingSemanticTimeoutMs: getIntFlag(
-      "--typing-semantic-timeout-ms",
-      profile.typingSemanticTimeoutMs,
-    ),
   };
 }
 
@@ -519,96 +460,6 @@ async function openCleanRichDocument(page, fixture, runtimeOptions) {
     "getLoadedDocumentText",
     async () => window.__cmView.state.doc.toString(),
   );
-}
-
-async function openCleanLexicalDocument(page, fixture, runtimeOptions) {
-  await switchToMode(page, "source");
-  await openFixtureDocument(
-    page,
-    fixture,
-    {
-      mode: "lexical",
-      timeoutMs: runtimeOptions.fixtureOpenTimeoutMs,
-      settleMs: runtimeOptions.postOpenSettleMs,
-    },
-  );
-  return evaluateStep(
-    page,
-    "getLoadedLexicalDocumentText",
-    async () => window.__editor.getDoc(),
-  );
-}
-
-async function measureLexicalSidebarOpen(page, panel, runtimeOptions) {
-  return evaluateStep(page, "measureLexicalSidebarOpen", async ({
-    nextPanel,
-    panelActiveTimeoutMs,
-    pollIntervalMs,
-    publishTimeoutMs,
-  }) => {
-    const findSummary = (summaries, name) =>
-      summaries.find((summary) => summary.name === name) ?? null;
-    const waitForAnimationFrames = () =>
-      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const waitForSidebarPanel = async () => {
-      const settleStart = performance.now();
-      while (performance.now() - settleStart < panelActiveTimeoutMs) {
-        const sidebar = window.__app?.getSidebarState?.();
-        if (!sidebar || (!sidebar.collapsed && sidebar.tab === nextPanel)) {
-          return;
-        }
-        await sleepInPage(pollIntervalMs);
-      }
-      throw new Error(`Sidebar panel "${nextPanel}" did not become active.`);
-    };
-
-    if (!window.__app?.showSidebarPanel) {
-      throw new Error("window.__app.showSidebarPanel is unavailable.");
-    }
-    const beforePerfSnapshot = await window.__cfDebug.perfSummary();
-    const beforePerfSummaries = beforePerfSnapshot.frontend.summaries;
-    const beforePublishCount = findSummary(
-      beforePerfSummaries,
-      "lexical.publishDiagnostics",
-    )?.count ?? 0;
-    const startAt = performance.now();
-    window.__app.showSidebarPanel(nextPanel);
-    await waitForSidebarPanel();
-    await waitForAnimationFrames();
-    const wallMs = performance.now() - startAt;
-
-    let publishMs = null;
-    while (performance.now() - startAt < publishTimeoutMs) {
-      const perfSnapshot = await window.__cfDebug.perfSummary();
-      const perfSummaries = perfSnapshot.frontend.summaries;
-      const publishSummary = findSummary(
-        perfSummaries,
-        "lexical.publishDiagnostics",
-      );
-      const publishCount = publishSummary?.count ?? 0;
-      if (publishCount > beforePublishCount && publishSummary) {
-        publishMs = Math.max(0, publishSummary.lastEndedAt - startAt);
-        break;
-      }
-      await sleepInPage(pollIntervalMs);
-    }
-
-    if (publishMs === null) {
-      throw new Error(`Lexical sidebar panel "${nextPanel}" did not publish within ${publishTimeoutMs}ms.`);
-    }
-
-    return {
-      panel: nextPanel,
-      publishMs,
-      wallMs,
-    };
-  }, {
-    nextPanel: panel,
-    panelActiveTimeoutMs: runtimeOptions.sidebarReadyTimeoutMs,
-    pollIntervalMs: runtimeOptions.pollIntervalMs,
-    publishTimeoutMs: runtimeOptions.sidebarPanelPublishTimeoutMs,
-  });
 }
 
 export function typingBurstMetrics(caseKey, positionKey, result) {
@@ -702,190 +553,6 @@ export function typingBurstMetrics(caseKey, positionKey, result) {
   ];
 }
 
-export function lexicalTypingBurstMetrics(caseKey, positionKey, result) {
-  const withContext = (name) => `${name}.${caseKey}.${positionKey}`;
-  return [
-    { name: withContext("lexical.typing.insert_count"), unit: "count", value: result.insertCount },
-    { name: withContext("lexical.typing.wall_ms"), unit: "ms", value: result.wallMs },
-    {
-      name: withContext("lexical.typing.wall_per_char_ms"),
-      unit: "ms",
-      value: result.wallPerCharMs,
-    },
-    {
-      name: withContext("lexical.typing.insert_mean_ms"),
-      unit: "ms",
-      value: result.meanInsertMs,
-    },
-    {
-      name: withContext("lexical.typing.insert_p95_ms"),
-      unit: "ms",
-      value: result.p95InsertMs,
-    },
-    {
-      name: withContext("lexical.typing.insert_max_ms"),
-      unit: "ms",
-      value: result.maxInsertMs,
-    },
-    {
-      name: withContext("lexical.typing.canonical_ms"),
-      unit: "ms",
-      value: result.canonicalMs,
-    },
-    {
-      name: withContext("lexical.typing.visual_sync_ms"),
-      unit: "ms",
-      value: result.visualSyncMs,
-    },
-    {
-      name: withContext("lexical.typing.semantic_ms"),
-      unit: "ms",
-      value: result.semanticMs,
-    },
-    {
-      name: withContext("lexical.typing.semantic_work_ms"),
-      unit: "ms",
-      value: result.semanticWorkMs,
-    },
-    {
-      name: withContext("lexical.typing.semantic_work_count"),
-      unit: "count",
-      value: result.semanticWorkCount,
-    },
-    {
-      name: withContext("lexical.typing.get_markdown_work_ms"),
-      unit: "ms",
-      value: result.getMarkdownWorkMs,
-    },
-    {
-      name: withContext("lexical.typing.get_markdown_work_count"),
-      unit: "count",
-      value: result.getMarkdownWorkCount,
-    },
-    {
-      name: withContext("lexical.typing.publish_snapshot_work_ms"),
-      unit: "ms",
-      value: result.publishSnapshotWorkMs,
-    },
-    {
-      name: withContext("lexical.typing.publish_snapshot_work_count"),
-      unit: "count",
-      value: result.publishSnapshotWorkCount,
-    },
-    {
-      name: withContext("lexical.typing.deferred_sync_work_ms"),
-      unit: "ms",
-      value: result.deferredSyncWorkMs,
-    },
-    {
-      name: withContext("lexical.typing.deferred_sync_count"),
-      unit: "count",
-      value: result.deferredSyncCount,
-    },
-    {
-      name: withContext("lexical.typing.incremental_sync_work_ms"),
-      unit: "ms",
-      value: result.incrementalSyncWorkMs,
-    },
-    {
-      name: withContext("lexical.typing.incremental_sync_count"),
-      unit: "count",
-      value: result.incrementalSyncCount,
-    },
-    {
-      name: withContext("lexical.typing.source_span_index_work_ms"),
-      unit: "ms",
-      value: result.sourceSpanIndexWorkMs,
-    },
-    {
-      name: withContext("lexical.typing.source_span_index_count"),
-      unit: "count",
-      value: result.sourceSpanIndexCount,
-    },
-    {
-      name: withContext("lexical.typing.input_to_semantic_ms"),
-      unit: "ms",
-      value: result.inputToSemanticMs,
-    },
-    {
-      name: withContext("lexical.typing.input_to_semantic_per_char_ms"),
-      unit: "ms",
-      value: result.inputToSemanticPerCharMs,
-    },
-    {
-      name: withContext("lexical.typing.longtask_supported"),
-      unit: "count",
-      value: result.longTaskSupported,
-    },
-    {
-      name: withContext("lexical.typing.longtask_count"),
-      unit: "count",
-      value: result.longTaskCount,
-    },
-    {
-      name: withContext("lexical.typing.longtask_total_ms"),
-      unit: "ms",
-      value: result.longTaskTotalMs,
-    },
-    {
-      name: withContext("lexical.typing.longtask_max_ms"),
-      unit: "ms",
-      value: result.longTaskMaxMs,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_longtask_count"),
-      unit: "count",
-      value: result.postIdleLongTaskCount,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_longtask_total_ms"),
-      unit: "ms",
-      value: result.postIdleLongTaskTotalMs,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_longtask_max_ms"),
-      unit: "ms",
-      value: result.postIdleLongTaskMaxMs,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_lag_samples"),
-      unit: "count",
-      value: result.postIdleLagSamples,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_lag_mean_ms"),
-      unit: "ms",
-      value: result.postIdleLagMeanMs,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_lag_p95_ms"),
-      unit: "ms",
-      value: result.postIdleLagP95Ms,
-    },
-    {
-      name: withContext("lexical.typing.post_idle_lag_max_ms"),
-      unit: "ms",
-      value: result.postIdleLagMaxMs,
-    },
-  ];
-}
-
-export function lexicalSidebarOpenMetrics(caseKey, panelKey, result) {
-  const withContext = (name) => `${name}.${caseKey}.${panelKey}`;
-  return [
-    {
-      name: withContext("lexical.sidebar_open.wall_ms"),
-      unit: "ms",
-      value: result.wallMs,
-    },
-    {
-      name: withContext("lexical.sidebar_open.publish_ms"),
-      unit: "ms",
-      value: result.publishMs,
-    },
-  ];
-}
-
 function typingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
   const metricNames = [];
   for (const caseDef of caseDefinitions) {
@@ -893,28 +560,6 @@ function typingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
       for (const metricName of TYPING_BURST_REQUIRED_METRICS) {
         metricNames.push(`${metricName}.${caseDef.key}.${positionKey}`);
       }
-    }
-  }
-  return metricNames;
-}
-
-function lexicalTypingBurstRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
-  const metricNames = [];
-  for (const caseDef of caseDefinitions) {
-    for (const positionKey of caseDef.positionKeys ?? DEFAULT_TYPING_BURST_POSITION_KEYS) {
-      for (const metricName of LEXICAL_TYPING_BURST_REQUIRED_METRICS) {
-        metricNames.push(`${metricName}.${caseDef.key}.${positionKey}`);
-      }
-    }
-  }
-  return metricNames;
-}
-
-function lexicalSidebarOpenRequiredMetricNames(caseDefinitions = TYPING_BURST_CASES) {
-  const metricNames = [];
-  for (const caseDef of caseDefinitions) {
-    for (const metricName of LEXICAL_SIDEBAR_OPEN_REQUIRED_METRICS) {
-      metricNames.push(`${metricName}.${caseDef.key}.diagnostics`);
     }
   }
   return metricNames;
@@ -1170,7 +815,7 @@ export const scenarios = {
     },
   },
   "mode-cycle-index": {
-    description: "Reload the app, open demo/index.md, then cycle Source/Lexical/CM6 Rich.",
+    description: "Reload the app, open demo/index.md, then cycle Source/CM6 Rich.",
     defaultSettleMs: 500,
     run: async (page, runtimeOptions) => {
       await openFixtureDocument(page, "index.md", {
@@ -1179,7 +824,6 @@ export const scenarios = {
         settleMs: runtimeOptions.postOpenSettleMs,
       });
       await switchToMode(page, "source");
-      await switchToMode(page, "lexical");
       await switchToMode(page, "cm6-rich");
     },
   },
@@ -1301,83 +945,6 @@ export const scenarios = {
       return { metrics };
     },
   },
-  "typing-lexical-bridge-burst": {
-    description: "Measure Lexical-mode typing bursts through the product-neutral editor bridge across representative markdown hotspots.",
-    defaultSettleMs: 300,
-    requiredMetrics: lexicalTypingBurstRequiredMetricNames(availableTypingBurstCases()),
-    run: async (page, runtimeOptions) => {
-      const metrics = [];
-      for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
-        const originalText = await openCleanLexicalDocument(
-          page,
-          testCase,
-          runtimeOptions,
-        );
-        const positions = findTypingBurstPositions(
-          originalText,
-          testCase.positionKeys,
-        );
-        for (const [positionKey, position] of Object.entries(positions)) {
-          await openCleanLexicalDocument(
-            page,
-            testCase,
-            runtimeOptions,
-          );
-          const beforeSummaries = await getFrontendPerfSummaries(page);
-          const result = finalizeLexicalBridgeObservation(
-            await measureLexicalBridgeTypingBurst(
-              page,
-              position.anchor,
-              TYPING_BURST_INSERT_COUNT,
-              runtimeOptions,
-            ),
-          );
-          const afterSummaries = await getFrontendPerfSummaries(page);
-          metrics.push(
-            ...lexicalTypingBurstMetrics(testCase.key, positionKey, result),
-            ...frontendSpanDeltaMetrics(
-              "lexical.typing",
-              testCase.key,
-              positionKey,
-              beforeSummaries,
-              afterSummaries,
-            ),
-          );
-        }
-      }
-      return { metrics };
-    },
-  },
-  "lexical-sidebar-open-diagnostics": {
-    description: "Measure Lexical diagnostics publication when the sidebar opens from a non-tracking panel.",
-    defaultSettleMs: 300,
-    requiredMetrics: lexicalSidebarOpenRequiredMetricNames(availableTypingBurstCases()),
-    run: async (page, runtimeOptions) => {
-      const metrics = [];
-      for (const testCase of availableTypingBurstCases().map(resolveTypingBurstFixture)) {
-        await showSidebarPanel(page, "files");
-        await openCleanLexicalDocument(
-          page,
-          testCase,
-          runtimeOptions,
-        );
-        const beforeSummaries = await getFrontendPerfSummaries(page);
-        const result = await measureLexicalSidebarOpen(page, "diagnostics", runtimeOptions);
-        const afterSummaries = await getFrontendPerfSummaries(page);
-        metrics.push(
-          ...lexicalSidebarOpenMetrics(testCase.key, "diagnostics", result),
-          ...frontendSpanDeltaMetrics(
-            "lexical.sidebar_open",
-            testCase.key,
-            "diagnostics",
-            beforeSummaries,
-            afterSummaries,
-          ),
-        );
-      }
-      return { metrics };
-    },
-  },
   "scroll-step-rich": {
     description: `Open the preferred heavy Rich-mode scroll fixture, falling back to demo/index.md when local private fixtures are unavailable.`,
     defaultSettleMs: 400,
@@ -1493,11 +1060,6 @@ Options:
   --poll-interval-ms <n>   Override in-page polling interval
   --idle-settle-timeout-ms <n> Override requestIdleCallback settle timeout
   --document-stable-timeout-ms <n> Override document-stability wait timeout
-  --sidebar-ready-timeout-ms <n> Override sidebar-active wait timeout
-  --sidebar-publish-timeout-ms <n> Override Lexical sidebar publish timeout
-  --typing-canonical-timeout-ms <n> Override typing canonical-doc timeout
-  --typing-visual-sync-timeout-ms <n> Override Lexical visual-sync timeout
-  --typing-semantic-timeout-ms <n> Override Lexical semantic-sync timeout
   --browser <managed|cdp>  Browser lane (default: managed)
   --headed                 Show the Playwright-owned browser window
   --port <n>               CDP port for Chrome for Testing (default: 9322)

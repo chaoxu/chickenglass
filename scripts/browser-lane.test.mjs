@@ -48,9 +48,6 @@ describe("browser lane helper", () => {
     expect(buildBrowserLaneArgs(["all"])).toEqual([
       "scripts/test-regression.mjs",
     ]);
-    expect(buildBrowserLaneArgs(["parity"])).toEqual([
-      "scripts/document-surface-parity.mjs",
-    ]);
   });
 
   it("builds one-off filters from positional test names", () => {
@@ -75,9 +72,8 @@ describe("browser lane helper", () => {
 
   it("prints lane help", () => {
     expect(formatBrowserLaneHelp()).toContain("render");
-    expect(formatBrowserLaneHelp()).toContain("parity");
     expect(formatBrowserLaneHelp()).toContain("cm6-rich");
-    expect(formatBrowserLaneHelp()).toContain("Lexical WYSIWYG and mode-switch lane");
+    expect(formatBrowserLaneHelp()).toContain("CM6 rich rendering");
   });
 
   it("runs the browser regression script", () => {

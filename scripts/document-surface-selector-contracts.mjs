@@ -1,17 +1,15 @@
-export const DOCUMENT_SURFACE_MODES = ["cm6-rich", "lexical"];
+export const DOCUMENT_SURFACE_MODES = ["cm6-rich"];
 
 export const DOCUMENT_SURFACE_SELECTORS = {
   block: ".cf-doc-block",
   displayMath: ".cf-doc-display-math",
   flow: {
     "cm6-rich": ".cf-doc-flow--cm6",
-    lexical: ".cf-doc-flow--lexical",
   },
   headingH1: ".cf-doc-heading--h1",
   paragraph: ".cf-doc-paragraph",
   surface: {
     "cm6-rich": ".cf-doc-surface--cm6",
-    lexical: ".cf-doc-surface--lexical",
   },
   table: ".cf-doc-table-block",
   tableCell: ".cf-doc-table-block th, .cf-doc-table-block td",
@@ -20,9 +18,6 @@ export const DOCUMENT_SURFACE_SELECTORS = {
 export function normalizeDocumentSurfaceMode(mode) {
   if (mode === "rich" || mode === "CM6 Rich") {
     return "cm6-rich";
-  }
-  if (mode === "Lexical") {
-    return "lexical";
   }
   if (DOCUMENT_SURFACE_MODES.includes(mode)) {
     return mode;

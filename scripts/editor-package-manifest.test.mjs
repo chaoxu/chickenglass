@@ -34,7 +34,6 @@ describe("editor package dependency manifest", () => {
   it("allows explicit bundled build dependencies without exposing them as package externals", () => {
     expect(isEditorBundledDependency("@overleaf/codemirror-tree-view")).toBe(true);
     expect(isEditorBuildDependency("@overleaf/codemirror-tree-view")).toBe(true);
-    expect(isEditorBuildDependency("lexical")).toBe(false);
     expect(isEditorBuildDependency("markdown-it")).toBe(false);
   });
 

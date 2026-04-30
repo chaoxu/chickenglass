@@ -6,13 +6,6 @@ declare module "*.css?inline" {
   export default css;
 }
 
-declare module "markdown-it";
-declare module "markdown-it-attrs";
-declare module "markdown-it-footnote";
-declare module "markdown-it-mark";
-declare module "markdown-it-task-lists";
-declare module "markdown-it-texmath";
-
 declare module "lucide-react/dist/esm/icons/copy.js" {
   export const __iconNode: ReadonlyArray<readonly [string, Readonly<Record<string, string>>]>;
 }

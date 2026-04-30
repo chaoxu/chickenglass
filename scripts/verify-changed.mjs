@@ -41,18 +41,6 @@ const AREA_TESTS = [
       "pnpm",
       "test:focused",
       "--",
-      "src/lexical/markdown.test.ts",
-      "src/lexical/markdown-editor.test.tsx",
-      "src/app/components/lexical-editor-pane.test.tsx",
-    ],
-    paths: ["src/lexical/"],
-  },
-  {
-    command: [
-      "rtk",
-      "pnpm",
-      "test:focused",
-      "--",
       "scripts/test-regression.test.mjs",
       "scripts/browser-repro.test.mjs",
     ],

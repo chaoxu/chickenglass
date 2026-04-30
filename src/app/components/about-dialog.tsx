@@ -40,7 +40,6 @@ const PREFIX_CREDITS: Credit[] = [
 
 const EDITOR_CREDITS: Credit[] = [
   { name: "CodeMirror", url: "https://codemirror.net" },
-  { name: "Lexical", url: "https://lexical.dev" },
 ];
 
 const SUFFIX_CREDITS: Credit[] = [

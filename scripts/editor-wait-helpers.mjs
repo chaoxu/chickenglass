@@ -69,7 +69,7 @@ export async function settleEditorLayout(page, options = {}) {
  * Wait until the active editor bridge and semantic snapshot are available and
  * stable across animation frames.
  *
- * Lexical/source modes may not expose CM6 semantic debug data; in those modes
+ * Source mode may not expose CM6 rich semantic debug data; in that mode
  * the canonical document text and app mode still provide the readiness key.
  *
  * @param {import("playwright").Page} page

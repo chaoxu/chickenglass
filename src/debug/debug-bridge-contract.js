@@ -5,7 +5,7 @@ export const DEBUG_BRIDGE_READY_PROMISES = [
   { globalName: "__editor", propertyName: "ready" },
   { globalName: "__cfDebug", propertyName: "ready" },
 ];
-export const DEBUG_EDITOR_TEST_ID = "lexical-editor";
+export const DEBUG_EDITOR_TEST_ID = "editor";
 export const MODE_BUTTON_TEST_ID = "mode-button";
 export const DEBUG_EDITOR_SELECTOR = `[data-testid="${DEBUG_EDITOR_TEST_ID}"]`;
 export const MODE_BUTTON_SELECTOR = `[data-testid="${MODE_BUTTON_TEST_ID}"]`;
@@ -33,7 +33,7 @@ export const DEBUG_BRIDGE_DOC_ENTRIES = [
   ["__app.loadFixtureProject(files, initialPath)", "load an in-memory fixture project for tests"],
   ["__app.closeFile({ discard })", "close the active document"],
   ["__app.setSearchOpen(true)", "open or close app search"],
-  ["__app.setMode(\"lexical\")", "switch editor mode (cm6-rich/lexical/source)"],
+  ["__app.setMode(\"source\")", "switch editor mode (cm6-rich/source)"],
   ["__app.showSidebarPanel(\"diagnostics\")", "open a specific sidebar panel"],
   ["__app.getSidebarState()", "current sidebar { collapsed, tab }"],
   ["__app.saveFile()", "save current file"],
@@ -43,7 +43,7 @@ export const DEBUG_BRIDGE_DOC_ENTRIES = [
   ["__app.ready", "resolves after the app debug bridge is connected"],
   ["__editor.ready", "resolves after the product-neutral editor bridge is connected"],
   ["__editor.focus()", "focus the active editor surface"],
-  ["__editor.getDoc()", "current document text for CM6 or Lexical"],
+  ["__editor.getDoc()", "current document text"],
   ["__editor.setDoc(text)", "replace current document text through the active editor"],
   ["__editor.peekDoc()", "current document text without forcing editor focus"],
   ["__editor.getSelection()", "current active editor selection"],
@@ -63,12 +63,10 @@ export const DEBUG_BRIDGE_DOC_ENTRIES = [
   ["__cfDebug.runtimeContract()", "computed editor runtime contract snapshot with drift issues"],
   ["__cfDebug.recorderStatus()", "debug recorder queue/connectivity/capture-mode snapshot"],
   ["__cfDebug.captureState(\"label\")", "combined selection/render/raw-fence/structure snapshot + recorder event"],
-  ["__cfDebug.interactionLog()", "recent Lexical interaction trace entries"],
-  ["__cfDebug.clearInteractionLog()", "clear Lexical interaction trace entries"],
   ["__cfDebug.exportSession()", "export locally recorded debug session events"],
   ["__cfDebug.clearSession()", "clear locally recorded debug session events"],
-  ["__cfDebug.captureFullSession()", "combined debug export with session events, interactions, perf, and current capture"],
-  ["__cfDebug.clearAllDebugBuffers()", "clear session events, interactions, and frontend/backend perf spans"],
+  ["__cfDebug.captureFullSession()", "combined debug export with session events, perf, and current capture"],
+  ["__cfDebug.clearAllDebugBuffers()", "clear session events and frontend/backend perf spans"],
   ["__tauriSmoke.openProject(\"/abs/path\")", "dev-only Tauri helper to switch project roots deterministically"],
   ["__tauriSmoke.openFile(\"/abs/path\")", "dev-only Tauri helper to open a file"],
   ["__tauriSmoke.requestNativeClose()", "dev-only Tauri helper to request native close handling"],

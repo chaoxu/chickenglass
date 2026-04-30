@@ -75,7 +75,6 @@ The static contract lives in `src/editor-theme.css` and covers:
 - Coflats document column: `800px` max width, centered margins, content
   padding, line height, and content font
 - Shared surface identity: `.cf-doc-surface` and `.cf-doc-flow`
-- Lexical static surface rules in `src/lexical/editor-theme.css`
 
 Reason: browser dev/preview and packaged Tauri run in different WebView
 environments. CodeMirror's base/theme CSS is generated through `style-mod` at

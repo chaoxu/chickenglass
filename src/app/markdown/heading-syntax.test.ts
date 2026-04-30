@@ -30,7 +30,7 @@ describe("heading syntax", () => {
     });
   });
 
-  it("shares trailing-attribute parsing between markdown and Lexical callers", () => {
+  it("parses trailing heading attributes from raw markdown", () => {
     const rawText = "Appendix {-}";
     expect(findTrailingHeadingAttributes(rawText)).toBe("{-}");
     expect(parseHeadingText(rawText)).toMatchObject({

@@ -2,12 +2,12 @@
 
 ## Core editing
 
-- **Pandoc-free editing loop**: Pandoc is only for export. CM6 edits markdown through Lezer + KaTeX directly. Lexical edits a document model and serializes Pandoc-flavored markdown at the boundary.
-- **Editor surfaces are runtime-selected**: Coflat has one app shell, file IO layer, semantics pipeline, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 or Lexical editor surfaces, not in duplicated app flows.
-- **Editor surfaces are startup-critical**: CM6 rich/source and Lexical are core product surfaces, not optional routes. Do not lazy-load editor panes or editor engine bootstraps to optimize first paint. Browser/Tauri parity, runtime style/module ordering, and immediate editing correctness are more important than shaving startup JavaScript. Lazy-loading is acceptable for optional features such as language packages, PDF.js, export/import tools, and rarely opened dialogs.
+- **Pandoc-free editing loop**: Pandoc is only for export. CM6 edits markdown through Lezer + KaTeX directly.
+- **Editor surfaces are runtime-selected**: Coflat has one app shell, file IO layer, semantics pipeline, format rules, and Tauri backend. Engine-specific behavior belongs behind the CM6 editor surface, not in duplicated app flows.
+- **Editor surfaces are startup-critical**: CM6 rich/source are core product surfaces, not optional routes. Do not lazy-load editor panes or editor engine bootstraps to optimize first paint. Browser/Tauri parity, runtime style/module ordering, and immediate editing correctness are more important than shaving startup JavaScript. Lazy-loading is acceptable for optional features such as language packages, PDF.js, export/import tools, and rarely opened dialogs.
 - **Startup bundle budget follows editor eagerness**: The app startup budget allows the editor surfaces to load eagerly. A larger startup graph is acceptable when it prevents browser/Tauri drift; treat typing latency and runtime parity as the performance budgets that matter.
 - **CM6 rich mode keeps normal viewport virtualization**: Do not solve scroll jumps by patching or globally expanding CM6's mounted viewport margin. Rich-mode renderers should use `view.visibleRanges` to bound work, while block widgets/replacements reserve stable geometry and request measurement when their height changes. Targeted, measured pre-render buffers near the viewport are acceptable only when they are bounded to a specific renderer.
-- **No in-app read mode**: The app exposes CM6 rich, Lexical WYSIWYG, and source modes. Do not implement, fix, or test a separate read-mode surface.
+- **No in-app read mode**: The app exposes CM6 rich and source modes. Do not implement, fix, or test a separate read-mode surface.
 - **HTML export is Pandoc-owned**: HTML/PDF/LaTeX export goes through the native Pandoc command boundary. In-app hover and chrome previews use the shared rich preview renderer, not a standalone export-style HTML renderer.
 - **Every block is a plugin**: Plugins register via `createStandardPlugin()` factory. Core knows nothing about "theorem." Render-specific behavior follows the [Plugin Render Contract](./plugin-render-contract.md).
 - **Fenced divs are composite blocks**: Content inside `::: ... :::` is parsed as full markdown by re-entering the parser.
@@ -18,7 +18,7 @@
 - **Shared app modes**: Browser dev mode loads demo content. Tauri app starts with demo content and lets the user open real files or folders.
 - **Document configuration has neutral owners**: Frontmatter/project config parsing must stay consumable by both editor engines. CM6 may cache derived values in StateFields; shared semantics should not require a CM6 view.
 - **CM6 widgets stay in the CM6 layer**: `RenderWidget` and decoration-specific behavior are implementation details of the CM6 editor surface.
-- **Block-boundary ownership depends on runtime surface**: `src/lib/markdown/block-scanner.ts` owns CM6-free source-text block boundaries for Lexical/source sync. CM6 fence protection should keep using editor-state geometry owners (`src/fenced-block/model.ts` and `src/state/code-block-structure.ts`) because those caches preserve semantics, code-block structure, and transaction mapping. Do not create a shared helper that makes Lexical depend on CM6 `EditorState` or makes CM6 fence protection rescan source text.
+- **Block-boundary ownership depends on runtime surface**: `src/lib/markdown/block-scanner.ts` owns CM6-free source-text block boundaries for source-mode sync. CM6 fence protection should keep using editor-state geometry owners (`src/fenced-block/model.ts` and `src/state/code-block-structure.ts`) because those caches preserve semantics, code-block structure, and transaction mapping. Do not make CM6 fence protection rescan source text.
 
 ## Design philosophy
 

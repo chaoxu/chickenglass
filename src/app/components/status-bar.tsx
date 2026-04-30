@@ -47,13 +47,11 @@ export interface StatusBarProps {
 
 const MODE_LABELS: Record<EditorMode, string> = {
   "cm6-rich": "CM6 Rich",
-  lexical: "Lexical",
   source: "Source",
 };
 
 const COMPACT_MODE_LABELS: Record<EditorMode, string> = {
   "cm6-rich": "CM6",
-  lexical: "Lexical",
   source: "Source",
 };
 

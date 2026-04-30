@@ -6,27 +6,14 @@ const CM6_RICH_FILTERS = [
   "cross-references",
   "fenced-divs",
   "heading-number-stability",
-  "heading-outline-parity",
   "headings",
   "hover-preview-blocks",
   "index-open-rich-render",
   "inline-reveal-geometry",
   "math-render",
-  "mode-switch-typing-parity",
   "rendered-hit-testing",
   "tables",
   "task-checkboxes",
-  "visual-surface-parity",
-];
-
-const LEXICAL_FILTERS = [
-  "heading-outline-parity",
-  "lexical-bridge-insert-burst",
-  "lexical-smoke",
-  "mode-switch",
-  "mode-switch-typing-parity",
-  "rendered-hit-testing",
-  "visual-surface-parity",
 ];
 
 const MEDIA_FILTERS = [
@@ -73,7 +60,6 @@ export const BROWSER_HARNESS_SUPPORT_PATHS = [
   "scripts/document-surface-selector-contracts.mjs",
   "scripts/chrome-common.mjs",
   "scripts/devx-browser-session.mjs",
-  "scripts/document-surface-parity.mjs",
   "scripts/editor-test-helpers.mjs",
   "scripts/fixture-test-helpers.mjs",
   "scripts/launch-chrome.mjs",
@@ -82,24 +68,6 @@ export const BROWSER_HARNESS_SUPPORT_PATHS = [
   "scripts/test-regression.mjs",
   "scripts/test-helpers.mjs",
   "scripts/typing-latency-helpers.mjs",
-];
-
-export const DOCUMENT_SURFACE_PARITY_PATH_PREFIXES = [
-  "src/document-surface-classes.ts",
-  "src/document-surfaces",
-  "src/editor-theme.css",
-  "src/render/block-render.ts",
-  "src/render/decoration-core.ts",
-  "src/render/markdown-render.ts",
-  "src/render/plugin-render.ts",
-  "src/render/preview-block-renderer.ts",
-  "src/lexical/editor-theme.css",
-  "src/lexical/markdown-schema.ts",
-  "src/lexical/markdown/rich-html-preview.ts",
-  "src/lexical/renderers/",
-  "scripts/document-surface-parity.mjs",
-  "scripts/document-surface-selector-contracts.mjs",
-  "scripts/regression-tests/visual-surface-parity.mjs",
 ];
 
 function filterArgs(filters) {
@@ -117,11 +85,6 @@ export const BROWSER_LANES = {
     description: "CM6 rich rendering and rendered-surface editing lane",
     filters: CM6_RICH_FILTERS,
   },
-  lexical: {
-    args: filterArgs(LEXICAL_FILTERS),
-    description: "Lexical WYSIWYG and mode-switch lane",
-    filters: LEXICAL_FILTERS,
-  },
   media: {
     args: filterArgs(MEDIA_FILTERS),
     description: "Image/PDF preview and media authoring lane",
@@ -136,12 +99,6 @@ export const BROWSER_LANES = {
     args: filterArgs(["headings", "math-render", "index-open-rich-render"]),
     description: "Compatibility alias for the older CM6 render smoke lane",
     filters: ["headings", "math-render", "index-open-rich-render"],
-  },
-  parity: {
-    args: [],
-    description: "CM6/Lexical shared document-surface parity audit",
-    filters: [],
-    script: "scripts/document-surface-parity.mjs",
   },
   scroll: {
     args: filterArgs(SCROLL_FILTERS),
@@ -158,12 +115,10 @@ export const BROWSER_LANES = {
 export const BROWSER_LANE_ORDER = [
   "smoke",
   "cm6-rich",
-  "lexical",
   "media",
   "navigation",
   "scroll",
   "render",
-  "parity",
   "all",
 ];
 
@@ -205,7 +160,6 @@ export function browserAreaTouched(paths) {
     path.startsWith("src/parser/") ||
     path.startsWith("src/plugins/") ||
     path.startsWith("src/render/") ||
-    path.startsWith("src/lexical/") ||
     path.startsWith("src/app/components/") ||
     path.startsWith("scripts/regression-tests/") ||
     isBrowserHarnessSupportPath(path)
@@ -223,14 +177,6 @@ export function selectBrowserLanesForChangedFiles(paths, { profile = "quick" } =
 
   for (const path of normalizedPaths) {
     const testName = regressionTestName(path);
-
-    if (
-      path.startsWith("src/lexical/") ||
-      path.startsWith("src/app/components/lexical-") ||
-      testName.startsWith("lexical-")
-    ) {
-      addLane(lanes, "lexical");
-    }
 
     if (
       hasPathPrefix(path, [
@@ -278,19 +224,10 @@ export function selectBrowserLanesForChangedFiles(paths, { profile = "quick" } =
         "src/parser/",
         "src/plugins/",
         "src/render/",
-        "src/lexical/editor-theme.css",
-        "src/lexical/markdown-schema.ts",
         "scripts/regression-tests/",
       ])
     ) {
       addLane(lanes, "cm6-rich");
-    }
-
-    if (
-      hasPathPrefix(path, DOCUMENT_SURFACE_PARITY_PATH_PREFIXES) ||
-      includesAny(testName, ["parity"])
-    ) {
-      addLane(lanes, "parity");
     }
   }
 

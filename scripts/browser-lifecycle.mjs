@@ -383,7 +383,7 @@ async function collectDebugBridgeDiagnostics(page) {
     );
     globals.__cmView = Boolean(window.__cmView);
     globals.__cmDebug = Boolean(window.__cmDebug);
-    globals.lexicalEditor = Boolean(document.querySelector(editorSelector));
+    globals.editorPresent = Boolean(document.querySelector(editorSelector));
     return {
       readyState: document.readyState,
       globals,
@@ -408,8 +408,8 @@ async function collectDebugBridgeDiagnostics(page) {
 }
 
 /**
- * Wait for the debug bridge globals. CM6 mode exposes CM6 globals; Lexical
- * mode exposes the product-neutral `__editor` bridge plus the Lexical root.
+ * Wait for the debug bridge globals. CM6 mode exposes CM6 globals plus the
+ * product-neutral `__editor` bridge.
  *
  * @param {import("playwright").Page} page
  * @param {object} [options]
@@ -433,7 +433,7 @@ export async function waitForDebugBridge(
     const pages = browser ? await inspectBrowserPages(browser, {}) : [];
     const missingGlobals = DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES
       .filter((name) => !diagnostics.globals[name]);
-    if (!diagnostics.globals.__cmView && !diagnostics.globals.lexicalEditor) {
+    if (!diagnostics.globals.__cmView && !diagnostics.globals.editorPresent) {
       missingGlobals.push(`__cmView or ${DEBUG_EDITOR_SELECTOR}`);
     }
     const pendingReady = diagnostics.readiness

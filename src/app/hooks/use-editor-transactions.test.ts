@@ -2,7 +2,7 @@ import { act, createElement, type FC, type MutableRefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 import {
   type EditorTransactionIntent,
   type EditorTransactionResult,
@@ -94,7 +94,7 @@ describe("useEditorTransactions", () => {
     container.remove();
   });
 
-  it("uses the cheap Lexical snapshot for non-mutating document reads", () => {
+  it("uses the cheap editor snapshot for non-mutating document reads", () => {
     const handle = createHandle("# A edited\n");
     const {
       Harness,

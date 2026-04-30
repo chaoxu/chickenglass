@@ -197,11 +197,8 @@ export async function scrollTo(page, line) {
       editor.setSelection(anchor, anchor);
       editor.focus?.();
 
-      const root = document.querySelector("[data-lexical-editor].cf-lexical-editor");
-      const surface = root?.closest(".cf-lexical-surface--scroll")
-        ?? root?.parentElement
-        ?? document.scrollingElement
-        ?? document.documentElement;
+      const root = null;
+      const surface = document.scrollingElement ?? document.documentElement;
       if (!(surface instanceof HTMLElement) && surface !== document.documentElement) {
         return;
       }

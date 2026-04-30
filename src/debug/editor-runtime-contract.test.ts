@@ -62,7 +62,6 @@ function snapshot(
       cmLine: 1,
       cmBlockWidget: 0,
       katex: 0,
-      lexicalEditor: 0,
     },
     elements: {
       app: visibleElement("#app"),
@@ -71,7 +70,6 @@ function snapshot(
       content: visibleElement(".cm-content"),
       firstLine: visibleElement(".cm-line"),
       katex: null,
-      lexical: null,
     },
     ...overrides,
   };
@@ -144,29 +142,6 @@ describe("editor runtime contract", () => {
 
     expect(issues).toContain("CM6 content max-width must be 800px, got none");
     expect(issues).toContain("CM6 content must keep the shared document column left margin");
-  });
-
-  it("accepts a healthy Lexical surface", () => {
-    expect(evaluateEditorRuntimeContract(snapshot({
-      mode: "lexical",
-      counts: {
-        cmEditor: 0,
-        cmScroller: 0,
-        cmContent: 0,
-        cmLine: 0,
-        cmBlockWidget: 0,
-        katex: 0,
-        lexicalEditor: 1,
-      },
-      elements: {
-        ...snapshot().elements,
-        editor: null,
-        scroller: null,
-        content: null,
-        firstLine: null,
-        lexical: visibleElement(".cf-lexical-editor"),
-      },
-    }))).toEqual([]);
   });
 
   it("flags broken KaTeX font state when math exists", () => {

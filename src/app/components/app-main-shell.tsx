@@ -2,8 +2,6 @@ import { useRef } from "react";
 import { DebugSidebarProvider } from "./debug-sidebar";
 import { EditorPane } from "./editor-pane";
 import { ExternalConflictBanner } from "./external-conflict-banner";
-import { LexicalEditorPane } from "./lexical-editor-pane";
-import { ensureLexicalEditorPaneBootstrapped } from "./lexical-editor-pane-bootstrap";
 import { StatusBar } from "./status-bar";
 import { SidebarInset } from "./sidebar";
 import { useAppEditorController } from "../contexts/app-editor-context";
@@ -12,8 +10,6 @@ import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 import type { Cm6HistoryCache } from "../hooks/use-editor";
 import { getEditorModeAdapter } from "../editor-mode-adapter";
-
-ensureLexicalEditorPaneBootstrapped();
 
 interface AppMainShellProps {
   sidebarLayout: Pick<
@@ -60,22 +56,7 @@ export function AppMainShell({
         closeCurrentFile={editor.closeCurrentFile}
       />
       <DebugSidebarProvider>
-        {currentPath && modeAdapter.usesLexicalSurface ? (
-          <LexicalEditorPane
-            doc={editor.editorDoc}
-            docPath={currentPath}
-            projectConfig={workspace.projectConfig}
-            projectConfigStatus={workspace.projectConfigStatus}
-            fs={fs}
-            onDocChange={editor.handleDocChange}
-            onDirtyChange={editor.handleDirtyChange}
-            onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
-            onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
-            onLexicalEditorReady={editor.handleLexicalEditorReady}
-            onSurfaceReady={editor.handleLexicalSurfaceReady}
-            revealMode={modeAdapter.lexicalRevealMode}
-          />
-        ) : currentPath ? (
+        {currentPath ? (
           <EditorPane
             doc={editor.editorDoc}
             docPath={currentPath}

@@ -20,23 +20,6 @@ export interface MarkdownEditorSelection {
   readonly to: number;
 }
 
-export interface InteractionTraceEntry {
-  readonly ts: number;
-  readonly type: "click" | "input" | "scroll-jump";
-  readonly nodeType: string | null;
-  readonly nodeKey: string | null;
-  readonly target: string;
-  readonly clientX?: number;
-  readonly clientY?: number;
-  readonly editorX?: number | null;
-  readonly editorY?: number | null;
-  readonly scrollBefore: number;
-  readonly scrollAfter: number;
-  readonly handled: boolean;
-  readonly inputType?: string;
-  readonly data?: string | null;
-}
-
 export type NativeWatcherHealth =
   | "starting"
   | "healthy"

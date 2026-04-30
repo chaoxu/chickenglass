@@ -3,7 +3,6 @@ import type { EditorMode } from "../editor-display-mode";
 import type {
   DebugDocumentState,
   FileWatcherStatus,
-  InteractionTraceEntry,
   MarkdownEditorSelection,
   ScrollGuardEvent,
   SidebarTab,
@@ -24,9 +23,9 @@ export const DEBUG_BRIDGE_READY_PROMISES: readonly [
   { readonly globalName: "__editor"; readonly propertyName: "ready" },
   { readonly globalName: "__cfDebug"; readonly propertyName: "ready" },
 ];
-export const DEBUG_EDITOR_TEST_ID: "lexical-editor";
+export const DEBUG_EDITOR_TEST_ID: "editor";
 export const MODE_BUTTON_TEST_ID: "mode-button";
-export const DEBUG_EDITOR_SELECTOR: "[data-testid=\"lexical-editor\"]";
+export const DEBUG_EDITOR_SELECTOR: "[data-testid=\"editor\"]";
 export const MODE_BUTTON_SELECTOR: "[data-testid=\"mode-button\"]";
 export const DEBUG_BRIDGE_DOC_ENTRIES: readonly (readonly [string, string])[];
 export function formatDebugBridgeDocs(
@@ -104,8 +103,6 @@ export interface CfDebugBridge {
   runtimeContract: () => Promise<EditorRuntimeContractSnapshot>;
   recorderStatus: () => DebugSessionRecorderStatus;
   captureState: (label?: string | null) => DebugSessionCapture;
-  interactionLog: () => readonly InteractionTraceEntry[];
-  clearInteractionLog: () => void;
   exportSession: (options?: { includeDocument?: boolean }) => unknown;
   clearSession: () => void;
   captureFullSession: (options?: {
@@ -118,7 +115,6 @@ export interface CfDebugBridge {
 export interface CfDebugFullSession {
   readonly capturedAt: number;
   readonly capture: DebugSessionCapture;
-  readonly interactions: readonly InteractionTraceEntry[];
   readonly perf: unknown;
   readonly session: DebugSessionExport;
 }

@@ -101,7 +101,7 @@ pnpm perf:capture -- \
 - `open-heavy-post`
   Reload app, open `posts/2020-07-11-yotta-savings-and-covering-designs.md`.
 - `mode-cycle-index`
-  Reload app, open `index.md`, then cycle `Source -> Lexical -> CM6 Rich`.
+  Reload app, open `index.md`, then cycle between Rich and Source modes.
 - `local-edit-index`
   Reload app, open `index.md`, then apply a local inline-math edit and report semantic revision churn.
 - `typing-rich-burst`
@@ -172,39 +172,9 @@ The main CM6 typing metrics are:
   Post-idle long tasks or high `post_idle_lag_*` frame-cadence lag indicate CPU
   work is still trapped after the user has stopped typing.
 
-`typing-lexical-bridge-burst` follows the same 100-character burst shape and
-adds Lexical-specific sync metrics:
-
-- `lexical.typing.insert_mean_ms` / `lexical.typing.insert_p95_ms` /
-  `lexical.typing.insert_max_ms` measure each `editor.insertText()` call.
-- `lexical.typing.canonical_ms` waits until canonical markdown catches up.
-- `lexical.typing.visual_sync_ms` measures the time from the last insert until
-  the rich surface runs its first incremental or full document sync. When the
-  bridge still emits no `lexical.setLexicalMarkdown` or
-  `lexical.incrementalRichSync` span by the end of the sync wait window, this
-  metric is `0` and the sync-count metrics remain `0`.
-- `lexical.typing.semantic_ms` waits for semantic derivation after the edit.
-  It includes scheduled/debounced readiness time, so compare it with
-  `lexical.typing.semantic_work_ms`.
-- `lexical.typing.semantic_work_ms`, `get_markdown_work_ms`, and
-  `publish_snapshot_work_ms` measure actual attributed Lexical work during the
-  burst window.
-- `lexical.typing.input_to_semantic_ms` is the whole burst plus canonical and
-  semantic settling. The `_per_char_ms` companion normalizes by insert count.
-
 Use p95 numbers when judging typing feel. Mean hides sticky edits; max can be a
 single scheduling outlier. p95 is usually the best "bad but normal keystroke"
 signal.
-
-`lexical-sidebar-open-diagnostics` measures the Lexical diagnostics publication
-path when the sidebar flips from a non-tracking panel to `diagnostics`. It uses
-the same fixture set as the typing burst lane and emits:
-
-- `lexical.sidebar_open.wall_ms` for the UI flip through the first settled frame
-- `lexical.sidebar_open.publish_ms` for the first observed diagnostics
-  publication after the panel opens, including cached republish paths
-- `lexical.sidebar_open.span_*` delta metrics for the frontend Lexical spans
-  attributed to that panel-open action
 
 ## Scroll Scenarios
 

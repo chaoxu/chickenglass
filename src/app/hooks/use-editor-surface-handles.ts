@@ -1,36 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { EditorView } from "@codemirror/view";
 
-import { IMAGE_TIMEOUT_MS } from "../../constants";
-import {
-  IMAGE_EXTENSIONS,
-  IMAGE_MIME_EXT,
-  altTextFromFilename,
-  createImageSaver,
-  escapeMarkdownPath,
-  fileToDataUrl,
-  generateImageFilename,
-  isImageMime,
-  logImageError,
-} from "../../editor/image-save";
 import { insertImageFromPicker } from "../../editor/image-insert";
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
-import { notifyLexicalMediaPreviewInvalidated } from "../../lexical/media-preview-invalidation";
-import { parseFrontmatter } from "../../parser/frontmatter";
+import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import { invalidatePdfPreview } from "../../render/pdf-preview-cache";
 import type { DiagnosticEntry } from "../diagnostics";
 import type { FileSystem } from "../file-manager";
 import type { HeadingEntry } from "../heading-ancestry";
 import type { UseEditorReturn } from "./use-editor";
-
-export interface PendingLexicalNavigation {
-  readonly onComplete?: () => void;
-  readonly path: string;
-  readonly pos: number;
-  readonly requestId: number;
-}
 
 export interface EditorSurfaceHandlesDeps {
   currentPath: string | null;
@@ -45,121 +24,17 @@ export interface EditorSurfaceHandlesDeps {
 export interface EditorSurfaceHandlesController {
   diagnostics: DiagnosticEntry[];
   editorState: UseEditorReturn | null;
-  getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   handleDiagnosticsChange: (diagnostics: DiagnosticEntry[]) => void;
   handleEditorStateChange: (state: UseEditorReturn) => void;
   handleGotoLine: (line: number, col?: number) => void;
   handleHeadingsChange: (headings: HeadingEntry[]) => void;
   handleInsertImage: () => void;
-  handleLexicalEditorReady: (handle: MarkdownEditorHandle | null) => void;
-  handleLexicalSurfaceReady: () => void;
   handleOutlineSelect: (from: number) => void;
   handleWatchedPathChange: (path: string) => void;
   headings: HeadingEntry[];
-  queueLexicalNavigation: (navigation: PendingLexicalNavigation) => void;
-  clearPendingLexicalNavigation: (requestId?: number) => void;
-}
-
-type SaveImage = (file: File) => Promise<string>;
-
-interface LexicalImageSaverOptions {
-  readonly docPath: string | null;
-  readonly fs?: FileSystem;
-  readonly getDoc: () => string;
-}
-
-function selectedLineIsEmpty(doc: string, from: number): boolean {
-  const lineStart = doc.lastIndexOf("\n", Math.max(0, from - 1)) + 1;
-  const nextLineBreak = doc.indexOf("\n", from);
-  const lineEnd = nextLineBreak === -1 ? doc.length : nextLineBreak;
-  return doc.slice(lineStart, lineEnd).trim() === "" && from === lineStart;
-}
-
-async function insertImageIntoLexicalHandle(
-  lexicalHandle: MarkdownEditorHandle,
-  saveImage?: SaveImage,
-): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = IMAGE_EXTENSIONS.map((ext) => `.${ext}`).join(",") + ",image/*";
-    input.style.display = "none";
-    let done = false;
-    let timeoutId: number | null = null;
-
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      input.remove();
-      resolve();
-    };
-
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      if (!file) {
-        finish();
-        return;
-      }
-
-      if (!isImageMime(file.type)) {
-        logImageError("insert", `unsupported MIME type: ${file.type}`);
-        finish();
-        return;
-      }
-
-      const save = saveImage ?? fileToDataUrl;
-      void save(file).then((path) => {
-        const filename = generateImageFilename(file, IMAGE_MIME_EXT[file.type] ?? "png");
-        const alt = altTextFromFilename(filename);
-        const doc = lexicalHandle.peekDoc();
-        const selection = lexicalHandle.peekSelection();
-        const prefix = selectedLineIsEmpty(doc, selection.from) ? "" : "\n";
-        lexicalHandle.insertText(`${prefix}![${alt}](${escapeMarkdownPath(path)})\n`);
-        lexicalHandle.focus();
-      }).catch((error: unknown) => {
-        logImageError("insert", error);
-      }).finally(finish);
-    });
-
-    input.addEventListener("cancel", () => {
-      finish();
-    });
-
-    document.body.appendChild(input);
-    timeoutId = window.setTimeout(() => {
-      finish();
-    }, IMAGE_TIMEOUT_MS);
-    input.click();
-  });
-}
-
-function createLexicalImageSaver({
-  docPath,
-  fs,
-  getDoc,
-}: LexicalImageSaverOptions): SaveImage | undefined {
-  if (!docPath) {
-    return undefined;
-  }
-
-  return createImageSaver({
-    fs,
-    docPath,
-    get imageFolder() {
-      return parseFrontmatter(getDoc()).config.imageFolder;
-    },
-  });
 }
 
 export function useEditorSurfaceHandles({
-  currentPath,
-  editorDoc,
-  editorHandleRef,
-  fs,
   handleCmGotoLine,
   handleCmOutlineSelect,
   syncView,
@@ -168,42 +43,12 @@ export function useEditorSurfaceHandles({
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
   const editorViewRef = useRef<EditorView | null>(null);
-  const pendingLexicalNavigationRef = useRef<PendingLexicalNavigation | null>(null);
-
-  const completeLexicalNavigation = useCallback(() => {
-    const pending = pendingLexicalNavigationRef.current;
-    const lexicalHandle = editorHandleRef.current;
-    if (!pending || !lexicalHandle || pending.path !== currentPath) {
-      return;
-    }
-    pendingLexicalNavigationRef.current = null;
-    lexicalHandle.setSelection(pending.pos, pending.pos);
-    lexicalHandle.focus();
-    pending.onComplete?.();
-  }, [currentPath, editorHandleRef]);
 
   const handleEditorStateChange = useCallback((state: UseEditorReturn) => {
     setEditorState(state);
     editorViewRef.current = state.view;
     syncView(state.view);
   }, [syncView]);
-
-  const handleLexicalSurfaceReady = useCallback(() => {
-    setEditorState(null);
-    editorViewRef.current = null;
-    syncView(null);
-    setHeadings([]);
-    setDiagnostics([]);
-  }, [syncView]);
-
-  const handleLexicalEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
-    editorHandleRef.current = handle;
-    if (handle) {
-      completeLexicalNavigation();
-    }
-  }, [completeLexicalNavigation, editorHandleRef]);
-
-  const getLexicalEditorHandle = useCallback(() => editorHandleRef.current, [editorHandleRef]);
 
   const handleHeadingsChange = useCallback((nextHeadings: HeadingEntry[]) => {
     setHeadings(nextHeadings);
@@ -214,8 +59,6 @@ export function useEditorSurfaceHandles({
   }, []);
 
   const handleWatchedPathChange = useCallback((path: string) => {
-    notifyLexicalMediaPreviewInvalidated(path);
-
     const view = editorViewRef.current;
     if (!view) return;
     invalidateImageDataUrl(view, path);
@@ -229,82 +72,27 @@ export function useEditorSurfaceHandles({
       return;
     }
 
-    const lexicalHandle = editorHandleRef.current;
-    if (lexicalHandle) {
-      const saveImage = createLexicalImageSaver({
-        docPath: currentPath,
-        fs,
-        getDoc: () => lexicalHandle.peekDoc(),
-      });
-      void insertImageIntoLexicalHandle(lexicalHandle, saveImage);
-      return;
-    }
-
     console.warn("[editor] Insert Image is unavailable until an editor surface is ready.");
-  }, [currentPath, editorHandleRef, editorState?.view, editorState?.imageSaver, fs]);
+  }, [editorState?.view, editorState?.imageSaver]);
 
   const handleOutlineSelect = useCallback((from: number) => {
-    const lexicalHandle = editorHandleRef.current;
-    if (lexicalHandle) {
-      lexicalHandle.setSelection(from, from);
-      lexicalHandle.focus();
-      return;
-    }
     handleCmOutlineSelect(from);
-  }, [editorHandleRef, handleCmOutlineSelect]);
+  }, [handleCmOutlineSelect]);
 
   const handleGotoLine = useCallback((line: number, col?: number) => {
-    const lexicalHandle = editorHandleRef.current;
-    if (lexicalHandle) {
-      const doc = lexicalHandle.peekDoc();
-      const lines = doc.split(/\r\n|\n|\r/);
-      const clampedLine = Math.max(1, Math.min(line, lines.length));
-      const lineStart = lines
-        .slice(0, clampedLine - 1)
-        .reduce((offset, currentLine) => offset + currentLine.length + 1, 0);
-      const lineText = lines[clampedLine - 1] ?? "";
-      const offset = lineStart + Math.max(0, Math.min((col ?? 1) - 1, lineText.length));
-      lexicalHandle.setSelection(offset, offset);
-      lexicalHandle.focus();
-      return;
-    }
     handleCmGotoLine(line, col);
-  }, [editorHandleRef, handleCmGotoLine]);
-
-  const queueLexicalNavigation = useCallback((navigation: PendingLexicalNavigation) => {
-    pendingLexicalNavigationRef.current = navigation;
-    completeLexicalNavigation();
-  }, [completeLexicalNavigation]);
-
-  const clearPendingLexicalNavigation = useCallback((requestId?: number) => {
-    if (
-      requestId !== undefined
-      && pendingLexicalNavigationRef.current?.requestId !== requestId
-    ) {
-      return;
-    }
-    pendingLexicalNavigationRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    completeLexicalNavigation();
-  }, [completeLexicalNavigation, editorDoc]);
+  }, [handleCmGotoLine]);
 
   return {
     diagnostics,
     editorState,
-    getLexicalEditorHandle,
     handleDiagnosticsChange,
     handleEditorStateChange,
     handleGotoLine,
     handleHeadingsChange,
     handleInsertImage,
-    handleLexicalEditorReady,
-    handleLexicalSurfaceReady,
     handleOutlineSelect,
     handleWatchedPathChange,
     headings,
-    queueLexicalNavigation,
-    clearPendingLexicalNavigation,
   };
 }

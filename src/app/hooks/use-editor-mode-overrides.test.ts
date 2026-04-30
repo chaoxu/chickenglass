@@ -3,7 +3,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorMode } from "../../editor-display-mode";
 import type { SearchNavigationTarget } from "../search";
-import type { PendingLexicalNavigation } from "./use-editor-surface-handles";
 import {
   useEditorModeOverrides,
   type EditorModeOverridesController,
@@ -46,7 +45,6 @@ describe("useEditorModeOverrides", () => {
   let container: HTMLDivElement;
   let root: Root;
   let controller: EditorModeOverridesController | null;
-  let queuedNavigation: PendingLexicalNavigation | null;
 
   const getController = () => {
     if (!controller) {
@@ -57,24 +55,15 @@ describe("useEditorModeOverrides", () => {
 
   const render = (deps: Partial<EditorModeOverridesDeps> = {}) => {
     const mergedDeps: EditorModeOverridesDeps = {
-      clearPendingLexicalNavigation: vi.fn(),
       currentPath: "notes.md",
       defaultMode: "cm6-rich",
-      editorDoc: "",
-      getSessionCurrentDocText: () => "",
       handleSearchResultNavigation: vi.fn(async () => true),
       isMarkdownFile: true,
-      isPathOpen: () => true,
-      openFile: vi.fn(async () => {}),
-      queueLexicalNavigation: (navigation) => {
-        queuedNavigation = navigation;
-      },
       runEditorTransaction: vi.fn((intent, body) => ({
         flush: { shouldDeferModeSwitch: false },
         intent,
         value: body(),
       })),
-      sessionHandleDocumentSnapshot: vi.fn(),
       ...deps,
     };
 
@@ -93,7 +82,6 @@ describe("useEditorModeOverrides", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     controller = null;
-    queuedNavigation = null;
   });
 
   afterEach(() => {
@@ -110,12 +98,11 @@ describe("useEditorModeOverrides", () => {
     expect(getController().editorMode).toBe("source");
 
     await act(async () => {
-      getController().handleSearchResult(target("lexical"));
+      getController().handleSearchResult(target("cm6-rich"));
       await Promise.resolve();
     });
 
-    expect(getController().editorMode).toBe("lexical");
-    expect(queuedNavigation?.path).toBe("notes.md");
+    expect(getController().editorMode).toBe("cm6-rich");
   });
 
   it("ignores a stale search completion after a newer pending request starts", async () => {
@@ -126,13 +113,12 @@ describe("useEditorModeOverrides", () => {
     act(() => {
       getController().handleSearchResult(target("source"));
     });
-    expect(getController().editorMode).toBe("source");
 
     await act(async () => {
-      getController().handleSearchResult(target("lexical"));
+      getController().handleSearchResult(target("cm6-rich"));
       await Promise.resolve();
     });
-    expect(getController().editorMode).toBe("lexical");
+    expect(getController().editorMode).toBe("cm6-rich");
 
     await act(async () => {
       firstNavigation.resolve(true);
@@ -140,12 +126,12 @@ describe("useEditorModeOverrides", () => {
       await Promise.resolve();
     });
 
-    expect(getController().editorMode).toBe("lexical");
+    expect(getController().editorMode).toBe("cm6-rich");
   });
 
   it("uses the configured default mode when the active markdown file has no override", () => {
-    render({ defaultMode: "lexical" });
+    render({ defaultMode: "source" });
 
-    expect(getController().editorMode).toBe("lexical");
+    expect(getController().editorMode).toBe("source");
   });
 });

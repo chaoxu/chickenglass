@@ -13,7 +13,7 @@ pnpm tauri:dev        # Coflat desktop app (requires Rust toolchain)
 1. **[DESIGN.md](../DESIGN.md)** — what Coflat is, the editing models, and core concepts
 2. **[AGENTS.md](../AGENTS.md)** — commands, project structure, conventions, and tooling reference
 3. **[FORMAT.md](../FORMAT.md)** — the canonical Pandoc-flavored markdown syntax
-4. **[Editor surfaces](editor-surfaces.md)** — CM6, Lexical, and source-mode behavior over that format
+4. **[Editor surfaces](editor-surfaces.md)** — CM6 rich and source-mode behavior over that format
 5. **[Feature inventory](feature-inventory.md)** — rebuild-oriented checklist of the full current product surface
 6. **[Devx workflow](devx-workflow.md)** — issue wrapper, merge-task helper, and verification record conventions
 
@@ -29,10 +29,10 @@ Read these when you're working on a specific area:
 
 ## Key concepts
 
-- **One app switches editor surfaces.** Coflat can switch at runtime between CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode.
-- **Markdown is the boundary format for Lexical.** CM6 edits markdown directly. Lexical edits a rich document model and serializes to Pandoc-flavored markdown at load/save boundaries.
+- **One app switches editor surfaces.** Coflat can switch at runtime between CM6 rich mode and CM6 source mode.
+- **CM6 edits markdown directly.** Markdown is the live source of truth.
 - **Lezer** is the shared markdown structure parser for Coflat's editor surface and shared semantic paths. Pandoc owns document export. Custom markdown extensions live in `src/parser/`.
-- **Rich modes are explicit.** CM6 rich mode is Typora-style source-backed rendering. Lexical mode is WYSIWYG editing with markdown serialization.
+- **Rich mode is explicit.** CM6 rich mode is Typora-style source-backed rendering.
 - **Block plugins** (`src/plugins/`) define theorem/proof/definition environments as fenced divs. Each block type has a manifest entry, counter group, and render function.
 
 ## Development workflow
@@ -59,9 +59,6 @@ Pre-commit hooks run `pnpm check:staged-lint` on staged files. Pre-push hooks ru
 ```bash
 pnpm dev                  # terminal 1, Coflat
 pnpm test:browser         # terminal 2, stable CM6 regression lane
-
-pnpm dev                  # terminal 1, Coflat
-pnpm test:browser:lexical # terminal 2, Lexical smoke lane
 ```
 
 For manual visual debugging, use the CDP/app-mode lane instead:

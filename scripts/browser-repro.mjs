@@ -67,7 +67,7 @@ Shared browser options:
 Capture / replay options:
   --fixture index.md      Open a deterministic fixture via the shared harness
   --file notes.md         Open a file through window.__app.openFile()
-  --mode cm6-rich|lexical|source Switch mode after opening
+  --mode cm6-rich|source Switch mode after opening
   --line 42               Place the cursor at a specific line
   --col 0                 Column offset for --line (0-based)
   --anchor-text "needle"  Jump to the first matching text anchor
@@ -223,8 +223,8 @@ function normalizeStep(step, index) {
         offset: Number.isInteger(step.offset) ? step.offset : 0,
       };
     case "switchMode":
-      if (!["rich", "cm6-rich", "lexical", "source"].includes(step.mode)) {
-        throw new Error(`Invalid switchMode step at index ${index}: expected cm6-rich/lexical/source.`);
+      if (!["rich", "cm6-rich", "source"].includes(step.mode)) {
+        throw new Error(`Invalid switchMode step at index ${index}: expected cm6-rich/source.`);
       }
       return {
         type: "switchMode",

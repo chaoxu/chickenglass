@@ -1,16 +1,14 @@
 /**
- * Shared document-surface class names used by both CM6 rich rendering and
- * Lexical WYSIWYG rendering. Editor-specific classes can still exist, but
- * these classes are the cross-editor visual contract.
+ * Shared document-surface class names used by CM6 rich and source rendering.
+ * Editor-specific classes can still exist, but these classes are the
+ * canonical document-surface visual contract.
  */
 
 export const DOCUMENT_SURFACE_CLASS = {
   surface: "cf-doc-surface",
   surfaceCm6: "cf-doc-surface--cm6",
-  surfaceLexical: "cf-doc-surface--lexical",
   flow: "cf-doc-flow",
   flowCm6: "cf-doc-flow--cm6",
-  flowLexical: "cf-doc-flow--lexical",
   paragraph: "cf-doc-paragraph",
   blockquote: "cf-doc-blockquote",
   heading: "cf-doc-heading",

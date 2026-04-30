@@ -59,9 +59,8 @@ harness behavior and you need a compact user-facing smoke check:
 pnpm check:runtime
 ```
 
-It runs browser smoke coverage plus the CM6/Lexical document-surface parity
-audit, so shared visual regressions are caught without relying on manual app
-inspection.
+It runs browser smoke coverage plus the document-surface parity audit, so
+shared visual regressions are caught without relying on manual app inspection.
 
 ## Heavy-Doc Perf Verification
 

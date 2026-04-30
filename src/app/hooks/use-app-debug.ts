@@ -21,8 +21,7 @@ import {
 } from "../perf";
 import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { useDevSettings } from "../../state/dev-settings";
-import { clearInteractionLog, getInteractionLog } from "../../lexical/interaction-trace";
-import type { MarkdownEditorHandle, MarkdownEditorSelection } from "../../lexical/markdown-editor-types";
+import type { MarkdownEditorSelection } from "../../editor/markdown-editor-types";
 import { planMarkdownFormat } from "../format-markdown";
 import type { SidebarTab } from "./use-sidebar-layout";
 import {
@@ -60,7 +59,6 @@ interface AppDebugDeps {
   saveFile: () => Promise<void>;
   closeFile: (options?: { discard?: boolean }) => Promise<boolean>;
   getCurrentDocText: () => string;
-  getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   setSearchOpen: (open: boolean) => void;
   showSidebarPanel: (panel: SidebarTab) => void;
   getSidebarState: () => {
@@ -86,7 +84,6 @@ export function useAppDebug({
   saveFile,
   closeFile,
   getCurrentDocText,
-  getLexicalEditorHandle,
   setSearchOpen,
   showSidebarPanel,
   getSidebarState,
@@ -115,33 +112,19 @@ export function useAppDebug({
           base64Length: file.base64.length,
         };
 
-  const getEditorHandle = () => getLexicalEditorHandle();
-
   const getCmView = () => window.__cmView ?? null;
 
   const readEditorDoc = (): string => {
-    const handle = getEditorHandle();
-    if (handle) {
-      return handle.getDoc();
-    }
     const view = getCmView();
     return view ? view.state.doc.toString() : getCurrentDocText();
   };
 
   const peekEditorDoc = (): string => {
-    const handle = getEditorHandle();
-    if (handle) {
-      return handle.peekDoc();
-    }
     const view = getCmView();
     return view ? view.state.doc.toString() : getCurrentDocText();
   };
 
   const readEditorSelection = (): MarkdownEditorSelection => {
-    const handle = getEditorHandle();
-    if (handle) {
-      return handle.getSelection();
-    }
     const view = getCmView();
     if (!view) {
       return { anchor: 0, focus: 0, from: 0, to: 0 };
@@ -156,20 +139,10 @@ export function useAppDebug({
   };
 
   const focusEditor = () => {
-    const handle = getEditorHandle();
-    if (handle) {
-      handle.focus();
-      return;
-    }
     getCmView()?.focus();
   };
 
   const insertEditorText = (text: string) => {
-    const handle = getEditorHandle();
-    if (handle) {
-      handle.insertText(text);
-      return;
-    }
     const view = getCmView();
     if (!view) return;
     const selection = view.state.selection.main;
@@ -181,11 +154,6 @@ export function useAppDebug({
   };
 
   const setEditorDoc = (doc: string) => {
-    const handle = getEditorHandle();
-    if (handle) {
-      handle.setDoc(doc);
-      return;
-    }
     const view = getCmView();
     if (!view) return;
     view.dispatch({
@@ -195,11 +163,6 @@ export function useAppDebug({
   };
 
   const setEditorSelection = (anchor: number, focus?: number) => {
-    const handle = getEditorHandle();
-    if (handle) {
-      handle.setSelection(anchor, focus);
-      return;
-    }
     const view = getCmView();
     if (!view) return;
     view.dispatch({
@@ -209,18 +172,6 @@ export function useAppDebug({
   };
 
   const formatEditorSelection = (detail: FormatEventDetail): boolean => {
-    const handle = getEditorHandle();
-    if (handle) {
-      const plan = planMarkdownFormat(
-        handle.getDoc(),
-        handle.getSelection(),
-        detail,
-      );
-      handle.applyChanges(plan.changes);
-      handle.setSelection(plan.selection.anchor, plan.selection.focus);
-      handle.focus();
-      return true;
-    }
     const view = getCmView();
     if (!view) return false;
     const selection = view.state.selection.main;
@@ -408,8 +359,6 @@ export function useAppDebug({
       runtimeContract: collectEditorRuntimeContract,
       recorderStatus: () => getDebugSessionRecorderStatus(),
       captureState: (label?: string | null) => captureDebugSessionState(label),
-      interactionLog: getInteractionLog,
-      clearInteractionLog,
       exportSession: (options?: { includeDocument?: boolean }) =>
         exportDebugSessionEvents({
           currentDocument: options?.includeDocument === false ? null : getCurrentDocText(),
@@ -424,7 +373,6 @@ export function useAppDebug({
         return {
           capturedAt: Date.now(),
           capture,
-          interactions: getInteractionLog(),
           perf,
           session: exportDebugSessionEvents({
             currentDocument: options?.includeDocument === false ? null : getCurrentDocText(),
@@ -433,7 +381,6 @@ export function useAppDebug({
       },
       clearAllDebugBuffers: async () => {
         clearDebugSessionEvents();
-        clearInteractionLog();
         await clearCombinedPerf();
       },
     } satisfies CfDebugBridge;
@@ -488,7 +435,6 @@ export function useAppDebug({
     saveFile,
     closeFile,
     getCurrentDocText,
-    getLexicalEditorHandle,
     setSearchOpen,
     showSidebarPanel,
     getSidebarState,

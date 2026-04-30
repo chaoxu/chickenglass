@@ -1,7 +1,6 @@
 import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 
 const nativeDebugMockState = vi.hoisted(() => ({
   debugListWindows: vi.fn(async () => [{ label: "main", focused: true }]),
@@ -47,7 +46,6 @@ const openFileWithContent = vi.fn(async (_name: string, _content: string) => {})
 const saveFile = vi.fn(async () => {});
 const closeFile = vi.fn(async (_options?: { discard?: boolean }) => true);
 const getCurrentDocText = vi.fn(() => "# Notes");
-const getLexicalEditorHandle = vi.fn<() => MarkdownEditorHandle | null>(() => null);
 const setSearchOpen = vi.fn((_open: boolean) => {});
 const showSidebarPanel = vi.fn((_panel: string) => {});
 const getSidebarState = vi.fn(() => ({ collapsed: false, tab: "files" as const }));
@@ -64,7 +62,6 @@ const Harness: FC = () => {
     saveFile,
     closeFile,
     getCurrentDocText,
-    getLexicalEditorHandle,
     setSearchOpen,
     showSidebarPanel,
     getSidebarState,
@@ -98,8 +95,6 @@ describe("useAppDebug", () => {
     closeFile.mockClear();
     getCurrentDocText.mockClear();
     getCurrentDocText.mockReturnValue("# Notes");
-    getLexicalEditorHandle.mockClear();
-    getLexicalEditorHandle.mockReturnValue(null);
     setSearchOpen.mockClear();
     showSidebarPanel.mockClear();
     getSidebarState.mockClear();
@@ -131,7 +126,6 @@ describe("useAppDebug", () => {
       DEBUG_BRIDGE_REQUIRED_GLOBAL_NAMES.every((name) => Boolean(window[name])),
     ).toBe(true);
     expect(window.__editor?.getDoc()).toBe("# Notes");
-    expect(window.__cfDebug?.interactionLog).toBeDefined();
     expect(window.__cfDebug?.exportSession()).toMatchObject({
       currentDocument: "# Notes",
     });
@@ -139,7 +133,6 @@ describe("useAppDebug", () => {
       session: {
         currentDocument: "# Notes",
       },
-      interactions: [],
     });
     await expect(window.__cfDebug?.clearAllDebugBuffers()).resolves.toBeUndefined();
     expect(window.__tauriSmoke).toBeDefined();
@@ -182,45 +175,5 @@ describe("useAppDebug", () => {
     await expect(window.__tauriSmoke?.listWindows()).resolves.toEqual([
       { label: "main", focused: true },
     ]);
-  });
-
-  it("formats Lexical debug selections against the live editor document", async () => {
-    const handle: MarkdownEditorHandle = {
-      applyChanges: vi.fn(),
-      flushPendingEdits: vi.fn(() => null),
-      focus: vi.fn(),
-      getDoc: vi.fn(() => "Alpha live omega"),
-      getSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 10,
-        from: 6,
-        to: 10,
-      })),
-      insertText: vi.fn(),
-      peekDoc: vi.fn(() => "Alpha live omega"),
-      peekSelection: vi.fn(() => ({
-        anchor: 6,
-        focus: 10,
-        from: 6,
-        to: 10,
-      })),
-      setDoc: vi.fn(),
-      setSelection: vi.fn(),
-    };
-    getCurrentDocText.mockReturnValue("Alpha stale omega");
-    getLexicalEditorHandle.mockReturnValue(handle);
-
-    act(() => {
-      root.render(createElement(Harness));
-    });
-
-    expect(window.__editor?.formatSelection({ type: "bold" })).toBe(true);
-    expect(handle.applyChanges).toHaveBeenCalledWith([{
-      from: 6,
-      to: 10,
-      insert: "**live**",
-    }]);
-    expect(handle.setSelection).toHaveBeenCalledWith(8, 12);
-    expect(handle.focus).toHaveBeenCalled();
   });
 });

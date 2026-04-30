@@ -122,7 +122,7 @@ describe("test helpers browser harness", () => {
 
     expect(hasDebugBridgeGlobals(args)).toBe(false);
 
-    document.body.innerHTML = "<div data-testid='lexical-editor'></div>";
+    document.body.innerHTML = "<div data-testid='editor'></div>";
     expect(hasDebugBridgeGlobals(args)).toBe(true);
 
     document.body.innerHTML = "";
@@ -208,7 +208,7 @@ describe("test helpers browser harness", () => {
 
   it("browser doctor reports a Vite overlay before running scenarios", async () => {
     window.__app = {
-      getMode: () => "lexical",
+      getMode: () => "cm6-rich",
       ready: Promise.resolve(),
     };
     window.__editor = {
@@ -219,7 +219,7 @@ describe("test helpers browser harness", () => {
     window.__cfDebug = {
       ready: Promise.resolve(),
     };
-    document.body.innerHTML = "<vite-error-overlay>compile failed</vite-error-overlay><div data-testid='lexical-editor'></div>";
+    document.body.innerHTML = "<vite-error-overlay>compile failed</vite-error-overlay><div data-testid='editor'></div>";
     const page = {
       context: vi.fn(() => ({ browser: () => null })),
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
@@ -275,99 +275,6 @@ describe("test helpers browser harness", () => {
       stableFrames: 1,
       timeoutMs: 200,
     })).resolves.toBeUndefined();
-  });
-
-  it("scrolls Lexical through the product-neutral editor bridge", async () => {
-    const doc = "# One\n\nIntro\n\n## Target\n\nBody";
-    const targetOffset = doc.indexOf("## Target");
-    const surface = document.createElement("div");
-    surface.className = "cf-lexical-surface--scroll";
-    Object.defineProperty(surface, "clientHeight", { configurable: true, value: 300 });
-    surface.getBoundingClientRect = () => ({
-      bottom: 300,
-      height: 300,
-      left: 0,
-      right: 700,
-      top: 0,
-      width: 700,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-
-    const root = document.createElement("div");
-    root.className = "cf-lexical-editor";
-    root.dataset.lexicalEditor = "true";
-    const target = document.createElement("h2");
-    target.dataset.coflatHeadingPos = String(targetOffset);
-    target.textContent = "Target";
-    target.getBoundingClientRect = () => ({
-      bottom: 420,
-      height: 40,
-      left: 0,
-      right: 700,
-      top: 380,
-      width: 700,
-      x: 0,
-      y: 380,
-      toJSON: () => ({}),
-    });
-    root.append(target);
-    surface.append(root);
-    document.body.append(surface);
-
-    const setSelection = vi.fn();
-    const focus = vi.fn();
-    window.__editor = {
-      focus,
-      getDoc: () => doc,
-      setSelection,
-    };
-    const page = {
-      evaluate: vi.fn(async (fn, arg) => fn(arg)),
-    };
-
-    await scrollTo(page, 5);
-
-    expect(setSelection).toHaveBeenCalledWith(targetOffset, targetOffset);
-    expect(focus).toHaveBeenCalled();
-    expect(surface.scrollTop).toBe(280);
-  });
-
-  it("switches editor modes through the app debug bridge", async () => {
-    let mode = "cm6-rich";
-    window.__app = {
-      getMode: () => mode,
-      setMode: (nextMode) => {
-        mode = nextMode;
-      },
-    };
-    window.__editor = {
-      getDoc: () => "# Ready\n",
-    };
-    window.__cmDebug = {
-      semantics: () => ({ revision: 1 }),
-    };
-    const page = {
-      evaluate: vi.fn(async (fn, arg) => fn(arg)),
-      waitForFunction: vi.fn(async () => {}),
-    };
-
-    await switchToMode(page, "Lexical");
-
-    expect(mode).toBe("lexical");
-    expect(page.evaluate).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.objectContaining({ nextMode: "lexical" }),
-    );
-    expect(page.waitForFunction).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.objectContaining({
-        minCount: 1,
-        selector: ".cf-doc-flow--lexical",
-      }),
-      expect.objectContaining({ timeout: expect.any(Number) }),
-    );
   });
 
   it("waits for CM6 mode-specific surface classes after switching modes", async () => {
@@ -440,8 +347,8 @@ describe("test helpers browser harness", () => {
     const page = {
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
       waitForFunction: vi.fn(async (fn, arg) => {
-        if (arg?.selector === ".cf-doc-flow--lexical") {
-          document.body.innerHTML = "<div class='cf-doc-flow--lexical'></div>";
+        if (arg?.selector?.includes("cf-doc-flow--cm6")) {
+          document.body.innerHTML = "<div class='cm-editor'><div class='cf-doc-flow--cm6'></div></div>";
         }
         expect(fn(arg)).toBe(true);
       }),
@@ -453,12 +360,12 @@ describe("test helpers browser harness", () => {
         "main.md": "# Scenario\n",
         "refs.bib": "@book{a,title={A}}",
       },
-      mode: "lexical",
+      mode: "cm6-rich",
       settleMs: 0,
     });
 
     expect(opened).toEqual({ entry: "main.md", method: "loadFixtureProject" });
-    expect(mode).toBe("lexical");
+    expect(mode).toBe("cm6-rich");
     expect(currentDoc).toBe("# Scenario\n");
   });
 });

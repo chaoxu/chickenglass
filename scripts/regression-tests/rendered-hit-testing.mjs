@@ -1,8 +1,8 @@
 /**
  * Regression test: rendered editor surfaces map clicks back to the source.
  *
- * Covers the drift-prone surfaces shared by CM6 rich and Lexical modes:
- * math, code, tables, fenced blocks, and images.
+ * Covers the drift-prone CM6 rich surfaces: math, code, tables, fenced
+ * blocks, and images.
  */
 
 /* global document, window */
@@ -94,50 +94,6 @@ const MODE_CASES = [
         selector: '.cf-image-wrapper img[alt="Standalone pixel"]',
         rangeNeedle: "![Standalone pixel]",
         mutation: "bridge",
-      },
-    ],
-  },
-  {
-    mode: "lexical",
-    cases: [
-      {
-        label: "Lexical inline math",
-        selector: ".cf-lexical-inline-math .katex, .cf-lexical-inline-math",
-        rangeNeedle: "$a+b$",
-        mutation: "bridge",
-      },
-      {
-        label: "Lexical code block",
-        selector: ".cf-lexical-code-block",
-        text: "const alpha",
-        rangeNeedle: "```ts\nconst alpha = 1;\n```\n",
-        mutation: "keyboard",
-      },
-      {
-        label: "Lexical display math",
-        selector: ".cf-lexical-display-math-body .katex, .cf-lexical-display-math-body",
-        rangeNeedle: "x^2 + y^2 = z^2",
-        mutation: "keyboard",
-      },
-      {
-        label: "Lexical table cell",
-        selector: ".cf-lexical-table-block tbody tr:nth-child(2) td:nth-child(2)",
-        rangeNeedle: "$q+r$ and `cell code`",
-        mutation: "keyboard",
-        requireSelectionInRange: false,
-      },
-      {
-        label: "Lexical fenced block",
-        selector: ".cf-lexical-block--theorem .cf-lexical-block-body",
-        rangeNeedle: '::: {.theorem #thm:hit-testing title="Hit Test Theorem"}\nThe theorem body has $m+n$.\n:::\n',
-        mutation: "bridge",
-      },
-      {
-        label: "Lexical standalone image",
-        selector: '.cf-lexical-image[alt="Standalone pixel"], .cf-lexical-inline-image[alt="Standalone pixel"]',
-        rangeNeedle: "![Standalone pixel](" + IMAGE_URL + ")",
-        inputMethod: "insertText",
-        mutation: "keyboard",
       },
     ],
   },
@@ -298,6 +254,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: "rendered CM6 and Lexical surfaces select source and accept edits",
+    message: "rendered CM6 surfaces select source and accept edits",
   };
 }

@@ -1,6 +1,6 @@
 import { useCallback, type MutableRefObject } from "react";
 
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 
 export type EditorTransactionIntent =
   | "debug-read"

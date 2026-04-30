@@ -4,7 +4,6 @@ import {
   BROWSER_HARNESS_SUPPORT_PATHS,
   BROWSER_LANE_ORDER,
   BROWSER_LANES,
-  DOCUMENT_SURFACE_PARITY_PATH_PREFIXES,
   browserAreaTouched,
   isBrowserHarnessSupportPath,
   resolveBrowserLane,
@@ -16,12 +15,10 @@ describe("browser lanes manifest", () => {
     expect(BROWSER_LANE_ORDER).toEqual([
       "smoke",
       "cm6-rich",
-      "lexical",
       "media",
       "navigation",
       "scroll",
       "render",
-      "parity",
       "all",
     ]);
   });
@@ -41,32 +38,13 @@ describe("browser lanes manifest", () => {
   it("keeps the older render lane available", () => {
     expect(resolveBrowserLane("render").name).toBe("render");
     expect(BROWSER_LANES.render.filters).toEqual(["headings", "math-render", "index-open-rich-render"]);
-    expect(resolveBrowserLane("parity").name).toBe("parity");
-    expect(BROWSER_LANES.parity.script).toBe("scripts/document-surface-parity.mjs");
   });
 
   it("selects all affected browser lanes from changed paths", () => {
     expect(selectBrowserLanesForChangedFiles([
-      "src/lexical/markdown.ts",
       "src/render/pdf-preview-cache.ts",
       "src/editor/scroll-guard.ts",
-    ])).toEqual(["cm6-rich", "lexical", "media", "scroll"]);
-  });
-
-  it("selects the parity lane for shared surface changes", () => {
-    expect(selectBrowserLanesForChangedFiles([
-      "src/lexical/editor-theme.css",
-    ])).toEqual(["cm6-rich", "lexical", "parity"]);
-    expect(selectBrowserLanesForChangedFiles([
-      "src/lexical/renderers/fenced-div-renderers.tsx",
-    ])).toEqual(["lexical", "parity"]);
-    expect(selectBrowserLanesForChangedFiles([
-      "src/render/preview-block-renderer.ts",
-    ])).toEqual(["cm6-rich", "parity"]);
-    expect(DOCUMENT_SURFACE_PARITY_PATH_PREFIXES).toEqual(expect.arrayContaining([
-      "src/lexical/renderers/",
-      "scripts/regression-tests/visual-surface-parity.mjs",
-    ]));
+    ])).toEqual(["cm6-rich", "media", "scroll"]);
   });
 
   it("escalates browser harness changes to all only in full profile", () => {

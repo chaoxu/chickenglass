@@ -48,9 +48,8 @@ declare global {
     __app?: AppDebugBridge;
 
     /**
-     * Product-neutral editor debug bridge. CM6 mode delegates to the
-     * active `EditorView`; Lexical mode delegates to the active
-     * `MarkdownEditorHandle`.
+     * Product-neutral editor debug bridge that delegates to the active
+     * CM6 `EditorView` through a `MarkdownEditorHandle`.
      */
     __editor?: EditorDebugBridgeGlobal;
 

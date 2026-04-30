@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import {
   dispatchFormatEvent,
   type FormatEventDetail,
@@ -33,7 +33,6 @@ interface AppCommandRegistryDeps {
     | "closeCurrentFile"
     | "currentPath"
     | "getCurrentDocText"
-    | "getLexicalEditorHandle"
     | "handleInsertImage"
     | "openFile"
     | "saveAs"
@@ -124,7 +123,6 @@ export function useAppCommandRegistry({
     closeCurrentFile,
     currentPath,
     getCurrentDocText,
-    getLexicalEditorHandle,
     handleInsertImage,
     openFile,
     saveAs,
@@ -141,16 +139,6 @@ export function useAppCommandRegistry({
     setSidebarTab,
     setSidenotesCollapsed,
   } = sidebarLayout;
-  const latestEditorSnapshotRef = useRef({
-    currentPath,
-    getCurrentDocText,
-    getLexicalEditorHandle,
-  });
-  latestEditorSnapshotRef.current = {
-    currentPath,
-    getCurrentDocText,
-    getLexicalEditorHandle,
-  };
 
   const handleExportHtml = useCallback(() => {
     if (!currentPath) return;
@@ -196,30 +184,8 @@ export function useAppCommandRegistry({
   }, [saveAs]);
 
   const applyFormat = useCallback((detail: FormatEventDetail) => {
-    const requestPath = currentPath;
-    const editorHandle = getLexicalEditorHandle();
-    if (!editorHandle) {
-      dispatchFormatDetail(detail);
-      return;
-    }
-
-    void import("../editor-format-actions").then(({ applyMarkdownFormatAction }) => {
-      const latest = latestEditorSnapshotRef.current;
-      if (
-        latest.currentPath !== requestPath ||
-        latest.getLexicalEditorHandle() !== editorHandle
-      ) {
-        return;
-      }
-      const handled = applyMarkdownFormatAction({
-        editorHandle,
-        getCurrentDocText: latest.getCurrentDocText,
-      }, detail);
-      if (!handled) {
-        dispatchFormatDetail(detail);
-      }
-    });
-  }, [currentPath, getLexicalEditorHandle]);
+    dispatchFormatDetail(detail);
+  }, []);
 
   const applySimpleFormat = useCallback((type: SimpleFormatEventType) => {
     applyFormat({ type });

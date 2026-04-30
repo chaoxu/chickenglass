@@ -17,9 +17,6 @@ const APP_BRIDGE_POLL_MS = 25;
 const APP_BRIDGE_WAIT_POLL_MS = 50;
 
 function selectorForEditorMode(mode) {
-  if (mode === "lexical") {
-    return ".cf-doc-flow--lexical";
-  }
   if (mode === "source") {
     return ".cm-editor.cf-source-mode .cm-content";
   }
@@ -101,11 +98,9 @@ export async function discardCurrentFile(page) {
 export async function switchToMode(page, mode) {
   const normalizedMode = mode === "Rich" || mode === "CM6 Rich" || mode === "rich"
     ? "cm6-rich"
-    : mode === "Lexical"
-      ? "lexical"
-      : mode === "Source"
-        ? "source"
-        : mode;
+    : mode === "Source"
+      ? "source"
+      : mode;
   const changedViaApp = await page.evaluate(async (payload) => {
     const sleepInPage = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const bridgeStart = performance.now();

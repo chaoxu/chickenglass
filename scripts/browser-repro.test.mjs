@@ -8,7 +8,7 @@ const browserReproMocks = vi.hoisted(() => {
       __cfDebug: true,
       __cmView: true,
       __editor: true,
-      lexicalEditor: false,
+      editorPresent: false,
     },
     readyState: "complete",
     title: "Coflat",

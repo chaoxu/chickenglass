@@ -3,15 +3,15 @@
 ## What is it
 
 A desktop/browser semantic document editor optimized for mathematical writing.
-The app switches at runtime between CM6 rich mode, Lexical WYSIWYG mode, and
-CM6 source mode. All modes share the same document format, app shell, file IO,
-semantic services, and Tauri backend.
+The app switches at runtime between CM6 rich mode and CM6 source mode. Both
+modes share the same document format, app shell, file IO, semantic services,
+and Tauri backend.
 
 ## Core philosophy
 
 - Semantics first, presentation derived.
-- CM6 edits Pandoc-flavored markdown directly; Lexical edits a rich document
-  model and uses markdown as the boundary serialization format.
+- CM6 edits Pandoc-flavored markdown directly; rendered widgets are layered on
+  top of the markdown source.
 - Every block type is a plugin. The core knows nothing about "theorem" or "proof."
 - Pandoc-free editing loop. Pandoc is an export tool, not part of the core.
 - Git-friendly: plain text files, meaningful diffs.
@@ -19,7 +19,7 @@ semantic services, and Tauri backend.
 ## Stack
 
 - **Language**: TypeScript (frontend) + Rust (Tauri backend)
-- **Editors**: CodeMirror 6 for rich/source markdown editing; Lexical for WYSIWYG editing
+- **Editors**: CodeMirror 6 for rich/source markdown editing
 - **Parser**: Lezer (extending `@lezer/markdown`)
 - **Math**: KaTeX
 - **Desktop**: Tauri v2 (~5MB binary, native OS webview)
@@ -114,7 +114,7 @@ blocks:
 │  │       │                          │      │ │
 │  │       │           ┌──────────────┴────┐ │ │
 │  │       │           │ CM6 markdown      │ │
-│  │       │           │ Lexical WYSIWYG   │ │
+│  │       │           │ (rich + source)   │ │
 │  │       │           └──────────────┬────┘ │ │
 │  │       ↓                          ↓      │ │
 │  │  Lezer semantics        KaTeX, blocks,  │ │
@@ -140,7 +140,6 @@ Markdown-derived semantic nodes track source positions whenever they come from
 the boundary document. This enables:
 
 - Precise source <-> rendered mapping for CM6 Typora-style editing
-- Stable markdown serialization for the Lexical WYSIWYG model
 - Structural edits in v3 that patch only affected source regions
 - Semantic indexing for search
 
@@ -159,7 +158,7 @@ Block plugins register additional Lezer extensions for custom body parsers.
 ### Editor rendering surfaces
 
 - **CM6 rich**: ViewPlugins and decorations render markdown syntax in place. Source reveals on cursor focus.
-- **Lexical WYSIWYG**: Lexical nodes render the document directly and serialize back to Pandoc-flavored markdown at the boundary.
+- **CM6 source**: Raw markdown without rich rendering.
 - **Math**: KaTeX renders `$...$` and `$$...$$` inline.
 - **Semantic blocks**: Rendered with type label, number, optional title.
 - **Cross-references**: Rendered as "Theorem 1" / "Eq. (3)" etc.
@@ -180,7 +179,6 @@ A background process (or web worker) that:
 ### Current App
 
 - CM6 rich/source editor with Lezer markdown parser extensions
-- Lexical WYSIWYG editor with markdown load/save serialization
 - Shared Pandoc-flavored markdown format
 - Block plugin system with default math environments
 - KaTeX math rendering

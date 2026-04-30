@@ -266,12 +266,12 @@ export async function runBrowserInspect(argv = process.argv.slice(2), io = {}) {
   if (parser.hasFlag("--help") || parser.hasFlag("-h")) {
     (io.stdout ?? process.stdout).write(`Usage:
   pnpm browser:inspect -- --fixture index.md --mode cm6-rich --text "Local PDF figure"
-  pnpm browser:inspect -- --mode lexical --selector ".cf-lexical-inline-math" --click
+  pnpm browser:inspect -- --mode source --selector ".cm-line" --click
 
 Options:
   --fixture <path>   open a fixture/demo document through the app debug bridge
   --file <path>      open an app file path through window.__app.openFile()
-  --mode <mode>      switch to cm6-rich, lexical, or source
+  --mode <mode>      switch to cm6-rich or source
   --text <needle>    scroll to visible text
   --selector <css>   include target DOM info; with --click, click its center first
   --click-text <txt> click the deepest visible element containing text

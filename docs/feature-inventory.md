@@ -19,20 +19,18 @@ that a rebuild must preserve.
 ## 1. Product Shape
 
 Coflat is a semantic document editor for mathematical writing. The app
-switches between three editor surfaces from the same shell:
+switches between two editor surfaces from the same shell:
 
 - CM6 rich markdown-native editing.
-- Lexical WYSIWYG editing.
 - CM6 source editing.
 
 The defining product qualities are:
 
 - Shared Pandoc-flavored markdown boundary. Documents load from and save to
   markdown files on disk.
-- Surface-specific editor truth. CM6 treats markdown as the live editing
-  source. Lexical treats markdown as serialization for a rich editor model.
+- CM6 treats markdown as the live editing source.
 - Rich editing as the primary workflow. CM6 rich mode is Typora-style source
-  backed editing; Lexical mode is WYSIWYG editing.
+  backed editing.
 - Semantics-first authoring. The editor understands equations, theorem-like
   blocks, citations, cross-references, figures, tables, and
   frontmatter as structured document concepts.
@@ -222,19 +220,7 @@ CM6 rich mode means:
 - cursor movement, click mapping, and selection behavior respect the rendered
   surface rather than acting like a plain textarea
 
-### 5.2 Lexical WYSIWYG behavior
-
-Lexical WYSIWYG mode means:
-
-- the live editor is a Lexical WYSIWYG document model
-- markdown is respected as the load/save serialization format, not as the
-  in-memory source of truth
-- formatting commands update the rich document and round-trip through canonical
-  markdown at the boundary
-- semantic constructs such as math, fenced-div blocks, citations, and
-  references remain structured editor concepts
-
-### 5.3 Structure editing
+### 5.2 Structure editing
 
 Certain block-level and shell-like constructs support explicit structure edit
 targets rather than naive text exposure.
@@ -247,7 +233,7 @@ Current structure-aware areas include at least:
 - footnote labels
 - display math
 
-### 5.4 Source-to-render mapping
+### 5.3 Source-to-render mapping
 
 Editor surfaces must map between source positions and rendered surfaces for:
 
@@ -456,10 +442,7 @@ least include:
 - [demo/index.md](/Users/chaoxu/playground/coflat/demo/index.md) renders correctly in rich mode
 - the syntax in [FORMAT.md](/Users/chaoxu/playground/coflat/FORMAT.md) is accepted and behaves as documented
 - the CM6 browser regression harness passes on the public showcase
-- the Lexical browser smoke passes on a generated heavy document
 - CM6 rich mode still feels like Typora-style source-backed editing
-- Lexical mode behaves like WYSIWYG editing while preserving the shared markdown
-  boundary format
 
 ## 13. What Is Explicitly Not the Core Product
 
@@ -476,10 +459,8 @@ A serious rebuild should be able to answer "yes" to all of these:
 
 - Can it open and save plain markdown files as the shared boundary format?
 - Does CM6 keep markdown as the live source of truth?
-- Does Lexical keep WYSIWYG editing separate from markdown serialization?
 - Does it support the shared Coflat document format, not just generic markdown?
 - Does CM6 rich mode preserve source-backed Typora-style editing?
-- Does Lexical mode preserve WYSIWYG editing with correct markdown round-trip behavior?
 - Are semantic blocks plugin-driven rather than hardcoded one-offs?
 - Do equations, figures, tables, citations, and cross-references behave like
   semantic objects?

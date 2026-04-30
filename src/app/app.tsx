@@ -149,7 +149,7 @@ function requestedDevFixtureOptions(): {
 
 function requestedDevFixtureMode(): EditorMode {
   const mode = new URLSearchParams(window.location.search).get("mode");
-  if (mode === "lexical" || mode === "source" || mode === "cm6-rich") {
+  if (mode === "source" || mode === "cm6-rich") {
     return mode;
   }
   return "cm6-rich";
@@ -386,7 +386,6 @@ function AppInner() {
     saveFile: editor.saveFile,
     closeFile: (options) => editor.closeCurrentFile(options),
     getCurrentDocText: editor.getCurrentDocText,
-    getLexicalEditorHandle: editor.getLexicalEditorHandle,
     setSearchOpen: dialogs.setSearchOpen,
     showSidebarPanel: (panel: SidebarTab) => {
       sidebarLayout.setSidebarTab(panel);

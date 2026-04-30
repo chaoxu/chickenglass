@@ -100,7 +100,7 @@ async function collectDebugState(page, label) {
         ...Object.fromEntries(requiredGlobals.map((name) => [name, Boolean(window[name])])),
         __cmDebug: Boolean(window.__cmDebug),
         __cmView: Boolean(window.__cmView),
-        lexicalEditor: Boolean(document.querySelector(editorSelector)),
+        editorPresent: Boolean(document.querySelector(editorSelector)),
       })),
       dom: safe(() => ({
         activeElement: document.activeElement

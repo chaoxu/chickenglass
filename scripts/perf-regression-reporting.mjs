@@ -131,35 +131,6 @@ function cm6TypingAnswerRows(metrics) {
   });
 }
 
-function lexicalTypingAnswerRows(metrics) {
-  return typingGroups(metrics, "lexical.typing").map(({ caseKey, positionKey }) => {
-    const scoped = (name) => `${name}.${caseKey}.${positionKey}`;
-    return {
-      surface: "Lexical",
-      document: caseKey,
-      position: positionKey,
-      inserts: roundAnswerValue(metricMean(metrics, scoped("lexical.typing.insert_count"))),
-      insertP95Ms: roundAnswerValue(metricP95(metrics, scoped("lexical.typing.insert_p95_ms"))),
-      insertMaxMs: roundAnswerValue(metricMax(metrics, scoped("lexical.typing.insert_max_ms"))),
-      donePerCharP95Ms: roundAnswerValue(
-        metricP95(metrics, scoped("lexical.typing.input_to_semantic_per_char_ms")),
-      ),
-      doneTotalP95Ms: roundAnswerValue(
-        metricP95(metrics, scoped("lexical.typing.input_to_semantic_ms")),
-      ),
-      semanticWorkP95Ms: roundAnswerValue(
-        metricP95(metrics, scoped("lexical.typing.semantic_work_ms")),
-      ),
-      longTasksP95: roundAnswerValue(
-        metricP95(metrics, scoped("lexical.typing.longtask_count")),
-      ),
-      postIdleLagP95Ms: roundAnswerValue(
-        metricP95(metrics, scoped("lexical.typing.post_idle_lag_p95_ms")),
-      ),
-    };
-  });
-}
-
 function scrollAnswerRows(metrics, scenario) {
   if (!scenario.startsWith("scroll-")) return [];
   if (scenario === "scroll-jump-rich") {
@@ -185,9 +156,6 @@ export function performanceAnswerRows(report) {
   const metrics = metricByName(report);
   if (report.scenario === "typing-rich-burst") {
     return cm6TypingAnswerRows(metrics);
-  }
-  if (report.scenario === "typing-lexical-bridge-burst") {
-    return lexicalTypingAnswerRows(metrics);
   }
   if (report.scenario?.startsWith("scroll-")) {
     return scrollAnswerRows(metrics, report.scenario);
@@ -224,28 +192,6 @@ export function comparisonFailureRows(result) {
 }
 
 const PERF_OWNER_HINTS = [
-  {
-    bucket: "hot-path typing",
-    owner: "src/lexical/incremental-rich-sync.ts",
-    test: (name) => name.startsWith("lexical.incrementalRichSync"),
-  },
-  {
-    bucket: "hot-path typing",
-    owner: "src/lexical/use-deferred-rich-document-sync.ts",
-    test: (name) => name.startsWith("lexical.typing."),
-  },
-  {
-    bucket: "semantic tail",
-    owner: "src/lexical/lexical-editor-pane.tsx",
-    test: (name) =>
-      name.startsWith("lexical.deriveSemanticState")
-      || name.startsWith("lexical.createSourceSpanIndex"),
-  },
-  {
-    bucket: "sidebar/background work",
-    owner: "src/app/components/sidebar-semantic-state.ts",
-    test: (name) => name.startsWith("lexical.sidebar_open."),
-  },
   {
     bucket: "hot-path typing",
     owner: "src/editor/",

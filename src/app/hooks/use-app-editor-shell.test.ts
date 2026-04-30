@@ -6,7 +6,6 @@ import { MemoryFileSystem, type ConditionalWriteResult } from "../file-manager";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import type { Settings } from "../lib/types";
 import type { AppEditorShellController } from "./use-app-editor-shell";
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 
 const shellMockState = vi.hoisted(() => ({
@@ -125,27 +124,6 @@ function replaceCurrentDoc(
   return [{ from: 0, to: currentDoc.length, insert: nextDoc }];
 }
 
-function createEditorHandle(doc: string): MarkdownEditorHandle {
-  const selection = {
-    anchor: 0,
-    focus: 0,
-    from: 0,
-    to: 0,
-  };
-  return {
-    applyChanges: vi.fn(),
-    flushPendingEdits: vi.fn(),
-    focus: vi.fn(),
-    getDoc: vi.fn(() => doc),
-    getSelection: vi.fn(() => selection),
-    insertText: vi.fn(),
-    peekDoc: vi.fn(() => doc),
-    peekSelection: vi.fn(() => selection),
-    setDoc: vi.fn(),
-    setSelection: vi.fn(),
-  };
-}
-
 function createDeferred<T = void>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((r) => { resolve = r; });
@@ -185,7 +163,7 @@ describe("useAppEditorShell", () => {
         "notes.md": "# Notes\n",
       },
       settings: {
-        editorMode: "lexical",
+        editorMode: "source",
       },
     });
 
@@ -195,7 +173,7 @@ describe("useAppEditorShell", () => {
       await ref.result.openFile("notes.md");
     });
 
-    expect(ref.result.editorMode).toBe("lexical");
+    expect(ref.result.editorMode).toBe("source");
   });
 
   it("preserves the current file mode when search navigation fails", async () => {
@@ -262,106 +240,6 @@ describe("useAppEditorShell", () => {
       expect(ref.result.currentPath).toBe("b.md");
       expect(ref.result.editorMode).toBe("source");
     });
-  });
-
-  it("completes same-file Lexical search navigation without waiting for a remount", async () => {
-    const onComplete = vi.fn();
-    const { Harness, ref } = createHarness({
-      files: {
-        "a.md": "# A\n",
-      },
-    });
-
-    act(() => root.render(createElement(Harness)));
-
-    await act(async () => {
-      await ref.result.openFile("a.md");
-    });
-
-    act(() => {
-      ref.result.handleModeChange("lexical");
-    });
-
-    await vi.waitFor(() => {
-      expect(ref.result.editorMode).toBe("lexical");
-    });
-
-    const handle = createEditorHandle("# A\n");
-    act(() => {
-      ref.result.handleLexicalEditorReady(handle);
-    });
-
-    act(() => {
-      ref.result.handleSearchResult({
-        file: "a.md",
-        pos: 3,
-        editorMode: "lexical",
-      }, onComplete);
-    });
-
-    expect(handle.setSelection).toHaveBeenCalledWith(3, 3);
-    expect(handle.focus).toHaveBeenCalledOnce();
-    expect(onComplete).toHaveBeenCalledOnce();
-    expect(ref.result.editorMode).toBe("lexical");
-  });
-
-  it("does not flush the Lexical markdown snapshot when reopening the current file", async () => {
-    const { Harness, ref } = createHarness({
-      files: {
-        "a.md": "# A\n",
-      },
-    });
-
-    act(() => root.render(createElement(Harness)));
-
-    await act(async () => {
-      await ref.result.openFile("a.md");
-    });
-
-    const handle = createEditorHandle("# A normalized\n");
-    act(() => {
-      ref.result.handleLexicalEditorReady(handle);
-    });
-
-    await act(async () => {
-      await ref.result.openFile("a.md");
-    });
-
-    expect(handle.getDoc).not.toHaveBeenCalled();
-    expect(ref.result.currentDocument).toMatchObject({
-      dirty: false,
-      path: "a.md",
-    });
-  });
-
-  it("publishes unsaved CM6 edits before switching to Lexical", async () => {
-    const { Harness, ref } = createHarness({
-      files: {
-        "a.md": "# A\n",
-      },
-    });
-
-    act(() => root.render(createElement(Harness)));
-
-    await act(async () => {
-      await ref.result.openFile("a.md");
-    });
-
-    act(() => {
-      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed in CM6\n"));
-    });
-
-    expect(ref.result.editorDoc).toBe("# A\n");
-    expect(ref.result.getCurrentDocText()).toBe("# A changed in CM6\n");
-
-    act(() => {
-      ref.result.handleModeChange("lexical");
-    });
-
-    await vi.waitFor(() => {
-      expect(ref.result.editorMode).toBe("lexical");
-    });
-    expect(ref.result.editorDoc).toBe("# A changed in CM6\n");
   });
 
   it("flushes pending autosave before switching files", async () => {
@@ -825,51 +703,4 @@ describe("useAppEditorShell", () => {
     expect(ref.result.editorMode).toBe("cm6-rich");
   });
 
-  it("clears pending Lexical search navigation when the target open is canceled", async () => {
-    const onComplete = vi.fn();
-    const requestUnsavedChangesDecision = vi
-      .fn<() => Promise<"save" | "discard" | "cancel">>()
-      .mockResolvedValue("discard");
-    const { Harness, ref } = createHarness({
-      files: {
-        "a.md": "# A\n",
-        "b.md": "# B\n",
-      },
-      requestUnsavedChangesDecision,
-    });
-
-    act(() => root.render(createElement(Harness)));
-
-    await act(async () => {
-      await ref.result.openFile("a.md");
-    });
-
-    act(() => {
-      ref.result.handleDocChange(replaceCurrentDoc(ref, "# A changed\n"));
-    });
-
-    requestUnsavedChangesDecision.mockResolvedValueOnce("cancel");
-
-    act(() => {
-      ref.result.handleSearchResult({
-        file: "b.md",
-        pos: 0,
-        editorMode: "lexical",
-      }, onComplete);
-    });
-
-    await vi.waitFor(() => {
-      expect(onComplete).toHaveBeenCalledOnce();
-    });
-    expect(ref.result.currentPath).toBe("a.md");
-
-    requestUnsavedChangesDecision.mockResolvedValueOnce("discard");
-
-    await act(async () => {
-      await ref.result.openFile("b.md");
-    });
-
-    expect(ref.result.currentPath).toBe("b.md");
-    expect(ref.result.editorMode).toBe("cm6-rich");
-  });
 });

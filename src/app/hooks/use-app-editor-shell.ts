@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { EditorMode } from "../../editor-display-mode";
 import type { EditorView } from "@codemirror/view";
 import type { UseEditorReturn } from "./use-editor";
@@ -17,10 +17,12 @@ import type { Settings } from "../lib/types";
 import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { ActiveDocumentSignal } from "../active-document-signal";
-import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import { saveAsErrorMessage } from "../project-root-errors";
+
+const NULL_EDITOR_HANDLE_REF = { current: null as MarkdownEditorHandle | null };
 
 export type { SaveActivity, SaveActivityStatus } from "./use-save-activity";
 
@@ -98,12 +100,6 @@ export interface AppEditorShellController extends UseEditorSessionReturn {
   handleDirtyChange: UseEditorSessionReturn["markCurrentDocumentDirty"];
   /** Called after `useEditor` has applied the current document/path to the live CM6 view. */
   handleEditorDocumentReady: (view: EditorView, docPath: string | undefined) => void;
-  /** Called by the Lexical editor surface when its imperative handle is available. */
-  handleLexicalEditorReady: (handle: MarkdownEditorHandle | null) => void;
-  /** Called when the Lexical surface mounts, clearing stale CM6 state. */
-  handleLexicalSurfaceReady: () => void;
-  /** Return the current Lexical editor handle without forcing app-shell rerenders. */
-  getLexicalEditorHandle: () => MarkdownEditorHandle | null;
   /** Current best-effort save operation state for the active document. */
   saveActivity: SaveActivity;
   // --- Navigation ---
@@ -209,7 +205,6 @@ export function useAppEditorShell({
     handleDocumentSnapshot: sessionHandleDocumentSnapshot,
   } = session;
 
-  const lexicalEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const { clearSaveFailure, saveActivity, trackSaveActivity } = useSaveActivity({
     activeDocumentSignal,
     currentPath,
@@ -238,7 +233,7 @@ export function useAppEditorShell({
   const { runEditorTransaction } = useEditorTransactions({
     currentPath,
     editorDoc,
-    editorHandleRef: lexicalEditorHandleRef,
+    editorHandleRef: NULL_EDITOR_HANDLE_REF,
     getSessionCurrentDocText,
     handleDocumentSnapshot,
   });
@@ -377,23 +372,18 @@ export function useAppEditorShell({
   const {
     diagnostics,
     editorState,
-    getLexicalEditorHandle,
     handleDiagnosticsChange,
     handleEditorStateChange,
     handleGotoLine,
     handleHeadingsChange,
     handleInsertImage,
-    handleLexicalEditorReady,
-    handleLexicalSurfaceReady,
     handleOutlineSelect,
     handleWatchedPathChange,
     headings,
-    queueLexicalNavigation,
-    clearPendingLexicalNavigation,
   } = useEditorSurfaceHandles({
     currentPath,
     editorDoc,
-    editorHandleRef: lexicalEditorHandleRef,
+    editorHandleRef: NULL_EDITOR_HANDLE_REF,
     fs,
     handleCmGotoLine,
     handleCmOutlineSelect,
@@ -407,18 +397,11 @@ export function useAppEditorShell({
     handleModeChange,
     handleSearchResult,
   } = useEditorModeOverrides({
-    clearPendingLexicalNavigation,
     currentPath,
     defaultMode: settings.editorMode,
-    editorDoc,
-    getSessionCurrentDocText,
     handleSearchResultNavigation,
     isMarkdownFile,
-    isPathOpen,
-    openFile,
-    queueLexicalNavigation,
     runEditorTransaction,
-    sessionHandleDocumentSnapshot,
   });
 
   const hasDirtyDocument = session.hasDirtyDocument;
@@ -441,9 +424,6 @@ export function useAppEditorShell({
     handleDiagnosticsChange,
     handleDirtyChange: markCurrentDocumentDirty,
     handleEditorDocumentReady,
-    handleLexicalEditorReady,
-    handleLexicalSurfaceReady,
-    getLexicalEditorHandle,
     saveActivity,
     handleOutlineSelect,
     handleGotoLine,

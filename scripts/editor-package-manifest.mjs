@@ -40,14 +40,6 @@ export const EDITOR_BUNDLED_DEPENDENCIES = Object.freeze([
 ]);
 
 export const EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES = Object.freeze([
-  "@lexical/clipboard",
-  "@lexical/code",
-  "@lexical/headless",
-  "@lexical/link",
-  "@lexical/list",
-  "@lexical/markdown",
-  "@lexical/react",
-  "@lexical/rich-text",
   "@dnd-kit/core",
   "@dnd-kit/sortable",
   "@dnd-kit/utilities",
@@ -63,13 +55,6 @@ export const EDITOR_FORBIDDEN_EXTERNAL_DEPENDENCIES = Object.freeze([
   "@tauri-apps/plugin-dialog",
   "@tauri-apps/plugin-log",
   "chokidar",
-  "lexical",
-  "markdown-it",
-  "markdown-it-attrs",
-  "markdown-it-footnote",
-  "markdown-it-mark",
-  "markdown-it-task-lists",
-  "markdown-it-texmath",
   "ws",
   "zustand",
 ]);

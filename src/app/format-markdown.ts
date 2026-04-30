@@ -1,5 +1,5 @@
 import type { FormatEventDetail } from "../constants/events";
-import type { MarkdownEditorSelection } from "../lexical/markdown-editor-types";
+import type { MarkdownEditorSelection } from "../editor/markdown-editor-types";
 import type { EditorDocumentChange } from "../lib/editor-document-diff";
 import { getTextLineAtOffset, getTextLines } from "./markdown/text-lines";
 

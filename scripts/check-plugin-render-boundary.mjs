@@ -9,7 +9,7 @@ const MODULE_FILE_RE = /\.(?:[cm]?[jt]sx?|d\.[cm]?[jt]s)$/;
 const DECLARATION_FILE_RE = /\.d\.[cm]?[jt]s$/;
 const TEST_FILE_RE = /(?:^|[./-])(?:[^/]*\.)?(?:test|spec)\.[cm]?[jt]sx?$/;
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
-const SPECIAL_SOURCE_LAYERS = ["lexical/runtime"];
+const SPECIAL_SOURCE_LAYERS = [];
 
 export const BOUNDARY_RULES = [
   {
@@ -27,7 +27,7 @@ export const BOUNDARY_RULES = [
   {
     name: "src/lib must stay neutral",
     from: ["lib"],
-    to: ["app", "citations", "editor", "lexical", "plugins", "render"],
+    to: ["app", "citations", "editor", "plugins", "render"],
     allow: [],
   },
   {
@@ -39,25 +39,13 @@ export const BOUNDARY_RULES = [
   {
     name: "src/citations must not import app/render/runtime modules",
     from: ["citations"],
-    to: ["app", "lexical", "render"],
+    to: ["app", "render"],
     allow: [],
   },
   {
     name: "src/debug must not depend on app/editor/runtime surfaces",
     from: ["debug"],
-    to: ["app", "editor", "lexical"],
-    allow: [],
-  },
-  {
-    name: "src/lexical production modules must not import app modules",
-    from: ["lexical"],
-    to: ["app"],
-    allow: [],
-  },
-  {
-    name: "src/lexical/runtime must not import app/editor/render modules",
-    from: ["lexical/runtime"],
-    to: ["app", "editor", "render"],
+    to: ["app", "editor"],
     allow: [],
   },
 ];

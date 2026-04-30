@@ -10,9 +10,8 @@ rendered, degraded, or disallowed.
 ### `document-body`
 
 Full document rendering. Used by the CM6 rich-mode viewport and shared
-hover/sidenote preview surfaces. Lexical has its own rich renderer for the
-WYSIWYG surface, but shared chrome callers should follow the same surface
-policy. All inline and block constructs are rendered at full fidelity.
+hover/sidenote preview surfaces. All inline and block constructs are rendered
+at full fidelity.
 
 **Consumers:** shared preview surfaces and CM6 ViewPlugins for paragraphs and
 list items.

@@ -64,7 +64,7 @@ export async function openFile(page, path) {
  *   content?: string,
  * }} fixture
  * @param {{
- *   mode?: "rich" | "cm6-rich" | "lexical" | "source",
+ *   mode?: "rich" | "cm6-rich" | "source",
  *   discardCurrent?: boolean,
  *   project?: "single-file" | "full-project",
  *   timeoutMs?: number,
@@ -252,7 +252,7 @@ function normalizeScenarioFiles(files) {
  *   entry?: string,
  *   files?: Record<string, string | { kind: "text" | "binary", content?: string, base64?: string }> | Array<{ path: string, kind: "text" | "binary", content?: string, base64?: string }>,
  *   fixture?: Parameters<typeof openFixtureDocument>[1],
- *   mode?: "rich" | "cm6-rich" | "lexical" | "source" | "CM6 Rich" | "Lexical" | "Source",
+ *   mode?: "rich" | "cm6-rich" | "source" | "CM6 Rich" | "Source",
  *   project?: "single-file" | "full-project",
  *   waitFor?: {
  *     selector?: string,

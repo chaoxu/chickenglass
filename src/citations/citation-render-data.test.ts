@@ -1,29 +1,29 @@
 import { describe, expect, it } from "vitest";
 
 import { extractFileIndex } from "../index/extract";
-import { createLexicalRenderResourceResolver } from "../lexical/runtime/controller/resource-resolver";
 import { analyzeMarkdownDocument } from "../semantics/markdown-analysis";
 import {
   buildCitationRenderData,
   buildCitationRenderDataFromAnalysis,
   loadBibliographyResource,
+  type CitationTextResourceResolver,
 } from "./citation-render-data";
 
-function createTextFileReader(files: Record<string, string>) {
+function createTextFileResolver(
+  files: Record<string, string>,
+  basePath: string,
+): CitationTextResourceResolver {
+  const baseDir = basePath.includes("/") ? basePath.slice(0, basePath.lastIndexOf("/") + 1) : "";
   return {
-    async readFile(path: string): Promise<string> {
-      const content = files[path];
-      if (content === undefined) {
-        throw new Error(`missing file: ${path}`);
-      }
-      return content;
+    async readProjectTextFile(path: string): Promise<string | null> {
+      return files[`${baseDir}${path}`] ?? files[path] ?? null;
     },
   };
 }
 
 describe("loadBibliographyResource", () => {
   it("loads bibliography entries through the shared resource resolver", async () => {
-    const resolver = createLexicalRenderResourceResolver(createTextFileReader({
+    const resolver = createTextFileResolver({
       "notes/main.md": "# Main",
       "notes/refs/library.bib": [
         "@book{cite:knuth,",
@@ -32,7 +32,7 @@ describe("loadBibliographyResource", () => {
         "  year = {1984}",
         "}",
       ].join("\n"),
-    }), "notes/main.md");
+    }, "notes/main.md");
 
     const bibliography = await loadBibliographyResource({
       bibliography: "refs/library.bib",

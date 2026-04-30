@@ -13,13 +13,13 @@
 import { create } from "zustand";
 
 export interface DevSettings {
-  /** Show the Lexical tree inspector panel. */
+  /** Show the Lezer syntax-tree inspector panel. */
   treeView: boolean;
   /** Show the performance debug panel. */
   perfPanel: boolean;
   /** Show the FPS counter in the status bar. */
   fpsCounter: boolean;
-  /** Log Lexical commands to the console. */
+  /** Log dispatched commands to the console. */
   commandLogging: boolean;
   /** Trace focus/blur events across editor surfaces. */
   focusTracing: boolean;
