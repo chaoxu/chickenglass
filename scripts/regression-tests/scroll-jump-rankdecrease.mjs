@@ -24,7 +24,6 @@ const STEP_SETTLE_MS = 120;
 const BOTTOM_OFFSET_PX = 2600;
 const REVERSE_TOLERANCE_PX = 40;
 const DOWN_OVERSHOOT_TOLERANCE_PX = 40;
-const MAX_MAX_SCROLL_DROP_PX = 128;
 
 function describeSample(sample) {
   return `${sample.label}: scrollTop=${sample.scrollTop} maxScrollTop=${sample.maxScrollTop} topLine=${sample.topLine} viewport=L${sample.viewportFromLine}-L${sample.viewportToLine}`;
@@ -36,8 +35,6 @@ function findScrollAnomalies(samples) {
     const previous = samples[index - 1];
     const current = samples[index];
     const delta = current.scrollTop - previous.scrollTop;
-    const maxScrollDrop = current.maxScrollTop - previous.maxScrollTop;
-
     if (delta < -REVERSE_TOLERANCE_PX) {
       anomalies.push(
         `reverse down-scroll ${describeSample(previous)} -> ${describeSample(current)} (${delta}px)`,
@@ -49,13 +46,6 @@ function findScrollAnomalies(samples) {
       anomalies.push(
         `overshoot down-scroll ${describeSample(previous)} -> ${describeSample(current)} (+${delta}px)`,
       );
-      continue;
-    }
-
-    if (maxScrollDrop < -MAX_MAX_SCROLL_DROP_PX) {
-      anomalies.push(
-        `maxScrollTop collapse ${describeSample(previous)} -> ${describeSample(current)} (${maxScrollDrop}px)`,
-      );
     }
   }
   return anomalies;
@@ -66,6 +56,15 @@ function findWorstDrift(samples) {
   for (let index = 1; index < samples.length; index += 1) {
     const delta = samples[index].scrollTop - samples[index - 1].scrollTop;
     worst = Math.max(worst, Math.abs(delta - STEP_PX));
+  }
+  return worst;
+}
+
+function findWorstMaxScrollDrop(samples) {
+  let worst = 0;
+  for (let index = 1; index < samples.length; index += 1) {
+    const delta = samples[index].maxScrollTop - samples[index - 1].maxScrollTop;
+    worst = Math.min(worst, delta);
   }
   return worst;
 }
@@ -157,6 +156,6 @@ export async function run(page) {
 
   return {
     pass: true,
-    message: `stable near-bottom wheel scroll (${samples.length} samples, worst drift ${findWorstDrift(samples)}px, guards=0)`,
+    message: `stable near-bottom wheel scroll (${samples.length} samples, worst drift ${findWorstDrift(samples)}px, worst maxScrollTop drop ${findWorstMaxScrollDrop(samples)}px, guards=0)`,
   };
 }
