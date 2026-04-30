@@ -6,9 +6,40 @@ import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
 import { MemoryFileSystem } from "../file-manager";
 import { useEditorSurfaceHandles } from "./use-editor-surface-handles";
 
+const mediaInvalidationMocks = vi.hoisted(() => ({
+  invalidateImageDataUrl: vi.fn(),
+  invalidatePdfPreview: vi.fn(),
+  notifyLexicalMediaPreviewInvalidated: vi.fn(),
+}));
+
 vi.mock("../../lib/tauri", () => ({
   isTauri: () => true,
 }));
+
+vi.mock("../../render/image-url-cache", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../render/image-url-cache")>();
+  return {
+    ...actual,
+    invalidateImageDataUrl: mediaInvalidationMocks.invalidateImageDataUrl,
+  };
+});
+
+vi.mock("../../render/pdf-preview-cache", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../render/pdf-preview-cache")>();
+  return {
+    ...actual,
+    invalidatePdfPreview: mediaInvalidationMocks.invalidatePdfPreview,
+  };
+});
+
+vi.mock("../../lexical/media-preview-invalidation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lexical/media-preview-invalidation")>();
+  return {
+    ...actual,
+    notifyLexicalMediaPreviewInvalidated:
+      mediaInvalidationMocks.notifyLexicalMediaPreviewInvalidated,
+  };
+});
 
 interface HarnessRef {
   result: ReturnType<typeof useEditorSurfaceHandles>;
@@ -81,6 +112,7 @@ describe("useEditorSurfaceHandles", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -183,5 +215,47 @@ describe("useEditorSurfaceHandles", () => {
     expect(warn).toHaveBeenCalledWith(
       "[editor] Insert Image is unavailable until an editor surface is ready.",
     );
+  });
+
+  it("invalidates CM6 image/PDF caches and Lexical previews for watched path changes", async () => {
+    const view = { dom: { isConnected: true } };
+    const { Harness, ref } = createHarness({
+      currentPath: "a.md",
+      editorHandleRef: { current: null },
+    });
+
+    act(() => root.render(createElement(Harness)));
+    act(() => {
+      ref.result.handleEditorStateChange({ view } as Parameters<typeof ref.result.handleEditorStateChange>[0]);
+      ref.result.handleWatchedPathChange("assets/diagram.pdf");
+    });
+
+    await vi.waitFor(() => {
+      expect(mediaInvalidationMocks.notifyLexicalMediaPreviewInvalidated)
+        .toHaveBeenCalledWith("assets/diagram.pdf");
+      expect(mediaInvalidationMocks.invalidateImageDataUrl)
+        .toHaveBeenCalledWith(view, "assets/diagram.pdf");
+      expect(mediaInvalidationMocks.invalidatePdfPreview)
+        .toHaveBeenCalledWith(view, "assets/diagram.pdf");
+    });
+  });
+
+  it("notifies Lexical preview invalidation even when no CM6 view is mounted", async () => {
+    const { Harness, ref } = createHarness({
+      currentPath: "a.md",
+      editorHandleRef: { current: createHandle() },
+    });
+
+    act(() => root.render(createElement(Harness)));
+    act(() => {
+      ref.result.handleWatchedPathChange("assets/diagram.png");
+    });
+
+    await vi.waitFor(() => {
+      expect(mediaInvalidationMocks.notifyLexicalMediaPreviewInvalidated)
+        .toHaveBeenCalledWith("assets/diagram.png");
+    });
+    expect(mediaInvalidationMocks.invalidateImageDataUrl).not.toHaveBeenCalled();
+    expect(mediaInvalidationMocks.invalidatePdfPreview).not.toHaveBeenCalled();
   });
 });

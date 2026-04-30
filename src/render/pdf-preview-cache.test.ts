@@ -36,6 +36,7 @@ vi.mock("./pdf-rasterizer", () => ({
 import {
   _resetPendingPaths,
   getPdfCanvas,
+  invalidatePdfPreview,
   requestPdfPreview,
 } from "./pdf-preview-cache";
 
@@ -338,6 +339,67 @@ describe("requestPdfPreview", () => {
       rasterizeMock.mockClear();
       await requestPdfPreview(view, "ok.pdf", fs);
       expect(rasterizeMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("external invalidation", () => {
+    it("invalidates a ready PDF preview and forces the next request to re-read the file", async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 10;
+      canvas.height = 10;
+      rasterizeMock.mockResolvedValue(canvas);
+
+      const fs = createMockFs();
+      const view = createMockView();
+
+      await requestPdfPreview(view, "diagram.pdf", fs);
+      expect(view.state.field(pdfPreviewField).get("diagram.pdf")?.status).toBe("ready");
+      expect(getPdfCanvas("diagram.pdf")).toBeDefined();
+
+      invalidatePdfPreview(view, "diagram.pdf");
+
+      expect(getPdfCanvas("diagram.pdf")).toBeUndefined();
+      expect(view.state.field(pdfPreviewField).get("diagram.pdf")).toBeUndefined();
+
+      rasterizeMock.mockClear();
+      await requestPdfPreview(view, "diagram.pdf", fs);
+
+      expect(rasterizeMock).toHaveBeenCalledTimes(1);
+      expect(view.state.field(pdfPreviewField).get("diagram.pdf")?.status).toBe("ready");
+      expect(getPdfCanvas("diagram.pdf")).toBeDefined();
+    });
+
+    it("drops stale in-flight rasterization after invalidation", async () => {
+      let resolveFirstRaster!: (value: HTMLCanvasElement) => void;
+      const firstRaster = new Promise<HTMLCanvasElement>((resolve) => {
+        resolveFirstRaster = resolve;
+      });
+      const oldCanvas = document.createElement("canvas");
+      oldCanvas.width = 10;
+      oldCanvas.height = 10;
+      const newCanvas = document.createElement("canvas");
+      newCanvas.width = 20;
+      newCanvas.height = 20;
+      rasterizeMock
+        .mockImplementationOnce(async () => firstRaster)
+        .mockResolvedValueOnce(newCanvas);
+
+      const fs = createMockFs();
+      const view = createMockView();
+
+      const firstRequest = requestPdfPreview(view, "diagram.pdf", fs);
+      await Promise.resolve();
+
+      invalidatePdfPreview(view, "diagram.pdf");
+      const secondRequest = requestPdfPreview(view, "diagram.pdf", fs);
+      await secondRequest;
+
+      resolveFirstRaster(oldCanvas);
+      await firstRequest;
+
+      expect(rasterizeMock).toHaveBeenCalledTimes(2);
+      expect(getPdfCanvas("diagram.pdf")?.width).toBe(20);
+      expect(view.state.field(pdfPreviewField).get("diagram.pdf")?.status).toBe("ready");
     });
   });
 });

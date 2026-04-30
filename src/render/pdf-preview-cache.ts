@@ -30,7 +30,8 @@ export {
 
 const MAX_CANVAS_CACHE_SIZE = 64;
 const canvasCache = new Map<string, HTMLCanvasElement>();
-const pendingPaths = new Set<string>();
+const pendingPaths = new Map<string, number>();
+const pathGenerations = new Map<string, number>();
 
 /** Get a cached canvas for a resolved PDF path. */
 export function getPdfCanvas(path: string): HTMLCanvasElement | undefined {
@@ -41,6 +42,23 @@ export function getPdfCanvas(path: string): HTMLCanvasElement | undefined {
 export function _resetPendingPaths(): void {
   pendingPaths.clear();
   canvasCache.clear();
+  pathGenerations.clear();
+}
+
+export function invalidatePdfPreview(view: EditorView, path: string): void {
+  const hadCanvas = canvasCache.delete(path);
+  const hadEntry = view.state.field(pdfPreviewField).has(path);
+  const hadPending = pendingPaths.has(path);
+
+  if (!hadCanvas && !hadEntry && !hadPending) {
+    return;
+  }
+
+  pathGenerations.set(path, (pathGenerations.get(path) ?? 0) + 1);
+
+  if (hadEntry) {
+    safeRemove(view, path);
+  }
 }
 
 // ── Async loader ─────────────────────────────────────────────────────────────
@@ -60,6 +78,7 @@ export async function requestPdfPreview(
   fs: FileSystem,
 ): Promise<void> {
   const existing = view.state.field(pdfPreviewField).get(path);
+  const generation = pathGenerations.get(path) ?? 0;
 
   if (existing) {
     // #486/#473: "ready" with canvas still in cache — nothing to do
@@ -76,14 +95,15 @@ export async function requestPdfPreview(
     if (existing.status === "loading") return;
   }
 
-  if (pendingPaths.has(path)) return;
-  pendingPaths.add(path);
+  if (pendingPaths.get(path) === generation) return;
+  pendingPaths.set(path, generation);
 
   safeDispatch(view, { path, entry: { status: "loading" } });
 
   try {
     const bytes = await fs.readFileBinary(path);
     const canvas = await rasterizePdfPage1(bytes);
+    if (!isCurrentGeneration(path, generation)) return;
 
     if (canvas) {
       // Evict oldest entry when cache is full.
@@ -102,9 +122,12 @@ export async function requestPdfPreview(
       safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
     }
   } catch (_error) {
+    if (!isCurrentGeneration(path, generation)) return;
     safeDispatch(view, { path, entry: { status: "error", errorTime: Date.now() } });
   } finally {
-    pendingPaths.delete(path);
+    if (pendingPaths.get(path) === generation) {
+      pendingPaths.delete(path);
+    }
   }
 }
 
@@ -124,4 +147,8 @@ function safeRemove(view: EditorView, path: string): void {
   } catch (_error) {
     // View disconnected between guard and dispatch — expected race
   }
+}
+
+function isCurrentGeneration(path: string, generation: number): boolean {
+  return pendingPaths.get(path) === generation && (pathGenerations.get(path) ?? 0) === generation;
 }

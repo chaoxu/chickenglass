@@ -2,7 +2,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { EditorView } from "@codemirror/view";
 
+import { IMAGE_TIMEOUT_MS } from "../../constants";
+import {
+  IMAGE_EXTENSIONS,
+  IMAGE_MIME_EXT,
+  altTextFromFilename,
+  createImageSaver,
+  escapeMarkdownPath,
+  fileToDataUrl,
+  generateImageFilename,
+  isImageMime,
+  logImageError,
+} from "../../editor/image-save";
+import { insertImageFromPicker } from "../../editor/image-insert";
 import type { MarkdownEditorHandle } from "../../lexical/markdown-editor-types";
+import { notifyLexicalMediaPreviewInvalidated } from "../../lexical/media-preview-invalidation";
+import { parseFrontmatter } from "../../parser/frontmatter";
+import { invalidateImageDataUrl } from "../../render/image-url-cache";
+import { invalidatePdfPreview } from "../../render/pdf-preview-cache";
 import type { DiagnosticEntry } from "../diagnostics";
 import type { FileSystem } from "../file-manager";
 import type { HeadingEntry } from "../heading-ancestry";
@@ -62,18 +79,6 @@ async function insertImageIntoLexicalHandle(
   lexicalHandle: MarkdownEditorHandle,
   saveImage?: SaveImage,
 ): Promise<void> {
-  const {
-    IMAGE_EXTENSIONS,
-    IMAGE_MIME_EXT,
-    altTextFromFilename,
-    escapeMarkdownPath,
-    fileToDataUrl,
-    generateImageFilename,
-    isImageMime,
-    logImageError,
-  } = await import("../../editor/image-save");
-  const { IMAGE_TIMEOUT_MS } = await import("../../constants");
-
   return new Promise<void>((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -132,19 +137,14 @@ async function insertImageIntoLexicalHandle(
   });
 }
 
-async function createLexicalImageSaver({
+function createLexicalImageSaver({
   docPath,
   fs,
   getDoc,
-}: LexicalImageSaverOptions): Promise<SaveImage | undefined> {
+}: LexicalImageSaverOptions): SaveImage | undefined {
   if (!docPath) {
     return undefined;
   }
-
-  const [{ createImageSaver }, { parseFrontmatter }] = await Promise.all([
-    import("../../editor/image-save"),
-    import("../../parser/frontmatter"),
-  ]);
 
   return createImageSaver({
     fs,
@@ -214,31 +214,29 @@ export function useEditorSurfaceHandles({
   }, []);
 
   const handleWatchedPathChange = useCallback((path: string) => {
+    notifyLexicalMediaPreviewInvalidated(path);
+
     const view = editorViewRef.current;
     if (!view) return;
-    void import("../../render/image-url-cache").then(({ invalidateImageDataUrl }) => {
-      if (editorViewRef.current !== view) return;
-      invalidateImageDataUrl(view, path);
-    });
+    invalidateImageDataUrl(view, path);
+    invalidatePdfPreview(view, path);
   }, []);
 
   const handleInsertImage = useCallback(() => {
     const view = editorState?.view;
     if (view) {
-      void import("../../editor").then(({ insertImageFromPicker }) => {
-        if (editorViewRef.current !== view) return;
-        void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
-      });
+      void insertImageFromPicker(view, editorState?.imageSaver ?? undefined);
       return;
     }
 
     const lexicalHandle = editorHandleRef.current;
     if (lexicalHandle) {
-      void createLexicalImageSaver({
+      const saveImage = createLexicalImageSaver({
         docPath: currentPath,
         fs,
         getDoc: () => lexicalHandle.peekDoc(),
-      }).then((saveImage) => insertImageIntoLexicalHandle(lexicalHandle, saveImage));
+      });
+      void insertImageIntoLexicalHandle(lexicalHandle, saveImage);
       return;
     }
 

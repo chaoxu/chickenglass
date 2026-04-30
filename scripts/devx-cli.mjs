@@ -21,6 +21,8 @@ const DEFAULT_VALUE_FLAGS = new Set([
   "--limit",
   "--line",
   "--max-height-delta",
+  "--max-drift-px",
+  "--max-scroll-guards",
   "--max-top-delta",
   "--min-reverse-scroll-px",
   "--mode",

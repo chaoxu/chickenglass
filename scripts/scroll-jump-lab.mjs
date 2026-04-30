@@ -15,6 +15,8 @@ const DEFAULT_STEP_PX = 90;
 const DEFAULT_STEP_COUNT = 24;
 const DEFAULT_SETTLE_MS = 120;
 const DEFAULT_BOTTOM_OFFSET_PX = 2600;
+const DEFAULT_MAX_DRIFT_PX = 2;
+const DEFAULT_MAX_SCROLL_GUARDS = 0;
 const DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS =
   DEFAULT_RUNTIME_BUDGET_PROFILE.debugBridgeTimeoutMs;
 
@@ -65,6 +67,59 @@ function findWorstStep(samples, expectedStepPx) {
   return worst;
 }
 
+function isEndClampedStep(previous, current, expectedStepPx) {
+  if (expectedStepPx <= 0) return false;
+  const remainingBeforeStep = Math.max(
+    0,
+    previous.maxScrollTop - previous.scrollTop,
+  );
+  return remainingBeforeStep < expectedStepPx
+    && current.scrollTop === current.maxScrollTop;
+}
+
+function validateSamples(
+  samples,
+  {
+    expectedStepPx,
+    maxDriftPx,
+    maxScrollGuards,
+    scrollGuards,
+  },
+) {
+  const failures = [];
+  if (scrollGuards.length > maxScrollGuards) {
+    failures.push(
+      `scroll guard count ${scrollGuards.length} exceeds ${maxScrollGuards}`,
+    );
+  }
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const delta = current.scrollTop - previous.scrollTop;
+    if (delta < 0) {
+      failures.push(
+        `${current.label} moved backward by ${Math.abs(delta)}px`,
+      );
+      continue;
+    }
+
+    if (isEndClampedStep(previous, current, expectedStepPx)) {
+      continue;
+    }
+
+    const drift = Math.abs(delta - expectedStepPx);
+    if (drift > maxDriftPx) {
+      failures.push(
+        `${current.label} drift ${drift}px exceeds ${maxDriftPx}px ` +
+          `(delta ${delta}px, expected ${expectedStepPx}px)`,
+      );
+    }
+  }
+
+  return failures;
+}
+
 function printSamples(samples, expectedStepPx) {
   for (let index = 1; index < samples.length; index += 1) {
     const previous = samples[index - 1];
@@ -99,8 +154,11 @@ async function main(argv = process.argv.slice(2)) {
   const stepCount = getIntFlag("--step-count", DEFAULT_STEP_COUNT);
   const settleMs = getIntFlag("--settle-ms", DEFAULT_SETTLE_MS);
   const bottomOffsetPx = getIntFlag("--bottom-offset-px", DEFAULT_BOTTOM_OFFSET_PX);
+  const maxDriftPx = getIntFlag("--max-drift-px", DEFAULT_MAX_DRIFT_PX);
+  const maxScrollGuards = getIntFlag("--max-scroll-guards", DEFAULT_MAX_SCROLL_GUARDS);
   const timeout = getIntFlag("--timeout", DEFAULT_DEBUG_BRIDGE_TIMEOUT_MS);
   const simulateWheel = hasFlag("--simulate-wheel");
+  const assertClean = hasFlag("--assert-clean");
 
   const session = await openBrowserSession(argv, { timeoutFallback: timeout });
   const { page } = session;
@@ -195,6 +253,26 @@ async function main(argv = process.argv.slice(2)) {
     if (worst) {
       console.log("\nworst-step:");
       console.log(JSON.stringify(worst, null, 2));
+    }
+
+    if (assertClean) {
+      const failures = validateSamples(samples, {
+        expectedStepPx: stepPx,
+        maxDriftPx,
+        maxScrollGuards,
+        scrollGuards,
+      });
+      if (failures.length > 0) {
+        console.error("\nassertion failures:");
+        for (const failure of failures) {
+          console.error(`- ${failure}`);
+        }
+        process.exitCode = 1;
+      } else {
+        console.log(
+          `\nassert-clean: pass (maxDriftPx=${maxDriftPx}, maxScrollGuards=${maxScrollGuards})`,
+        );
+      }
     }
   } finally {
     await closeBrowserSession(session);

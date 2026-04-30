@@ -5,6 +5,7 @@ import { classifyAssetTarget } from "../lib/markdown-image";
 import { markdownReferencePathCandidatesFromDocument } from "../lib/markdown-reference-paths";
 import { useLexicalRenderResources } from "./render-context";
 import { rasterizePdfPage1 } from "./pdf-rasterizer";
+import { subscribeLexicalMediaPreviewInvalidations } from "./media-preview-invalidation";
 
 export interface AssetPreviewState {
   readonly fallbackUrl: string;
@@ -30,6 +31,36 @@ async function readLocalImageDataUrl(
   return null;
 }
 
+function pathMatchesLocalTarget(
+  docPath: string,
+  target: string,
+  changedPath: string,
+): boolean {
+  return markdownReferencePathCandidatesFromDocument(docPath, target).includes(changedPath);
+}
+
+function useLocalMediaInvalidationVersion(
+  docPath: string | undefined,
+  target: string,
+  isLocal: boolean,
+): number {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    if (!docPath || !target || !isLocal) {
+      return;
+    }
+
+    return subscribeLexicalMediaPreviewInvalidations((changedPath) => {
+      if (pathMatchesLocalTarget(docPath, target, changedPath)) {
+        setVersion((current) => current + 1);
+      }
+    });
+  }, [docPath, isLocal, target]);
+
+  return version;
+}
+
 export function useAssetPreview(target: string): AssetPreviewState {
   const { docPath, fs, resolveAssetUrl } = useLexicalRenderResources();
   const fallbackUrl = useMemo(
@@ -37,6 +68,11 @@ export function useAssetPreview(target: string): AssetPreviewState {
     [resolveAssetUrl, target],
   );
   const targetInfo = useMemo(() => classifyAssetTarget(target), [target]);
+  const invalidationVersion = useLocalMediaInvalidationVersion(
+    docPath,
+    target,
+    targetInfo.isLocal,
+  );
   const initiallyNeedsLocalProbe = targetInfo.isLocal;
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(() =>
     targetInfo.isPdf || initiallyNeedsLocalProbe ? undefined : fallbackUrl,
@@ -117,7 +153,7 @@ export function useAssetPreview(target: string): AssetPreviewState {
     return () => {
       cancelled = true;
     };
-  }, [docPath, fallbackUrl, fs, target, targetInfo]);
+  }, [docPath, fallbackUrl, fs, invalidationVersion, target, targetInfo]);
 
   return {
     fallbackUrl,
@@ -128,12 +164,18 @@ export function useAssetPreview(target: string): AssetPreviewState {
 
 export function useLocalImageDataUrl(target: string): string | null {
   const { docPath, fs } = useLexicalRenderResources();
+  const targetInfo = useMemo(() => classifyAssetTarget(target), [target]);
+  const invalidationVersion = useLocalMediaInvalidationVersion(
+    docPath,
+    target,
+    targetInfo.isLocal,
+  );
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!classifyAssetTarget(target).isLocal || !docPath) {
+    if (!targetInfo.isLocal || !docPath) {
       setDataUrl(null);
       return () => {
         cancelled = true;
@@ -151,7 +193,7 @@ export function useLocalImageDataUrl(target: string): string | null {
     return () => {
       cancelled = true;
     };
-  }, [docPath, fs, target]);
+  }, [docPath, fs, invalidationVersion, target, targetInfo.isLocal]);
 
   return dataUrl;
 }

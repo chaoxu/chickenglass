@@ -1,7 +1,13 @@
-# Scroll Jump Investigation
+# Scroll Jump Investigation (Historical)
 
-This note is for the `scroll-jump-debug` branch. It records every tested hypothesis
-against the same runtime signature so we do not keep chasing one-off anecdotes.
+This note records the `scroll-jump-debug` investigation before the stable rich
+rendering architecture landed. It is historical evidence, not current product
+guidance.
+
+Current policy: keep CM6's normal viewport virtualization, use `view.visibleRanges`
+to bound renderer work, and fix jumps by making editor-owned geometry stable. Do
+not patch or globally expand CM6's mounted viewport margin as a product fix. See
+`docs/architecture/architecture-decisions.md`.
 
 ## Baseline signature
 
@@ -424,7 +430,7 @@ Implication:
 
 ### H12. Larger CM6 overscan can suppress the jump by keeping the risky tail mounted
 
-Status: confirmed.
+Status: confirmed as a diagnostic mitigation; rejected as product architecture.
 
 What changed:
 
@@ -458,6 +464,9 @@ Conclusion:
 - The remaining bad behavior is strongly tied to viewport turnover.
 - If the risky tail stays mounted, the original reverse jump disappears.
 - Bigger overscan is an effective mitigation even without the runtime guard.
+- This is intentionally not the current fix. It increases mounted DOM and hides
+  unstable geometry instead of making the rendered block geometry match CM6's
+  height-map rules.
 
 ### H13. A runway-preserving guard can neutralize the end clamp when turnover still happens
 
@@ -496,7 +505,7 @@ Conclusion:
 
 ### H14. The `8e3` overscan mitigation has a real DOM-size cost, but only a modest measured time cost on `rankdecrease`
 
-Status: confirmed.
+Status: historical benchmark for the rejected overscan mitigation.
 
 Benchmark setup:
 
