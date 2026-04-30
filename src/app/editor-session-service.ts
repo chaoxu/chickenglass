@@ -1,4 +1,4 @@
-import { basename, dirname } from "./lib/utils";
+import { basename } from "./lib/utils";
 import {
   clearExternalDocumentConflict,
   clearSessionDocument,
@@ -6,8 +6,10 @@ import {
   setExternalDocumentConflict,
 } from "./editor-session-actions";
 import {
-  type SessionDocument,
-} from "./editor-session-model";
+  makeTransitionRequest,
+  nextGeneratedPath,
+  pathAffectsDocument,
+} from "./editor-session-service-helpers";
 import type { FileSystem } from "./file-manager";
 import { measureAsync, withPerfOperation } from "./perf";
 import type {
@@ -72,27 +74,6 @@ export interface EditorSessionServiceOptions {
   runtime: EditorSessionRuntime;
   onAfterDiscard?: (path: string) => void | Promise<void>;
   saveCurrentDocument: () => Promise<boolean>;
-}
-
-function makeTransitionRequest(
-  currentDocument: SessionDocument,
-  reason: UnsavedChangesRequest["reason"],
-  target?: { path?: string; name: string },
-): UnsavedChangesRequest {
-  return {
-    reason,
-    currentDocument: {
-      path: currentDocument.path,
-      name: currentDocument.name,
-    },
-    target,
-  };
-}
-
-function pathAffectsDocument(changedPath: string, documentPath: string): boolean {
-  return documentPath === changedPath || (
-    changedPath !== "" && documentPath.startsWith(`${changedPath}/`)
-  );
 }
 
 export function createEditorSessionService({
@@ -487,17 +468,6 @@ export function createEditorSessionService({
 
   const openFileWithContent = async (name: string, content: string) => {
     const requestId = runtime.nextOpenFileRequest();
-    const nextGeneratedPath = (basePath: string, suffix: number): string => {
-      const directory = dirname(basePath);
-      const fileName = basename(basePath);
-      const dotIndex = fileName.lastIndexOf(".");
-      const hasExtension = dotIndex > 0;
-      const nextName = hasExtension
-        ? `${fileName.slice(0, dotIndex)} (${suffix})${fileName.slice(dotIndex)}`
-        : `${fileName} (${suffix})`;
-      return directory ? `${directory}/${nextName}` : nextName;
-    };
-
     const isPathAvailable = async (candidatePath: string): Promise<boolean> =>
       !runtime.hasPath(candidatePath) && !(await fs.exists(candidatePath));
 

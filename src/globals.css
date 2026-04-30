@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 @import "./editor-theme.css";
-@import "./lexical/editor-theme.css";
 
 /* ── App-only tokens ───────────────────────────────────────────────────────── */
 
