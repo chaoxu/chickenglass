@@ -2,9 +2,9 @@ import type { EditorMode } from "../editor-display-mode";
 import { isTauri } from "../lib/tauri";
 
 export const TAURI_RENDER_DIAGNOSTICS_KEY = "cf-tauri-render-diagnostics";
-const ROOT_CM_EDITOR_SELECTOR = ".cm-editor.cf-doc-surface--cm6";
+const ROOT_CM_EDITOR_SELECTOR = ".cm-editor.cf-doc-surface";
 const ROOT_CM_SCROLLER_SELECTOR = `${ROOT_CM_EDITOR_SELECTOR} > .cm-scroller`;
-const ROOT_CM_CONTENT_SELECTOR = ".cm-content.cf-doc-flow--cm6";
+const ROOT_CM_CONTENT_SELECTOR = ".cm-content.cf-doc-flow";
 
 export interface RuntimeContractElementSnapshot {
   readonly selector: string;

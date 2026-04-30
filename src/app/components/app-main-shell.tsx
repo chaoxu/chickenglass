@@ -9,7 +9,7 @@ import { useFileSystem } from "../contexts/file-system-context";
 import { useAppWorkspaceController } from "../contexts/app-workspace-context";
 import type { SidebarLayoutController } from "../hooks/use-sidebar-layout";
 import type { Cm6HistoryCache } from "../hooks/use-editor";
-import { getEditorModeAdapter } from "../editor-mode-adapter";
+import { normalizeEditorMode } from "../../editor-display-mode";
 
 interface AppMainShellProps {
   sidebarLayout: Pick<
@@ -32,7 +32,10 @@ export function AppMainShell({
   const currentPath = editor.currentPath;
   const trackOutline = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "outline";
   const trackDiagnostics = !sidebarLayout.sidebarCollapsed && sidebarLayout.sidebarTab === "diagnostics";
-  const modeAdapter = getEditorModeAdapter(editor.editorMode, editor.isMarkdownFile);
+  const cm6Mode =
+    normalizeEditorMode(editor.editorMode, editor.isMarkdownFile) === "source"
+      ? "source"
+      : "rich";
   const saveStatus = !editor.currentDocument
     ? "idle"
     : editor.hasUnresolvedExternalConflict
@@ -76,7 +79,7 @@ export function AppMainShell({
             onHeadingsChange={trackOutline ? editor.handleHeadingsChange : undefined}
             onDiagnosticsChange={trackDiagnostics ? editor.handleDiagnosticsChange : undefined}
             onDocumentReady={editor.handleEditorDocumentReady}
-            editorMode={modeAdapter.cm6Mode}
+            editorMode={cm6Mode}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center select-none text-sm text-[var(--cf-muted)]">

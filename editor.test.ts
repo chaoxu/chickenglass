@@ -14,10 +14,8 @@ describe("mountEditor", () => {
     const editorElement = parent.querySelector(".cm-editor");
     expect(editorElement).toBeTruthy();
     expect(editorElement?.classList.contains(DOCUMENT_SURFACE_CLASS.surface)).toBe(true);
-    expect(editorElement?.classList.contains(DOCUMENT_SURFACE_CLASS.surfaceCm6)).toBe(true);
     const contentElement = parent.querySelector(".cm-content");
     expect(contentElement?.classList.contains(DOCUMENT_SURFACE_CLASS.flow)).toBe(true);
-    expect(contentElement?.classList.contains(DOCUMENT_SURFACE_CLASS.flowCm6)).toBe(true);
 
     editor.unmount();
   });

@@ -60,16 +60,10 @@ const debugLaneCompartment = new Compartment();
 const defaultDebugLaneExtensions: Extension[] = [];
 const cm6DocumentSurfaceExtensions: Extension[] = [
   EditorView.editorAttributes.of({
-    class: documentSurfaceClassNames(
-      DOCUMENT_SURFACE_CLASS.surface,
-      DOCUMENT_SURFACE_CLASS.surfaceCm6,
-    ),
+    class: documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.surface),
   }),
   EditorView.contentAttributes.of({
-    class: documentSurfaceClassNames(
-      DOCUMENT_SURFACE_CLASS.flow,
-      DOCUMENT_SURFACE_CLASS.flowCm6,
-    ),
+    class: documentSurfaceClassNames(DOCUMENT_SURFACE_CLASS.flow),
   }),
 ];
 

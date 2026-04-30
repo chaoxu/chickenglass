@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   defaultEditorMode,
@@ -10,12 +10,6 @@ import type {
   EditorTransactionIntent,
   EditorTransactionResult,
 } from "./use-editor-transactions";
-import {
-  getCommittedModeOverride,
-  getPendingModeOverride,
-  initialEditorModeOverrideState,
-  transitionEditorModeOverride,
-} from "./editor-mode-override-state";
 
 export interface EditorModeOverridesDeps {
   currentPath: string | null;
@@ -45,49 +39,35 @@ export function useEditorModeOverrides({
   isMarkdownFile,
   runEditorTransaction,
 }: EditorModeOverridesDeps): EditorModeOverridesController {
-  const [overrideState, dispatchOverrideTransition] = useReducer(
-    transitionEditorModeOverride,
-    initialEditorModeOverrideState,
-  );
-  const pendingModeRequestIdRef = useRef(0);
+  const [overrides, setOverrides] = useState<Record<string, EditorMode>>({});
 
-  const clearPendingIfRequest = useCallback((requestId: number) => {
-    dispatchOverrideTransition({ type: "clear-pending", requestId });
+  const commitOverride = useCallback((path: string, mode: EditorMode) => {
+    setOverrides((prev) => ({ ...prev, [path]: mode }));
   }, []);
 
   const editorMode = useMemo((): EditorMode => {
-    const pendingOverride = getPendingModeOverride(overrideState, currentPath);
-    if (pendingOverride !== undefined) {
-      return normalizeEditorMode(pendingOverride, isMarkdownFile);
-    }
-    const committedOverride = getCommittedModeOverride(overrideState, currentPath);
-    if (committedOverride !== undefined) {
-      return normalizeEditorMode(committedOverride, isMarkdownFile);
+    const committed = currentPath ? overrides[currentPath] : undefined;
+    if (committed !== undefined) {
+      return normalizeEditorMode(committed, isMarkdownFile);
     }
     return normalizeEditorMode(defaultMode ?? defaultEditorMode, isMarkdownFile);
-  }, [overrideState, currentPath, defaultMode, isMarkdownFile]);
+  }, [overrides, currentPath, defaultMode, isMarkdownFile]);
 
   const handleModeChange = useCallback((mode: EditorMode | string) => {
-    const { flush: flushResult } = runEditorTransaction("mode-switch", () => undefined);
+    runEditorTransaction("mode-switch", () => undefined);
     const normalizedMode = normalizeEditorMode(mode, isMarkdownFile);
-    const applyModeOverride = () => {
-      if (currentPath) {
-        dispatchOverrideTransition({
-          type: "commit",
-          target: { path: currentPath, mode: normalizedMode },
-        });
-      }
-    };
-    if (flushResult.shouldDeferModeSwitch) {
-      window.setTimeout(applyModeOverride, 0);
-    } else {
-      applyModeOverride();
+    if (currentPath) {
+      commitOverride(currentPath, normalizedMode);
     }
   }, [
+    commitOverride,
     currentPath,
     isMarkdownFile,
     runEditorTransaction,
   ]);
+
+  const overridesRef = useRef(overrides);
+  overridesRef.current = overrides;
 
   const handleSearchResult = useCallback((
     target: SearchNavigationTarget,
@@ -95,26 +75,25 @@ export function useEditorModeOverrides({
   ) => {
     const targetIsMarkdown = target.file.endsWith(".md");
     const normalizedMode = normalizeEditorMode(target.editorMode, targetIsMarkdown);
-    const requestId = ++pendingModeRequestIdRef.current;
-    dispatchOverrideTransition({
-      type: "begin",
-      requestId,
-      target: { path: target.file, mode: normalizedMode },
-    });
+    const hadPrevious = Object.hasOwn(overridesRef.current, target.file);
+    const previousMode = overridesRef.current[target.file];
+    commitOverride(target.file, normalizedMode);
 
     void handleSearchResultNavigation(target.file, target.pos, onComplete).then((opened) => {
-      if (!opened) {
-        clearPendingIfRequest(requestId);
-        return;
-      }
-      dispatchOverrideTransition({
-        type: "commit",
-        requestId,
-        target: { path: target.file, mode: normalizedMode },
+      if (opened) return;
+      setOverrides((prev) => {
+        if (prev[target.file] !== normalizedMode) return prev;
+        const next = { ...prev };
+        if (hadPrevious) {
+          next[target.file] = previousMode;
+        } else {
+          delete next[target.file];
+        }
+        return next;
       });
     });
   }, [
-    clearPendingIfRequest,
+    commitOverride,
     handleSearchResultNavigation,
   ]);
 

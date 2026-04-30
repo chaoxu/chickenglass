@@ -49,7 +49,7 @@ declare global {
 
     /**
      * Product-neutral editor debug bridge that delegates to the active
-     * CM6 `EditorView` through a `MarkdownEditorHandle`.
+     * CM6 `EditorView`.
      */
     __editor?: EditorDebugBridgeGlobal;
 

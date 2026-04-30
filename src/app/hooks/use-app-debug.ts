@@ -21,7 +21,7 @@ import {
 } from "../perf";
 import { setFpsMeterEnabled, stopFpsMeter } from "../fps-meter";
 import { useDevSettings } from "../../state/dev-settings";
-import type { MarkdownEditorSelection } from "../../editor/markdown-editor-types";
+import type { MarkdownEditorSelection } from "../../lib/debug-types";
 import { planMarkdownFormat } from "../format-markdown";
 import type { SidebarTab } from "./use-sidebar-layout";
 import {

@@ -17,12 +17,9 @@ import type { Settings } from "../lib/types";
 import type { SearchNavigationTarget } from "../search";
 import type { UnsavedChangesDecision, UnsavedChangesRequest } from "../unsaved-changes";
 import type { ActiveDocumentSignal } from "../active-document-signal";
-import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 import type { AutoSaveFlushOptions, AutoSaveFlushReason } from "./use-auto-save";
 import type { EditorDocumentChange } from "../editor-doc-change";
 import { saveAsErrorMessage } from "../project-root-errors";
-
-const NULL_EDITOR_HANDLE_REF = { current: null as MarkdownEditorHandle | null };
 
 export type { SaveActivity, SaveActivityStatus } from "./use-save-activity";
 
@@ -192,7 +189,6 @@ export function useAppEditorShell({
   });
   const {
     currentPath,
-    editorDoc,
     activeDocumentSignal,
     getCurrentDocText: getSessionCurrentDocText,
     prepareCurrentDocumentForTransition,
@@ -230,13 +226,7 @@ export function useAppEditorShell({
     session.handleProgrammaticDocChange(path, doc);
   }, [clearSaveFailure, session]);
 
-  const { runEditorTransaction } = useEditorTransactions({
-    currentPath,
-    editorDoc,
-    editorHandleRef: NULL_EDITOR_HANDLE_REF,
-    getSessionCurrentDocText,
-    handleDocumentSnapshot,
-  });
+  const { runEditorTransaction } = useEditorTransactions();
 
   const getCurrentDocText = useCallback(() => {
     return runEditorTransaction("debug-read", getSessionCurrentDocText).value;
@@ -381,10 +371,6 @@ export function useAppEditorShell({
     handleWatchedPathChange,
     headings,
   } = useEditorSurfaceHandles({
-    currentPath,
-    editorDoc,
-    editorHandleRef: NULL_EDITOR_HANDLE_REF,
-    fs,
     handleCmGotoLine,
     handleCmOutlineSelect,
     syncView,

@@ -1,8 +1,7 @@
-import { act, createElement, type FC, type MutableRefObject } from "react";
+import { act, createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 import { useEditorSurfaceHandles } from "./use-editor-surface-handles";
 
 const mediaInvalidationMocks = vi.hoisted(() => ({
@@ -34,19 +33,13 @@ interface HarnessRef {
   result: ReturnType<typeof useEditorSurfaceHandles>;
 }
 
-function createHarness(options: {
-  readonly currentPath: string | null;
-  readonly editorHandleRef: MutableRefObject<MarkdownEditorHandle | null>;
-}): { readonly Harness: FC; readonly ref: HarnessRef } {
+function createHarness(): { readonly Harness: FC; readonly ref: HarnessRef } {
   const ref: HarnessRef = {
     result: null as unknown as ReturnType<typeof useEditorSurfaceHandles>,
   };
 
   const Harness: FC = () => {
     ref.result = useEditorSurfaceHandles({
-      currentPath: options.currentPath,
-      editorDoc: "Alpha",
-      editorHandleRef: options.editorHandleRef,
       handleCmGotoLine: vi.fn(),
       handleCmOutlineSelect: vi.fn(),
       syncView: vi.fn(),
@@ -76,10 +69,7 @@ describe("useEditorSurfaceHandles", () => {
 
   it("warns instead of silently no-oping when no editor surface can insert an image", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { Harness, ref } = createHarness({
-      currentPath: "a.md",
-      editorHandleRef: { current: null },
-    });
+    const { Harness, ref } = createHarness();
 
     act(() => root.render(createElement(Harness)));
     act(() => {
@@ -93,10 +83,7 @@ describe("useEditorSurfaceHandles", () => {
 
   it("invalidates CM6 image/PDF caches for watched path changes", async () => {
     const view = { dom: { isConnected: true } };
-    const { Harness, ref } = createHarness({
-      currentPath: "a.md",
-      editorHandleRef: { current: null },
-    });
+    const { Harness, ref } = createHarness();
 
     act(() => root.render(createElement(Harness)));
     act(() => {

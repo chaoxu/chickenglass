@@ -20,19 +20,6 @@ const Harness: FC<HarnessProps> = ({ deps, onReady }) => {
   return null;
 };
 
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((innerResolve) => {
-    resolve = innerResolve;
-  });
-  return { promise, resolve };
-}
-
 function target(editorMode: EditorMode): SearchNavigationTarget {
   return {
     editorMode,
@@ -60,7 +47,6 @@ describe("useEditorModeOverrides", () => {
       handleSearchResultNavigation: vi.fn(async () => true),
       isMarkdownFile: true,
       runEditorTransaction: vi.fn((intent, body) => ({
-        flush: { shouldDeferModeSwitch: false },
         intent,
         value: body(),
       })),
@@ -89,7 +75,7 @@ describe("useEditorModeOverrides", () => {
     container.remove();
   });
 
-  it("lets a pending search mode override a committed mode for the active path", async () => {
+  it("commits a search-result mode override after navigation resolves", async () => {
     render();
 
     act(() => {
@@ -105,25 +91,16 @@ describe("useEditorModeOverrides", () => {
     expect(getController().editorMode).toBe("cm6-rich");
   });
 
-  it("ignores a stale search completion after a newer pending request starts", async () => {
-    const firstNavigation = createDeferred<boolean>();
-    const handleSearchResultNavigation = vi.fn(() => firstNavigation.promise);
-    render({ handleSearchResultNavigation });
+  it("commits the search-result override eagerly so the next render sees it", () => {
+    render();
 
     act(() => {
-      getController().handleSearchResult(target("source"));
+      getController().handleModeChange("source");
     });
+    expect(getController().editorMode).toBe("source");
 
-    await act(async () => {
+    act(() => {
       getController().handleSearchResult(target("cm6-rich"));
-      await Promise.resolve();
-    });
-    expect(getController().editorMode).toBe("cm6-rich");
-
-    await act(async () => {
-      firstNavigation.resolve(true);
-      await firstNavigation.promise;
-      await Promise.resolve();
     });
 
     expect(getController().editorMode).toBe("cm6-rich");

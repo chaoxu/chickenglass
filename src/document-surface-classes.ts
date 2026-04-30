@@ -6,9 +6,7 @@
 
 export const DOCUMENT_SURFACE_CLASS = {
   surface: "cf-doc-surface",
-  surfaceCm6: "cf-doc-surface--cm6",
   flow: "cf-doc-flow",
-  flowCm6: "cf-doc-flow--cm6",
   paragraph: "cf-doc-paragraph",
   blockquote: "cf-doc-blockquote",
   heading: "cf-doc-heading",

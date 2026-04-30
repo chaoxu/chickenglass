@@ -243,6 +243,9 @@ const stickySectionNumberExpiryPlugin = ViewPlugin.fromClass(class {
       update.selectionSet ||
       update.transactions.some((tr) => tr.effects.length > 0)
     ) {
+      if (this.view.state.field(sectionNumberField).sticky.length === 0) {
+        return;
+      }
       this.schedule();
     }
   }

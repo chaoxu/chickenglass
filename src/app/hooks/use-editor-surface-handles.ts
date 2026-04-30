@@ -1,21 +1,14 @@
 import { useCallback, useRef, useState } from "react";
-import type { MutableRefObject } from "react";
 import type { EditorView } from "@codemirror/view";
 
 import { insertImageFromPicker } from "../../editor/image-insert";
-import type { MarkdownEditorHandle } from "../../editor/markdown-editor-types";
 import { invalidateImageDataUrl } from "../../render/image-url-cache";
 import { invalidatePdfPreview } from "../../render/pdf-preview-cache";
 import type { DiagnosticEntry } from "../diagnostics";
-import type { FileSystem } from "../file-manager";
 import type { HeadingEntry } from "../heading-ancestry";
 import type { UseEditorReturn } from "./use-editor";
 
 export interface EditorSurfaceHandlesDeps {
-  currentPath: string | null;
-  editorDoc: string;
-  editorHandleRef: MutableRefObject<MarkdownEditorHandle | null>;
-  fs?: FileSystem;
   handleCmGotoLine: (line: number, col?: number) => void;
   handleCmOutlineSelect: (from: number) => void;
   syncView: (view: EditorView | null) => void;
