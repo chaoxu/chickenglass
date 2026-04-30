@@ -9,6 +9,7 @@
 import { STYLED_BLOCK_NAMES } from "../constants/block-manifest";
 import {
   IMAGE_MAX_HEIGHT,
+  IMAGE_PREVIEW_RESERVED_HEIGHT,
 } from "../constants/layout";
 
 /** Auto-generate per-block-type accent override rules from the manifest. */
@@ -131,19 +132,21 @@ export const blockThemeStyles: Record<string, Record<string, string>> = {
     margin: "0",
   },
 
-  /* Inline image preview — stable slot for async loading (#1015) */
+  /* Image preview — block widgets reserve the same async slot height that
+   * ImagePreviewWidget reports to CM6's virtual height map. */
   ".cf-image-wrapper": {
     display: "inline-block",
     verticalAlign: "middle",
     maxWidth: "100%",
   },
-  ".cf-image-loading": {
+  ".cf-image-loading, .cf-image-placeholder": {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: "100px",
+    minHeight: IMAGE_PREVIEW_RESERVED_HEIGHT,
     color: "var(--cf-muted)",
     fontSize: "0.85em",
+    textAlign: "center",
   },
   ".cf-image": {
     display: "block",

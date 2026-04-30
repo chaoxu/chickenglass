@@ -272,8 +272,6 @@ function makeDisplayMathParser(
         cx.nextLine();
         return true;
       }
-      if (textAfterIndent.slice(openLen).trim().length > 0) return false;
-
       // Multi-line: scan subsequent lines for closing delimiter
       const scan = scanMultilineClose(cx, line, closeDelimiter);
       if (!scan.found) return false;

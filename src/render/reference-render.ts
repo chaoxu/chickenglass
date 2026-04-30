@@ -1,5 +1,5 @@
 /**
- * Unified CM6 ViewPlugin for rendering all [@id] and @id references.
+ * Unified CM6 StateField for rendering all [@id] and @id references.
  *
  * Replaces the separate crossref-render and citation-render ViewPlugins
  * with a single tree walk that routes each reference to the appropriate
@@ -16,7 +16,7 @@ import {
   type EditorView,
   type ViewUpdate,
 } from "@codemirror/view";
-import { type ChangeSet, type EditorState, type Extension, type Range } from "@codemirror/state";
+import { type ChangeSet, type EditorState, type Extension, type Range, type Transaction } from "@codemirror/state";
 import { CSS } from "../constants/css-classes";
 import type { ResolvedCrossref } from "../references/presentation";
 import { forEachOverlappingOrderedRange } from "../lib/range-helpers";
@@ -45,7 +45,11 @@ import {
   inlineRevealTargetChanged,
 } from "./inline-reveal-policy";
 import { isDebugRenderFlagEnabled } from "./debug-render-flags";
-import { createSemanticSensitiveViewPlugin } from "./view-plugin-factories";
+import { createLifecycleDecorationStateField } from "./decoration-field";
+import {
+  editorFocusField,
+  focusTracker,
+} from "./focus-state";
 import {
   createEditorReferencePresentationController,
   ensureEditorReferencePresentationCitationsRegistered,
@@ -126,18 +130,52 @@ function toRenderItem(
  * Citations must be registered with the processor before calling this
  * function (see {@link ensureEditorReferencePresentationCitationsRegistered}).
  */
+function isEditorView(value: EditorState | EditorView): value is EditorView {
+  return "state" in value;
+}
+
 export function planReferenceRendering(
   view: EditorView,
   store: BibStore,
   processor: CslProcessor,
-  references = getReferenceRenderAnalysis(view.state).references,
+  references?: readonly ReferenceSemantics[],
+): ReferenceRenderItem[];
+export function planReferenceRendering(
+  state: EditorState,
+  focused: boolean,
+  store: BibStore,
+  processor: CslProcessor,
+  references?: readonly ReferenceSemantics[],
+): ReferenceRenderItem[];
+export function planReferenceRendering(
+  viewOrState: EditorView | EditorState,
+  focusedOrStore: boolean | BibStore,
+  storeOrProcessor: BibStore | CslProcessor,
+  processorOrReferences?: CslProcessor | readonly ReferenceSemantics[],
+  maybeReferences?: readonly ReferenceSemantics[],
 ): ReferenceRenderItem[] {
-  const controller = createEditorReferencePresentationController(view.state, {
+  const state = isEditorView(viewOrState) ? viewOrState.state : viewOrState;
+  const focused = isEditorView(viewOrState)
+    ? viewOrState.hasFocus
+    : focusedOrStore as boolean;
+  const store = isEditorView(viewOrState)
+    ? focusedOrStore as BibStore
+    : storeOrProcessor as BibStore;
+  const processor = isEditorView(viewOrState)
+    ? storeOrProcessor as CslProcessor
+    : processorOrReferences as CslProcessor;
+  const references = (
+    isEditorView(viewOrState)
+      ? processorOrReferences as readonly ReferenceSemantics[] | undefined
+      : maybeReferences
+  ) ?? getReferenceRenderAnalysis(state).references;
+
+  const controller = createEditorReferencePresentationController(state, {
     store,
     cslProcessor: processor,
   });
   const items: ReferenceRenderItem[] = [];
-  const activeRef = getRevealedReferenceTarget(view.state, view.hasFocus);
+  const activeRef = getRevealedReferenceTarget(state, focused);
 
   for (const ref of references) {
     if (activeRef && activeRef.from === ref.from && activeRef.to === ref.to) {
@@ -149,7 +187,7 @@ export function planReferenceRendering(
       bracketed: ref.bracketed,
       ids: ref.ids,
       locators: ref.locators,
-      raw: view.state.sliceDoc(ref.from, ref.to),
+      raw: state.sliceDoc(ref.from, ref.to),
     });
     if (route) {
       items.push(toRenderItem(route, ref.from, ref.to));
@@ -224,9 +262,38 @@ export function collectReferenceRanges(
   view: EditorView,
   store: BibStore,
   cslProcessor?: CslProcessor,
-  references = getReferenceRenderState(view.state).analysis.references,
+  references?: readonly ReferenceSemantics[],
+): Range<Decoration>[];
+export function collectReferenceRanges(
+  state: EditorState,
+  focused: boolean,
+  store: BibStore,
+  cslProcessor?: CslProcessor,
+  references?: readonly ReferenceSemantics[],
+): Range<Decoration>[];
+export function collectReferenceRanges(
+  viewOrState: EditorView | EditorState,
+  focusedOrStore: boolean | BibStore,
+  storeOrProcessor?: BibStore | CslProcessor,
+  cslProcessorOrReferences?: CslProcessor | readonly ReferenceSemantics[],
+  maybeReferences?: readonly ReferenceSemantics[],
 ): Range<Decoration>[] {
-  const { analysis, bibliography } = getReferenceRenderState(view.state);
+  const state = isEditorView(viewOrState) ? viewOrState.state : viewOrState;
+  const focused = isEditorView(viewOrState)
+    ? viewOrState.hasFocus
+    : focusedOrStore as boolean;
+  const store = isEditorView(viewOrState)
+    ? focusedOrStore as BibStore
+    : storeOrProcessor as BibStore;
+  const cslProcessor = isEditorView(viewOrState)
+    ? cslProcessorOrReferences as CslProcessor | undefined
+    : cslProcessorOrReferences as CslProcessor | undefined;
+  const references = (
+    isEditorView(viewOrState)
+      ? maybeReferences
+      : maybeReferences
+  ) ?? getReferenceRenderState(state).analysis.references;
+  const { analysis, bibliography } = getReferenceRenderState(state);
   const processor = cslProcessor ?? bibliography.cslProcessor;
 
   // Numeric CSL registration is global to document order. Cache it at the
@@ -236,7 +303,8 @@ export function collectReferenceRanges(
 
   return emitReferenceDecorations(
     planReferenceRendering(
-      view,
+      state,
+      focused,
       store,
       processor,
       references,
@@ -245,10 +313,10 @@ export function collectReferenceRanges(
 }
 
 /** Build reference decorations from the view state. */
-function buildReferenceDecorations(view: EditorView): DecorationSet {
-  const { bibliography } = getReferenceRenderState(view.state);
+function buildReferenceDecorations(state: EditorState): DecorationSet {
+  const { bibliography } = getReferenceRenderState(state);
   const { store, cslProcessor } = bibliography;
-  return buildDecorations(collectReferenceRanges(view, store, cslProcessor));
+  return buildDecorations(collectReferenceRanges(state, referenceStateFocus(state), store, cslProcessor));
 }
 
 function collectDirtyReferences(
@@ -300,7 +368,12 @@ interface ReferenceDocDirtyRanges {
   readonly couldContainReferences: boolean;
 }
 
-function computeReferenceDocDirtyRanges(update: ViewUpdate): ReferenceDocDirtyRanges {
+type ReferenceDocUpdate = Pick<
+  Transaction,
+  "changes" | "docChanged" | "startState" | "state"
+>;
+
+function computeReferenceDocDirtyRanges(update: ReferenceDocUpdate): ReferenceDocDirtyRanges {
   if (!update.docChanged) {
     return { ranges: [], couldContainReferences: false };
   }
@@ -350,13 +423,27 @@ function getReferenceRevealChange(update: ViewUpdate): ReferenceRevealChange {
   };
 }
 
-function referenceRenderDependenciesNeedRebuild(update: ViewUpdate): boolean {
-  return referenceRenderRebuildDependenciesChanged(update.startState, update.state);
+function referenceStateFocus(state: EditorState): boolean {
+  return state.field(editorFocusField, false) ?? false;
 }
 
-function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
-  const { beforeActive, afterActive, activeChanged } = getReferenceRevealChange(update);
-  const docDirty = computeReferenceDocDirtyRanges(update);
+function getReferenceRevealChangeForTransaction(tr: Transaction): ReferenceRevealChange {
+  const beforeActive = getRevealedReferenceTarget(tr.startState, referenceStateFocus(tr.startState));
+  const afterActive = getRevealedReferenceTarget(tr.state, referenceStateFocus(tr.state));
+  return {
+    beforeActive,
+    afterActive,
+    activeChanged: inlineRevealTargetChanged(beforeActive, afterActive),
+  };
+}
+
+function referenceRenderDependenciesNeedRebuild(tr: Transaction): boolean {
+  return referenceRenderRebuildDependenciesChanged(tr.startState, tr.state);
+}
+
+function computeReferenceDirtyRangesForTransaction(tr: Transaction): DirtyRange[] {
+  const { beforeActive, afterActive, activeChanged } = getReferenceRevealChangeForTransaction(tr);
+  const docDirty = computeReferenceDocDirtyRanges(tr);
   if (
     docDirty.ranges.length > 0 &&
     !activeChanged &&
@@ -364,8 +451,8 @@ function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
   ) {
     return [];
   }
-  const mappedBeforeActive = activeChanged && beforeActive && update.docChanged
-    ? mapReferenceDirtyRange(beforeActive, update.changes)
+  const mappedBeforeActive = activeChanged && beforeActive && tr.docChanged
+    ? mapReferenceDirtyRange(beforeActive, tr.changes)
     : beforeActive;
   return mergeDirtyRangesWithActiveReference(
     docDirty.ranges,
@@ -375,35 +462,60 @@ function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
 }
 
 function collectReferenceRangesForDirtySpans(
-  view: EditorView,
+  state: EditorState,
   dirtyRanges: readonly DirtyRange[],
 ): Range<Decoration>[] {
-  const { analysis, bibliography } = getReferenceRenderState(view.state);
+  const { analysis, bibliography } = getReferenceRenderState(state);
   const { store, cslProcessor } = bibliography;
   const dirtyRefs = collectDirtyReferences(
     analysis.references,
     dirtyRanges,
   );
   return dirtyRefs.length > 0
-    ? collectReferenceRanges(view, store, cslProcessor, dirtyRefs)
+    ? collectReferenceRanges(state, referenceStateFocus(state), store, cslProcessor, dirtyRefs)
     : [];
 }
 
 /** CM6 extension that renders all [@id] and @id references with Typora-style toggle. */
-export const referenceRenderPlugin: Extension = createSemanticSensitiveViewPlugin(
-  buildReferenceDecorations,
-  {
-    collectRanges: collectReferenceRangesForDirtySpans,
-    semanticChanged: referenceRenderSliceChanged,
-    contextChanged: (update) =>
-      getReferenceRevealChange(update).activeChanged,
-    contextUpdateMode: "dirty-ranges",
-    shouldRebuild: (update) => referenceRenderDependenciesNeedRebuild(update),
-    dirtyRangeFn: (update) => computeReferenceDirtyRanges(update),
-    mapDecorations: (decorations, update) =>
-      mappedDecorationsWithFreshWidgetSources(decorations, update.changes),
-    spanName: "cm6.referenceRender",
-  },
-);
+const referenceDecorationField = createLifecycleDecorationStateField<DirtyRange>({
+  spanName: "cm6.referenceRender",
+  build: buildReferenceDecorations,
+  collectRanges: collectReferenceRangesForDirtySpans,
+  semanticChanged: referenceRenderSliceChanged,
+  contextChanged: (tr) =>
+    getReferenceRevealChangeForTransaction(tr).activeChanged,
+  contextUpdateMode: "dirty-ranges",
+  shouldRebuild: (tr) => referenceRenderDependenciesNeedRebuild(tr),
+  dirtyRangeFn: (tr) => computeReferenceDirtyRangesForTransaction(tr),
+  mapDecorations: (decorations, tr) =>
+    mappedDecorationsWithFreshWidgetSources(decorations, tr.changes),
+});
+
+export const referenceRenderPlugin: Extension = [
+  editorFocusField,
+  focusTracker,
+  referenceDecorationField,
+];
+
+function computeReferenceDirtyRanges(update: ViewUpdate): DirtyRange[] {
+  const { beforeActive, afterActive, activeChanged } = getReferenceRevealChange(update);
+  const docDirty = computeReferenceDocDirtyRanges(update);
+  const changes = update.changes;
+  if (
+    docDirty.ranges.length > 0 &&
+    !activeChanged &&
+    !docDirty.couldContainReferences
+  ) {
+    return [];
+  }
+  const mappedBeforeActive = activeChanged && beforeActive && update.docChanged
+    ? mapReferenceDirtyRange(beforeActive, changes)
+    : beforeActive;
+  return mergeDirtyRangesWithActiveReference(
+    docDirty.ranges,
+    activeChanged ? mappedBeforeActive : null,
+    activeChanged ? afterActive : null,
+  );
+}
 
 export { computeReferenceDirtyRanges as _computeReferenceDirtyRangesForTest };

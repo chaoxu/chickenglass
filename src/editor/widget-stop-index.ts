@@ -11,9 +11,16 @@ import {
   isStandaloneImageLine,
   readMarkdownImageContent,
 } from "../state/markdown-image";
+import { collectFencedDivs } from "../fenced-block/model";
 import { mergeRanges, rangesOverlap } from "../lib/range-helpers";
+import { pluginRegistryField } from "../state/plugin-registry";
+import { getPluginOrFallback } from "../state/plugin-registry-core";
 
-export type HiddenWidgetStopKind = "frontmatter" | "display-math" | "block-image";
+export type HiddenWidgetStopKind =
+  | "frontmatter"
+  | "display-math"
+  | "block-image"
+  | "fenced-opener";
 
 export interface HiddenWidgetStop {
   readonly kind: HiddenWidgetStopKind;
@@ -162,6 +169,40 @@ function collectBlockImageStops(
   return stops;
 }
 
+function collectFencedOpenerStops(
+  state: EditorState,
+  queryRanges: readonly NavigationStopQueryRange[],
+): readonly HiddenWidgetStop[] {
+  const registry = state.field(pluginRegistryField, false);
+  if (!registry) return [];
+  const stops: HiddenWidgetStop[] = [];
+
+  for (const div of collectFencedDivs(state)) {
+    const plugin = getPluginOrFallback(registry, div.className);
+    if (!plugin) continue;
+    const openerIsHidden =
+      plugin.captionPosition === "below" ||
+      plugin.headerPosition === "inline" ||
+      plugin.displayHeader === false;
+    if (!openerIsHidden) continue;
+    if (!rangeOverlapsQueryRanges(
+      { from: div.openFenceFrom, to: div.openFenceTo },
+      queryRanges,
+    )) {
+      continue;
+    }
+    const stop = hiddenStopFromRange(
+      state,
+      "fenced-opener",
+      div.openFenceFrom,
+      div.openFenceTo,
+    );
+    if (stop) stops.push(stop);
+  }
+
+  return stops;
+}
+
 function collectTableStops(
   state: EditorState,
   queryRanges: readonly NavigationStopQueryRange[],
@@ -184,6 +225,7 @@ function buildWidgetStopIndex(
     ...(frontmatterStop ? [frontmatterStop] : []),
     ...collectDisplayMathStops(state, queryRanges),
     ...collectBlockImageStops(state, queryRanges),
+    ...collectFencedOpenerStops(state, queryRanges),
   ];
   const tableStops = collectTableStops(state, queryRanges);
 

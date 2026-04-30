@@ -41,6 +41,7 @@ import {
 } from "./lazy-widget-base";
 import { requestScrollStabilizedMeasure } from "./scroll-anchor";
 import { CSS } from "../constants/css-classes";
+import { IMAGE_PREVIEW_RESERVED_HEIGHT_PX } from "../constants/layout";
 import { createChangeChecker } from "../state/change-detection";
 import {
   dirtyRangesFromChanges,
@@ -115,7 +116,11 @@ export class ImagePreviewWidget extends LazyWidgetBase {
     return {
       cache: imagePreviewHeightCache,
       key: this.src,
-      fallbackHeight: this.state.kind === "loading" ? 100 : -1,
+      fallbackHeight: this.isBlock
+        ? IMAGE_PREVIEW_RESERVED_HEIGHT_PX
+        : this.state.kind === "loading"
+          ? IMAGE_PREVIEW_RESERVED_HEIGHT_PX
+          : -1,
     };
   }
 
@@ -176,8 +181,7 @@ export class ImagePreviewWidget extends LazyWidgetBase {
         img.src = this.state.src;
         img.alt = this.alt;
         img.addEventListener("error", () => {
-          wrapper.textContent = `[Image: ${this.alt}]`;
-          wrapper.className = CSS.imageError;
+          this.renderUnavailablePlaceholder(wrapper);
         });
         wrapper.appendChild(img);
         break;
@@ -197,8 +201,7 @@ export class ImagePreviewWidget extends LazyWidgetBase {
           if (ctx) ctx.drawImage(canvas, 0, 0);
           wrapper.appendChild(clone);
         } else {
-          wrapper.className = CSS.imageError;
-          wrapper.textContent = `[Image: ${this.alt}]`;
+          this.renderUnavailablePlaceholder(wrapper);
         }
         break;
       }
@@ -209,19 +212,29 @@ export class ImagePreviewWidget extends LazyWidgetBase {
           : `[Loading image: ${this.alt || "preview"}]`;
         break;
       case "error": {
+        if (this.isBlock) {
+          this.renderUnavailablePlaceholder(wrapper);
+          break;
+        }
         wrapper.className = CSS.imageWrapper;
         const img = document.createElement("img");
         img.className = CSS.image;
         img.src = this.state.fallbackSrc;
         img.alt = this.alt;
         img.addEventListener("error", () => {
-          wrapper.textContent = `[Image: ${this.alt}]`;
-          wrapper.className = CSS.imageError;
+          this.renderUnavailablePlaceholder(wrapper);
         });
         wrapper.appendChild(img);
         break;
       }
     }
+  }
+
+  private renderUnavailablePlaceholder(wrapper: HTMLElement): void {
+    wrapper.textContent = `[Image: ${this.alt || "preview"}]`;
+    wrapper.className = this.isBlock
+      ? `${CSS.imageWrapper} ${CSS.imagePlaceholder}`
+      : CSS.imageError;
   }
 }
 

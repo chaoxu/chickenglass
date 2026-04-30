@@ -21,6 +21,7 @@ import {
   lexicalSidebarOpenMetrics,
   lexicalTypingBurstMetrics,
   parseCliArgs,
+  performanceAnswerRows,
   perfOwnerHint,
   preflightHtmlExportPandoc,
   resolvePerfRuntimeOptions,
@@ -506,6 +507,91 @@ describe("perf regression scenarios", () => {
         name: "typing.span_total_ms.cm6.referenceRender.map.index.after_frontmatter",
         unit: "ms",
         value: 1.25,
+      },
+    ]);
+  });
+
+  it("builds a direct CM6 typing answer table from burst metrics", () => {
+    const report = {
+      scenario: "typing-rich-burst",
+      metrics: [
+        { name: "typing.insert_count.index.after_frontmatter", meanValue: 100 },
+        { name: "typing.dispatch_p95_ms.index.after_frontmatter", p95Value: 1.4 },
+        { name: "typing.dispatch_max_ms.index.after_frontmatter", maxValue: 4.2 },
+        { name: "typing.input_to_idle_per_char_ms.index.after_frontmatter", p95Value: 1.9 },
+        { name: "typing.input_to_idle_ms.index.after_frontmatter", p95Value: 190 },
+        { name: "typing.longtask_count.index.after_frontmatter", p95Value: 0 },
+        { name: "typing.post_idle_lag_p95_ms.index.after_frontmatter", p95Value: 0.7 },
+      ],
+    };
+
+    expect(performanceAnswerRows(report)).toEqual([
+      {
+        surface: "CM6 Rich",
+        document: "index",
+        position: "after_frontmatter",
+        inserts: 100,
+        dispatchP95Ms: 1.4,
+        dispatchMaxMs: 4.2,
+        donePerCharP95Ms: 1.9,
+        doneTotalP95Ms: 190,
+        longTasksP95: 0,
+        postIdleLagP95Ms: 0.7,
+      },
+    ]);
+  });
+
+  it("builds a direct Lexical typing answer table from bridge burst metrics", () => {
+    const report = {
+      scenario: "typing-lexical-bridge-burst",
+      metrics: [
+        { name: "lexical.typing.insert_count.index.near_end", meanValue: 100 },
+        { name: "lexical.typing.insert_p95_ms.index.near_end", p95Value: 2.4 },
+        { name: "lexical.typing.insert_max_ms.index.near_end", maxValue: 8.2 },
+        { name: "lexical.typing.input_to_semantic_per_char_ms.index.near_end", p95Value: 3.1 },
+        { name: "lexical.typing.input_to_semantic_ms.index.near_end", p95Value: 310 },
+        { name: "lexical.typing.semantic_work_ms.index.near_end", p95Value: 12 },
+        { name: "lexical.typing.longtask_count.index.near_end", p95Value: 1 },
+        { name: "lexical.typing.post_idle_lag_p95_ms.index.near_end", p95Value: 1.3 },
+      ],
+    };
+
+    expect(performanceAnswerRows(report)).toEqual([
+      {
+        surface: "Lexical",
+        document: "index",
+        position: "near_end",
+        inserts: 100,
+        insertP95Ms: 2.4,
+        insertMaxMs: 8.2,
+        donePerCharP95Ms: 3.1,
+        doneTotalP95Ms: 310,
+        semanticWorkP95Ms: 12,
+        longTasksP95: 1,
+        postIdleLagP95Ms: 1.3,
+      },
+    ]);
+  });
+
+  it("builds a direct scroll answer table from stepped scroll metrics", () => {
+    const report = {
+      scenario: "scroll-step-rich",
+      metrics: [
+        { name: "scroll.step_count", meanValue: 17 },
+        { name: "scroll.mean_step_ms", p95Value: 6.9 },
+        { name: "scroll.max_step_ms", maxValue: 11.4 },
+        { name: "scroll.total_ms", p95Value: 117.6 },
+      ],
+    };
+
+    expect(performanceAnswerRows(report)).toEqual([
+      {
+        surface: "CM6 Rich",
+        scenario: "scroll-step-rich",
+        steps: 17,
+        meanStepP95Ms: 6.9,
+        maxStepMs: 11.4,
+        totalP95Ms: 117.6,
       },
     ]);
   });

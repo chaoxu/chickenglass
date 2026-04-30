@@ -1,24 +1,22 @@
-import { monoFont } from "../constants/editor-constants";
-
 /**
  * Code block styles: container layout (header, body, last line),
  * copy button, source mode, and monochrome syntax highlighting tokens.
+ *
+ * These line classes must not change `.cm-line` font metrics, padding, or
+ * border-box height. CM6 has one global height oracle; if a viewport full of
+ * code lines changes that oracle, wrapped prose far away gets re-estimated and
+ * scrolling jumps. Code-block chrome is therefore visual-only here.
  */
 export const codeThemeStyles = {
   /* Code block: unified container via per-line classes.
      Header = top border + radius, body = side borders, last = bottom border + radius. */
   ".cf-codeblock-header": {
     position: "relative",
-    fontFamily: monoFont,
-    fontSize: "0.85em",
     backgroundColor: "var(--cf-subtle)",
-    borderTop: "var(--cf-border-width) solid var(--cf-border)",
-    borderLeft: "var(--cf-border-width) solid var(--cf-border)",
-    borderRight: "var(--cf-border-width) solid var(--cf-border)",
+    boxShadow:
+      "inset 0 var(--cf-border-width) 0 var(--cf-border), inset var(--cf-border-width) 0 0 var(--cf-border), inset calc(-1 * var(--cf-border-width)) 0 0 var(--cf-border)",
     borderTopLeftRadius: "var(--cf-border-radius-lg)",
     borderTopRightRadius: "var(--cf-border-radius-lg)",
-    padding: "0 var(--cf-spacing-md)",
-    lineHeight: "inherit",
   },
   ".cf-codeblock-header-widget": {
     display: "inline",
@@ -27,30 +25,18 @@ export const codeThemeStyles = {
     fontWeight: "600",
     color: "var(--cf-muted)",
     textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    fontFamily: monoFont,
   },
   ".cf-codeblock-body": {
-    fontFamily: monoFont,
-    fontSize: "0.85em",
     backgroundColor: "var(--cf-subtle)",
-    borderLeft: "var(--cf-border-width) solid var(--cf-border)",
-    borderRight: "var(--cf-border-width) solid var(--cf-border)",
-    paddingLeft: "var(--cf-spacing-md)",
-    paddingRight: "var(--cf-spacing-md)",
+    boxShadow:
+      "inset var(--cf-border-width) 0 0 var(--cf-border), inset calc(-1 * var(--cf-border-width)) 0 0 var(--cf-border)",
   },
   ".cf-codeblock-last": {
-    fontFamily: monoFont,
-    fontSize: "0.85em",
     backgroundColor: "var(--cf-subtle)",
-    borderLeft: "var(--cf-border-width) solid var(--cf-border)",
-    borderRight: "var(--cf-border-width) solid var(--cf-border)",
-    borderBottom: "var(--cf-border-width) solid var(--cf-border)",
+    boxShadow:
+      "inset var(--cf-border-width) 0 0 var(--cf-border), inset calc(-1 * var(--cf-border-width)) 0 0 var(--cf-border), inset 0 calc(-1 * var(--cf-border-width)) 0 var(--cf-border)",
     borderBottomLeftRadius: "var(--cf-border-radius-lg)",
     borderBottomRightRadius: "var(--cf-border-radius-lg)",
-    paddingLeft: "var(--cf-spacing-md)",
-    paddingRight: "var(--cf-spacing-md)",
-    paddingBottom: "var(--cf-spacing-xs)",
   },
 
   /* Copy button in code block header */
@@ -88,29 +74,19 @@ export const codeThemeStyles = {
 
   /* Source mode: keep monospace font and subtle bg when cursor is inside */
   ".cf-codeblock-source": {
-    fontFamily: monoFont,
-    fontSize: "0.85em",
     backgroundColor: "var(--cf-subtle)",
   },
   ".cf-codeblock-source-open": {
-    borderTop: "var(--cf-border-width) solid var(--cf-border)",
-    borderLeft: "var(--cf-border-width) solid var(--cf-border)",
-    borderRight: "var(--cf-border-width) solid var(--cf-border)",
+    boxShadow:
+      "inset 0 var(--cf-border-width) 0 var(--cf-border), inset var(--cf-border-width) 0 0 var(--cf-border), inset calc(-1 * var(--cf-border-width)) 0 0 var(--cf-border)",
     borderTopLeftRadius: "var(--cf-border-radius-lg)",
     borderTopRightRadius: "var(--cf-border-radius-lg)",
-    lineHeight: "inherit",
-    paddingLeft: "var(--cf-spacing-md)",
-    paddingRight: "var(--cf-spacing-md)",
   },
   ".cf-codeblock-source-close": {
-    borderLeft: "var(--cf-border-width) solid var(--cf-border)",
-    borderRight: "var(--cf-border-width) solid var(--cf-border)",
-    borderBottom: "var(--cf-border-width) solid var(--cf-border)",
+    boxShadow:
+      "inset var(--cf-border-width) 0 0 var(--cf-border), inset calc(-1 * var(--cf-border-width)) 0 0 var(--cf-border), inset 0 calc(-1 * var(--cf-border-width)) 0 var(--cf-border)",
     borderBottomLeftRadius: "var(--cf-border-radius-lg)",
     borderBottomRightRadius: "var(--cf-border-radius-lg)",
-    lineHeight: "inherit",
-    paddingLeft: "var(--cf-spacing-md)",
-    paddingRight: "var(--cf-spacing-md)",
   },
 
   /* ── B&W syntax highlighting ─────────────────────────────────

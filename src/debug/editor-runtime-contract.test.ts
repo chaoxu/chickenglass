@@ -60,6 +60,7 @@ function snapshot(
       cmScroller: 1,
       cmContent: 1,
       cmLine: 1,
+      cmBlockWidget: 0,
       katex: 0,
       lexicalEditor: 0,
     },
@@ -79,6 +80,20 @@ function snapshot(
 describe("editor runtime contract", () => {
   it("accepts a healthy CM6 surface", () => {
     expect(evaluateEditorRuntimeContract(snapshot())).toEqual([]);
+  });
+
+  it("accepts a CM6 document that is fully represented by block widgets", () => {
+    expect(evaluateEditorRuntimeContract(snapshot({
+      counts: {
+        ...snapshot().counts,
+        cmLine: 0,
+        cmBlockWidget: 1,
+      },
+      elements: {
+        ...snapshot().elements,
+        firstLine: null,
+      },
+    }))).toEqual([]);
   });
 
   it("flags the Tauri CM6 layout drift that pushes content out of view", () => {
@@ -139,6 +154,7 @@ describe("editor runtime contract", () => {
         cmScroller: 0,
         cmContent: 0,
         cmLine: 0,
+        cmBlockWidget: 0,
         katex: 0,
         lexicalEditor: 1,
       },

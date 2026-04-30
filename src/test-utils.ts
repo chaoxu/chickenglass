@@ -242,6 +242,16 @@ export function hasLineClassAt(
   );
 }
 
+export function hasBlockReplacementClassAt(
+  specs: readonly DecorationSpecInfo[],
+  lineStart: number,
+  classSubstr: string,
+): boolean {
+  return specs.some(
+    (spec) => spec.from === lineStart && spec.to > lineStart && spec.block === true && spec.class?.includes(classSubstr),
+  );
+}
+
 /** Check whether a mark decoration with the given class covers at least part of [from, to). */
 export function hasMarkClassInRange(
   specs: readonly DecorationSpecInfo[],

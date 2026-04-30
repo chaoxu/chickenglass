@@ -36,6 +36,7 @@ import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { scrollStabilityExtension } from "./scroll-stability";
 import { shellSurfaceOverlayExtension } from "./shell-surface-overlay";
+import { stableHeightOracleExtension } from "./stable-height-oracle";
 import { coflatDarkTheme, coflatTheme } from "./theme";
 import { widgetStopIndexCleanupExtension } from "./widget-stop-index";
 
@@ -92,6 +93,7 @@ function editorChromeExtensions(isDark: boolean): Extension[] {
     editorKeybindings,
     widgetStopIndexCleanupExtension,
     scrollStabilityExtension,
+    stableHeightOracleExtension,
     richMouseSelectionStyle,
     blockTypePickerExtension,
     debugLaneCompartment.of(defaultDebugLaneExtensions),

@@ -55,6 +55,13 @@ describe("plain display math with \\[\\]", () => {
     expect(nodes[0].from).toBe(0);
     expect(nodes[0].to).toBe(text.indexOf("\\]") + 2);
   });
+
+  it("supports Pandoc-style opener-line content in multi-line \\[\\] display math", () => {
+    const text = "\\[a + b\n= c\n\\]";
+    const nodes = findNodes(text, "DisplayMath");
+    expect(nodes).toHaveLength(1);
+    expect(nodeText(text, nodes[0])).toBe(text);
+  });
 });
 
 describe("plain display math with $$", () => {
@@ -71,6 +78,13 @@ describe("plain display math with $$", () => {
     expect(nodes).toHaveLength(1);
     expect(nodes[0].from).toBe(0);
     expect(nodes[0].to).toBe(text.lastIndexOf("$$") + 2);
+  });
+
+  it("supports Pandoc-style opener-line content in multi-line $$ display math", () => {
+    const text = "$$a + b\n= c\n$$";
+    const nodes = findNodes(text, "DisplayMath");
+    expect(nodes).toHaveLength(1);
+    expect(nodeText(text, nodes[0])).toBe(text);
   });
 
   it("does not parse unclosed block math at EOF as DisplayMath", () => {
@@ -109,6 +123,36 @@ describe("$$ is not parsed as inline math", () => {
     expect(inline).toHaveLength(0);
     const display = findNodes("$$x$$", "DisplayMath");
     expect(display).toHaveLength(1);
+  });
+});
+
+describe("live delimiter editing resilience", () => {
+  it("does not reinterpret an edited opening delimiter's old close as a new opener", () => {
+    const text = [
+      "Standard:",
+      "",
+      "$$X",
+      "x",
+      "$$",
+      "",
+      "Backslash:",
+      "",
+      "\\[",
+      "y",
+      "\\]",
+      "",
+      "Display math without blank line before:",
+      "$$",
+      "z",
+      "$$",
+    ].join("\n");
+
+    const display = findNodes(text, "DisplayMath");
+    expect(display.map((node) => nodeText(text, node))).toEqual([
+      "$$X\nx\n$$",
+      "\\[\ny\n\\]",
+      "$$\nz\n$$",
+    ]);
   });
 });
 

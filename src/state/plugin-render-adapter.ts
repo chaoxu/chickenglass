@@ -40,7 +40,7 @@ export interface PluginRenderAdapter {
   ): PluginRenderWidget;
 }
 
-const decorationHidden = Decoration.mark({ class: "cf-hidden" });
+const decorationHidden = Decoration.replace({});
 
 export function addPluginMarkerReplacement(
   markerFrom: number,

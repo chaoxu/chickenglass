@@ -146,10 +146,20 @@ function displayMathBodyRange(
 ): { readonly bodyFrom: number; readonly bodyTo: number } {
   const startLine = lines[startLineIndex] ?? "";
   const startOffset = lineStartOffset(lineOffsets, startLineIndex);
+  const multilineBodyFrom = (
+    delimiterOffset: number,
+    delimiterLength: number,
+  ): number => {
+    const contentOffset = delimiterOffset + delimiterLength;
+    const openerLineContent = startLine.slice(contentOffset);
+    return openerLineContent.trim().length > 0
+      ? startOffset + contentOffset
+      : offsetAfterLine(lines, lineOffsets, startLineIndex);
+  };
 
-  if (startLineIndex === endLineIndex) {
-    const bracketOpen = startLine.indexOf("\\[");
-    const bracketClose = bracketOpen >= 0
+  const bracketOpen = startLine.indexOf("\\[");
+  if (bracketOpen >= 0) {
+    const bracketClose = startLineIndex === endLineIndex
       ? startLine.indexOf("\\]", bracketOpen + 2)
       : -1;
     if (bracketOpen >= 0 && bracketClose >= 0) {
@@ -158,9 +168,17 @@ function displayMathBodyRange(
         bodyTo: startOffset + bracketClose,
       };
     }
+    const bodyFrom = multilineBodyFrom(bracketOpen, 2);
+    const closingLineStart = lineStartOffset(lineOffsets, endLineIndex);
+    return {
+      bodyFrom,
+      bodyTo: Math.max(bodyFrom, closingLineStart - 1),
+    };
+  }
 
-    const dollarOpen = startLine.indexOf("$$");
-    const dollarClose = dollarOpen >= 0
+  const dollarOpen = startLine.indexOf("$$");
+  if (dollarOpen >= 0) {
+    const dollarClose = startLineIndex === endLineIndex
       ? startLine.indexOf("$$", dollarOpen + 2)
       : -1;
     if (dollarOpen >= 0 && dollarClose >= 0) {
@@ -169,6 +187,12 @@ function displayMathBodyRange(
         bodyTo: startOffset + dollarClose,
       };
     }
+    const bodyFrom = multilineBodyFrom(dollarOpen, 2);
+    const closingLineStart = lineStartOffset(lineOffsets, endLineIndex);
+    return {
+      bodyFrom,
+      bodyTo: Math.max(bodyFrom, closingLineStart - 1),
+    };
   }
 
   return multilineInteriorRange(lines, lineOffsets, startLineIndex, endLineIndex);

@@ -54,6 +54,7 @@ export const CSS = {
   imageWrapper: "cf-image-wrapper",
   image: "cf-image",
   imageLoading: "cf-image-loading",
+  imagePlaceholder: "cf-image-placeholder",
   imageError: "cf-image-error",
 
   /** Heading fold toggle. */

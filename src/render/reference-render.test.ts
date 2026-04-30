@@ -21,6 +21,7 @@ import {
   pluginRegistryField,
 } from "../state/plugin-registry";
 import { createTestView, makeBibStore, makeBlockPlugin } from "../test-utils";
+import { focusEffect } from "./focus-state";
 import {
   collectReferenceRanges,
   _computeReferenceDirtyRangesForTest as computeReferenceDirtyRanges,
@@ -73,6 +74,9 @@ function createView(doc: string, cursorPos?: number, focus = true): EditorView {
     ],
   });
   view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
+  if (focus) {
+    view.dispatch({ effects: focusEffect.of(true) });
+  }
   return view;
 }
 
@@ -94,6 +98,9 @@ function createPluginView(doc: string, cursorPos?: number, focus = true): Editor
     ],
   });
   view.dispatch({ effects: bibDataEffect.of({ store, cslProcessor: new CslProcessor([karger, stein]) }) });
+  if (focus) {
+    view.dispatch({ effects: focusEffect.of(true) });
+  }
   return view;
 }
 

@@ -16,6 +16,7 @@ import {
   createCursorSensitiveViewPlugin,
   cursorInRange,
   createSimpleViewPlugin,
+  focusEffect,
 } from "./render-utils";
 import {
   createEditorState,
@@ -29,10 +30,12 @@ import { markdownExtensions } from "../parser";
 
 /** Create an EditorView with the markdown render plugin at the given cursor position. */
 function createView(doc: string, cursorPos?: number): EditorView {
-  return createTestView(doc, {
+  const view = createTestView(doc, {
     cursorPos,
     extensions: [markdown({ extensions: markdownExtensions }), markdownRenderPlugin],
   });
+  view.dispatch({ effects: focusEffect.of(true) });
+  return view;
 }
 
 function getAllDecorationSpecs(view: EditorView) {
@@ -83,6 +86,26 @@ describe("cursorInRange", () => {
     it("returns false when cursor is well past range end", () => {
       view = createView("hello world", 10);
       expect(cursorInRange(view, 0, 3)).toBe(false);
+    });
+  });
+});
+
+describe("highlight rendering", () => {
+  let view: EditorView;
+
+  afterEach(() => {
+    view?.destroy();
+  });
+
+  it("styles only highlight content, not hidden == markers", () => {
+    const doc = "a ==mark== b";
+    view = createView(doc, doc.length);
+    const specs = getAllDecorationSpecs(view);
+    const highlight = specs.find((spec) => spec.class === CSS.highlight);
+
+    expect(highlight).toMatchObject({
+      from: doc.indexOf("mark"),
+      to: doc.indexOf("mark") + "mark".length,
     });
   });
 });
@@ -769,16 +792,16 @@ describe("markdownRenderPlugin doc-change invalidation (#823)", () => {
     view?.destroy();
   });
 
-  it("removes stale hidden markers when emphasis syntax is destroyed", () => {
+  it("removes stale hidden marker replacements when emphasis syntax is destroyed", () => {
     view = createView("**bold** tail", 12);
     const before = getAllDecorationSpecs(view);
-    expect(hasMarkClassInRange(before, 0, 2, "cf-hidden")).toBe(true);
+    expect(before.some((spec) => spec.from === 0 && spec.to === 2)).toBe(true);
 
     view.dispatch({ changes: { from: 6, to: 8, insert: "" } });
 
     const after = getAllDecorationSpecs(view);
     expect(view.state.doc.toString()).toBe("**bold tail");
-    expect(hasMarkClassInRange(after, 0, 2, "cf-hidden")).toBe(false);
+    expect(after.some((spec) => spec.from === 0 && spec.to === 2)).toBe(false);
   });
 
   it("replaces stale heading line decorations when the heading level changes", () => {

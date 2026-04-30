@@ -73,7 +73,8 @@ describe("plugin render adapter helpers", () => {
     pushPluginHiddenDecoration(items, 5, 9);
 
     expect(items[0]).toMatchObject({ from: 5, to: 9 });
-    expect(firstSpec(items).class).toBe("cf-hidden");
+    expect(firstSpec(items).class).toBeUndefined();
+    expect(firstSpec(items).widget).toBeUndefined();
   });
 
   it("updates widget source ranges before publishing widget decorations", () => {

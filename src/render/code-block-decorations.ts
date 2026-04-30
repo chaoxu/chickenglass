@@ -247,7 +247,7 @@ function decorateCodeBlock(
   // The closing fence is protected from accidental deletion by a
   // transaction filter and skipped by atomicRanges (see below).
   if (!block.singleLine) {
-    hideMultiLineClosingFence(block.closeFenceFrom, block.closeFenceTo, items);
+    hideMultiLineClosingFence(state, block.closeFenceFrom, block.closeFenceTo, items);
   }
 }
 

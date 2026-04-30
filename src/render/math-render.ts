@@ -22,12 +22,6 @@ import { mathMacrosField } from "../state/math-macros";
 import { createMathWidgetMetadataPlugin } from "./math-metadata";
 import { mathPrewarmPlugin } from "./math-prewarm";
 import {
-  getInlineMathViewportRanges,
-  inlineMathViewportRangesField,
-  inlineMathViewportTracker,
-  setInlineMathViewportRangesEffect,
-} from "./math-inline-viewport";
-import {
   buildEquationNumbersByFrom,
   getDisplayEquationNumber,
 } from "./math-source";
@@ -59,7 +53,6 @@ import {
 import { createChangeChecker } from "../state/change-detection";
 import { programmaticDocumentChangeAnnotation } from "../state/programmatic-document-change";
 import { planSemanticSensitiveUpdate } from "./view-plugin-factories";
-import { rangeIntersectsRanges } from "./viewport-diff";
 import { measureSync } from "../lib/perf";
 
 export { renderKatexToHtml } from "./inline-shared";
@@ -128,7 +121,6 @@ function buildMathItems(
   regions: readonly MathSemantics[],
   shouldSkip: (from: number, to: number) => boolean,
 ): Range<Decoration>[] {
-  const inlineViewportRanges = getInlineMathViewportRanges(state);
   const macros = state.field(mathMacrosField);
   const analysis = state.field(documentAnalysisField);
   const equationNumbersByFrom = buildEquationNumbersByFrom(analysis.equationById);
@@ -195,10 +187,7 @@ function buildMathItems(
         getDisplayEquationNumber(region, equationNumbersByFrom),
       );
       pushBlockWidgetDecoration(items, widget, region.from, region.to);
-    } else if (
-      !disableInlineMathWidgets
-      && rangeIntersectsRanges(region.from, region.to, inlineViewportRanges)
-    ) {
+    } else if (!disableInlineMathWidgets) {
       const widget = new MathWidget(
         region.latex,
         state.sliceDoc(region.from, region.to),
@@ -443,47 +432,6 @@ function docChangeCanShiftDecorationSet(
 }
 
 
-function sameViewportRanges(
-  before: readonly { from: number; to: number }[],
-  after: readonly { from: number; to: number }[],
-): boolean {
-  if (before === after) return true;
-  if (before.length !== after.length) return false;
-  for (let index = 0; index < before.length; index += 1) {
-    if (before[index].from !== after[index].from || before[index].to !== after[index].to) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function collectInlineViewportDirtyRanges(
-  regions: readonly MathSemantics[],
-  beforeRanges: readonly { from: number; to: number }[],
-  afterRanges: readonly { from: number; to: number }[],
-): DirtyRange[] {
-  const dirtyRanges: DirtyRange[] = [];
-  const seen = new Set<MathSemantics>();
-  const visit = (region: MathSemantics) => {
-    if (region.isDisplay || seen.has(region)) return;
-    seen.add(region);
-    const wasVisible = rangeIntersectsRanges(region.from, region.to, beforeRanges);
-    const isVisible = rangeIntersectsRanges(region.from, region.to, afterRanges);
-    if (wasVisible !== isVisible) {
-      dirtyRanges.push({ from: region.from, to: region.to });
-    }
-  };
-
-  for (const range of beforeRanges) {
-    forEachMathRegionIntersectingRange(regions, range, visit);
-  }
-  for (const range of afterRanges) {
-    forEachMathRegionIntersectingRange(regions, range, visit);
-  }
-
-  return mergeDirtyRanges(dirtyRanges);
-}
-
 function collectActiveMathDirtyRanges(
   tr: Transaction,
   activeChanged: boolean,
@@ -569,11 +517,6 @@ const mathDecorationField = createDecorationStateField({
       tr.state.field(editorFocusField, false) ?? false,
     );
     const activeMathChanged = inlineRevealTargetChanged(beforeActive, afterActive);
-    const beforeInlineViewport = getInlineMathViewportRanges(tr.startState);
-    const afterInlineViewport = getInlineMathViewportRanges(tr.state);
-    const inlineViewportChanged =
-      tr.effects.some((effect) => effect.is(setInlineMathViewportRangesEffect))
-      && !sameViewportRanges(beforeInlineViewport, afterInlineViewport);
     const mathPositionsMayShift = docChangeCanShiftMathDecorations(tr, regionsBefore);
     const mathChangeSummary = tr.docChanged
       ? summarizeMathChanges(tr, regionsBefore, regionsAfter)
@@ -593,7 +536,7 @@ const mathDecorationField = createDecorationStateField({
         if (docChangeOnlyShiftsMath && !mathPositionsMayShift) return false;
         return regionsBefore !== regionsAfter || mathPositionsMayShift;
       },
-      contextChanged: () => inlineViewportChanged || activeMathChanged,
+      contextChanged: () => activeMathChanged,
       contextUpdateMode: "dirty-ranges",
       // Edits after every math range can keep the DecorationSet by identity.
       // The "keep" branch below still maps when the actual decoration set
@@ -629,17 +572,7 @@ const mathDecorationField = createDecorationStateField({
         );
 
         if (!context.docChanged) {
-          const viewportDirtyRanges = inlineViewportChanged
-            ? collectInlineViewportDirtyRanges(
-              regionsAfter,
-              beforeInlineViewport,
-              afterInlineViewport,
-            )
-            : [];
-          return mergeDirtyRanges([
-            ...viewportDirtyRanges,
-            ...activeDirtyRanges,
-          ]);
+          return activeDirtyRanges;
         }
 
         if (!context.docChanged || !context.semanticChanged) {
@@ -708,10 +641,8 @@ export const mathRenderPlugin: Extension = [
   editorFocusField,
   focusTracker,
   mathMacrosField,
-  inlineMathViewportRangesField,
   mathDecorationField,
   mathMouseSelectionStyle,
   mathWidgetMetadataPlugin,
   mathPrewarmPlugin,
-  inlineMathViewportTracker,
 ];

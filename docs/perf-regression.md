@@ -32,6 +32,13 @@ families. Use that table first when deciding where the next optimization should
 start. Compare runs also attach the same bucket/owner hints to regressed or
 missing measurements.
 
+Typing and scroll captures also print a "Performance answer table" before the
+actionable summary. This is the short table to use when someone asks "how fast
+is typing or scrolling right now?" For `typing-rich-burst`, the key columns are
+`dispatchP95Ms` for normal synchronous per-character dispatch cost and
+`donePerCharP95Ms` for the end-to-idle burst cost normalized per character. The
+same rows are saved as `answerTable` in the JSON report when `--output` is set.
+
 For heavy private fixtures, use the supported heavy-doc mode instead of ad hoc timeout tweaks:
 
 ```bash

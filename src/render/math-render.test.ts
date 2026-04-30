@@ -19,7 +19,6 @@ import {
   createStructureEditTargetAt,
   setStructureEditTargetEffect,
 } from "../state/cm-structure-edit";
-import { setInlineMathViewportRangesEffect } from "./math-inline-viewport";
 import { clearFrontendPerf, getFrontendPerfSnapshot } from "../lib/perf";
 
 /** Count only widget (replace) decorations, ignoring mark decorations like cf-math-source. */
@@ -904,7 +903,7 @@ describe("math decoration invalidation", () => {
     });
   });
 
-  it("renders inline math in the initial bounded viewport while keeping display math rendered", () => {
+  it("renders inline math for the full document while keeping display math rendered", () => {
     const inlineLines = Array.from(
       { length: 20 },
       (_, index) => `line ${index + 1} $x_${index + 1}$`,
@@ -919,7 +918,7 @@ describe("math decoration invalidation", () => {
     expect(widgetSpecs.filter((spec) => spec.block !== true)).toHaveLength(20);
   });
 
-  it("rebuilds when the inline math viewport band changes", () => {
+  it("keeps inline math layout decorations independent of viewport-band effects", () => {
     const inlineLines = Array.from(
       { length: 20 },
       (_, index) => `line ${index + 1} $x_${index + 1}$`,
@@ -929,17 +928,13 @@ describe("math decoration invalidation", () => {
     const before = getDecorationSpecs(state.field(mathDecorationField))
       .filter((spec) => spec.widgetClass === "MathWidget");
 
-    const from = state.doc.line(15).from;
-    const to = state.doc.line(20).to;
-    const afterState = state.update({
-      effects: setInlineMathViewportRangesEffect.of([{ from, to }]),
-    }).state;
+    const afterState = state.update({ selection: { anchor: state.doc.length } }).state;
     const after = getDecorationSpecs(afterState.field(mathDecorationField))
       .filter((spec) => spec.widgetClass === "MathWidget");
 
-    expect(afterState.field(mathDecorationField)).not.toBe(state.field(mathDecorationField));
+    expect(afterState.field(mathDecorationField)).toBe(state.field(mathDecorationField));
     expect(before).toHaveLength(20);
-    expect(after).toHaveLength(6);
+    expect(after).toHaveLength(20);
   });
 });
 

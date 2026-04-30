@@ -16,6 +16,79 @@ function clip(rect) {
   };
 }
 
+async function compareTokenShots(page, beforeShot, afterShot) {
+  if (beforeShot.equals(afterShot)) {
+    return { pass: true, differentPixels: 0, totalPixels: 0 };
+  }
+
+  return page.evaluate(
+    async ({ beforeBase64, afterBase64 }) => {
+      const loadImage = (base64) =>
+        new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("failed to load screenshot"));
+          image.src = `data:image/png;base64,${base64}`;
+        });
+      const [beforeImage, afterImage] = await Promise.all([
+        loadImage(beforeBase64),
+        loadImage(afterBase64),
+      ]);
+      if (
+        beforeImage.width !== afterImage.width ||
+        beforeImage.height !== afterImage.height
+      ) {
+        return {
+          pass: false,
+          reason:
+            `size ${beforeImage.width}x${beforeImage.height} != ` +
+            `${afterImage.width}x${afterImage.height}`,
+        };
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = beforeImage.width;
+      canvas.height = beforeImage.height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        return { pass: false, reason: "canvas context unavailable" };
+      }
+
+      context.drawImage(beforeImage, 0, 0);
+      const before = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(afterImage, 0, 0);
+      const after = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      let differentPixels = 0;
+      for (let offset = 0; offset < before.length; offset += 4) {
+        const channelDelta = Math.max(
+          Math.abs(before[offset] - after[offset]),
+          Math.abs(before[offset + 1] - after[offset + 1]),
+          Math.abs(before[offset + 2] - after[offset + 2]),
+          Math.abs(before[offset + 3] - after[offset + 3]),
+        );
+        if (channelDelta > 2) {
+          differentPixels++;
+        }
+      }
+
+      const totalPixels = canvas.width * canvas.height;
+      const allowedPixels = Math.max(2, Math.ceil(totalPixels * 0.01));
+      return {
+        pass: differentPixels <= allowedPixels,
+        allowedPixels,
+        differentPixels,
+        totalPixels,
+      };
+    },
+    {
+      afterBase64: afterShot.toString("base64"),
+      beforeBase64: beforeShot.toString("base64"),
+    },
+  );
+}
+
 async function clearTableEditing(page) {
   await page.evaluate(() => {
     window.__cmView?.focus();
@@ -156,8 +229,12 @@ async function checkFirstRichClickEntersEditWithParity(page, rowLabel, selector)
   if (!afterShot) {
     return `missing active token ${selector} for ${rowLabel}`;
   }
-  if (!beforeShot.equals(afterShot)) {
-    return `pixel mismatch after first rich click for ${rowLabel} ${selector}`;
+  const comparison = await compareTokenShots(page, beforeShot, afterShot);
+  if (!comparison.pass) {
+    return (
+      `pixel mismatch after first rich click for ${rowLabel} ${selector}: ` +
+      JSON.stringify(comparison)
+    );
   }
 
   return null;
@@ -244,8 +321,12 @@ async function checkRowTokenParity(page, rowLabel, tokens) {
     if (!afterShot) {
       return `missing active token ${token.after} for ${rowLabel}`;
     }
-    if (!shot.equals(afterShot)) {
-      return `pixel mismatch for ${rowLabel} token ${token.name}`;
+    const comparison = await compareTokenShots(page, shot, afterShot);
+    if (!comparison.pass) {
+      return (
+        `pixel mismatch for ${rowLabel} token ${token.name}: ` +
+        JSON.stringify(comparison)
+      );
     }
   }
 

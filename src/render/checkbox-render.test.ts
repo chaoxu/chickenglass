@@ -1,10 +1,8 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { forceParsing } from "@codemirror/language";
 import {
-  Decoration,
   type DecorationSet,
   EditorView,
-  type ViewPlugin,
 } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
@@ -15,6 +13,7 @@ import {
 import {
   CheckboxWidget,
   checkboxRenderPlugin,
+  _checkboxDecorationFieldForTest as checkboxDecorationField,
 } from "./checkbox-render";
 
 let view: EditorView | undefined;
@@ -24,14 +23,10 @@ interface CheckboxPluginProbe {
 }
 
 function getCheckboxPlugin(): CheckboxPluginProbe {
-  const plugin = view?.plugin(
-    checkboxRenderPlugin as unknown as ViewPlugin<CheckboxPluginProbe>,
-  );
-  expect(plugin).toBeTruthy();
-  if (!plugin) {
-    throw new Error("expected checkbox render plugin instance");
+  if (!view) {
+    throw new Error("expected checkbox render view");
   }
-  return plugin;
+  return { decorations: view.state.field(checkboxDecorationField) };
 }
 
 function createCheckboxView(doc: string, cursorPos: number): CheckboxPluginProbe {
@@ -149,25 +144,40 @@ describe("checkboxRenderPlugin stable task markers", () => {
       selection: { anchor: prosePos + 2 },
     });
 
-    const after = getDecorationSpecs(plugin.decorations);
+    const after = getDecorationSpecs(getCheckboxPlugin().decorations);
     expect(after).toHaveLength(1);
     expect(after[0]?.widgetClass).toBe("CheckboxWidget");
     expect(after[0]?.from).toBe((before[0]?.from ?? 0) + 2);
     expect(after[0]?.to).toBe((before[0]?.to ?? 0) + 2);
   });
 
-  it("recovers task markers when the parser catches up during unrelated prose edits", () => {
+  it("toggles the mapped task marker after unrelated prose edits", () => {
     const doc = "plain text\n\n- [ ] task";
     const prosePos = doc.indexOf("plain") + 2;
-    const plugin = createCheckboxView(doc, prosePos);
-    plugin.decorations = Decoration.none;
+    createCheckboxView(doc, prosePos);
 
     view?.dispatch({
       changes: { from: prosePos, to: prosePos, insert: "ZZ" },
       selection: { anchor: prosePos + 2 },
     });
 
-    const after = getDecorationSpecs(plugin.decorations);
+    const input = view?.dom.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    input?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(view?.state.doc.toString()).toBe("plZZain text\n\n- [x] task");
+  });
+
+  it("recovers task markers when the parser catches up during unrelated prose edits", () => {
+    const doc = "plain text\n\n- [ ] task";
+    const prosePos = doc.indexOf("plain") + 2;
+    createCheckboxView(doc, prosePos);
+
+    view?.dispatch({
+      changes: { from: prosePos, to: prosePos, insert: "ZZ" },
+      selection: { anchor: prosePos + 2 },
+    });
+
+    const after = getDecorationSpecs(getCheckboxPlugin().decorations);
     expect(after).toHaveLength(1);
     expect(after[0]?.widgetClass).toBe("CheckboxWidget");
   });
@@ -180,24 +190,25 @@ describe("checkboxRenderPlugin stable task markers", () => {
 
     view?.dispatch({ selection: { anchor: prosePos + 2 } });
 
-    expect(plugin.decorations).toBe(before);
-    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
+    const after = getCheckboxPlugin().decorations;
+    expect(after).toBe(before);
+    expect(getDecorationSpecs(after)).toHaveLength(1);
   });
 
   it("keeps the checkbox widget rendered when the cursor enters the marker", () => {
-    const plugin = createCheckboxView("- [ ] task", 3);
+    createCheckboxView("- [ ] task", 3);
     view?.dispatch({ selection: { anchor: 6 } });
 
-    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(1);
+    expect(getDecorationSpecs(getCheckboxPlugin().decorations)).toHaveLength(1);
   });
 
   it("keeps one widget per task marker when the cursor moves between markers", () => {
     const doc = "- [ ] first\n- [x] second";
     const secondMarkerPos = doc.lastIndexOf("[") + 1;
-    const plugin = createCheckboxView(doc, 3);
+    createCheckboxView(doc, 3);
 
     view?.dispatch({ selection: { anchor: secondMarkerPos } });
 
-    expect(getDecorationSpecs(plugin.decorations)).toHaveLength(2);
+    expect(getDecorationSpecs(getCheckboxPlugin().decorations)).toHaveLength(2);
   });
 });

@@ -30,6 +30,7 @@ import {
   applyStateEffects,
   createEditorState,
   getDecorationSpecs,
+  hasBlockReplacementClassAt,
   hasLineClassAt,
 } from "../test-utils";
 import { _updateCodeBlockStructureCacheForTest as updateCodeBlockStructureCache } from "../state/code-block-structure";
@@ -131,7 +132,7 @@ describe("edge cases", () => {
     // Opening fence does not enter source mode.
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence is always hidden (#429) — never shows source.
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("handles empty code blocks (no body lines)", () => {
@@ -142,7 +143,7 @@ describe("edge cases", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence is always hidden (#429) — never shows source
-    expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(2).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("handles code block at end of document (no trailing newline)", () => {
@@ -156,7 +157,7 @@ describe("edge cases", () => {
 
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
     // Closing fence is always hidden (#429)
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 });
 
@@ -266,7 +267,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
     // Closing fence always hidden (#429)
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
 
     const widgets = specs.filter((s) => s.widgetClass === "CodeBlockLanguageWidget");
     expect(widgets.length).toBe(2);
@@ -279,7 +280,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("does not rebuild code-block decorations for prose-only cursor movement (#1176)", () => {
@@ -418,7 +419,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.codeblockLast)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("closing fence stays hidden even when selection is on it", () => {
@@ -431,7 +432,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence always hidden (#429)
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockClosingFence)).toBe(true);
   });
 
   it("other code blocks stay rendered when one block fence is active", () => {
@@ -441,7 +442,7 @@ describe("codeBlockDecorationField", () => {
     expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.codeblockHeader)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.codeblockSourceOpen)).toBe(false);
     // Closing fence always hidden (#429)
-    expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
   });
 });
 

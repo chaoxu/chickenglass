@@ -29,6 +29,7 @@ import { collectFencedDivs, docChangeTouchesFencedDivStructure } from "../fenced
 import { mathMacrosField } from "../state/math-macros";
 import {
   addSingleLineClosingFence,
+  addCollapsedStructureLine,
   buildFencedBlockDecorations,
   createFencedBlockDecorationField,
   hideMultiLineClosingFence,
@@ -149,23 +150,35 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // the last body line instead of the opening fence. The opening fence gets
     // collapsed (no label) and the title text becomes the caption, displayed
     // on the opening line without the "Figure 1." prefix.
-    const showHeader = openerSourceActive || (
-      plugin.displayHeader !== false &&
-      !captionBelow &&
-      !inlineHeader
-    );
     const headerClass = joinClasses(
       spec.className,
-      showHeader ? CSS.blockHeader : CSS.blockHeaderCollapsed,
+      CSS.blockHeader,
       activeShell && CSS.activeShell,
       activeShell && openerLineVisible && CSS.activeShellTop,
       openerIsBottom && openerLineVisible && CSS.activeShellBottom,
     );
-    builder.addLine(div.from, headerClass);
+    if (openerLineVisible) {
+      builder.addLine(div.from, headerClass);
+    } else {
+      addCollapsedStructureLine(
+        state,
+        openLine,
+        joinClasses(
+          spec.className,
+          CSS.blockHeaderCollapsed,
+          activeShell && CSS.activeShell,
+          activeShell && CSS.activeShellTop,
+          openerIsBottom && CSS.activeShellBottom,
+        ),
+        items,
+      );
+    }
     // Always keep the widget replacement active — structure editing uses
     // explicit mapped state, not raw-text editing of the fence syntax.
     // Toggling the replacement on/off caused a 1px geometry delta (#1015).
-    if (captionBelow || inlineHeader) {
+    if (!openerLineVisible) {
+      // The whole opener line is represented by the block replacement above.
+    } else if (captionBelow || inlineHeader) {
       addHeaderWidgetDecoration(
         pluginRenderAdapter,
         div,
@@ -189,17 +202,18 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     // Uses Decoration.widget (not Decoration.mark with CSS ::before/::after) because
     // marks get split around Decoration.replace (math widgets), causing ") $x^2$".
     // For below-caption blocks, title text is the caption — no parens needed.
-    if (!openerSourceActive && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
+    if (openerLineVisible && !openerSourceActive && !captionBelow && !inlineHeader && div.titleFrom !== undefined && div.titleTo !== undefined) {
       addInlineTitleParenDecorations(div.titleFrom, div.titleTo, items);
     }
 
-    if (!openerSourceActive && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
+    if (openerLineVisible && !openerSourceActive && (captionBelow || inlineHeader) && div.titleFrom !== undefined && div.titleTo !== undefined) {
       builder.addHidden(div.titleFrom, div.titleTo);
     }
 
     // Attribute-only title (not used for below-caption blocks — their title is the caption).
     if (
       !openerSourceActive &&
+      openerLineVisible &&
       !captionBelow &&
       div.titleFrom === undefined &&
       div.titleTo === undefined &&
@@ -223,7 +237,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
     if (div.singleLine) {
       addSingleLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
     } else {
-      hideMultiLineClosingFence(div.closeFenceFrom, div.closeFenceTo, items);
+      hideMultiLineClosingFence(state, div.closeFenceFrom, div.closeFenceTo, items);
       getCm6RenderDecorations(plugin)?.addBodyDecorations?.({
         adapter: pluginRenderAdapter,
         state,

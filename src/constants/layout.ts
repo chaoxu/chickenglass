@@ -44,6 +44,15 @@ export const SIDENOTE_WIDTH = "240px";
 export const IMAGE_MAX_HEIGHT = "400px";
 
 /**
+ * Reserved height for block image/PDF preview widgets before their real
+ * dimensions are known. This value must match the placeholder min-height used
+ * by the editor theme so CodeMirror's virtual height map does not oscillate
+ * while offscreen media moves between loading, ready, and error states.
+ */
+export const IMAGE_PREVIEW_RESERVED_HEIGHT_PX = 100;
+export const IMAGE_PREVIEW_RESERVED_HEIGHT = `${IMAGE_PREVIEW_RESERVED_HEIGHT_PX}px`;
+
+/**
  * Vertical padding (top and bottom) for the editor content area.
  * 24 px gives the first and last lines breathing room without wasting
  * significant vertical space on smaller screens.

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { CSS } from "../constants/css-classes";
+import { IMAGE_PREVIEW_RESERVED_HEIGHT_PX } from "../constants/layout";
 import {
   ImagePreviewWidget,
   _imageDecorationFieldForTest,
@@ -129,6 +130,59 @@ describe("ImagePreviewWidget (image state)", () => {
       expect(ready.updateDOM(el)).toBe(true);
       expect(el.className).toBe(CSS.imageWrapper);
       expect(el.querySelector("img")?.src).toContain("data:fig.png");
+    });
+  });
+
+  describe("block height contract", () => {
+    it("uses one stable fallback estimate for all async block media states", () => {
+      const states = [
+        imageState("data:image/png;base64,abc"),
+        { kind: "pdf-canvas" as const, path: "figure.pdf" },
+        { kind: "loading" as const, isPdf: true },
+        { kind: "error" as const, fallbackSrc: "figure.pdf" },
+      ];
+
+      for (const state of states) {
+        const widget = new ImagePreviewWidget("diagram", "figure.pdf", state, true);
+        expect(widget.estimatedHeight).toBe(IMAGE_PREVIEW_RESERVED_HEIGHT_PX);
+      }
+    });
+
+    it("does not reserve fallback height for ready inline image widgets", () => {
+      const widget = new ImagePreviewWidget("diagram", "figure.png", imageState("figure.png"));
+      expect(widget.estimatedHeight).toBe(-1);
+    });
+
+    it("renders block errors as a reserved placeholder instead of a compact inline error", () => {
+      const widget = new ImagePreviewWidget(
+        "diagram",
+        "figure.pdf",
+        { kind: "error", fallbackSrc: "figure.pdf" },
+        true,
+      );
+
+      const el = widget.createDOM();
+
+      expect(el.tagName).toBe("DIV");
+      expect(el.className).toBe(`${CSS.imageWrapper} ${CSS.imagePlaceholder}`);
+      expect(el.textContent).toBe("[Image: diagram]");
+      expect(el.querySelector("img")).toBeNull();
+    });
+
+    it("keeps the reserved block placeholder when a rendered image later fails", () => {
+      const widget = new ImagePreviewWidget(
+        "broken",
+        "missing.png",
+        imageState("missing.png"),
+        true,
+      );
+      const el = widget.createDOM();
+      const img = el.querySelector("img");
+
+      img?.dispatchEvent(new Event("error"));
+
+      expect(el.className).toBe(`${CSS.imageWrapper} ${CSS.imagePlaceholder}`);
+      expect(el.textContent).toBe("[Image: broken]");
     });
   });
 });

@@ -1,11 +1,11 @@
 import {
   Decoration,
-  type EditorView,
+  EditorView,
   type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { type EditorState, type Range, type Extension } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { type EditorState, type Range, type Extension, type Transaction } from "@codemirror/state";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type { SyntaxNodeRef, Tree } from "@lezer/common";
 import {
   normalizeDirtyRange,
@@ -14,10 +14,11 @@ import {
 } from "./viewport-diff";
 import {
   addMarkerReplacement,
+  buildDecorations,
   decorationHidden,
 } from "./decoration-core";
 import { cursorInRange } from "./node-collection";
-import { createCursorSensitiveViewPlugin } from "./view-plugin-factories";
+import { createLifecycleDecorationStateField } from "./decoration-field";
 import { findTrailingHeadingAttributes } from "../semantics/heading-ancestry";
 import { containsRange } from "../lib/range-helpers";
 import {
@@ -32,6 +33,10 @@ import {
   DOCUMENT_SURFACE_CLASS,
   documentSurfaceClassNames,
 } from "../document-surface-classes";
+import {
+  editorFocusField,
+  focusTracker,
+} from "./focus-state";
 
 /** Heading mark decorations (font-weight, text styling on spans). */
 const headingMarkByLevel: Record<string, Decoration> = {
@@ -139,12 +144,31 @@ class BulletListMarkerWidget extends WidgetType {
 }
 
 const bulletListMarkerWidget = new BulletListMarkerWidget();
+const MARKDOWN_LAYOUT_PARSE_TIMEOUT_MS = 1000;
+
+function markdownLayoutTree(state: EditorState): Tree {
+  return ensureSyntaxTree(
+    state,
+    state.doc.length,
+    MARKDOWN_LAYOUT_PARSE_TIMEOUT_MS,
+  ) ?? syntaxTree(state);
+}
+
+function cursorInMarkdownRange(
+  state: EditorState,
+  focused: boolean,
+  from: number,
+  to: number,
+): boolean {
+  return focused && cursorInRange(state, from, to);
+}
 
 // ── Markdown node handler registry ─────────────────────────────────────
 
 /** Shared mutable context passed to handlers during tree iteration. */
 interface MarkdownHandlerContext {
-  readonly view: EditorView;
+  readonly state: EditorState;
+  readonly focused: boolean;
   readonly items: Range<Decoration>[];
   /** Set by ATXHeading handler, read by HeaderMark handler. */
   cursorInHeading: boolean;
@@ -173,23 +197,23 @@ interface MarkdownNodeHandler {
  *   keeps its rendered state — only direct cursor contact shows source
  */
 function handleHeading(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
-  const { view, items } = ctx;
+  const { state, focused, items } = ctx;
   const headingMark = headingMarkByLevel[node.name];
   if (headingMark) {
     items.push(headingMark.range(node.from, node.to));
   }
   const headingLine = headingLineByLevel[node.name];
   if (headingLine) {
-    const line = view.state.doc.lineAt(node.from);
+    const line = state.doc.lineAt(node.from);
     items.push(headingLine.range(line.from));
   }
 
-  ctx.cursorInHeading = cursorInRange(view, node.from, node.to);
+  ctx.cursorInHeading = cursorInMarkdownRange(state, focused, node.from, node.to);
 
   if (!ctx.cursorInHeading) {
     // Cursor outside: hide ALL trailing Pandoc attribute blocks
     // ({#id}, {.class}, {-}, {.unnumbered}, {#id .class key=value}, etc.)
-    const hLine = view.state.doc.lineAt(node.from);
+    const hLine = state.doc.lineAt(node.from);
     const attrMatch = findTrailingHeadingAttributes(hLine.text);
     if (attrMatch) {
       const attrFrom = hLine.from + attrMatch.index;
@@ -207,10 +231,10 @@ function handleHeading(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
  * See addMarkerReplacement() and CLAUDE.md "Block headers must behave like headings."
  */
 function handleHeaderMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
-  const { view, items } = ctx;
+  const { state, items } = ctx;
   const end = node.to;
-  const docLen = view.state.doc.length;
-  const nextChar = end < docLen ? view.state.sliceDoc(end, end + 1) : "";
+  const docLen = state.doc.length;
+  const nextChar = end < docLen ? state.sliceDoc(end, end + 1) : "";
   const hideEnd = nextChar === " " ? end + 1 : end;
   // When cursor is on the heading line, markers stay visible (cursorInside=true).
   // When cursor is outside, markers are hidden (cursorInside=false).
@@ -219,8 +243,26 @@ function handleHeaderMark(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): voi
 
 /** Highlight: ALWAYS apply highlight decoration, hide markers when cursor outside. */
 function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
-  ctx.items.push(highlightDecoration.range(node.from, node.to));
-  if (cursorInRange(ctx.view, node.from, node.to)) {
+  let contentFrom = node.from;
+  let contentTo = node.to;
+  let firstMarkTo: number | undefined;
+  let lastMarkFrom: number | undefined;
+  let cursor = node.node.firstChild;
+  while (cursor) {
+    if (cursor.name === "HighlightMark") {
+      firstMarkTo ??= cursor.to;
+      lastMarkFrom = cursor.from;
+    }
+    cursor = cursor.nextSibling;
+  }
+  if (firstMarkTo !== undefined && lastMarkFrom !== undefined) {
+    contentFrom = firstMarkTo;
+    contentTo = lastMarkFrom;
+  }
+  if (contentFrom < contentTo) {
+    ctx.items.push(highlightDecoration.range(contentFrom, contentTo));
+  }
+  if (cursorInMarkdownRange(ctx.state, ctx.focused, node.from, node.to)) {
     addInlineRevealSourceMetricsInSubtree(node.node, ctx.items);
     return false as const; // keep highlight style, show markers
   }
@@ -229,8 +271,8 @@ function handleHighlight(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
 
 /** Link: style as clickable link when cursor is outside. */
 function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
-  const { view, items } = ctx;
-  if (cursorInRange(view, node.from, node.to)) {
+  const { state, focused, items } = ctx;
+  if (cursorInMarkdownRange(state, focused, node.from, node.to)) {
     addInlineRevealSourceMetricsInSubtree(node.node, items);
     return false as const; // cursor inside: show full source for editing
   }
@@ -241,7 +283,7 @@ function handleLink(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   if (!urlChild) {
     return false as const;
   }
-  url = view.state.sliceDoc(urlChild.from, urlChild.to);
+  url = state.sliceDoc(urlChild.from, urlChild.to);
   // Find the link text range: between first [ and ]
   // The text is between the first LinkMark end and second LinkMark start
   const marks: { from: number; to: number }[] = [];
@@ -272,16 +314,16 @@ function handleUrl(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
     return;
   }
   if (parentName !== "Autolink") return undefined;
-  if (cursorInRange(ctx.view, node.from, node.to)) {
+  if (cursorInMarkdownRange(ctx.state, ctx.focused, node.from, node.to)) {
     return false as const;
   }
-  const url = ctx.view.state.sliceDoc(node.from, node.to);
+  const url = ctx.state.sliceDoc(node.from, node.to);
   ctx.items.push(getLinkDecoration(url).range(node.from, node.to));
 }
 
 /** Inline elements: ALWAYS apply content styling, toggle marker visibility. */
 function handleElement(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
-  const { view, items } = ctx;
+  const { state, focused, items } = ctx;
   // Always apply content styling for seamless WYSIWYG
   const styleDeco = styleMap[node.name];
   if (styleDeco) {
@@ -291,7 +333,7 @@ function handleElement(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
   // If cursor is inside: skip hiding markers (show source) but keep style.
   // Recursively decorate all mark nodes in the subtree so nested inline
   // elements (e.g. ***x***, **a *b* c**) also get reduced metrics (#789).
-  if (cursorInRange(view, node.from, node.to)) {
+  if (cursorInMarkdownRange(state, focused, node.from, node.to)) {
     addInlineRevealSourceMetricsInSubtree(node.node, items);
     return false as const;
   }
@@ -310,7 +352,7 @@ function handleHidden(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
 
 /** HorizontalRule: style if cursor is not inside. */
 function handleHorizontalRule(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) {
-  if (cursorInRange(ctx.view.state, node.from, node.to)) {
+  if (cursorInMarkdownRange(ctx.state, ctx.focused, node.from, node.to)) {
     return false as const;
   }
   ctx.items.push(
@@ -322,7 +364,7 @@ function handleHorizontalRule(node: SyntaxNodeRef, ctx: MarkdownHandlerContext) 
 
 /** Escape: hide the backslash (\$ → $, \* → *) unless cursor is on it. */
 function handleEscape(node: SyntaxNodeRef, ctx: MarkdownHandlerContext): void {
-  if (cursorInRange(ctx.view, node.from, node.to)) return;
+  if (cursorInMarkdownRange(ctx.state, ctx.focused, node.from, node.to)) return;
   // Hide just the backslash (first character)
   ctx.items.push(Decoration.replace({}).range(node.from, node.from + 1));
 }
@@ -416,14 +458,15 @@ function iterateTreeUnique(
 }
 
 function mapNodeRange(
-  update: ViewUpdate,
+  changes: Transaction["changes"],
+  state: EditorState,
   from: number,
   to: number,
 ): VisibleRange {
   return normalizeDirtyRange(
-    update.changes.mapPos(from, 1),
-    update.changes.mapPos(to, -1),
-    update.state.doc.length,
+    changes.mapPos(from, 1),
+    changes.mapPos(to, -1),
+    state.doc.length,
   );
 }
 
@@ -433,7 +476,7 @@ function collectMarkdownDirtyRangesInState(
   rangeTo: number,
   pushRange: (from: number, to: number) => void,
 ): void {
-  const tree = syntaxTree(state);
+  const tree = markdownLayoutTree(state);
   const seenRanges = new Set<string>();
   const pushUniqueRange = (from: number, to: number) => {
     const key = `${from}:${to}`;
@@ -489,7 +532,7 @@ function collectCursorContextSnapshot(
   }
 
   const { from, to } = state.selection.main;
-  const tree = syntaxTree(state);
+  const tree = markdownLayoutTree(state);
   const entriesByKey = new Map<string, CursorContextEntry>();
 
   const positions = from === to ? [from] : [from, to];
@@ -538,18 +581,17 @@ function markdownDocChangeNeedsContextMerge(update: ViewUpdate): boolean {
   return update.focusChanged || !update.state.selection.eq(update.startState.selection);
 }
 
-export function computeMarkdownContextChangeRanges(
-  update: ViewUpdate,
+function computeMarkdownContextChangeRangesBetween(
+  startState: EditorState,
+  state: EditorState,
+  changes: Transaction["changes"],
+  startFocused: boolean,
+  endFocused: boolean,
 ): readonly VisibleRange[] {
-  const cached = cursorChangeRangeCache.get(update);
-  if (cached) return cached;
-
-  const { startFocused, endFocused } = focusStates(update);
-  const startContext = collectCursorContextSnapshot(update.startState, startFocused);
-  const endContext = collectCursorContextSnapshot(update.state, endFocused);
+  const startContext = collectCursorContextSnapshot(startState, startFocused);
+  const endContext = collectCursorContextSnapshot(state, endFocused);
 
   if (startContext.key === endContext.key) {
-    cursorChangeRangeCache.set(update, []);
     return [];
   }
 
@@ -558,20 +600,52 @@ export function computeMarkdownContextChangeRanges(
 
   for (const entry of startContext.entries) {
     if (!nextEntries.has(entry.key)) {
-      dirtyRanges.push(mapNodeRange(update, entry.from, entry.to));
+      dirtyRanges.push(mapNodeRange(changes, state, entry.from, entry.to));
     }
   }
 
   const previousKeys = new Set(startContext.entries.map((entry) => entry.key));
   for (const entry of endContext.entries) {
     if (!previousKeys.has(entry.key)) {
-      dirtyRanges.push(normalizeDirtyRange(entry.from, entry.to, update.state.doc.length));
+      dirtyRanges.push(normalizeDirtyRange(entry.from, entry.to, state.doc.length));
     }
   }
 
-  const mergedDirtyRanges = mergeRanges(dirtyRanges);
+  return mergeRanges(dirtyRanges);
+}
+
+export function computeMarkdownContextChangeRanges(
+  update: ViewUpdate,
+): readonly VisibleRange[] {
+  const cached = cursorChangeRangeCache.get(update);
+  if (cached) return cached;
+
+  const { startFocused, endFocused } = focusStates(update);
+  const mergedDirtyRanges = computeMarkdownContextChangeRangesBetween(
+    update.startState,
+    update.state,
+    update.changes,
+    startFocused,
+    endFocused,
+  );
   cursorChangeRangeCache.set(update, mergedDirtyRanges);
   return mergedDirtyRanges;
+}
+
+function stateFocus(state: EditorState): boolean {
+  return state.field(editorFocusField, false) ?? false;
+}
+
+function computeMarkdownContextChangeRangesForTransaction(
+  tr: Transaction,
+): readonly VisibleRange[] {
+  return computeMarkdownContextChangeRangesBetween(
+    tr.startState,
+    tr.state,
+    tr.changes,
+    stateFocus(tr.startState),
+    stateFocus(tr.state),
+  );
 }
 
 function markdownCursorContextChanged(update: ViewUpdate): boolean {
@@ -635,9 +709,36 @@ export function computeMarkdownDocChangeRanges(
 
   update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
     collectMarkdownDirtyRangesInState(update.startState, fromA, toA, (nodeFrom, nodeTo) => {
-      dirtyRanges.push(mapNodeRange(update, nodeFrom, nodeTo));
+      dirtyRanges.push(mapNodeRange(update.changes, update.state, nodeFrom, nodeTo));
     });
     collectMarkdownDirtyRangesInState(update.state, fromB, toB, pushRange);
+  });
+
+  return mergeRanges(dirtyRanges);
+}
+
+function markdownTransactionNeedsContextMerge(tr: Transaction): boolean {
+  return (
+    stateFocus(tr.startState) !== stateFocus(tr.state) ||
+    !tr.state.selection.eq(tr.startState.selection)
+  );
+}
+
+function computeMarkdownDocChangeRangesForTransaction(
+  tr: Transaction,
+): readonly VisibleRange[] | null {
+  const dirtyRanges = markdownTransactionNeedsContextMerge(tr)
+    ? [...computeMarkdownContextChangeRangesForTransaction(tr)]
+    : [];
+  const pushRange = (from: number, to: number) => {
+    dirtyRanges.push(normalizeDirtyRange(from, to, tr.state.doc.length));
+  };
+
+  tr.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    collectMarkdownDirtyRangesInState(tr.startState, fromA, toA, (nodeFrom, nodeTo) => {
+      dirtyRanges.push(mapNodeRange(tr.changes, tr.state, nodeFrom, nodeTo));
+    });
+    collectMarkdownDirtyRangesInState(tr.state, fromB, toB, pushRange);
   });
 
   return mergeRanges(dirtyRanges);
@@ -655,17 +756,19 @@ export function computeMarkdownDocChangeRanges(
  * local rebuilds can update nested dirty descendants without duplicating the
  * parent decorations.
  */
-function collectMarkdownItems(
-  view: EditorView,
+function collectMarkdownItemsForState(
+  state: EditorState,
+  focused: boolean,
   ranges: readonly VisibleRange[],
   skip: (nodeFrom: number) => boolean,
 ): Range<Decoration>[] {
   const ctx: MarkdownHandlerContext = {
-    view,
+    state,
+    focused,
     items: [],
     cursorInHeading: false,
   };
-  const tree = syntaxTree(view.state);
+  const tree = markdownLayoutTree(state);
   const seenNodes = new Set<string>();
 
   for (const { from, to } of ranges) {
@@ -687,6 +790,25 @@ function collectMarkdownItems(
   return ctx.items;
 }
 
+function collectMarkdownItems(
+  view: EditorView,
+  ranges: readonly VisibleRange[],
+  skip: (nodeFrom: number) => boolean,
+): Range<Decoration>[] {
+  return collectMarkdownItemsForState(view.state, view.hasFocus, ranges, skip);
+}
+
+function buildMarkdownDecorationsFromState(state: EditorState) {
+  return buildDecorations(
+    collectMarkdownItemsForState(
+      state,
+      stateFocus(state),
+      [{ from: 0, to: state.doc.length }],
+      () => false,
+    ),
+  );
+}
+
 export { collectMarkdownItems as _collectMarkdownItemsForTest };
 export { markdownDocChangeNeedsContextMerge as _markdownDocChangeNeedsContextMergeForTest };
 export function _clearLinkDecorationCacheForTest(): void {
@@ -696,18 +818,43 @@ export function _linkDecorationCacheSizeForTest(): number {
   return linkDecorationCacheSizeForTest();
 }
 
-/** CM6 extension that provides Typora-style rendering for standard markdown. */
-export const markdownRenderPlugin: Extension = createCursorSensitiveViewPlugin(
-  collectMarkdownItems,
-  {
-    contextChangeRanges: computeMarkdownContextChangeRanges,
-    docChangeRanges: computeMarkdownDocChangeRanges,
-    onViewportOnly: "incremental",
-    pluginSpec: {
-      eventHandlers: {
-        click: openRenderedLinkAtEvent,
-      },
-    },
-    spanName: "cm6.markdownRender",
+const markdownDecorationField = createLifecycleDecorationStateField({
+  spanName: "cm6.markdownRender",
+  build: buildMarkdownDecorationsFromState,
+  collectRanges(state, dirtyRanges) {
+    return collectMarkdownItemsForState(
+      state,
+      stateFocus(state),
+      dirtyRanges,
+      () => false,
+    );
   },
-);
+  semanticChanged(beforeState, afterState) {
+    return syntaxTree(afterState) !== syntaxTree(beforeState);
+  },
+  contextChanged(tr) {
+    return computeMarkdownContextChangeRangesForTransaction(tr).length > 0;
+  },
+  contextUpdateMode: "dirty-ranges",
+  dirtyRangeFn(tr, context) {
+    if (context.docChanged) {
+      return computeMarkdownDocChangeRangesForTransaction(tr);
+    }
+    if (context.contextChanged) {
+      return computeMarkdownContextChangeRangesForTransaction(tr);
+    }
+    return [];
+  },
+});
+
+const renderedLinkEventHandlers = EditorView.domEventHandlers({
+  click: openRenderedLinkAtEvent,
+});
+
+/** CM6 extension that provides Typora-style rendering for standard markdown. */
+export const markdownRenderPlugin: Extension = [
+  editorFocusField,
+  focusTracker,
+  markdownDecorationField,
+  renderedLinkEventHandlers,
+];

@@ -218,15 +218,18 @@ describe("inline editor decoration rendering (#406)", () => {
 
   it("hides link markers (LinkMark, URL) when cursor is outside", () => {
     const view = createInlineEditorView("[link](https://example.com) text", {}, 32);
-    const classes = getDecorationClasses(view);
-    expect(classes).toContain("cf-hidden");
+    const lineText = view.dom.querySelector(".cm-line")?.textContent ?? "";
+    expect(lineText).toContain("link");
+    expect(lineText).not.toContain("[");
+    expect(lineText).not.toContain("https://example.com");
     view.destroy();
   });
 
   it("hides highlight markers when cursor is outside", () => {
     const view = createInlineEditorView("==highlight== text", {}, 18);
-    const classes = getDecorationClasses(view);
-    expect(classes).toContain("cf-hidden");
+    const lineText = view.dom.querySelector(".cm-line")?.textContent ?? "";
+    expect(lineText).toContain("highlight");
+    expect(lineText).not.toContain("==");
     view.destroy();
   });
 });

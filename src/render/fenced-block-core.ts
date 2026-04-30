@@ -1,5 +1,5 @@
 import { type EditorState, type Line, type Range, type StateField, type Transaction } from "@codemirror/state";
-import { type DecorationSet, Decoration, EditorView } from "@codemirror/view";
+import { type DecorationSet, Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
 import type { FencedBlockInfo } from "../fenced-block/model";
 import { containsPos } from "../lib/range-helpers";
@@ -12,6 +12,57 @@ import { editorFocusField, focusEffect } from "./focus-state";
 import { CSS } from "../constants/css-classes";
 
 export { findFencedBlockAt, type FencedBlockInfo } from "../fenced-block/model";
+
+class CollapsedStructureLineWidget extends WidgetType {
+  constructor(private readonly className: string) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("div");
+    el.className = this.className;
+    el.setAttribute("aria-hidden", "true");
+    return el;
+  }
+
+  eq(other: WidgetType): boolean {
+    return (
+      other instanceof CollapsedStructureLineWidget &&
+      this.className === other.className
+    );
+  }
+
+  get estimatedHeight(): number {
+    return 0;
+  }
+}
+
+/**
+ * Hide an entire structural line through a block replacement. This is used for
+ * rich-mode fence lines that visually disappear. A line class with height: 0
+ * only affects already-drawn DOM; a block replacement with estimatedHeight=0
+ * participates in CM6's offscreen height model.
+ *
+ * The replacement covers the structural text, not the trailing line break.
+ * Keeping the break outside the replacement lets decorations at the next line
+ * start compose normally, which is required for inline proof headers.
+ */
+export function addCollapsedStructureLine(
+  _state: EditorState,
+  line: Line,
+  className: string,
+  items: Range<Decoration>[],
+): void {
+  if (!className || line.to <= line.from) return;
+
+  items.push(
+    Decoration.replace({
+      widget: new CollapsedStructureLineWidget(className),
+      block: true,
+      class: className,
+    }).range(line.from, line.to),
+  );
+}
 
 /** Shared derived state for rendering a fenced block. */
 export interface FencedBlockRenderContext<T extends FencedBlockInfo> {
@@ -112,32 +163,31 @@ export function addSingleLineClosingFence(
   items.push(decorationHidden.range(hideFrom, closeFenceTo));
 }
 
-/** Hide a multi-line closing fence (hidden text + zero-height line class). */
+/** Hide a multi-line closing fence as an explicit zero-height block. */
 export function hideMultiLineClosingFence(
+  state: EditorState,
   closeFenceFrom: number,
   closeFenceTo: number,
   items: Range<Decoration>[],
 ): void {
   if (closeFenceFrom < 0 || closeFenceTo <= closeFenceFrom) return;
 
-  items.push(decorationHidden.range(closeFenceFrom, closeFenceTo));
-  items.push(
-    Decoration.line({ class: CSS.blockClosingFence }).range(closeFenceFrom),
+  addCollapsedStructureLine(
+    state,
+    state.doc.lineAt(closeFenceFrom),
+    CSS.blockClosingFence,
+    items,
   );
 }
 
 /** Hide a multi-line closing fence and collapse its line. */
 export function addCollapsedClosingFence(
+  state: EditorState,
   closeFenceFrom: number,
   closeFenceTo: number,
   items: Range<Decoration>[],
 ): void {
-  if (closeFenceFrom < 0 || closeFenceTo <= closeFenceFrom) return;
-
-  items.push(decorationHidden.range(closeFenceFrom, closeFenceTo));
-  items.push(
-    Decoration.line({ class: CSS.blockClosingFence }).range(closeFenceFrom),
-  );
+  hideMultiLineClosingFence(state, closeFenceFrom, closeFenceTo, items);
 }
 
 /** Shared DecorationSet builder for fenced-block renderers. */

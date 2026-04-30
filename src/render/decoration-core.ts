@@ -8,8 +8,8 @@ import {
 } from "@codemirror/state";
 import { RenderWidget } from "./source-widget";
 
-/** Shared Decoration.mark that visually hides source markers via CSS while keeping them in the DOM. */
-export const decorationHidden = Decoration.mark({ class: "cf-hidden" });
+/** Shared replacement that hides source syntax and lets CM6 account for its layout width. */
+export const decorationHidden = Decoration.replace({});
 
 /**
  * Heading-like marker replacement pattern.

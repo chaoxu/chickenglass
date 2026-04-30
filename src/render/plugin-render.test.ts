@@ -36,6 +36,7 @@ import {
   CSL_FIXTURES,
   createEditorState,
   getDecorationSpecs,
+  hasBlockReplacementClassAt,
   hasLineClassAt,
   hasMarkClassInRange,
   makeBibStore,
@@ -145,13 +146,13 @@ describe("blockDecorationField", () => {
     const specs = getDecoSpecs(state);
 
     expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeader)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(3).from, CSS.blockHeaderCollapsed)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(3).from, CSS.blockHeaderCollapsed)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(4).from, CSS.blockHeader)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(5).from, CSS.blockHeaderCollapsed)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(5).from, CSS.blockHeaderCollapsed)).toBe(true);
 
-    expect(hasLineClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(9).from, CSS.blockClosingFence)).toBe(true);
-    expect(hasLineClassAt(specs, state.doc.line(11).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(7).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(9).from, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(11).from, CSS.blockClosingFence)).toBe(true);
 
     const headerWidgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
     expect(headerWidgets).toHaveLength(2);
@@ -216,7 +217,7 @@ describe("blockDecorationField", () => {
 
     // Closing fence line (:::) should have cf-block-closing-fence (collapsed)
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
   });
 
   it("rebuilds when the plugin registry changes without a doc edit", () => {
@@ -315,7 +316,7 @@ describe("blockDecorationField", () => {
 
     // Closing fence should be hidden (cf-block-closing-fence), NOT source-visible
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
     expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(false);
   });
 
@@ -338,7 +339,7 @@ describe("blockDecorationField", () => {
 
     // Closing fence is always hidden — cf-block-closing-fence, not cf-block-source
     const closeFenceLine = state.doc.line(3).from;
-    expect(hasLineClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, closeFenceLine, CSS.blockClosingFence)).toBe(true);
     expect(hasLineClassAt(specs, closeFenceLine, CSS.blockSource)).toBe(false);
   });
 
@@ -357,7 +358,7 @@ describe("blockDecorationField", () => {
 
     // Proof closing fence should be hidden with cf-block-closing-fence
     const proofCloseLine = state.doc.line(7).from;
-    expect(hasLineClassAt(specs, proofCloseLine, CSS.blockClosingFence)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, proofCloseLine, CSS.blockClosingFence)).toBe(true);
   });
 
   it.each([
@@ -392,7 +393,7 @@ describe("blockDecorationField", () => {
 
     expect(hasLineClassAt(specs, staleBodyTarget.doc.line(headerLine).from, CSS.blockHeader)).toBe(true);
     expect(
-      hasLineClassAt(specs, staleBodyTarget.doc.line(3).from, CSS.blockClosingFence),
+      hasBlockReplacementClassAt(specs, staleBodyTarget.doc.line(3).from, CSS.blockClosingFence),
     ).toBe(true);
     expect(specs.some((spec) => spec.widgetClass === "BlockHeaderWidget")).toBe(true);
   });
@@ -637,7 +638,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     );
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeaderCollapsed)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(1).from, CSS.blockHeaderCollapsed)).toBe(true);
     expect(hasLineClassAt(specs, state.doc.line(2).from, CSS.blockHeader)).toBe(true);
 
     const widgets = specs.filter((s) => s.widgetClass === "BlockHeaderWidget");
@@ -667,7 +668,7 @@ describe("disabled blocks show raw fences (issue #356)", () => {
     );
     const specs = getDecoSpecs(state);
 
-    expect(hasLineClassAt(specs, state.doc.line(1).from, CSS.blockHeaderCollapsed)).toBe(true);
+    expect(hasBlockReplacementClassAt(specs, state.doc.line(1).from, CSS.blockHeaderCollapsed)).toBe(true);
     const captionWidgets = specs.filter((s) => s.widgetClass === "BlockCaptionWidget");
     expect(captionWidgets).toHaveLength(1);
   });

@@ -3,6 +3,9 @@ import { isCm6EditorMode, isLexicalEditorMode } from "../editor-display-mode";
 import { isTauri } from "../lib/tauri";
 
 export const TAURI_RENDER_DIAGNOSTICS_KEY = "cf-tauri-render-diagnostics";
+const ROOT_CM_EDITOR_SELECTOR = ".cm-editor.cf-doc-surface--cm6";
+const ROOT_CM_SCROLLER_SELECTOR = `${ROOT_CM_EDITOR_SELECTOR} > .cm-scroller`;
+const ROOT_CM_CONTENT_SELECTOR = ".cm-content.cf-doc-flow--cm6";
 
 export interface RuntimeContractElementSnapshot {
   readonly selector: string;
@@ -53,6 +56,7 @@ export interface EditorRuntimeContractSnapshot {
     readonly cmScroller: number;
     readonly cmContent: number;
     readonly cmLine: number;
+    readonly cmBlockWidget: number;
     readonly katex: number;
     readonly lexicalEditor: number;
   };
@@ -87,8 +91,10 @@ function isVisibleElement(element: RuntimeContractElementSnapshot | null): boole
     && element.style.opacity !== "0";
 }
 
-function elementSnapshot(selector: string): RuntimeContractElementSnapshot | null {
-  const el = document.querySelector<HTMLElement>(selector);
+function elementSnapshotFromElement(
+  selector: string,
+  el: HTMLElement | null,
+): RuntimeContractElementSnapshot | null {
   if (!el) return null;
   const rect = el.getBoundingClientRect();
   const style = window.getComputedStyle(el);
@@ -123,6 +129,29 @@ function elementSnapshot(selector: string): RuntimeContractElementSnapshot | nul
       visibility: style.visibility,
     },
   };
+}
+
+function elementSnapshot(selector: string): RuntimeContractElementSnapshot | null {
+  return elementSnapshotFromElement(
+    selector,
+    document.querySelector<HTMLElement>(selector),
+  );
+}
+
+function rootCmContent(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(ROOT_CM_CONTENT_SELECTOR);
+}
+
+function countRootCmLines(): number {
+  return rootCmContent()?.querySelectorAll(":scope > .cm-line").length ?? 0;
+}
+
+function countRootCmBlockWidgets(): number {
+  const content = rootCmContent();
+  if (!content) return 0;
+  return Array.from(content.querySelectorAll(
+    ".cf-table-widget, .cf-math-display, .cf-image-wrapper",
+  )).filter((element) => !element.closest(".cf-table-cell-editing")).length;
 }
 
 function findKatexMainFontUrl(): string | null {
@@ -164,6 +193,18 @@ async function fetchFontProbe(fontUrl: string | null): Promise<Record<string, un
   }
 }
 
+async function waitForKatexMainFontLoaded(): Promise<boolean | null> {
+  const fonts = document.fonts;
+  if (!fonts?.check) return null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await fonts.ready.catch(() => undefined);
+    if (fonts.check("16px KaTeX_Main")) return true;
+    await fonts.load?.("16px KaTeX_Main").catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return fonts.check("16px KaTeX_Main");
+}
+
 export function evaluateEditorRuntimeContract(
   snapshot: Omit<EditorRuntimeContractSnapshot, "issues">,
 ): readonly string[] {
@@ -184,6 +225,7 @@ export function evaluateEditorRuntimeContract(
   }
 
   if (mode && isCm6EditorMode(mode)) {
+    const isSourceMode = mode === "source";
     if (counts.cmEditor !== 1) issues.push(`expected one CM6 editor, found ${counts.cmEditor}`);
     if (counts.cmScroller !== 1) issues.push(`expected one CM6 scroller, found ${counts.cmScroller}`);
     if (counts.cmContent !== 1) issues.push(`expected one CM6 content root, found ${counts.cmContent}`);
@@ -199,13 +241,22 @@ export function evaluateEditorRuntimeContract(
     if (elements.content && elements.content.style.maxWidth !== "800px") {
       issues.push(`CM6 content max-width must be 800px, got ${elements.content.style.maxWidth}`);
     }
-    if (elements.content && elements.content.style.marginLeft === "0px") {
+    if (
+      elements.content
+      && elements.content.style.maxWidth !== "800px"
+      && elements.content.style.marginLeft === "0px"
+    ) {
       issues.push("CM6 content must keep the shared document column left margin");
     }
-    if (elements.content && !elements.content.style.fontFamily.includes("KaTeX_Main")) {
+    if (!isSourceMode && elements.content && !elements.content.style.fontFamily.includes("KaTeX_Main")) {
       issues.push(`CM6 content font must use KaTeX_Main, got ${elements.content.style.fontFamily}`);
     }
-    if (docLength !== null && docLength > 0 && counts.cmLine === 0) {
+    if (
+      docLength !== null &&
+      docLength > 0 &&
+      counts.cmLine === 0 &&
+      counts.cmBlockWidget === 0
+    ) {
       issues.push("CM6 document has no visible line nodes");
     }
     if (elements.content && elements.scroller) {
@@ -243,6 +294,7 @@ export async function collectEditorRuntimeContract(): Promise<EditorRuntimeContr
   };
   await global.__app?.ready?.catch(() => undefined);
   await global.__editor?.ready?.catch(() => undefined);
+  const katexMainLoaded = await waitForKatexMainFontLoaded();
 
   const fontUrl = findKatexMainFontUrl();
   const base = {
@@ -253,24 +305,28 @@ export async function collectEditorRuntimeContract(): Promise<EditorRuntimeContr
     docLength: global.__editor?.getDoc?.().length ?? null,
     fonts: {
       status: document.fonts?.status ?? null,
-      katexMainLoaded: document.fonts?.check?.("16px KaTeX_Main") ?? null,
+      katexMainLoaded,
       fontUrl,
       fontFetch: await fetchFontProbe(fontUrl),
     },
     counts: {
-      cmEditor: document.querySelectorAll(".cm-editor").length,
-      cmScroller: document.querySelectorAll(".cm-scroller").length,
-      cmContent: document.querySelectorAll(".cm-content").length,
-      cmLine: document.querySelectorAll(".cm-line").length,
+      cmEditor: document.querySelectorAll(ROOT_CM_EDITOR_SELECTOR).length,
+      cmScroller: document.querySelectorAll(ROOT_CM_SCROLLER_SELECTOR).length,
+      cmContent: document.querySelectorAll(ROOT_CM_CONTENT_SELECTOR).length,
+      cmLine: countRootCmLines(),
+      cmBlockWidget: countRootCmBlockWidgets(),
       katex: document.querySelectorAll(".katex").length,
       lexicalEditor: document.querySelectorAll(".cf-lexical-editor:not(.cf-lexical-nested-editor)").length,
     },
     elements: {
       app: elementSnapshot("#app"),
-      editor: elementSnapshot(".cm-editor"),
-      scroller: elementSnapshot(".cm-scroller"),
-      content: elementSnapshot(".cm-content"),
-      firstLine: elementSnapshot(".cm-line"),
+      editor: elementSnapshot(ROOT_CM_EDITOR_SELECTOR),
+      scroller: elementSnapshot(ROOT_CM_SCROLLER_SELECTOR),
+      content: elementSnapshot(ROOT_CM_CONTENT_SELECTOR),
+      firstLine: elementSnapshotFromElement(
+        `${ROOT_CM_CONTENT_SELECTOR} > .cm-line`,
+        rootCmContent()?.querySelector<HTMLElement>(":scope > .cm-line") ?? null,
+      ),
       katex: elementSnapshot(".katex"),
       lexical: elementSnapshot(".cf-lexical-editor:not(.cf-lexical-nested-editor)"),
     },

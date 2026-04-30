@@ -204,6 +204,16 @@ describe("block-scanner", () => {
     ]);
   });
 
+  it("keeps Pandoc opener-line display math content inside the source body range", () => {
+    const dollar = "Before\n\n$$x + y\n= z\n$$\n\nAfter";
+    const [dollarRange] = collectSourceBlockRanges(dollar);
+    expect(dollar.slice(dollarRange?.bodyFrom, dollarRange?.bodyTo)).toBe("x + y\n= z");
+
+    const bracket = "Before\n\n\\[x + y\n= z\n\\]\n\nAfter";
+    const [bracketRange] = collectSourceBlockRanges(bracket);
+    expect(bracket.slice(bracketRange?.bodyFrom, bracketRange?.bodyTo)).toBe("x + y\n= z");
+  });
+
   it("recognizes labeled backslash display math consistently with import", () => {
     expect(collectSourceBlockRanges("Before\n\n\\[\nx + y\n\\] {#eq:sum}\n\nAfter").map((range) => ({
       raw: range.raw,

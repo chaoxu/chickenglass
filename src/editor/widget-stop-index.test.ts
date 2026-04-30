@@ -15,6 +15,8 @@ import {
 import { frontmatterField } from "./frontmatter-state";
 import { documentAnalysisField } from "../state/document-analysis";
 import { tableDiscoveryField } from "../state/table-discovery";
+import { createPluginRegistryField } from "../state/plugin-registry";
+import { defaultPlugins } from "../plugins/default-plugins";
 
 function hiddenStop(
   from: number,
@@ -213,6 +215,44 @@ describe("widget stop index queries", () => {
         endLine: 1,
       });
       expect(index.tableStopsForward[0]?.startLine).toBe(3);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("builds hidden fenced-opener stops for inline and captioned block headers", () => {
+    const doc = [
+      "before",
+      "",
+      "::: {.proof}",
+      "Proof body",
+      ":::",
+      "",
+      '::: {.figure title="Caption"}',
+      "![Alt](image.png)",
+      ":::",
+    ].join("\n");
+    const view = createTestView(doc, {
+      extensions: [
+        ...createMarkdownLanguageExtensions(),
+        documentAnalysisField,
+        createPluginRegistryField(defaultPlugins),
+      ],
+      focus: false,
+    });
+
+    try {
+      const stops = getWidgetStopIndex(view).hiddenStopsForward.filter((candidate) =>
+        candidate.kind === "fenced-opener"
+      );
+
+      expect(stops.map((stop) => stop.startLine)).toEqual([3, 7]);
+      expect(firstHiddenWidgetStopBetweenLines(
+        getWidgetStopIndex(view),
+        2,
+        4,
+        true,
+      )?.kind).toBe("fenced-opener");
     } finally {
       view.destroy();
     }

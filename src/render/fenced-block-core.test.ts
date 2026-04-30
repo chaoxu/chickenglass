@@ -273,36 +273,38 @@ describe("addSingleLineClosingFence", () => {
 // ── hideMultiLineClosingFence ────────────────────────────────────────
 
 describe("hideMultiLineClosingFence", () => {
-  it("adds a hidden decoration and a closing-fence line class", () => {
+  it("adds a zero-height block replacement for the closing-fence line", () => {
+    const state = createEditorState("before\n:::\nafter");
+    const closeLine = state.doc.line(2);
     const items: Range<Decoration>[] = [];
-    hideMultiLineClosingFence(10, 13, items);
-    expect(items).toHaveLength(2);
+    hideMultiLineClosingFence(state, closeLine.from, closeLine.to, items);
+    expect(items).toHaveLength(1);
 
-    // First item: hidden mark
-    expect(items[0].from).toBe(10);
-    expect(items[0].to).toBe(13);
-
-    // Second item: line decoration with closing-fence class
-    expect(items[1].from).toBe(10);
-    expect(items[1].to).toBe(10);
-    expect(items[1].value.spec.class).toBe(CSS.blockClosingFence);
+    expect(items[0].from).toBe(closeLine.from);
+    expect(items[0].to).toBe(closeLine.to);
+    expect(items[0].value.spec.block).toBe(true);
+    expect(items[0].value.spec.class).toBe(CSS.blockClosingFence);
+    expect(items[0].value.spec.widget.estimatedHeight).toBe(0);
   });
 
   it("does nothing when closeFenceFrom is -1", () => {
+    const state = createEditorState("before\n:::\nafter");
     const items: Range<Decoration>[] = [];
-    hideMultiLineClosingFence(-1, -1, items);
+    hideMultiLineClosingFence(state, -1, -1, items);
     expect(items).toHaveLength(0);
   });
 
   it("does nothing when closeFenceTo < closeFenceFrom", () => {
+    const state = createEditorState("before\n:::\nafter");
     const items: Range<Decoration>[] = [];
-    hideMultiLineClosingFence(13, 10, items);
+    hideMultiLineClosingFence(state, 13, 10, items);
     expect(items).toHaveLength(0);
   });
 
   it("does nothing when closeFenceTo === closeFenceFrom (empty range)", () => {
+    const state = createEditorState("before\n:::\nafter");
     const items: Range<Decoration>[] = [];
-    hideMultiLineClosingFence(10, 10, items);
+    hideMultiLineClosingFence(state, 10, 10, items);
     expect(items).toHaveLength(0);
   });
 });
@@ -310,36 +312,37 @@ describe("hideMultiLineClosingFence", () => {
 // ── addCollapsedClosingFence ─────────────────────────────────────────
 
 describe("addCollapsedClosingFence", () => {
-  it("adds a hidden decoration and a line class", () => {
+  it("adds a zero-height block replacement", () => {
+    const state = createEditorState("before\n:::\nafter");
+    const closeLine = state.doc.line(2);
     const items: Range<Decoration>[] = [];
-    addCollapsedClosingFence(10, 13, items);
-    expect(items).toHaveLength(2);
+    addCollapsedClosingFence(state, closeLine.from, closeLine.to, items);
+    expect(items).toHaveLength(1);
 
-    // First item: hidden mark
-    expect(items[0].from).toBe(10);
-    expect(items[0].to).toBe(13);
-
-    // Second item: line decoration with collapsed closing-fence class
-    expect(items[1].from).toBe(10);
-    expect(items[1].to).toBe(10);
-    expect(items[1].value.spec.class).toBe(CSS.blockClosingFence);
+    expect(items[0].from).toBe(closeLine.from);
+    expect(items[0].to).toBe(closeLine.to);
+    expect(items[0].value.spec.block).toBe(true);
+    expect(items[0].value.spec.class).toBe(CSS.blockClosingFence);
   });
 
   it("does nothing when closeFenceFrom is -1", () => {
+    const state = createEditorState("before\n:::\nafter");
     const items: Range<Decoration>[] = [];
-    addCollapsedClosingFence(-1, -1, items);
+    addCollapsedClosingFence(state, -1, -1, items);
     expect(items).toHaveLength(0);
   });
 
   it("does nothing when closeFenceTo < closeFenceFrom", () => {
+    const state = createEditorState("before\n:::\nafter");
     const items: Range<Decoration>[] = [];
-    addCollapsedClosingFence(13, 10, items);
+    addCollapsedClosingFence(state, 13, 10, items);
     expect(items).toHaveLength(0);
   });
 
   it("does nothing when closeFenceTo === closeFenceFrom (empty range)", () => {
+    const state = createEditorState("before\n:::\nafter");
     const items: Range<Decoration>[] = [];
-    addCollapsedClosingFence(10, 10, items);
+    addCollapsedClosingFence(state, 10, 10, items);
     expect(items).toHaveLength(0);
   });
 });

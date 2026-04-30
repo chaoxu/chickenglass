@@ -23,17 +23,17 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
-  ViewPlugin,
-  type ViewUpdate,
   keymap,
 } from "@codemirror/view";
 import {
   Annotation,
   EditorState,
   RangeSetBuilder,
+  StateField,
   type ChangeDesc,
   type Range,
   type RangeSet,
+  type Transaction,
 } from "@codemirror/state";
 import {
   findTablesInState,
@@ -394,7 +394,9 @@ function updateTableGridArtifacts(
   };
 }
 
-function tableDiscoveryChanged(update: ViewUpdate): boolean {
+function tableDiscoveryChanged(
+  update: Pick<Transaction, "state" | "startState">,
+): boolean {
   return (
     update.state.field(tableDiscoveryField, false)
     !== update.startState.field(tableDiscoveryField, false)
@@ -578,59 +580,54 @@ export function deleteSelectedTableSelection(view: EditorView): boolean {
 // Plugin and theme
 // ---------------------------------------------------------------------------
 
+interface TableGridState extends TableGridArtifacts {
+  readonly tables: readonly TableRange[];
+}
+
+function buildTableGridState(state: EditorState): TableGridState {
+  const tables = findTablesInState(state);
+  return {
+    tables,
+    ...buildTableGridArtifacts(state, tables),
+  };
+}
+
 /** Structural decorations: pipe replacements, line classes, separator hiding.
  *  Also provides atomicRanges so CM6 cursor motion skips structural zones. */
-const tableGridPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    outerDecorations: DecorationSet;
-    atomicRanges: RangeSet<Decoration>;
-    tables: readonly TableRange[];
-    constructor(view: EditorView) {
-      this.tables = findTablesInState(view.state);
-      const artifacts = buildTableGridArtifacts(view.state, this.tables);
-      this.decorations = artifacts.structuralDecorations;
-      this.outerDecorations = artifacts.cellDecorations;
-      this.atomicRanges = artifacts.atomicRanges;
-    }
-    update(update: ViewUpdate) {
-      if (tableDiscoveryChanged(update)) {
-        const nextTables = findTablesInState(update.state);
-        const artifacts = updateTableGridArtifacts(
-          {
-            structuralDecorations: this.decorations,
-            cellDecorations: this.outerDecorations,
-            atomicRanges: this.atomicRanges,
-          },
-          this.tables,
+const tableGridField = StateField.define<TableGridState>({
+  create: buildTableGridState,
+  update(value, tr) {
+    if (tableDiscoveryChanged(tr)) {
+      const nextTables = findTablesInState(tr.state);
+      return {
+        tables: nextTables,
+        ...updateTableGridArtifacts(
+          value,
+          value.tables,
           nextTables,
-          update.state,
-          update.changes,
-        );
-        this.decorations = artifacts.structuralDecorations;
-        this.outerDecorations = artifacts.cellDecorations;
-        this.atomicRanges = artifacts.atomicRanges;
-        this.tables = nextTables;
-      } else if (update.docChanged) {
-        this.decorations = this.decorations.map(update.changes);
-        this.outerDecorations = this.outerDecorations.map(update.changes);
-        this.atomicRanges = this.atomicRanges.map(update.changes);
-      }
+          tr.state,
+          tr.changes,
+        ),
+      };
     }
+    if (tr.docChanged) {
+      return {
+        tables: value.tables,
+        structuralDecorations: value.structuralDecorations.map(tr.changes),
+        cellDecorations: value.cellDecorations.map(tr.changes),
+        atomicRanges: value.atomicRanges.map(tr.changes),
+      };
+    }
+    return value;
   },
-  {
-    decorations: (v) => v.decorations,
-    provide: (plugin) =>
-      [
-        EditorView.outerDecorations.of((view) =>
-          view.plugin(plugin)?.outerDecorations ?? Decoration.none,
-        ),
-        EditorView.atomicRanges.of((view) =>
-          view.plugin(plugin)?.atomicRanges ?? Decoration.none,
-        ),
-      ],
+  provide(field) {
+    return [
+      EditorView.decorations.from(field, (value) => value.structuralDecorations),
+      EditorView.outerDecorations.from(field, (value) => value.cellDecorations),
+      EditorView.atomicRanges.of((view) => view.state.field(field).atomicRanges),
+    ];
   },
-);
+});
 
 export const _computeDirtyTableGridUpdateForTest = computeDirtyTableGridUpdate;
 
@@ -684,7 +681,7 @@ const tableGridTheme = EditorView.baseTheme({
 
 export const tableGridExtension = [
   tableDiscoveryField,
-  tableGridPlugin,
+  tableGridField,
   tableGridTheme,
   tableClipboardHandlers,
   tableGridClickGuard,
