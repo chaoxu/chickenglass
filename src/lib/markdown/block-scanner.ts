@@ -1,6 +1,12 @@
 import { FRONTMATTER_DELIMITER_RE } from "../frontmatter";
 import { MARKDOWN_IMAGE_LINE_RE, isMarkdownImageLine } from "../markdown-image";
 import { isCanonicalFencedDivOpeningLine } from "../../parser/fenced-div";
+import {
+  computeLineOffsets,
+  lineEndOffset,
+  lineStartOffset,
+  offsetAfterLine,
+} from "./block-scanner-lines";
 
 export { FRONTMATTER_DELIMITER_RE };
 
@@ -89,39 +95,8 @@ function isDisplayMathBracketClosingSuffix(text: string): boolean {
   return /^\s*(?:\{#[A-Za-z][\w.:-]*\})?\s*$/.test(text);
 }
 
-function computeLineOffsets(lines: readonly string[]): number[] {
-  const offsets: number[] = [];
-  let offset = 0;
-  for (const line of lines) {
-    offsets.push(offset);
-    offset += line.length + 1;
-  }
-  return offsets;
-}
-
 export function computeSourceLineOffsets(lines: readonly string[]): number[] {
   return computeLineOffsets(lines);
-}
-
-function lineStartOffset(lineOffsets: readonly number[], lineIndex: number): number {
-  return lineOffsets[lineIndex] ?? 0;
-}
-
-function lineEndOffset(
-  lines: readonly string[],
-  lineOffsets: readonly number[],
-  lineIndex: number,
-): number {
-  return lineStartOffset(lineOffsets, lineIndex) + (lines[lineIndex]?.length ?? 0);
-}
-
-function offsetAfterLine(
-  lines: readonly string[],
-  lineOffsets: readonly number[],
-  lineIndex: number,
-): number {
-  const lineEnd = lineEndOffset(lines, lineOffsets, lineIndex);
-  return lineIndex < lines.length - 1 ? lineEnd + 1 : lineEnd;
 }
 
 function multilineInteriorRange(

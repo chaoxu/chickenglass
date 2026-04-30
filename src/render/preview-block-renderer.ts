@@ -8,8 +8,6 @@ import {
   type BlockManifestEntry,
 } from "../constants/block-manifest";
 import { CSS } from "../constants/css-classes";
-import { resolveMarkdownReferencePathFromDocument } from "../lib/markdown-reference-paths";
-import { isRelativeFilePath } from "../lib/pdf-target";
 import type { BlockCounterEntry } from "../lib/types";
 import {
   extractRawFrontmatter,
@@ -26,12 +24,14 @@ import type { BibStore } from "../state/bib-data";
 import {
   renderInlineMarkdown,
   renderInlineSyntaxNodeToDom,
-  type InlineReferenceRenderContext,
 } from "./inline-render";
 import { renderKatex } from "./math-widget";
 import {
   createPreviewReferencePresentationController,
 } from "../references/presentation";
+import { renderPreviewTable } from "./preview-table-renderer";
+import { applyPreviewImageOverrides } from "./preview-media-overrides";
+import type { PreviewRenderContext } from "./preview-render-context";
 
 export interface PreviewBlockRenderOptions {
   readonly macros?: Record<string, string>;
@@ -42,19 +42,6 @@ export interface PreviewBlockRenderOptions {
   readonly documentPath?: string;
   readonly imageUrlOverrides?: ReadonlyMap<string, string>;
   readonly referenceSemantics?: DocumentSemantics;
-}
-
-interface PreviewRenderContext {
-  readonly doc: string;
-  readonly macros: Record<string, string>;
-  readonly semantics: DocumentSemantics;
-  readonly referenceSemantics: DocumentSemantics;
-  readonly bibliography?: BibStore;
-  readonly cslProcessor?: CslProcessor;
-  readonly blockCounters?: ReadonlyMap<string, BlockCounterEntry>;
-  readonly documentPath?: string;
-  readonly imageUrlOverrides?: ReadonlyMap<string, string>;
-  readonly referenceContext: InlineReferenceRenderContext;
 }
 
 const previewParser = baseParser.configure(htmlRenderExtensions);
@@ -92,7 +79,7 @@ export function renderPreviewBlockContentToDom(
   };
 
   renderNode(container, tree.topNode, context);
-  applyImageOverrides(container, context);
+  applyPreviewImageOverrides(container, context);
 }
 
 function renderNode(
@@ -137,7 +124,7 @@ function renderNode(
       renderFootnoteDef(parent, node, context);
       return;
     case "Table":
-      renderTable(parent, node, context);
+      renderPreviewTable(parent, node, context);
       return;
     case "Blockquote":
       renderBlockquote(parent, node, context);
@@ -546,75 +533,6 @@ function renderFootnoteDef(
   parent.appendChild(block);
 }
 
-function renderTable(
-  parent: HTMLElement | DocumentFragment,
-  node: SyntaxNode,
-  context: PreviewRenderContext,
-): void {
-  const delimiterNode = node.getChild("TableDelimiter");
-  if (!delimiterNode) return;
-
-  const alignments = parseTableAlignments(context.doc.slice(delimiterNode.from, delimiterNode.to));
-  const headerNode = node.getChild("TableHeader");
-  const headerCells = headerNode?.getChildren("TableCell") ?? [];
-  const table = document.createElement("table");
-  const thead = document.createElement("thead");
-  const tbody = document.createElement("tbody");
-
-  thead.appendChild(renderTableRow(headerCells, "th", alignments, context));
-
-  let child = node.firstChild;
-  while (child) {
-    if (child.name === "TableRow") {
-      tbody.appendChild(renderTableRow(child.getChildren("TableCell"), "td", alignments, context));
-    }
-    child = child.nextSibling;
-  }
-
-  table.appendChild(thead);
-  table.appendChild(tbody);
-  parent.appendChild(table);
-}
-
-function renderTableRow(
-  cells: readonly SyntaxNode[],
-  tag: "th" | "td",
-  alignments: readonly string[],
-  context: PreviewRenderContext,
-): HTMLTableRowElement {
-  const row = document.createElement("tr");
-  for (let index = 0; index < alignments.length; index += 1) {
-    const cell = document.createElement(tag);
-    const align = alignments[index];
-    if (align) {
-      cell.style.textAlign = align;
-    }
-    const cellNode = cells[index];
-    if (cellNode) {
-      appendInlineNode(cell, cellNode, context);
-    }
-    row.appendChild(cell);
-  }
-  return row;
-}
-
-export function parseTableAlignments(delimiterRow: string): string[] {
-  const cells = delimiterRow
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim());
-
-  return cells.map((cell) => {
-    const left = cell.startsWith(":");
-    const right = cell.endsWith(":");
-    if (left && right) return "center";
-    if (right) return "right";
-    if (left) return "left";
-    return "";
-  });
-}
-
 function renderBlockquote(
   parent: HTMLElement | DocumentFragment,
   node: SyntaxNode,
@@ -647,25 +565,4 @@ function appendInlineText(
   surface: "document-body" | "document-inline",
 ): void {
   renderInlineMarkdown(parent, text, context.macros, surface, context.referenceContext);
-}
-
-function applyImageOverrides(
-  container: HTMLElement,
-  context: Pick<PreviewRenderContext, "documentPath" | "imageUrlOverrides">,
-): void {
-  if (!context.imageUrlOverrides || context.imageUrlOverrides.size === 0) return;
-
-  for (const img of container.querySelectorAll("img")) {
-    const src = img.getAttribute("src");
-    if (!src || !isRelativeFilePath(src)) continue;
-
-    const resolvedPath = resolveMarkdownReferencePathFromDocument(
-      context.documentPath ?? "",
-      src,
-    );
-    const override = context.imageUrlOverrides.get(resolvedPath);
-    if (override) {
-      img.setAttribute("src", override);
-    }
-  }
 }
