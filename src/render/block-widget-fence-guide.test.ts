@@ -94,6 +94,26 @@ describe("block widgets inside active fenced divs", () => {
     expectFenceGuide(view.dom.querySelector(`.${CSS.mathDisplay}`), 1);
   });
 
+  it("does not put inline math on the active theorem fence guide lane", async () => {
+    const doc = [
+      "::: {.theorem}",
+      "Prelude with $x^2$ inline math",
+      "$$",
+      "x^2 + y^2 = z^2",
+      "$$",
+      ":::",
+    ].join("\n");
+
+    const view = createRichView(doc, "Prelude");
+    await flushFrames();
+
+    const inlineMath = view.dom.querySelector<HTMLElement>(`.${CSS.mathInline}`);
+    expect(inlineMath).not.toBeNull();
+    expect(inlineMath?.dataset.activeFenceGuides).toBeUndefined();
+    expect(inlineMath?.classList.contains("cf-fence-guide")).toBe(false);
+    expectFenceGuide(view.dom.querySelector(`.${CSS.mathDisplay}`), 1);
+  });
+
   it("keeps standalone image widgets on the active theorem fence guide lane", async () => {
     const doc = [
       "::: {.theorem}",

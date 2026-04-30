@@ -68,8 +68,13 @@ function syncRenderedMathWidgetMetadata(
     const { widget, from, to } = widgets[i];
     el.dataset.sourceFrom = String(from);
     el.dataset.sourceTo = String(to);
-    el.dataset.activeFenceGuides = "true";
-    syncActiveFenceGuideClasses(el, view, from, to);
+    if (el.classList.contains(CSS.mathDisplay)) {
+      el.dataset.activeFenceGuides = "true";
+      syncActiveFenceGuideClasses(el, view, from, to);
+    } else {
+      delete el.dataset.activeFenceGuides;
+      clearActiveFenceGuideClasses(el);
+    }
     widget.updateSourceRange(from, to);
     widgetSourceMap.set(el, widget);
   }
