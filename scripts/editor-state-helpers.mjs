@@ -20,7 +20,7 @@ function selectorForEditorMode(mode) {
   if (mode === "source") {
     return ".cm-editor.cf-source-mode .cm-content";
   }
-  return ".cm-editor:not(.cf-source-mode) .cf-doc-flow--cm6";
+  return ".cm-editor:not(.cf-source-mode) .cf-doc-flow";
 }
 
 export async function focusEditorEnd(page) {

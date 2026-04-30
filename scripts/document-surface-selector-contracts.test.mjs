@@ -14,7 +14,7 @@ describe("document surface selector contracts", () => {
   });
 
   it("resolves mode-specific surface selectors", () => {
-    expect(documentSurfaceSelector("surface", "cm6-rich")).toBe(".cf-doc-surface--cm6");
+    expect(documentSurfaceSelector("surface", "cm6-rich")).toBe(".cf-doc-surface");
     expect(documentSurfaceSelector("headingH1", "cm6-rich")).toBe(".cf-doc-heading--h1");
   });
 
@@ -22,14 +22,14 @@ describe("document surface selector contracts", () => {
     expect(documentSurfaceSelectorSnapshot("cm6-rich")).toEqual({
       block: ".cf-doc-block",
       displayMath: ".cf-doc-display-math",
-      flow: ".cf-doc-flow--cm6",
+      flow: ".cf-doc-flow",
       headingH1: ".cf-doc-heading--h1",
       paragraph: ".cf-doc-paragraph",
-      surface: ".cf-doc-surface--cm6",
+      surface: ".cf-doc-surface",
       table: ".cf-doc-table-block",
       tableCell: ".cf-doc-table-block th, .cf-doc-table-block td",
     });
-    expect(documentSurfaceWaitSelector("cm6-rich")).toContain(".cf-doc-flow--cm6");
+    expect(documentSurfaceWaitSelector("cm6-rich")).toContain(".cf-doc-flow");
   });
 
   it("fails loudly for unknown selector concepts", () => {

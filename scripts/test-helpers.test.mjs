@@ -295,9 +295,9 @@ describe("test helpers browser harness", () => {
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
       waitForFunction: vi.fn(async (fn, arg) => {
         if (arg?.selector === ".cm-editor.cf-source-mode .cm-content") {
-          document.body.innerHTML = "<div class='cm-editor cf-source-mode'><div class='cm-content cf-doc-flow--cm6'></div></div>";
-        } else if (arg?.selector === ".cm-editor:not(.cf-source-mode) .cf-doc-flow--cm6") {
-          document.body.innerHTML = "<div class='cm-editor'><div class='cm-content cf-doc-flow--cm6'></div></div>";
+          document.body.innerHTML = "<div class='cm-editor cf-source-mode'><div class='cm-content cf-doc-flow'></div></div>";
+        } else if (arg?.selector === ".cm-editor:not(.cf-source-mode) .cf-doc-flow") {
+          document.body.innerHTML = "<div class='cm-editor'><div class='cm-content cf-doc-flow'></div></div>";
         }
         expect(fn(arg)).toBe(true);
       }),
@@ -318,7 +318,7 @@ describe("test helpers browser harness", () => {
       expect.any(Function),
       expect.objectContaining({
         minCount: 1,
-        selector: ".cm-editor:not(.cf-source-mode) .cf-doc-flow--cm6",
+        selector: ".cm-editor:not(.cf-source-mode) .cf-doc-flow",
       }),
       expect.objectContaining({ timeout: expect.any(Number) }),
     );
@@ -347,8 +347,8 @@ describe("test helpers browser harness", () => {
     const page = {
       evaluate: vi.fn(async (fn, arg) => fn(arg)),
       waitForFunction: vi.fn(async (fn, arg) => {
-        if (arg?.selector?.includes("cf-doc-flow--cm6")) {
-          document.body.innerHTML = "<div class='cm-editor'><div class='cf-doc-flow--cm6'></div></div>";
+        if (arg?.selector?.includes("cf-doc-flow")) {
+          document.body.innerHTML = "<div class='cm-editor'><div class='cf-doc-flow'></div></div>";
         }
         expect(fn(arg)).toBe(true);
       }),

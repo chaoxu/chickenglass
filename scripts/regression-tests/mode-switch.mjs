@@ -58,6 +58,8 @@ export async function run(page) {
   });
 
   const initialDoc = await readEditorText(page);
+  const initialState = await captureModeState(page);
+  const initialDirty = Boolean(initialState.appDirty || initialState.currentDocumentDirty);
 
   for (const mode of MODE_SEQUENCE) {
     await switchToMode(page, mode);
@@ -70,8 +72,9 @@ export async function run(page) {
     if (state.doc !== initialDoc) {
       return { pass: false, message: `mode ${mode}: canonical doc drift detected` };
     }
-    if (state.appDirty || state.currentDocumentDirty) {
-      return { pass: false, message: `mode ${mode}: unexpected dirty state` };
+    const dirty = Boolean(state.appDirty || state.currentDocumentDirty);
+    if (dirty !== initialDirty) {
+      return { pass: false, message: `mode ${mode}: dirty state changed from ${initialDirty} to ${dirty}` };
     }
   }
 

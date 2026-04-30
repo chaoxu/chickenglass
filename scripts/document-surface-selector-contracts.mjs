@@ -4,12 +4,12 @@ export const DOCUMENT_SURFACE_SELECTORS = {
   block: ".cf-doc-block",
   displayMath: ".cf-doc-display-math",
   flow: {
-    "cm6-rich": ".cf-doc-flow--cm6",
+    "cm6-rich": ".cf-doc-flow",
   },
   headingH1: ".cf-doc-heading--h1",
   paragraph: ".cf-doc-paragraph",
   surface: {
-    "cm6-rich": ".cf-doc-surface--cm6",
+    "cm6-rich": ".cf-doc-surface",
   },
   table: ".cf-doc-table-block",
   tableCell: ".cf-doc-table-block th, .cf-doc-table-block td",
