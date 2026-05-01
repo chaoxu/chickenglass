@@ -8,7 +8,7 @@ import type { DocumentAnalysis } from "../semantics/document";
 import { buildKatexOptions } from "../lib/katex-options";
 import { findFencedDivOpenerTrailingContent } from "../parser/fenced-div";
 import { mathMacrosField } from "../state/math-macros";
-import type { DiagnosticEntry } from "./diagnostic-types";
+import type { DiagnosticEntry, DiagnosticFix } from "./diagnostic-types";
 import {
   buildReferenceConflictModel,
   type DuplicateReferenceTargetConflict,
@@ -33,6 +33,17 @@ export {
 interface AnalysisDiagnosticOptions {
   readonly bibliography?: ReferenceLookup;
   readonly localOnlyWithoutBibliography?: boolean;
+  /** When provided, unresolved-reference diagnostics carry a fix targeting this bib file. */
+  readonly bibPath?: string;
+}
+
+function buildUnresolvedCitationFix(id: string, bibPath: string): DiagnosticFix {
+  return {
+    kind: "insert-bibliography-stub",
+    bibPath,
+    id,
+    label: `Add @${id} to bibliography`,
+  };
 }
 
 function duplicateTargetMessage(conflict: DuplicateReferenceTargetConflict): string {
@@ -108,6 +119,9 @@ export function extractDiagnosticsFromAnalysis(
     }
 
     if (conflict.kind === "unresolved-reference") {
+      const fix = options.bibPath
+        ? buildUnresolvedCitationFix(conflict.id, options.bibPath)
+        : undefined;
       diagnostics.push({
         severity: "warning",
         source: "reference",
@@ -115,6 +129,7 @@ export function extractDiagnosticsFromAnalysis(
         message: `Unresolved reference "@${conflict.id}"`,
         from: conflict.reference.from,
         to: conflict.reference.to,
+        ...(fix ? { fix } : {}),
       });
     }
   }
@@ -212,9 +227,14 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
       || bibData.status.kind === "parse-bib"
       || bibData.status.kind === "unexpected"
     );
+  const status = bibData?.status;
+  const bibPath = (status && (status.state === "ok" || status.state === "warning"))
+    ? status.bibPath || undefined
+    : undefined;
   const diagnostics = extractDiagnosticsFromAnalysis(analysis, {
     bibliography: bibliographyUnavailable ? undefined : bibData?.store,
     localOnlyWithoutBibliography: bibliographyUnavailable,
+    bibPath,
   });
   diagnostics.push(...extractMathDiagnostics(
     analysis,

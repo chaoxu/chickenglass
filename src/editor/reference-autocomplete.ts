@@ -54,11 +54,14 @@ export interface ReferenceCompletionCandidate {
   readonly detail?: string;
   readonly info?: string;
   readonly preview?: string;
+  /** Rendered citation form as it will appear (e.g. "(Karger 2000)"). */
+  readonly formatted?: string;
 }
 
 interface ReferenceAutocompleteCompletion extends Completion {
   readonly referenceCompletionKind: ReferenceCompletionKind;
   readonly citationPreview?: string;
+  readonly citationFormatted?: string;
 }
 
 function isReferenceIdChar(ch: string | undefined): boolean {
@@ -203,7 +206,10 @@ function renderReferenceCompletionPreview(
   view: EditorView,
 ): Node | null {
   if (isCitationCompletion(completion)) {
-    return buildCitationPreviewContent(completion.citationPreview);
+    return buildCitationPreviewContent({
+      entry: completion.citationPreview,
+      formatted: completion.citationFormatted,
+    });
   }
 
   return isSemanticReferenceCompletion(completion)
@@ -263,11 +269,13 @@ export function collectReferenceCompletionCandidates(
   if (store) {
     for (const item of store.values()) {
       if (candidates.has(item.id)) continue;
+      const formatted = presentation.cite([item.id], []);
       candidates.set(item.id, {
         id: item.id,
         kind: "citation",
         detail: presentation.getDisplayText(item.id),
         preview: presentation.getPreviewText(item.id),
+        formatted: formatted || undefined,
       });
     }
   }
@@ -330,6 +338,7 @@ function candidateToCompletion(
       return {
         ...baseCompletion,
         citationPreview: candidate.preview,
+        citationFormatted: candidate.formatted,
         referenceCompletionKind: "citation",
         section: CITATION_SECTION,
         sortText: `3-${candidate.id}`,

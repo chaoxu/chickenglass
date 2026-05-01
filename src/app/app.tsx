@@ -17,6 +17,8 @@ import {
   AppSidebarOutlineProvider,
 } from "./contexts/app-sidebar-context";
 import { FileSystemProvider, useFileSystem } from "./contexts/file-system-context";
+import { applyDiagnosticEntryFix } from "./diagnostic-fix";
+import type { DiagnosticEntry } from "./diagnostic-types";
 import type { FileEntry, FileSystem, MemoryFileSystemEntry } from "./file-manager";
 import { useAppDebug } from "./hooks/use-app-debug";
 import { useAppEditorShell } from "./hooks/use-app-editor-shell";
@@ -358,7 +360,13 @@ function AppInner() {
   const sidebarDiagnosticsController = useMemo(() => ({
     diagnostics: editor.diagnostics,
     onSelect: editor.handleOutlineSelect,
-  }), [editor.diagnostics, editor.handleOutlineSelect]);
+    onFix: (diagnostic: DiagnosticEntry) => {
+      void applyDiagnosticEntryFix(diagnostic, {
+        fs,
+        openFile: editor.openFile,
+      });
+    },
+  }), [editor.diagnostics, editor.handleOutlineSelect, editor.openFile, fs]);
 
   useAppSessionPersistence({
     fileTree: workspace.fileTree,

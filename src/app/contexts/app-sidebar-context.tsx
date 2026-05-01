@@ -25,6 +25,7 @@ export interface AppSidebarOutlineController {
 export interface AppSidebarDiagnosticsController {
   readonly diagnostics: DiagnosticEntry[];
   readonly onSelect: (from: number) => void;
+  readonly onFix?: (diagnostic: DiagnosticEntry) => void;
 }
 
 const AppSidebarFileTreeContext =

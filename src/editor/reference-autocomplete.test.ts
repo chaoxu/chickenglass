@@ -369,6 +369,14 @@ describe("reference autocomplete integration", () => {
     expect(item?.querySelector(".cf-citation-preview")?.textContent).toContain(
       "Minimum cuts in near-linear time. JACM, 47(1), 46-76. 2000.",
     );
+    const formatted = item?.querySelector(".cf-citation-preview-formatted")?.textContent ?? "";
+    // Header shows the rendered citation form (or the raw key fallback when the
+    // CSL engine has no live style — both contain the citation id).
+    expect(formatted.length).toBeGreaterThan(0);
+    expect(formatted.toLowerCase()).toContain("karger");
+    expect(item?.querySelector(".cf-citation-preview-entry")?.textContent).toContain(
+      "Minimum cuts in near-linear time",
+    );
     expect(document.querySelector(".cm-completionInfo")).toBeNull();
 
     view.destroy();

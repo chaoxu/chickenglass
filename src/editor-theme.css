@@ -748,6 +748,14 @@
 .cf-citation-preview {
   white-space: normal;
 }
+.cf-citation-preview-formatted {
+  font-weight: 600;
+  color: var(--cf-fg);
+  margin-bottom: var(--cf-spacing-xs);
+}
+.cf-citation-preview-entry {
+  color: var(--cf-fg);
+}
 .cf-hover-preview-citation {
   color: var(--cf-fg);
   margin-bottom: var(--cf-spacing-xs);
