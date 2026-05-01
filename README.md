@@ -4,8 +4,8 @@ Coflat is a semantic document editor for mathematical writing. It targets papers
 notes, books, and lecture-style documents that need equations, theorem-like
 blocks, citations, cross-references, figures, tables, and Pandoc export.
 
-The app has one shared markdown boundary format and multiple editor surfaces:
-CM6 rich mode, Lexical WYSIWYG mode, and CM6 source mode.
+The app has one shared markdown boundary format and two editor surfaces:
+CM6 rich mode and CM6 source mode.
 
 ## Quick Start
 
@@ -28,8 +28,10 @@ pnpm build
 
 Start here:
 
+- [docs/authoring.md](./docs/authoring.md) - user guide for writing math,
+  theorem blocks, references, citations, media, tables, and exporting.
 - [FORMAT.md](./FORMAT.md) - canonical Pandoc-flavored markdown format.
-- [docs/editor-surfaces.md](./docs/editor-surfaces.md) - CM6, Lexical, and
+- [docs/editor-surfaces.md](./docs/editor-surfaces.md) - CM6 rich and
   source-mode behavior over that format.
 - [DESIGN.md](./DESIGN.md) - product philosophy and high-level architecture.
 - [docs/getting-started.md](./docs/getting-started.md) - development workflow
@@ -59,8 +61,6 @@ Pandoc owns export. The editor does not run Pandoc in the live editing loop.
 
 - **CM6 rich mode** keeps markdown as the live source of truth and renders rich
   widgets over it.
-- **Lexical mode** edits a WYSIWYG document model and serializes to markdown at
-  load/save boundaries.
 - **CM6 source mode** edits the raw markdown.
 
 The app shell, file IO, semantic services, document format, and Tauri backend
@@ -69,7 +69,7 @@ are shared across surfaces.
 ## Stack
 
 - TypeScript, React, Vite
-- CodeMirror 6 and Lexical
+- CodeMirror 6
 - Lezer markdown parsing with Coflat extensions
 - KaTeX
 - Tauri v2 desktop shell

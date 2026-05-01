@@ -1,6 +1,6 @@
 # Coflat Document Format
 
-Pandoc Markdown with a fixed set of Pandoc extensions and pandoc-crossref conventions for mathematical writing. This document specifies the canonical input format the editor expects.
+Pandoc Markdown with a fixed set of Pandoc extensions and pandoc-crossref conventions for mathematical writing. This document specifies the canonical input format the editor expects. For task-oriented authoring guidance (how to write math, use theorem blocks, cite, export, switch modes), see [docs/authoring.md](./docs/authoring.md).
 
 Canonical documents must be parseable by Pandoc. Coflat semantics are encoded with Pandoc-native constructs such as YAML metadata, fenced divs, attributes, citations, raw LaTeX, and tables, plus pandoc-crossref-style labels for equations and cross-references. Non-Pandoc authoring sugar is not part of the canonical format.
 
