@@ -25,4 +25,6 @@ demo/*
 # Local-only heavy/regression fixtures. Keep the policy note tracked.
 fixtures/*
 !fixtures/README.md
+!fixtures/visual-baselines/
+!fixtures/visual-baselines/**
 __pycache__/

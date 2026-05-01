@@ -1,0 +1,424 @@
+{
+  "file": "theorem.md",
+  "id": "theorem",
+  "snapshot": {
+    "anchors": [
+      {
+        "attrs": {
+          "data-section-number": "1"
+        },
+        "kind": "heading",
+        "selector": "[data-section-number]",
+        "textSnippet": "▼Theorems"
+      },
+      {
+        "kind": "block-header",
+        "selector": ".cf-block-header",
+        "textSnippet": "Definition 1(Graph)"
+      },
+      {
+        "kind": "block-header",
+        "selector": ".cf-block-header",
+        "textSnippet": "Theorem 1(Euler)"
+      },
+      {
+        "kind": "block-header",
+        "selector": ".cf-block-header",
+        "textSnippet": "ProofTrivial."
+      },
+      {
+        "kind": "math-inline",
+        "selector": ".cf-math-inline"
+      },
+      {
+        "kind": "math-inline",
+        "selector": ".cf-math-inline"
+      }
+    ],
+    "computedStyles": {
+      ".cf-block-header": {
+        "color": "rgb(9, 9, 11)",
+        "font-weight": "400"
+      },
+      ".cm-content": {
+        "color": "rgb(9, 9, 11)",
+        "font-family": "KaTeX_Main, \"Times New Roman\", serif"
+      }
+    },
+    "dom": {
+      "a": {
+        "role": "textbox"
+      },
+      "c": [
+        "cf-doc-flow",
+        "cm-content",
+        "cm-lineWrapping"
+      ],
+      "e": "div",
+      "k": [
+        {
+          "c": [
+            "cf-doc-title"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Theorem Doc"
+            }
+          ]
+        },
+        {
+          "a": {
+            "data-section-number": "1"
+          },
+          "c": [
+            "cf-doc-heading",
+            "cf-doc-heading--h1",
+            "cf-fold-line",
+            "cf-heading-line-1",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "a": {
+                "role": "button"
+              },
+              "c": [
+                "cf-fold-h1",
+                "cf-fold-toggle"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "▼"
+                }
+              ]
+            },
+            {
+              "e": "span"
+            },
+            {
+              "c": [
+                "cf-heading-1"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Theorems"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-definition",
+            "cf-block-header",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "c": [
+                "cf-block-header-rendered"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Definition 1"
+                }
+              ]
+            },
+            {
+              "c": [
+                "cf-block-attr-title"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "cf-block-title-paren"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": "("
+                    }
+                  ]
+                },
+                {
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": "Graph"
+                    }
+                  ]
+                },
+                {
+                  "c": [
+                    "cf-block-title-paren"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": ")"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-definition",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "A graph is a pair"
+            },
+            {
+              "a": {
+                "role": "img"
+              },
+              "c": [
+                "cf-math-inline"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "katex"
+                  ],
+                  "e": "span",
+                  "tex": ""
+                }
+              ]
+            },
+            {
+              "t": "."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block-closing-fence"
+          ],
+          "e": "div"
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-header",
+            "cf-block-theorem",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "c": [
+                "cf-block-header-rendered"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Theorem 1"
+                }
+              ]
+            },
+            {
+              "c": [
+                "cf-block-attr-title"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "cf-block-title-paren"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": "("
+                    }
+                  ]
+                },
+                {
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": "Euler"
+                    }
+                  ]
+                },
+                {
+                  "c": [
+                    "cf-block-title-paren"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": ")"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-theorem",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "For a connected planar graph"
+            },
+            {
+              "a": {
+                "role": "img"
+              },
+              "c": [
+                "cf-math-inline"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "katex"
+                  ],
+                  "e": "span",
+                  "tex": ""
+                }
+              ]
+            },
+            {
+              "t": "."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block-closing-fence"
+          ],
+          "e": "div"
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-header-collapsed",
+            "cf-block-proof",
+            "cf-doc-block"
+          ],
+          "e": "div"
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block",
+            "cf-block-header",
+            "cf-block-proof",
+            "cf-block-proof",
+            "cf-block-qed",
+            "cf-doc-block",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "c": [
+                "cf-block-header-rendered"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Proof"
+                }
+              ]
+            },
+            {
+              "t": "Trivial."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block-closing-fence"
+          ],
+          "e": "div"
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        }
+      ]
+    },
+    "rootSelector": ".cm-content",
+    "theme": "default"
+  },
+  "title": "Theorem + proof + definition fenced divs"
+}

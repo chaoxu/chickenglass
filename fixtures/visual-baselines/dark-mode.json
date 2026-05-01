@@ -1,0 +1,258 @@
+{
+  "file": "dark.md",
+  "id": "dark-mode",
+  "snapshot": {
+    "anchors": [
+      {
+        "attrs": {
+          "data-section-number": "1"
+        },
+        "kind": "heading",
+        "selector": "[data-section-number]",
+        "textSnippet": "▼Dark Mode"
+      },
+      {
+        "kind": "block-header",
+        "selector": ".cf-block-header",
+        "textSnippet": "Theorem 1(Dark)"
+      },
+      {
+        "kind": "math-inline",
+        "selector": ".cf-math-inline"
+      }
+    ],
+    "computedStyles": {
+      ".cf-block-header": {
+        "color": "rgb(250, 250, 250)",
+        "font-weight": "400"
+      },
+      ".cm-content": {
+        "color": "rgb(250, 250, 250)",
+        "font-family": "KaTeX_Main, \"Times New Roman\", serif"
+      }
+    },
+    "dom": {
+      "a": {
+        "role": "textbox"
+      },
+      "c": [
+        "cf-doc-flow",
+        "cm-content",
+        "cm-lineWrapping"
+      ],
+      "e": "div",
+      "k": [
+        {
+          "c": [
+            "cf-doc-title"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Dark Mode"
+            }
+          ]
+        },
+        {
+          "a": {
+            "data-section-number": "1"
+          },
+          "c": [
+            "cf-doc-heading",
+            "cf-doc-heading--h1",
+            "cf-fold-line",
+            "cf-heading-line-1",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "a": {
+                "role": "button"
+              },
+              "c": [
+                "cf-fold-h1",
+                "cf-fold-toggle"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "▼"
+                }
+              ]
+            },
+            {
+              "e": "span"
+            },
+            {
+              "c": [
+                "cf-heading-1"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Dark Mode"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Inline math"
+            },
+            {
+              "a": {
+                "role": "img"
+              },
+              "c": [
+                "cf-math-inline"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "katex"
+                  ],
+                  "e": "span",
+                  "tex": ""
+                }
+              ]
+            },
+            {
+              "t": "renders in dark theme."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-header",
+            "cf-block-theorem",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "c": [
+                "cf-block-header-rendered"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Theorem 1"
+                }
+              ]
+            },
+            {
+              "c": [
+                "cf-block-attr-title"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "cf-block-title-paren"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": "("
+                    }
+                  ]
+                },
+                {
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": "Dark"
+                    }
+                  ]
+                },
+                {
+                  "c": [
+                    "cf-block-title-paren"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "t": ")"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block",
+            "cf-block-theorem",
+            "cf-doc-block",
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Body of theorem."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-block-closing-fence"
+          ],
+          "e": "div"
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        }
+      ]
+    },
+    "rootSelector": ".cm-content",
+    "theme": "dark"
+  },
+  "title": "Dark mode rendering of math + theorem"
+}

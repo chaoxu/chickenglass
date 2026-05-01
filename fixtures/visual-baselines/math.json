@@ -1,0 +1,264 @@
+{
+  "file": "math.md",
+  "id": "math",
+  "snapshot": {
+    "anchors": [
+      {
+        "attrs": {
+          "data-section-number": "1"
+        },
+        "kind": "heading",
+        "selector": "[data-section-number]",
+        "textSnippet": "▼Math"
+      },
+      {
+        "kind": "math-display",
+        "selector": ".cf-math-display"
+      },
+      {
+        "kind": "math-display-number",
+        "selector": ".cf-math-display-number",
+        "textSnippet": "(1)"
+      },
+      {
+        "kind": "math-inline",
+        "selector": ".cf-math-inline"
+      },
+      {
+        "kind": "crossref",
+        "selector": ".cf-crossref, .cf-ref",
+        "textSnippet": "Eq. (1)"
+      }
+    ],
+    "computedStyles": {
+      ".cf-math-display": {
+        "text-align": "start"
+      },
+      ".cm-content": {
+        "color": "rgb(9, 9, 11)",
+        "font-family": "KaTeX_Main, \"Times New Roman\", serif"
+      }
+    },
+    "dom": {
+      "a": {
+        "role": "textbox"
+      },
+      "c": [
+        "cf-doc-flow",
+        "cm-content",
+        "cm-lineWrapping"
+      ],
+      "e": "div",
+      "k": [
+        {
+          "c": [
+            "cf-doc-title"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Math Doc"
+            }
+          ]
+        },
+        {
+          "a": {
+            "data-section-number": "1"
+          },
+          "c": [
+            "cf-doc-heading",
+            "cf-doc-heading--h1",
+            "cf-fold-line",
+            "cf-heading-line-1",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "a": {
+                "role": "button"
+              },
+              "c": [
+                "cf-fold-h1",
+                "cf-fold-toggle"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "▼"
+                }
+              ]
+            },
+            {
+              "e": "span"
+            },
+            {
+              "c": [
+                "cf-heading-1"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Math"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Inline math"
+            },
+            {
+              "a": {
+                "role": "img"
+              },
+              "c": [
+                "cf-math-inline"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "c": [
+                    "katex"
+                  ],
+                  "e": "span",
+                  "tex": ""
+                }
+              ]
+            },
+            {
+              "t": "in a paragraph."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "a": {
+            "role": "img"
+          },
+          "c": [
+            "cf-doc-display-math",
+            "cf-math-display",
+            "cf-math-display-numbered"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "c": [
+                "cf-math-display-content"
+              ],
+              "e": "div",
+              "k": [
+                {
+                  "c": [
+                    "katex-display"
+                  ],
+                  "e": "span",
+                  "k": [
+                    {
+                      "c": [
+                        "katex"
+                      ],
+                      "e": "span",
+                      "tex": "E = m c^2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "c": [
+                "cf-math-display-number"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "(1)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "See"
+            },
+            {
+              "c": [
+                "cf-crossref"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Eq. (1)"
+                }
+              ]
+            },
+            {
+              "t": "for the relation."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        }
+      ]
+    },
+    "rootSelector": ".cm-content",
+    "theme": "default"
+  },
+  "title": "Inline + display math with label and crossref"
+}

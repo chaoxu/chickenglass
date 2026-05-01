@@ -1,0 +1,308 @@
+{
+  "file": "citation.md",
+  "id": "citation",
+  "snapshot": {
+    "anchors": [
+      {
+        "attrs": {
+          "data-section-number": "1"
+        },
+        "kind": "heading",
+        "selector": "[data-section-number]",
+        "textSnippet": "▼Citations"
+      },
+      {
+        "attrs": {
+          "data-section-number": "1.1"
+        },
+        "kind": "heading",
+        "selector": "[data-section-number]",
+        "textSnippet": "▼References"
+      },
+      {
+        "kind": "citation",
+        "selector": ".cf-citation, .cf-cite",
+        "textSnippet": "Karger [1]"
+      }
+    ],
+    "computedStyles": {
+      ".cf-citation, .cf-cite": {
+        "color": "rgb(9, 9, 11)"
+      },
+      ".cm-content": {
+        "color": "rgb(9, 9, 11)",
+        "font-family": "KaTeX_Main, \"Times New Roman\", serif"
+      }
+    },
+    "dom": {
+      "a": {
+        "role": "textbox"
+      },
+      "c": [
+        "cf-doc-flow",
+        "cm-content",
+        "cm-lineWrapping"
+      ],
+      "e": "div",
+      "k": [
+        {
+          "c": [
+            "cf-doc-title"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "Citation Doc"
+            }
+          ]
+        },
+        {
+          "a": {
+            "data-section-number": "1"
+          },
+          "c": [
+            "cf-doc-heading",
+            "cf-doc-heading--h1",
+            "cf-fold-line",
+            "cf-heading-line-1",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "a": {
+                "role": "button"
+              },
+              "c": [
+                "cf-fold-h1",
+                "cf-fold-toggle"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "▼"
+                }
+              ]
+            },
+            {
+              "e": "span"
+            },
+            {
+              "c": [
+                "cf-heading-1"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Citations"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-doc-paragraph",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "t": "We rely on"
+            },
+            {
+              "c": [
+                "cf-citation",
+                "cf-citation-narrative"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "Karger [1]"
+                }
+              ]
+            },
+            {
+              "t": "for randomized min-cut."
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "a": {
+            "data-section-number": "1.1"
+          },
+          "c": [
+            "cf-doc-heading",
+            "cf-doc-heading--h2",
+            "cf-fold-line",
+            "cf-heading-line-2",
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "a": {
+                "role": "button"
+              },
+              "c": [
+                "cf-fold-h2",
+                "cf-fold-toggle"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "▼"
+                }
+              ]
+            },
+            {
+              "e": "span"
+            },
+            {
+              "c": [
+                "cf-heading-2"
+              ],
+              "e": "span",
+              "k": [
+                {
+                  "t": "References"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "c": [
+            "cm-line"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "e": "br"
+            }
+          ]
+        },
+        {
+          "c": [
+            "cf-bibliography"
+          ],
+          "e": "div",
+          "k": [
+            {
+              "c": [
+                "cf-bibliography-heading"
+              ],
+              "e": "h2",
+              "k": [
+                {
+                  "t": "References"
+                }
+              ]
+            },
+            {
+              "c": [
+                "cf-bibliography-list"
+              ],
+              "e": "div",
+              "k": [
+                {
+                  "c": [
+                    "cf-bibliography-entry"
+                  ],
+                  "e": "div",
+                  "k": [
+                    {
+                      "c": [
+                        "csl-entry"
+                      ],
+                      "e": "div",
+                      "k": [
+                        {
+                          "c": [
+                            "csl-left-margin"
+                          ],
+                          "e": "div",
+                          "k": [
+                            {
+                              "t": "[1]"
+                            }
+                          ]
+                        },
+                        {
+                          "c": [
+                            "csl-right-inline"
+                          ],
+                          "e": "div",
+                          "k": [
+                            {
+                              "t": "D. R. Karger, “Minimum Cuts in Near-Linear Time,”"
+                            },
+                            {
+                              "e": "i",
+                              "k": [
+                                {
+                                  "t": "J. ACM"
+                                }
+                              ]
+                            },
+                            {
+                              "t": ", 2000."
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "c": [
+                        "cf-bibliography-backlinks"
+                      ],
+                      "e": "span",
+                      "k": [
+                        {
+                          "c": [
+                            "cf-bibliography-backlink"
+                          ],
+                          "e": "a",
+                          "k": [
+                            {
+                              "t": "↩"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "rootSelector": ".cm-content",
+    "theme": "default"
+  },
+  "title": "Citation with bibliography"
+}

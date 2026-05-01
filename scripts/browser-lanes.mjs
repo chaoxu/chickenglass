@@ -117,6 +117,12 @@ export const BROWSER_LANES = {
     description: "Realistic author dogfood lane (theorem, math, citation, save/reopen)",
     filters: DOGFOOD_FILTERS,
   },
+  visual: {
+    args: [],
+    description: "Structural visual baselines for canonical authoring states",
+    filters: ["visual-baselines"],
+    script: "scripts/regression-tests/visual-baselines.mjs",
+  },
 };
 
 export const BROWSER_LANE_ORDER = [
@@ -127,6 +133,7 @@ export const BROWSER_LANE_ORDER = [
   "scroll",
   "render",
   "dogfood",
+  "visual",
   "all",
 ];
 
