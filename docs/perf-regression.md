@@ -249,6 +249,73 @@ Use these default targets when filing or closing performance issues:
 - Open and mode-switch scenarios should include both total scenario time and the largest frontend/backend spans in the report.
 - Any exception to these targets needs before/after numbers and a concrete reason, not a bundle-size argument.
 
+## Dashboard Snapshot
+
+`pnpm perf:dashboard` runs the existing `typing-rich-burst` capture and emits a
+single flat JSON snapshot suitable for pasting into issues or PRs. The output
+field order is sorted; the metrics object is keyed by metric base name with the
+worst-hotspot value aggregated across all (case, position) pairs.
+
+```bash
+pnpm perf:dashboard                              # JSON to stdout
+pnpm perf:dashboard --output snapshot.json       # JSON to file (status to stderr)
+pnpm perf:dashboard --input report.json          # derive from an existing capture
+```
+
+The dashboard automatically passes `--heavy-doc` when
+`fixtures/cogirth/main2.md` is present, falling back to `demo/index.md` and
+recording the selection in the `fixture` field. Top-level fields:
+
+- `capturedAt`, `commit`, `fixture`, `iterations`, `scenario`, `warmup`
+- `metrics` — flat object: `typing.dispatch_p95_ms`, `typing.dispatch_max_ms`,
+  `typing.input_to_idle_ms`, `typing.longtask_count`,
+  `typing.post_idle_lag_p95_ms`, etc.
+
+Idle CPU is intentionally not in the metric set — `perf-regression-lib.mjs`
+does not capture an idle-CPU sample today, only the post-idle long-task and
+frame-cadence-lag proxies, which the dashboard reports under `typing.post_idle_*`.
+
+## Perf Gate
+
+`pnpm perf:gate` captures a fresh dashboard snapshot and compares it against
+the checked-in `perf-baseline.json` using a per-metric **1.5x** ratio threshold
+plus the existing `--min-delta-ms` floor (default 5 ms). Count-style metrics
+use a `--min-delta-count` floor of 1 instead.
+
+```bash
+pnpm perf:gate                                              # gate fresh capture
+pnpm perf:gate --current snapshot.json                      # gate a saved snapshot
+pnpm perf:gate --threshold-multiplier 1.3 --min-delta-ms 8  # tighten the gate
+pnpm perf:gate --soft                                       # always exit 0 (CI soft mode)
+pnpm perf:gate --json                                       # machine-readable output
+```
+
+The failing output names the scenario, fixture, metric, baseline value,
+current value, and threshold for every regression. CI runs the gate in soft
+mode (warn-only) so we can tighten it after collecting a few healthy
+baselines.
+
+### Regenerating the baseline
+
+```bash
+pnpm perf:dashboard --output perf-baseline.json
+```
+
+Commit the result. The baseline file embeds a `_descriptions` map alongside
+the metrics for documentation; the gate ignores that field. Baselines are
+machine-specific — regenerate on the target lane (CI runner or your laptop)
+when you change scenarios, runtime budgets, or fixture content.
+
+### Threshold policy
+
+- Ratio gate: 1.5x of baseline (per metric). Designed to flag clear
+  regressions while tolerating run-to-run noise.
+- Absolute floor: 5 ms for ms-valued metrics, 1 for count-valued metrics. A
+  small relative blow-up on a tiny baseline (e.g. 4 ms -> 7 ms) does not
+  flap.
+- Diagnostic-only metrics (e.g. raw long-task counts on quiet machines) can
+  be tuned by editing `COUNT_METRICS` in `scripts/perf-gate-lib.mjs`.
+
 ## Notes
 
 - Reloading between iterations is intentional. It avoids state bleed between runs.

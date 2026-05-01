@@ -263,6 +263,38 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:package
 
+  # ── Perf gate (soft) ─────────────────────────────────────────────────────
+  # Compares typing-rich-burst dashboard metrics against the checked-in
+  # perf-baseline.json with a 1.5x per-metric threshold. Runs in --soft mode
+  # so it warns on regression but never fails CI; tighten once the lane is
+  # stable. See docs/perf-regression.md.
+  perf:
+    name: Perf gate (soft)
+    needs: [static]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup pnpm
+        run: |
+          pnpm_home="${RUNNER_TEMP:-$PWD/.tmp-ci}/pnpm"
+          npm install -g --prefix "$pnpm_home" pnpm@10.33.0
+          echo "$pnpm_home/bin" >> "$GITHUB_PATH"
+          "$pnpm_home/bin/pnpm" --version
+      - run: pnpm install --frozen-lockfile
+      - name: Build app
+        run: pnpm check:app-build
+      - name: Run perf gate (soft)
+        run: |
+          artifacts_dir="${BROWSER_ARTIFACTS_DIR:-/tmp/coflat-perf-gate-${GITHUB_RUN_ID:-local-$$}}"
+          mkdir -p "$artifacts_dir"
+          # Soft gate: never fail CI. Failures are visible in the run log;
+          # tighten by removing --soft once the baseline is stable.
+          pnpm perf:gate -- --soft --iterations 1 --warmup 0 --artifacts-dir "$artifacts_dir" || true
+
   # ── Rust / Tauri backend ──────────────────────────────────────────────────
   rust:
     name: Rust tests

@@ -92,6 +92,8 @@ pnpm perf:quick --scenario local-edit-index
                      # one-sample local perf sniff, not PR-quality evidence
 pnpm perf:capture:heavy -- --scenario typing-rich-burst
                      # heavy-doc perf lane with longer open/debug budgets
+pnpm perf:dashboard  # flat JSON dashboard snapshot (typing-rich-burst, heavy if available)
+pnpm perf:gate       # compare fresh capture against perf-baseline.json (1.5x threshold)
 pnpm chrome          # launch Playwright Chromium with CDP on port 9322 (manual debug lane)
 ```
 
