@@ -76,6 +76,7 @@
     "test:browser:scroll-jump": "node scripts/scroll-jump-lab.mjs --regression showcase/scroll-jump.md --simulate-wheel --step-px 180 --step-count 16 --assert-clean",
     "test:browser:scroll-jump:heavy": "node scripts/scroll-jump-lab.mjs --fixture rankdecrease/main.md --simulate-wheel --step-px 90 --step-count 24 --assert-clean",
     "test:browser:all": "node scripts/browser-lane.mjs all",
+    "test:browser:dogfood": "node scripts/browser-lane.mjs dogfood",
     "perf:capture": "node scripts/perf-regression.mjs capture",
     "perf:compare": "node scripts/perf-regression.mjs compare",
     "perf:capture:heavy": "node scripts/perf-regression.mjs capture --heavy-doc",

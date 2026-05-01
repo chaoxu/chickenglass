@@ -90,6 +90,11 @@ async function loadTests(filter) {
     if (filter.length > 0 && !filter.includes(mod.name)) {
       continue;
     }
+    // Tests that opt out of the default lane are only executed when the
+    // caller explicitly names them via `--filter`.
+    if (filter.length === 0 && mod.excludeFromDefaultLane === true) {
+      continue;
+    }
     tests.push({
       file,
       name: mod.name,

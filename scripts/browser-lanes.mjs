@@ -45,6 +45,8 @@ const SCROLL_FILTERS = [
 
 const SMOKE_FILTERS = ["mode-switch", "index-open-rich-render", "headings", "math-render"];
 
+const DOGFOOD_FILTERS = ["dogfood-author-flow"];
+
 export const BROWSER_HARNESS_SUPPORT_PATHS = [
   "scripts/browser-doctor.mjs",
   "scripts/browser-failure-artifacts.mjs",
@@ -110,6 +112,11 @@ export const BROWSER_LANES = {
     description: "Merged-app smoke lane",
     filters: SMOKE_FILTERS,
   },
+  dogfood: {
+    args: filterArgs(DOGFOOD_FILTERS),
+    description: "Realistic author dogfood lane (theorem, math, citation, save/reopen)",
+    filters: DOGFOOD_FILTERS,
+  },
 };
 
 export const BROWSER_LANE_ORDER = [
@@ -119,6 +126,7 @@ export const BROWSER_LANE_ORDER = [
   "navigation",
   "scroll",
   "render",
+  "dogfood",
   "all",
 ];
 
