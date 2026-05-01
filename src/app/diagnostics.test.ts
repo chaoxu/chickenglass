@@ -80,6 +80,27 @@ describe("extractDiagnostics", () => {
     ]);
   });
 
+  it("attaches an insert-bibliography-stub fix to unresolved citations when a bib path is known", () => {
+    const state = withBibliography(createState(
+      "See [@unknown-key].",
+    ));
+
+    const diagnostics = extractDiagnostics(state);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.fix).toEqual({
+      kind: "insert-bibliography-stub",
+      bibPath: "refs.bib",
+      id: "unknown-key",
+      label: "Add @unknown-key to bibliography",
+    });
+  });
+
+  it("omits the fix metadata when no bibliography path is configured", () => {
+    const state = createState("See [@unknown-key].");
+    const diagnostics = extractDiagnostics(state);
+    expect(diagnostics.some((diag) => diag.fix !== undefined)).toBe(false);
+  });
+
   it("reports invalid inline math", () => {
     const state = createState("Text $\\oops{x}$ more.");
 

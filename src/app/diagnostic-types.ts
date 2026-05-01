@@ -27,6 +27,23 @@ export type DiagnosticCode =
   | "format.reference-link-definition"
   | "format.bare-url-autolink";
 
+/**
+ * Optional repair action for a diagnostic. Renderers can surface this as a
+ * button next to the diagnostic message; the controller executes it.
+ */
+export type DiagnosticFix =
+  | {
+    readonly kind: "open-bibliography";
+    readonly bibPath: string;
+    readonly label: string;
+  }
+  | {
+    readonly kind: "insert-bibliography-stub";
+    readonly bibPath: string;
+    readonly id: string;
+    readonly label: string;
+  };
+
 export interface DiagnosticEntry {
   readonly severity: DiagnosticSeverity;
   readonly source: DiagnosticSource;
@@ -36,6 +53,8 @@ export interface DiagnosticEntry {
   readonly from: number;
   /** End position in the document (character offset). */
   readonly to: number;
+  /** Optional repair action surfaced by the diagnostics UI. */
+  readonly fix?: DiagnosticFix;
 }
 
 export function sameDiagnosticEntries(

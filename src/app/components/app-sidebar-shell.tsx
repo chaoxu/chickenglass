@@ -77,6 +77,7 @@ const DiagnosticsSidebarPane = memo(function DiagnosticsSidebarPane() {
     <Diagnostics
       diagnostics={diagnostics.diagnostics}
       onSelect={diagnostics.onSelect}
+      onFix={diagnostics.onFix}
     />
   );
 });
