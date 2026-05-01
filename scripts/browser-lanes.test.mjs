@@ -20,6 +20,7 @@ describe("browser lanes manifest", () => {
       "scroll",
       "render",
       "dogfood",
+      "visual",
       "all",
     ]);
   });
