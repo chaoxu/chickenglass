@@ -2,7 +2,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { StateEffect, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { markdownExtensions } from "../parser";
 import { mathMacrosField } from "../state/math-macros";
 import { tableDiscoveryField } from "../state/table-discovery";

@@ -1,7 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it, vi } from "vitest";
 
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import type { FrontmatterConfig } from "../parser/frontmatter";
 import { MemoryFileSystem } from "./file-manager";
 import {
@@ -13,7 +13,7 @@ import {
   projectConfigFacet,
   PROJECT_CONFIG_FILE,
   type ProjectConfig,
-} from "./project-config";
+} from "../project-config";
 
 // ---------------------------------------------------------------------------
 // Type-level test: ProjectConfig = Omit<FrontmatterConfig, "title">.

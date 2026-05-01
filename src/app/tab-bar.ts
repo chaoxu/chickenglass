@@ -1,4 +1,5 @@
 import { ContextMenu } from "../lib/context-menu";
+import { logCatchError } from "./lib/log-catch-error";
 
 /** Represents a single open file tab. */
 export interface Tab {
@@ -245,7 +246,13 @@ export class TabBar {
       [
         {
           label: "Close",
-          action: () => this.onClose?.(path),
+          action: () => {
+            try {
+              this.onClose?.(path);
+            } catch (err) {
+              logCatchError("[tab-bar] context-menu Close failed", path)(err);
+            }
+          },
         },
         {
           label: "Close Others",
@@ -253,7 +260,11 @@ export class TabBar {
           action: () => {
             // Close all tabs except the right-clicked one
             for (const p of otherPaths) {
-              this.onClose?.(p);
+              try {
+                this.onClose?.(p);
+              } catch (err) {
+                logCatchError("[tab-bar] context-menu Close Others failed", p)(err);
+              }
             }
           },
         },
@@ -262,7 +273,11 @@ export class TabBar {
           action: () => {
             const allPaths = this.tabs.map((t) => t.path);
             for (const p of allPaths) {
-              this.onClose?.(p);
+              try {
+                this.onClose?.(p);
+              } catch (err) {
+                logCatchError("[tab-bar] context-menu Close All failed", p)(err);
+              }
             }
           },
         },
@@ -323,12 +338,20 @@ export class TabBar {
       closeBtn.textContent = "\u00D7";
       closeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.onClose?.(tab.path);
+        try {
+          this.onClose?.(tab.path);
+        } catch (err) {
+          logCatchError("[tab-bar] onClose handler failed", tab.path)(err);
+        }
       });
       tabEl.appendChild(closeBtn);
 
       tabEl.addEventListener("click", () => {
-        this.onSelect?.(tab.path);
+        try {
+          this.onSelect?.(tab.path);
+        } catch (err) {
+          logCatchError("[tab-bar] onSelect handler failed", tab.path)(err);
+        }
       });
 
       // Right-click context menu

@@ -19,7 +19,7 @@ import {
   activeStructureEditField,
   activateStructureEditAt,
 } from "../state/cm-structure-edit";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { createTestView, makeBlockPlugin } from "../test-utils";
 
 /**

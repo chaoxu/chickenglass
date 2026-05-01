@@ -1,6 +1,6 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it, vi } from "vitest";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { equationLabelExtension } from "../parser/equation-label";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";

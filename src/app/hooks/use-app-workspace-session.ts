@@ -7,8 +7,8 @@ import {
 import { isTauri } from "../../lib/tauri";
 import type { FileEntry, FileSystem } from "../file-manager";
 import { measureAsync, withPerfOperation } from "../perf";
-import type { ProjectConfig, ProjectConfigStatus } from "../project-config";
-import { loadProjectConfigWithStatus, PROJECT_CONFIG_FILE } from "../project-config";
+import type { ProjectConfig, ProjectConfigStatus } from "../../project-config";
+import { loadProjectConfigWithStatus, PROJECT_CONFIG_FILE } from "../../project-config";
 import type { ProjectOpenResult } from "../project-open-result";
 import { useRecentFiles } from "./use-recent-files";
 import { useSettings } from "./use-settings";

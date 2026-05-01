@@ -4,8 +4,8 @@ import {
   findTrailingHeadingAttributes,
   parseHeadingLine,
   parseHeadingText,
-} from "./heading-syntax";
-import { extractHeadingDefinitions } from "./headings";
+} from "../../lib/markdown/heading-syntax";
+import { extractHeadingDefinitions } from "../../lib/markdown/headings";
 
 describe("heading syntax", () => {
   it("parses heading text, labels, unnumbered markers, and source columns", () => {

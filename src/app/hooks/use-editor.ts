@@ -29,7 +29,7 @@ import {
 import { programmaticDocumentChangeAnnotation } from "../../editor/programmatic-document-change";
 import { bibDataEffect, bibDataField } from "../../state/bib-data";
 import { CslProcessor } from "../../citations/csl-processor";
-import type { ProjectConfig, ProjectConfigStatus } from "../project-config";
+import type { ProjectConfig, ProjectConfigStatus } from "../../project-config";
 import type { FileSystem } from "../file-manager";
 import { computeLiveStats, computeLiveStatsFromText } from "../writing-stats";
 import { useEditorScroll } from "./use-editor-scroll";

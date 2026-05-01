@@ -26,7 +26,7 @@ import { referenceRenderPlugin } from "../render/reference-render";
 import { CSS } from "../constants/css-classes";
 import { CSL_FIXTURES, makeBibStore } from "../test-utils";
 import { CslProcessor } from "../citations/csl-processor";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import type { DocumentReferenceCatalog } from "../semantics/reference-catalog";
 
 // jsdom lacks ResizeObserver — provide a no-op stub.

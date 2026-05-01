@@ -7,7 +7,7 @@ import {
   markdownEditorModes,
   setEditorMode,
 } from "./editor";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
 import { documentReferenceCatalogField } from "../semantics/editor-reference-catalog";
 import { blockCounterField } from "../state/block-counter";

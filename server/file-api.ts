@@ -412,7 +412,22 @@ export async function handleFileApi(
       }
 
       const body = await readBody(req);
-      const { content } = JSON.parse(body) as { content: string };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch (_error) {
+        sendError(res, 400, "Invalid JSON body");
+        return true;
+      }
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        typeof (parsed as { content?: unknown }).content !== "string"
+      ) {
+        sendError(res, 400, "Expected JSON body of shape { content: string }");
+        return true;
+      }
+      const { content } = parsed as { content: string };
 
       try {
         await writeAtomicExistingFile(rootDir, safePath, content);
@@ -434,7 +449,23 @@ export async function handleFileApi(
       }
 
       const body = await readBody(req);
-      const { content } = JSON.parse(body) as { content?: string };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch (_error) {
+        sendError(res, 400, "Invalid JSON body");
+        return true;
+      }
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        ((parsed as { content?: unknown }).content !== undefined &&
+          typeof (parsed as { content?: unknown }).content !== "string")
+      ) {
+        sendError(res, 400, "Expected JSON body of shape { content?: string }");
+        return true;
+      }
+      const { content } = parsed as { content?: string };
 
       try {
         await fs.access(safePath);

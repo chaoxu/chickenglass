@@ -22,7 +22,7 @@ import {
   registerPlugins,
   createRegistryState,
 } from "../plugins";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { createTestView, makeBlockPlugin } from "../test-utils";
 

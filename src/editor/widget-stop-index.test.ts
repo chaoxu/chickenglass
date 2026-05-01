@@ -12,7 +12,7 @@ import {
   hiddenWidgetStopAtPos,
   tableStopAtPos,
 } from "./widget-stop-index";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { documentAnalysisField } from "../state/document-analysis";
 import { tableDiscoveryField } from "../state/table-discovery";
 import { createPluginRegistryField } from "../state/plugin-registry";

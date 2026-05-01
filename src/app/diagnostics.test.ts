@@ -5,7 +5,7 @@ import { fencedDiv } from "../parser/fenced-div";
 import { footnoteExtension } from "../parser/footnote";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { blockCounterField } from "../state/block-counter";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { documentSemanticsField } from "../state/document-analysis";

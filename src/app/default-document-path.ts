@@ -29,7 +29,7 @@ export async function findDefaultDocumentPath(
   const preloadUnloadedDirectoryChildren = async (
     children: FileEntry[],
   ): Promise<Map<string, Promise<LazyChildrenResult>>> => {
-    if (!listChildren || signal) return new Map();
+    if (!listChildren || signal?.aborted) return new Map();
     const unloadedDirectories = children.filter((child) =>
       child.isDirectory && child.children === undefined
     );

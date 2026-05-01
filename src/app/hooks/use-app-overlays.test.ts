@@ -2,7 +2,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import type { EditorView } from "@codemirror/view";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { frontmatterField } from "../../editor/frontmatter-state";
+import { frontmatterField } from "../../state/frontmatter-state";
 import { BackgroundIndexer } from "../../index";
 import { markdownExtensions } from "../../parser";
 import {

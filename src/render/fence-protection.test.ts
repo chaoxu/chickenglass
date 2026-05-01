@@ -31,7 +31,7 @@ import { documentSemanticsField } from "../state/document-analysis";
 import { mathMacrosField } from "../state/math-macros";
 import { editorFocusField } from "./render-core";
 import { _codeBlockStructureFieldForTest as codeBlockStructureField } from "./code-block-render";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import {
   activeStructureEditField,
   getActiveStructureEditTarget,

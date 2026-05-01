@@ -2,7 +2,7 @@ import type { EditorState } from "@codemirror/state";
 import katex from "katex";
 import { documentAnalysisField } from "../state/document-analysis";
 import { bibDataField } from "../state/bib-data";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { projectConfigStatusFacet } from "../project-config";
 import type { DocumentAnalysis } from "../semantics/document";
 import { buildKatexOptions } from "../lib/katex-options";

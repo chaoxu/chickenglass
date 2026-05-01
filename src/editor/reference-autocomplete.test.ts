@@ -24,7 +24,7 @@ import {
   createMarkdownLanguageExtensions,
 } from "./base-editor-extensions";
 import { createEditor } from "./editor";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import {
   collectReferenceCompletionCandidates,
   findReferenceCompletionMatch,

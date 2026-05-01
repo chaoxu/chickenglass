@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { markdownExtensions } from "../parser";
 import { documentSemanticsField } from "../state/document-analysis";
 import { applyStateEffects } from "../test-utils";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { programmaticDocumentChangeAnnotation } from "./programmatic-document-change";
 import {
   activeStructureEditField,

@@ -15,7 +15,7 @@ import {
   type CitationReferenceToken,
 } from "./citation-matching";
 import { CslProcessor } from "./csl-processor";
-import type { FrontmatterConfig } from "../lib/frontmatter";
+import type { FrontmatterConfig } from "../parser/frontmatter";
 import type { DocumentAnalysis } from "../semantics/document";
 import { analyzeMarkdownSemantics } from "../semantics/markdown-analysis";
 

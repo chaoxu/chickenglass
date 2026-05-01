@@ -238,6 +238,46 @@ describe("handleFileApi", () => {
     }
   });
 
+  it("rejects malformed JSON on PUT", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    await fs.writeFile(path.join(rootDir, "note.md"), "old", "utf-8");
+
+    const response = await apiFetch(baseUrl, "/api/files/note.md", {
+      method: "PUT",
+      headers: { Origin: baseUrl, "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Invalid JSON body" });
+  });
+
+  it("rejects PUT body whose content field is the wrong type", async () => {
+    const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
+    await fs.writeFile(path.join(rootDir, "note.md"), "old", "utf-8");
+
+    const response = await apiFetch(baseUrl, "/api/files/note.md", {
+      method: "PUT",
+      headers: { Origin: baseUrl, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: 42 }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects malformed JSON on POST", async () => {
+    const { baseUrl } = await setupServer("coflat-file-api-");
+
+    const response = await apiFetch(baseUrl, "/api/files/new.md", {
+      method: "POST",
+      headers: { Origin: baseUrl, "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "Invalid JSON body" });
+  });
+
   it("preserves in-root symlink entries when atomically updating their targets", async () => {
     const { rootDir, baseUrl } = await setupServer("coflat-file-api-");
     const targetPath = path.join(rootDir, "target.md");

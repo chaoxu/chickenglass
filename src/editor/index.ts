@@ -19,7 +19,7 @@ export {
 export {
   frontmatterField,
   type FrontmatterState,
-} from "./frontmatter-state";
+} from "../state/frontmatter-state";
 export {
   frontmatterDecoration,
 } from "./frontmatter-render";
@@ -43,7 +43,7 @@ export {
   projectConfigStatusFacet,
   parseProjectConfig,
   mergeConfigs,
-} from "./project-config";
+} from "../project-config";
 export {
   createDebugHelpers,
   type DebugHelpers,

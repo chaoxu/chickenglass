@@ -1,3 +1,5 @@
+import { logCatchError } from "./lib/log-catch-error";
+
 const DYNAMIC_IMPORT_RECOVERY_KEY = "coflat.dynamic-import-recovery";
 
 const DYNAMIC_IMPORT_ERROR_PATTERNS = [
@@ -51,15 +53,23 @@ export function installDynamicImportRecovery({
   };
 
   const handleError = (event: Event): void => {
-    if (!isDynamicImportFailure(event)) return;
-    event.preventDefault();
-    triggerReload();
+    try {
+      if (!isDynamicImportFailure(event)) return;
+      event.preventDefault();
+      triggerReload();
+    } catch (err) {
+      logCatchError("[dynamic-import-recovery] error handler failed")(err);
+    }
   };
 
   const handleUnhandledRejection = (event: PromiseRejectionEvent): void => {
-    if (!isDynamicImportFailure(event.reason)) return;
-    event.preventDefault();
-    triggerReload();
+    try {
+      if (!isDynamicImportFailure(event.reason)) return;
+      event.preventDefault();
+      triggerReload();
+    } catch (err) {
+      logCatchError("[dynamic-import-recovery] rejection handler failed")(err);
+    }
   };
 
   target.addEventListener("error", handleError);

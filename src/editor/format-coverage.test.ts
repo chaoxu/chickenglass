@@ -25,7 +25,7 @@ import { documentSemanticsField } from "../state/document-analysis";
 import { mathMacrosField } from "../state/math-macros";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { createEditorState, makeBlockPlugin } from "../test-utils";
-import { frontmatterField } from "./frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 
 // ── Test plugins (matching FORMAT.md built-in types) ─────────────────────────
 

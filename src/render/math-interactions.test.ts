@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import { CSS } from "../constants/css-classes";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { equationLabelExtension } from "../parser/equation-label";
 import { mathExtension } from "../parser/math-backslash";
 import { createTestView } from "../test-utils";

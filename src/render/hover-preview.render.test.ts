@@ -5,7 +5,7 @@ import { bibDataField } from "../state/bib-data";
 import {
   createMarkdownLanguageExtensions,
 } from "../editor/base-editor-extensions";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { documentPathFacet } from "../lib/types";
 import {
   defaultPlugins,

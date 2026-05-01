@@ -6,7 +6,7 @@ import type { CslJsonItem } from "../citations/bibtex-parser";
 import { bibDataEffect, bibDataField } from "../state/bib-data";
 import { CslProcessor } from "../citations/csl-processor";
 import { CSS } from "../constants/css-classes";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import {
   activeStructureEditField,
 } from "../state/cm-structure-edit";

@@ -1,4 +1,4 @@
-import { FRONTMATTER_DELIMITER_RE } from "../frontmatter";
+import { FRONTMATTER_DELIMITER_RE } from "../frontmatter-delimiter.js";
 import { MARKDOWN_IMAGE_LINE_RE, isMarkdownImageLine } from "../markdown-image";
 import { isCanonicalFencedDivOpeningLine } from "../../parser/fenced-div";
 import {

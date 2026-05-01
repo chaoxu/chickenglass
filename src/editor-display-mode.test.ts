@@ -14,9 +14,9 @@ describe("app editor display modes", () => {
   });
 
   it("normalizes legacy mode names to CM6 rich mode", () => {
-    expect(normalizeEditorModeInput("rich")).toBe("cm6-rich");
-    expect(normalizeEditorModeInput("read")).toBe("cm6-rich");
     expect(normalizeEditorModeInput("lexical")).toBe("cm6-rich");
+    expect(normalizeEditorModeInput("rich")).toBeNull();
+    expect(normalizeEditorModeInput("read")).toBeNull();
   });
 
   it("forces non-markdown files into source mode", () => {

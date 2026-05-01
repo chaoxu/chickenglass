@@ -10,8 +10,6 @@ export const markdownEditorModes: readonly EditorMode[] = [
 export const defaultEditorMode: EditorMode = "cm6-rich";
 
 const EDITOR_MODE_ALIASES: Readonly<Record<string, EditorMode>> = {
-  read: "cm6-rich",
-  rich: "cm6-rich",
   lexical: "cm6-rich",
 };
 

@@ -1,10 +1,9 @@
 import { StateEffect, StateField } from "@codemirror/state";
 
-import { type CslJsonItem } from "../citations/bibtex-parser";
 import { CslProcessor } from "../citations/csl-processor";
 
-/** A store of bibliography entries keyed by citation id. */
-export type BibStore = ReadonlyMap<string, CslJsonItem>;
+import { type BibStore } from "../citations/csl-json";
+export { type BibStore };
 
 export type BibliographyFailureKind =
   | "read-bib"

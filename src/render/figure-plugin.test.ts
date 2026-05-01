@@ -1,6 +1,6 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { describe, expect, it } from "vitest";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { fencedDiv } from "../parser/fenced-div";
 import { defaultPlugins } from "../plugins/default-plugins";
 import { blockCounterField } from "../state/block-counter";

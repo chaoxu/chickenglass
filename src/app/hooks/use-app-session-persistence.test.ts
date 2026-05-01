@@ -872,9 +872,10 @@ describe("useAppSessionPersistence", () => {
       await Promise.resolve();
     });
 
-    // The key assertion: listChildren should NOT have been called for "b"
-    // because the signal was aborted after "a" resolved with a stale generation
-    expect(listChildren).not.toHaveBeenCalledWith("b");
+    // The key assertion: stale listChildren results must not surface a
+    // restored document.  Sibling listChildren calls may already be in flight
+    // (parallel preload), but their results are discarded once the workspace
+    // generation changes.
     expect(ref.openFileCalls).toHaveLength(0);
   });
 });

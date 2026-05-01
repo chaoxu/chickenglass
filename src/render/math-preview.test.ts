@@ -5,7 +5,7 @@ import { CSS } from "../constants";
 import {
   createMarkdownLanguageExtensions,
 } from "../editor/base-editor-extensions";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { documentAnalysisField } from "../state/document-analysis";
 import { mathMacrosField } from "../state/math-macros";
 

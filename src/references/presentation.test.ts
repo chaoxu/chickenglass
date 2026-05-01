@@ -4,7 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { createPluginRegistryField } from "../state/plugin-registry";
 import { blockCounterField } from "../state/block-counter";
 import { documentSemanticsField } from "../state/document-analysis";

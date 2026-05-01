@@ -12,7 +12,7 @@ import {
 } from "./block-counter";
 import { markdown } from "@codemirror/lang-markdown";
 import { fencedDiv } from "../parser/fenced-div";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import {
   documentSemanticsField,
   getDocumentAnalysisSliceRevision,

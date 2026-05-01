@@ -22,8 +22,9 @@ class TableDiscoveryParsePlugin {
     this.schedule();
   }
 
-  update(_update: ViewUpdate): void {
+  update(update: ViewUpdate): void {
     if (this.destroyed) return;
+    if (!update.docChanged) return;
     this.schedule();
   }
 

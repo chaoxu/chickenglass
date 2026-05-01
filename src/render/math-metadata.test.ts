@@ -4,7 +4,7 @@ import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
 import { activeStructureEditField } from "../state/cm-structure-edit";
 import { createMockEditorView } from "../test-utils";

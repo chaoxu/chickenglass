@@ -25,7 +25,7 @@ import { documentSemanticsField } from "../state/document-analysis";
 import { mathMacrosField } from "../state/math-macros";
 import { editorFocusField, focusEffect } from "./render-core";
 import { widgetSourceMap } from "./render-utils";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import {
   activeStructureEditField,
   createFencedStructureEditTarget,

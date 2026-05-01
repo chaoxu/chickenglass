@@ -53,7 +53,7 @@ export {
   loadProjectConfig,
   loadProjectConfigWithStatus,
   PROJECT_CONFIG_FILE,
-} from "./project-config";
+} from "../project-config";
 
 // ── Shared types ───────────────────────────────────────────────────────────────
 export type { Tab } from "./tab-bar";

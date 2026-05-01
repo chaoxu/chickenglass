@@ -8,7 +8,7 @@ import { mathExtension } from "../parser/math-backslash";
 import { equationLabelExtension } from "../parser/equation-label";
 import { parser as lezerParser } from "@lezer/markdown";
 import { MathWidget, collectMathRanges, stripMathDelimiters, getDisplayMathContentEnd, _mathDecorationFieldForTest as mathDecorationField, mathRenderPlugin, clearKatexCache, renderKatex, renderKatexToHtml, _snapToTokenBoundary } from "./math-render";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { mathMacrosField } from "../state/math-macros";
 import { createMockEditorView, createTestView, getDecorationSpecs } from "../test-utils";
 import { focusEffect, widgetSourceMap } from "./render-utils";

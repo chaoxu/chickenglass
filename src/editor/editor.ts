@@ -39,7 +39,7 @@ import { headingFold } from "./heading-fold";
 import { editorKeybindings } from "./keybindings";
 import { listOutlinerExtension } from "./list-outliner";
 import { editorModeField } from "./editor-mode-state";
-import { type ProjectConfig, type ProjectConfigStatus } from "./project-config";
+import { type ProjectConfig, type ProjectConfigStatus } from "../project-config";
 import { referenceAutocompleteExtension } from "./reference-autocomplete";
 import { richMouseSelectionStyle } from "./rich-mouse-selection";
 import { scrollStabilityExtension } from "./scroll-stability";

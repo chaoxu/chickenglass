@@ -2,7 +2,7 @@ import { type CslJsonItem, extractFirstFamilyName, extractYear, formatCslAuthors
 import {
   type CitationBacklink,
 } from "./csl-processor";
-import { containsMarkdownMath } from "../lib/markdown-math";
+import { findNextInlineMathSource } from "../lib/inline-math-source";
 import { sanitizeCslHtml } from "../lib/sanitize-csl-html";
 import { type BibStore } from "../state/bib-data";
 
@@ -85,7 +85,7 @@ export function buildBibliographyEntries(
       return {
         id: entry.id,
         plainText,
-        renderedHtml: containsMarkdownMath(plainText)
+        renderedHtml: findNextInlineMathSource(plainText, 0, { requireTightDollar: true }) !== null
           ? undefined
           : sanitizeCslHtml(cslHtml[index] ?? ""),
       };

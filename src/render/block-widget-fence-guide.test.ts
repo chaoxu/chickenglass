@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
 import { createMarkdownLanguageExtensions } from "../editor/base-editor-extensions";
-import { frontmatterField } from "../editor/frontmatter-state";
+import { frontmatterField } from "../state/frontmatter-state";
 import { documentSemanticsField } from "../state/document-analysis";
 import { imageUrlField } from "../state/image-url";
 import { mathMacrosField } from "../state/math-macros";
