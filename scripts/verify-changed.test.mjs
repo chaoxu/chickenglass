@@ -54,7 +54,7 @@ describe("verify-changed", () => {
     expect(plan.commands.map(commandDisplay)).toEqual([
       "rtk git diff --check origin/main...HEAD",
       "rtk pnpm test:focused -- src/render/reference-render.test.ts",
-      "rtk pnpm test:focused -- src/render/reference-render.test.ts src/render/hover-preview.test.ts src/render/hover-preview.render.test.ts",
+      "rtk pnpm test:focused -- src/render/reference-render-routing-basic.test.ts src/render/reference-render-routing-cluster.test.ts src/render/reference-render-edge.test.ts src/render/reference-render-perf.test.ts src/render/reference-render-plan.test.ts src/render/reference-render-focus.test.ts src/render/hover-preview.test.ts src/render/hover-preview.render.test.ts",
       "rtk pnpm check:pre-push",
       "rtk pnpm test:browser:quick -- cm6-rich",
     ]);

@@ -40,7 +40,7 @@ Read these when you're working on a specific area:
 ```bash
 pnpm dev:show        # stable no-HMR dev server for shared review on localhost:5173
 pnpm test:watch      # run tests in watch mode
-pnpm test:focused -- src/render/reference-render.test.ts
+pnpm test:focused -- src/render/reference-render-perf.test.ts
                      # automation-safe single-worker render/state verification
 pnpm check:pre-push  # fast local gate used by lefthook pre-push
 pnpm check:merge     # full local merge gate before closing broad issues

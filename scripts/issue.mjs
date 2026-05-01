@@ -150,6 +150,10 @@ export function buildVerifiedIssueClosePlan(argv = []) {
   parsed = allowDirty;
   const message = extractValueFlag(parsed.args, "--message", "");
   parsed = message;
+  const browserArtifact = extractRepeatedValueFlag(parsed.args, "--browser-artifact");
+  parsed = browserArtifact;
+  const residualRisk = extractValueFlag(parsed.args, "--residual-risk", "");
+  parsed = residualRisk;
 
   const issues = parsed.args.filter((arg) => /^\d+$/.test(arg));
   const unknown = parsed.args.filter((arg) => !/^\d+$/.test(arg));
@@ -172,13 +176,27 @@ export function buildVerifiedIssueClosePlan(argv = []) {
     throw new Error("verify-close requires at least one --verify entry.");
   }
 
-  const body = [
+  const artifacts = unique(
+    browserArtifact.values.flatMap((value) =>
+      value.split(",").map((item) => item.trim()).filter(Boolean)
+    ),
+  );
+
+  const bodyLines = [
     message.value || "Verification passed.",
     "",
     `Commit: ${commit}`,
     "Verified:",
     ...verifyItems.map((item) => `- ${item}`),
-  ].join("\n");
+  ];
+  if (artifacts.length > 0) {
+    bodyLines.push("Browser/visual artifacts:");
+    for (const artifact of artifacts) bodyLines.push(`- ${artifact}`);
+  }
+  if (residualRisk.value) {
+    bodyLines.push(`Residual risk: ${residualRisk.value}`);
+  }
+  const body = bodyLines.join("\n");
 
   return {
     allowDirty: allowDirty.value,
@@ -187,6 +205,8 @@ export function buildVerifiedIssueClosePlan(argv = []) {
     issues,
     repo,
     verifyItems,
+    artifacts,
+    residualRisk: residualRisk.value,
     commands: [
       command(["git", "rev-parse", "--verify", `${commit}^{commit}`], { capture: true, kind: "commit" }),
       command(["git", "status", "--short"], { capture: true, kind: "status" }),
@@ -268,7 +288,8 @@ export function printIssueHelp(stream = process.stdout) {
   pnpm issue -- reopen <number...>
   pnpm issue -- label <number> "devx,bug"
   pnpm issue -- triage [tea options]
-  pnpm issue -- verify-close <number...> --commit <sha> --verify "pnpm test" [--dry-run]
+  pnpm issue -- verify-close <number...> --commit <sha> --verify "pnpm test" \
+    [--browser-artifact /tmp/coflat-foo.png] [--residual-risk "..."] [--dry-run]
 
 All commands default to --repo ${DEFAULT_REPO}.
 `);

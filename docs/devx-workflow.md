@@ -156,6 +156,56 @@ pnpm perf:quick --scenario local-edit-index
 pnpm perf:quick:heavy --scenario typing-rich-burst
 ```
 
+## Closing Issues: Verification Record
+
+Before closing an issue, post a verification record so reviewers can audit
+that the visible behavior actually changed. Use `pnpm issue -- verify-close`
+to write the comment and close in one step. The recommended template:
+
+- **Commit**: SHA of the change (auto-included)
+- **Verified**: list of commands run (`--verify "pnpm test"` may be repeated)
+- **Browser/visual artifacts**: paths or links for runtime/visual issues
+  (`--browser-artifact /tmp/coflat-foo.png`). Required for visual or runtime
+  issues unless explicitly marked N/A in the message.
+- **Residual risk**: known follow-ups or out-of-scope notes
+  (`--residual-risk "..."`)
+
+Example:
+
+```
+pnpm issue -- verify-close 1234 \
+  --commit $(git rev-parse HEAD) \
+  --verify "pnpm test" \
+  --verify "pnpm test:browser:cm6-rich" \
+  --browser-artifact /tmp/coflat-1234-before.png \
+  --browser-artifact /tmp/coflat-1234-after.png \
+  --residual-risk "Tauri smoke not run; covered separately in #1300"
+```
+
+For doc-only or non-runtime issues the artifact and residual-risk flags can be
+omitted; verification commands alone are enough. This is a recommended
+template — not a gate — so trivial closes still work without ceremony.
+
+## Browser Verification Lanes
+
+Canonical lanes for runtime verification. Pick the smallest lane that covers
+the changed surface; escalate to `full` for broad or pre-merge work. The fast
+default is `smoke` so routine fixes do not pay for unrelated coverage.
+
+| Lane | Command | When required |
+|---|---|---|
+| smoke | `pnpm test:browser:quick -- smoke` | every browser-affecting change (fast default) |
+| cm6-rich | `pnpm test:browser:cm6-rich` | render-layer / Typora-mode / fenced-div / math-render changes |
+| scroll | `pnpm test:browser:scroll` | scroll, cursor-handoff, vertical-motion changes |
+| navigation | `pnpm test:browser:navigation` | file open, mode switch, cursor navigation across blocks |
+| media | `pnpm test:browser:media` | image, hover-preview, local-PDF changes |
+| perf | `pnpm perf:quick --scenario <name>` | local regression sniff; not PR-quality evidence |
+| full | `pnpm test:browser` | broad changes, pre-merge gate, anything touching shared editor state |
+
+`pnpm verify:changed` recommends these lanes from changed paths. The
+`authoring`, `visual`, and `export` lanes from earlier proposals are not yet
+implemented; treat them as future work and use `full` for now.
+
 ## Focused Test Watchdog
 
 `pnpm test:focused -- ...` runs each explicit test file in a single deterministic

@@ -8,7 +8,7 @@ Use the single-worker Vitest lane for changed-area editor/render/state work. It 
 
 ```bash
 pnpm test:focused -- src/render/sidenote-render.test.ts
-pnpm test:focused -- src/render/reference-render.test.ts
+pnpm test:focused -- src/render/reference-render-perf.test.ts
 pnpm test:focused -- src/render/hover-preview.test.ts src/render/hover-preview.render.test.ts
 ```
 
@@ -17,7 +17,7 @@ The supported automation-safe combined command for the current render/state hots
 ```bash
 pnpm test:focused -- \
   src/render/sidenote-render.test.ts \
-  src/render/reference-render.test.ts \
+  src/render/reference-render-perf.test.ts \
   src/render/hover-preview.test.ts \
   src/render/hover-preview.render.test.ts
 ```
@@ -29,8 +29,8 @@ automation. Override only while debugging a known slow case; a value of `0`
 disables that timer for the current command:
 
 ```bash
-FOCUSED_VITEST_TIMEOUT_MS=600000 pnpm test:focused -- src/render/reference-render.test.ts
-FOCUSED_VITEST_INACTIVITY_TIMEOUT_MS=300000 pnpm test:focused -- src/render/reference-render.test.ts
+FOCUSED_VITEST_TIMEOUT_MS=600000 pnpm test:focused -- src/render/reference-render-perf.test.ts
+FOCUSED_VITEST_INACTIVITY_TIMEOUT_MS=300000 pnpm test:focused -- src/render/reference-render-perf.test.ts
 ```
 
 Fast-check property tests use a deterministic repo seed by default. Override it
