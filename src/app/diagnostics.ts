@@ -20,6 +20,7 @@ import {
   diagnosticFromFrontmatterStatus,
   diagnosticFromProjectConfigStatus,
 } from "./diagnostic-status";
+import { extractFormatDiagnostics } from "./format-diagnostics";
 
 export {
   sameDiagnosticEntries,
@@ -221,6 +222,7 @@ export function extractDiagnostics(state: EditorState): DiagnosticEntry[] {
   ));
   diagnostics.push(...extractFootnoteDiagnostics(analysis));
   diagnostics.push(...extractFencedDivOpenerDiagnostics(state));
+  diagnostics.push(...extractFormatDiagnostics(state));
   const frontmatterStatus = state.field(frontmatterField, false)?.status;
   const frontmatterDiagnostic = diagnosticFromFrontmatterStatus(frontmatterStatus);
   if (frontmatterDiagnostic) diagnostics.push(frontmatterDiagnostic);

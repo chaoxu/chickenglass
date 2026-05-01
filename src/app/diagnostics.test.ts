@@ -347,4 +347,86 @@ describe("extractDiagnostics", () => {
 
     expect(extractDiagnostics(state)).toEqual([]);
   });
+
+  it("warns on HTML comments", () => {
+    const state = createState("Hello <!-- TODO --> world.");
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        source: "format",
+        code: "format.html-comment",
+      }),
+    ]);
+  });
+
+  it("warns on raw inline HTML tags", () => {
+    const state = createState("Click <a href=\"x\">here</a>.");
+    const diagnostics = extractDiagnostics(state);
+    expect(diagnostics.length).toBeGreaterThanOrEqual(1);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "warning",
+          source: "format",
+          code: "format.html-tag",
+        }),
+      ]),
+    );
+  });
+
+  it("warns on reference-style link definitions", () => {
+    const state = createState([
+      "See [the spec][spec].",
+      "",
+      "[spec]: https://example.com/spec",
+    ].join("\n"));
+    const diagnostics = extractDiagnostics(state);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "warning",
+          source: "format",
+          code: "format.reference-link-definition",
+        }),
+      ]),
+    );
+  });
+
+  it("warns on bare URL autolinks", () => {
+    const state = createState("Visit <https://example.com>.");
+    expect(extractDiagnostics(state)).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        source: "format",
+        code: "format.bare-url-autolink",
+      }),
+    ]);
+  });
+
+  it("does not warn on inline links with URLs", () => {
+    const state = createState("Visit [the site](https://example.com) today.");
+    expect(extractDiagnostics(state)).toEqual([]);
+  });
+
+  it("does not warn on URLs inside fenced code blocks", () => {
+    const state = createState([
+      "```",
+      "Visit https://example.com or <!-- comment -->",
+      "```",
+    ].join("\n"));
+    expect(extractDiagnostics(state)).toEqual([]);
+  });
+
+  it("does not warn on a clean canonical document", () => {
+    const state = createState([
+      "# Title",
+      "",
+      "Plain prose with [an inline link](https://example.com) and $math$.",
+      "",
+      "::: {.theorem #thm:x}",
+      "Body.",
+      ":::",
+    ].join("\n"));
+    expect(extractDiagnostics(state)).toEqual([]);
+  });
 });
